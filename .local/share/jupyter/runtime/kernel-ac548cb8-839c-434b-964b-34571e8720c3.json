@@ -1,0 +1,13 @@
+{
+  "shell_port": 51871,
+  "iopub_port": 46035,
+  "stdin_port": 59829,
+  "control_port": 56781,
+  "hb_port": 50667,
+  "ip": "127.0.0.1",
+  "key": "96dfb9d7-67d850e96d4d437ebe475687",
+  "transport": "tcp",
+  "signature_scheme": "hmac-sha256",
+  "kernel_name": "python3",
+  "jupyter_session": "/home/budnik_an/Agregat.ipynb"
+}

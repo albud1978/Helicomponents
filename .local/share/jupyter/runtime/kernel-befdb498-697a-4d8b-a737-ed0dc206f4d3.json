@@ -1,0 +1,13 @@
+{
+  "shell_port": 35091,
+  "iopub_port": 57451,
+  "stdin_port": 48737,
+  "control_port": 42361,
+  "hb_port": 43863,
+  "ip": "127.0.0.1",
+  "key": "2a12d956-4b19d7e2cb111db972e8c50c",
+  "transport": "tcp",
+  "signature_scheme": "hmac-sha256",
+  "kernel_name": "python3",
+  "jupyter_session": "/home/budnik_an/Untitled.ipynb"
+}

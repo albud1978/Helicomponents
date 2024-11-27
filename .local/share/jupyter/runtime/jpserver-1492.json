@@ -1,0 +1,13 @@
+{
+  "base_url": "/user/budnik_an/",
+  "hostname": "127.0.0.1",
+  "password": false,
+  "pid": 1492,
+  "port": 33335,
+  "root_dir": "/home/budnik_an",
+  "secure": false,
+  "sock": "",
+  "token": "e70f39d622e34530945dba45a93379fa",
+  "url": "http://127.0.0.1:33335/user/budnik_an/",
+  "version": "2.14.2"
+}

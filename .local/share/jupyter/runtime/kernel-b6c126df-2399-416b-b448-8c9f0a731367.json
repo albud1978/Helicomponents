@@ -1,0 +1,13 @@
+{
+  "shell_port": 45397,
+  "iopub_port": 49269,
+  "stdin_port": 51677,
+  "control_port": 50219,
+  "hb_port": 53417,
+  "ip": "127.0.0.1",
+  "key": "3467f363-a83ebc8a671226aa7cd97df1",
+  "transport": "tcp",
+  "signature_scheme": "hmac-sha256",
+  "kernel_name": "python3",
+  "jupyter_session": "/home/budnik_an/OLAP.ipynb"
+}
