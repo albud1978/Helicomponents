@@ -1,0 +1,31 @@
+2024-12-01 13:28:26,145 - INFO - Начальная дата в OlapCube_VNV: 2024-11-25
+2024-12-01 13:28:26,147 - INFO - target_date: 2024-11-26
+2024-12-01 13:28:26,148 - INFO - Используемые значения: mi8t_count = 10, mi17_count = 5
+2024-12-01 13:28:26,176 - INFO - balance_mi8t: 63 (exploitation_count: 73 - mi8t_count: 10)
+2024-12-01 13:28:26,198 - INFO - balance_mi17: 78 (exploitation_count: 83 - mi17_count: 5)
+2024-12-01 13:28:26,199 - INFO - balance_total: 141 (balance_mi8t: 63 + balance_mi17: 78)
+2024-12-01 13:28:26,215 - INFO - stock_mi8t: 8
+2024-12-01 13:28:26,232 - INFO - stock_mi17: 11
+2024-12-01 13:28:26,233 - INFO - stock_total: 19 (stock_mi8t: 8 + stock_mi17: 11)
+2024-12-01 13:28:26,240 - INFO - Баланс и запасы обновлены для даты 2024-11-26.
+2024-12-01 13:35:52,055 - INFO - Initial date in OlapCube_VNV: 2024-11-25
+2024-12-01 13:35:52,057 - INFO - Target date: 2024-11-26
+2024-12-01 13:35:52,089 - INFO - balance_mi8t: -13.0 (balance_mi8t_count: 73 - mi8t_count: 86.0)
+2024-12-01 13:35:52,115 - INFO - balance_mi17: 13.0 (balance_mi17_count: 83 - mi17_count: 70.0)
+2024-12-01 13:35:52,117 - INFO - balance_total: 0.0 (balance_mi8t: -13.0 + balance_mi17: 13.0)
+2024-12-01 13:35:52,134 - INFO - stock_mi8t: 8
+2024-12-01 13:35:52,151 - INFO - stock_mi17: 11
+2024-12-01 13:35:52,152 - INFO - stock_total: 19 (stock_mi8t: 8 + stock_mi17: 11)
+2024-12-01 13:35:52,159 - INFO - Баланс и запасы успешно обновлены для даты 2024-11-26.
+2024-12-01 13:42:20,231 - INFO - Initial date in OlapCube_VNV: 2024-11-25
+2024-12-01 13:42:20,232 - INFO - Target date: 2024-11-26
+2024-12-01 13:42:20,262 - INFO - balance_mi8t_count: 73
+2024-12-01 13:42:20,272 - INFO - balance_mi8t: -13.0 (balance_mi8t_count: 73 - mi8t_count: 86.0)
+2024-12-01 13:42:20,298 - INFO - balance_mi17_count: 83
+2024-12-01 13:42:20,307 - INFO - balance_mi17: 13.0 (balance_mi17_count: 83 - mi17_count: 70.0)
+2024-12-01 13:42:20,309 - INFO - balance_total: 0.0 (balance_mi8t: -13.0 + balance_mi17: 13.0)
+2024-12-01 13:42:20,330 - INFO - stock_mi8t: 8
+2024-12-01 13:42:20,346 - INFO - stock_mi17: 11
+2024-12-01 13:42:20,362 - INFO - stock_empty: 1
+2024-12-01 13:42:20,363 - INFO - stock_total: 20 (stock_mi8t: 8 + stock_mi17: 11 + stock_empty: 1)
+2024-12-01 13:42:20,370 - INFO - Баланс и запасы успешно обновлены для даты 2024-11-26.
