@@ -52,3 +52,1109 @@
 2024-12-01 19:16:59,228 - INFO - Извлечено 420 записей на target_date.
 2024-12-01 19:16:59,276 - INFO - Извлечено 420 записей на предыдущую дату.
 2024-12-01 19:16:59,277 - ERROR - Ошибка при обновлении счётчиков: sequence item 0: expected str instance, NoneType found
+2024-12-02 12:06:14,122 - INFO - Initial date in OlapCube_VNV: 2024-11-25
+2024-12-02 12:06:14,123 - INFO - Target date: 2024-11-26, Previous date: 2024-11-25
+2024-12-02 12:06:14,261 - INFO - Извлечено 420 записей на target_date.
+2024-12-02 12:06:14,262 - ERROR - Ошибка при обновлении счётчиков: unsupported operand type(s) for +: 'NoneType' and 'float'
+2024-12-02 12:10:50,264 - INFO - Initial date in OlapCube_VNV: 2024-11-25
+2024-12-02 12:10:50,265 - INFO - Target date: 2024-11-26, Previous date: 2024-11-25
+2024-12-02 12:10:50,380 - INFO - Извлечено 420 записей на target_date.
+2024-12-02 12:10:50,388 - INFO - Updated serialno 2238С133: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,396 - INFO - Updated serialno 2238С95: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,404 - INFO - Updated serialno 2238С99: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,414 - INFO - Updated serialno 2248С149: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,421 - INFO - Updated serialno 0938С114: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,430 - INFO - Updated serialno 0938С99: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,438 - INFO - Updated serialno 0948С179: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,450 - INFO - Updated serialno 2248С150: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,457 - INFO - Updated serialno 2248С165: sne=0, ppr=0, repair_days=1
+2024-12-02 12:10:50,465 - INFO - Updated serialno 2248С166: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,474 - INFO - Updated serialno 2248С169: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,491 - INFO - Updated serialno 0948С189: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,500 - INFO - Updated serialno 0948С190: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,510 - INFO - Updated serialno 1018С12: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,518 - INFO - Updated serialno 2248С175: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,526 - INFO - Updated serialno 2248С176: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,535 - INFO - Updated serialno 2248С177: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,545 - INFO - Updated serialno 2248С178: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,551 - INFO - Updated serialno 1018С13: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,559 - INFO - Updated serialno 1018С17: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,568 - INFO - Updated serialno 1018С2: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,577 - INFO - Updated serialno 1018С34: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,585 - INFO - Updated serialno 2248С179: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,595 - INFO - Updated serialno 2248С180: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,602 - INFO - Updated serialno 2248С184: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,609 - INFO - Updated serialno 2248С185: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,619 - INFO - Updated serialno 1148С229: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,626 - INFO - Updated serialno 118107: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,634 - INFO - Updated serialno 11862: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,645 - INFO - Updated serialno 128236: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,651 - INFO - Updated serialno 1328С150: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,661 - INFO - Updated serialno 1328С151: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,669 - INFO - Updated serialno 1418С30: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,676 - INFO - Updated serialno 1518С14: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,684 - INFO - Updated serialno 1518С26: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,691 - INFO - Updated serialno 1528С117: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,712 - INFO - Updated serialno 1548С241: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,718 - INFO - Updated serialno 2248С186: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,730 - INFO - Updated serialno 228118: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,738 - INFO - Updated serialno 2318С16: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,746 - INFO - Updated serialno 2318С17: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,755 - INFO - Updated serialno 2318С36: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,763 - INFO - Updated serialno 1548С243: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,771 - INFO - Updated serialno 1548С244: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,778 - INFO - Updated serialno 1618С11: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,785 - INFO - Updated serialno 1618С18: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,791 - INFO - Updated serialno 2318С37: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,798 - INFO - Updated serialno 2328С102: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,804 - INFO - Updated serialno 2338С109: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,813 - INFO - Updated serialno 2338С110: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,824 - INFO - Updated serialno 1618С23: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,832 - INFO - Updated serialno 1618С34: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,839 - INFO - Updated serialno 1618С46: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,847 - INFO - Updated serialno 1618С55: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,854 - INFO - Updated serialno 2338С111: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,861 - INFO - Updated serialno 2338С117: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,870 - INFO - Updated serialno 2338С118: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,880 - INFO - Updated serialno 2338С119: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,890 - INFO - Updated serialno 2338С120: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,897 - INFO - Updated serialno 2338С121: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,904 - INFO - Updated serialno 2338С127: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,913 - INFO - Updated serialno 2338С128: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,922 - INFO - Updated serialno 2338С132: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,935 - INFO - Updated serialno 2338С133: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,942 - INFO - Updated serialno 2338С134: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,949 - INFO - Updated serialno 2338С135: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,958 - INFO - Updated serialno 1618С57: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,966 - INFO - Updated serialno 1618С58: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,975 - INFO - Updated serialno 1618С9: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,981 - INFO - Updated serialno 1638С142: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,988 - INFO - Updated serialno 1648С143: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:50,994 - INFO - Updated serialno 1718С12: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,000 - INFO - Updated serialno 1718С17: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,010 - INFO - Updated serialno 1718С18: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,019 - INFO - Updated serialno 1718С19: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,030 - INFO - Updated serialno 1718С22: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,036 - INFO - Updated serialno 1718С23: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,046 - INFO - Updated serialno 1718С37: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,054 - INFO - Updated serialno 1728С70: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,060 - INFO - Updated serialno 1728С79: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,067 - INFO - Updated serialno 1728С80: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,077 - INFO - Updated serialno 1748С176: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,085 - INFO - Updated serialno 1748С177: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,096 - INFO - Updated serialno 2338С162: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,106 - INFO - Updated serialno 2338С163: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,142 - INFO - Updated serialno 2338С164: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,154 - INFO - Updated serialno 2338С165: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,162 - INFO - Updated serialno 1748С178: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,169 - INFO - Updated serialno 1748С183: sne=0, ppr=0, repair_days=1
+2024-12-02 12:10:51,179 - INFO - Updated serialno 1828С34: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,188 - INFO - Updated serialno 1828С35: sne=0, ppr=0, repair_days=1
+2024-12-02 12:10:51,199 - INFO - Updated serialno 1828С49: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,208 - INFO - Updated serialno 1838С79: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,217 - INFO - Updated serialno 1838С80: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,225 - INFO - Updated serialno 2338С166: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,233 - INFO - Updated serialno 2338С167: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,241 - INFO - Updated serialno 2348С168: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,252 - INFO - Updated serialno 2348С170: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,261 - INFO - Updated serialno 1838С81: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,270 - INFO - Updated serialno 1838С85: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,277 - INFO - Updated serialno 1848С101: sne=0, ppr=0, repair_days=1
+2024-12-02 12:10:51,285 - INFO - Updated serialno 2348С176: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,292 - INFO - Updated serialno 2348С177: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,299 - INFO - Updated serialno 2348С178: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,307 - INFO - Updated serialno 2348С179: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,314 - INFO - Updated serialno 1848С90: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,322 - INFO - Updated serialno 1848С91: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,330 - INFO - Updated serialno 1848С92: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,337 - INFO - Updated serialno 1848С94: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,346 - INFO - Updated serialno 2348С180: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,357 - INFO - Updated serialno 23819: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,365 - INFO - Updated serialno 23856: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,374 - INFO - Updated serialno 23858: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,382 - INFO - Updated serialno 1848С95: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,389 - INFO - Updated serialno 1848С96: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,397 - INFO - Updated serialno 1848С98: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,406 - INFO - Updated serialno 1848С99: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,413 - INFO - Updated serialno 2048С109: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,421 - INFO - Updated serialno 2428С87: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,430 - INFO - Updated serialno 2438C127: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,439 - INFO - Updated serialno 2438С115: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,446 - INFO - Updated serialno 24814: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,454 - INFO - Updated serialno 2048С116: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,464 - INFO - Updated serialno 2048С118: sne=0, ppr=0, repair_days=1
+2024-12-02 12:10:51,473 - INFO - Updated serialno 2048С125: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,480 - INFO - Updated serialno 32847: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,492 - INFO - Updated serialno 33853: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,499 - INFO - Updated serialno 91873: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,506 - INFO - Updated serialno 2048С144: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,526 - INFO - Updated serialno 2048С148: sne=0, ppr=0, repair_days=1
+2024-12-02 12:10:51,535 - INFO - Updated serialno 2118С26: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,545 - INFO - Updated serialno 2128С58: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,553 - INFO - Updated serialno С1185793: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,563 - INFO - Updated serialno С318789: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,571 - INFO - Updated serialno С3281283: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,579 - INFO - Updated serialno 2128С60: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,587 - INFO - Updated serialno 2138С107: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,594 - INFO - Updated serialno 2148С113: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,601 - INFO - Updated serialno С4281457: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,609 - INFO - Updated serialno С4381509: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,617 - INFO - Updated serialno С498В1255: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,624 - INFO - Updated serialno С5280753: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,631 - INFO - Updated serialno 2148С114: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,640 - INFO - Updated serialno 2148С116: sne=0, ppr=0, repair_days=1
+2024-12-02 12:10:51,649 - INFO - Updated serialno 2148С133: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,656 - INFO - Updated serialno 2148С136: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,666 - INFO - Updated serialno 21824: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,674 - INFO - Updated serialno 2218С42: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,683 - INFO - Updated serialno 2218С43: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,691 - INFO - Updated serialno 2218С46: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,698 - INFO - Updated serialno С7387241: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,706 - INFO - Updated serialno С8382220: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,713 - INFO - Updated serialno СВ98В875: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,720 - INFO - Updated serialno СВ98В927: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,729 - INFO - Updated serialno 2218С47: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,739 - INFO - Updated serialno 2228С56: sne=0, ppr=0, repair_days=1
+2024-12-02 12:10:51,748 - INFO - Updated serialno 2228С57: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,754 - INFO - Updated serialno 2228С58: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,763 - INFO - Updated serialno 2228С67: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,772 - INFO - Updated serialno 2228С72: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,780 - INFO - Updated serialno 2228С73: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,788 - INFO - Updated serialno 2228С77: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,797 - INFO - Updated serialno 2238С100: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:10:51,806 - INFO - Updated serialno 2238С132: sne=1.58, ppr=1.58, repair_days=0
+2024-12-02 12:19:00,316 - INFO - Initial date in OlapCube_VNV: 2024-11-25
+2024-12-02 12:19:00,318 - INFO - Target date: 2024-11-26, Previous date: 2024-11-25
+2024-12-02 12:19:00,449 - INFO - Извлечено 420 записей на target_date.
+2024-12-02 12:19:00,456 - INFO - Updated serialno 2238С133: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,461 - INFO - Updated serialno 2238С95: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,469 - INFO - Updated serialno 2238С99: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,479 - INFO - Updated serialno 2248С149: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,489 - INFO - Updated serialno 0938С114: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,497 - INFO - Updated serialno 0938С99: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,506 - INFO - Updated serialno 0948С179: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,517 - INFO - Updated serialno 2248С150: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,523 - INFO - Updated serialno 2248С165: sne=0.0, ppr=0.0, repair_days=2.0
+2024-12-02 12:19:00,534 - INFO - Updated serialno 2248С166: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,543 - INFO - Updated serialno 2248С169: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,554 - INFO - Updated serialno 0948С189: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,563 - INFO - Updated serialno 0948С190: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,579 - INFO - Updated serialno 1018С12: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,588 - INFO - Updated serialno 2248С175: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,603 - INFO - Updated serialno 2248С176: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,610 - INFO - Updated serialno 2248С177: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,618 - INFO - Updated serialno 2248С178: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,627 - INFO - Updated serialno 1018С13: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,635 - INFO - Updated serialno 1018С17: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,645 - INFO - Updated serialno 1018С2: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,655 - INFO - Updated serialno 1018С34: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,664 - INFO - Updated serialno 2248С179: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,672 - INFO - Updated serialno 2248С180: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,682 - INFO - Updated serialno 2248С184: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,692 - INFO - Updated serialno 2248С185: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,701 - INFO - Updated serialno 1148С229: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,710 - INFO - Updated serialno 118107: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,725 - INFO - Updated serialno 11862: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,735 - INFO - Updated serialno 128236: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,745 - INFO - Updated serialno 1328С150: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,759 - INFO - Updated serialno 1328С151: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,768 - INFO - Updated serialno 1418С30: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,776 - INFO - Updated serialno 1518С14: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,784 - INFO - Updated serialno 2248С186: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,796 - INFO - Updated serialno 228118: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,804 - INFO - Updated serialno 2318С16: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,813 - INFO - Updated serialno 2318С17: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,820 - INFO - Updated serialno 2318С36: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,828 - INFO - Updated serialno 2318С37: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,835 - INFO - Updated serialno 2328С102: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,842 - INFO - Updated serialno 2338С109: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,850 - INFO - Updated serialno 2338С110: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,857 - INFO - Updated serialno 1518С26: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,864 - INFO - Updated serialno 1528С117: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,873 - INFO - Updated serialno 1548С241: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,880 - INFO - Updated serialno 1548С243: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,887 - INFO - Updated serialno 1548С244: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,895 - INFO - Updated serialno 1618С11: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,904 - INFO - Updated serialno 1618С18: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,911 - INFO - Updated serialno 2338С111: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,917 - INFO - Updated serialno 2338С117: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,924 - INFO - Updated serialno 2338С118: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,955 - INFO - Updated serialno 2338С119: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,966 - INFO - Updated serialno 2338С120: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,974 - INFO - Updated serialno 2338С121: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,985 - INFO - Updated serialno 2338С127: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:00,992 - INFO - Updated serialno 2338С128: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,005 - INFO - Updated serialno 1618С23: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,012 - INFO - Updated serialno 1618С34: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,019 - INFO - Updated serialno 1618С46: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,027 - INFO - Updated serialno 1618С55: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,035 - INFO - Updated serialno 2338С132: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,043 - INFO - Updated serialno 2338С133: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,050 - INFO - Updated serialno 2338С134: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,057 - INFO - Updated serialno 2338С135: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,065 - INFO - Updated serialno 1618С57: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,075 - INFO - Updated serialno 1618С58: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,083 - INFO - Updated serialno 1618С9: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,092 - INFO - Updated serialno 1638С142: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,100 - INFO - Updated serialno 2338С162: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,115 - INFO - Updated serialno 2338С163: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,122 - INFO - Updated serialno 2338С164: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,129 - INFO - Updated serialno 2338С165: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,139 - INFO - Updated serialno 1648С143: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,150 - INFO - Updated serialno 1718С12: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,158 - INFO - Updated serialno 1718С17: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,166 - INFO - Updated serialno 1718С18: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,177 - INFO - Updated serialno 1718С19: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,185 - INFO - Updated serialno 1718С22: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,192 - INFO - Updated serialno 1718С23: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,200 - INFO - Updated serialno 1718С37: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,210 - INFO - Updated serialno 2338С166: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,219 - INFO - Updated serialno 2338С167: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,229 - INFO - Updated serialno 2348С168: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,238 - INFO - Updated serialno 2348С170: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,246 - INFO - Updated serialno 2348С176: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,255 - INFO - Updated serialno 2348С177: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,265 - INFO - Updated serialno 2348С178: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,274 - INFO - Updated serialno 2348С179: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,282 - INFO - Updated serialno 1728С70: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,290 - INFO - Updated serialno 1728С79: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,300 - INFO - Updated serialno 1728С80: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,308 - INFO - Updated serialno 1748С176: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,324 - INFO - Updated serialno 1748С177: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,330 - INFO - Updated serialno 1748С178: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,337 - INFO - Updated serialno 1748С183: sne=0.0, ppr=0.0, repair_days=2.0
+2024-12-02 12:19:01,344 - INFO - Updated serialno 1828С34: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,352 - INFO - Updated serialno 2348С180: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,358 - INFO - Updated serialno 23819: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,365 - INFO - Updated serialno 23856: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,375 - INFO - Updated serialno 23858: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,384 - INFO - Updated serialno 1828С35: sne=0.0, ppr=0.0, repair_days=2.0
+2024-12-02 12:19:01,393 - INFO - Updated serialno 1828С49: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,401 - INFO - Updated serialno 1838С79: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,407 - INFO - Updated serialno 1838С80: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,415 - INFO - Updated serialno 2428С87: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,424 - INFO - Updated serialno 2438C127: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,431 - INFO - Updated serialno 2438С115: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,438 - INFO - Updated serialno 24814: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,445 - INFO - Updated serialno 1838С81: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,451 - INFO - Updated serialno 1838С85: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,456 - INFO - Updated serialno 1848С101: sne=0.0, ppr=0.0, repair_days=2.0
+2024-12-02 12:19:01,463 - INFO - Updated serialno 1848С90: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,473 - INFO - Updated serialno 1848С91: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,483 - INFO - Updated serialno 1848С92: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,493 - INFO - Updated serialno 1848С94: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,501 - INFO - Updated serialno 32847: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,550 - INFO - Updated serialno 33853: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,560 - INFO - Updated serialno 91873: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,568 - INFO - Updated serialno 1848С95: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,589 - INFO - Updated serialno 1848С96: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,599 - INFO - Updated serialno 1848С98: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,607 - INFO - Updated serialno 1848С99: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,614 - INFO - Updated serialno 2048С109: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,622 - INFO - Updated serialno 2048С116: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,632 - INFO - Updated serialno 2048С118: sne=0.0, ppr=0.0, repair_days=2.0
+2024-12-02 12:19:01,642 - INFO - Updated serialno 2048С125: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,650 - INFO - Updated serialno 2048С144: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,661 - INFO - Updated serialno 2048С148: sne=0.0, ppr=0.0, repair_days=2.0
+2024-12-02 12:19:01,669 - INFO - Updated serialno 2118С26: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,681 - INFO - Updated serialno 2128С58: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,690 - INFO - Updated serialno 2128С60: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,697 - INFO - Updated serialno 2138С107: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,704 - INFO - Updated serialno 2148С113: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,712 - INFO - Updated serialno 2148С114: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,719 - INFO - Updated serialno 2148С116: sne=0.0, ppr=0.0, repair_days=2.0
+2024-12-02 12:19:01,729 - INFO - Updated serialno 2148С133: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,738 - INFO - Updated serialno 2148С136: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,745 - INFO - Updated serialno 21824: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,751 - INFO - Updated serialno 2218С42: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,758 - INFO - Updated serialno 2218С43: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,766 - INFO - Updated serialno 2218С46: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,778 - INFO - Updated serialno 2218С47: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,787 - INFO - Updated serialno 2228С56: sne=0.0, ppr=0.0, repair_days=2.0
+2024-12-02 12:19:01,796 - INFO - Updated serialno 2228С57: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,805 - INFO - Updated serialno 2228С58: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,814 - INFO - Updated serialno 2228С67: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,823 - INFO - Updated serialno 2228С72: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,831 - INFO - Updated serialno 2228С73: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,840 - INFO - Updated serialno 2228С77: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,850 - INFO - Updated serialno 2238С100: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,858 - INFO - Updated serialno 2238С132: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,867 - INFO - Updated serialno С1185793: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,874 - INFO - Updated serialno С318789: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,885 - INFO - Updated serialno С3281283: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,894 - INFO - Updated serialno С4281457: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,904 - INFO - Updated serialno С4381509: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,913 - INFO - Updated serialno С498В1255: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,919 - INFO - Updated serialno С5280753: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,930 - INFO - Updated serialno С7387241: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,939 - INFO - Updated serialno С8382220: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,947 - INFO - Updated serialno СВ98В875: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:19:01,954 - INFO - Updated serialno СВ98В927: sne=3.16, ppr=3.16, repair_days=0.0
+2024-12-02 12:27:41,476 - INFO - Initial date in OlapCube_VNV: 2024-11-25
+2024-12-02 12:27:41,477 - INFO - Target date: 2024-11-26, Previous date: 2024-11-25
+2024-12-02 12:27:41,564 - INFO - Извлечено 420 записей на target_date.
+2024-12-02 12:27:41,570 - INFO - Updated serialno 0938С114: sne=4231.51, ppr=74.58, repair_days=None
+2024-12-02 12:27:41,578 - INFO - Updated serialno 0938С99: sne=5993.16, ppr=1000.1600000000001, repair_days=None
+2024-12-02 12:27:41,588 - INFO - Updated serialno 0948С179: sne=5888.11, ppr=362.65999999999997, repair_days=None
+2024-12-02 12:27:41,596 - INFO - Updated serialno 0948С189: sne=5951.74, ppr=1465.7399999999998, repair_days=None
+2024-12-02 12:27:41,604 - INFO - Updated serialno 0948С190: sne=4029.31, ppr=1089.31, repair_days=None
+2024-12-02 12:27:41,612 - INFO - Updated serialno 2238С133: sne=521.08, ppr=521.08, repair_days=None
+2024-12-02 12:27:41,621 - INFO - Updated serialno 2238С95: sne=662.33, ppr=662.33, repair_days=None
+2024-12-02 12:27:41,630 - INFO - Updated serialno 2238С99: sne=658.7600000000001, ppr=658.7600000000001, repair_days=None
+2024-12-02 12:27:41,637 - INFO - Updated serialno 2248С149: sne=459.53999999999996, ppr=459.53999999999996, repair_days=None
+2024-12-02 12:27:41,645 - INFO - Updated serialno 2248С150: sne=537.34, ppr=537.34, repair_days=None
+2024-12-02 12:27:41,651 - INFO - Updated serialno 2248С165: sne=1404.55, ppr=1404.55, repair_days=46.0
+2024-12-02 12:27:41,664 - INFO - Updated serialno 2248С166: sne=1283.5299999999997, ppr=1283.5299999999997, repair_days=None
+2024-12-02 12:27:41,677 - INFO - Updated serialno 2248С169: sne=1227.4099999999999, ppr=1227.4099999999999, repair_days=None
+2024-12-02 12:27:41,686 - INFO - Updated serialno 2248С175: sne=1203.33, ppr=1203.33, repair_days=None
+2024-12-02 12:27:41,694 - INFO - Updated serialno 2248С176: sne=837.0400000000001, ppr=837.0400000000001, repair_days=None
+2024-12-02 12:27:41,706 - INFO - Updated serialno 2248С177: sne=1049.9399999999998, ppr=1049.9399999999998, repair_days=None
+2024-12-02 12:27:41,716 - INFO - Updated serialno 2248С178: sne=992.7600000000001, ppr=992.7600000000001, repair_days=None
+2024-12-02 12:27:41,723 - INFO - Updated serialno 2248С179: sne=655.7600000000001, ppr=655.7600000000001, repair_days=None
+2024-12-02 12:27:41,731 - INFO - Updated serialno 2248С180: sne=862.4100000000001, ppr=862.4100000000001, repair_days=None
+2024-12-02 12:27:41,737 - INFO - Updated serialno 2248С184: sne=1275.7399999999998, ppr=1275.7399999999998, repair_days=None
+2024-12-02 12:27:41,745 - INFO - Updated serialno 2248С185: sne=1399.1799999999998, ppr=1399.1799999999998, repair_days=None
+2024-12-02 12:27:41,752 - INFO - Updated serialno 2248С186: sne=1278.31, ppr=1278.31, repair_days=None
+2024-12-02 12:27:41,765 - INFO - Updated serialno 228118: sne=3535.44, ppr=1260.4399999999998, repair_days=None
+2024-12-02 12:27:41,776 - INFO - Updated serialno 2318С16: sne=468.46, ppr=468.46, repair_days=None
+2024-12-02 12:27:41,783 - INFO - Updated serialno 1018С12: sne=5873.74, ppr=854.3800000000001, repair_days=None
+2024-12-02 12:27:41,791 - INFO - Updated serialno 1018С13: sne=3785.96, ppr=99.67999999999999, repair_days=None
+2024-12-02 12:27:41,799 - INFO - Updated serialno 1018С17: sne=5457.41, ppr=975.0100000000001, repair_days=None
+2024-12-02 12:27:41,808 - INFO - Updated serialno 1018С2: sne=5465.49, ppr=979.7800000000001, repair_days=None
+2024-12-02 12:27:41,814 - INFO - Updated serialno 1018С34: sne=5972.59, ppr=1481.59, repair_days=None
+2024-12-02 12:27:41,824 - INFO - Updated serialno 1148С229: sne=4433.44, ppr=1434.4399999999998, repair_days=None
+2024-12-02 12:27:41,833 - INFO - Updated serialno 118107: sne=5055.23, ppr=1237.2299999999998, repair_days=None
+2024-12-02 12:27:41,840 - INFO - Updated serialno 11862: sne=5297.46, ppr=808.46, repair_days=None
+2024-12-02 12:27:41,847 - INFO - Updated serialno 128236: sne=5364.04, ppr=907.0400000000001, repair_days=None
+2024-12-02 12:27:41,853 - INFO - Updated serialno 1328С150: sne=5305.63, ppr=838.6300000000001, repair_days=None
+2024-12-02 12:27:41,872 - INFO - Updated serialno 1328С151: sne=3386.21, ppr=441.53999999999996, repair_days=None
+2024-12-02 12:27:41,879 - INFO - Updated serialno 1418С30: sne=1788.11, ppr=1196.8899999999999, repair_days=None
+2024-12-02 12:27:41,885 - INFO - Updated serialno 1518С14: sne=2204.64, ppr=1185.36, repair_days=None
+2024-12-02 12:27:41,892 - INFO - Updated serialno 1518С26: sne=918.6400000000001, ppr=252.44000000000003, repair_days=None
+2024-12-02 12:27:41,899 - INFO - Updated serialno 1528С117: sne=4597.11, ppr=160.11, repair_days=None
+2024-12-02 12:27:41,907 - INFO - Updated serialno 1548С241: sne=4500.58, ppr=6.8100000000000005, repair_days=None
+2024-12-02 12:27:41,914 - INFO - Updated serialno 2318С17: sne=535.3800000000001, ppr=535.3800000000001, repair_days=None
+2024-12-02 12:27:41,922 - INFO - Updated serialno 2318С36: sne=906.6600000000001, ppr=906.6600000000001, repair_days=None
+2024-12-02 12:27:41,929 - INFO - Updated serialno 2318С37: sne=656.4100000000001, ppr=656.4100000000001, repair_days=None
+2024-12-02 12:27:41,940 - INFO - Updated serialno 2328С102: sne=513.16, ppr=513.16, repair_days=None
+2024-12-02 12:27:41,951 - INFO - Updated serialno 2338С109: sne=631.83, ppr=631.83, repair_days=None
+2024-12-02 12:27:41,958 - INFO - Updated serialno 2338С110: sne=826.8100000000001, ppr=826.8100000000001, repair_days=None
+2024-12-02 12:27:41,964 - INFO - Updated serialno 2338С111: sne=751.5400000000001, ppr=751.5400000000001, repair_days=None
+2024-12-02 12:27:41,971 - INFO - Updated serialno 2338С117: sne=720.4900000000001, ppr=720.4900000000001, repair_days=None
+2024-12-02 12:27:41,978 - INFO - Updated serialno 2338С118: sne=905.4900000000001, ppr=905.4900000000001, repair_days=None
+2024-12-02 12:27:41,987 - INFO - Updated serialno 2338С119: sne=373.89, ppr=373.89, repair_days=None
+2024-12-02 12:27:41,993 - INFO - Updated serialno 1548С243: sne=4824.139999999999, ppr=345.88, repair_days=None
+2024-12-02 12:27:42,004 - INFO - Updated serialno 1548С244: sne=3995.83, ppr=1002.6100000000001, repair_days=None
+2024-12-02 12:27:42,014 - INFO - Updated serialno 1618С11: sne=3604.5899999999997, ppr=621.59, repair_days=None
+2024-12-02 12:27:42,022 - INFO - Updated serialno 1618С18: sne=4302.51, ppr=1336.5099999999998, repair_days=None
+2024-12-02 12:27:42,029 - INFO - Updated serialno 1618С23: sne=5069.51, ppr=583.84, repair_days=None
+2024-12-02 12:27:42,038 - INFO - Updated serialno 1618С34: sne=4899.76, ppr=405.03999999999996, repair_days=None
+2024-12-02 12:27:42,048 - INFO - Updated serialno 1618С46: sne=3239.94, ppr=257.94, repair_days=None
+2024-12-02 12:27:42,055 - INFO - Updated serialno 1618С55: sne=4506.28, ppr=12.81, repair_days=None
+2024-12-02 12:27:42,069 - INFO - Updated serialno 1618С57: sne=3872.04, ppr=880.0400000000001, repair_days=None
+2024-12-02 12:27:42,076 - INFO - Updated serialno 1618С58: sne=3357.7799999999997, ppr=404.78, repair_days=None
+2024-12-02 12:27:42,087 - INFO - Updated serialno 2338С120: sne=715.5400000000001, ppr=715.5400000000001, repair_days=None
+2024-12-02 12:27:42,093 - INFO - Updated serialno 2338С121: sne=686.94, ppr=686.94, repair_days=None
+2024-12-02 12:27:42,099 - INFO - Updated serialno 2338С127: sne=634.4100000000001, ppr=634.4100000000001, repair_days=None
+2024-12-02 12:27:42,109 - INFO - Updated serialno 2338С128: sne=690.96, ppr=690.96, repair_days=None
+2024-12-02 12:27:42,118 - INFO - Updated serialno 2338С132: sne=773.19, ppr=773.19, repair_days=None
+2024-12-02 12:27:42,130 - INFO - Updated serialno 2338С133: sne=642.0600000000001, ppr=642.0600000000001, repair_days=None
+2024-12-02 12:27:42,138 - INFO - Updated serialno 2338С134: sne=628.6400000000001, ppr=628.6400000000001, repair_days=None
+2024-12-02 12:27:42,157 - INFO - Updated serialno 2338С135: sne=601.1100000000001, ppr=601.1100000000001, repair_days=None
+2024-12-02 12:27:42,166 - INFO - Updated serialno 2338С162: sne=562.2600000000001, ppr=562.2600000000001, repair_days=None
+2024-12-02 12:27:42,174 - INFO - Updated serialno 2338С163: sne=379.51, ppr=379.51, repair_days=None
+2024-12-02 12:27:42,182 - INFO - Updated serialno 2338С164: sne=503.78999999999996, ppr=503.78999999999996, repair_days=None
+2024-12-02 12:27:42,189 - INFO - Updated serialno 2338С165: sne=212.71000000000004, ppr=212.71000000000004, repair_days=None
+2024-12-02 12:27:42,196 - INFO - Updated serialno 2338С166: sne=235.81000000000003, ppr=235.81000000000003, repair_days=None
+2024-12-02 12:27:42,203 - INFO - Updated serialno 2338С167: sne=620.6800000000001, ppr=620.6800000000001, repair_days=None
+2024-12-02 12:27:42,211 - INFO - Updated serialno 2348С168: sne=526.3100000000001, ppr=526.3100000000001, repair_days=None
+2024-12-02 12:27:42,222 - INFO - Updated serialno 2348С170: sne=450.23999999999995, ppr=450.23999999999995, repair_days=None
+2024-12-02 12:27:42,231 - INFO - Updated serialno 2348С176: sne=530.71, ppr=530.71, repair_days=None
+2024-12-02 12:27:42,260 - INFO - Updated serialno 2348С177: sne=344.83, ppr=344.83, repair_days=None
+2024-12-02 12:27:42,269 - INFO - Updated serialno 2348С178: sne=267.40999999999997, ppr=267.40999999999997, repair_days=None
+2024-12-02 12:27:42,278 - INFO - Updated serialno 2348С179: sne=412.71, ppr=412.71, repair_days=None
+2024-12-02 12:27:42,286 - INFO - Updated serialno 2348С180: sne=446.60999999999996, ppr=446.60999999999996, repair_days=None
+2024-12-02 12:27:42,294 - INFO - Updated serialno 23819: sne=5745.71, ppr=132.56000000000003, repair_days=None
+2024-12-02 12:27:42,302 - INFO - Updated serialno 23856: sne=5179.21, ppr=677.21, repair_days=None
+2024-12-02 12:27:42,309 - INFO - Updated serialno 23858: sne=5778.94, ppr=488.93999999999994, repair_days=None
+2024-12-02 12:27:42,317 - INFO - Updated serialno 2428С87: sne=256.78000000000003, ppr=256.78000000000003, repair_days=None
+2024-12-02 12:27:42,326 - INFO - Updated serialno 2438C127: sne=91.84, ppr=91.84, repair_days=None
+2024-12-02 12:27:42,336 - INFO - Updated serialno 2438С115: sne=147.89000000000001, ppr=147.89000000000001, repair_days=None
+2024-12-02 12:27:42,346 - INFO - Updated serialno 24814: sne=5960.71, ppr=479.71, repair_days=None
+2024-12-02 12:27:42,355 - INFO - Updated serialno 32847: sne=5911.13, ppr=330.40999999999997, repair_days=None
+2024-12-02 12:27:42,367 - INFO - Updated serialno 33853: sne=5746.26, ppr=687.7900000000001, repair_days=None
+2024-12-02 12:27:42,376 - INFO - Updated serialno 91873: sne=7296.41, ppr=1347.4099999999999, repair_days=None
+2024-12-02 12:27:42,384 - INFO - Updated serialno С1185793: sne=5994.16, ppr=1157.1599999999999, repair_days=None
+2024-12-02 12:27:42,395 - INFO - Updated serialno С318789: sne=5999.29, ppr=955.2900000000001, repair_days=None
+2024-12-02 12:27:42,402 - INFO - Updated serialno С3281283: sne=5796.16, ppr=1490.1599999999999, repair_days=None
+2024-12-02 12:27:42,411 - INFO - Updated serialno С4281457: sne=4105.19, ppr=1122.1899999999998, repair_days=None
+2024-12-02 12:27:42,420 - INFO - Updated serialno С4381509: sne=5972.28, ppr=199.28000000000003, repair_days=None
+2024-12-02 12:27:42,427 - INFO - Updated serialno С498В1255: sne=3114.21, ppr=631.21, repair_days=None
+2024-12-02 12:27:42,435 - INFO - Updated serialno С5280753: sne=7476.46, ppr=348.46, repair_days=None
+2024-12-02 12:27:42,443 - INFO - Updated serialno С7387241: sne=4366.3099999999995, ppr=221.29000000000002, repair_days=None
+2024-12-02 12:27:42,451 - INFO - Updated serialno С8382220: sne=4026.8599999999997, ppr=1042.86, repair_days=None
+2024-12-02 12:27:42,459 - INFO - Updated serialno СВ98В875: sne=4059.68, ppr=170.13000000000002, repair_days=None
+2024-12-02 12:27:42,469 - INFO - Updated serialno СВ98В927: sne=4736.29, ppr=780.2900000000001, repair_days=None
+2024-12-02 12:27:42,478 - INFO - Updated serialno 1618С9: sne=5168.16, ppr=693.1600000000001, repair_days=None
+2024-12-02 12:27:42,485 - INFO - Updated serialno 1638С142: sne=4445.41, ppr=1470.4099999999999, repair_days=None
+2024-12-02 12:27:42,498 - INFO - Updated serialno 1648С143: sne=3502.96, ppr=516.0100000000001, repair_days=None
+2024-12-02 12:27:42,506 - INFO - Updated serialno 1718С12: sne=3800.54, ppr=1037.5099999999998, repair_days=None
+2024-12-02 12:27:42,514 - INFO - Updated serialno 1718С17: sne=4107.41, ppr=958.19, repair_days=None
+2024-12-02 12:27:42,525 - INFO - Updated serialno 1718С18: sne=3708.94, ppr=724.94, repair_days=None
+2024-12-02 12:27:42,533 - INFO - Updated serialno 1718С19: sne=2686.99, ppr=1196.9899999999998, repair_days=None
+2024-12-02 12:27:42,540 - INFO - Updated serialno 1718С22: sne=4197.93, ppr=1199.9299999999998, repair_days=None
+2024-12-02 12:27:42,552 - INFO - Updated serialno 1718С23: sne=5489.24, ppr=1007.46, repair_days=None
+2024-12-02 12:27:42,558 - INFO - Updated serialno 1718С37: sne=2426.74, ppr=934.7400000000001, repair_days=None
+2024-12-02 12:27:42,568 - INFO - Updated serialno 1728С70: sne=2286.43, ppr=787.6600000000001, repair_days=None
+2024-12-02 12:27:42,575 - INFO - Updated serialno 1728С79: sne=4306.34, ppr=1315.54, repair_days=None
+2024-12-02 12:27:42,584 - INFO - Updated serialno 1728С80: sne=4200.71, ppr=1208.7099999999998, repair_days=None
+2024-12-02 12:27:42,591 - INFO - Updated serialno 1748С176: sne=4030.23, ppr=1043.8899999999999, repair_days=None
+2024-12-02 12:27:42,601 - INFO - Updated serialno 1748С177: sne=2974.44, ppr=1485.1899999999998, repair_days=None
+2024-12-02 12:27:42,613 - INFO - Updated serialno 1748С178: sne=3555.81, ppr=568.5300000000001, repair_days=None
+2024-12-02 12:27:42,620 - INFO - Updated serialno 1748С183: sne=2987.03, ppr=1496.03, repair_days=38.0
+2024-12-02 12:27:42,628 - INFO - Updated serialno 1828С34: sne=2890.71, ppr=1400.7799999999997, repair_days=None
+2024-12-02 12:27:42,638 - INFO - Updated serialno 1828С35: sne=2983.73, ppr=1483.73, repair_days=63.0
+2024-12-02 12:27:42,647 - INFO - Updated serialno 1828С49: sne=3648.64, ppr=658.33, repair_days=None
+2024-12-02 12:27:42,653 - INFO - Updated serialno 1838С79: sne=4324.99, ppr=1326.0099999999998, repair_days=None
+2024-12-02 12:27:42,661 - INFO - Updated serialno 1838С80: sne=1356.6799999999998, ppr=1176.61, repair_days=None
+2024-12-02 12:27:42,673 - INFO - Updated serialno 1838С81: sne=1489.9599999999998, ppr=5.6899999999999995, repair_days=None
+2024-12-02 12:27:42,682 - INFO - Updated serialno 1838С85: sne=3476.06, ppr=487.38, repair_days=None
+2024-12-02 12:27:42,689 - INFO - Updated serialno 1848С101: sne=2968.35, ppr=1495.35, repair_days=75.0
+2024-12-02 12:27:42,699 - INFO - Updated serialno 1848С90: sne=3476.83, ppr=487.03, repair_days=None
+2024-12-02 12:27:42,707 - INFO - Updated serialno 1848С91: sne=1809.9399999999998, ppr=351.93999999999994, repair_days=None
+2024-12-02 12:27:42,715 - INFO - Updated serialno 1848С92: sne=3966.54, ppr=975.19, repair_days=None
+2024-12-02 12:27:42,725 - INFO - Updated serialno 1848С94: sne=3507.74, ppr=611.7300000000001, repair_days=None
+2024-12-02 12:27:42,734 - INFO - Updated serialno 1848С95: sne=2516.74, ppr=1039.7399999999998, repair_days=None
+2024-12-02 12:27:42,743 - INFO - Updated serialno 1848С96: sne=1576.09, ppr=87.86, repair_days=None
+2024-12-02 12:27:42,752 - INFO - Updated serialno 1848С98: sne=1958.1599999999999, ppr=466.21, repair_days=None
+2024-12-02 12:27:42,760 - INFO - Updated serialno 1848С99: sne=3900.16, ppr=905.59, repair_days=None
+2024-12-02 12:27:42,768 - INFO - Updated serialno 2048С109: sne=1489.4099999999999, ppr=84.81, repair_days=None
+2024-12-02 12:27:42,780 - INFO - Updated serialno 2048С116: sne=1467.2799999999997, ppr=62.279999999999994, repair_days=None
+2024-12-02 12:27:42,787 - INFO - Updated serialno 2048С118: sne=1493.12, ppr=1493.12, repair_days=29.0
+2024-12-02 12:27:42,796 - INFO - Updated serialno 2048С125: sne=1852.0299999999997, ppr=356.03, repair_days=None
+2024-12-02 12:27:42,809 - INFO - Updated serialno 2048С144: sne=1765.83, ppr=268.78999999999996, repair_days=None
+2024-12-02 12:27:42,818 - INFO - Updated serialno 2048С148: sne=2971.22, ppr=1498.22, repair_days=33.0
+2024-12-02 12:27:42,827 - INFO - Updated serialno 2118С26: sne=2492.41, ppr=994.4100000000001, repair_days=None
+2024-12-02 12:27:42,836 - INFO - Updated serialno 2128С58: sne=2477.7799999999997, ppr=985.7800000000001, repair_days=None
+2024-12-02 12:27:42,844 - INFO - Updated serialno 2128С60: sne=1748.56, ppr=282.08, repair_days=None
+2024-12-02 12:27:42,885 - INFO - Updated serialno 2138С107: sne=1836.6799999999998, ppr=338.33, repair_days=None
+2024-12-02 12:27:42,893 - INFO - Updated serialno 2148С113: sne=1266.11, ppr=1266.11, repair_days=None
+2024-12-02 12:27:42,901 - INFO - Updated serialno 2148С114: sne=2113.2799999999997, ppr=612.94, repair_days=None
+2024-12-02 12:27:42,907 - INFO - Updated serialno 2148С116: sne=1497.2, ppr=1497.2, repair_days=48.0
+2024-12-02 12:27:42,914 - INFO - Updated serialno 2148С133: sne=1443.4599999999998, ppr=1443.4599999999998, repair_days=None
+2024-12-02 12:27:42,922 - INFO - Updated serialno 2148С136: sne=1499.1599999999999, ppr=3.83, repair_days=None
+2024-12-02 12:27:42,931 - INFO - Updated serialno 21824: sne=3875.83, ppr=50.379999999999995, repair_days=None
+2024-12-02 12:27:42,941 - INFO - Updated serialno 2218С42: sne=586.33, ppr=586.33, repair_days=None
+2024-12-02 12:27:42,951 - INFO - Updated serialno 2218С43: sne=746.21, ppr=746.21, repair_days=None
+2024-12-02 12:27:42,962 - INFO - Updated serialno 2218С46: sne=722.1800000000001, ppr=722.1800000000001, repair_days=None
+2024-12-02 12:27:42,970 - INFO - Updated serialno 2218С47: sne=743.08, ppr=743.08, repair_days=None
+2024-12-02 12:27:42,982 - INFO - Updated serialno 2228С56: sne=1497.38, ppr=1497.38, repair_days=77.0
+2024-12-02 12:27:42,991 - INFO - Updated serialno 2228С57: sne=1754.2599999999998, ppr=274.53999999999996, repair_days=None
+2024-12-02 12:27:42,998 - INFO - Updated serialno 2228С58: sne=1429.1799999999998, ppr=1429.1799999999998, repair_days=None
+2024-12-02 12:27:43,008 - INFO - Updated serialno 2228С67: sne=539.2800000000001, ppr=539.2800000000001, repair_days=None
+2024-12-02 12:27:43,017 - INFO - Updated serialno 2228С72: sne=559.1600000000001, ppr=559.1600000000001, repair_days=None
+2024-12-02 12:27:43,024 - INFO - Updated serialno 2228С73: sne=495.13, ppr=495.13, repair_days=None
+2024-12-02 12:27:43,031 - INFO - Updated serialno 2228С77: sne=1629.5099999999998, ppr=157.76000000000002, repair_days=None
+2024-12-02 12:27:43,037 - INFO - Updated serialno 2238С100: sne=1028.5099999999998, ppr=1028.5099999999998, repair_days=None
+2024-12-02 12:27:43,047 - INFO - Updated serialno 2238С132: sne=542.0300000000001, ppr=542.0300000000001, repair_days=None
+2024-12-02 12:31:31,211 - INFO - Initial date in OlapCube_VNV: 2024-11-25
+2024-12-02 12:31:31,212 - INFO - Target date: 2024-11-26, Previous date: 2024-11-25
+2024-12-02 12:31:31,328 - INFO - Извлечено 420 записей на target_date.
+2024-12-02 12:31:31,338 - INFO - Updated serialno 2238С133: sne=521.08, ppr=521.08, repair_days=None
+2024-12-02 12:31:31,344 - INFO - Updated serialno 2238С95: sne=662.33, ppr=662.33, repair_days=None
+2024-12-02 12:31:31,354 - INFO - Updated serialno 2238С99: sne=658.76, ppr=658.76, repair_days=None
+2024-12-02 12:31:31,365 - INFO - Updated serialno 2248С149: sne=459.54, ppr=459.54, repair_days=None
+2024-12-02 12:31:31,375 - INFO - Updated serialno 2248С150: sne=537.34, ppr=537.34, repair_days=None
+2024-12-02 12:31:31,384 - INFO - Updated serialno 2248С165: sne=1404.55, ppr=1404.55, repair_days=46.0
+2024-12-02 12:31:31,393 - INFO - Updated serialno 2248С166: sne=1283.53, ppr=1283.53, repair_days=None
+2024-12-02 12:31:31,402 - INFO - Updated serialno 2248С169: sne=1227.41, ppr=1227.41, repair_days=None
+2024-12-02 12:31:31,413 - INFO - Updated serialno 2248С175: sne=1203.33, ppr=1203.33, repair_days=None
+2024-12-02 12:31:31,423 - INFO - Updated serialno 2248С176: sne=837.04, ppr=837.04, repair_days=None
+2024-12-02 12:31:31,431 - INFO - Updated serialno 0938С114: sne=4231.51, ppr=74.58, repair_days=None
+2024-12-02 12:31:31,439 - INFO - Updated serialno 0938С99: sne=5993.16, ppr=1000.16, repair_days=None
+2024-12-02 12:31:31,454 - INFO - Updated serialno 0948С179: sne=5888.11, ppr=362.66, repair_days=None
+2024-12-02 12:31:31,473 - INFO - Updated serialno 0948С189: sne=5951.74, ppr=1465.74, repair_days=None
+2024-12-02 12:31:31,485 - INFO - Updated serialno 0948С190: sne=4029.31, ppr=1089.31, repair_days=None
+2024-12-02 12:31:31,493 - INFO - Updated serialno 1018С12: sne=5873.74, ppr=854.38, repair_days=None
+2024-12-02 12:31:31,500 - INFO - Updated serialno 1018С13: sne=3785.96, ppr=99.68, repair_days=None
+2024-12-02 12:31:31,511 - INFO - Updated serialno 1018С17: sne=5457.41, ppr=975.01, repair_days=None
+2024-12-02 12:31:31,521 - INFO - Updated serialno 1018С2: sne=5465.49, ppr=979.78, repair_days=None
+2024-12-02 12:31:31,530 - INFO - Updated serialno 1018С34: sne=5972.59, ppr=1481.59, repair_days=None
+2024-12-02 12:31:31,538 - INFO - Updated serialno 1148С229: sne=4433.44, ppr=1434.44, repair_days=None
+2024-12-02 12:31:31,545 - INFO - Updated serialno 118107: sne=5055.23, ppr=1237.23, repair_days=None
+2024-12-02 12:31:31,555 - INFO - Updated serialno 11862: sne=5297.46, ppr=808.46, repair_days=None
+2024-12-02 12:31:31,571 - INFO - Updated serialno 2248С177: sne=1049.94, ppr=1049.94, repair_days=None
+2024-12-02 12:31:31,580 - INFO - Updated serialno 2248С178: sne=992.76, ppr=992.76, repair_days=None
+2024-12-02 12:31:31,587 - INFO - Updated serialno 2248С179: sne=655.76, ppr=655.76, repair_days=None
+2024-12-02 12:31:31,598 - INFO - Updated serialno 2248С180: sne=862.41, ppr=862.41, repair_days=None
+2024-12-02 12:31:31,605 - INFO - Updated serialno 2248С184: sne=1275.74, ppr=1275.74, repair_days=None
+2024-12-02 12:31:31,618 - INFO - Updated serialno 2248С185: sne=1399.18, ppr=1399.18, repair_days=None
+2024-12-02 12:31:31,629 - INFO - Updated serialno 2248С186: sne=1278.31, ppr=1278.31, repair_days=None
+2024-12-02 12:31:31,638 - INFO - Updated serialno 228118: sne=3535.44, ppr=1260.44, repair_days=None
+2024-12-02 12:31:31,647 - INFO - Updated serialno 2318С16: sne=468.46, ppr=468.46, repair_days=None
+2024-12-02 12:31:31,656 - INFO - Updated serialno 2318С17: sne=535.38, ppr=535.38, repair_days=None
+2024-12-02 12:31:31,664 - INFO - Updated serialno 2318С36: sne=906.66, ppr=906.66, repair_days=None
+2024-12-02 12:31:31,673 - INFO - Updated serialno 2318С37: sne=656.41, ppr=656.41, repair_days=None
+2024-12-02 12:31:31,681 - INFO - Updated serialno 2328С102: sne=513.16, ppr=513.16, repair_days=None
+2024-12-02 12:31:31,692 - INFO - Updated serialno 2338С109: sne=631.83, ppr=631.83, repair_days=None
+2024-12-02 12:31:31,701 - INFO - Updated serialno 2338С110: sne=826.81, ppr=826.81, repair_days=None
+2024-12-02 12:31:31,710 - INFO - Updated serialno 2338С111: sne=751.54, ppr=751.54, repair_days=None
+2024-12-02 12:31:31,718 - INFO - Updated serialno 2338С117: sne=720.49, ppr=720.49, repair_days=None
+2024-12-02 12:31:31,728 - INFO - Updated serialno 2338С118: sne=905.49, ppr=905.49, repair_days=None
+2024-12-02 12:31:31,738 - INFO - Updated serialno 2338С119: sne=373.89, ppr=373.89, repair_days=None
+2024-12-02 12:31:31,774 - INFO - Updated serialno 128236: sne=5364.04, ppr=907.04, repair_days=None
+2024-12-02 12:31:31,785 - INFO - Updated serialno 1328С150: sne=5305.63, ppr=838.63, repair_days=None
+2024-12-02 12:31:31,795 - INFO - Updated serialno 1328С151: sne=3386.21, ppr=441.54, repair_days=None
+2024-12-02 12:31:31,806 - INFO - Updated serialno 1418С30: sne=1788.11, ppr=1196.89, repair_days=None
+2024-12-02 12:31:31,815 - INFO - Updated serialno 1518С14: sne=2204.64, ppr=1185.36, repair_days=None
+2024-12-02 12:31:31,822 - INFO - Updated serialno 1518С26: sne=918.64, ppr=252.44, repair_days=None
+2024-12-02 12:31:31,830 - INFO - Updated serialno 1528С117: sne=4597.11, ppr=160.11, repair_days=None
+2024-12-02 12:31:31,838 - INFO - Updated serialno 1548С241: sne=4500.58, ppr=6.81, repair_days=None
+2024-12-02 12:31:31,857 - INFO - Updated serialno 2338С120: sne=715.54, ppr=715.54, repair_days=None
+2024-12-02 12:31:31,866 - INFO - Updated serialno 2338С121: sne=686.94, ppr=686.94, repair_days=None
+2024-12-02 12:31:31,875 - INFO - Updated serialno 2338С127: sne=634.41, ppr=634.41, repair_days=None
+2024-12-02 12:31:31,885 - INFO - Updated serialno 2338С128: sne=690.96, ppr=690.96, repair_days=None
+2024-12-02 12:31:31,894 - INFO - Updated serialno 2338С132: sne=773.19, ppr=773.19, repair_days=None
+2024-12-02 12:31:31,904 - INFO - Updated serialno 2338С133: sne=642.06, ppr=642.06, repair_days=None
+2024-12-02 12:31:31,915 - INFO - Updated serialno 2338С134: sne=628.64, ppr=628.64, repair_days=None
+2024-12-02 12:31:31,926 - INFO - Updated serialno 2338С135: sne=601.11, ppr=601.11, repair_days=None
+2024-12-02 12:31:31,936 - INFO - Updated serialno 2338С162: sne=562.26, ppr=562.26, repair_days=None
+2024-12-02 12:31:31,946 - INFO - Updated serialno 2338С163: sne=379.51, ppr=379.51, repair_days=None
+2024-12-02 12:31:31,963 - INFO - Updated serialno 1548С243: sne=4824.14, ppr=345.88, repair_days=None
+2024-12-02 12:31:31,970 - INFO - Updated serialno 1548С244: sne=3995.83, ppr=1002.61, repair_days=None
+2024-12-02 12:31:31,980 - INFO - Updated serialno 1618С11: sne=3604.59, ppr=621.59, repair_days=None
+2024-12-02 12:31:31,989 - INFO - Updated serialno 1618С18: sne=4302.51, ppr=1336.51, repair_days=None
+2024-12-02 12:31:31,999 - INFO - Updated serialno 1618С23: sne=5069.51, ppr=583.84, repair_days=None
+2024-12-02 12:31:32,009 - INFO - Updated serialno 1618С34: sne=4899.76, ppr=405.04, repair_days=None
+2024-12-02 12:31:32,022 - INFO - Updated serialno 1618С46: sne=3239.94, ppr=257.94, repair_days=None
+2024-12-02 12:31:32,031 - INFO - Updated serialno 1618С55: sne=4506.28, ppr=12.81, repair_days=None
+2024-12-02 12:31:32,040 - INFO - Updated serialno 1618С57: sne=3872.04, ppr=880.04, repair_days=None
+2024-12-02 12:31:32,048 - INFO - Updated serialno 1618С58: sne=3357.78, ppr=404.78, repair_days=None
+2024-12-02 12:31:32,058 - INFO - Updated serialno 2338С164: sne=503.79, ppr=503.79, repair_days=None
+2024-12-02 12:31:32,066 - INFO - Updated serialno 2338С165: sne=212.71, ppr=212.71, repair_days=None
+2024-12-02 12:31:32,074 - INFO - Updated serialno 2338С166: sne=235.81, ppr=235.81, repair_days=None
+2024-12-02 12:31:32,082 - INFO - Updated serialno 2338С167: sne=620.68, ppr=620.68, repair_days=None
+2024-12-02 12:31:32,095 - INFO - Updated serialno 2348С168: sne=526.31, ppr=526.31, repair_days=None
+2024-12-02 12:31:32,102 - INFO - Updated serialno 2348С170: sne=450.24, ppr=450.24, repair_days=None
+2024-12-02 12:31:32,110 - INFO - Updated serialno 2348С176: sne=530.71, ppr=530.71, repair_days=None
+2024-12-02 12:31:32,117 - INFO - Updated serialno 2348С177: sne=344.83, ppr=344.83, repair_days=None
+2024-12-02 12:31:32,125 - INFO - Updated serialno 2348С178: sne=267.41, ppr=267.41, repair_days=None
+2024-12-02 12:31:32,133 - INFO - Updated serialno 2348С179: sne=412.71, ppr=412.71, repair_days=None
+2024-12-02 12:31:32,143 - INFO - Updated serialno 1618С9: sne=5168.16, ppr=693.16, repair_days=None
+2024-12-02 12:31:32,152 - INFO - Updated serialno 1638С142: sne=4445.41, ppr=1470.41, repair_days=None
+2024-12-02 12:31:32,162 - INFO - Updated serialno 1648С143: sne=3502.96, ppr=516.01, repair_days=None
+2024-12-02 12:31:32,169 - INFO - Updated serialno 1718С12: sne=3800.54, ppr=1037.51, repair_days=None
+2024-12-02 12:31:32,178 - INFO - Updated serialno 1718С17: sne=4107.41, ppr=958.19, repair_days=None
+2024-12-02 12:31:32,186 - INFO - Updated serialno 1718С18: sne=3708.94, ppr=724.94, repair_days=None
+2024-12-02 12:31:32,195 - INFO - Updated serialno 1718С19: sne=2686.99, ppr=1196.99, repair_days=None
+2024-12-02 12:31:32,205 - INFO - Updated serialno 1718С22: sne=4197.93, ppr=1199.93, repair_days=None
+2024-12-02 12:31:32,214 - INFO - Updated serialno 1718С23: sne=5489.24, ppr=1007.46, repair_days=None
+2024-12-02 12:31:32,224 - INFO - Updated serialno 1718С37: sne=2426.74, ppr=934.74, repair_days=None
+2024-12-02 12:31:32,233 - INFO - Updated serialno 1728С70: sne=2286.43, ppr=787.66, repair_days=None
+2024-12-02 12:31:32,243 - INFO - Updated serialno 1728С79: sne=4306.34, ppr=1315.54, repair_days=None
+2024-12-02 12:31:32,252 - INFO - Updated serialno 1728С80: sne=4200.71, ppr=1208.71, repair_days=None
+2024-12-02 12:31:32,262 - INFO - Updated serialno 1748С176: sne=4030.23, ppr=1043.89, repair_days=None
+2024-12-02 12:31:32,302 - INFO - Updated serialno 1748С177: sne=2974.44, ppr=1485.19, repair_days=None
+2024-12-02 12:31:32,312 - INFO - Updated serialno 1748С178: sne=3555.81, ppr=568.53, repair_days=None
+2024-12-02 12:31:32,320 - INFO - Updated serialno 1748С183: sne=2987.03, ppr=1496.03, repair_days=38.0
+2024-12-02 12:31:32,335 - INFO - Updated serialno 1828С34: sne=2890.71, ppr=1400.78, repair_days=None
+2024-12-02 12:31:32,354 - INFO - Updated serialno 1828С35: sne=2983.73, ppr=1483.73, repair_days=63.0
+2024-12-02 12:31:32,365 - INFO - Updated serialno 1828С49: sne=3648.64, ppr=658.33, repair_days=None
+2024-12-02 12:31:32,376 - INFO - Updated serialno 2348С180: sne=446.61, ppr=446.61, repair_days=None
+2024-12-02 12:31:32,392 - INFO - Updated serialno 23819: sne=5745.71, ppr=132.56, repair_days=None
+2024-12-02 12:31:32,403 - INFO - Updated serialno 23856: sne=5179.21, ppr=677.21, repair_days=None
+2024-12-02 12:31:32,413 - INFO - Updated serialno 23858: sne=5778.94, ppr=488.94, repair_days=None
+2024-12-02 12:31:32,422 - INFO - Updated serialno 2428С87: sne=256.78, ppr=256.78, repair_days=None
+2024-12-02 12:31:32,434 - INFO - Updated serialno 2438C127: sne=91.84, ppr=91.84, repair_days=None
+2024-12-02 12:31:32,447 - INFO - Updated serialno 2438С115: sne=147.89, ppr=147.89, repair_days=None
+2024-12-02 12:31:32,454 - INFO - Updated serialno 24814: sne=5960.71, ppr=479.71, repair_days=None
+2024-12-02 12:31:32,465 - INFO - Updated serialno 32847: sne=5911.13, ppr=330.41, repair_days=None
+2024-12-02 12:31:32,477 - INFO - Updated serialno 33853: sne=5746.26, ppr=687.79, repair_days=None
+2024-12-02 12:31:32,486 - INFO - Updated serialno 91873: sne=7296.41, ppr=1347.41, repair_days=None
+2024-12-02 12:31:32,494 - INFO - Updated serialno С1185793: sne=5994.16, ppr=1157.16, repair_days=None
+2024-12-02 12:31:32,503 - INFO - Updated serialno С318789: sne=5999.29, ppr=955.29, repair_days=None
+2024-12-02 12:31:32,512 - INFO - Updated serialno С3281283: sne=5796.16, ppr=1490.16, repair_days=None
+2024-12-02 12:31:32,521 - INFO - Updated serialno С4281457: sne=4105.19, ppr=1122.19, repair_days=None
+2024-12-02 12:31:32,529 - INFO - Updated serialno С4381509: sne=5972.28, ppr=199.28, repair_days=None
+2024-12-02 12:31:32,538 - INFO - Updated serialno С498В1255: sne=3114.21, ppr=631.21, repair_days=None
+2024-12-02 12:31:32,550 - INFO - Updated serialno С5280753: sne=7476.46, ppr=348.46, repair_days=None
+2024-12-02 12:31:32,561 - INFO - Updated serialno С7387241: sne=4366.31, ppr=221.29, repair_days=None
+2024-12-02 12:31:32,570 - INFO - Updated serialno С8382220: sne=4026.86, ppr=1042.86, repair_days=None
+2024-12-02 12:31:32,579 - INFO - Updated serialno СВ98В875: sne=4059.68, ppr=170.13, repair_days=None
+2024-12-02 12:31:32,588 - INFO - Updated serialno СВ98В927: sne=4736.29, ppr=780.29, repair_days=None
+2024-12-02 12:31:32,596 - INFO - Updated serialno 1838С79: sne=4324.99, ppr=1326.01, repair_days=None
+2024-12-02 12:31:32,604 - INFO - Updated serialno 1838С80: sne=1356.68, ppr=1176.61, repair_days=None
+2024-12-02 12:31:32,612 - INFO - Updated serialno 1838С81: sne=1489.96, ppr=5.69, repair_days=None
+2024-12-02 12:31:32,620 - INFO - Updated serialno 1838С85: sne=3476.06, ppr=487.38, repair_days=None
+2024-12-02 12:31:32,629 - INFO - Updated serialno 1848С101: sne=2968.35, ppr=1495.35, repair_days=75.0
+2024-12-02 12:31:32,638 - INFO - Updated serialno 1848С90: sne=3476.83, ppr=487.03, repair_days=None
+2024-12-02 12:31:32,647 - INFO - Updated serialno 1848С91: sne=1809.94, ppr=351.94, repair_days=None
+2024-12-02 12:31:32,657 - INFO - Updated serialno 1848С92: sne=3966.54, ppr=975.19, repair_days=None
+2024-12-02 12:31:32,665 - INFO - Updated serialno 1848С94: sne=3507.74, ppr=611.73, repair_days=None
+2024-12-02 12:31:32,676 - INFO - Updated serialno 1848С95: sne=2516.74, ppr=1039.74, repair_days=None
+2024-12-02 12:31:32,683 - INFO - Updated serialno 1848С96: sne=1576.09, ppr=87.86, repair_days=None
+2024-12-02 12:31:32,694 - INFO - Updated serialno 1848С98: sne=1958.16, ppr=466.21, repair_days=None
+2024-12-02 12:31:32,703 - INFO - Updated serialno 1848С99: sne=3900.16, ppr=905.59, repair_days=None
+2024-12-02 12:31:32,710 - INFO - Updated serialno 2048С109: sne=1489.41, ppr=84.81, repair_days=None
+2024-12-02 12:31:32,719 - INFO - Updated serialno 2048С116: sne=1467.28, ppr=62.28, repair_days=None
+2024-12-02 12:31:32,728 - INFO - Updated serialno 2048С118: sne=1493.12, ppr=1493.12, repair_days=29.0
+2024-12-02 12:31:32,736 - INFO - Updated serialno 2048С125: sne=1852.03, ppr=356.03, repair_days=None
+2024-12-02 12:31:32,746 - INFO - Updated serialno 2048С144: sne=1765.83, ppr=268.79, repair_days=None
+2024-12-02 12:31:32,754 - INFO - Updated serialno 2048С148: sne=2971.22, ppr=1498.22, repair_days=33.0
+2024-12-02 12:31:32,764 - INFO - Updated serialno 2118С26: sne=2492.41, ppr=994.41, repair_days=None
+2024-12-02 12:31:32,774 - INFO - Updated serialno 2128С58: sne=2477.78, ppr=985.78, repair_days=None
+2024-12-02 12:31:32,784 - INFO - Updated serialno 2128С60: sne=1748.56, ppr=282.08, repair_days=None
+2024-12-02 12:31:32,793 - INFO - Updated serialno 2138С107: sne=1836.68, ppr=338.33, repair_days=None
+2024-12-02 12:31:32,802 - INFO - Updated serialno 2148С113: sne=1266.11, ppr=1266.11, repair_days=None
+2024-12-02 12:31:32,811 - INFO - Updated serialno 2148С114: sne=2113.28, ppr=612.94, repair_days=None
+2024-12-02 12:31:32,821 - INFO - Updated serialno 2148С116: sne=1497.2, ppr=1497.2, repair_days=48.0
+2024-12-02 12:31:32,830 - INFO - Updated serialno 2148С133: sne=1443.46, ppr=1443.46, repair_days=None
+2024-12-02 12:31:32,846 - INFO - Updated serialno 2148С136: sne=1499.16, ppr=3.83, repair_days=None
+2024-12-02 12:31:32,855 - INFO - Updated serialno 21824: sne=3875.83, ppr=50.38, repair_days=None
+2024-12-02 12:31:32,864 - INFO - Updated serialno 2218С42: sne=586.33, ppr=586.33, repair_days=None
+2024-12-02 12:31:32,874 - INFO - Updated serialno 2218С43: sne=746.21, ppr=746.21, repair_days=None
+2024-12-02 12:31:32,886 - INFO - Updated serialno 2218С46: sne=722.18, ppr=722.18, repair_days=None
+2024-12-02 12:31:32,895 - INFO - Updated serialno 2218С47: sne=743.08, ppr=743.08, repair_days=None
+2024-12-02 12:31:32,909 - INFO - Updated serialno 2228С56: sne=1497.38, ppr=1497.38, repair_days=77.0
+2024-12-02 12:31:32,920 - INFO - Updated serialno 2228С57: sne=1754.26, ppr=274.54, repair_days=None
+2024-12-02 12:31:32,930 - INFO - Updated serialno 2228С58: sne=1429.18, ppr=1429.18, repair_days=None
+2024-12-02 12:31:32,943 - INFO - Updated serialno 2228С67: sne=539.28, ppr=539.28, repair_days=None
+2024-12-02 12:31:32,953 - INFO - Updated serialno 2228С72: sne=559.16, ppr=559.16, repair_days=None
+2024-12-02 12:31:32,963 - INFO - Updated serialno 2228С73: sne=495.13, ppr=495.13, repair_days=None
+2024-12-02 12:31:32,971 - INFO - Updated serialno 2228С77: sne=1629.51, ppr=157.76, repair_days=None
+2024-12-02 12:31:32,979 - INFO - Updated serialno 2238С100: sne=1028.51, ppr=1028.51, repair_days=None
+2024-12-02 12:31:32,987 - INFO - Updated serialno 2238С132: sne=542.03, ppr=542.03, repair_days=None
+2024-12-02 12:43:57,251 - INFO - Начальная дата в OlapCube_VNV: 2024-11-25
+2024-12-02 12:43:57,252 - INFO - Определен target_date: 2024-11-26
+2024-12-02 12:43:57,253 - INFO - Обработка предыдущей даты: 2024-11-25
+2024-12-02 12:43:57,254 - INFO - Обработка target_date: 2024-11-26
+2024-12-02 12:43:57,369 - INFO - Извлечено 420 записей за предыдущую дату 2024-11-25.
+2024-12-02 12:43:57,488 - INFO - Извлечено 420 записей за target_date 2024-11-26.
+2024-12-02 12:43:57,496 - INFO - Обновлены счетчики для serialno: S1, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,507 - INFO - Обновлены счетчики для serialno: S10, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,516 - INFO - Обновлены счетчики для serialno: S100, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,525 - INFO - Обновлены счетчики для serialno: S194, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,534 - INFO - Обновлены счетчики для serialno: S195, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,541 - INFO - Обновлены счетчики для serialno: S101, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,547 - INFO - Обновлены счетчики для serialno: S102, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,554 - INFO - Обновлены счетчики для serialno: S196, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,560 - INFO - Обновлены счетчики для serialno: S197, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,567 - INFO - Обновлены счетчики для serialno: S103, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,575 - INFO - Обновлены счетчики для serialno: S104, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,582 - INFO - Обновлены счетчики для serialno: S198, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,590 - INFO - Обновлены счетчики для serialno: S199, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,597 - INFO - Обновлены счетчики для serialno: S105, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,609 - INFO - Обновлены счетчики для serialno: S106, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,617 - INFO - Обновлены счетчики для serialno: 038159, Dates: 2024-11-26 -> sne: 4940.77, ppr: 508.77, repair_days: None
+2024-12-02 12:43:57,626 - INFO - Обновлены счетчики для serialno: 038189, Dates: 2024-11-26 -> sne: 5065.63, ppr: 723.63, repair_days: None
+2024-12-02 12:43:57,633 - INFO - Обновлены счетчики для serialno: 0828С46, Dates: 2024-11-26 -> sne: 5754.07, ppr: 1264.07, repair_days: None
+2024-12-02 12:43:57,641 - INFO - Обновлены счетчики для serialno: S2, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,650 - INFO - Обновлены счетчики для serialno: S20, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,657 - INFO - Обновлены счетчики для serialno: S107, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,664 - INFO - Обновлены счетчики для serialno: S108, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,670 - INFO - Обновлены счетчики для serialno: S200, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,677 - INFO - Обновлены счетчики для serialno: S201, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,685 - INFO - Обновлены счетчики для serialno: 0828С47, Dates: 2024-11-26 -> sne: 5610.67, ppr: 40.57, repair_days: None
+2024-12-02 12:43:57,691 - INFO - Обновлены счетчики для serialno: 0918С36, Dates: 2024-11-26 -> sne: 5565.28, ppr: 1102.28, repair_days: None
+2024-12-02 12:43:57,697 - INFO - Обновлены счетчики для serialno: S109, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,703 - INFO - Обновлены счетчики для serialno: S11, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,710 - INFO - Обновлены счетчики для serialno: 2238С133, Dates: 2024-11-26 -> sne: 521.08, ppr: 521.08, repair_days: None
+2024-12-02 12:43:57,717 - INFO - Обновлены счетчики для serialno: 2238С95, Dates: 2024-11-26 -> sne: 662.33, ppr: 662.33, repair_days: None
+2024-12-02 12:43:57,723 - INFO - Обновлены счетчики для serialno: S202, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,729 - INFO - Обновлены счетчики для serialno: S203, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,736 - INFO - Обновлены счетчики для serialno: S110, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,743 - INFO - Обновлены счетчики для serialno: S111, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,750 - INFO - Обновлены счетчики для serialno: 2238С99, Dates: 2024-11-26 -> sne: 658.7600000000001, ppr: 658.7600000000001, repair_days: None
+2024-12-02 12:43:57,756 - INFO - Обновлены счетчики для serialno: 2248С149, Dates: 2024-11-26 -> sne: 459.53999999999996, ppr: 459.53999999999996, repair_days: None
+2024-12-02 12:43:57,765 - INFO - Обновлены счетчики для serialno: S204, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,783 - INFO - Обновлены счетчики для serialno: S205, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,790 - INFO - Обновлены счетчики для serialno: S112, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,798 - INFO - Обновлены счетчики для serialno: S113, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,806 - INFO - Обновлены счетчики для serialno: S206, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,813 - INFO - Обновлены счетчики для serialno: S207, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,819 - INFO - Обновлены счетчики для serialno: 2248С150, Dates: 2024-11-26 -> sne: 537.34, ppr: 537.34, repair_days: None
+2024-12-02 12:43:57,826 - INFO - Обновлены счетчики для serialno: 2248С165, Dates: 2024-11-26 -> sne: 1404.55, ppr: 1404.55, repair_days: 46.0
+2024-12-02 12:43:57,833 - INFO - Обновлены счетчики для serialno: S114, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,840 - INFO - Обновлены счетчики для serialno: S115, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,847 - INFO - Обновлены счетчики для serialno: S208, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,854 - INFO - Обновлены счетчики для serialno: S209, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,860 - INFO - Обновлены счетчики для serialno: S116, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,866 - INFO - Обновлены счетчики для serialno: S117, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,872 - INFO - Обновлены счетчики для serialno: 0938С112, Dates: 2024-11-26 -> sne: 5752.93, ppr: 1268.93, repair_days: None
+2024-12-02 12:43:57,880 - INFO - Обновлены счетчики для serialno: 0938С114, Dates: 2024-11-26 -> sne: 4231.51, ppr: 74.58, repair_days: None
+2024-12-02 12:43:57,887 - INFO - Обновлены счетчики для serialno: S21, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,893 - INFO - Обновлены счетчики для serialno: S210, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,932 - INFO - Обновлены счетчики для serialno: S118, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,939 - INFO - Обновлены счетчики для serialno: S119, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,947 - INFO - Обновлены счетчики для serialno: 0938С99, Dates: 2024-11-26 -> sne: 5993.16, ppr: 1000.1600000000001, repair_days: None
+2024-12-02 12:43:57,955 - INFO - Обновлены счетчики для serialno: 0948С179, Dates: 2024-11-26 -> sne: 5888.11, ppr: 362.65999999999997, repair_days: None
+2024-12-02 12:43:57,962 - INFO - Обновлены счетчики для serialno: S211, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,968 - INFO - Обновлены счетчики для serialno: S212, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,974 - INFO - Обновлены счетчики для serialno: S12, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,982 - INFO - Обновлены счетчики для serialno: S120, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:57,990 - INFO - Обновлены счетчики для serialno: 0948С189, Dates: 2024-11-26 -> sne: 5951.74, ppr: 1465.7399999999998, repair_days: None
+2024-12-02 12:43:57,997 - INFO - Обновлены счетчики для serialno: 0948С190, Dates: 2024-11-26 -> sne: 4029.31, ppr: 1089.31, repair_days: None
+2024-12-02 12:43:58,008 - INFO - Обновлены счетчики для serialno: S213, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,015 - INFO - Обновлены счетчики для serialno: S214, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,023 - INFO - Обновлены счетчики для serialno: S121, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,030 - INFO - Обновлены счетчики для serialno: S122, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,036 - INFO - Обновлены счетчики для serialno: 0948С191, Dates: 2024-11-26 -> sne: 5962.78, ppr: 1472.78, repair_days: None
+2024-12-02 12:43:58,043 - INFO - Обновлены счетчики для serialno: 1018С12, Dates: 2024-11-26 -> sne: 5873.74, ppr: 854.3800000000001, repair_days: None
+2024-12-02 12:43:58,050 - INFO - Обновлены счетчики для serialno: S215, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,056 - INFO - Обновлены счетчики для serialno: S216, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,062 - INFO - Обновлены счетчики для serialno: S217, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,069 - INFO - Обновлены счетчики для serialno: S123, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,076 - INFO - Обновлены счетчики для serialno: S124, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,084 - INFO - Обновлены счетчики для serialno: 1018С13, Dates: 2024-11-26 -> sne: 3785.96, ppr: 99.67999999999999, repair_days: None
+2024-12-02 12:43:58,092 - INFO - Обновлены счетчики для serialno: 1018С17, Dates: 2024-11-26 -> sne: 5457.41, ppr: 975.0100000000001, repair_days: None
+2024-12-02 12:43:58,128 - INFO - Обновлены счетчики для serialno: S218, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,137 - INFO - Обновлены счетчики для serialno: S219, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,145 - INFO - Обновлены счетчики для serialno: S125, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,152 - INFO - Обновлены счетчики для serialno: S126, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,160 - INFO - Обновлены счетчики для serialno: 1018С2, Dates: 2024-11-26 -> sne: 5465.49, ppr: 979.7800000000001, repair_days: None
+2024-12-02 12:43:58,166 - INFO - Обновлены счетчики для serialno: 1018С34, Dates: 2024-11-26 -> sne: 5972.59, ppr: 1481.59, repair_days: None
+2024-12-02 12:43:58,174 - INFO - Обновлены счетчики для serialno: S127, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,180 - INFO - Обновлены счетчики для serialno: S128, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,186 - INFO - Обновлены счетчики для serialno: 1148С229, Dates: 2024-11-26 -> sne: 4433.44, ppr: 1434.4399999999998, repair_days: None
+2024-12-02 12:43:58,194 - INFO - Обновлены счетчики для serialno: 118107, Dates: 2024-11-26 -> sne: 5055.23, ppr: 1237.2299999999998, repair_days: None
+2024-12-02 12:43:58,200 - INFO - Обновлены счетчики для serialno: S129, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,207 - INFO - Обновлены счетчики для serialno: S13, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,214 - INFO - Обновлены счетчики для serialno: 2248С166, Dates: 2024-11-26 -> sne: 1283.5299999999997, ppr: 1283.5299999999997, repair_days: None
+2024-12-02 12:43:58,221 - INFO - Обновлены счетчики для serialno: 2248С169, Dates: 2024-11-26 -> sne: 1227.4099999999999, ppr: 1227.4099999999999, repair_days: None
+2024-12-02 12:43:58,227 - INFO - Обновлены счетчики для serialno: S130, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,235 - INFO - Обновлены счетчики для serialno: S131, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,242 - INFO - Обновлены счетчики для serialno: S132, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,249 - INFO - Обновлены счетчики для serialno: S133, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,255 - INFO - Обновлены счетчики для serialno: 2248С175, Dates: 2024-11-26 -> sne: 1203.33, ppr: 1203.33, repair_days: None
+2024-12-02 12:43:58,263 - INFO - Обновлены счетчики для serialno: 2248С176, Dates: 2024-11-26 -> sne: 837.0400000000001, ppr: 837.0400000000001, repair_days: None
+2024-12-02 12:43:58,271 - INFO - Обновлены счетчики для serialno: S134, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,278 - INFO - Обновлены счетчики для serialno: S135, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,284 - INFO - Обновлены счетчики для serialno: S136, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,290 - INFO - Обновлены счетчики для serialno: S137, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,296 - INFO - Обновлены счетчики для serialno: 2248С177, Dates: 2024-11-26 -> sne: 1049.9399999999998, ppr: 1049.9399999999998, repair_days: None
+2024-12-02 12:43:58,302 - INFO - Обновлены счетчики для serialno: 2248С178, Dates: 2024-11-26 -> sne: 992.7600000000001, ppr: 992.7600000000001, repair_days: None
+2024-12-02 12:43:58,309 - INFO - Обновлены счетчики для serialno: S138, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,314 - INFO - Обновлены счетчики для serialno: S139, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,321 - INFO - Обновлены счетчики для serialno: S14, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,327 - INFO - Обновлены счетчики для serialno: 2248С179, Dates: 2024-11-26 -> sne: 655.7600000000001, ppr: 655.7600000000001, repair_days: None
+2024-12-02 12:43:58,334 - INFO - Обновлены счетчики для serialno: 2248С180, Dates: 2024-11-26 -> sne: 862.4100000000001, ppr: 862.4100000000001, repair_days: None
+2024-12-02 12:43:58,341 - INFO - Обновлены счетчики для serialno: S140, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,347 - INFO - Обновлены счетчики для serialno: S141, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,353 - INFO - Обновлены счетчики для serialno: S142, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,359 - INFO - Обновлены счетчики для serialno: S143, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,366 - INFO - Обновлены счетчики для serialno: 11862, Dates: 2024-11-26 -> sne: 5297.46, ppr: 808.46, repair_days: None
+2024-12-02 12:43:58,373 - INFO - Обновлены счетчики для serialno: 1228С101, Dates: 2024-11-26 -> sne: 4413.68, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,380 - INFO - Обновлены счетчики для serialno: 128236, Dates: 2024-11-26 -> sne: 5364.04, ppr: 907.0400000000001, repair_days: None
+2024-12-02 12:43:58,387 - INFO - Обновлены счетчики для serialno: 1328С150, Dates: 2024-11-26 -> sne: 5305.63, ppr: 838.6300000000001, repair_days: None
+2024-12-02 12:43:58,394 - INFO - Обновлены счетчики для serialno: S144, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,400 - INFO - Обновлены счетчики для serialno: S145, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,407 - INFO - Обновлены счетчики для serialno: S22, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,413 - INFO - Обновлены счетчики для serialno: S220, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,419 - INFO - Обновлены счетчики для serialno: S146, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,425 - INFO - Обновлены счетчики для serialno: S147, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,432 - INFO - Обновлены счетчики для serialno: 1328С151, Dates: 2024-11-26 -> sne: 3386.21, ppr: 441.53999999999996, repair_days: None
+2024-12-02 12:43:58,440 - INFO - Обновлены счетчики для serialno: 1418С30, Dates: 2024-11-26 -> sne: 1788.11, ppr: 1196.8899999999999, repair_days: None
+2024-12-02 12:43:58,446 - INFO - Обновлены счетчики для serialno: 1518С14, Dates: 2024-11-26 -> sne: 2204.64, ppr: 1185.36, repair_days: None
+2024-12-02 12:43:58,453 - INFO - Обновлены счетчики для serialno: S221, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,459 - INFO - Обновлены счетчики для serialno: S222, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,465 - INFO - Обновлены счетчики для serialno: S148, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,473 - INFO - Обновлены счетчики для serialno: S149, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,480 - INFO - Обновлены счетчики для serialno: 1518С26, Dates: 2024-11-26 -> sne: 918.6400000000001, ppr: 252.44000000000003, repair_days: None
+2024-12-02 12:43:58,487 - INFO - Обновлены счетчики для serialno: 1528С117, Dates: 2024-11-26 -> sne: 4597.11, ppr: 160.11, repair_days: None
+2024-12-02 12:43:58,494 - INFO - Обновлены счетчики для serialno: 2248С184, Dates: 2024-11-26 -> sne: 1275.7399999999998, ppr: 1275.7399999999998, repair_days: None
+2024-12-02 12:43:58,499 - INFO - Обновлены счетчики для serialno: 2248С185, Dates: 2024-11-26 -> sne: 1399.1799999999998, ppr: 1399.1799999999998, repair_days: None
+2024-12-02 12:43:58,506 - INFO - Обновлены счетчики для serialno: 1528С120, Dates: 2024-11-26 -> sne: 4465.0, ppr: 0.1, repair_days: None
+2024-12-02 12:43:58,514 - INFO - Обновлены счетчики для serialno: 1548С241, Dates: 2024-11-26 -> sne: 4500.58, ppr: 6.8100000000000005, repair_days: None
+2024-12-02 12:43:58,520 - INFO - Обновлены счетчики для serialno: 1548С243, Dates: 2024-11-26 -> sne: 4824.139999999999, ppr: 345.88, repair_days: None
+2024-12-02 12:43:58,527 - INFO - Обновлены счетчики для serialno: 1548С244, Dates: 2024-11-26 -> sne: 3995.83, ppr: 1002.6100000000001, repair_days: None
+2024-12-02 12:43:58,534 - INFO - Обновлены счетчики для serialno: S223, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,540 - INFO - Обновлены счетчики для serialno: S224, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,546 - INFO - Обновлены счетчики для serialno: 1618С11, Dates: 2024-11-26 -> sne: 3604.5899999999997, ppr: 621.59, repair_days: None
+2024-12-02 12:43:58,552 - INFO - Обновлены счетчики для serialno: 1618С18, Dates: 2024-11-26 -> sne: 4302.51, ppr: 1336.5099999999998, repair_days: None
+2024-12-02 12:43:58,559 - INFO - Обновлены счетчики для serialno: S225, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,565 - INFO - Обновлены счетчики для serialno: S226, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,571 - INFO - Обновлены счетчики для serialno: S227, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,578 - INFO - Обновлены счетчики для serialno: S228, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,585 - INFO - Обновлены счетчики для serialno: 1618С23, Dates: 2024-11-26 -> sne: 5069.51, ppr: 583.84, repair_days: None
+2024-12-02 12:43:58,591 - INFO - Обновлены счетчики для serialno: 1618С34, Dates: 2024-11-26 -> sne: 4899.76, ppr: 405.03999999999996, repair_days: None
+2024-12-02 12:43:58,597 - INFO - Обновлены счетчики для serialno: S229, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,603 - INFO - Обновлены счетчики для serialno: S23, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,609 - INFO - Обновлены счетчики для serialno: 1618С46, Dates: 2024-11-26 -> sne: 3239.94, ppr: 257.94, repair_days: None
+2024-12-02 12:43:58,616 - INFO - Обновлены счетчики для serialno: 1618С55, Dates: 2024-11-26 -> sne: 4506.28, ppr: 12.81, repair_days: None
+2024-12-02 12:43:58,623 - INFO - Обновлены счетчики для serialno: S230, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,630 - INFO - Обновлены счетчики для serialno: S231, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,636 - INFO - Обновлены счетчики для serialno: 1618С57, Dates: 2024-11-26 -> sne: 3872.04, ppr: 880.0400000000001, repair_days: None
+2024-12-02 12:43:58,642 - INFO - Обновлены счетчики для serialno: 1618С58, Dates: 2024-11-26 -> sne: 3357.7799999999997, ppr: 404.78, repair_days: None
+2024-12-02 12:43:58,648 - INFO - Обновлены счетчики для serialno: S232, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,655 - INFO - Обновлены счетчики для serialno: S233, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,661 - INFO - Обновлены счетчики для serialno: 1618С9, Dates: 2024-11-26 -> sne: 5168.16, ppr: 693.1600000000001, repair_days: None
+2024-12-02 12:43:58,667 - INFO - Обновлены счетчики для serialno: 1638С142, Dates: 2024-11-26 -> sne: 4445.41, ppr: 1470.4099999999999, repair_days: None
+2024-12-02 12:43:58,673 - INFO - Обновлены счетчики для serialno: S234, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,679 - INFO - Обновлены счетчики для serialno: S235, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,689 - INFO - Обновлены счетчики для serialno: 2248С186, Dates: 2024-11-26 -> sne: 1278.31, ppr: 1278.31, repair_days: None
+2024-12-02 12:43:58,802 - INFO - Обновлены счетчики для serialno: 228118, Dates: 2024-11-26 -> sne: 3535.44, ppr: 1260.4399999999998, repair_days: None
+2024-12-02 12:43:58,812 - INFO - Обновлены счетчики для serialno: 2318С16, Dates: 2024-11-26 -> sne: 468.46, ppr: 468.46, repair_days: None
+2024-12-02 12:43:58,820 - INFO - Обновлены счетчики для serialno: S15, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,830 - INFO - Обновлены счетчики для serialno: S150, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,855 - INFO - Обновлены счетчики для serialno: 1648С143, Dates: 2024-11-26 -> sne: 3502.96, ppr: 516.0100000000001, repair_days: None
+2024-12-02 12:43:58,864 - INFO - Обновлены счетчики для serialno: 1718С12, Dates: 2024-11-26 -> sne: 3800.54, ppr: 1037.5099999999998, repair_days: None
+2024-12-02 12:43:58,872 - INFO - Обновлены счетчики для serialno: S24, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,881 - INFO - Обновлены счетчики для serialno: S25, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,888 - INFO - Обновлены счетчики для serialno: 2318С17, Dates: 2024-11-26 -> sne: 535.3800000000001, ppr: 535.3800000000001, repair_days: None
+2024-12-02 12:43:58,895 - INFO - Обновлены счетчики для serialno: 2318С36, Dates: 2024-11-26 -> sne: 906.6600000000001, ppr: 906.6600000000001, repair_days: None
+2024-12-02 12:43:58,902 - INFO - Обновлены счетчики для serialno: S151, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,910 - INFO - Обновлены счетчики для serialno: S152, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,923 - INFO - Обновлены счетчики для serialno: 1718С17, Dates: 2024-11-26 -> sne: 4107.41, ppr: 958.19, repair_days: None
+2024-12-02 12:43:58,931 - INFO - Обновлены счетчики для serialno: 1718С18, Dates: 2024-11-26 -> sne: 3708.94, ppr: 724.94, repair_days: None
+2024-12-02 12:43:58,938 - INFO - Обновлены счетчики для serialno: S26, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,944 - INFO - Обновлены счетчики для serialno: S27, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,953 - INFO - Обновлены счетчики для serialno: S153, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,960 - INFO - Обновлены счетчики для serialno: S154, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,967 - INFO - Обновлены счетчики для serialno: 2318С37, Dates: 2024-11-26 -> sne: 656.4100000000001, ppr: 656.4100000000001, repair_days: None
+2024-12-02 12:43:58,974 - INFO - Обновлены счетчики для serialno: 2328С102, Dates: 2024-11-26 -> sne: 513.16, ppr: 513.16, repair_days: None
+2024-12-02 12:43:58,981 - INFO - Обновлены счетчики для serialno: S28, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,989 - INFO - Обновлены счетчики для serialno: S29, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:58,997 - INFO - Обновлены счетчики для serialno: 1718С19, Dates: 2024-11-26 -> sne: 2686.99, ppr: 1196.9899999999998, repair_days: None
+2024-12-02 12:43:59,009 - INFO - Обновлены счетчики для serialno: 1718С22, Dates: 2024-11-26 -> sne: 4197.93, ppr: 1199.9299999999998, repair_days: None
+2024-12-02 12:43:59,017 - INFO - Обновлены счетчики для serialno: S155, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,024 - INFO - Обновлены счетчики для serialno: S156, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,030 - INFO - Обновлены счетчики для serialno: 2338С109, Dates: 2024-11-26 -> sne: 631.83, ppr: 631.83, repair_days: None
+2024-12-02 12:43:59,046 - INFO - Обновлены счетчики для serialno: 2338С110, Dates: 2024-11-26 -> sne: 826.8100000000001, ppr: 826.8100000000001, repair_days: None
+2024-12-02 12:43:59,053 - INFO - Обновлены счетчики для serialno: S3, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,061 - INFO - Обновлены счетчики для serialno: S30, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,069 - INFO - Обновлены счетчики для serialno: 1718С23, Dates: 2024-11-26 -> sne: 5489.24, ppr: 1007.46, repair_days: None
+2024-12-02 12:43:59,076 - INFO - Обновлены счетчики для serialno: 1718С37, Dates: 2024-11-26 -> sne: 2426.74, ppr: 934.7400000000001, repair_days: None
+2024-12-02 12:43:59,083 - INFO - Обновлены счетчики для serialno: S157, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,090 - INFO - Обновлены счетчики для serialno: S158, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,097 - INFO - Обновлены счетчики для serialno: 2338С111, Dates: 2024-11-26 -> sne: 751.5400000000001, ppr: 751.5400000000001, repair_days: None
+2024-12-02 12:43:59,105 - INFO - Обновлены счетчики для serialno: 2338С117, Dates: 2024-11-26 -> sne: 720.4900000000001, ppr: 720.4900000000001, repair_days: None
+2024-12-02 12:43:59,112 - INFO - Обновлены счетчики для serialno: S31, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,119 - INFO - Обновлены счетчики для serialno: S32, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,126 - INFO - Обновлены счетчики для serialno: S159, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,133 - INFO - Обновлены счетчики для serialno: S16, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,140 - INFO - Обновлены счетчики для serialno: 1728С70, Dates: 2024-11-26 -> sne: 2286.43, ppr: 787.6600000000001, repair_days: None
+2024-12-02 12:43:59,147 - INFO - Обновлены счетчики для serialno: 1728С79, Dates: 2024-11-26 -> sne: 4306.34, ppr: 1315.54, repair_days: None
+2024-12-02 12:43:59,154 - INFO - Обновлены счетчики для serialno: 1728С80, Dates: 2024-11-26 -> sne: 4200.71, ppr: 1208.7099999999998, repair_days: None
+2024-12-02 12:43:59,162 - INFO - Обновлены счетчики для serialno: S33, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,168 - INFO - Обновлены счетчики для serialno: S34, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,181 - INFO - Обновлены счетчики для serialno: 2338С118, Dates: 2024-11-26 -> sne: 905.4900000000001, ppr: 905.4900000000001, repair_days: None
+2024-12-02 12:43:59,190 - INFO - Обновлены счетчики для serialno: 2338С119, Dates: 2024-11-26 -> sne: 373.89, ppr: 373.89, repair_days: None
+2024-12-02 12:43:59,197 - INFO - Обновлены счетчики для serialno: S160, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,203 - INFO - Обновлены счетчики для serialno: S161, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,209 - INFO - Обновлены счетчики для serialno: 1748С176, Dates: 2024-11-26 -> sne: 4030.23, ppr: 1043.8899999999999, repair_days: None
+2024-12-02 12:43:59,223 - INFO - Обновлены счетчики для serialno: 1748С177, Dates: 2024-11-26 -> sne: 2974.44, ppr: 1485.1899999999998, repair_days: None
+2024-12-02 12:43:59,233 - INFO - Обновлены счетчики для serialno: S162, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,243 - INFO - Обновлены счетчики для serialno: S163, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,254 - INFO - Обновлены счетчики для serialno: 1748С178, Dates: 2024-11-26 -> sne: 3555.81, ppr: 568.5300000000001, repair_days: None
+2024-12-02 12:43:59,267 - INFO - Обновлены счетчики для serialno: 1748С183, Dates: 2024-11-26 -> sne: 2987.03, ppr: 1496.03, repair_days: 38.0
+2024-12-02 12:43:59,274 - INFO - Обновлены счетчики для serialno: S164, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,284 - INFO - Обновлены счетчики для serialno: S165, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,293 - INFO - Обновлены счетчики для serialno: 1828С33, Dates: 2024-11-26 -> sne: 2966.0, ppr: 0.55, repair_days: None
+2024-12-02 12:43:59,301 - INFO - Обновлены счетчики для serialno: 1828С34, Dates: 2024-11-26 -> sne: 2890.71, ppr: 1400.7799999999997, repair_days: None
+2024-12-02 12:43:59,310 - INFO - Обновлены счетчики для serialno: S166, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,318 - INFO - Обновлены счетчики для serialno: S167, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,327 - INFO - Обновлены счетчики для serialno: S168, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,335 - INFO - Обновлены счетчики для serialno: S169, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,344 - INFO - Обновлены счетчики для serialno: 1828С35, Dates: 2024-11-26 -> sne: 2983.73, ppr: 1483.73, repair_days: 63.0
+2024-12-02 12:43:59,352 - INFO - Обновлены счетчики для serialno: 1828С49, Dates: 2024-11-26 -> sne: 3648.64, ppr: 658.33, repair_days: None
+2024-12-02 12:43:59,360 - INFO - Обновлены счетчики для serialno: S17, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,367 - INFO - Обновлены счетчики для serialno: S170, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,378 - INFO - Обновлены счетчики для serialno: 1838С79, Dates: 2024-11-26 -> sne: 4324.99, ppr: 1326.0099999999998, repair_days: None
+2024-12-02 12:43:59,387 - INFO - Обновлены счетчики для serialno: 1838С80, Dates: 2024-11-26 -> sne: 1356.6799999999998, ppr: 1176.61, repair_days: None
+2024-12-02 12:43:59,398 - INFO - Обновлены счетчики для serialno: S171, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,408 - INFO - Обновлены счетчики для serialno: S172, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,417 - INFO - Обновлены счетчики для serialno: 1838С81, Dates: 2024-11-26 -> sne: 1489.9599999999998, ppr: 5.6899999999999995, repair_days: None
+2024-12-02 12:43:59,427 - INFO - Обновлены счетчики для serialno: 1838С85, Dates: 2024-11-26 -> sne: 3476.06, ppr: 487.38, repair_days: None
+2024-12-02 12:43:59,436 - INFO - Обновлены счетчики для serialno: 2338С120, Dates: 2024-11-26 -> sne: 715.5400000000001, ppr: 715.5400000000001, repair_days: None
+2024-12-02 12:43:59,447 - INFO - Обновлены счетчики для serialno: 2338С121, Dates: 2024-11-26 -> sne: 686.94, ppr: 686.94, repair_days: None
+2024-12-02 12:43:59,457 - INFO - Обновлены счетчики для serialno: S173, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,466 - INFO - Обновлены счетчики для serialno: S174, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,476 - INFO - Обновлены счетчики для serialno: 1848С101, Dates: 2024-11-26 -> sne: 2968.35, ppr: 1495.35, repair_days: 75.0
+2024-12-02 12:43:59,485 - INFO - Обновлены счетчики для serialno: 1848С110, Dates: 2024-11-26 -> sne: 2975.28, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,495 - INFO - Обновлены счетчики для serialno: S35, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,504 - INFO - Обновлены счетчики для serialno: S36, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,514 - INFO - Обновлены счетчики для serialno: S175, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,526 - INFO - Обновлены счетчики для serialno: S176, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,537 - INFO - Обновлены счетчики для serialno: 1848С90, Dates: 2024-11-26 -> sne: 3476.83, ppr: 487.03, repair_days: None
+2024-12-02 12:43:59,545 - INFO - Обновлены счетчики для serialno: 1848С91, Dates: 2024-11-26 -> sne: 1809.9399999999998, ppr: 351.93999999999994, repair_days: None
+2024-12-02 12:43:59,553 - INFO - Обновлены счетчики для serialno: S37, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,561 - INFO - Обновлены счетчики для serialno: S38, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,568 - INFO - Обновлены счетчики для serialno: 2338С127, Dates: 2024-11-26 -> sne: 634.4100000000001, ppr: 634.4100000000001, repair_days: None
+2024-12-02 12:43:59,576 - INFO - Обновлены счетчики для serialno: 2338С128, Dates: 2024-11-26 -> sne: 690.96, ppr: 690.96, repair_days: None
+2024-12-02 12:43:59,585 - INFO - Обновлены счетчики для serialno: S177, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,593 - INFO - Обновлены счетчики для serialno: S178, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,601 - INFO - Обновлены счетчики для serialno: S179, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,609 - INFO - Обновлены счетчики для serialno: 1848С92, Dates: 2024-11-26 -> sne: 3966.54, ppr: 975.19, repair_days: None
+2024-12-02 12:43:59,618 - INFO - Обновлены счетчики для serialno: 1848С94, Dates: 2024-11-26 -> sne: 3507.74, ppr: 611.7300000000001, repair_days: None
+2024-12-02 12:43:59,626 - INFO - Обновлены счетчики для serialno: S18, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,634 - INFO - Обновлены счетчики для serialno: S180, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,642 - INFO - Обновлены счетчики для serialno: 2338С132, Dates: 2024-11-26 -> sne: 773.19, ppr: 773.19, repair_days: None
+2024-12-02 12:43:59,651 - INFO - Обновлены счетчики для serialno: 2338С133, Dates: 2024-11-26 -> sne: 642.0600000000001, ppr: 642.0600000000001, repair_days: None
+2024-12-02 12:43:59,659 - INFO - Обновлены счетчики для serialno: S181, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,666 - INFO - Обновлены счетчики для serialno: S182, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,675 - INFO - Обновлены счетчики для serialno: 2338С134, Dates: 2024-11-26 -> sne: 628.6400000000001, ppr: 628.6400000000001, repair_days: None
+2024-12-02 12:43:59,683 - INFO - Обновлены счетчики для serialno: 2338С135, Dates: 2024-11-26 -> sne: 601.1100000000001, ppr: 601.1100000000001, repair_days: None
+2024-12-02 12:43:59,694 - INFO - Обновлены счетчики для serialno: S183, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,704 - INFO - Обновлены счетчики для serialno: S184, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,711 - INFO - Обновлены счетчики для serialno: S39, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,719 - INFO - Обновлены счетчики для serialno: S4, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,728 - INFO - Обновлены счетчики для serialno: 2338С162, Dates: 2024-11-26 -> sne: 562.2600000000001, ppr: 562.2600000000001, repair_days: None
+2024-12-02 12:43:59,739 - INFO - Обновлены счетчики для serialno: 2338С163, Dates: 2024-11-26 -> sne: 379.51, ppr: 379.51, repair_days: None
+2024-12-02 12:43:59,747 - INFO - Обновлены счетчики для serialno: S185, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,755 - INFO - Обновлены счетчики для serialno: S186, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,764 - INFO - Обновлены счетчики для serialno: S40, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,773 - INFO - Обновлены счетчики для serialno: S41, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,784 - INFO - Обновлены счетчики для serialno: 2338С164, Dates: 2024-11-26 -> sne: 503.78999999999996, ppr: 503.78999999999996, repair_days: None
+2024-12-02 12:43:59,794 - INFO - Обновлены счетчики для serialno: 2338С165, Dates: 2024-11-26 -> sne: 212.71000000000004, ppr: 212.71000000000004, repair_days: None
+2024-12-02 12:43:59,802 - INFO - Обновлены счетчики для serialno: 1848С95, Dates: 2024-11-26 -> sne: 2516.74, ppr: 1039.7399999999998, repair_days: None
+2024-12-02 12:43:59,810 - INFO - Обновлены счетчики для serialno: 1848С96, Dates: 2024-11-26 -> sne: 1576.09, ppr: 87.86, repair_days: None
+2024-12-02 12:43:59,818 - INFO - Обновлены счетчики для serialno: S187, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,826 - INFO - Обновлены счетчики для serialno: S188, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,835 - INFO - Обновлены счетчики для serialno: S42, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,844 - INFO - Обновлены счетчики для serialno: S43, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,855 - INFO - Обновлены счетчики для serialno: S44, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,866 - INFO - Обновлены счетчики для serialno: 2338С166, Dates: 2024-11-26 -> sne: 235.81000000000003, ppr: 235.81000000000003, repair_days: None
+2024-12-02 12:43:59,874 - INFO - Обновлены счетчики для serialno: 2338С167, Dates: 2024-11-26 -> sne: 620.6800000000001, ppr: 620.6800000000001, repair_days: None
+2024-12-02 12:43:59,885 - INFO - Обновлены счетчики для serialno: 2348С168, Dates: 2024-11-26 -> sne: 526.3100000000001, ppr: 526.3100000000001, repair_days: None
+2024-12-02 12:43:59,893 - INFO - Обновлены счетчики для serialno: 1848С98, Dates: 2024-11-26 -> sne: 1958.1599999999999, ppr: 466.21, repair_days: None
+2024-12-02 12:43:59,902 - INFO - Обновлены счетчики для serialno: 1848С99, Dates: 2024-11-26 -> sne: 3900.16, ppr: 905.59, repair_days: None
+2024-12-02 12:43:59,910 - INFO - Обновлены счетчики для serialno: 2048С109, Dates: 2024-11-26 -> sne: 1489.4099999999999, ppr: 84.81, repair_days: None
+2024-12-02 12:43:59,918 - INFO - Обновлены счетчики для serialno: S189, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,926 - INFO - Обновлены счетчики для serialno: S19, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,934 - INFO - Обновлены счетчики для serialno: S45, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,942 - INFO - Обновлены счетчики для serialno: S46, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,951 - INFO - Обновлены счетчики для serialno: 2348С169, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,959 - INFO - Обновлены счетчики для serialno: 2348С170, Dates: 2024-11-26 -> sne: 450.23999999999995, ppr: 450.23999999999995, repair_days: None
+2024-12-02 12:43:59,967 - INFO - Обновлены счетчики для serialno: 2048С116, Dates: 2024-11-26 -> sne: 1467.2799999999997, ppr: 62.279999999999994, repair_days: None
+2024-12-02 12:43:59,975 - INFO - Обновлены счетчики для serialno: 2048С118, Dates: 2024-11-26 -> sne: 1493.12, ppr: 1493.12, repair_days: 29.0
+2024-12-02 12:43:59,983 - INFO - Обновлены счетчики для serialno: S190, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,992 - INFO - Обновлены счетчики для serialno: S191, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:43:59,999 - INFO - Обновлены счетчики для serialno: S47, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,010 - INFO - Обновлены счетчики для serialno: S48, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,019 - INFO - Обновлены счетчики для serialno: 2348С176, Dates: 2024-11-26 -> sne: 530.71, ppr: 530.71, repair_days: None
+2024-12-02 12:44:00,030 - INFO - Обновлены счетчики для serialno: 2348С177, Dates: 2024-11-26 -> sne: 344.83, ppr: 344.83, repair_days: None
+2024-12-02 12:44:00,047 - INFO - Обновлены счетчики для serialno: 2048С125, Dates: 2024-11-26 -> sne: 1852.0299999999997, ppr: 356.03, repair_days: None
+2024-12-02 12:44:00,065 - INFO - Обновлены счетчики для serialno: 2048С140, Dates: 2024-11-26 -> sne: 2691.0, ppr: 0.6, repair_days: None
+2024-12-02 12:44:00,072 - INFO - Обновлены счетчики для serialno: S49, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,081 - INFO - Обновлены счетчики для serialno: S5, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,089 - INFO - Обновлены счетчики для serialno: S192, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,098 - INFO - Обновлены счетчики для serialno: S193, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,256 - INFO - Обновлены счетчики для serialno: 2348С178, Dates: 2024-11-26 -> sne: 267.40999999999997, ppr: 267.40999999999997, repair_days: None
+2024-12-02 12:44:00,267 - INFO - Обновлены счетчики для serialno: 2348С179, Dates: 2024-11-26 -> sne: 412.71, ppr: 412.71, repair_days: None
+2024-12-02 12:44:00,275 - INFO - Обновлены счетчики для serialno: S50, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,283 - INFO - Обновлены счетчики для serialno: S51, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,291 - INFO - Обновлены счетчики для serialno: S70, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,299 - INFO - Обновлены счетчики для serialno: S71, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,307 - INFO - Обновлены счетчики для serialno: 2348С180, Dates: 2024-11-26 -> sne: 446.60999999999996, ppr: 446.60999999999996, repair_days: None
+2024-12-02 12:44:00,325 - INFO - Обновлены счетчики для serialno: 23819, Dates: 2024-11-26 -> sne: 5745.71, ppr: 132.56000000000003, repair_days: None
+2024-12-02 12:44:00,339 - INFO - Обновлены счетчики для serialno: S52, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,356 - INFO - Обновлены счетчики для serialno: S53, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,364 - INFO - Обновлены счетчики для serialno: S72, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,371 - INFO - Обновлены счетчики для serialno: S73, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,383 - INFO - Обновлены счетчики для serialno: S54, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,398 - INFO - Обновлены счетчики для serialno: S55, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,406 - INFO - Обновлены счетчики для serialno: S74, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,420 - INFO - Обновлены счетчики для serialno: S75, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,428 - INFO - Обновлены счетчики для serialno: 23856, Dates: 2024-11-26 -> sne: 5179.21, ppr: 677.21, repair_days: None
+2024-12-02 12:44:00,437 - INFO - Обновлены счетчики для serialno: 23858, Dates: 2024-11-26 -> sne: 5778.94, ppr: 488.93999999999994, repair_days: None
+2024-12-02 12:44:00,445 - INFO - Обновлены счетчики для serialno: S56, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,454 - INFO - Обновлены счетчики для serialno: S57, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,461 - INFO - Обновлены счетчики для serialno: S76, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,470 - INFO - Обновлены счетчики для serialno: S77, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,478 - INFO - Обновлены счетчики для serialno: 2428С87, Dates: 2024-11-26 -> sne: 256.78000000000003, ppr: 256.78000000000003, repair_days: None
+2024-12-02 12:44:00,486 - INFO - Обновлены счетчики для serialno: 2438C127, Dates: 2024-11-26 -> sne: 91.84, ppr: 91.84, repair_days: None
+2024-12-02 12:44:00,494 - INFO - Обновлены счетчики для serialno: S58, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,502 - INFO - Обновлены счетчики для serialno: S59, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,511 - INFO - Обновлены счетчики для serialno: S78, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,521 - INFO - Обновлены счетчики для serialno: S79, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,531 - INFO - Обновлены счетчики для serialno: 2438С115, Dates: 2024-11-26 -> sne: 147.89000000000001, ppr: 147.89000000000001, repair_days: None
+2024-12-02 12:44:00,541 - INFO - Обновлены счетчики для serialno: 24814, Dates: 2024-11-26 -> sne: 5960.71, ppr: 479.71, repair_days: None
+2024-12-02 12:44:00,550 - INFO - Обновлены счетчики для serialno: S6, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,559 - INFO - Обновлены счетчики для serialno: S60, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,568 - INFO - Обновлены счетчики для serialno: S8, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,577 - INFO - Обновлены счетчики для serialno: S80, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,587 - INFO - Обновлены счетчики для serialno: 32847, Dates: 2024-11-26 -> sne: 5911.13, ppr: 330.40999999999997, repair_days: None
+2024-12-02 12:44:00,599 - INFO - Обновлены счетчики для serialno: 32890, Dates: 2024-11-26 -> sne: 5979.17, ppr: 1273.17, repair_days: None
+2024-12-02 12:44:00,609 - INFO - Обновлены счетчики для serialno: S61, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,617 - INFO - Обновлены счетчики для serialno: S62, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,627 - INFO - Обновлены счетчики для serialno: S81, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,637 - INFO - Обновлены счетчики для serialno: S82, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,646 - INFO - Обновлены счетчики для serialno: S83, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,656 - INFO - Обновлены счетчики для serialno: 33853, Dates: 2024-11-26 -> sne: 5746.26, ppr: 687.7900000000001, repair_days: None
+2024-12-02 12:44:00,675 - INFO - Обновлены счетчики для serialno: 91873, Dates: 2024-11-26 -> sne: 7296.41, ppr: 1347.4099999999999, repair_days: None
+2024-12-02 12:44:00,689 - INFO - Обновлены счетчики для serialno: S63, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,697 - INFO - Обновлены счетчики для serialno: S64, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,705 - INFO - Обновлены счетчики для serialno: S84, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,713 - INFO - Обновлены счетчики для serialno: S85, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,721 - INFO - Обновлены счетчики для serialno: 2048С144, Dates: 2024-11-26 -> sne: 1765.83, ppr: 268.78999999999996, repair_days: None
+2024-12-02 12:44:00,729 - INFO - Обновлены счетчики для serialno: 2048С148, Dates: 2024-11-26 -> sne: 2971.22, ppr: 1498.22, repair_days: 33.0
+2024-12-02 12:44:00,737 - INFO - Обновлены счетчики для serialno: S86, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,745 - INFO - Обновлены счетчики для serialno: S87, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,754 - INFO - Обновлены счетчики для serialno: S65, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,767 - INFO - Обновлены счетчики для serialno: S66, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,775 - INFO - Обновлены счетчики для serialno: 2118С26, Dates: 2024-11-26 -> sne: 2492.41, ppr: 994.4100000000001, repair_days: None
+2024-12-02 12:44:00,785 - INFO - Обновлены счетчики для serialno: 2128С58, Dates: 2024-11-26 -> sne: 2477.7799999999997, ppr: 985.7800000000001, repair_days: None
+2024-12-02 12:44:00,795 - INFO - Обновлены счетчики для serialno: S88, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,803 - INFO - Обновлены счетчики для serialno: S89, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,813 - INFO - Обновлены счетчики для serialno: S67, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,821 - INFO - Обновлены счетчики для serialno: S68, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,829 - INFO - Обновлены счетчики для serialno: 2128С60, Dates: 2024-11-26 -> sne: 1748.56, ppr: 282.08, repair_days: None
+2024-12-02 12:44:00,837 - INFO - Обновлены счетчики для serialno: 2138С107, Dates: 2024-11-26 -> sne: 1836.6799999999998, ppr: 338.33, repair_days: None
+2024-12-02 12:44:00,845 - INFO - Обновлены счетчики для serialno: S9, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,854 - INFO - Обновлены счетчики для serialno: S90, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,862 - INFO - Обновлены счетчики для serialno: S69, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,870 - INFO - Обновлены счетчики для serialno: S7, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,879 - INFO - Обновлены счетчики для serialno: 2138С87, Dates: 2024-11-26 -> sne: 1498.0, ppr: 0.05, repair_days: None
+2024-12-02 12:44:00,886 - INFO - Обновлены счетчики для serialno: 2148С113, Dates: 2024-11-26 -> sne: 1266.11, ppr: 1266.11, repair_days: None
+2024-12-02 12:44:00,895 - INFO - Обновлены счетчики для serialno: S91, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,904 - INFO - Обновлены счетчики для serialno: S92, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,912 - INFO - Обновлены счетчики для serialno: S93, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,922 - INFO - Обновлены счетчики для serialno: S94, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:00,930 - INFO - Обновлены счетчики для serialno: 2148С114, Dates: 2024-11-26 -> sne: 2113.2799999999997, ppr: 612.94, repair_days: None
+2024-12-02 12:44:01,085 - INFO - Обновлены счетчики для serialno: 2148С116, Dates: 2024-11-26 -> sne: 1497.2, ppr: 1497.2, repair_days: 48.0
+2024-12-02 12:44:01,095 - INFO - Обновлены счетчики для serialno: S95, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:01,103 - INFO - Обновлены счетчики для serialno: S96, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:01,111 - INFO - Обновлены счетчики для serialno: 2148С133, Dates: 2024-11-26 -> sne: 1443.4599999999998, ppr: 1443.4599999999998, repair_days: None
+2024-12-02 12:44:01,119 - INFO - Обновлены счетчики для serialno: 2148С136, Dates: 2024-11-26 -> sne: 1499.1599999999999, ppr: 3.83, repair_days: None
+2024-12-02 12:44:01,128 - INFO - Обновлены счетчики для serialno: S97, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:01,143 - INFO - Обновлены счетчики для serialno: S98, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:01,151 - INFO - Обновлены счетчики для serialno: 21824, Dates: 2024-11-26 -> sne: 3875.83, ppr: 50.379999999999995, repair_days: None
+2024-12-02 12:44:01,158 - INFO - Обновлены счетчики для serialno: 2218С42, Dates: 2024-11-26 -> sne: 586.33, ppr: 586.33, repair_days: None
+2024-12-02 12:44:01,167 - INFO - Обновлены счетчики для serialno: S99, Dates: 2024-11-26 -> sne: 0.0, ppr: 0.0, repair_days: None
+2024-12-02 12:44:01,175 - INFO - Обновлены счетчики для serialno: 2218С43, Dates: 2024-11-26 -> sne: 746.21, ppr: 746.21, repair_days: None
+2024-12-02 12:44:01,184 - INFO - Обновлены счетчики для serialno: 2218С46, Dates: 2024-11-26 -> sne: 722.1800000000001, ppr: 722.1800000000001, repair_days: None
+2024-12-02 12:44:01,192 - INFO - Обновлены счетчики для serialno: С1185793, Dates: 2024-11-26 -> sne: 5994.16, ppr: 1157.1599999999999, repair_days: None
+2024-12-02 12:44:01,226 - INFO - Обновлены счетчики для serialno: С318789, Dates: 2024-11-26 -> sne: 5999.29, ppr: 955.2900000000001, repair_days: None
+2024-12-02 12:44:01,243 - INFO - Обновлены счетчики для serialno: С3281250, Dates: 2024-11-26 -> sne: 5966.88, ppr: 581.88, repair_days: None
+2024-12-02 12:44:01,256 - INFO - Обновлены счетчики для serialno: С3281283, Dates: 2024-11-26 -> sne: 5796.16, ppr: 1490.1599999999999, repair_days: None
+2024-12-02 12:44:01,269 - INFO - Обновлены счетчики для serialno: 2218С47, Dates: 2024-11-26 -> sne: 743.08, ppr: 743.08, repair_days: None
+2024-12-02 12:44:01,278 - INFO - Обновлены счетчики для serialno: 2228С56, Dates: 2024-11-26 -> sne: 1497.38, ppr: 1497.38, repair_days: 77.0
+2024-12-02 12:44:01,288 - INFO - Обновлены счетчики для serialno: С4281457, Dates: 2024-11-26 -> sne: 4105.19, ppr: 1122.1899999999998, repair_days: None
+2024-12-02 12:44:01,299 - INFO - Обновлены счетчики для serialno: С4381509, Dates: 2024-11-26 -> sne: 5972.28, ppr: 199.28000000000003, repair_days: None
+2024-12-02 12:44:01,308 - INFO - Обновлены счетчики для serialno: С498В1255, Dates: 2024-11-26 -> sne: 3114.21, ppr: 631.21, repair_days: None
+2024-12-02 12:44:01,319 - INFO - Обновлены счетчики для serialno: 2228С57, Dates: 2024-11-26 -> sne: 1754.2599999999998, ppr: 274.53999999999996, repair_days: None
+2024-12-02 12:44:01,327 - INFO - Обновлены счетчики для serialno: 2228С58, Dates: 2024-11-26 -> sne: 1429.1799999999998, ppr: 1429.1799999999998, repair_days: None
+2024-12-02 12:44:01,338 - INFO - Обновлены счетчики для serialno: 2228С67, Dates: 2024-11-26 -> sne: 539.2800000000001, ppr: 539.2800000000001, repair_days: None
+2024-12-02 12:44:01,353 - INFO - Обновлены счетчики для serialno: С5280753, Dates: 2024-11-26 -> sne: 7476.46, ppr: 348.46, repair_days: None
+2024-12-02 12:44:01,372 - INFO - Обновлены счетчики для serialno: С5381040, Dates: 2024-11-26 -> sne: 4360.6, ppr: 0.0, repair_days: None
+2024-12-02 12:44:01,381 - INFO - Обновлены счетчики для serialno: 2228С72, Dates: 2024-11-26 -> sne: 559.1600000000001, ppr: 559.1600000000001, repair_days: None
+2024-12-02 12:44:01,390 - INFO - Обновлены счетчики для serialno: 2228С73, Dates: 2024-11-26 -> sne: 495.13, ppr: 495.13, repair_days: None
+2024-12-02 12:44:01,402 - INFO - Обновлены счетчики для serialno: С6384678, Dates: 2024-11-26 -> sne: 4476.38, ppr: 0.0, repair_days: None
+2024-12-02 12:44:01,411 - INFO - Обновлены счетчики для serialno: С7387241, Dates: 2024-11-26 -> sne: 4366.3099999999995, ppr: 221.29000000000002, repair_days: None
+2024-12-02 12:44:01,419 - INFO - Обновлены счетчики для serialno: 2228С77, Dates: 2024-11-26 -> sne: 1629.5099999999998, ppr: 157.76000000000002, repair_days: None
+2024-12-02 12:44:01,427 - INFO - Обновлены счетчики для serialno: 2228С78, Dates: 2024-11-26 -> sne: 1498.02, ppr: 0.0, repair_days: None
+2024-12-02 12:44:01,437 - INFO - Обновлены счетчики для serialno: С8382220, Dates: 2024-11-26 -> sne: 4026.8599999999997, ppr: 1042.86, repair_days: None
+2024-12-02 12:44:01,446 - INFO - Обновлены счетчики для serialno: СВ78В615, Dates: 2024-11-26 -> sne: 4995.6, ppr: 0.0, repair_days: None
+2024-12-02 12:44:01,458 - INFO - Обновлены счетчики для serialno: 2238С100, Dates: 2024-11-26 -> sne: 1028.5099999999998, ppr: 1028.5099999999998, repair_days: None
+2024-12-02 12:44:01,466 - INFO - Обновлены счетчики для serialno: 2238С132, Dates: 2024-11-26 -> sne: 542.0300000000001, ppr: 542.0300000000001, repair_days: None
+2024-12-02 12:44:01,474 - INFO - Обновлены счетчики для serialno: СВ98В875, Dates: 2024-11-26 -> sne: 4059.68, ppr: 170.13000000000002, repair_days: None
+2024-12-02 12:44:01,486 - INFO - Обновлены счетчики для serialno: СВ98В927, Dates: 2024-11-26 -> sne: 4736.29, ppr: 780.2900000000001, repair_days: None
+2024-12-02 12:44:01,498 - INFO - Обновлены счетчики для serialno: СП88В485, Dates: 2024-11-26 -> sne: 5296.72, ppr: 229.72, repair_days: None
+2024-12-02 12:44:01,499 - INFO - Обновлено 420 записей счетчиков sne, ppr и repair_days для даты 2024-11-26.
+2024-12-02 12:46:02,033 - INFO - Начальная дата в OlapCube_VNV: 2024-11-25
+2024-12-02 12:46:02,034 - INFO - Определен target_date: 2024-11-26
+2024-12-02 12:46:02,035 - INFO - Обработка предыдущей даты: 2024-11-25
+2024-12-02 12:46:02,038 - INFO - Обработка target_date: 2024-11-26
+2024-12-02 12:46:02,155 - INFO - Извлечено 420 записей за предыдущую дату 2024-11-25.
+2024-12-02 12:46:02,276 - INFO - Извлечено 420 записей за target_date 2024-11-26.
+2024-12-02 12:46:04,994 - INFO - Обновлено 420 записей счетчиков sne, ppr и repair_days для даты 2024-11-26.
