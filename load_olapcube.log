@@ -1,0 +1,447 @@
+2024-12-09 14:21:06,880 - INFO - Начинаю вычисление aggregate_count.
+2024-12-09 14:21:06,899 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2024-12-09 14:21:06,908 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2024-12-09 14:21:06,918 - INFO - monthly_flight_hours: 48.0
+2024-12-09 14:21:06,920 - INFO - Вычисленный aggregate_count: 235
+2024-12-09 14:21:06,921 - INFO - aggregate_count рассчитан: 235
+2024-12-09 14:21:06,922 - INFO - Получаю значения из таблицы Agregat.
+2024-12-09 14:21:06,934 - INFO - Получены значения из таблицы Agregat.
+2024-12-09 14:21:06,935 - INFO - Получаю daily_flight_hours из flight_hours.
+2024-12-09 14:21:06,945 - INFO - Получено daily_flight_hours: 1.58
+2024-12-09 14:21:06,948 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2024-12-09 14:21:06,963 - INFO - Получено 4001 уникальных дат.
+2024-12-09 14:21:06,964 - INFO - Сгенерировано 235 серийных номеров.
+2024-12-09 14:21:19,067 - INFO - Успешно вставлено 940235 записей в OlapCube_VNV.
+2024-12-09 14:21:19,151 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 14:21:19,163 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2024-12-09 14:21:19,185 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2024-12-09 14:21:19,194 - INFO - Получено значение RepairTime: 120.0
+2024-12-09 14:21:19,207 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2024-12-09 14:21:26,049 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 14:21:26,064 - INFO - Получено данных из fleet: 12 месяцев
+2024-12-09 14:21:26,065 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2024-12-09 14:21:26,079 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2024-12-09 14:21:26,081 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2024-12-09 14:21:35,382 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 14:21:35,398 - INFO - Получено значение daily_flight_hours: 1.58
+2024-12-09 14:21:35,408 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2024-12-09 14:21:35,410 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2024-12-09 14:21:40,679 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2024-12-09 14:21:40,689 - INFO - Извлечено 1 записей из таблицы Agregat.
+2024-12-09 14:21:40,690 - INFO - Определено 0 записей с trigger_type=1.
+2024-12-09 14:21:40,691 - INFO - Определено 1 записей с trigger_type=0.
+2024-12-09 14:21:40,693 - INFO - Нет записей для обновления trigger_type=1.
+2024-12-09 14:21:40,705 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2024-12-09 14:21:40,706 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2024-12-09 16:38:25,810 - INFO - Начинаю вычисление aggregate_count.
+2024-12-09 16:38:25,824 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2024-12-09 16:38:25,833 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2024-12-09 16:38:25,840 - INFO - monthly_flight_hours: 48.0
+2024-12-09 16:38:25,842 - INFO - Вычисленный aggregate_count: 235
+2024-12-09 16:38:25,843 - INFO - aggregate_count рассчитан: 235
+2024-12-09 16:38:25,844 - INFO - Получаю значения из таблицы Agregat.
+2024-12-09 16:38:25,854 - INFO - Получены значения из таблицы Agregat.
+2024-12-09 16:38:25,855 - INFO - Получаю daily_flight_hours из flight_hours.
+2024-12-09 16:38:25,864 - INFO - Получено daily_flight_hours: 1.58
+2024-12-09 16:38:25,865 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2024-12-09 16:38:25,880 - INFO - Получено 4001 уникальных дат.
+2024-12-09 16:38:25,881 - INFO - Сгенерировано 235 серийных номеров.
+2024-12-09 16:38:37,814 - INFO - Успешно вставлено 940235 записей в OlapCube_VNV.
+2024-12-09 16:38:37,903 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 16:38:37,915 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2024-12-09 16:38:37,938 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2024-12-09 16:38:37,946 - INFO - Получено значение RepairTime: 120.0
+2024-12-09 16:38:37,956 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2024-12-09 16:38:40,053 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 16:38:40,065 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String,
+    `RepairTime` Nullable(Float64)
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2024-12-09 16:38:40,074 - INFO - Столбец 'RepairTime' уже существует в таблице 'OlapCube_VNV'
+2024-12-09 16:38:40,082 - INFO - Получено значение RepairTime: 120.0
+2024-12-09 16:38:40,092 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2024-12-09 16:38:55,846 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 16:38:55,861 - INFO - Получено данных из fleet: 12 месяцев
+2024-12-09 16:38:55,863 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2024-12-09 16:38:55,875 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2024-12-09 16:38:55,877 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2024-12-09 16:39:09,155 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 16:39:09,178 - INFO - Получено значение daily_flight_hours: 1.58
+2024-12-09 16:39:09,191 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2024-12-09 16:39:09,192 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2024-12-09 16:39:20,494 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2024-12-09 16:39:20,504 - INFO - Извлечено 1 записей из таблицы Agregat.
+2024-12-09 16:39:20,506 - INFO - Определено 0 записей с trigger_type=1.
+2024-12-09 16:39:20,507 - INFO - Определено 1 записей с trigger_type=0.
+2024-12-09 16:39:20,508 - INFO - Нет записей для обновления trigger_type=1.
+2024-12-09 16:39:20,517 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2024-12-09 16:39:20,519 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2024-12-09 16:39:36,176 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2024-12-09 16:39:36,187 - INFO - Извлечено 1 записей из таблицы Agregat.
+2024-12-09 16:39:36,188 - INFO - Определено 0 записей с trigger_type=1.
+2024-12-09 16:39:36,190 - INFO - Определено 1 записей с trigger_type=0.
+2024-12-09 16:39:36,191 - INFO - Нет записей для обновления trigger_type=1.
+2024-12-09 16:39:36,200 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2024-12-09 16:39:36,201 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2024-12-09 16:46:32,633 - INFO - Начинаю вычисление aggregate_count.
+2024-12-09 16:46:32,648 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2024-12-09 16:46:32,657 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2024-12-09 16:46:32,665 - INFO - monthly_flight_hours: 48.0
+2024-12-09 16:46:32,666 - INFO - Вычисленный aggregate_count: 235
+2024-12-09 16:46:32,667 - INFO - aggregate_count рассчитан: 235
+2024-12-09 16:46:32,667 - INFO - Получаю значения из таблицы Agregat.
+2024-12-09 16:46:32,676 - INFO - Получены значения из таблицы Agregat.
+2024-12-09 16:46:32,678 - INFO - Получаю daily_flight_hours из flight_hours.
+2024-12-09 16:46:32,686 - INFO - Получено daily_flight_hours: 1.58
+2024-12-09 16:46:32,687 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2024-12-09 16:46:32,701 - INFO - Получено 4001 уникальных дат.
+2024-12-09 16:46:32,702 - INFO - Сгенерировано 235 серийных номеров.
+2024-12-09 16:46:45,024 - INFO - Успешно вставлено 940235 записей в OlapCube_VNV.
+2024-12-09 16:46:45,133 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 16:46:45,145 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2024-12-09 16:46:45,167 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2024-12-09 16:46:45,174 - INFO - Получено значение RepairTime: 120.0
+2024-12-09 16:46:45,184 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2024-12-09 16:46:51,982 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 16:46:51,996 - INFO - Получено данных из fleet: 12 месяцев
+2024-12-09 16:46:51,997 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2024-12-09 16:46:52,010 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2024-12-09 16:46:52,011 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2024-12-09 16:46:58,883 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 16:46:58,898 - INFO - Получено значение daily_flight_hours: 1.58
+2024-12-09 16:46:58,911 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2024-12-09 16:46:58,912 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2024-12-09 16:47:03,848 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2024-12-09 16:47:03,857 - INFO - Извлечено 1 записей из таблицы Agregat.
+2024-12-09 16:47:03,859 - INFO - Определено 0 записей с trigger_type=1.
+2024-12-09 16:47:03,861 - INFO - Определено 1 записей с trigger_type=0.
+2024-12-09 16:47:03,862 - INFO - Нет записей для обновления trigger_type=1.
+2024-12-09 16:47:03,872 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2024-12-09 16:47:03,874 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2024-12-09 18:43:54,480 - INFO - Начинаю вычисление aggregate_count.
+2024-12-09 18:43:54,500 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2024-12-09 18:43:54,511 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2024-12-09 18:43:54,520 - INFO - monthly_flight_hours: 48.0
+2024-12-09 18:43:54,522 - INFO - Вычисленный aggregate_count: 235
+2024-12-09 18:43:54,523 - INFO - aggregate_count рассчитан: 235
+2024-12-09 18:43:54,524 - INFO - Получаю значения из таблицы Agregat.
+2024-12-09 18:43:54,533 - INFO - Получены значения из таблицы Agregat.
+2024-12-09 18:43:54,534 - INFO - Получаю daily_flight_hours из flight_hours.
+2024-12-09 18:43:54,542 - INFO - Получено daily_flight_hours: 1.58
+2024-12-09 18:43:54,543 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2024-12-09 18:43:54,561 - INFO - Получено 4001 уникальных дат.
+2024-12-09 18:43:54,562 - INFO - Сгенерировано 235 серийных номеров.
+2024-12-09 18:44:06,620 - INFO - Успешно вставлено 940235 записей в OlapCube_VNV.
+2024-12-09 18:44:09,488 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 18:44:09,500 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2024-12-09 18:44:09,523 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2024-12-09 18:44:09,531 - INFO - Получено значение RepairTime: 120.0
+2024-12-09 18:44:09,542 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2024-12-09 18:44:26,061 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 18:44:26,076 - INFO - Получено данных из fleet: 12 месяцев
+2024-12-09 18:44:26,078 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2024-12-09 18:44:26,091 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2024-12-09 18:44:26,092 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2024-12-09 18:44:33,506 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 18:44:33,520 - INFO - Получено значение daily_flight_hours: 1.58
+2024-12-09 18:44:33,531 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2024-12-09 18:44:33,533 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2024-12-09 18:44:40,126 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2024-12-09 18:44:40,136 - INFO - Извлечено 1 записей из таблицы Agregat.
+2024-12-09 18:44:40,137 - INFO - Определено 0 записей с trigger_type=1.
+2024-12-09 18:44:40,138 - INFO - Определено 1 записей с trigger_type=0.
+2024-12-09 18:44:40,139 - INFO - Нет записей для обновления trigger_type=1.
+2024-12-09 18:44:40,152 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2024-12-09 18:44:40,154 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2024-12-09 18:50:23,742 - INFO - Начинаю вычисление aggregate_count.
+2024-12-09 18:50:23,758 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2024-12-09 18:50:23,766 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2024-12-09 18:50:23,774 - INFO - monthly_flight_hours: 48.0
+2024-12-09 18:50:23,775 - INFO - Вычисленный aggregate_count: 235
+2024-12-09 18:50:23,776 - INFO - aggregate_count рассчитан: 235
+2024-12-09 18:50:23,777 - INFO - Получаю значения из таблицы Agregat.
+2024-12-09 18:50:23,786 - INFO - Получены значения из таблицы Agregat.
+2024-12-09 18:50:23,788 - INFO - Получаю daily_flight_hours из flight_hours.
+2024-12-09 18:50:23,795 - INFO - Получено daily_flight_hours: 1.58
+2024-12-09 18:50:23,796 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2024-12-09 18:50:23,811 - INFO - Получено 4001 уникальных дат.
+2024-12-09 18:50:23,812 - INFO - Сгенерировано 235 серийных номеров.
+2024-12-09 18:50:35,989 - INFO - Успешно вставлено 940235 записей в OlapCube_VNV.
+2024-12-09 18:50:38,786 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 18:50:38,800 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2024-12-09 18:50:38,820 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2024-12-09 18:50:38,829 - INFO - Получено значение RepairTime: 120.0
+2024-12-09 18:50:38,840 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2024-12-09 18:50:50,325 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 18:50:50,340 - INFO - Получено данных из fleet: 12 месяцев
+2024-12-09 18:50:50,341 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2024-12-09 18:50:50,354 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2024-12-09 18:50:50,355 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2024-12-09 18:50:58,482 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 18:50:58,497 - INFO - Получено значение daily_flight_hours: 1.58
+2024-12-09 18:50:58,507 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2024-12-09 18:50:58,508 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2024-12-09 18:51:04,141 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2024-12-09 18:51:04,152 - INFO - Извлечено 1 записей из таблицы Agregat.
+2024-12-09 18:51:04,153 - INFO - Определено 0 записей с trigger_type=1.
+2024-12-09 18:51:04,156 - INFO - Определено 1 записей с trigger_type=0.
+2024-12-09 18:51:04,159 - INFO - Нет записей для обновления trigger_type=1.
+2024-12-09 18:51:04,170 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2024-12-09 18:51:04,171 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2024-12-09 19:10:11,491 - INFO - Начинаю вычисление aggregate_count.
+2024-12-09 19:10:11,505 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2024-12-09 19:10:11,513 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2024-12-09 19:10:11,520 - INFO - monthly_flight_hours: 48.0
+2024-12-09 19:10:11,521 - INFO - Вычисленный aggregate_count: 235
+2024-12-09 19:10:11,522 - INFO - aggregate_count рассчитан: 235
+2024-12-09 19:10:11,523 - INFO - Получаю значения из таблицы Agregat.
+2024-12-09 19:10:11,532 - INFO - Получены значения из таблицы Agregat.
+2024-12-09 19:10:11,533 - INFO - Получаю daily_flight_hours из flight_hours.
+2024-12-09 19:10:11,540 - INFO - Получено daily_flight_hours: 1.58
+2024-12-09 19:10:11,541 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2024-12-09 19:10:11,556 - INFO - Получено 4001 уникальных дат.
+2024-12-09 19:10:11,557 - INFO - Сгенерировано 235 серийных номеров.
+2024-12-09 19:10:23,361 - INFO - Успешно вставлено 940235 записей в OlapCube_VNV.
+2024-12-09 19:10:25,911 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 19:10:25,922 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2024-12-09 19:10:25,942 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2024-12-09 19:10:25,950 - INFO - Получено значение RepairTime: 120.0
+2024-12-09 19:10:25,960 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2024-12-09 19:10:35,780 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 19:10:35,794 - INFO - Получено данных из fleet: 12 месяцев
+2024-12-09 19:10:35,795 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2024-12-09 19:10:35,807 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2024-12-09 19:10:35,810 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2024-12-09 19:10:49,445 - INFO - Подключение к ClickHouse успешно установлено
+2024-12-09 19:10:49,458 - INFO - Получено значение daily_flight_hours: 1.58
+2024-12-09 19:10:49,470 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2024-12-09 19:10:49,472 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2024-12-09 19:10:58,154 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2024-12-09 19:10:58,164 - INFO - Извлечено 1 записей из таблицы Agregat.
+2024-12-09 19:10:58,166 - INFO - Определено 0 записей с trigger_type=1.
+2024-12-09 19:10:58,167 - INFO - Определено 1 записей с trigger_type=0.
+2024-12-09 19:10:58,168 - INFO - Нет записей для обновления trigger_type=1.
+2024-12-09 19:10:58,178 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2024-12-09 19:10:58,180 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.

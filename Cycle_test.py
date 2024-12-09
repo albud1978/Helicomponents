@@ -181,14 +181,29 @@ class CycleProcessor:
         self.logger.info(f"Шаг II завершен для даты {self.target_date.strftime('%Y-%m-%d')}")
 
     def process_step_3(self):
-        """Шаг III: Корректировка Status_P на основе balance_total"""
+        """Шаг III: Формирование Status на основе balance_total и Status_P.
+        Status_P остается неизменным, Status формируется по правилам:
+        1. При balance_total > 0: первые balance_total записей с Status_P='Эксплуатация' получают Status='Исправен'
+        2. При balance_total < 0: первые |balance_total| записей с Status_P='Исправен' получают Status='Эксплуатация'
+        3. Если записей с Status_P='Исправен' недостаточно, берутся записи с Status_P='Неактивно'
+        4. Для остальных записей Status = Status_P
+        """
         curr_data = self.temp_df[self.temp_df['Dates'] == self.target_date].copy()
         balance_total = curr_data['balance_total'].iloc[0]
         
-        self.logger.info(f"Начало Шага III. Исходный balance_total: {balance_total}")
+        # Сначала копируем Status_P в Status для всех записей текущей даты
+        curr_mask = self.temp_df['Dates'] == self.target_date
+        self.temp_df.loc[curr_mask, 'Status'] = self.temp_df.loc[curr_mask, 'Status_P']
+        
+        self.logger.info(f"Начало Шага III:")
+        self.logger.info(f"balance_total: {balance_total}")
+        self.logger.info("Исходное распределение Status_P:")
+        for status, count in curr_data['Status_P'].value_counts().items():
+            self.logger.info(f"  {status}: {count}")
 
+        indices_to_change = []
         if balance_total > 0:
-            # Получаем индексы записей в статусе 'Эксплуатация'
+            # Находим записи с Status_P = 'Эксплуатация'
             exploitation_mask = curr_data['Status_P'] == 'Эксплуатация'
             exploitation_indices = curr_data[exploitation_mask].index.tolist()
             
@@ -196,13 +211,14 @@ class CycleProcessor:
             indices_to_change = exploitation_indices[:int(balance_total)]
             
             if indices_to_change:
-                self.temp_df.loc[indices_to_change, 'Status_P'] = 'Исправен'
-                self.logger.info(f"Корректировка избытка: {len(indices_to_change)} записей из 'Эксплуатация' в 'Исправен'")
+                # Для этих записей Status = 'Исправен' (отличается от их Status_P)
+                self.temp_df.loc[indices_to_change, 'Status'] = 'Исправен'
+                self.logger.info(f"Изменен Status на 'Исправен' для {len(indices_to_change)} записей с Status_P='Эксплуатация'")
 
         elif balance_total < 0:
             abs_balance = abs(int(balance_total))
             
-            # Получаем индексы записей в статусе 'Исправен'
+            # Находим записи с Status_P = 'Исправен'
             ready_mask = curr_data['Status_P'] == 'Исправен'
             ready_indices = curr_data[ready_mask].index.tolist()
             
@@ -210,102 +226,174 @@ class CycleProcessor:
             indices_to_change = ready_indices[:abs_balance]
             
             if indices_to_change:
-                self.temp_df.loc[indices_to_change, 'Status_P'] = 'Эксплуатация'
+                # Для этих записей Status = 'Эксплуатация' (отличается от их Status_P)
+                self.temp_df.loc[indices_to_change, 'Status'] = 'Эксплуатация'
                 
-                # Если нужно больше записей, берем из 'Неактивно'
+                # Если нужно больше записей, берем из Status_P = 'Неактивно'
                 if len(indices_to_change) < abs_balance:
                     remaining = abs_balance - len(indices_to_change)
                     
-                    # Получаем индексы записей в статусе 'Неактивно'
+                    # Находим записи с Status_P = 'Неактивно'
                     inactive_mask = curr_data['Status_P'] == 'Неактивно'
                     inactive_indices = curr_data[inactive_mask].index.tolist()
                     additional_indices = inactive_indices[:remaining]
                     
                     if additional_indices:
-                        self.temp_df.loc[additional_indices, 'Status_P'] = 'Эксплуатация'
+                        # Для этих записей тоже Status = 'Эксплуатация'
+                        self.temp_df.loc[additional_indices, 'Status'] = 'Эксплуатация'
+                        indices_to_change.extend(additional_indices)
                         
                         self.logger.info(
-                            f"Корректировка недостатка: переведено в 'Эксплуатация':\n"
-                            f"- из 'Исправен': {len(indices_to_change)} записей\n"
-                            f"- из 'Неактивно': {len(additional_indices)} записей"
+                            f"Изменен Status на 'Эксплуатация' для:\n"
+                            f"- {len(indices_to_change) - len(additional_indices)} записей с Status_P='Исправен'\n"
+                            f"- {len(additional_indices)} записей с Status_P='Неактивно'"
                         )
                 else:
-                    self.logger.info(f"Корректировка недостатка: {len(indices_to_change)} записей из 'Исправен' в 'Эксплуатация'")
-
-        # Контрольный пересчет балансов
-        self.process_step_2()
+                    self.logger.info(f"Изменен Status на 'Эксплуатация' для {len(indices_to_change)} записей с Status_P='Исправен'")
         
-        final_balance = self.temp_df[self.temp_df['Dates'] == self.target_date]['balance_total'].iloc[0]
-        self.logger.info(f"Завершение Шага III. Итоговый balance_total: {final_balance}")
+        # Выводим итоговое распределение
+        curr_data = self.temp_df[self.temp_df['Dates'] == self.target_date]
+        self.logger.info("\nИтоговое распределение:")
+        self.logger.info("Status_P (не изменился):")
+        for status, count in curr_data['Status_P'].value_counts().items():
+            self.logger.info(f"  {status}: {count}")
+        self.logger.info("Status (новые значения):")
+        for status, count in curr_data['Status'].value_counts().items():
+            self.logger.info(f"  {status}: {count}")
+        self.logger.info(f"Всего изменено записей: {len(indices_to_change)}")
 
     def process_step_4(self):
-        """Шаг IV: Обновление счетчиков"""
-        curr_data = self.temp_df[self.temp_df['Dates'] == self.target_date]
-        prev_data = self.temp_df[self.temp_df['Dates'] == self.prev_date][['serialno', 'sne', 'ppr', 'repair_days', 'Status', 'Status_P']]
+        """Обработка счетчиков sne, ppr и repair_days"""
+        self.logger.info("\nШаг 4: Обработка счетчиков")
         
-        working_df = pd.merge(
-            curr_data,
-            prev_data,
-            on='serialno',
-            suffixes=('', '_prev')
-        )
+        # Получаем данные для текущей даты
+        current_data = self.temp_df[self.temp_df['Dates'] == self.target_date].copy()
+        
+        # Получаем предыдущие значения из базы
+        prev_data = pd.DataFrame(columns=['serialno', 'Status', 'Status_P', 'sne', 'ppr', 'repair_days'])
+        if self.prev_date is not None:
+            prev_query = f"""
+                SELECT 
+                    serialno,
+                    Status,
+                    Status_P,
+                    sne,
+                    ppr,
+                    repair_days
+                FROM OlapCube_VNV 
+                WHERE Dates = '{self.prev_date.strftime('%Y-%m-%d')}'
+            """
+            prev_data = pd.DataFrame(
+                self.client.execute(prev_query),
+                columns=['serialno', 'Status', 'Status_P', 'sne', 'ppr', 'repair_days']
+            )
+        
+        # Обрабатываем каждую запись
+        for idx, row in current_data.iterrows():
+            serialno = row['serialno']
+            status = row['Status']
+            daily_flight_hours = row['daily_flight_hours']
+            
+            # Находим предыдущие значения
+            prev_row = prev_data[prev_data['serialno'] == serialno]
+            
+            if not prev_row.empty:
+                prev_sne = prev_row['sne'].iloc[0]
+                prev_ppr = prev_row['ppr'].iloc[0]
+                prev_repair = prev_row['repair_days'].iloc[0]
+                prev_status = prev_row['Status'].iloc[0]
+                prev_status_p = prev_row['Status_P'].iloc[0]
+            else:
+                prev_sne = None
+                prev_ppr = None
+                prev_repair = None
+                prev_status = None
+                prev_status_p = None
+            
+            # Логируем значения для отладки
+            self.logger.debug(
+                f"\nОбработка {serialno}:\n"
+                f"  Текущий статус: {status}\n"
+                f"  Предыдущий статус: {prev_status}\n"
+                f"  Предыдущий Status_P: {prev_status_p}\n"
+                f"  daily_flight_hours: {daily_flight_hours}\n"
+                f"  Предыдущие значения: sne={prev_sne}, ppr={prev_ppr}, repair={prev_repair}"
+            )
+            
+            # Применяем правила из алгоритма
+            if status == 'Эксплуатация':
+                # Status (target_date) == "Эксплуатация"
+                if prev_sne is not None:
+                    self.temp_df.at[idx, 'sne'] = prev_sne + daily_flight_hours
+                    self.temp_df.at[idx, 'ppr'] = prev_ppr + daily_flight_hours
+                
+            elif status == 'Исправен':
+                if prev_status_p == 'Ремонт':
+                    # Status (target_date) == "Исправен" И Status_P (target_date-1) == "Ремонт"
+                    self.temp_df.at[idx, 'sne'] = prev_sne
+                    self.temp_df.at[idx, 'ppr'] = 0
+                    self.temp_df.at[idx, 'repair_days'] = None
+                else:
+                    # Status (target_date) == "Исправен" И Status_P (target_date-1) != "Ремонт"
+                    self.temp_df.at[idx, 'sne'] = prev_sne
+                    self.temp_df.at[idx, 'ppr'] = prev_ppr
+                    self.temp_df.at[idx, 'repair_days'] = prev_repair
+            
+            elif status == 'Ремонт':
+                if prev_status == 'Эксплуатация':
+                    # Status (target_date) == "Ремонт" И Status_P (target_date-1) == "Эксплуатация"
+                    self.temp_df.at[idx, 'sne'] = prev_sne
+                    self.temp_df.at[idx, 'ppr'] = prev_ppr
+                    self.temp_df.at[idx, 'repair_days'] = 1
+                else:
+                    # Status (target_date) == "Ремонт" И Status_P (target_date-1) != "Эксплуатация"
+                    self.temp_df.at[idx, 'sne'] = prev_sne
+                    self.temp_df.at[idx, 'ppr'] = prev_ppr
+                    if prev_repair is not None:
+                        self.temp_df.at[idx, 'repair_days'] = prev_repair + 1
+            
+            elif status in ['Хранение', 'Неактивно']:
+                # Status (target_date) == "Хранение" или "Неактивно"
+                self.temp_df.at[idx, 'sne'] = prev_sne
+                self.temp_df.at[idx, 'ppr'] = prev_ppr
+                self.temp_df.at[idx, 'repair_days'] = prev_repair
+            
+            # Логируем новые значения для отладки
+            self.logger.debug(
+                f"  Новые значения: "
+                f"sne={self.temp_df.at[idx, 'sne']}, "
+                f"ppr={self.temp_df.at[idx, 'ppr']}, "
+                f"repair={self.temp_df.at[idx, 'repair_days']}"
+            )
 
-        # 1. Status = "Эксплуатация"
-        exploitation_mask = working_df['Status'] == 'Эксплуатация'
-        working_df.loc[exploitation_mask, 'sne'] = working_df.loc[exploitation_mask, 'sne_prev'] + \
-                                                  working_df.loc[exploitation_mask, 'daily_flight_hours']
-        working_df.loc[exploitation_mask, 'ppr'] = working_df.loc[exploitation_mask, 'ppr_prev'] + \
-                                                  working_df.loc[exploitation_mask, 'daily_flight_hours']
-
-        # 2. Status = "Исправен" и Status_P (t-1) = "Ремонт"
-        ready_after_repair_mask = (working_df['Status'] == 'Исправен') & \
-                                 (working_df['Status_P_prev'] == 'Ремонт')
-        working_df.loc[ready_after_repair_mask, 'sne'] = working_df.loc[ready_after_repair_mask, 'sne_prev']
-        working_df.loc[ready_after_repair_mask, 'ppr'] = 0
-        working_df.loc[ready_after_repair_mask, 'repair_days'] = None
-
-        # 3. Status = "Исправен" и Status_P (t-1) != "Ремонт"
-        ready_not_from_repair_mask = (working_df['Status'] == 'Исправен') & \
-                                    (working_df['Status_P_prev'] != 'Ремонт')
-        working_df.loc[ready_not_from_repair_mask, 'sne'] = working_df.loc[ready_not_from_repair_mask, 'sne_prev']
-        working_df.loc[ready_not_from_repair_mask, 'ppr'] = working_df.loc[ready_not_from_repair_mask, 'ppr_prev']
-
-        # 4. Status = "Ремонт" и Status_P (t-1) = "Эксплуатация"
-        repair_from_exploitation_mask = (working_df['Status'] == 'Ремонт') & \
-                                      (working_df['Status_P_prev'] == 'Эксплуатация')
-        working_df.loc[repair_from_exploitation_mask, 'sne'] = working_df.loc[repair_from_exploitation_mask, 'sne_prev']
-        working_df.loc[repair_from_exploitation_mask, 'ppr'] = working_df.loc[repair_from_exploitation_mask, 'ppr_prev']
-        working_df.loc[repair_from_exploitation_mask, 'repair_days'] = 1
-
-        # 5. Status = "Ремонт" и Status_P (t-1) != "Эксплуатация"
-        repair_not_from_exploitation_mask = (working_df['Status'] == 'Ремонт') & \
-                                          (working_df['Status_P_prev'] != 'Эксплуатация')
-        working_df.loc[repair_not_from_exploitation_mask, 'sne'] = working_df.loc[repair_not_from_exploitation_mask, 'sne_prev']
-        working_df.loc[repair_not_from_exploitation_mask, 'ppr'] = working_df.loc[repair_not_from_exploitation_mask, 'ppr_prev']
-        working_df.loc[repair_not_from_exploitation_mask, 'repair_days'] = \
-            working_df.loc[repair_not_from_exploitation_mask, 'repair_days_prev'] + 1
-
-        # 6. Status = "Хранение" или "Неактивно"
-        storage_inactive_mask = working_df['Status'].isin(['Хранение', 'Неактивно'])
-        working_df.loc[storage_inactive_mask, 'sne'] = working_df.loc[storage_inactive_mask, 'sne_prev']
-        working_df.loc[storage_inactive_mask, 'ppr'] = working_df.loc[storage_inactive_mask, 'ppr_prev']
-
-        # Обновляем значения в основной таблице
-        update_columns = ['sne', 'ppr', 'repair_days']
-        self.temp_df.loc[self.temp_df['Dates'] == self.target_date, update_columns] = working_df[update_columns]
-
-        self.logger.info(f"Шаг IV завершен для даты {self.target_date.strftime('%Y-%m-%d')}")
+        self.logger.info("Шаг 4 завершен")
 
     def save_results(self, date: datetime) -> None:
         """Обновление результатов в кубе OlapCube_VNV"""
         data_to_update = self.temp_df[self.temp_df['Dates'] == date].copy()
         
+        self.logger.info(f"\nПодготовка данных для сохранения на дату {date.strftime('%Y-%m-%d')}:")
+        self.logger.info(f"Количество записей для обновления: {len(data_to_update)}")
+        
+        # Проверяем данные перед сохранением
+        self.logger.info("Проверка данных перед сохранением:")
+        sample = data_to_update.head(2)
+        for idx, row in sample.iterrows():
+            self.logger.info(f"  Запись {idx}:")
+            self.logger.info(f"    serialno: {row['serialno']}")
+            self.logger.info(f"    Status: {row['Status']}")
+            self.logger.info(f"    Status_P: {row['Status_P']}")
+            self.logger.info(f"    sne: {row['sne']}")
+            self.logger.info(f"    ppr: {row['ppr']}")
+            self.logger.info(f"    repair_days: {row['repair_days']}")
+        
         # Подготовка данных для обновления
         updates = []
         for _, row in data_to_update.iterrows():
-            updates.append({
+            update = {
                 'serialno': row['serialno'],
                 'Dates': row['Dates'],
+                'Status': row['Status'],
                 'Status_P': row['Status_P'],
                 'sne': float(row['sne']) if pd.notnull(row['sne']) else None,
                 'ppr': float(row['ppr']) if pd.notnull(row['ppr']) else None,
@@ -318,13 +406,15 @@ class CycleProcessor:
                 'stock_mi17': float(row['stock_mi17']) if pd.notnull(row['stock_mi17']) else None,
                 'stock_empty': float(row['stock_empty']) if pd.notnull(row['stock_empty']) else None,
                 'stock_total': float(row['stock_total']) if pd.notnull(row['stock_total']) else None
-            })
+            }
+            updates.append(update)
 
         # Обновление данных в кубе
         for update in updates:
             query = """
                 ALTER TABLE OlapCube_VNV
                 UPDATE 
+                    Status = %(Status)s,
                     Status_P = %(Status_P)s,
                     sne = %(sne)s,
                     ppr = %(ppr)s,
@@ -343,11 +433,33 @@ class CycleProcessor:
             """
             try:
                 self.client.execute(query, update)
+                self.logger.info(f"Обновлена запись: serialno={update['serialno']}, date={update['Dates']}")
             except Exception as e:
                 self.logger.error(f"Ошибка при обновлении записи {update['serialno']} на дату {update['Dates']}: {str(e)}")
                 raise
 
-        self.logger.info(f"Обновлены данные в кубе для даты {date.strftime('%Y-%m-%d')}: {len(updates)} записей")
+        # Проверяем результат сохранения
+        verify_query = f"""
+            SELECT 
+                Status,
+                Status_P,
+                sne,
+                ppr,
+                repair_days,
+                balance_total
+            FROM OlapCube_VNV
+            WHERE Dates = '{date.strftime('%Y-%m-%d')}'
+            LIMIT 5
+        """
+        verify_result = self.client.execute(verify_query)
+        if verify_result:
+            self.logger.info("\nПроверка после сохранения (первые 5 записей):")
+            fields = ['Status', 'Status_P', 'sne', 'ppr', 'repair_days', 'balance_total']
+            for record in verify_result:
+                values = dict(zip(fields, record))
+                self.logger.info(f"  {values}")
+
+        self.logger.info(f"\nОбновлены данные в кубе для даты {date.strftime('%Y-%m-%d')}: {len(updates)} записей")
 
     def load_data(self):
         # Загрузка данных из куба
@@ -406,8 +518,85 @@ class CycleProcessor:
         for col in numeric_columns:
             self.temp_df[col] = pd.to_numeric(self.temp_df[col], errors='coerce')
 
+    def load_data_for_dates(self, dates):
+        # Загрузка данных из куба
+        self.logger.info(f"\nЗагрузка данных из базы для дат: {[d.strftime('%Y-%m-%d') for d in dates]}")
+        
+        query = f"""
+            WITH
+                (
+                    SELECT
+                        mi8t_count,
+                        mi17_count
+                    FROM OlapCube_VNV
+                    WHERE Dates = '{dates[0].strftime('%Y-%m-%d')}'
+                    LIMIT 1
+                ) AS counts
+            SELECT
+                serialno,
+                Dates,
+                Status,
+                Status_P,
+                sne,
+                ppr,
+                repair_days,
+                ll,
+                oh,
+                BR,
+                daily_flight_hours,
+                RepairTime,
+                ac_typ,
+                counts.mi8t_count,
+                counts.mi17_count
+            FROM OlapCube_VNV
+            WHERE Dates IN ({', '.join([f"'{date.strftime('%Y-%m-%d')}'" for date in dates])})
+            ORDER BY Dates, serialno
+        """
+        
+        result = self.client.execute(
+            query,
+            settings={'max_threads': 8}
+        )
+        
+        self.logger.info(f"Получено записей из базы: {len(result)}")
+        
+        if not result:
+            self.logger.error(f"Нет данных для обработки на даты {[date.strftime('%Y-%m-%d') for date in dates]}")
+            raise Exception("Нет данных для обработки")
+        
+        # Преобразование в DataFrame
+        columns = [
+            'serialno', 'Dates', 'Status', 'Status_P', 'sne', 'ppr', 'repair_days',
+            'll', 'oh', 'BR', 'daily_flight_hours', 'RepairTime', 'ac_typ',
+            'mi8t_count', 'mi17_count'
+        ]
+        
+        self.temp_df = pd.DataFrame(result, columns=columns)
+        
+        # Приведение типов данных
+        numeric_columns = ['sne', 'ppr', 'repair_days', 'll', 'oh', 'BR', 
+                         'daily_flight_hours', 'RepairTime', 'mi8t_count', 'mi17_count']
+        for col in numeric_columns:
+            self.temp_df[col] = pd.to_numeric(self.temp_df[col], errors='coerce')
+        
+        # Логируем состояние temp_df после загрузки
+        self.logger.info(f"Текущий размер temp_df: {len(self.temp_df)}")
+        self.logger.info("Пример данных в temp_df:")
+        sample = self.temp_df.head(2)
+        for idx, row in sample.iterrows():
+            self.logger.info(f"  Запись {idx}:")
+            self.logger.info(f"    serialno: {row['serialno']}")
+            self.logger.info(f"    Dates: {row['Dates']}")
+            self.logger.info(f"    Status: {row['Status']}")
+            self.logger.info(f"    Status_P: {row['Status_P']}")
+            self.logger.info(f"    sne: {row['sne']}")
+            self.logger.info(f"    ppr: {row['ppr']}")
+            self.logger.info(f"    repair_days: {row['repair_days']}")
+            self.logger.info(f"    RepairTime: {row['RepairTime']}")
+            self.logger.info(f"    daily_flight_hours: {row['daily_flight_hours']}")
+
     def run_cycle(self):
-        """Основной метод для запуска цикла обработки данных"""
+        """Выполнение цикла обработки для каждой даты"""
         try:
             # Получаем первую дату из куба
             query = "SELECT MIN(Dates) as first_date FROM OlapCube_VNV"
@@ -420,87 +609,51 @@ class CycleProcessor:
             self.logger.info(f"Начинаем обработку с даты: {current_date.strftime('%Y-%m-%d')}")
             
             # Обрабатываем 2 дня
-            for day in range(2):
+            for day in range(2):  # для теста 2 дня, потом будет больше
                 self.target_date = current_date
                 self.prev_date = current_date - timedelta(days=1)
                 
-                self.logger.info(f"\n{'='*80}")
-                self.logger.info(f"Обработка даты: {self.target_date.strftime('%Y-%m-%d')}")
+                self.logger.info(f"\nОбработка даты: {self.target_date.strftime('%Y-%m-%d')}")
                 self.logger.info(f"Предыдущая дата: {self.prev_date.strftime('%Y-%m-%d')}")
                 
-                # Загружаем данные
-                self.load_data()
+                # Очищаем промежуточную таблицу перед обработкой новой даты
+                self.temp_df = pd.DataFrame()
                 
-                # Логируем начальное состояние
+                # Загружаем свежие данные из базы для обеих дат
+                self.load_data_for_dates([self.prev_date, self.target_date])
+                
+                # Проверяем наличие данных
+                curr_data = self.temp_df[self.temp_df['Dates'] == self.target_date]
                 prev_data = self.temp_df[self.temp_df['Dates'] == self.prev_date]
-                curr_data = self.temp_df[self.temp_df['Dates'] == self.target_date]
                 
-                self.logger.info(f"\n--- Исходные данные ---")
-                # Status на предыдущую дату
-                self.logger.info(f"Status на {self.prev_date.strftime('%Y-%m-%d')}:")
-                status_counts = prev_data['Status'].value_counts()
-                for status, count in status_counts.items():
-                    self.logger.info(f"  {status}: {count}")
+                if curr_data.empty:
+                    self.logger.warning(f"Нет данных для текущей даты {self.target_date.strftime('%Y-%m-%d')}")
+                    continue
+                    
+                if prev_data.empty:
+                    self.logger.warning(f"Нет данных для предыдущей даты {self.prev_date.strftime('%Y-%m-%d')}")
+                    continue
                 
-                # Status_P на текущую дату (до обработки)
-                self.logger.info(f"\nStatus_P на {self.target_date.strftime('%Y-%m-%d')} (до обработки):")
-                status_p_counts = curr_data['Status_P'].value_counts()
-                for status, count in status_p_counts.items():
-                    self.logger.info(f"  {status}: {count}")
-                
-                # Шаг 1: Status -> Status_P
-                self.logger.info(f"\n--- Шаг I: Status({self.prev_date.strftime('%Y-%m-%d')}) -> Status_P({self.target_date.strftime('%Y-%m-%d')}) ---")
+                # Выполняем все шаги обработки для текущей даты
                 self.process_step_1()
-                curr_data = self.temp_df[self.temp_df['Dates'] == self.target_date]
-                self.logger.info("Status_P после Шага I:")
-                status_p_counts = curr_data['Status_P'].value_counts()
-                for status, count in status_p_counts.items():
-                    self.logger.info(f"  {status}: {count}")
-                
-                # Шаг 2: Расчет балансов
-                self.logger.info(f"\n--- Шаг II: Расчет balance_total ---")
                 self.process_step_2()
-                curr_data = self.temp_df[self.temp_df['Dates'] == self.target_date]
-                self.logger.info("Значения счетчиков:")
-                self.logger.info(f"  mi8t_count: {curr_data['mi8t_count'].iloc[0]}")
-                self.logger.info(f"  mi17_count: {curr_data['mi17_count'].iloc[0]}")
-                self.logger.info("Расчет балансов:")
-                self.logger.info(f"  balance_mi8t: {curr_data['balance_mi8t'].iloc[0]}")
-                self.logger.info(f"  balance_mi17: {curr_data['balance_mi17'].iloc[0]}")
-                self.logger.info(f"  balance_empty: {curr_data['balance_empty'].iloc[0]}")
-                self.logger.info(f"  balance_total: {curr_data['balance_total'].iloc[0]}")
-                
-                # Шаг 3: Корректировка Status_P
-                self.logger.info(f"\n--- Шаг III: Корректировка Status_P на основе balance_total ---")
                 self.process_step_3()
-                curr_data = self.temp_df[self.temp_df['Dates'] == self.target_date]
-                self.logger.info("Status_P после корректировки:")
-                status_p_counts = curr_data['Status_P'].value_counts()
-                for status, count in status_p_counts.items():
-                    self.logger.info(f"  {status}: {count}")
-                
-                # Шаг 4: Расчет показателей
-                self.logger.info(f"\n--- Шаг IV: Расчет sne, ppr, repair_days ---")
                 self.process_step_4()
-                curr_data = self.temp_df[self.temp_df['Dates'] == self.target_date]
-                self.logger.info("Значения показателей (не NULL):")
-                self.logger.info(f"  sne > 0: {len(curr_data[curr_data['sne'] > 0])}")
-                self.logger.info(f"  ppr > 0: {len(curr_data[curr_data['ppr'] > 0])}")
-                self.logger.info(f"  repair_days > 0: {len(curr_data[curr_data['repair_days'] > 0])}")
                 
-                # Сохранение результатов
-                self.logger.info(f"\n--- Сохранение результатов ---")
+                # Сохраняем результаты в базу
                 self.save_results(self.target_date)
+                self.logger.info(f"Успешно обработана и сохранена дата: {self.target_date.strftime('%Y-%m-%d')}")
                 
                 # Переходим к следующему дню
                 current_date += timedelta(days=1)
-                
-            self.logger.info(f"\nОбработка данных завершена. Обработано дней: 2")
+            
+            self.logger.info("Цикл обработки завершен")
             
         except Exception as e:
-            self.logger.error(f"Ошибка при обработке даты {self.target_date}: {str(e)}")
+            self.logger.error(f"Ошибка при обработке: {str(e)}")
             raise
 
 # Создание и запуск процессора
-processor = CycleProcessor()
-processor.run_cycle() 
+if __name__ == "__main__":
+    processor = CycleProcessor()
+    processor.run_cycle()
