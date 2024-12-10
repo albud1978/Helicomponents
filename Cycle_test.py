@@ -7,6 +7,7 @@ import sys
 import os
 from typing import List, Dict, Any
 from dotenv import load_dotenv
+import time
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -43,20 +44,39 @@ class CycleProcessor:
         prev_data = self.temp_df[self.temp_df['Dates'] == self.prev_date]
         curr_data = self.temp_df[self.temp_df['Dates'] == self.target_date]
         
+        self.logger.info(f"Количество записей на предыдущую дату: {len(prev_data)}")
+        self.logger.info(f"Количество записей на текущую дату: {len(curr_data)}")
+        
+        # Логируем распределение Status на предыдущую дату
+        self.logger.info(f"Распределение Status на {self.prev_date.strftime('%Y-%m-%d')}:")
+        status_counts = prev_data['Status'].value_counts()
+        for status, count in status_counts.items():
+            self.logger.info(f"  {status}: {count}")
+
         working_df = pd.merge(
             curr_data,
             prev_data[['serialno', 'Status', 'Status_P', 'sne', 'ppr', 'repair_days']],
             on='serialno',
+            how='left',  # Используем left join чтобы сохранить все записи из curr_data
             suffixes=('', '_prev')
         )
+        
+        self.logger.info(f"Количество записей после merge: {len(working_df)}")
+        
+        # Обработка новых записей (которых не было в предыдущий день)
+        new_records_mask = working_df['Status_prev'].isna()
+        working_df.loc[new_records_mask, 'Status_P'] = 'Неактивно'
+        
+        # Обработка существующих записей
+        existing_records = ~new_records_mask
 
         # 1. Копирование неизменяемых статусов
         for status in ['Неактивно', 'Хранение', 'Исправен']:
-            mask = (working_df['Status_prev'] == status)
+            mask = existing_records & (working_df['Status_prev'] == status)
             working_df.loc[mask, 'Status_P'] = status
 
         # 2. Обработка статуса "Ремонт"
-        repair_mask = (working_df['Status_prev'] == 'Ремонт')
+        repair_mask = existing_records & (working_df['Status_prev'] == 'Ремонт')
         working_df.loc[
             repair_mask & (working_df['repair_days_prev'] < working_df['RepairTime']),
             'Status_P'
@@ -67,7 +87,7 @@ class CycleProcessor:
         ] = 'Исправен'
 
         # 3. Обработка статуса "Эксплуатация"
-        explo_mask = (working_df['Status_prev'] == 'Эксплуатация')
+        explo_mask = existing_records & (working_df['Status_prev'] == 'Эксплуатация')
         working_df.loc[
             explo_mask & 
             (working_df['sne_prev'] < (working_df['ll'] - working_df['daily_flight_hours'])) &
@@ -94,7 +114,12 @@ class CycleProcessor:
         self.temp_df.loc[self.temp_df['Dates'] == self.target_date, 'Status_P'] = \
             working_df['Status_P'].values
 
+        # Логируем результат после Шага I
         self.logger.info(f"Шаг I завершен для даты {self.target_date.strftime('%Y-%m-%d')}")
+        self.logger.info("Распределение Status_P:")
+        final_counts = self.temp_df[self.temp_df['Dates'] == self.target_date]['Status_P'].value_counts()
+        for status, count in final_counts.items():
+            self.logger.info(f"  {status}: {count}")
 
     def process_step_2(self):
         """Шаг II: Расчет балансов и запасов"""
@@ -373,31 +398,24 @@ class CycleProcessor:
         data_to_update = self.temp_df[self.temp_df['Dates'] == date].copy()
         
         self.logger.info(f"\nПодготовка данных для сохранения на дату {date.strftime('%Y-%m-%d')}:")
-        self.logger.info(f"Количество записей для обновления: {len(data_to_update)}")
-        
-        # Проверяем данные перед сохранением
-        self.logger.info("Проверка данных перед сохранением:")
-        sample = data_to_update.head(2)
-        for idx, row in sample.iterrows():
-            self.logger.info(f"  Запись {idx}:")
-            self.logger.info(f"    serialno: {row['serialno']}")
-            self.logger.info(f"    Status: {row['Status']}")
-            self.logger.info(f"    Status_P: {row['Status_P']}")
-            self.logger.info(f"    sne: {row['sne']}")
-            self.logger.info(f"    ppr: {row['ppr']}")
-            self.logger.info(f"    repair_days: {row['repair_days']}")
+        self.logger.info(f"Количество записей: {len(data_to_update)}")
         
         # Подготовка данных для обновления
         updates = []
         for _, row in data_to_update.iterrows():
+            # Проверяем наличие значений перед сохранением
+            sne_value = float(row['sne']) if pd.notnull(row['sne']) else None
+            ppr_value = float(row['ppr']) if pd.notnull(row['ppr']) else None
+            repair_days_value = float(row['repair_days']) if pd.notnull(row['repair_days']) else None
+            
             update = {
                 'serialno': row['serialno'],
                 'Dates': row['Dates'],
                 'Status': row['Status'],
                 'Status_P': row['Status_P'],
-                'sne': float(row['sne']) if pd.notnull(row['sne']) else None,
-                'ppr': float(row['ppr']) if pd.notnull(row['ppr']) else None,
-                'repair_days': float(row['repair_days']) if pd.notnull(row['repair_days']) else None,
+                'sne': sne_value,
+                'ppr': ppr_value,
+                'repair_days': repair_days_value,
                 'balance_mi8t': float(row['balance_mi8t']) if pd.notnull(row['balance_mi8t']) else None,
                 'balance_mi17': float(row['balance_mi17']) if pd.notnull(row['balance_mi17']) else None,
                 'balance_empty': float(row['balance_empty']) if pd.notnull(row['balance_empty']) else None,
@@ -407,6 +425,16 @@ class CycleProcessor:
                 'stock_empty': float(row['stock_empty']) if pd.notnull(row['stock_empty']) else None,
                 'stock_total': float(row['stock_total']) if pd.notnull(row['stock_total']) else None
             }
+            
+            # Логируем значения счетчиков для отладки
+            self.logger.debug(
+                f"Запись {row['serialno']}: "
+                f"Status={row['Status']}, "
+                f"sne={sne_value}, "
+                f"ppr={ppr_value}, "
+                f"repair_days={repair_days_value}"
+            )
+            
             updates.append(update)
 
         # Обновление данных в кубе
@@ -433,7 +461,6 @@ class CycleProcessor:
             """
             try:
                 self.client.execute(query, update)
-                self.logger.info(f"Обновлена запись: serialno={update['serialno']}, date={update['Dates']}")
             except Exception as e:
                 self.logger.error(f"Ошибка при обновлении записи {update['serialno']} на дату {update['Dates']}: {str(e)}")
                 raise
@@ -447,13 +474,14 @@ class CycleProcessor:
                 ppr,
                 repair_days,
                 balance_total
-            FROM OlapCube_VNV
+            FROM OlapCube_VNV FINAL
             WHERE Dates = '{date.strftime('%Y-%m-%d')}'
             LIMIT 5
+            SETTINGS optimize_read_in_order=1
         """
         verify_result = self.client.execute(verify_query)
         if verify_result:
-            self.logger.info("\nПроверка после сохранения (первые 5 записей):")
+            self.logger.info("\nПроверка сохранения (первые 5 записей):")
             fields = ['Status', 'Status_P', 'sne', 'ppr', 'repair_days', 'balance_total']
             for record in verify_result:
                 values = dict(zip(fields, record))
@@ -520,15 +548,13 @@ class CycleProcessor:
 
     def load_data_for_dates(self, dates):
         # Загрузка данных из куба
-        self.logger.info(f"\nЗагрузка данных из базы для дат: {[d.strftime('%Y-%m-%d') for d in dates]}")
-        
         query = f"""
             WITH
                 (
                     SELECT
                         mi8t_count,
                         mi17_count
-                    FROM OlapCube_VNV
+                    FROM OlapCube_VNV FINAL
                     WHERE Dates = '{dates[0].strftime('%Y-%m-%d')}'
                     LIMIT 1
                 ) AS counts
@@ -548,17 +574,18 @@ class CycleProcessor:
                 ac_typ,
                 counts.mi8t_count,
                 counts.mi17_count
-            FROM OlapCube_VNV
+            FROM OlapCube_VNV FINAL
             WHERE Dates IN ({', '.join([f"'{date.strftime('%Y-%m-%d')}'" for date in dates])})
             ORDER BY Dates, serialno
+            SETTINGS optimize_read_in_order=1
         """
+        
+        self.logger.info(f"\nЗагрузка данных для дат: {[date.strftime('%Y-%m-%d') for date in dates]}")
         
         result = self.client.execute(
             query,
             settings={'max_threads': 8}
         )
-        
-        self.logger.info(f"Получено записей из базы: {len(result)}")
         
         if not result:
             self.logger.error(f"Нет данных для обработки на даты {[date.strftime('%Y-%m-%d') for date in dates]}")
@@ -573,27 +600,25 @@ class CycleProcessor:
         
         self.temp_df = pd.DataFrame(result, columns=columns)
         
+        # Логируем состояние загруженных данных
+        for date in dates:
+            date_data = self.temp_df[self.temp_df['Dates'] == date]
+            self.logger.info(f"\nДанные на {date.strftime('%Y-%m-%d')}:")
+            self.logger.info(f"Количество записей: {len(date_data)}")
+            self.logger.info("Распределение Status:")
+            status_counts = date_data['Status'].value_counts()
+            for status, count in status_counts.items():
+                self.logger.info(f"  {status}: {count}")
+            self.logger.info("Распределение Status_P:")
+            status_p_counts = date_data['Status_P'].value_counts()
+            for status, count in status_p_counts.items():
+                self.logger.info(f"  {status}: {count}")
+        
         # Приведение типов данных
         numeric_columns = ['sne', 'ppr', 'repair_days', 'll', 'oh', 'BR', 
                          'daily_flight_hours', 'RepairTime', 'mi8t_count', 'mi17_count']
         for col in numeric_columns:
             self.temp_df[col] = pd.to_numeric(self.temp_df[col], errors='coerce')
-        
-        # Логируем состояние temp_df после загрузки
-        self.logger.info(f"Текущий размер temp_df: {len(self.temp_df)}")
-        self.logger.info("Пример данных в temp_df:")
-        sample = self.temp_df.head(2)
-        for idx, row in sample.iterrows():
-            self.logger.info(f"  Запись {idx}:")
-            self.logger.info(f"    serialno: {row['serialno']}")
-            self.logger.info(f"    Dates: {row['Dates']}")
-            self.logger.info(f"    Status: {row['Status']}")
-            self.logger.info(f"    Status_P: {row['Status_P']}")
-            self.logger.info(f"    sne: {row['sne']}")
-            self.logger.info(f"    ppr: {row['ppr']}")
-            self.logger.info(f"    repair_days: {row['repair_days']}")
-            self.logger.info(f"    RepairTime: {row['RepairTime']}")
-            self.logger.info(f"    daily_flight_hours: {row['daily_flight_hours']}")
 
     def run_cycle(self):
         """Выполнение цикла обработки для каждой даты"""
@@ -616,10 +641,7 @@ class CycleProcessor:
                 self.logger.info(f"\nОбработка даты: {self.target_date.strftime('%Y-%m-%d')}")
                 self.logger.info(f"Предыдущая дата: {self.prev_date.strftime('%Y-%m-%d')}")
                 
-                # Очищаем промежуточную таблицу перед обработкой новой даты
-                self.temp_df = pd.DataFrame()
-                
-                # Загружаем свежие данные из базы для обеих дат
+                # Загружаем данные для текущей итерации
                 self.load_data_for_dates([self.prev_date, self.target_date])
                 
                 # Проверяем наличие данных
@@ -634,17 +656,21 @@ class CycleProcessor:
                     self.logger.warning(f"Нет данных для предыдущей даты {self.prev_date.strftime('%Y-%m-%d')}")
                     continue
                 
-                # Выполняем все шаги обработки для текущей даты
+                # Выполняем шаги обработки
                 self.process_step_1()
                 self.process_step_2()
                 self.process_step_3()
                 self.process_step_4()
                 
-                # Сохраняем результаты в базу
+                # Сохраняем результаты
                 self.save_results(self.target_date)
-                self.logger.info(f"Успешно обработана и сохранена дата: {self.target_date.strftime('%Y-%m-%d')}")
                 
-                # Переходим к следующему дню
+                # Добавляем паузу между днями
+                if day < 1:  # Не ждем после последнего дня
+                    self.logger.info(f"\nОжидаем 20 секунд перед обработкой следующего дня...")
+                    time.sleep(20)
+                
+                # Переходим к следующей дате
                 current_date += timedelta(days=1)
             
             self.logger.info("Цикл обработки завершен")
