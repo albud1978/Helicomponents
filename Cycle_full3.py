@@ -1,10 +1,10 @@
 import os
 import logging
 import pandas as pd
+import numpy as np
 from clickhouse_driver import Client
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-import numpy as np
 import sys
 
 # Загрузка переменных окружений
@@ -156,19 +156,31 @@ class CycleProcessor:
         prev_data = self.df[self.df['Dates'] == prev_date]
         curr_data = self.df[self.df['Dates'] == curr_date]
 
+        # Проверяем наличие данных
+        if len(curr_data) == 0:
+            self.logger.warning(f"Нет данных для даты {curr_date}")
+            return
+        
+        if len(prev_data) == 0:
+            self.logger.warning(f"Нет данных для даты {prev_date}")
+            return
+
+        # Создаем рабочую копию с объединением данных
         working_df = pd.merge(
             curr_data,
             prev_data[['serialno','Status','Status_P','sne','ppr','repair_days']],
-            on='serialno', how='left', suffixes=('', '_prev')
+            on='serialno', how='inner', suffixes=('', '_prev')
         )
 
-        # Шаг I
+        # Инициализация Status_P
         working_df['Status_P'] = None
 
+        # Обработка статусов
         working_df.loc[working_df['Status_prev'] == 'Неактивно', 'Status_P'] = 'Неактивно'
         working_df.loc[working_df['Status_prev'] == 'Хранение', 'Status_P'] = 'Хранение'
         working_df.loc[working_df['Status_prev'] == 'Исправен', 'Status_P'] = 'Исправен'
 
+        # Обработка ремонта
         working_df.loc[
             (working_df['Status_prev'] == 'Ремонт') &
             (working_df['repair_days_prev'] < working_df['RepairTime']),
@@ -181,14 +193,16 @@ class CycleProcessor:
             'Status_P'
         ] = 'Исправен'
 
-        explo_mask = (working_df['Status_prev']=='Эксплуатация')
-        sne_check = working_df['sne_prev']<(working_df['ll']-working_df['daily_flight_hours'])
-        ppr_check = working_df['ppr_prev']<(working_df['oh']-working_df['daily_flight_hours'])
-        working_df.loc[explo_mask & sne_check & ppr_check,'Status_P']='Эксплуатация'
+        # Обработка эксплуатации
+        explo_mask = (working_df['Status_prev'] == 'Эксплуатация')
+        sne_check = working_df['sne_prev'] < (working_df['ll'] - working_df['daily_flight_hours'])
+        ppr_check = working_df['ppr_prev'] < (working_df['oh'] - working_df['daily_flight_hours'])
+        working_df.loc[explo_mask & sne_check & ppr_check, 'Status_P'] = 'Эксплуатация'
 
-        sne_limit = working_df['sne_prev']>=(working_df['ll']-working_df['daily_flight_hours'])
-        working_df.loc[explo_mask & sne_limit,'Status_P']='Хранение'
+        sne_limit = working_df['sne_prev'] >= (working_df['ll'] - working_df['daily_flight_hours'])
+        working_df.loc[explo_mask & sne_limit, 'Status_P'] = 'Хранение'
 
+        # Применяем функцию для определения статуса
         def exploitation_to_repair_or_storage(row):
             if (row['Status_prev'] == 'Эксплуатация') and (row['ppr_prev'] >= (row['oh'] - row['daily_flight_hours'])):
                 return 'Ремонт' if row['sne_prev'] < row['BR'] else 'Хранение'
@@ -196,14 +210,25 @@ class CycleProcessor:
 
         working_df['Status_P'] = working_df.apply(exploitation_to_repair_or_storage, axis=1)
 
-        part_of_df = self.df[self.df['Dates']==curr_date].copy()
-        working_df = working_df.sort_values('serialno')
-        part_of_df = part_of_df.sort_values('serialno')
-
-        if len(part_of_df) != len(working_df):
-            self.logger.error("Количество строк не совпадает, проверьте данные!")
-        else:
-            self.df.loc[part_of_df.index, 'Status_P'] = working_df['Status_P'].values
+        # Обновляем Status_P в основном DataFrame
+        curr_mask = (self.df['Dates'] == curr_date)
+        curr_indices = self.df[curr_mask].index
+        working_df = working_df.reset_index(drop=True)
+        if len(curr_indices) != len(working_df):
+            self.logger.error(f"Количество строк не совпадает: curr_indices={len(curr_indices)}, working_df={len(working_df)}")
+            return
+            
+        # Убедимся, что все необходимые категории присутствуют
+        current_categories = self.df['Status_P'].cat.categories
+        new_values = working_df['Status_P'].unique()
+        missing_categories = [cat for cat in new_values if cat not in current_categories]
+        
+        if missing_categories:
+            # Добавляем недостающие категории
+            self.df['Status_P'] = self.df['Status_P'].cat.add_categories(missing_categories)
+            
+        # Теперь можно безопасно присвоить новые значения
+        self.df.loc[curr_indices, 'Status_P'] = working_df['Status_P'].values
 
     def step_2(self, curr_date):
         curr_data = self.df[self.df['Dates']==curr_date]
@@ -237,7 +262,23 @@ class CycleProcessor:
         curr_data = self.df[self.df['Dates']==curr_date]
         balance_total = curr_data['balance_total'].iloc[0]
         mask = (self.df['Dates']==curr_date)
-        self.df.loc[mask,'Status']=self.df.loc[mask,'Status_P']
+        
+        # Убедимся что категории в Status и Status_P идентичны
+        status_categories = set(self.df['Status'].cat.categories)
+        status_p_categories = set(self.df['Status_P'].cat.categories)
+        
+        # Добавим недостающие категории в оба столбца
+        all_categories = sorted(status_categories.union(status_p_categories))
+        
+        self.df['Status'] = self.df['Status'].cat.add_categories(
+            [cat for cat in all_categories if cat not in status_categories]
+        )
+        self.df['Status_P'] = self.df['Status_P'].cat.add_categories(
+            [cat for cat in all_categories if cat not in status_p_categories]
+        )
+        
+        # Теперь можно безопасно копировать значения
+        self.df.loc[mask,'Status'] = self.df.loc[mask,'Status_P']
 
         if balance_total > 0:
             exploitation = curr_data[curr_data['Status_P']=='Эксплуатация'].index.tolist()
@@ -252,160 +293,154 @@ class CycleProcessor:
                 self.df.loc[serviceable[:change_count],'Status']='Эксплуатация'
 
     def step_4(self, prev_date, curr_date):
-        prev_data = self.df[self.df['Dates']==prev_date][['serialno','Status','Status_P','sne','ppr','repair_days']].set_index('serialno')
-        curr_mask = (self.df['Dates']==curr_date)
-        for idx,row in self.df[curr_mask].iterrows():
-            serialno=row['serialno']
-            status=row['Status']
-            daily_flight_hours=row['daily_flight_hours']
-            if serialno in prev_data.index:
-                prev_sne=prev_data.at[serialno,'sne']
-                prev_ppr=prev_data.at[serialno,'ppr']
-                prev_repair=prev_data.at[serialno,'repair_days']
-                prev_status=prev_data.at[serialno,'Status']
-                prev_status_p=prev_data.at[serialno,'Status_P']
-            else:
-                prev_sne=None
-                prev_ppr=None
-                prev_repair=None
-                prev_status=None
-                prev_status_p=None
+        """Рассчитываем значения sne, ppr и repair_days"""
+        curr_data = self.df[self.df['Dates'] == curr_date]
+        prev_data = self.df[self.df['Dates'] == prev_date]
 
-            if status=='Эксплуатация':
-                if prev_sne is not None:
-                    self.df.at[idx,'sne']=np.float32(prev_sne+daily_flight_hours)
-                    self.df.at[idx,'ppr']=np.float32(prev_ppr+daily_flight_hours)
-            elif status=='Исправен':
-                if prev_status_p=='Ремонт':
-                    self.df.at[idx,'sne']=np.float32(prev_sne)
-                    self.df.at[idx,'ppr']=np.float32(0)
-                    self.df.at[idx,'repair_days']=np.nan
-                else:
-                    self.df.at[idx,'sne']=np.float32(prev_sne)
-                    self.df.at[idx,'ppr']=np.float32(prev_ppr)
-                    self.df.at[idx,'repair_days']=prev_repair
-            elif status=='Ремонт':
-                if prev_status=='Эксплуатация':
-                    self.df.at[idx,'sne']=np.float32(prev_sne)
-                    self.df.at[idx,'ppr']=np.float32(prev_ppr)
-                    self.df.at[idx,'repair_days']=1
-                else:
-                    self.df.at[idx,'sne']=np.float32(prev_sne)
-                    self.df.at[idx,'ppr']=np.float32(prev_ppr)
-                    if prev_repair is not None:
-                        self.df.at[idx,'repair_days']=prev_repair+1
-            elif status in ['Хранение','Неактивно']:
-                self.df.at[idx,'sne']=np.float32(prev_sne)
-                self.df.at[idx,'ppr']=np.float32(prev_ppr)
-                self.df.at[idx,'repair_days']=prev_repair
+        for _, row in curr_data.iterrows():
+            idx = row.name
+            serialno = row['serialno']
+            status = row['Status_P']
+            daily_flight_hours = row['daily_flight_hours']
+
+            # Получаем предыдущие значения
+            prev_row = prev_data[prev_data['serialno'] == serialno]
+            if len(prev_row) == 0:
+                continue
+
+            prev_sne = prev_row['sne'].iloc[0]
+            prev_ppr = prev_row['ppr'].iloc[0]
+            prev_repair = prev_row['repair_days'].iloc[0]
+            prev_status = prev_row['Status'].iloc[0]
+            prev_status_p = prev_row['Status_P'].iloc[0]
+
+            if pd.isna(prev_sne):
+                continue
+
+            try:
+                if status == 'Эксплуатация':
+                    self.df.loc[idx, 'sne'] = np.float32(round(float(prev_sne + daily_flight_hours), 2))
+                    self.df.loc[idx, 'ppr'] = np.float32(round(float(prev_ppr + daily_flight_hours), 2))
+                elif status == 'Исправен':
+                    if prev_status_p == 'Ремонт':
+                        self.df.loc[idx, 'sne'] = np.float32(round(float(prev_sne), 2))
+                        self.df.loc[idx, 'ppr'] = np.float32(0.0)
+                        self.df.loc[idx, 'repair_days'] = None
+                    else:
+                        self.df.loc[idx, 'sne'] = np.float32(round(float(prev_sne), 2))
+                        self.df.loc[idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
+                        self.df.loc[idx, 'repair_days'] = prev_repair
+                elif status == 'Ремонт':
+                    if prev_status == 'Эксплуатация':
+                        self.df.loc[idx, 'sne'] = np.float32(round(float(prev_sne), 2))
+                        self.df.loc[idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
+                        self.df.loc[idx, 'repair_days'] = 1
+                    else:
+                        self.df.loc[idx, 'sne'] = np.float32(round(float(prev_sne), 2))
+                        self.df.loc[idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
+                        if prev_repair is not None:
+                            self.df.loc[idx, 'repair_days'] = prev_repair + 1
+                elif status in ['Хранение', 'Неактивно']:
+                    self.df.loc[idx, 'sne'] = np.float32(round(float(prev_sne), 2))
+                    self.df.loc[idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
+                    self.df.loc[idx, 'repair_days'] = prev_repair
+            except Exception as e:
+                self.logger.error(f"Ошибка при обновлении значений для serialno={serialno}: {str(e)}")
+                continue
 
     def save_all_results(self):
         """Запись результатов в куб"""
-        float_cols = ['sne','ppr','repair_days','ll','oh','BR','daily_flight_hours','RepairTime','mi8t_count','mi17_count','balance_mi8t','balance_mi17','balance_empty','balance_total','stock_mi8t','stock_mi17','stock_empty','stock_total']
-        for col in float_cols:
-            if col in self.df.columns:
-                self.df[col] = self.df[col].astype(np.float64, errors='ignore')
+        self.logger.warning(f"Начинаем сохранение {len(self.df)} записей")
+        self.logger.warning(f"Уникальные даты: {self.df['Dates'].unique()}")
+        self.logger.warning(f"Уникальные serialno: {len(self.df['serialno'].unique())}")
 
-        required_cols = ['serialno','Dates','Status','Status_P','sne','ppr','repair_days','balance_mi8t','balance_mi17','balance_empty','balance_total','stock_mi8t','stock_mi17','stock_empty','stock_total']
-        for col in required_cols:
-            if col not in self.df.columns:
-                self.df[col]=np.nan
-
-        if len(self.df)==0:
-            self.logger.warning("Нет данных для записи в базу (df пуст).")
-            return
-
-        update_data=[]
-        for _,row in self.df.iterrows():
-            update_data.append((
-                row['serialno'],
-                row['Dates'],
-                row['Status'],
-                row['Status_P'],
-                row['sne'],
-                row['ppr'],
-                row['repair_days'],
-                row['balance_mi8t'],
-                row['balance_mi17'],
-                row['balance_empty'],
-                row['balance_total'],
-                row['stock_mi8t'],
-                row['stock_mi17'],
-                row['stock_empty'],
-                row['stock_total']
-            ))
-
-        create_temp_table = f"""
-        CREATE TEMPORARY TABLE IF NOT EXISTS updates_temp (
+        # Создаем временную таблицу только с нужными колонками
+        create_temp_table = """
+        CREATE TABLE IF NOT EXISTS default.updates_temp (
             serialno String,
             Dates Date,
-            Status String,
-            Status_P String,
-            sne Float64,
-            ppr Float64,
-            repair_days Float64,
-            balance_mi8t Float64,
-            balance_mi17 Float64,
-            balance_empty Float64,
-            balance_total Float64,
-            stock_mi8t Float64,
-            stock_mi17 Float64,
-            stock_empty Float64,
-            stock_total Float64
+            Status Nullable(String),
+            Status_P Nullable(String),
+            sne Nullable(Float32),
+            ppr Nullable(Float32),
+            repair_days Nullable(Float32),
+            mi8t_count Nullable(Float32),
+            mi17_count Nullable(Float32),
+            balance_mi8t Nullable(Float32),
+            balance_mi17 Nullable(Float32),
+            balance_empty Nullable(Float32),
+            balance_total Nullable(Float32),
+            stock_mi8t Nullable(Float32),
+            stock_mi17 Nullable(Float32),
+            stock_empty Nullable(Float32),
+            stock_total Nullable(Float32)
         ) ENGINE = Memory
         """
         self.client.execute(create_temp_table)
+
+        # Подготавливаем данные для вставки
+        self.logger.warning(f"Подготовка {len(self.df)} записей для вставки")
+        insert_temp_query = """
+        INSERT INTO default.updates_temp (
+            serialno, Dates, Status, Status_P, sne, ppr, repair_days,
+            mi8t_count, mi17_count,
+            balance_mi8t, balance_mi17, balance_empty, balance_total,
+            stock_mi8t, stock_mi17, stock_empty, stock_total
+        )
+        VALUES
+        """
         
-        insert_query = "INSERT INTO updates_temp VALUES"
-        self.client.execute(insert_query, update_data)
+        # Вставляем данные во временную таблицу
+        values = []
+        for _, row in self.df.iterrows():
+            values.append((
+                row['serialno'], row['Dates'], row['Status'], row['Status_P'],
+                row['sne'], row['ppr'], row['repair_days'],
+                row['mi8t_count'], row['mi17_count'],
+                row['balance_mi8t'], row['balance_mi17'], row['balance_empty'],
+                row['balance_total'], row['stock_mi8t'], row['stock_mi17'],
+                row['stock_empty'], row['stock_total']
+            ))
+        
+        self.client.execute(insert_temp_query, values)
+        self.logger.warning(f"Вставлено {len(values)} записей во временную таблицу")
 
-        # Проверка перед UPDATE
-        check_updates = self.client.execute(f"SELECT * FROM updates_temp LIMIT 10")
-        self.logger.warning("Пример данных в updates_temp перед UPDATE:")
-        for r in check_updates:
-            self.logger.warning(r)
-
+        # Обновляем основную таблицу используя данные из временной
         update_query = f"""
         ALTER TABLE {self.database_name}.OlapCube_VNV
         UPDATE 
-            Status = (SELECT Status FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            Status_P = (SELECT Status_P FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            sne = (SELECT sne FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            ppr = (SELECT ppr FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            repair_days = (SELECT repair_days FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            balance_mi8t = (SELECT balance_mi8t FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            balance_mi17 = (SELECT balance_mi17 FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            balance_empty = (SELECT balance_empty FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            balance_total = (SELECT balance_total FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            stock_mi8t = (SELECT stock_mi8t FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            stock_mi17 = (SELECT stock_mi17 FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            stock_empty = (SELECT stock_empty FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1),
-            stock_total = (SELECT stock_total FROM updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1)
+            Status = coalesce((SELECT t2.Status FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), Status),
+            Status_P = coalesce((SELECT t2.Status_P FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), Status_P),
+            sne = round(coalesce((SELECT t2.sne FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), sne), 2),
+            ppr = round(coalesce((SELECT t2.ppr FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), ppr), 2),
+            repair_days = coalesce((SELECT t2.repair_days FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), repair_days),
+            mi8t_count = coalesce((SELECT t2.mi8t_count FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), mi8t_count),
+            mi17_count = coalesce((SELECT t2.mi17_count FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), mi17_count),
+            balance_mi8t = coalesce((SELECT t2.balance_mi8t FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), balance_mi8t),
+            balance_mi17 = coalesce((SELECT t2.balance_mi17 FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), balance_mi17),
+            balance_empty = coalesce((SELECT t2.balance_empty FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), balance_empty),
+            balance_total = coalesce((SELECT t2.balance_total FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), balance_total),
+            stock_mi8t = coalesce((SELECT t2.stock_mi8t FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), stock_mi8t),
+            stock_mi17 = coalesce((SELECT t2.stock_mi17 FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), stock_mi17),
+            stock_empty = coalesce((SELECT t2.stock_empty FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), stock_empty),
+            stock_total = coalesce((SELECT t2.stock_total FROM {self.database_name}.updates_temp t2 WHERE t2.serialno = serialno AND t2.Dates = Dates LIMIT 1), stock_total)
         WHERE EXISTS(
             SELECT 1 
-            FROM updates_temp
-            WHERE updates_temp.serialno = serialno
-            AND updates_temp.Dates = Dates
+            FROM {self.database_name}.updates_temp t2 
+            WHERE t2.serialno = serialno AND t2.Dates = Dates
         )
         """
-
-        self.client.execute(update_query)
-        self.logger.warning("Все результаты успешно сохранены")
-
-        # Проверим данные после обновления
-        check_date = datetime(2024,11,26).date()
-        after_query = f"""
-        SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days 
-        FROM {self.database_name}.OlapCube_VNV 
-        WHERE Dates = '{check_date}'
-        LIMIT 10
-        """
-        after_result = self.client.execute(after_query)
-        self.logger.warning("Пример данных на 2024-11-26 после записи в базу:")
-        for row in after_result:
-            self.logger.warning(row)
-
-        self.client.execute("DROP TABLE IF EXISTS updates_temp")
+        
+        try:
+            self.client.execute(update_query)
+            self.logger.warning("Данные успешно обновлены")
+        except Exception as e:
+            self.logger.error(f"Ошибка при обновлении данных: {str(e)}")
+            raise e
+        finally:
+            # Удаляем временную таблицу
+            self.client.execute("DROP TABLE IF EXISTS default.updates_temp")
+            self.logger.warning("Временная таблица удалена")
 
 if __name__ == "__main__":
     processor = CycleProcessor(total_days=100)
