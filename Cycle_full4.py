@@ -101,10 +101,15 @@ class CycleProcessor:
         self.load_all_data()
         self.logger.warning("Начинаем обработку дат...")
         self.process_all_dates()
+
+        # Добавляем отладочную выгрузку в Excel перед сохранением результатов
+        self.logger.warning("Выгружаем промежуточный результат в Excel для отладки.")
+        self.df.to_excel("debug_df_before_save.xlsx", index=False, engine="openpyxl")
+
         self.save_all_results()
         self.logger.warning("Обработка завершена. Результаты записаны в базу.")
 
-        # Дополнительная проверка после записи в БД: SELECT для 2024-11-26
+        # Дополнительная проверка после записи в БД
         check_date = datetime(2024,11,26).date()
         check_query = f"""
         SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days
@@ -445,3 +450,4 @@ class CycleProcessor:
 if __name__ == "__main__":
     processor = CycleProcessor(total_days=100)
     processor.run_cycle()
+
