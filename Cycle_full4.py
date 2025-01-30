@@ -290,12 +290,22 @@ class CycleProcessor:
             change_count=min(int(balance_total),len(exploitation))
             if change_count>0:
                 self.df.loc[exploitation[:change_count],'Status']='Исправен'
-        elif balance_total<0:
-            abs_balance=abs(int(balance_total))
-            serviceable = curr_data[curr_data['Status_P'].isin(['Исправен','Неактивно'])].index.tolist()
-            change_count=min(abs_balance,len(serviceable))
-            if change_count>0:
-                self.df.loc[serviceable[:change_count],'Status']='Эксплуатация'
+        elif balance_total < 0:
+            abs_balance = abs(int(balance_total))
+            # Сначала переводим объекты со статусом "Исправен"
+            serviceable_only = curr_data[curr_data['Status_P'] == 'Исправен'].index.tolist()
+            serviceable_count = min(abs_balance, len(serviceable_only))
+            if serviceable_count > 0:
+                self.df.loc[serviceable_only[:serviceable_count], 'Status'] = 'Эксплуатация'
+                abs_balance -= serviceable_count
+
+            # Если не хватило, переводим объекты со статусом "Неактивно"
+            if abs_balance > 0:
+                inactive = curr_data[curr_data['Status_P'] == 'Неактивно'].index.tolist()
+                inactive_count = min(abs_balance, len(inactive))
+                if inactive_count > 0:
+                    self.df.loc[inactive[:inactive_count], 'Status'] = 'Эксплуатация'
+                    abs_balance -= inactive_count
 
     def step_4(self, prev_date, curr_date):
         """Рассчитываем значения sne, ppr и repair_days"""
@@ -450,4 +460,3 @@ class CycleProcessor:
 if __name__ == "__main__":
     processor = CycleProcessor(total_days=100)
     processor.run_cycle()
-
