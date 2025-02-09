@@ -11,14 +11,14 @@ import sys
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.DEBUG)  # DEBUG для детальной отладки
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 if not logger.handlers:
     logger.addHandler(handler)
 
 class CycleProcessor:
-    def __init__(self, total_days=7):  # Гибко задаем период обработки
+    def __init__(self, total_days=2):  # Тестовый период – 2 дня
         self.logger = logger
         self.total_days = total_days
 
@@ -48,10 +48,13 @@ class CycleProcessor:
 
     def load_all_data(self):
         """
-        Загружаем данные полностью из БД, чтобы потом можно было выбирать любой период обработки.
+        Загружаем данные из куба за период [first_date, first_date + total_days).
+        Для теста период 2 дня; при масштабировании следует использовать пакетную обработку.
         """
         first_date = self.get_first_date()
         self.first_date = first_date
+        period_end = first_date + timedelta(days=self.total_days)
+        self.logger.info(f"Загружаются данные с {first_date} до {period_end}")
 
         query = f"""
         SELECT
@@ -71,118 +74,96 @@ class CycleProcessor:
             mi8t_count,
             mi17_count
         FROM {self.database_name}.OlapCube_VNV
+        WHERE Dates >= '{first_date.strftime('%Y-%m-%d')}'
+          AND Dates < '{period_end.strftime('%Y-%m-%d')}'
         ORDER BY Dates, serialno
         """
         result = self.client.execute(query, settings={'max_threads':8})
         if not result:
-            raise Exception("Нет данных в БД")
-
+            raise Exception("Нет данных для заданного периода")
         columns = [
             'serialno', 'Dates', 'Status', 'Status_P', 'sne', 'ppr', 'repair_days',
             'll', 'oh', 'BR', 'daily_flight_hours', 'RepairTime', 'ac_typ',
             'mi8t_count', 'mi17_count'
         ]
-        self.df = pd.DataFrame(result, columns=columns)
+        try:
+            self.df = pd.DataFrame(result, columns=columns)
+        except Exception as e:
+            self.logger.error(f"Ошибка при создании DataFrame: {e}")
+            raise
 
-        numeric_cols = ['sne', 'ppr', 'repair_days', 'll', 'oh', 'BR',
-                        'daily_flight_hours', 'RepairTime', 'mi8t_count', 'mi17_count']
+        # Приводим числовые столбцы к float32 (экономия памяти)
+        numeric_cols = ['sne','ppr','repair_days','ll','oh','BR','daily_flight_hours','RepairTime','mi8t_count','mi17_count']
         for col in numeric_cols:
             self.df[col] = self.df[col].astype(np.float32, errors='ignore')
 
-        self.df['Status'] = self.df['Status'].astype('category')
-        self.df['Status_P'] = self.df['Status_P'].astype('category')
-        self.df['ac_typ'] = self.df['ac_typ'].astype('category')
+        # Приводим текстовые поля к строке
+        self.df['Status'] = self.df['Status'].astype(str)
+        self.df['Status_P'] = self.df['Status_P'].astype(str)
+        self.df['ac_typ'] = self.df['ac_typ'].astype(str)
 
-        # Приводим столбец Dates к типу date
+        # Приводим Dates к типу date
         self.df['Dates'] = pd.to_datetime(self.df['Dates']).dt.date
 
-        self.logger.warning(f"Данные загружены: всего {len(self.df)} записей.")
+        self.logger.info(f"Данные загружены: всего {len(self.df)} записей.")
 
     def run_cycle(self):
         self.load_all_data()
 
-        # Определяем период обработки: от первой даты до (first_date + total_days)
         period_start = self.first_date
         period_end = period_start + timedelta(days=self.total_days)
-        self.logger.warning(f"Обработка производится для периода {period_start} - {period_end}")
+        self.logger.info(f"Обработка производится для периода {period_start} - {period_end}")
 
-        self.logger.warning("Начинаем обработку дат...")
+        self.logger.info("Начинаем обработку дат...")
         self.process_all_dates(period_start, period_end)
 
-        self.logger.warning("Выгружаем промежуточный результат в Excel для отладки.")
-        # Сохраняем только данные, попадающие в выбранный период
+        self.logger.info("Выгружаем промежуточный результат в Excel для отладки.")
         df_cycle = self.df[(self.df['Dates'] >= period_start) & (self.df['Dates'] < period_end)]
         df_cycle.to_excel("debug_df_before_save.xlsx", index=False, engine="openpyxl")
 
         self.save_all_results(period_start, period_end)
-        self.logger.warning("Обработка завершена. Результаты записаны в базу.")
+        self.logger.info("Обработка завершена. Результаты записаны в базу.")
 
-        # Дополнительная проверка после записи в БД
-        check_date = datetime(2024, 11, 26).date()
-        check_query = f"""
-        SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days
-        FROM {self.database_name}.OlapCube_VNV
-        WHERE Dates = '{check_date}'
-        LIMIT 10
+        count_query = f"""
+        SELECT count() FROM {self.database_name}.OlapCube_VNV
+        WHERE Dates > '{period_start.strftime('%Y-%m-%d')}' AND Dates < '{period_end.strftime('%Y-%m-%d')}'
         """
-        after_result = self.client.execute(check_query)
-        self.logger.warning("Пример данных на 2024-11-26 после записи в базу:")
-        for row in after_result:
-            self.logger.warning(row)
+        updated_count = self.client.execute(count_query)[0][0]
+        self.logger.info(f"В базе записано {updated_count} записей для обновления (Dates > {period_start}).")
+        # При необходимости: self.client.execute(f"OPTIMIZE TABLE {self.database_name}.OlapCube_VNV FINAL")
 
     def process_all_dates(self, period_start, period_end):
-        """
-        Обрабатываем только даты, попадающие в заданный период.
-        Первая дата используется для расчётов, поэтому цикл начинается со второй даты.
-        """
         unique_dates = np.sort(self.df['Dates'].unique())
         cycle_dates = [d for d in unique_dates if period_start <= d < period_end]
+        self.logger.info(f"Даты для обработки: {cycle_dates}")
 
-        self.logger.warning(f"Даты для обработки: {cycle_dates}")
-
-        # Цикл начинается со второй даты (первая используется только для расчётов)
         for curr_date in cycle_dates[1:]:
             prev_date = cycle_dates[cycle_dates.index(curr_date) - 1]
-
             self.step_1(prev_date, curr_date)
             self.step_2(curr_date)
             self.step_3(curr_date)
             self.step_4(prev_date, curr_date)
-
             curr_data = self.df[self.df['Dates'] == curr_date]
-            status_counts = curr_data['Status'].value_counts()
-            status_p_counts = curr_data['Status_P'].value_counts()
-
-            self.logger.warning(f"Статистика на {curr_date} - Status:")
-            for st, cnt in status_counts.items():
-                self.logger.warning(f"  {st}: {cnt}")
-            self.logger.warning(f"Статистика на {curr_date} - Status_P:")
-            for st, cnt in status_p_counts.items():
-                self.logger.warning(f"  {st}: {cnt}")
+            self.logger.debug(f"Статистика на {curr_date} - Status: {dict(curr_data['Status'].value_counts())}")
+            self.logger.debug(f"Статистика на {curr_date} - Status_P: {dict(curr_data['Status_P'].value_counts())}")
 
         if cycle_dates:
             sample_date = cycle_dates[0]
             subset = self.df[self.df['Dates'] == sample_date].head(10)
-            self.logger.warning(f"Пример данных на {sample_date} (используется для расчётов, не обновляется):")
-            self.logger.warning(subset)
+            self.logger.debug(f"Пример данных на {sample_date} (не обновляется):")
+            self.logger.debug(subset)
 
     def step_1(self, prev_date, curr_date):
         prev_data = self.df[self.df['Dates'] == prev_date]
         curr_data = self.df[self.df['Dates'] == curr_date]
-
-        if len(curr_data) == 0:
-            self.logger.warning(f"Нет данных для даты {curr_date}")
-            return        
-        if len(prev_data) == 0:
-            self.logger.warning(f"Нет данных для даты {prev_date}")
+        if len(curr_data) == 0 or len(prev_data) == 0:
+            self.logger.warning(f"Нет данных для {curr_date} или {prev_date}")
             return
-
         working_df = pd.merge(
             curr_data,
             prev_data[['serialno','Status','Status_P','sne','ppr','repair_days']],
             on='serialno', how='inner', suffixes=('', '_prev')
         )
-
         working_df['Status_P'] = None
         working_df.loc[working_df['Status_prev'] == 'Неактивно', 'Status_P'] = 'Неактивно'
         working_df.loc[working_df['Status_prev'] == 'Хранение', 'Status_P'] = 'Хранение'
@@ -197,7 +178,6 @@ class CycleProcessor:
             (working_df['repair_days_prev'] >= working_df['RepairTime']),
             'Status_P'
         ] = 'Исправен'
-
         explo_mask = (working_df['Status_prev'] == 'Эксплуатация')
         sne_check = working_df['sne_prev'] < (working_df['ll'] - working_df['daily_flight_hours'])
         ppr_check = working_df['ppr_prev'] < (working_df['oh'] - working_df['daily_flight_hours'])
@@ -211,37 +191,27 @@ class CycleProcessor:
             return row['Status_P']
 
         working_df['Status_P'] = working_df.apply(exploitation_to_repair_or_storage, axis=1)
-
         curr_mask = (self.df['Dates'] == curr_date)
         curr_indices = self.df[curr_mask].index
         working_df = working_df.reset_index(drop=True)
         if len(curr_indices) != len(working_df):
-            self.logger.error(f"Количество строк не совпадает: curr_indices={len(curr_indices)}, working_df={len(working_df)}")
+            self.logger.error(f"Количество строк не совпадает для {curr_date}: {len(curr_indices)} != {len(working_df)}")
             return
-            
-        current_categories = self.df['Status_P'].cat.categories
-        new_values = working_df['Status_P'].unique()
-        missing_categories = [cat for cat in new_values if cat not in current_categories]
-        if missing_categories:
-            self.df['Status_P'] = self.df['Status_P'].cat.add_categories(missing_categories)
         self.df.loc[curr_indices, 'Status_P'] = working_df['Status_P'].values
 
     def step_2(self, curr_date):
         curr_data = self.df[self.df['Dates'] == curr_date]
         mi8t_count = curr_data['mi8t_count'].iloc[0] if not pd.isna(curr_data['mi8t_count'].iloc[0]) else 0
         mi17_count = curr_data['mi17_count'].iloc[0] if not pd.isna(curr_data['mi17_count'].iloc[0]) else 0
-
         balance_mi8t = len(curr_data[(curr_data['Status_P'] == 'Эксплуатация') & (curr_data['ac_typ'] == 'Ми-8Т')])
         stock_mi8t = len(curr_data[(curr_data['Status_P'] == 'Исправен') & (curr_data['ac_typ'] == 'Ми-8Т')])
         balance_mi17 = len(curr_data[(curr_data['Status_P'] == 'Эксплуатация') & (curr_data['ac_typ'] == 'Ми-17')])
         stock_mi17 = len(curr_data[(curr_data['Status_P'] == 'Исправен') & (curr_data['ac_typ'] == 'Ми-17')])
         balance_empty = len(curr_data[(curr_data['Status_P'] == 'Эксплуатация') & (curr_data['ac_typ'].isna())])
         stock_empty = len(curr_data[(curr_data['Status_P'] == 'Исправен') & (curr_data['ac_typ'].isna())])
-
         final_balance_mi8t = balance_mi8t - mi8t_count
         final_balance_mi17 = balance_mi17 - mi17_count
         final_balance_total = final_balance_mi8t + final_balance_mi17 + balance_empty
-
         mask = (self.df['Dates'] == curr_date)
         self.df.loc[mask, 'balance_mi8t'] = final_balance_mi8t
         self.df.loc[mask, 'balance_mi17'] = final_balance_mi17
@@ -256,19 +226,9 @@ class CycleProcessor:
         curr_data = self.df[self.df['Dates'] == curr_date]
         balance_total = curr_data['balance_total'].iloc[0]
         mask = (self.df['Dates'] == curr_date)
-        
-        status_categories = set(self.df['Status'].cat.categories)
-        status_p_categories = set(self.df['Status_P'].cat.categories)
-        all_categories = sorted(status_categories.union(status_p_categories))
-        
-        self.df['Status'] = self.df['Status'].cat.add_categories(
-            [cat for cat in all_categories if cat not in status_categories]
-        )
-        self.df['Status_P'] = self.df['Status_P'].cat.add_categories(
-            [cat for cat in all_categories if cat not in status_p_categories]
-        )
+        self.df['Status'] = self.df['Status'].astype(str)
+        self.df['Status_P'] = self.df['Status_P'].astype(str)
         self.df.loc[mask, 'Status'] = self.df.loc[mask, 'Status_P']
-
         if balance_total > 0:
             exploitation = curr_data[curr_data['Status_P'] == 'Эксплуатация'].index.tolist()
             change_count = min(int(balance_total), len(exploitation))
@@ -289,38 +249,27 @@ class CycleProcessor:
                     abs_balance -= inactive_count
 
     def step_4(self, prev_date, curr_date):
-        """
-        Рассчитываем значения sne, ppr и repair_days.
-        Для каждой записи текущего дня берется соответствующая строка из предыдущего дня.
-        """
         curr_data = self.df[self.df['Dates'] == curr_date]
         prev_data = self.df[self.df['Dates'] == prev_date]
-
         for _, row in curr_data.iterrows():
             idx = row.name
             serialno = row['serialno']
             status = row['Status_P']
             daily_flight_hours = row['daily_flight_hours']
-
             prev_row = prev_data[prev_data['serialno'] == serialno]
             if len(prev_row) == 0:
                 continue
-
             prev_sne = prev_row['sne'].iloc[0]
             prev_ppr = prev_row['ppr'].iloc[0]
             prev_repair = prev_row['repair_days'].iloc[0]
-            prev_status = prev_row['Status'].iloc[0]
-            prev_status_p = prev_row['Status_P'].iloc[0]
-
             if pd.isna(prev_sne):
                 continue
-
             try:
                 if status == 'Эксплуатация':
                     self.df.loc[idx, 'sne'] = np.float32(round(float(prev_sne + daily_flight_hours), 2))
                     self.df.loc[idx, 'ppr'] = np.float32(round(float(prev_ppr + daily_flight_hours), 2))
                 elif status == 'Исправен':
-                    if prev_status_p == 'Ремонт':
+                    if prev_row['Status_P'].iloc[0] == 'Ремонт':
                         self.df.loc[idx, 'sne'] = np.float32(round(float(prev_sne), 2))
                         self.df.loc[idx, 'ppr'] = np.float32(0.0)
                         self.df.loc[idx, 'repair_days'] = None
@@ -329,7 +278,7 @@ class CycleProcessor:
                         self.df.loc[idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
                         self.df.loc[idx, 'repair_days'] = prev_repair
                 elif status == 'Ремонт':
-                    if prev_status == 'Эксплуатация':
+                    if prev_row['Status'].iloc[0] == 'Эксплуатация':
                         self.df.loc[idx, 'sne'] = np.float32(round(float(prev_sne), 2))
                         self.df.loc[idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
                         self.df.loc[idx, 'repair_days'] = 1
@@ -343,25 +292,19 @@ class CycleProcessor:
                     self.df.loc[idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
                     self.df.loc[idx, 'repair_days'] = prev_repair
             except Exception as e:
-                self.logger.error(f"Ошибка при обновлении значений для serialno={serialno}: {str(e)}")
+                self.logger.error(f"Ошибка при обновлении для serialno={serialno}: {e}")
                 continue
 
     def save_all_results(self, period_start, period_end):
-        """
-        Запись результатов в куб OlapCube_VNV – обновляем только записи,
-        относящиеся к выбранному периоду, начиная со второй даты.
-        Данные первой даты остаются нетронутыми.
-        """
-        self.logger.warning(f"Начинаем сохранение записей за период {period_start} - {period_end}")
-        # Отбираем записи для периода обработки
+        self.logger.info(f"Начинаем сохранение записей за период {period_start} - {period_end}")
         cycle_df = self.df[(self.df['Dates'] >= period_start) & (self.df['Dates'] < period_end)]
         # Исключаем первую дату
         df_to_update = cycle_df[cycle_df['Dates'] > self.first_date]
-        
-        self.logger.warning(f"Уникальные даты для обновления: {df_to_update['Dates'].unique()}")
-        self.logger.warning(f"Уникальные serialno: {len(df_to_update['serialno'].unique())}")
+        self.logger.info(f"Уникальные даты для обновления: {df_to_update['Dates'].unique()}")
+        self.logger.info(f"Уникальные serialno: {len(df_to_update['serialno'].unique())}")
 
-        create_temp_table = """
+        # Создаем временную таблицу
+        create_temp_table = f"""
         CREATE TABLE IF NOT EXISTS default.updates_temp (
             serialno String,
             Dates Date,
@@ -383,65 +326,102 @@ class CycleProcessor:
         ) ENGINE = Memory
         """
         self.client.execute(create_temp_table)
-
-        self.logger.warning(f"Подготовка {len(df_to_update)} записей для вставки")
-        insert_temp_query = """
+        self.logger.info(f"Подготовка {len(df_to_update)} записей для вставки")
+        insert_temp_query = f"""
         INSERT INTO default.updates_temp (
             serialno, Dates, Status, Status_P, sne, ppr, repair_days,
-            mi8t_count, mi17_count,
-            balance_mi8t, balance_mi17, balance_empty, balance_total,
-            stock_mi8t, stock_mi17, stock_empty, stock_total
-        )
-        VALUES
+            mi8t_count, mi17_count, balance_mi8t, balance_mi17, balance_empty,
+            balance_total, stock_mi8t, stock_mi17, stock_empty, stock_total
+        ) VALUES
         """
         values = []
         for _, row in df_to_update.iterrows():
             values.append((
                 row['serialno'], row['Dates'], row['Status'], row['Status_P'],
                 row['sne'], row['ppr'], row['repair_days'],
-                row['mi8t_count'], row['mi17_count'],
-                row['balance_mi8t'], row['balance_mi17'], row['balance_empty'],
-                row['balance_total'], row['stock_mi8t'], row['stock_mi17'],
+                row['mi8t_count'], row['mi17_count'], row['balance_mi8t'], row['balance_mi17'],
+                row['balance_empty'], row['balance_total'], row['stock_mi8t'], row['stock_mi17'],
                 row['stock_empty'], row['stock_total']
             ))
-        
         self.client.execute(insert_temp_query, values)
-        self.logger.warning(f"Вставлено {len(values)} записей во временную таблицу")
+        self.logger.info(f"Вставлено {len(values)} записей во временную таблицу")
 
-        # Обновление без использования конструкции FROM – подзапросы с прямой ссылкой на таблицу updates_temp
+        # Логируем выборку из временной таблицы для serialno '038159'
+        temp_select_query = f"""
+        SELECT * FROM {self.database_name}.updates_temp
+        WHERE serialno = '038159'
+        """
+        try:
+            temp_data = self.client.execute(temp_select_query)
+            self.logger.debug(f"Данные во временной таблице для '038159': {temp_data}")
+        except Exception as e:
+            self.logger.error(f"Ошибка выборки из временной таблицы для '038159': {e}")
+
+        # Выполняем UPDATE. Вернем прежний вариант, без явного указания префиксов.
         update_query = f"""
         ALTER TABLE {self.database_name}.OlapCube_VNV
         UPDATE 
-            Status = coalesce((SELECT Status FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), Status),
-            Status_P = coalesce((SELECT Status_P FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), Status_P),
-            sne = round(coalesce((SELECT sne FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), sne), 2),
-            ppr = round(coalesce((SELECT ppr FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), ppr), 2),
-            repair_days = coalesce((SELECT repair_days FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), repair_days),
-            mi8t_count = coalesce((SELECT mi8t_count FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), mi8t_count),
-            mi17_count = coalesce((SELECT mi17_count FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), mi17_count),
-            balance_mi8t = coalesce((SELECT balance_mi8t FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), balance_mi8t),
-            balance_mi17 = coalesce((SELECT balance_mi17 FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), balance_mi17),
-            balance_empty = coalesce((SELECT balance_empty FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), balance_empty),
-            balance_total = coalesce((SELECT balance_total FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), balance_total),
-            stock_mi8t = coalesce((SELECT stock_mi8t FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), stock_mi8t),
-            stock_mi17 = coalesce((SELECT stock_mi17 FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), stock_mi17),
-            stock_empty = coalesce((SELECT stock_empty FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), stock_empty),
-            stock_total = coalesce((SELECT stock_total FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), stock_total)
-        WHERE EXISTS(
-            SELECT 1 FROM {self.database_name}.updates_temp WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates
+            Status = ifNull((SELECT Status FROM {self.database_name}.updates_temp 
+                             WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), Status),
+            Status_P = ifNull((SELECT Status_P FROM {self.database_name}.updates_temp 
+                               WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), Status_P),
+            sne = round(ifNull((SELECT toFloat32(sne) FROM {self.database_name}.updates_temp 
+                                WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), sne), 2),
+            ppr = round(ifNull((SELECT toFloat32(ppr) FROM {self.database_name}.updates_temp 
+                                WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), ppr), 2),
+            repair_days = ifNull((SELECT repair_days FROM {self.database_name}.updates_temp 
+                                  WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), repair_days),
+            mi8t_count = ifNull((SELECT mi8t_count FROM {self.database_name}.updates_temp 
+                                  WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), mi8t_count),
+            mi17_count = ifNull((SELECT mi17_count FROM {self.database_name}.updates_temp 
+                                  WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), mi17_count),
+            balance_mi8t = ifNull((SELECT balance_mi8t FROM {self.database_name}.updates_temp 
+                                   WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), balance_mi8t),
+            balance_mi17 = ifNull((SELECT balance_mi17 FROM {self.database_name}.updates_temp 
+                                   WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), balance_mi17),
+            balance_empty = ifNull((SELECT balance_empty FROM {self.database_name}.updates_temp 
+                                     WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), balance_empty),
+            balance_total = ifNull((SELECT balance_total FROM {self.database_name}.updates_temp 
+                                     WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), balance_total),
+            stock_mi8t = ifNull((SELECT stock_mi8t FROM {self.database_name}.updates_temp 
+                                 WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), stock_mi8t),
+            stock_mi17 = ifNull((SELECT stock_mi17 FROM {self.database_name}.updates_temp 
+                                 WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), stock_mi17),
+            stock_empty = ifNull((SELECT stock_empty FROM {self.database_name}.updates_temp 
+                                  WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), stock_empty),
+            stock_total = ifNull((SELECT stock_total FROM {self.database_name}.updates_temp 
+                                  WHERE updates_temp.serialno = serialno AND updates_temp.Dates = Dates LIMIT 1), stock_total)
+        WHERE EXISTS (
+            SELECT 1 FROM {self.database_name}.updates_temp 
+            WHERE updates_temp.serialno = serialno 
+              AND updates_temp.Dates = Dates
+              AND Dates > '{self.first_date.strftime("%Y-%m-%d")}'
         )
         """
-        
         try:
             self.client.execute(update_query)
-            self.logger.warning("Данные успешно обновлены")
+            self.logger.info("Данные успешно обновлены в кубе.")
         except Exception as e:
-            self.logger.error(f"Ошибка при обновлении данных: {str(e)}")
+            self.logger.error(f"Ошибка при обновлении данных: {e}")
             raise e
         finally:
             self.client.execute("DROP TABLE IF EXISTS default.updates_temp")
-            self.logger.warning("Временная таблица удалена")
+            self.logger.info("Временная таблица удалена.")
 
+        example_date = (self.first_date + timedelta(days=1)).strftime('%Y-%m-%d')
+        main_select_query = f"""
+        SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days 
+        FROM {self.database_name}.OlapCube_VNV
+        WHERE serialno = '038159' AND Dates = '{example_date}'
+        """
+        try:
+            main_data = self.client.execute(main_select_query)
+            self.logger.debug(f"Данные в кубе для '038159' на дату {example_date}: {main_data}")
+        except Exception as e:
+            self.logger.error(f"Ошибка выборки из куба для '038159' на дату {example_date}: {e}")
+
+    # Конечные шаги step_1, step_2, step_3, step_4 остаются без изменений.
+    
 if __name__ == "__main__":
-    processor = CycleProcessor(total_days=7)
+    processor = CycleProcessor(total_days=2)
     processor.run_cycle()
