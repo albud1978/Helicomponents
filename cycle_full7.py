@@ -323,136 +323,33 @@ class CycleProcessor:
     def save_all_results(self, period_start, period_end):
         self.logger.info(f"Начинаем сохранение записей за период {period_start} - {period_end}")
         cycle_df = self.df[(self.df['Dates'] >= period_start) & (self.df['Dates'] < period_end)]
-        # Исключаем первую дату
         df_to_update = cycle_df[cycle_df['Dates'] > self.first_date]
         
         self.logger.info(f"Уникальные даты для обновления: {df_to_update['Dates'].unique()}")
         self.logger.info(f"Уникальные serialno: {len(df_to_update['serialno'].unique())}")
-
-        # Создаем временную таблицу
-        create_temp_table = f"""
-        CREATE TABLE IF NOT EXISTS default.updates_temp (
-            serialno String,
-            Dates Date,
-            Status Nullable(String),
-            Status_P Nullable(String),
-            sne Nullable(Float32),
-            ppr Nullable(Float32),
-            repair_days Nullable(Float32),
-            mi8t_count Nullable(Float32),
-            mi17_count Nullable(Float32),
-            balance_mi8t Nullable(Float32),
-            balance_mi17 Nullable(Float32),
-            balance_empty Nullable(Float32),
-            balance_total Nullable(Float32),
-            stock_mi8t Nullable(Float32),
-            stock_mi17 Nullable(Float32),
-            stock_empty Nullable(Float32),
-            stock_total Nullable(Float32)
-        ) ENGINE = Memory
-        """
-        self.client.execute(create_temp_table)
-        self.logger.info(f"Подготовка {len(df_to_update)} записей для вставки")
-        insert_temp_query = f"""
-        INSERT INTO default.updates_temp (
-            serialno, Dates, Status, Status_P, sne, ppr, repair_days,
-            mi8t_count, mi17_count, balance_mi8t, balance_mi17, balance_empty,
-            balance_total, stock_mi8t, stock_mi17, stock_empty, stock_total
-        )
-        VALUES
-        """
-        values = []
+        
         for _, row in df_to_update.iterrows():
-            values.append((
-                row['serialno'], row['Dates'], row['Status'], row['Status_P'],
-                row['sne'], row['ppr'], row['repair_days'],
-                row['mi8t_count'], row['mi17_count'], row['balance_mi8t'], row['balance_mi17'],
-                row['balance_empty'], row['balance_total'], row['stock_mi8t'], row['stock_mi17'],
-                row['stock_empty'], row['stock_total']
-            ))
-        self.client.execute(insert_temp_query, values)
-        self.logger.info(f"Вставлено {len(values)} записей во временную таблицу")
-
-        # Логируем выборку из временной таблицы для serialno '038159'
-        temp_select_query = f"""
-        SELECT * FROM {self.database_name}.updates_temp
-        WHERE serialno = '038159'
-        """
-        try:
-            temp_data = self.client.execute(temp_select_query)
-            self.logger.debug(f"Данные во временной таблице для '038159': {temp_data}")
-        except Exception as e:
-            self.logger.error(f"Ошибка выборки из временной таблицы для '038159': {e}")
-
-        # Выполняем UPDATE по каждой уникальной дате из df_to_update
-        unique_update_dates = df_to_update['Dates'].unique()
-        for upd_date in unique_update_dates:
             update_query = f"""
-            ALTER TABLE {self.database_name}.OlapCube_VNV
-            UPDATE 
-                Status = ifNull((SELECT Status FROM {self.database_name}.updates_temp 
-                                 WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), Status),
-                Status_P = ifNull((SELECT Status_P FROM {self.database_name}.updates_temp 
-                                   WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), Status_P),
-                sne = round(ifNull((SELECT toFloat32(sne) FROM {self.database_name}.updates_temp 
-                                    WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), sne), 2),
-                ppr = round(ifNull((SELECT toFloat32(ppr) FROM {self.database_name}.updates_temp 
-                                    WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), ppr), 2),
-                repair_days = ifNull((SELECT repair_days FROM {self.database_name}.updates_temp 
-                                      WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), repair_days),
-                mi8t_count = ifNull((SELECT mi8t_count FROM {self.database_name}.updates_temp 
-                                      WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), mi8t_count),
-                mi17_count = ifNull((SELECT mi17_count FROM {self.database_name}.updates_temp 
-                                      WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), mi17_count),
-                balance_mi8t = ifNull((SELECT balance_mi8t FROM {self.database_name}.updates_temp 
-                                       WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), balance_mi8t),
-                balance_mi17 = ifNull((SELECT balance_mi17 FROM {self.database_name}.updates_temp 
-                                       WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), balance_mi17),
-                balance_empty = ifNull((SELECT balance_empty FROM {self.database_name}.updates_temp 
-                                         WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), balance_empty),
-                balance_total = ifNull((SELECT balance_total FROM {self.database_name}.updates_temp 
-                                         WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), balance_total),
-                stock_mi8t = ifNull((SELECT stock_mi8t FROM {self.database_name}.updates_temp 
-                                     WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), stock_mi8t),
-                stock_mi17 = ifNull((SELECT stock_mi17 FROM {self.database_name}.updates_temp 
-                                     WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), stock_mi17),
-                stock_empty = ifNull((SELECT stock_empty FROM {self.database_name}.updates_temp 
-                                      WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), stock_empty),
-                stock_total = ifNull((SELECT stock_total FROM {self.database_name}.updates_temp 
-                                      WHERE updates_temp.serialno = serialno AND updates_temp.Dates = '{upd_date}' LIMIT 1), stock_total)
-            WHERE Dates = '{upd_date}'
+            ALTER TABLE {self.database_name}.OlapCube_VNV UPDATE 
+                Status = '{row['Status']}',
+                Status_P = '{row['Status_P']}',
+                sne = round({row['sne']}, 2),
+                ppr = round({row['ppr']}, 2),
+                repair_days = {row['repair_days'] if row['repair_days'] is not None else 'NULL'},
+                mi8t_count = {row['mi8t_count'] if row['mi8t_count'] is not None else 'NULL'},
+                mi17_count = {row['mi17_count'] if row['mi17_count'] is not None else 'NULL'},
+                balance_mi8t = {row['balance_mi8t'] if row['balance_mi8t'] is not None else 'NULL'},
+                balance_mi17 = {row['balance_mi17'] if row['balance_mi17'] is not None else 'NULL'},
+                balance_empty = {row['balance_empty'] if row['balance_empty'] is not None else 'NULL'},
+                balance_total = {row['balance_total'] if row['balance_total'] is not None else 'NULL'},
+                stock_mi8t = {row['stock_mi8t'] if row['stock_mi8t'] is not None else 'NULL'},
+                stock_mi17 = {row['stock_mi17'] if row['stock_mi17'] is not None else 'NULL'},
+                stock_empty = {row['stock_empty'] if row['stock_empty'] is not None else 'NULL'},
+                stock_total = {row['stock_total'] if row['stock_total'] is not None else 'NULL'}
+            WHERE serialno = '{row['serialno']}' AND Dates = '{row['Dates']}'
             """
-            try:
-                self.client.execute(update_query)
-                self.logger.info(f"Данные успешно обновлены для даты {upd_date}.")
-            except Exception as e:
-                self.logger.error(f"Ошибка при обновлении для даты {upd_date}: {e}")
-                raise e
-
-        self.client.execute("DROP TABLE IF EXISTS default.updates_temp")
-        self.logger.info("Временная таблица удалена.")
-
-        example_date = (self.first_date + timedelta(days=1)).strftime('%Y-%m-%d')
-        main_select_query = f"""
-        SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days 
-        FROM {self.database_name}.OlapCube_VNV
-        WHERE serialno = '038159' AND Dates = '{example_date}'
-        """
-        try:
-            main_data = self.client.execute(main_select_query)
-            self.logger.debug(f"Данные в кубе для '038159' на дату {example_date}: {main_data}")
-            if main_data:
-                row = main_data[0]
-                cols = ['serialno', 'Dates', 'Status', 'Status_P', 'sne', 'ppr', 'repair_days']
-                for col, val in zip(cols, row):
-                    self.logger.debug(f"{col}: {val}")
-            else:
-                self.logger.debug("Нет данных для '038159' на указанную дату.")
-        except Exception as e:
-            self.logger.error(f"Ошибка выборки из куба для '038159' на дату {example_date}: {e}")
-
-    # Конечные шаги step_1, step_2, step_3, step_4 остаются без изменений.
+            self.client.execute(update_query)
     
 if __name__ == "__main__":
-    processor = CycleProcessor(total_days=2)
+    processor = CycleProcessor(total_days=30)
     processor.run_cycle()
