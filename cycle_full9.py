@@ -354,6 +354,10 @@ class CycleProcessor:
         # Обновляем данные только для дат, отличных от начальной (если это требуется)
         df_to_update = cycle_df[cycle_df['Dates'] > self.first_date]
 
+        # Округляем поля sne и ppr до 2 знаков после запятой
+        df_to_update['sne'] = df_to_update['sne'].astype(float).round(2)
+        df_to_update['ppr'] = df_to_update['ppr'].astype(float).round(2)
+
         # Убедимся, что временная таблица существует
         self.ensure_tmp_table_exists()
 
@@ -382,8 +386,7 @@ class CycleProcessor:
         self.logger.info(f"Количество записей во временной таблице: {tmp_count}")
 
         # Пакетное обновление основной таблицы для ReplacingMergeTree:
-        # Для ReplacingMergeTree мы вставляем новые версии строк.
-        # Обратите внимание, что здесь мы явно указываем список столбцов, чтобы число столбцов совпадало.
+        # Вставляем новые версии строк, которые будут заменены при merge.
         insert_main_query = f"""
         INSERT INTO {self.database_name}.OlapCube_VNV (
             serialno, Dates, Status, Status_P, sne, ppr, repair_days,
@@ -404,22 +407,12 @@ class CycleProcessor:
         self.client.execute(optimize_query, settings={'max_threads': 8})
         self.logger.info("Оптимизация таблицы выполнена (FINAL).")
 
-        # Очистка временной таблицы после обновления
-        self.client.execute(f"TRUNCATE TABLE {self.database_name}.tmp_OlapCube_update")
-        self.logger.info("Временная таблица очищена после обновления.")
+        # Удаляем временную таблицу после использования
+        drop_query = f"DROP TABLE {self.database_name}.tmp_OlapCube_update"
+        self.client.execute(drop_query, settings={'max_threads': 8})
+        self.logger.info("Временная таблица удалена после обновления.")
 
         # Дополнительные проверки: выгрузка примера данных для отладки
-        sample_query = f"""
-        SELECT *
-        FROM {self.database_name}.tmp_OlapCube_update
-        WHERE Dates = '2024-11-26'
-        LIMIT 5
-        """
-        sample_result = self.client.execute(sample_query)
-        self.logger.info("Пример данных из временной таблицы на 26-11:")
-        for row in sample_result:
-            self.logger.info(row)
-
         main_sample_query = f"""
         SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days
         FROM {self.database_name}.OlapCube_VNV

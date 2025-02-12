@@ -106,3 +106,48 @@
 2025-02-10 14:32:52,643 - INFO - stock_empty: 1
 2025-02-10 14:32:52,644 - INFO - stock_total: 9 (stock_mi8t: 3 + stock_mi17: 5 + stock_empty: 1)
 2025-02-10 14:32:52,655 - INFO - Баланс и запасы успешно обновлены для первой даты.
+2025-02-12 15:03:22,905 - INFO - Первая дата в OlapCube_VNV: 2024-11-25
+2025-02-12 15:03:22,946 - INFO - balance_mi8t: -11.0 (balance_mi8t_count: 75 - mi8t_count: 86.0)
+2025-02-12 15:03:22,984 - INFO - balance_mi17: 17.0 (balance_mi17_count: 87 - mi17_count: 70.0)
+2025-02-12 15:03:22,985 - INFO - balance_total: 6.0 (balance_mi8t: -11.0 + balance_mi17: 17.0)
+2025-02-12 15:03:23,007 - INFO - stock_mi8t: 3
+2025-02-12 15:03:23,027 - INFO - stock_mi17: 5
+2025-02-12 15:03:23,049 - INFO - stock_empty: 1
+2025-02-12 15:03:23,050 - INFO - stock_total: 9 (stock_mi8t: 3 + stock_mi17: 5 + stock_empty: 1)
+2025-02-12 15:03:23,064 - INFO - Баланс и запасы успешно обновлены для первой даты.
+2025-02-12 16:25:07,459 - INFO - Первая дата в OlapCube_VNV: 2024-11-25
+2025-02-12 16:25:07,723 - INFO - balance_mi8t: -11.0 (balance_mi8t_count: 75 - mi8t_count: 86.0)
+2025-02-12 16:25:07,987 - INFO - balance_mi17: 17.0 (balance_mi17_count: 87 - mi17_count: 70.0)
+2025-02-12 16:25:07,990 - INFO - balance_total: 6.0 (balance_mi8t: -11.0 + balance_mi17: 17.0)
+2025-02-12 16:25:08,067 - INFO - stock_mi8t: 3
+2025-02-12 16:25:08,144 - INFO - stock_mi17: 5
+2025-02-12 16:25:08,342 - INFO - stock_empty: 1
+2025-02-12 16:25:08,343 - INFO - stock_total: 9 (stock_mi8t: 3 + stock_mi17: 5 + stock_empty: 1)
+2025-02-12 16:25:08,489 - INFO - Баланс и запасы успешно обновлены для первой даты.
+2025-02-12 16:35:13,265 - INFO - Первая дата в OlapCube_VNV: 2024-11-25
+2025-02-12 16:35:13,477 - INFO - balance_mi8t: -11.0 (balance_mi8t_count: 75 - mi8t_count: 86.0)
+2025-02-12 16:35:13,949 - INFO - balance_mi17: 17.0 (balance_mi17_count: 87 - mi17_count: 70.0)
+2025-02-12 16:35:13,953 - INFO - balance_total: 6.0 (balance_mi8t: -11.0 + balance_mi17: 17.0)
+2025-02-12 16:35:14,308 - INFO - stock_mi8t: 3
+2025-02-12 16:35:14,437 - INFO - stock_mi17: 5
+2025-02-12 16:35:14,455 - INFO - stock_empty: 1
+2025-02-12 16:35:14,456 - INFO - stock_total: 9 (stock_mi8t: 3 + stock_mi17: 5 + stock_empty: 1)
+2025-02-12 16:35:14,693 - INFO - Баланс и запасы успешно обновлены для первой даты.
+2025-02-12 18:31:33,631 - INFO - Первая дата в OlapCube_VNV: 2024-11-25
+2025-02-12 18:31:33,676 - INFO - balance_mi8t: -11.0 (balance_mi8t_count: 75 - mi8t_count: 86.0)
+2025-02-12 18:31:33,715 - INFO - balance_mi17: 17.0 (balance_mi17_count: 87 - mi17_count: 70.0)
+2025-02-12 18:31:33,716 - INFO - balance_total: 6.0 (balance_mi8t: -11.0 + balance_mi17: 17.0)
+2025-02-12 18:31:33,736 - INFO - stock_mi8t: 3
+2025-02-12 18:31:33,757 - INFO - stock_mi17: 5
+2025-02-12 18:31:33,777 - INFO - stock_empty: 1
+2025-02-12 18:31:33,778 - INFO - stock_total: 9 (stock_mi8t: 3 + stock_mi17: 5 + stock_empty: 1)
+2025-02-12 18:31:33,790 - INFO - Баланс и запасы успешно обновлены для первой даты.
+2025-02-12 19:03:56,422 - INFO - Первая дата в OlapCube_VNV: 2024-11-25
+2025-02-12 19:03:56,477 - INFO - balance_mi8t: -11.0 (balance_mi8t_count: 75 - mi8t_count: 86.0)
+2025-02-12 19:03:56,526 - INFO - balance_mi17: 17.0 (balance_mi17_count: 87 - mi17_count: 70.0)
+2025-02-12 19:03:56,527 - INFO - balance_total: 6.0 (balance_mi8t: -11.0 + balance_mi17: 17.0)
+2025-02-12 19:03:56,554 - INFO - stock_mi8t: 3
+2025-02-12 19:03:56,579 - INFO - stock_mi17: 5
+2025-02-12 19:03:56,603 - INFO - stock_empty: 1
+2025-02-12 19:03:56,604 - INFO - stock_total: 9 (stock_mi8t: 3 + stock_mi17: 5 + stock_empty: 1)
+2025-02-12 19:03:56,617 - INFO - Баланс и запасы успешно обновлены для первой даты.

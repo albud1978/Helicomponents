@@ -802,3 +802,615 @@ SETTINGS index_granularity = 8192
 2025-02-10 14:31:53,837 - INFO - Нет записей для обновления trigger_type=1.
 2025-02-10 14:31:53,849 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
 2025-02-10 14:31:53,850 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2025-02-12 15:02:50,380 - INFO - Начинаю вычисление aggregate_count.
+2025-02-12 15:02:50,397 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2025-02-12 15:02:50,408 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2025-02-12 15:02:50,418 - INFO - monthly_flight_hours: 48.0
+2025-02-12 15:02:50,420 - INFO - Вычисленный aggregate_count: 235
+2025-02-12 15:02:50,422 - INFO - aggregate_count рассчитан: 235
+2025-02-12 15:02:50,423 - INFO - Получаю значения из таблицы Agregat.
+2025-02-12 15:02:50,434 - INFO - Получены значения из таблицы Agregat.
+2025-02-12 15:02:50,438 - INFO - Получаю daily_flight_hours из flight_hours.
+2025-02-12 15:02:50,446 - INFO - Получено daily_flight_hours: 1.58
+2025-02-12 15:02:50,447 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2025-02-12 15:02:50,467 - INFO - Получено 4001 уникальных дат.
+2025-02-12 15:02:50,469 - INFO - Сгенерировано 235 серийных номеров.
+2025-02-12 15:03:04,020 - INFO - Успешно вставлено 940235 записей в OlapCube_VNV.
+2025-02-12 15:03:04,168 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 15:03:04,180 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2025-02-12 15:03:04,203 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2025-02-12 15:03:04,212 - INFO - Получено значение RepairTime: 120.0
+2025-02-12 15:03:04,225 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2025-02-12 15:03:04,274 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 15:03:04,305 - INFO - Получено данных из fleet: 12 месяцев
+2025-02-12 15:03:04,306 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2025-02-12 15:03:04,321 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2025-02-12 15:03:04,324 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2025-02-12 15:03:04,358 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 15:03:04,372 - INFO - Получено значение daily_flight_hours: 1.58
+2025-02-12 15:03:04,383 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2025-02-12 15:03:04,385 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2025-02-12 15:03:04,459 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2025-02-12 15:03:04,469 - INFO - Извлечено 1 записей из таблицы Agregat.
+2025-02-12 15:03:04,471 - INFO - Определено 0 записей с trigger_type=1.
+2025-02-12 15:03:04,472 - INFO - Определено 1 записей с trigger_type=0.
+2025-02-12 15:03:04,473 - INFO - Нет записей для обновления trigger_type=1.
+2025-02-12 15:03:04,482 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2025-02-12 15:03:04,485 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2025-02-12 16:22:10,287 - INFO - Начинаю вычисление aggregate_count.
+2025-02-12 16:22:10,302 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2025-02-12 16:22:10,310 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2025-02-12 16:22:10,319 - INFO - monthly_flight_hours: 48.0
+2025-02-12 16:22:10,321 - INFO - Вычисленный aggregate_count: 235
+2025-02-12 16:22:10,322 - INFO - aggregate_count рассчитан: 235
+2025-02-12 16:22:10,323 - INFO - Получаю значения из таблицы Agregat.
+2025-02-12 16:22:10,334 - INFO - Получены значения из таблицы Agregat.
+2025-02-12 16:22:10,335 - INFO - Получаю daily_flight_hours из flight_hours.
+2025-02-12 16:22:10,344 - INFO - Получено daily_flight_hours: 1.58
+2025-02-12 16:22:10,345 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2025-02-12 16:22:10,666 - INFO - Получено 4001 уникальных дат.
+2025-02-12 16:22:10,669 - INFO - Сгенерировано 235 серийных номеров.
+2025-02-12 16:22:21,461 - ERROR - Ошибка при вставке данных в OlapCube_VNV: Code: 252.
+DB::Exception: Too many partitions for single INSERT block (more than 100). The limit is controlled by 'max_partitions_per_insert_block' setting. Large number of partitions is a common misconception. It will lead to severe negative performance impact, including slow server startup, slow INSERT queries and slow SELECT queries. Recommended total number of partitions for a table is under 1000..10000. Please note, that partitioning is not intended to speed up SELECT queries (ORDER BY key is sufficient to make range queries fast). Partitions are intended for data manipulation (DROP PARTITION, etc).. Stack trace:
+
+0. DB::Exception::Exception(DB::Exception::MessageMasked&&, int, bool) @ 0x000000000cf720fb
+1. DB::Exception::Exception(PreformattedMessage&&, int) @ 0x0000000007ea888c
+2. DB::Exception::Exception<unsigned long&>(int, FormatStringHelperImpl<std::type_identity<unsigned long&>::type>, unsigned long&) @ 0x000000000849248b
+3. DB::MergeTreeDataWriter::splitBlockIntoParts(DB::Block&&, unsigned long, std::shared_ptr<DB::StorageInMemoryMetadata const> const&, std::shared_ptr<DB::Context const>, std::shared_ptr<DB::AsyncInsertInfo>) @ 0x00000000123ddd8d
+4. DB::MergeTreeSink::consume(DB::Chunk&) @ 0x0000000012699135
+5. DB::SinkToStorage::onConsume(DB::Chunk) @ 0x0000000012cf5564
+6. void std::__function::__policy_invoker<void ()>::__call_impl<std::__function::__default_alloc_func<DB::ExceptionKeepingTransform::work()::$_1, void ()>>(std::__function::__policy_storage const*) @ 0x0000000012c1e5f8
+7. DB::runStep(std::function<void ()>, DB::ThreadStatus*, std::atomic<unsigned long>*) @ 0x0000000012c1e30b
+8. DB::ExceptionKeepingTransform::work() @ 0x0000000012c1db35
+9. DB::ExecutionThreadContext::executeTask() @ 0x00000000129b3ce7
+10. DB::PipelineExecutor::executeStepImpl(unsigned long, std::atomic<bool>*) @ 0x00000000129a7290
+11. DB::PipelineExecutor::executeStep(std::atomic<bool>*) @ 0x00000000129a6ae8
+12. DB::TCPHandler::processInsertQuery() @ 0x0000000012924246
+13. DB::TCPHandler::runImpl() @ 0x0000000012913483
+14. DB::TCPHandler::run() @ 0x000000001292e7b8
+15. Poco::Net::TCPServerConnection::start() @ 0x00000000157fc747
+16. Poco::Net::TCPServerDispatcher::run() @ 0x00000000157fcbd9
+17. Poco::PooledThread::run() @ 0x00000000157c9741
+18. Poco::ThreadImpl::runnableEntry(void*) @ 0x00000000157c7cfd
+19. ? @ 0x00007fcf0187d609
+20. ? @ 0x00007fcf017a2353
+Traceback (most recent call last):
+  File "C:\Users\Budnik_AN\AppData\Local\Temp\ipykernel_18044\3885069522.py", line 174, in insert_into_olapcube_vnv_with_dates
+    client.execute(insert_query, data_to_insert, types_check=True)
+  File "c:\Program Files\Python311\Lib\site-packages\clickhouse_driver\client.py", line 376, in execute
+    rv = self.process_insert_query(
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Program Files\Python311\Lib\site-packages\clickhouse_driver\client.py", line 607, in process_insert_query
+    rv = self.send_data(sample_block, data,
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Program Files\Python311\Lib\site-packages\clickhouse_driver\client.py", line 670, in send_data
+    self.receive_profile_events()
+  File "c:\Program Files\Python311\Lib\site-packages\clickhouse_driver\client.py", line 747, in receive_profile_events
+    raise packet.exception
+clickhouse_driver.errors.ServerException: Code: 252.
+DB::Exception: Too many partitions for single INSERT block (more than 100). The limit is controlled by 'max_partitions_per_insert_block' setting. Large number of partitions is a common misconception. It will lead to severe negative performance impact, including slow server startup, slow INSERT queries and slow SELECT queries. Recommended total number of partitions for a table is under 1000..10000. Please note, that partitioning is not intended to speed up SELECT queries (ORDER BY key is sufficient to make range queries fast). Partitions are intended for data manipulation (DROP PARTITION, etc).. Stack trace:
+
+0. DB::Exception::Exception(DB::Exception::MessageMasked&&, int, bool) @ 0x000000000cf720fb
+1. DB::Exception::Exception(PreformattedMessage&&, int) @ 0x0000000007ea888c
+2. DB::Exception::Exception<unsigned long&>(int, FormatStringHelperImpl<std::type_identity<unsigned long&>::type>, unsigned long&) @ 0x000000000849248b
+3. DB::MergeTreeDataWriter::splitBlockIntoParts(DB::Block&&, unsigned long, std::shared_ptr<DB::StorageInMemoryMetadata const> const&, std::shared_ptr<DB::Context const>, std::shared_ptr<DB::AsyncInsertInfo>) @ 0x00000000123ddd8d
+4. DB::MergeTreeSink::consume(DB::Chunk&) @ 0x0000000012699135
+5. DB::SinkToStorage::onConsume(DB::Chunk) @ 0x0000000012cf5564
+6. void std::__function::__policy_invoker<void ()>::__call_impl<std::__function::__default_alloc_func<DB::ExceptionKeepingTransform::work()::$_1, void ()>>(std::__function::__policy_storage const*) @ 0x0000000012c1e5f8
+7. DB::runStep(std::function<void ()>, DB::ThreadStatus*, std::atomic<unsigned long>*) @ 0x0000000012c1e30b
+8. DB::ExceptionKeepingTransform::work() @ 0x0000000012c1db35
+9. DB::ExecutionThreadContext::executeTask() @ 0x00000000129b3ce7
+10. DB::PipelineExecutor::executeStepImpl(unsigned long, std::atomic<bool>*) @ 0x00000000129a7290
+11. DB::PipelineExecutor::executeStep(std::atomic<bool>*) @ 0x00000000129a6ae8
+12. DB::TCPHandler::processInsertQuery() @ 0x0000000012924246
+13. DB::TCPHandler::runImpl() @ 0x0000000012913483
+14. DB::TCPHandler::run() @ 0x000000001292e7b8
+15. Poco::Net::TCPServerConnection::start() @ 0x00000000157fc747
+16. Poco::Net::TCPServerDispatcher::run() @ 0x00000000157fcbd9
+17. Poco::PooledThread::run() @ 0x00000000157c9741
+18. Poco::ThreadImpl::runnableEntry(void*) @ 0x00000000157c7cfd
+19. ? @ 0x00007fcf0187d609
+20. ? @ 0x00007fcf017a2353
+
+2025-02-12 16:22:21,575 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 16:22:21,587 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String,
+    `update_time` DateTime
+)
+ENGINE = ReplacingMergeTree(update_time)
+PARTITION BY toYYYYMM(Dates)
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2025-02-12 16:22:22,167 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2025-02-12 16:22:22,187 - INFO - Получено значение RepairTime: 120.0
+2025-02-12 16:22:22,825 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2025-02-12 16:22:22,851 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 16:22:22,870 - INFO - Получено данных из fleet: 12 месяцев
+2025-02-12 16:22:22,871 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2025-02-12 16:22:22,891 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2025-02-12 16:22:22,892 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2025-02-12 16:22:22,911 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 16:22:22,924 - INFO - Получено значение daily_flight_hours: 1.58
+2025-02-12 16:22:22,941 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2025-02-12 16:22:22,942 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2025-02-12 16:22:23,018 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2025-02-12 16:22:23,029 - INFO - Извлечено 1 записей из таблицы Agregat.
+2025-02-12 16:22:23,030 - INFO - Определено 0 записей с trigger_type=1.
+2025-02-12 16:22:23,032 - INFO - Определено 1 записей с trigger_type=0.
+2025-02-12 16:22:23,033 - INFO - Нет записей для обновления trigger_type=1.
+2025-02-12 16:22:23,063 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2025-02-12 16:22:23,064 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2025-02-12 16:31:26,284 - INFO - Начинаю вычисление aggregate_count.
+2025-02-12 16:31:26,300 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2025-02-12 16:31:26,309 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2025-02-12 16:31:26,324 - INFO - monthly_flight_hours: 48.0
+2025-02-12 16:31:26,325 - INFO - Вычисленный aggregate_count: 235
+2025-02-12 16:31:26,326 - INFO - aggregate_count рассчитан: 235
+2025-02-12 16:31:26,328 - INFO - Получаю значения из таблицы Agregat.
+2025-02-12 16:31:26,339 - INFO - Получены значения из таблицы Agregat.
+2025-02-12 16:31:26,340 - INFO - Получаю daily_flight_hours из flight_hours.
+2025-02-12 16:31:26,350 - INFO - Получено daily_flight_hours: 1.58
+2025-02-12 16:31:26,351 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2025-02-12 16:31:26,828 - INFO - Получено 4001 уникальных дат.
+2025-02-12 16:31:26,829 - INFO - Сгенерировано 235 серийных номеров.
+2025-02-12 16:31:37,464 - ERROR - Ошибка при вставке данных в OlapCube_VNV: Code: 252.
+DB::Exception: Too many partitions for single INSERT block (more than 100). The limit is controlled by 'max_partitions_per_insert_block' setting. Large number of partitions is a common misconception. It will lead to severe negative performance impact, including slow server startup, slow INSERT queries and slow SELECT queries. Recommended total number of partitions for a table is under 1000..10000. Please note, that partitioning is not intended to speed up SELECT queries (ORDER BY key is sufficient to make range queries fast). Partitions are intended for data manipulation (DROP PARTITION, etc).. Stack trace:
+
+0. DB::Exception::Exception(DB::Exception::MessageMasked&&, int, bool) @ 0x000000000cf720fb
+1. DB::Exception::Exception(PreformattedMessage&&, int) @ 0x0000000007ea888c
+2. DB::Exception::Exception<unsigned long&>(int, FormatStringHelperImpl<std::type_identity<unsigned long&>::type>, unsigned long&) @ 0x000000000849248b
+3. DB::MergeTreeDataWriter::splitBlockIntoParts(DB::Block&&, unsigned long, std::shared_ptr<DB::StorageInMemoryMetadata const> const&, std::shared_ptr<DB::Context const>, std::shared_ptr<DB::AsyncInsertInfo>) @ 0x00000000123ddd8d
+4. DB::MergeTreeSink::consume(DB::Chunk&) @ 0x0000000012699135
+5. DB::SinkToStorage::onConsume(DB::Chunk) @ 0x0000000012cf5564
+6. void std::__function::__policy_invoker<void ()>::__call_impl<std::__function::__default_alloc_func<DB::ExceptionKeepingTransform::work()::$_1, void ()>>(std::__function::__policy_storage const*) @ 0x0000000012c1e5f8
+7. DB::runStep(std::function<void ()>, DB::ThreadStatus*, std::atomic<unsigned long>*) @ 0x0000000012c1e30b
+8. DB::ExceptionKeepingTransform::work() @ 0x0000000012c1db35
+9. DB::ExecutionThreadContext::executeTask() @ 0x00000000129b3ce7
+10. DB::PipelineExecutor::executeStepImpl(unsigned long, std::atomic<bool>*) @ 0x00000000129a7290
+11. DB::PipelineExecutor::executeStep(std::atomic<bool>*) @ 0x00000000129a6ae8
+12. DB::TCPHandler::processInsertQuery() @ 0x0000000012924246
+13. DB::TCPHandler::runImpl() @ 0x0000000012913483
+14. DB::TCPHandler::run() @ 0x000000001292e7b8
+15. Poco::Net::TCPServerConnection::start() @ 0x00000000157fc747
+16. Poco::Net::TCPServerDispatcher::run() @ 0x00000000157fcbd9
+17. Poco::PooledThread::run() @ 0x00000000157c9741
+18. Poco::ThreadImpl::runnableEntry(void*) @ 0x00000000157c7cfd
+19. ? @ 0x00007fcf0187d609
+20. ? @ 0x00007fcf017a2353
+Traceback (most recent call last):
+  File "C:\Users\Budnik_AN\AppData\Local\Temp\ipykernel_18044\3885069522.py", line 174, in insert_into_olapcube_vnv_with_dates
+    client.execute(insert_query, data_to_insert, types_check=True)
+  File "c:\Program Files\Python311\Lib\site-packages\clickhouse_driver\client.py", line 376, in execute
+    rv = self.process_insert_query(
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Program Files\Python311\Lib\site-packages\clickhouse_driver\client.py", line 607, in process_insert_query
+    rv = self.send_data(sample_block, data,
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Program Files\Python311\Lib\site-packages\clickhouse_driver\client.py", line 670, in send_data
+    self.receive_profile_events()
+  File "c:\Program Files\Python311\Lib\site-packages\clickhouse_driver\client.py", line 747, in receive_profile_events
+    raise packet.exception
+clickhouse_driver.errors.ServerException: Code: 252.
+DB::Exception: Too many partitions for single INSERT block (more than 100). The limit is controlled by 'max_partitions_per_insert_block' setting. Large number of partitions is a common misconception. It will lead to severe negative performance impact, including slow server startup, slow INSERT queries and slow SELECT queries. Recommended total number of partitions for a table is under 1000..10000. Please note, that partitioning is not intended to speed up SELECT queries (ORDER BY key is sufficient to make range queries fast). Partitions are intended for data manipulation (DROP PARTITION, etc).. Stack trace:
+
+0. DB::Exception::Exception(DB::Exception::MessageMasked&&, int, bool) @ 0x000000000cf720fb
+1. DB::Exception::Exception(PreformattedMessage&&, int) @ 0x0000000007ea888c
+2. DB::Exception::Exception<unsigned long&>(int, FormatStringHelperImpl<std::type_identity<unsigned long&>::type>, unsigned long&) @ 0x000000000849248b
+3. DB::MergeTreeDataWriter::splitBlockIntoParts(DB::Block&&, unsigned long, std::shared_ptr<DB::StorageInMemoryMetadata const> const&, std::shared_ptr<DB::Context const>, std::shared_ptr<DB::AsyncInsertInfo>) @ 0x00000000123ddd8d
+4. DB::MergeTreeSink::consume(DB::Chunk&) @ 0x0000000012699135
+5. DB::SinkToStorage::onConsume(DB::Chunk) @ 0x0000000012cf5564
+6. void std::__function::__policy_invoker<void ()>::__call_impl<std::__function::__default_alloc_func<DB::ExceptionKeepingTransform::work()::$_1, void ()>>(std::__function::__policy_storage const*) @ 0x0000000012c1e5f8
+7. DB::runStep(std::function<void ()>, DB::ThreadStatus*, std::atomic<unsigned long>*) @ 0x0000000012c1e30b
+8. DB::ExceptionKeepingTransform::work() @ 0x0000000012c1db35
+9. DB::ExecutionThreadContext::executeTask() @ 0x00000000129b3ce7
+10. DB::PipelineExecutor::executeStepImpl(unsigned long, std::atomic<bool>*) @ 0x00000000129a7290
+11. DB::PipelineExecutor::executeStep(std::atomic<bool>*) @ 0x00000000129a6ae8
+12. DB::TCPHandler::processInsertQuery() @ 0x0000000012924246
+13. DB::TCPHandler::runImpl() @ 0x0000000012913483
+14. DB::TCPHandler::run() @ 0x000000001292e7b8
+15. Poco::Net::TCPServerConnection::start() @ 0x00000000157fc747
+16. Poco::Net::TCPServerDispatcher::run() @ 0x00000000157fcbd9
+17. Poco::PooledThread::run() @ 0x00000000157c9741
+18. Poco::ThreadImpl::runnableEntry(void*) @ 0x00000000157c7cfd
+19. ? @ 0x00007fcf0187d609
+20. ? @ 0x00007fcf017a2353
+
+2025-02-12 16:31:37,589 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 16:31:37,603 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String,
+    `update_time` DateTime
+)
+ENGINE = ReplacingMergeTree(update_time)
+PARTITION BY toYYYYMM(Dates)
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2025-02-12 16:31:37,780 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2025-02-12 16:31:37,792 - INFO - Получено значение RepairTime: 120.0
+2025-02-12 16:31:38,223 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2025-02-12 16:31:38,260 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 16:31:38,277 - INFO - Получено данных из fleet: 12 месяцев
+2025-02-12 16:31:38,278 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2025-02-12 16:31:38,319 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2025-02-12 16:31:38,320 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2025-02-12 16:31:38,339 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 16:31:38,354 - INFO - Получено значение daily_flight_hours: 1.58
+2025-02-12 16:31:38,368 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2025-02-12 16:31:38,369 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2025-02-12 16:31:38,430 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2025-02-12 16:31:38,449 - INFO - Извлечено 1 записей из таблицы Agregat.
+2025-02-12 16:31:38,450 - INFO - Определено 0 записей с trigger_type=1.
+2025-02-12 16:31:38,452 - INFO - Определено 1 записей с trigger_type=0.
+2025-02-12 16:31:38,453 - INFO - Нет записей для обновления trigger_type=1.
+2025-02-12 16:31:38,474 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2025-02-12 16:31:38,475 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2025-02-12 16:34:00,900 - INFO - Начинаю вычисление aggregate_count.
+2025-02-12 16:34:00,914 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2025-02-12 16:34:00,924 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2025-02-12 16:34:00,932 - INFO - monthly_flight_hours: 48.0
+2025-02-12 16:34:00,934 - INFO - Вычисленный aggregate_count: 235
+2025-02-12 16:34:00,935 - INFO - aggregate_count рассчитан: 235
+2025-02-12 16:34:00,937 - INFO - Получаю значения из таблицы Agregat.
+2025-02-12 16:34:00,948 - INFO - Получены значения из таблицы Agregat.
+2025-02-12 16:34:00,949 - INFO - Получаю daily_flight_hours из flight_hours.
+2025-02-12 16:34:00,958 - INFO - Получено daily_flight_hours: 1.58
+2025-02-12 16:34:00,959 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2025-02-12 16:34:01,065 - INFO - Получено 4001 уникальных дат.
+2025-02-12 16:34:01,066 - INFO - Сгенерировано 235 серийных номеров.
+2025-02-12 16:34:01,980 - INFO - Подготовлено 940235 записей для вставки.
+2025-02-12 16:34:07,697 - INFO - Вставлено 1410 записей для партиции 202411
+2025-02-12 16:34:07,814 - INFO - Вставлено 7285 записей для партиции 202412
+2025-02-12 16:34:07,922 - INFO - Вставлено 7285 записей для партиции 202501
+2025-02-12 16:34:08,019 - INFO - Вставлено 6580 записей для партиции 202502
+2025-02-12 16:34:08,129 - INFO - Вставлено 7285 записей для партиции 202503
+2025-02-12 16:34:08,233 - INFO - Вставлено 7050 записей для партиции 202504
+2025-02-12 16:34:08,342 - INFO - Вставлено 7285 записей для партиции 202505
+2025-02-12 16:34:08,449 - INFO - Вставлено 7050 записей для партиции 202506
+2025-02-12 16:34:08,559 - INFO - Вставлено 7285 записей для партиции 202507
+2025-02-12 16:34:08,691 - INFO - Вставлено 7285 записей для партиции 202508
+2025-02-12 16:34:08,798 - INFO - Вставлено 7050 записей для партиции 202509
+2025-02-12 16:34:08,914 - INFO - Вставлено 7285 записей для партиции 202510
+2025-02-12 16:34:09,020 - INFO - Вставлено 7050 записей для партиции 202511
+2025-02-12 16:34:09,127 - INFO - Вставлено 7285 записей для партиции 202512
+2025-02-12 16:34:09,239 - INFO - Вставлено 7285 записей для партиции 202601
+2025-02-12 16:34:09,335 - INFO - Вставлено 6580 записей для партиции 202602
+2025-02-12 16:34:09,455 - INFO - Вставлено 7285 записей для партиции 202603
+2025-02-12 16:34:09,571 - INFO - Вставлено 7050 записей для партиции 202604
+2025-02-12 16:34:09,677 - INFO - Вставлено 7285 записей для партиции 202605
+2025-02-12 16:34:09,785 - INFO - Вставлено 7050 записей для партиции 202606
+2025-02-12 16:34:09,894 - INFO - Вставлено 7285 записей для партиции 202607
+2025-02-12 16:34:10,007 - INFO - Вставлено 7285 записей для партиции 202608
+2025-02-12 16:34:10,129 - INFO - Вставлено 7050 записей для партиции 202609
+2025-02-12 16:34:10,251 - INFO - Вставлено 7285 записей для партиции 202610
+2025-02-12 16:34:10,369 - INFO - Вставлено 7050 записей для партиции 202611
+2025-02-12 16:34:10,479 - INFO - Вставлено 7285 записей для партиции 202612
+2025-02-12 16:34:10,585 - INFO - Вставлено 7285 записей для партиции 202701
+2025-02-12 16:34:10,683 - INFO - Вставлено 6580 записей для партиции 202702
+2025-02-12 16:34:10,789 - INFO - Вставлено 7285 записей для партиции 202703
+2025-02-12 16:34:10,906 - INFO - Вставлено 7050 записей для партиции 202704
+2025-02-12 16:34:11,014 - INFO - Вставлено 7285 записей для партиции 202705
+2025-02-12 16:34:11,119 - INFO - Вставлено 7050 записей для партиции 202706
+2025-02-12 16:34:11,231 - INFO - Вставлено 7285 записей для партиции 202707
+2025-02-12 16:34:11,341 - INFO - Вставлено 7285 записей для партиции 202708
+2025-02-12 16:34:11,453 - INFO - Вставлено 7050 записей для партиции 202709
+2025-02-12 16:34:11,561 - INFO - Вставлено 7285 записей для партиции 202710
+2025-02-12 16:34:11,667 - INFO - Вставлено 7050 записей для партиции 202711
+2025-02-12 16:34:11,772 - INFO - Вставлено 7285 записей для партиции 202712
+2025-02-12 16:34:11,883 - INFO - Вставлено 7285 записей для партиции 202801
+2025-02-12 16:34:11,983 - INFO - Вставлено 6815 записей для партиции 202802
+2025-02-12 16:34:12,087 - INFO - Вставлено 7285 записей для партиции 202803
+2025-02-12 16:34:12,189 - INFO - Вставлено 7050 записей для партиции 202804
+2025-02-12 16:34:12,300 - INFO - Вставлено 7285 записей для партиции 202805
+2025-02-12 16:34:12,415 - INFO - Вставлено 7050 записей для партиции 202806
+2025-02-12 16:34:12,528 - INFO - Вставлено 7285 записей для партиции 202807
+2025-02-12 16:34:12,636 - INFO - Вставлено 7285 записей для партиции 202808
+2025-02-12 16:34:12,745 - INFO - Вставлено 7050 записей для партиции 202809
+2025-02-12 16:34:12,848 - INFO - Вставлено 7285 записей для партиции 202810
+2025-02-12 16:34:12,964 - INFO - Вставлено 7050 записей для партиции 202811
+2025-02-12 16:34:13,072 - INFO - Вставлено 7285 записей для партиции 202812
+2025-02-12 16:34:13,182 - INFO - Вставлено 7285 записей для партиции 202901
+2025-02-12 16:34:13,278 - INFO - Вставлено 6580 записей для партиции 202902
+2025-02-12 16:34:13,381 - INFO - Вставлено 7285 записей для партиции 202903
+2025-02-12 16:34:13,494 - INFO - Вставлено 7050 записей для партиции 202904
+2025-02-12 16:34:13,600 - INFO - Вставлено 7285 записей для партиции 202905
+2025-02-12 16:34:13,701 - INFO - Вставлено 7050 записей для партиции 202906
+2025-02-12 16:34:13,807 - INFO - Вставлено 7285 записей для партиции 202907
+2025-02-12 16:34:13,923 - INFO - Вставлено 7285 записей для партиции 202908
+2025-02-12 16:34:14,031 - INFO - Вставлено 7050 записей для партиции 202909
+2025-02-12 16:34:14,138 - INFO - Вставлено 7285 записей для партиции 202910
+2025-02-12 16:34:14,249 - INFO - Вставлено 7050 записей для партиции 202911
+2025-02-12 16:34:14,356 - INFO - Вставлено 7285 записей для партиции 202912
+2025-02-12 16:34:14,467 - INFO - Вставлено 7285 записей для партиции 203001
+2025-02-12 16:34:14,567 - INFO - Вставлено 6580 записей для партиции 203002
+2025-02-12 16:34:14,678 - INFO - Вставлено 7285 записей для партиции 203003
+2025-02-12 16:34:14,790 - INFO - Вставлено 7050 записей для партиции 203004
+2025-02-12 16:34:14,901 - INFO - Вставлено 7285 записей для партиции 203005
+2025-02-12 16:34:15,016 - INFO - Вставлено 7050 записей для партиции 203006
+2025-02-12 16:34:15,128 - INFO - Вставлено 7285 записей для партиции 203007
+2025-02-12 16:34:15,238 - INFO - Вставлено 7285 записей для партиции 203008
+2025-02-12 16:34:15,346 - INFO - Вставлено 7050 записей для партиции 203009
+2025-02-12 16:34:15,463 - INFO - Вставлено 7285 записей для партиции 203010
+2025-02-12 16:34:15,568 - INFO - Вставлено 7050 записей для партиции 203011
+2025-02-12 16:34:15,683 - INFO - Вставлено 7285 записей для партиции 203012
+2025-02-12 16:34:15,797 - INFO - Вставлено 7285 записей для партиции 203101
+2025-02-12 16:34:15,911 - INFO - Вставлено 6580 записей для партиции 203102
+2025-02-12 16:34:16,036 - INFO - Вставлено 7285 записей для партиции 203103
+2025-02-12 16:34:16,163 - INFO - Вставлено 7050 записей для партиции 203104
+2025-02-12 16:34:16,270 - INFO - Вставлено 7285 записей для партиции 203105
+2025-02-12 16:34:16,377 - INFO - Вставлено 7050 записей для партиции 203106
+2025-02-12 16:34:16,486 - INFO - Вставлено 7285 записей для партиции 203107
+2025-02-12 16:34:16,594 - INFO - Вставлено 7285 записей для партиции 203108
+2025-02-12 16:34:16,701 - INFO - Вставлено 7050 записей для партиции 203109
+2025-02-12 16:34:16,809 - INFO - Вставлено 7285 записей для партиции 203110
+2025-02-12 16:34:16,916 - INFO - Вставлено 7050 записей для партиции 203111
+2025-02-12 16:34:17,022 - INFO - Вставлено 7285 записей для партиции 203112
+2025-02-12 16:34:17,134 - INFO - Вставлено 7285 записей для партиции 203201
+2025-02-12 16:34:17,237 - INFO - Вставлено 6815 записей для партиции 203202
+2025-02-12 16:34:17,350 - INFO - Вставлено 7285 записей для партиции 203203
+2025-02-12 16:34:17,455 - INFO - Вставлено 7050 записей для партиции 203204
+2025-02-12 16:34:17,562 - INFO - Вставлено 7285 записей для партиции 203205
+2025-02-12 16:34:17,679 - INFO - Вставлено 7050 записей для партиции 203206
+2025-02-12 16:34:17,788 - INFO - Вставлено 7285 записей для партиции 203207
+2025-02-12 16:34:17,893 - INFO - Вставлено 7285 записей для партиции 203208
+2025-02-12 16:34:18,009 - INFO - Вставлено 7050 записей для партиции 203209
+2025-02-12 16:34:18,115 - INFO - Вставлено 7285 записей для партиции 203210
+2025-02-12 16:34:18,230 - INFO - Вставлено 7050 записей для партиции 203211
+2025-02-12 16:34:18,346 - INFO - Вставлено 7285 записей для партиции 203212
+2025-02-12 16:34:18,467 - INFO - Вставлено 7285 записей для партиции 203301
+2025-02-12 16:34:18,580 - INFO - Вставлено 6580 записей для партиции 203302
+2025-02-12 16:34:18,698 - INFO - Вставлено 7285 записей для партиции 203303
+2025-02-12 16:34:18,808 - INFO - Вставлено 7050 записей для партиции 203304
+2025-02-12 16:34:18,929 - INFO - Вставлено 7285 записей для партиции 203305
+2025-02-12 16:34:19,040 - INFO - Вставлено 7050 записей для партиции 203306
+2025-02-12 16:34:19,159 - INFO - Вставлено 7285 записей для партиции 203307
+2025-02-12 16:34:19,267 - INFO - Вставлено 7285 записей для партиции 203308
+2025-02-12 16:34:19,377 - INFO - Вставлено 7050 записей для партиции 203309
+2025-02-12 16:34:19,484 - INFO - Вставлено 7285 записей для партиции 203310
+2025-02-12 16:34:19,591 - INFO - Вставлено 7050 записей для партиции 203311
+2025-02-12 16:34:19,698 - INFO - Вставлено 7285 записей для партиции 203312
+2025-02-12 16:34:19,813 - INFO - Вставлено 7285 записей для партиции 203401
+2025-02-12 16:34:19,912 - INFO - Вставлено 6580 записей для партиции 203402
+2025-02-12 16:34:20,020 - INFO - Вставлено 7285 записей для партиции 203403
+2025-02-12 16:34:20,123 - INFO - Вставлено 7050 записей для партиции 203404
+2025-02-12 16:34:20,237 - INFO - Вставлено 7285 записей для партиции 203405
+2025-02-12 16:34:20,352 - INFO - Вставлено 7050 записей для партиции 203406
+2025-02-12 16:34:20,464 - INFO - Вставлено 7285 записей для партиции 203407
+2025-02-12 16:34:20,573 - INFO - Вставлено 7285 записей для партиции 203408
+2025-02-12 16:34:20,687 - INFO - Вставлено 7050 записей для партиции 203409
+2025-02-12 16:34:20,792 - INFO - Вставлено 7285 записей для партиции 203410
+2025-02-12 16:34:20,919 - INFO - Вставлено 7050 записей для партиции 203411
+2025-02-12 16:34:21,038 - INFO - Вставлено 7285 записей для партиции 203412
+2025-02-12 16:34:21,163 - INFO - Вставлено 7285 записей для партиции 203501
+2025-02-12 16:34:21,266 - INFO - Вставлено 6580 записей для партиции 203502
+2025-02-12 16:34:21,409 - INFO - Вставлено 7285 записей для партиции 203503
+2025-02-12 16:34:21,528 - INFO - Вставлено 7050 записей для партиции 203504
+2025-02-12 16:34:21,645 - INFO - Вставлено 7285 записей для партиции 203505
+2025-02-12 16:34:21,762 - INFO - Вставлено 7050 записей для партиции 203506
+2025-02-12 16:34:21,883 - INFO - Вставлено 7285 записей для партиции 203507
+2025-02-12 16:34:22,007 - INFO - Вставлено 7285 записей для партиции 203508
+2025-02-12 16:34:22,110 - INFO - Вставлено 7050 записей для партиции 203509
+2025-02-12 16:34:22,217 - INFO - Вставлено 7285 записей для партиции 203510
+2025-02-12 16:34:22,273 - INFO - Вставлено 1880 записей для партиции 203511
+2025-02-12 16:34:22,276 - INFO - Успешно вставлено 940235 записей в OlapCube_VNV.
+2025-02-12 16:34:22,403 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 16:34:22,413 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String,
+    `update_time` DateTime,
+    `RepairTime` Nullable(Float64),
+    `trigger_type` UInt8
+)
+ENGINE = ReplacingMergeTree(update_time)
+PARTITION BY toYYYYMM(Dates)
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2025-02-12 16:34:22,422 - INFO - Столбец 'RepairTime' уже существует в таблице 'OlapCube_VNV'
+2025-02-12 16:34:22,429 - INFO - Получено значение RepairTime: 120.0
+2025-02-12 16:34:22,441 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2025-02-12 16:34:22,474 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 16:34:22,497 - INFO - Получено данных из fleet: 12 месяцев
+2025-02-12 16:34:22,498 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2025-02-12 16:34:22,534 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2025-02-12 16:34:22,535 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2025-02-12 16:34:22,555 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 16:34:22,568 - INFO - Получено значение daily_flight_hours: 1.58
+2025-02-12 16:34:22,590 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2025-02-12 16:34:22,591 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2025-02-12 16:34:22,651 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2025-02-12 16:34:22,664 - INFO - Извлечено 1 записей из таблицы Agregat.
+2025-02-12 16:34:22,665 - INFO - Определено 0 записей с trigger_type=1.
+2025-02-12 16:34:22,665 - INFO - Определено 1 записей с trigger_type=0.
+2025-02-12 16:34:22,666 - INFO - Нет записей для обновления trigger_type=1.
+2025-02-12 16:34:22,691 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2025-02-12 16:34:22,692 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2025-02-12 18:30:49,989 - INFO - Начинаю вычисление aggregate_count.
+2025-02-12 18:30:50,004 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2025-02-12 18:30:50,015 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2025-02-12 18:30:50,024 - INFO - monthly_flight_hours: 48.0
+2025-02-12 18:30:50,028 - INFO - Вычисленный aggregate_count: 235
+2025-02-12 18:30:50,030 - INFO - aggregate_count рассчитан: 235
+2025-02-12 18:30:50,033 - INFO - Получаю значения из таблицы Agregat.
+2025-02-12 18:30:50,043 - INFO - Получены значения из таблицы Agregat.
+2025-02-12 18:30:50,045 - INFO - Получаю daily_flight_hours из flight_hours.
+2025-02-12 18:30:50,053 - INFO - Получено daily_flight_hours: 1.58
+2025-02-12 18:30:50,055 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2025-02-12 18:30:50,070 - INFO - Получено 4001 уникальных дат.
+2025-02-12 18:30:50,072 - INFO - Сгенерировано 235 серийных номеров.
+2025-02-12 18:31:02,969 - INFO - Успешно вставлено 940235 записей в OlapCube_VNV.
+2025-02-12 18:31:03,071 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 18:31:03,089 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2025-02-12 18:31:03,110 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2025-02-12 18:31:03,120 - INFO - Получено значение RepairTime: 120.0
+2025-02-12 18:31:03,130 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2025-02-12 18:31:03,172 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 18:31:03,188 - INFO - Получено данных из fleet: 12 месяцев
+2025-02-12 18:31:03,190 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2025-02-12 18:31:03,202 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2025-02-12 18:31:03,204 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2025-02-12 18:31:03,225 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 18:31:03,237 - INFO - Получено значение daily_flight_hours: 1.58
+2025-02-12 18:31:03,249 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2025-02-12 18:31:03,251 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2025-02-12 18:31:03,298 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2025-02-12 18:31:03,307 - INFO - Извлечено 1 записей из таблицы Agregat.
+2025-02-12 18:31:03,309 - INFO - Определено 0 записей с trigger_type=1.
+2025-02-12 18:31:03,310 - INFO - Определено 1 записей с trigger_type=0.
+2025-02-12 18:31:03,311 - INFO - Нет записей для обновления trigger_type=1.
+2025-02-12 18:31:03,320 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2025-02-12 18:31:03,322 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
+2025-02-12 19:03:21,519 - INFO - Начинаю вычисление aggregate_count.
+2025-02-12 19:03:21,537 - INFO - Сумма mi17_count: 777.0, сумма mi8t_count: 1006.0
+2025-02-12 19:03:21,547 - INFO - items_per_ac: 1.0, NR_Mi17: 6000.0
+2025-02-12 19:03:21,555 - INFO - monthly_flight_hours: 48.0
+2025-02-12 19:03:21,556 - INFO - Вычисленный aggregate_count: 235
+2025-02-12 19:03:21,557 - INFO - aggregate_count рассчитан: 235
+2025-02-12 19:03:21,557 - INFO - Получаю значения из таблицы Agregat.
+2025-02-12 19:03:21,566 - INFO - Получены значения из таблицы Agregat.
+2025-02-12 19:03:21,568 - INFO - Получаю daily_flight_hours из flight_hours.
+2025-02-12 19:03:21,577 - INFO - Получено daily_flight_hours: 1.58
+2025-02-12 19:03:21,578 - INFO - Начинаю вставку данных в OlapCube_VNV.
+2025-02-12 19:03:21,598 - INFO - Получено 4001 уникальных дат.
+2025-02-12 19:03:21,600 - INFO - Сгенерировано 235 серийных номеров.
