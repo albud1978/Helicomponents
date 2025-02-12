@@ -1414,3 +1414,57 @@ SETTINGS index_granularity = 8192
 2025-02-12 19:03:21,578 - INFO - Начинаю вставку данных в OlapCube_VNV.
 2025-02-12 19:03:21,598 - INFO - Получено 4001 уникальных дат.
 2025-02-12 19:03:21,600 - INFO - Сгенерировано 235 серийных номеров.
+2025-02-12 19:03:34,137 - INFO - Успешно вставлено 940235 записей в OlapCube_VNV.
+2025-02-12 19:03:34,232 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 19:03:34,242 - INFO - Схема таблицы 'OlapCube_VNV':
+CREATE TABLE default.OlapCube_VNV
+(
+    `serialno` String,
+    `Dates` Date,
+    `Status_P` Nullable(String),
+    `repair_days` Nullable(Float64),
+    `sne` Nullable(Float64),
+    `ppr` Nullable(Float64),
+    `Status` Nullable(String),
+    `daily_flight_hours` Nullable(Float64),
+    `daily_flight_hours_f` Nullable(Float64),
+    `BR` Nullable(Float64),
+    `ll` Nullable(Float64),
+    `oh` Nullable(Float64),
+    `threshold` Nullable(Float64),
+    `Effectivity` Nullable(String),
+    `mi8t_count` Nullable(Float64),
+    `mi17_count` Nullable(Float64),
+    `balance_mi8t` Float64,
+    `balance_mi17` Float64,
+    `balance_total` Float64,
+    `stock_mi8t` Float64,
+    `stock_mi17` Float64,
+    `stock_total` Float64,
+    `balance_empty` Float64,
+    `stock_empty` Float64,
+    `location` String,
+    `ac_typ` String
+)
+ENGINE = ReplacingMergeTree
+ORDER BY (serialno, Dates)
+SETTINGS index_granularity = 8192
+2025-02-12 19:03:34,265 - INFO - Столбец 'RepairTime' успешно добавлен в таблицу 'OlapCube_VNV'
+2025-02-12 19:03:34,274 - INFO - Получено значение RepairTime: 120.0
+2025-02-12 19:03:34,284 - INFO - Столбец 'RepairTime' успешно обновлён в таблице 'OlapCube_VNV'
+2025-02-12 19:03:34,312 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 19:03:34,335 - INFO - Получено данных из fleet: 12 месяцев
+2025-02-12 19:03:34,339 - INFO - Начинается обновление полей mi8t_count и mi17_count в OlapCube_VNV
+2025-02-12 19:03:34,352 - INFO - Поля mi8t_count и mi17_count успешно обновлены в OlapCube_VNV
+2025-02-12 19:03:34,353 - INFO - Данные mi8t_count и mi17_count успешно обновлены на основании Dates в OlapCube_VNV
+2025-02-12 19:03:34,390 - INFO - Подключение к ClickHouse успешно установлено
+2025-02-12 19:03:34,403 - INFO - Получено значение daily_flight_hours: 1.58
+2025-02-12 19:03:34,416 - INFO - Поле daily_flight_hours успешно обновлено в OlapCube_VNV
+2025-02-12 19:03:34,418 - INFO - Поле daily_flight_hours успешно обновлено в OLAP кубе
+2025-02-12 19:03:34,473 - INFO - Поле trigger_type успешно добавлено в таблицу OlapCube_VNV.
+2025-02-12 19:03:34,483 - INFO - Извлечено 1 записей из таблицы Agregat.
+2025-02-12 19:03:34,484 - INFO - Определено 0 записей с trigger_type=1.
+2025-02-12 19:03:34,485 - INFO - Определено 1 записей с trigger_type=0.
+2025-02-12 19:03:34,486 - INFO - Нет записей для обновления trigger_type=1.
+2025-02-12 19:03:34,497 - INFO - Обновлено trigger_type=0 для 1 записей (батч 1).
+2025-02-12 19:03:34,499 - INFO - Поле trigger_type успешно добавлено и заполнено в таблице OlapCube_VNV.
