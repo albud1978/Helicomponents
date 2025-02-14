@@ -50,6 +50,7 @@ class CycleProcessor:
     def load_all_data(self):
         """
         Загружаем данные из куба за период [first_date, first_date + total_days).
+        Для теста период 2 дня.
         """
         first_date = self.get_first_date()
         self.first_date = first_date
@@ -58,34 +59,21 @@ class CycleProcessor:
 
         query = f"""
         SELECT
-             trigger_type,
-             RepairTime,
-             Status_P,
-             repair_days,
-             sne,
-             ppr,
-             Status,
-             location,
-             ac_typ,
-             daily_flight_hours,
-             daily_flight_hours_f,
-             BR,
-             ll,
-             oh,
-             threshold,
-             Effectivity,
-             serialno,
-             Dates,
-             mi8t_count,
-             mi17_count,
-             balance_mi8t,
-             balance_mi17,
-             balance_empty,
-             balance_total,
-             stock_mi8t,
-             stock_mi17,
-             stock_empty,
-             stock_total
+            serialno,
+            Dates,
+            Status,
+            Status_P,
+            sne,
+            ppr,
+            repair_days,
+            ll,
+            oh,
+            BR,
+            daily_flight_hours,
+            RepairTime,
+            ac_typ,
+            mi8t_count,
+            mi17_count
         FROM {self.database_name}.OlapCube_VNV
         WHERE Dates >= '{first_date.strftime('%Y-%m-%d')}'
           AND Dates < '{period_end.strftime('%Y-%m-%d')}'
@@ -95,34 +83,9 @@ class CycleProcessor:
         if not result:
             raise Exception("Нет данных для заданного периода")
         columns = [
-             'trigger_type',
-             'RepairTime',
-             'Status_P',
-             'repair_days',
-             'sne',
-             'ppr',
-             'Status',
-             'location',
-             'ac_typ',
-             'daily_flight_hours',
-             'daily_flight_hours_f',
-             'BR',
-             'll',
-             'oh',
-             'threshold',
-             'Effectivity',
-             'serialno',
-             'Dates',
-             'mi8t_count',
-             'mi17_count',
-             'balance_mi8t',
-             'balance_mi17',
-             'balance_empty',
-             'balance_total',
-             'stock_mi8t',
-             'stock_mi17',
-             'stock_empty',
-             'stock_total'
+            'serialno', 'Dates', 'Status', 'Status_P', 'sne', 'ppr', 'repair_days',
+            'll', 'oh', 'BR', 'daily_flight_hours', 'RepairTime', 'ac_typ',
+            'mi8t_count', 'mi17_count'
         ]
         try:
             self.df = pd.DataFrame(result, columns=columns)
@@ -130,28 +93,16 @@ class CycleProcessor:
             self.logger.error(f"Ошибка при создании DataFrame: {e}")
             raise
 
-        # Приводим числовые поля к требуемому типу (trigger_type теперь тоже числовой)
-        numeric_cols = [
-            'trigger_type',
-            'RepairTime', 'repair_days', 'sne', 'ppr', 'daily_flight_hours',
-            'daily_flight_hours_f', 'BR', 'll', 'oh', 'threshold',
-            'mi8t_count', 'mi17_count', 'balance_mi8t', 'balance_mi17', 'balance_empty',
-            'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty', 'stock_total'
-        ]
+        numeric_cols = ['sne','ppr','repair_days','ll','oh','BR','daily_flight_hours','RepairTime','mi8t_count','mi17_count']
         for col in numeric_cols:
             self.df[col] = self.df[col].astype(np.float32, errors='ignore')
 
-        # Приводим оставшиеся строковые поля к типу str
-        str_cols = ['Status_P', 'Status', 'location', 'ac_typ', 'Effectivity']
-        for col in str_cols:
-            self.df[col] = self.df[col].astype(str)
+        self.df['Status'] = self.df['Status'].astype(str)
+        self.df['Status_P'] = self.df['Status_P'].astype(str)
+        self.df['ac_typ'] = self.df['ac_typ'].astype(str)
 
         # Приводим столбец Dates к типу date
         self.df['Dates'] = pd.to_datetime(self.df['Dates']).dt.date
-
-        # Округляем daily_flight_hours и daily_flight_hours_f до двух знаков
-        self.df['daily_flight_hours'] = self.df['daily_flight_hours'].astype(np.float64).round(2).astype(np.float32)
-        self.df['daily_flight_hours_f'] = self.df['daily_flight_hours_f'].astype(np.float64).round(2).astype(np.float32)
 
         self.logger.info(f"Данные загружены: всего {len(self.df)} записей.")
 
@@ -372,31 +323,16 @@ class CycleProcessor:
                 continue
 
     def ensure_tmp_table_exists(self):
-        drop_ddl = f"DROP TABLE IF EXISTS {self.database_name}.tmp_OlapCube_update"
-        self.client.execute(drop_ddl)
-        self.logger.info("Старая временная таблица tmp_OlapCube_update удалена (если существовала).")
-
         ddl = f"""
-        CREATE TABLE {self.database_name}.tmp_OlapCube_update
+        CREATE TABLE IF NOT EXISTS {self.database_name}.tmp_OlapCube_update
         (
-            trigger_type Float32,
-            RepairTime Float32,
-            Status_P String,
-            repair_days Nullable(Float32),
-            sne Decimal(10,2),
-            ppr Decimal(10,2),
-            Status String,
-            location String,
-            ac_typ String,
-            daily_flight_hours Decimal(10,2),
-            daily_flight_hours_f Decimal(10,2),
-            BR Float32,
-            ll Float32,
-            oh Float32,
-            threshold Float32,
-            Effectivity String,
             serialno String,
             Dates Date,
+            Status String,
+            Status_P String,
+            sne Decimal(10,2),
+            ppr Decimal(10,2),
+            repair_days Nullable(Float32),
             mi8t_count Float32,
             mi17_count Float32,
             balance_mi8t Float32,
@@ -410,94 +346,34 @@ class CycleProcessor:
         ) ENGINE = Memory
         """
         self.client.execute(ddl)
-        self.logger.info("Новая временная таблица tmp_OlapCube_update создана.")
-
+        self.logger.info("Временная таблица tmp_OlapCube_update создана (если отсутствовала).")
+    
     def save_all_results(self, period_start, period_end):
         self.logger.info(f"Начинаем сохранение записей за период {period_start} - {period_end}")
         cycle_df = self.df[(self.df['Dates'] >= period_start) & (self.df['Dates'] < period_end)]
-        df_to_update = cycle_df[cycle_df['Dates'] > self.first_date].copy()
+        # Обновляем данные только для дат, отличных от начальной (если это требуется)
+        df_to_update = cycle_df[cycle_df['Dates'] > self.first_date]
 
-        # Округляем sne и ppr, как и раньше
-        df_to_update.loc[:, 'sne'] = df_to_update['sne'].astype(np.float64).round(2).astype(np.float32)
-        df_to_update.loc[:, 'ppr'] = df_to_update['ppr'].astype(np.float64).round(2).astype(np.float32)
-        # Аналогично для daily_flight_hours и daily_flight_hours_f
-        df_to_update.loc[:, 'daily_flight_hours'] = df_to_update['daily_flight_hours'].astype(np.float64).round(2).astype(np.float32)
-        df_to_update.loc[:, 'daily_flight_hours_f'] = df_to_update['daily_flight_hours_f'].astype(np.float64).round(2).astype(np.float32)
-        
+        # Округляем поля sne и ppr до 2 знаков после запятой
+        df_to_update['sne'] = df_to_update['sne'].astype(float).round(2)
+        df_to_update['ppr'] = df_to_update['ppr'].astype(float).round(2)
+
+        # Убедимся, что временная таблица существует
         self.ensure_tmp_table_exists()
-      
+
         update_records = df_to_update[[ 
-             'trigger_type',
-             'RepairTime',
-             'Status_P',
-             'repair_days',
-             'sne',
-             'ppr',
-             'Status',
-             'location',
-             'ac_typ',
-             'daily_flight_hours',
-             'daily_flight_hours_f',
-             'BR',
-             'll',
-             'oh',
-             'threshold',
-             'Effectivity',
-             'serialno',
-             'Dates',
-             'mi8t_count',
-             'mi17_count',
-             'balance_mi8t',
-             'balance_mi17',
-             'balance_empty',
-             'balance_total',
-             'stock_mi8t',
-             'stock_mi17',
-             'stock_empty',
-             'stock_total'
-        ]]
-        for col in [
-            'trigger_type', 'RepairTime', 'repair_days', 'sne', 'ppr',
-            'daily_flight_hours', 'daily_flight_hours_f', 'BR', 'll', 'oh',
-            'threshold', 'mi8t_count', 'mi17_count', 'balance_mi8t', 'balance_mi17',
-            'balance_empty', 'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty',
-            'stock_total'
-        ]:
-            update_records[col] = update_records[col].fillna(0.0).astype(np.float32)
-        
-        update_records = update_records.replace({np.nan: None})
+             'serialno', 'Dates', 'Status', 'Status_P', 'sne', 'ppr', 'repair_days',
+             'mi8t_count', 'mi17_count', 'balance_mi8t', 'balance_mi17', 'balance_empty',
+             'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty', 'stock_total'
+        ]].copy()
+        update_records = update_records.where(pd.notnull(update_records), None)
         records = list(update_records.itertuples(index=False, name=None))
 
         insert_query = f"""
         INSERT INTO {self.database_name}.tmp_OlapCube_update (
-             trigger_type,
-             RepairTime,
-             Status_P,
-             repair_days,
-             sne,
-             ppr,
-             Status,
-             location,
-             ac_typ,
-             daily_flight_hours,
-             daily_flight_hours_f,
-             BR,
-             ll,
-             oh,
-             threshold,
-             Effectivity,
-             serialno,
-             Dates,
-             mi8t_count,
-             mi17_count,
-             balance_mi8t,
-             balance_mi17,
-             balance_empty,
-             balance_total,
-             stock_mi8t,
-             stock_mi17,
-             stock_empty,
-             stock_total
+             serialno, Dates, Status, Status_P, sne, ppr, repair_days,
+             mi8t_count, mi17_count, balance_mi8t, balance_mi17, balance_empty,
+             balance_total, stock_mi8t, stock_mi17, stock_empty, stock_total
         ) VALUES
         """
         self.client.execute(insert_query, records, settings={'max_threads': 8})
@@ -509,64 +385,14 @@ class CycleProcessor:
 
         insert_main_query = f"""
         INSERT INTO {self.database_name}.OlapCube_VNV (
-             trigger_type,
-             RepairTime,
-             Status_P,
-             repair_days,
-             sne,
-             ppr,
-             Status,
-             location,
-             ac_typ,
-             daily_flight_hours,
-             daily_flight_hours_f,
-             BR,
-             ll,
-             oh,
-             threshold,
-             Effectivity,
-             serialno,
-             Dates,
-             mi8t_count,
-             mi17_count,
-             balance_mi8t,
-             balance_mi17,
-             balance_empty,
-             balance_total,
-             stock_mi8t,
-             stock_mi17,
-             stock_empty,
-             stock_total
+             serialno, Dates, Status, Status_P, sne, ppr, repair_days,
+             mi8t_count, mi17_count, balance_mi8t, balance_mi17, balance_empty,
+             balance_total, stock_mi8t, stock_mi17, stock_empty, stock_total
         )
         SELECT
-             trigger_type,
-             RepairTime,
-             Status_P,
-             repair_days,
-             sne,
-             ppr,
-             Status,
-             location,
-             ac_typ,
-             daily_flight_hours,
-             daily_flight_hours_f,
-             BR,
-             ll,
-             oh,
-             threshold,
-             Effectivity,
-             serialno,
-             Dates,
-             mi8t_count,
-             mi17_count,
-             balance_mi8t,
-             balance_mi17,
-             balance_empty,
-             balance_total,
-             stock_mi8t,
-             stock_mi17,
-             stock_empty,
-             stock_total
+             serialno, Dates, Status, Status_P, sne, ppr, repair_days,
+             mi8t_count, mi17_count, balance_mi8t, balance_mi17, balance_empty,
+             balance_total, stock_mi8t, stock_mi17, stock_empty, stock_total
         FROM {self.database_name}.tmp_OlapCube_update
         """
         self.client.execute(insert_main_query, settings={'max_threads': 8})
@@ -576,10 +402,12 @@ class CycleProcessor:
         self.client.execute(optimize_query, settings={'max_threads': 8})
         self.logger.info("Оптимизация таблицы выполнена (FINAL).")
 
+        # Удаляем временную таблицу после использования
         drop_query = f"DROP TABLE {self.database_name}.tmp_OlapCube_update"
         self.client.execute(drop_query, settings={'max_threads': 8})
         self.logger.info("Временная таблица удалена после обновления.")
 
+        # Очистка временных переменных
         records = None
         update_records = None
 
@@ -590,10 +418,10 @@ class CycleProcessor:
         LIMIT 10
         """
         main_sample_result = self.client.execute(main_sample_query)
-        self.logger.info("Пример данных из основной таблицы на 2024-11-26 после обновления:")
+        self.logger.info("Пример данных из основной таблицы на 26-11 после обновления:")
         for row in main_sample_result:
             self.logger.info(row)
     
 if __name__ == "__main__":
-    processor = CycleProcessor(total_days=30)
+    processor = CycleProcessor(total_days=7)
     processor.run_cycle()
