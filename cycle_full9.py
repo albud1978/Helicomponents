@@ -595,5 +595,5 @@ class CycleProcessor:
             self.logger.info(row)
     
 if __name__ == "__main__":
-    processor = CycleProcessor(total_days=30)
+    processor = CycleProcessor(total_days=365)
     processor.run_cycle()
