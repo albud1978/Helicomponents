@@ -17,7 +17,6 @@ handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)
 if not logger.handlers:
     logger.addHandler(handler)
 
-
 class CycleProcessor:
     def __init__(self, total_days=2):  # Тестовый период – 2 дня
         self.logger = logger
@@ -79,7 +78,7 @@ class CycleProcessor:
           AND Dates < '{period_end.strftime('%Y-%m-%d')}'
         ORDER BY Dates, serialno
         """
-        result = self.client.execute(query, settings={'max_threads': 8})
+        result = self.client.execute(query, settings={'max_threads':8})
         if not result:
             raise Exception("Нет данных для заданного периода")
         columns = [
@@ -101,7 +100,6 @@ class CycleProcessor:
         self.df['Status_P'] = self.df['Status_P'].astype(str)
         self.df['ac_typ'] = self.df['ac_typ'].astype(str)
 
-        # Приводим столбец Dates к типу date
         self.df['Dates'] = pd.to_datetime(self.df['Dates']).dt.date
 
         self.logger.info(f"Данные загружены: всего {len(self.df)} записей.")
@@ -131,7 +129,7 @@ class CycleProcessor:
         LIMIT 10
         """
         after_result = self.client.execute(check_query)
-        self.logger.info("Пример данных на 2024-11-26 после обновления:")
+        self.logger.info("Пример данных на 2024-11-26 после записи в базу:")
         for row in after_result:
             self.logger.info(row)
 
@@ -175,7 +173,7 @@ class CycleProcessor:
 
         working_df = pd.merge(
             curr_data,
-            prev_data[['serialno', 'Status', 'Status_P', 'sne', 'ppr', 'repair_days']],
+            prev_data[['serialno','Status','Status_P','sne','ppr','repair_days']],
             on='serialno', how='inner', suffixes=('', '_prev')
         )
 
@@ -322,115 +320,36 @@ class CycleProcessor:
                 self.logger.error(f"Ошибка при обновлении для serialno={serialno}: {e}")
                 continue
 
-    def ensure_tmp_table_exists(self):
-        ddl = f"""
-        CREATE TABLE IF NOT EXISTS {self.database_name}.tmp_OlapCube_update
-        (
-            serialno String,
-            Dates Date,
-            Status String,
-            Status_P String,
-            sne Float32,
-            ppr Float32,
-            repair_days Nullable(Float32),
-            mi8t_count Float32,
-            mi17_count Float32,
-            balance_mi8t Float32,
-            balance_mi17 Float32,
-            balance_empty Float32,
-            balance_total Float32,
-            stock_mi8t Float32,
-            stock_mi17 Float32,
-            stock_empty Float32,
-            stock_total Float32
-        ) ENGINE = Memory
-        """
-        self.client.execute(ddl)
-        self.logger.info("Временная таблица tmp_OlapCube_update создана (если отсутствовала).")
-    
     def save_all_results(self, period_start, period_end):
         self.logger.info(f"Начинаем сохранение записей за период {period_start} - {period_end}")
         cycle_df = self.df[(self.df['Dates'] >= period_start) & (self.df['Dates'] < period_end)]
-        # Обновляем данные только для дат, отличных от начальной (если это требуется)
         df_to_update = cycle_df[cycle_df['Dates'] > self.first_date]
-
-        # Убедимся, что временная таблица существует
-        self.ensure_tmp_table_exists()
-
-        # Подготовка данных для пакетного обновления: записываем обновлённые данные во временную таблицу
-        update_records = df_to_update[[ 
-             'serialno', 'Dates', 'Status', 'Status_P', 'sne', 'ppr', 'repair_days',
-             'mi8t_count', 'mi17_count', 'balance_mi8t', 'balance_mi17', 'balance_empty',
-             'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty', 'stock_total'
-        ]].copy()
-        update_records = update_records.where(pd.notnull(update_records), None)
-        records = list(update_records.itertuples(index=False, name=None))
-
-        insert_query = f"""
-        INSERT INTO {self.database_name}.tmp_OlapCube_update (
-             serialno, Dates, Status, Status_P, sne, ppr, repair_days,
-             mi8t_count, mi17_count, balance_mi8t, balance_mi17, balance_empty,
-             balance_total, stock_mi8t, stock_mi17, stock_empty, stock_total
-        ) VALUES
-        """
-        self.client.execute(insert_query, records, settings={'max_threads': 8})
-        self.logger.info("Данные вставлены во временную таблицу.")
-
-        # Проверка: вывод количества записей во временной таблице
-        count_query = f"SELECT count(*) FROM {self.database_name}.tmp_OlapCube_update"
-        tmp_count = self.client.execute(count_query)[0][0]
-        self.logger.info(f"Количество записей во временной таблице: {tmp_count}")
-
-        # Пакетное обновление основной таблицы для ReplacingMergeTree:
-        # Для ReplacingMergeTree мы вставляем новые версии строк.
-        # Обратите внимание, что здесь мы явно указываем список столбцов, чтобы число столбцов совпадало.
-        insert_main_query = f"""
-        INSERT INTO {self.database_name}.OlapCube_VNV (
-            serialno, Dates, Status, Status_P, sne, ppr, repair_days,
-            mi8t_count, mi17_count, balance_mi8t, balance_mi17, balance_empty,
-            balance_total, stock_mi8t, stock_mi17, stock_empty, stock_total
-        )
-        SELECT
-            serialno, Dates, Status, Status_P, sne, ppr, repair_days,
-            mi8t_count, mi17_count, balance_mi8t, balance_mi17, balance_empty,
-            balance_total, stock_mi8t, stock_mi17, stock_empty, stock_total
-        FROM {self.database_name}.tmp_OlapCube_update
-        """
-        self.client.execute(insert_main_query, settings={'max_threads': 8})
-        self.logger.info("Новые версии записей вставлены в основную таблицу.")
-
-        # Оптимизируем таблицу, чтобы обновлённые данные стали видны быстрее
-        optimize_query = f"OPTIMIZE TABLE {self.database_name}.OlapCube_VNV FINAL"
-        self.client.execute(optimize_query, settings={'max_threads': 8})
-        self.logger.info("Оптимизация таблицы выполнена (FINAL).")
-
-        # Очистка временной таблицы после обновления
-        self.client.execute(f"TRUNCATE TABLE {self.database_name}.tmp_OlapCube_update")
-        self.logger.info("Временная таблица очищена после обновления.")
-
-        # Дополнительные проверки: выгрузка примера данных для отладки
-        sample_query = f"""
-        SELECT *
-        FROM {self.database_name}.tmp_OlapCube_update
-        WHERE Dates = '2024-11-26'
-        LIMIT 5
-        """
-        sample_result = self.client.execute(sample_query)
-        self.logger.info("Пример данных из временной таблицы на 26-11:")
-        for row in sample_result:
-            self.logger.info(row)
-
-        main_sample_query = f"""
-        SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days
-        FROM {self.database_name}.OlapCube_VNV
-        WHERE Dates = '2024-11-26'
-        LIMIT 10
-        """
-        main_sample_result = self.client.execute(main_sample_query)
-        self.logger.info("Пример данных из основной таблицы на 26-11 после обновления:")
-        for row in main_sample_result:
-            self.logger.info(row)
+        
+        self.logger.info(f"Уникальные даты для обновления: {df_to_update['Dates'].unique()}")
+        self.logger.info(f"Уникальные serialno: {len(df_to_update['serialno'].unique())}")
+        
+        for _, row in df_to_update.iterrows():
+            update_query = f"""
+            ALTER TABLE {self.database_name}.OlapCube_VNV UPDATE 
+                Status = '{row['Status']}',
+                Status_P = '{row['Status_P']}',
+                sne = round({row['sne']}, 2),
+                ppr = round({row['ppr']}, 2),
+                repair_days = {row['repair_days'] if row['repair_days'] is not None else 'NULL'},
+                mi8t_count = {row['mi8t_count'] if row['mi8t_count'] is not None else 'NULL'},
+                mi17_count = {row['mi17_count'] if row['mi17_count'] is not None else 'NULL'},
+                balance_mi8t = {row['balance_mi8t'] if row['balance_mi8t'] is not None else 'NULL'},
+                balance_mi17 = {row['balance_mi17'] if row['balance_mi17'] is not None else 'NULL'},
+                balance_empty = {row['balance_empty'] if row['balance_empty'] is not None else 'NULL'},
+                balance_total = {row['balance_total'] if row['balance_total'] is not None else 'NULL'},
+                stock_mi8t = {row['stock_mi8t'] if row['stock_mi8t'] is not None else 'NULL'},
+                stock_mi17 = {row['stock_mi17'] if row['stock_mi17'] is not None else 'NULL'},
+                stock_empty = {row['stock_empty'] if row['stock_empty'] is not None else 'NULL'},
+                stock_total = {row['stock_total'] if row['stock_total'] is not None else 'NULL'}
+            WHERE serialno = '{row['serialno']}' AND Dates = '{row['Dates']}'
+            """
+            self.client.execute(update_query)
     
 if __name__ == "__main__":
-    processor = CycleProcessor(total_days=7)
+    processor = CycleProcessor(total_days=30)
     processor.run_cycle()
