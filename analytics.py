@@ -46,7 +46,7 @@ def main():
     min_date = min_date_result[0][0]
     logger.info(f"Найдена min_date = {min_date}")
 
-    max_date = min_date + pd.Timedelta(days=4000)
+    max_date = min_date + pd.Timedelta(days=7)
     logger.info(f"Будем обрабатывать даты в диапазоне [{min_date}, {max_date})")
 
     # 5. ALTER TABLE (если нужно добавить колонки)
@@ -226,30 +226,55 @@ def main():
     # 12. Перенос в OlapCube_VNV через UPDATE вместо INSERT
     logger.info("Обновляем поля в OlapCube_VNV...")
 
-    client.execute("START TRANSACTION")
     try:
-        # Пример группировки полей (по 3-4 поля в запросе)
+        # Example: update a group of columns in one statement
+        # We remove "FROM tmp ..." and use subselects in each column assignment
         field_groups = [
             ['ops_count', 'hbs_count', 'repair_count'],
-            ['total_operable', 'entry_count', 'exit_count'],
-            # ...и т.д.
+            ['total_operable', 'entry_count', 'exit_count']
+            # ...and so on
         ]
 
         for group in field_groups:
-            update_parts = [f"{field} = tmp.{field}" for field in group]
-            update_expr = ", ".join(update_parts)
-            
+            update_parts = []
+            for field in group:
+                update_parts.append(
+                    f"""{field} = (
+                        SELECT {field} 
+                        FROM {database_name}.{tmp_table_name} tmp
+                        WHERE tmp.serialno = {database_name}.OlapCube_VNV.serialno
+                          AND tmp.Dates    = {database_name}.OlapCube_VNV.Dates
+                    )"""
+                )
+            update_expr = ",\n    ".join(update_parts)
+
             update_query = f"""
             ALTER TABLE {database_name}.OlapCube_VNV
-            UPDATE {update_expr}
-            FROM {database_name}.{tmp_table_name} AS tmp
-            WHERE OlapCube_VNV.serialno = tmp.serialno AND OlapCube_VNV.Dates = tmp.Dates
+            UPDATE
+                {update_expr}
+            WHERE (serialno, Dates) IN (
+                SELECT serialno, Dates FROM {database_name}.{tmp_table_name}
+            )
             """
             client.execute(update_query)
 
-        client.execute("COMMIT")
+        update_query = f"""
+        ALTER TABLE {database_name}.OlapCube_VNV
+        UPDATE
+            hbs_count = (
+                SELECT tmp.hbs_count 
+                FROM {database_name}.{tmp_table_name} tmp
+                WHERE tmp.serialno = OlapCube_VNV.serialno
+                  AND tmp.Dates    = OlapCube_VNV.Dates
+            )
+        WHERE (serialno, Dates) IN (
+            SELECT serialno, Dates 
+            FROM {database_name}.{tmp_table_name}
+        )
+        """
+        client.execute(update_query)
+
     except Exception as e:
-        client.execute("ROLLBACK")
         logger.error(f"Ошибка при обновлении: {e}", exc_info=True)
 
     logger.info("Обновление полей в OlapCube_VNV завершено.")
