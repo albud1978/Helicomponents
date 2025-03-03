@@ -223,61 +223,58 @@ def main():
     client.execute(insert_tmp_query, records)
     logger.info("Вставка во временную таблицу завершена.")
 
-    # 12. Перенос в OlapCube_VNV через UPDATE вместо INSERT
-    logger.info("Обновляем поля в OlapCube_VNV...")
+    # 12. Перенос в OlapCube_VNV через DELETE + INSERT вместо UPDATE
+    logger.info("Обновляем поля в OlapCube_VNV (через DELETE + INSERT)...")
 
     try:
-        # Example: update a group of columns in one statement
-        # We remove "FROM tmp ..." and use subselects in each column assignment
-        field_groups = [
-            ['ops_count', 'hbs_count', 'repair_count'],
-            ['total_operable', 'entry_count', 'exit_count']
-            # ...and so on
-        ]
-
-        for group in field_groups:
-            update_parts = []
-            for field in group:
-                update_parts.append(
-                    f"""{field} = (
-                        SELECT {field} 
-                        FROM {database_name}.{tmp_table_name} tmp
-                        WHERE tmp.serialno = {database_name}.OlapCube_VNV.serialno
-                          AND tmp.Dates    = {database_name}.OlapCube_VNV.Dates
-                    )"""
-                )
-            update_expr = ",\n    ".join(update_parts)
-
-            update_query = f"""
-            ALTER TABLE {database_name}.OlapCube_VNV
-            UPDATE
-                {update_expr}
-            WHERE (serialno, Dates) IN (
-                SELECT serialno, Dates FROM {database_name}.{tmp_table_name}
-            )
-            """
-            client.execute(update_query)
-
-        update_query = f"""
+        # 1. Удаляем строки, которые будем обновлять
+        delete_query = f"""
         ALTER TABLE {database_name}.OlapCube_VNV
-        UPDATE
-            hbs_count = (
-                SELECT tmp.hbs_count 
-                FROM {database_name}.{tmp_table_name} tmp
-                WHERE tmp.serialno = OlapCube_VNV.serialno
-                  AND tmp.Dates    = OlapCube_VNV.Dates
-            )
-        WHERE (serialno, Dates) IN (
-            SELECT serialno, Dates 
-            FROM {database_name}.{tmp_table_name}
+        DELETE WHERE (serialno, Dates) IN (
+            SELECT serialno, Dates FROM {database_name}.{tmp_table_name}
         )
         """
-        client.execute(update_query)
-
+        client.execute(delete_query)
+        logger.info("Целевые строки удалены.")
+        
+        # 2. Получаем актуальные данные из основной таблицы
+        # (берем только те строки, которые не попали во временную таблицу)
+        select_query = f"""
+        SELECT * FROM {database_name}.OlapCube_VNV
+        WHERE (serialno, Dates) NOT IN (
+            SELECT serialno, Dates FROM {database_name}.{tmp_table_name}
+        )
+        """
+        existing_data = client.execute(select_query)
+        
+        # 3. Получаем схему таблицы (список полей в правильном порядке)
+        schema_query = f"DESCRIBE TABLE {database_name}.OlapCube_VNV"
+        schema = client.execute(schema_query)
+        column_names = [col[0] for col in schema]
+        
+        # 4. Получаем новые данные из временной таблицы со всеми полями
+        tmp_query = f"""
+        SELECT t.*, o.* EXCEPT(serialno, Dates, ops_count, hbs_count, repair_count, 
+                              total_operable, entry_count, exit_count, into_repair, 
+                              complete_repair, remain_repair, remain, midfire_repair, 
+                              midfire, hours)
+        FROM {database_name}.{tmp_table_name} t
+        LEFT JOIN {database_name}.OlapCube_VNV o
+        ON t.serialno = o.serialno AND t.Dates = o.Dates
+        """
+        new_data = client.execute(tmp_query)
+        
+        # 5. Вставляем обратно все данные
+        insert_query = f"INSERT INTO {database_name}.OlapCube_VNV VALUES"
+        if existing_data:
+            client.execute(insert_query, existing_data)
+        if new_data:
+            client.execute(insert_query, new_data)
+        
+        logger.info("Данные успешно обновлены через DELETE + INSERT.")
+        
     except Exception as e:
-        logger.error(f"Ошибка при обновлении: {e}", exc_info=True)
-
-    logger.info("Обновление полей в OlapCube_VNV завершено.")
+        logger.error(f"Ошибка при обновлении через DELETE + INSERT: {e}", exc_info=True)
 
     # Не требуется выполнять OPTIMIZE TABLE, так как мы напрямую обновляем поля
     # Но для уверенности можно оставить (или закомментировать)
