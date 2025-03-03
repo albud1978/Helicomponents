@@ -223,58 +223,63 @@ def main():
     client.execute(insert_tmp_query, records)
     logger.info("Вставка во временную таблицу завершена.")
 
-    # 12. Перенос в OlapCube_VNV через DELETE + INSERT вместо UPDATE
-    logger.info("Обновляем поля в OlapCube_VNV (через DELETE + INSERT)...")
+    # 12. Перенос в OlapCube_VNV - только обновление полей, без DELETE + INSERT
+    logger.info("Обновляем только новые поля в OlapCube_VNV...")
 
     try:
-        # 1. Удаляем строки, которые будем обновлять
-        delete_query = f"""
-        ALTER TABLE {database_name}.OlapCube_VNV
-        DELETE WHERE (serialno, Dates) IN (
-            SELECT serialno, Dates FROM {database_name}.{tmp_table_name}
-        )
-        """
-        client.execute(delete_query)
-        logger.info("Целевые строки удалены.")
+        # Группируем поля для обновления (чтобы не превышать ограничения на размер запроса)
+        field_groups = [
+            ['ops_count', 'hbs_count', 'repair_count'],
+            ['total_operable', 'entry_count', 'exit_count'],
+            ['into_repair', 'complete_repair', 'remain_repair'],
+            ['remain', 'midfire_repair', 'midfire', 'hours']
+        ]
         
-        # 2. Получаем актуальные данные из основной таблицы
-        # (берем только те строки, которые не попали во временную таблицу)
-        select_query = f"""
-        SELECT * FROM {database_name}.OlapCube_VNV
-        WHERE (serialno, Dates) NOT IN (
-            SELECT serialno, Dates FROM {database_name}.{tmp_table_name}
-        )
-        """
-        existing_data = client.execute(select_query)
+        # Обновляем каждую группу полей отдельным запросом
+        for group in field_groups:
+            update_fields = []
+            for field in group:
+                update_fields.append(f"{field} = t.{field}")
+            
+            update_expr = ", ".join(update_fields)
+            
+            update_query = f"""
+            ALTER TABLE {database_name}.OlapCube_VNV
+            UPDATE {update_expr}
+            FROM {database_name}.{tmp_table_name} AS t
+            WHERE {database_name}.OlapCube_VNV.serialno = t.serialno 
+              AND {database_name}.OlapCube_VNV.Dates = t.Dates
+            """
+            client.execute(update_query)
+            logger.info(f"Обновлены поля: {', '.join(group)}")
         
-        # 3. Получаем схему таблицы (список полей в правильном порядке)
-        schema_query = f"DESCRIBE TABLE {database_name}.OlapCube_VNV"
-        schema = client.execute(schema_query)
-        column_names = [col[0] for col in schema]
-        
-        # 4. Получаем новые данные из временной таблицы со всеми полями
-        tmp_query = f"""
-        SELECT t.*, o.* EXCEPT(serialno, Dates, ops_count, hbs_count, repair_count, 
-                              total_operable, entry_count, exit_count, into_repair, 
-                              complete_repair, remain_repair, remain, midfire_repair, 
-                              midfire, hours)
-        FROM {database_name}.{tmp_table_name} t
-        LEFT JOIN {database_name}.OlapCube_VNV o
-        ON t.serialno = o.serialno AND t.Dates = o.Dates
-        """
-        new_data = client.execute(tmp_query)
-        
-        # 5. Вставляем обратно все данные
-        insert_query = f"INSERT INTO {database_name}.OlapCube_VNV VALUES"
-        if existing_data:
-            client.execute(insert_query, existing_data)
-        if new_data:
-            client.execute(insert_query, new_data)
-        
-        logger.info("Данные успешно обновлены через DELETE + INSERT.")
+        logger.info("Все поля успешно обновлены.")
         
     except Exception as e:
-        logger.error(f"Ошибка при обновлении через DELETE + INSERT: {e}", exc_info=True)
+        # В случае ошибки с FROM - попробуем альтернативный синтаксис
+        logger.warning(f"Ошибка при обновлении с FROM: {e}")
+        logger.info("Пробуем альтернативный синтаксис...")
+        
+        try:
+            for field in new_fields:
+                update_query = f"""
+                ALTER TABLE {database_name}.OlapCube_VNV
+                UPDATE {field} = (
+                    SELECT t.{field}
+                    FROM {database_name}.{tmp_table_name} AS t
+                    WHERE t.serialno = {database_name}.OlapCube_VNV.serialno 
+                      AND t.Dates = {database_name}.OlapCube_VNV.Dates
+                )
+                WHERE (serialno, Dates) IN (
+                    SELECT serialno, Dates FROM {database_name}.{tmp_table_name}
+                )
+                """
+                client.execute(update_query)
+                logger.info(f"Обновлено поле: {field}")
+            
+            logger.info("Все поля успешно обновлены альтернативным способом.")
+        except Exception as e2:
+            logger.error(f"Ошибка при обновлении альтернативным способом: {e2}", exc_info=True)
 
     # Не требуется выполнять OPTIMIZE TABLE, так как мы напрямую обновляем поля
     # Но для уверенности можно оставить (или закомментировать)
