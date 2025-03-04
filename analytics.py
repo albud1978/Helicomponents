@@ -228,6 +228,7 @@ def main():
 
     # Для ReplaceMergeTree гораздо надёжнее использовать другой подход
     try:
+<<<<<<< HEAD
         # Подготавливаем список полей
         update_fields = [
             'ops_count', 'hbs_count', 'repair_count', 'total_operable', 
@@ -365,6 +366,64 @@ def main():
         logger.error(f"Общая ошибка при обновлении данных: {e}", exc_info=True)
         
     # Для ReplaceMergeTree полезно выполнить оптимизацию после обновления
+=======
+        # Группируем поля для обновления (чтобы не превышать ограничения на размер запроса)
+        field_groups = [
+            ['ops_count', 'hbs_count', 'repair_count'],
+            ['total_operable', 'entry_count', 'exit_count'],
+            ['into_repair', 'complete_repair', 'remain_repair'],
+            ['remain', 'midfire_repair', 'midfire', 'hours']
+        ]
+        
+        # Обновляем каждую группу полей отдельным запросом
+        for group in field_groups:
+            update_fields = []
+            for field in group:
+                update_fields.append(f"{field} = t.{field}")
+            
+            update_expr = ", ".join(update_fields)
+            
+            update_query = f"""
+            ALTER TABLE {database_name}.OlapCube_VNV
+            UPDATE {update_expr}
+            FROM {database_name}.{tmp_table_name} AS t
+            WHERE {database_name}.OlapCube_VNV.serialno = t.serialno 
+              AND {database_name}.OlapCube_VNV.Dates = t.Dates
+            """
+            client.execute(update_query)
+            logger.info(f"Обновлены поля: {', '.join(group)}")
+        
+        logger.info("Все поля успешно обновлены.")
+        
+    except Exception as e:
+        # В случае ошибки с FROM - попробуем альтернативный синтаксис
+        logger.warning(f"Ошибка при обновлении с FROM: {e}")
+        logger.info("Пробуем альтернативный синтаксис...")
+        
+        try:
+            for field in new_fields:
+                update_query = f"""
+                ALTER TABLE {database_name}.OlapCube_VNV
+                UPDATE {field} = (
+                    SELECT t.{field}
+                    FROM {database_name}.{tmp_table_name} AS t
+                    WHERE t.serialno = {database_name}.OlapCube_VNV.serialno 
+                      AND t.Dates = {database_name}.OlapCube_VNV.Dates
+                )
+                WHERE (serialno, Dates) IN (
+                    SELECT serialno, Dates FROM {database_name}.{tmp_table_name}
+                )
+                """
+                client.execute(update_query)
+                logger.info(f"Обновлено поле: {field}")
+            
+            logger.info("Все поля успешно обновлены альтернативным способом.")
+        except Exception as e2:
+            logger.error(f"Ошибка при обновлении альтернативным способом: {e2}", exc_info=True)
+
+    # Не требуется выполнять OPTIMIZE TABLE, так как мы напрямую обновляем поля
+    # Но для уверенности можно оставить (или закомментировать)
+>>>>>>> 2fc3b5689ffc8d70636d63570e545b167c725dda
     optimize_query = f"OPTIMIZE TABLE {database_name}.OlapCube_VNV FINAL"
     client.execute(optimize_query)
     logger.info("OPTIMIZE TABLE завершён.")
