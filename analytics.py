@@ -223,64 +223,148 @@ def main():
     client.execute(insert_tmp_query, records)
     logger.info("Вставка во временную таблицу завершена.")
 
-    # 12. Перенос в OlapCube_VNV через UPDATE вместо INSERT
-    logger.info("Обновляем поля в OlapCube_VNV...")
+    # 12. Перенос в OlapCube_VNV - только обновление полей, без DELETE + INSERT
+    logger.info("Обновляем только новые поля в OlapCube_VNV...")
 
+    # Для ReplaceMergeTree гораздо надёжнее использовать другой подход
     try:
-        # Example: update a group of columns in one statement
-        # We remove "FROM tmp ..." and use subselects in each column assignment
-        field_groups = [
-            ['ops_count', 'hbs_count', 'repair_count'],
-            ['total_operable', 'entry_count', 'exit_count']
-            # ...and so on
+        # Подготавливаем список полей
+        update_fields = [
+            'ops_count', 'hbs_count', 'repair_count', 'total_operable', 
+            'entry_count', 'exit_count', 'into_repair', 'complete_repair',
+            'remain_repair', 'remain', 'midfire_repair', 'midfire', 'hours'
         ]
 
-        for group in field_groups:
-            update_parts = []
-            for field in group:
-                update_parts.append(
-                    f"""{field} = (
-                        SELECT {field} 
-                        FROM {database_name}.{tmp_table_name} tmp
-                        WHERE tmp.serialno = {database_name}.OlapCube_VNV.serialno
-                          AND tmp.Dates    = {database_name}.OlapCube_VNV.Dates
-                    )"""
-                )
-            update_expr = ",\n    ".join(update_parts)
-
-            update_query = f"""
-            ALTER TABLE {database_name}.OlapCube_VNV
-            UPDATE
-                {update_expr}
-            WHERE (serialno, Dates) IN (
-                SELECT serialno, Dates FROM {database_name}.{tmp_table_name}
-            )
-            """
-            client.execute(update_query)
-
-        update_query = f"""
-        ALTER TABLE {database_name}.OlapCube_VNV
-        UPDATE
-            hbs_count = (
-                SELECT tmp.hbs_count 
-                FROM {database_name}.{tmp_table_name} tmp
-                WHERE tmp.serialno = OlapCube_VNV.serialno
-                  AND tmp.Dates    = OlapCube_VNV.Dates
-            )
-        WHERE (serialno, Dates) IN (
-            SELECT serialno, Dates 
-            FROM {database_name}.{tmp_table_name}
-        )
-        """
-        client.execute(update_query)
-
+        # Определим версию ClickHouse, так как синтаксис может отличаться
+        version_query = "SELECT version()"
+        version_result = client.execute(version_query)
+        ch_version = version_result[0][0]
+        logger.info(f"Версия ClickHouse: {ch_version}")
+        
+        # Создадим временную таблицу для хранения ключей и новых значений
+        for field in update_fields:
+            try:
+                logger.info(f"Обновление поля: {field}")
+                
+                # Загружаем данные во временную таблицу для одного поля
+                temp_table = f"tmp_update_{field}"
+                drop_temp = f"DROP TABLE IF EXISTS {database_name}.{temp_table}"
+                client.execute(drop_temp)
+                
+                create_temp = f"""
+                CREATE TABLE {database_name}.{temp_table} (
+                    serialno String,
+                    Dates Date,
+                    value Float32
+                ) ENGINE = Memory
+                """
+                client.execute(create_temp)
+                
+                # Вставляем данные для обновления из временной таблицы
+                insert_temp = f"""
+                INSERT INTO {database_name}.{temp_table}
+                SELECT serialno, Dates, {field} as value
+                FROM {database_name}.{tmp_table_name}
+                """
+                client.execute(insert_temp)
+                
+                # Обновляем данные 
+                update_query = f"""
+                ALTER TABLE {database_name}.OlapCube_VNV
+                UPDATE {field} = tv.value
+                FROM {database_name}.{temp_table} as tv
+                WHERE 
+                    OlapCube_VNV.serialno = tv.serialno AND 
+                    OlapCube_VNV.Dates = tv.Dates
+                """
+                
+                try:
+                    client.execute(update_query)
+                    logger.info(f"Успешно обновлено поле: {field}")
+                except Exception as e:
+                    logger.error(f"Ошибка при обновлении поля {field}: {e}")
+                    
+                    # Попробуем старый синтаксис
+                    try:
+                        old_update_query = f"""
+                        ALTER TABLE {database_name}.OlapCube_VNV
+                        UPDATE {field} = (
+                            SELECT value 
+                            FROM {database_name}.{temp_table} as tv
+                            WHERE 
+                                tv.serialno = OlapCube_VNV.serialno AND 
+                                tv.Dates = OlapCube_VNV.Dates
+                        )
+                        WHERE (serialno, Dates) IN (
+                            SELECT serialno, Dates 
+                            FROM {database_name}.{temp_table}
+                        )
+                        """
+                        client.execute(old_update_query)
+                        logger.info(f"Успешно обновлено поле {field} с использованием альтернативного синтаксиса")
+                    except Exception as e2:
+                        logger.error(f"Не удалось обновить поле {field} альтернативным методом: {e2}")
+                        
+                        # Пробуем последний вариант - обновление через временную таблицу с материализованным представлением
+                        try:
+                            logger.info(f"Пробуем обновить через пакетные SQL запросы для поля {field}")
+                            
+                            # Получаем данные из временной таблицы
+                            fetch_query = f"""
+                            SELECT serialno, Dates, value 
+                            FROM {database_name}.{temp_table}
+                            """
+                            rows_to_update = client.execute(fetch_query)
+                            
+                            # Группируем по 100 строк для пакетного обновления
+                            batch_size = 100
+                            for i in range(0, len(rows_to_update), batch_size):
+                                batch = rows_to_update[i:i+batch_size]
+                                serials = [f"'{row[0]}'" for row in batch]
+                                dates = [f"'{row[1]}'" for row in batch]
+                                
+                                # Формируем условия для IN
+                                conditions = []
+                                for j in range(len(batch)):
+                                    conditions.append(f"(serialno = {serials[j]} AND Dates = {dates[j]})")
+                                
+                                where_clause = " OR ".join(conditions)
+                                
+                                # Формируем запрос CASE WHEN для каждой строки
+                                cases = []
+                                for j in range(len(batch)):
+                                    cases.append(f"WHEN serialno = {serials[j]} AND Dates = {dates[j]} THEN {batch[j][2]}")
+                                
+                                case_clause = "CASE " + " ".join(cases) + f" ELSE {field} END"
+                                
+                                # Обновляем данные
+                                batch_update = f"""
+                                ALTER TABLE {database_name}.OlapCube_VNV
+                                UPDATE {field} = {case_clause}
+                                WHERE {where_clause}
+                                """
+                                
+                                try:
+                                    client.execute(batch_update)
+                                    logger.info(f"Пакетно обновлено {len(batch)} строк для поля {field}")
+                                except Exception as e3:
+                                    logger.error(f"Ошибка при пакетном обновлении поля {field}: {e3}")
+                        except Exception as e3:
+                            logger.error(f"Не удалось обновить поле {field} пакетным методом: {e3}")
+                
+                # Удаляем временную таблицу
+                client.execute(drop_temp)
+                
+            except Exception as e:
+                logger.error(f"Общая ошибка при обработке поля {field}: {e}")
+                continue
+                
+        logger.info("Обновление полей завершено.")
+        
     except Exception as e:
-        logger.error(f"Ошибка при обновлении: {e}", exc_info=True)
-
-    logger.info("Обновление полей в OlapCube_VNV завершено.")
-
-    # Не требуется выполнять OPTIMIZE TABLE, так как мы напрямую обновляем поля
-    # Но для уверенности можно оставить (или закомментировать)
+        logger.error(f"Общая ошибка при обновлении данных: {e}", exc_info=True)
+        
+    # Для ReplaceMergeTree полезно выполнить оптимизацию после обновления
     optimize_query = f"OPTIMIZE TABLE {database_name}.OlapCube_VNV FINAL"
     client.execute(optimize_query)
     logger.info("OPTIMIZE TABLE завершён.")

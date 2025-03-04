@@ -38,6 +38,40 @@ class CycleProcessor:
         )
         self.database_name = database_name
         self.df = None
+        
+        # Поля для аналитики
+        self.analytics_fields = [
+            'ops_count','hbs_count','repair_count','total_operable','entry_count','exit_count',
+            'into_repair','complete_repair','remain_repair','remain','midfire_repair','midfire','hours'
+        ]
+        
+        # Добавляем колонки для аналитики
+        self.ensure_analytics_columns()
+        
+    def ensure_analytics_columns(self):
+        """Добавляем колонки для аналитики, если их нет"""
+        try:
+            # ALTER TABLE для добавления необходимых полей
+            new_columns_ddl = f"""
+            ALTER TABLE {self.database_name}.OlapCube_VNV
+            ADD COLUMN IF NOT EXISTS ops_count Float32,
+            ADD COLUMN IF NOT EXISTS hbs_count Float32,
+            ADD COLUMN IF NOT EXISTS repair_count Float32,
+            ADD COLUMN IF NOT EXISTS total_operable Float32,
+            ADD COLUMN IF NOT EXISTS entry_count Float32,
+            ADD COLUMN IF NOT EXISTS exit_count Float32,
+            ADD COLUMN IF NOT EXISTS into_repair Float32,
+            ADD COLUMN IF NOT EXISTS complete_repair Float32,
+            ADD COLUMN IF NOT EXISTS remain_repair Float32,
+            ADD COLUMN IF NOT EXISTS remain Float32,
+            ADD COLUMN IF NOT EXISTS midfire_repair Float32,
+            ADD COLUMN IF NOT EXISTS midfire Float32,
+            ADD COLUMN IF NOT EXISTS hours Float32
+            """
+            self.client.execute(new_columns_ddl)
+            self.logger.info("Аналитические поля (если их не было) успешно добавлены в OlapCube_VNV.")
+        except Exception as e:
+            self.logger.error(f"Ошибка при добавлении аналитических полей: {e}", exc_info=True)
 
     def get_first_date(self) -> datetime:
         query = f"SELECT MIN(Dates) as first_date FROM {self.database_name}.OlapCube_VNV"
@@ -163,23 +197,13 @@ class CycleProcessor:
 
         self.logger.info("Начинаем обработку дат...")
         self.process_all_dates(period_start, period_end)
-
-        # Удаляем или комментируем строку общего экспорта, которая превышает лимит строк Excel
-        # df_cycle.to_excel("debug_df_before_save.xlsx", index=False, engine="openpyxl")
-
-        # Расчёт середины периода
-        half_period = period_start + (period_end - period_start) / 2
-
-        # Первая половина данных
-        df_first_half = self.df[(self.df['Dates'] >= period_start) & (self.df['Dates'] < half_period)]
-        df_first_half.to_excel("debug_first_half.xlsx", index=False, engine="openpyxl")
-        self.logger.info(f"Данные за период {period_start} - {half_period} сохранены в debug_first_half.xlsx")
-
-        # Вторая половина данных
-        df_second_half = self.df[(self.df['Dates'] >= half_period) & (self.df['Dates'] < period_end)]
-        df_second_half.to_excel("debug_second_half.xlsx", index=False, engine="openpyxl")
-        self.logger.info(f"Данные за период {half_period} - {period_end} сохранены в debug_second_half.xlsx")
-
+        
+        # Добавляем расчет аналитических метрик
+        self.calculate_analytics_metrics()
+        
+        # Сохраняем разбивку для отладки если нужно
+        # Остальной код без изменений...
+        
         self.save_all_results(period_start, period_end)
         self.logger.info("Обработка завершена. Результаты записаны в базу.")
 
@@ -387,10 +411,12 @@ class CycleProcessor:
                 continue
 
     def ensure_tmp_table_exists(self):
+        """Создает временную таблицу с учетом аналитических полей"""
         drop_ddl = f"DROP TABLE IF EXISTS {self.database_name}.tmp_OlapCube_update"
         self.client.execute(drop_ddl)
         self.logger.info("Старая временная таблица tmp_OlapCube_update удалена (если существовала).")
 
+        # Добавляем аналитические поля в структуру таблицы
         ddl = f"""
         CREATE TABLE {self.database_name}.tmp_OlapCube_update
         (
@@ -421,11 +447,26 @@ class CycleProcessor:
             stock_mi8t Float32,
             stock_mi17 Float32,
             stock_empty Float32,
-            stock_total Float32
+            stock_total Float32,
+            
+            /* Аналитические поля */
+            ops_count Float32,
+            hbs_count Float32,
+            repair_count Float32,
+            total_operable Float32,
+            entry_count Float32,
+            exit_count Float32,
+            into_repair Float32,
+            complete_repair Float32,
+            remain_repair Float32,
+            remain Float32,
+            midfire_repair Float32,
+            midfire Float32,
+            hours Float32
         ) ENGINE = Memory
         """
         self.client.execute(ddl)
-        self.logger.info("Новая временная таблица tmp_OlapCube_update создана.")
+        self.logger.info("Новая временная таблица tmp_OlapCube_update создана (с аналитическими полями).")
 
     def save_all_results(self, period_start, period_end):
         self.logger.info(f"Начинаем сохранение записей за период {period_start} - {period_end}")
@@ -440,8 +481,9 @@ class CycleProcessor:
         df_to_update.loc[:, 'daily_flight_hours_f'] = df_to_update['daily_flight_hours_f'].astype(np.float64).round(2).astype(np.float32)
         
         self.ensure_tmp_table_exists()
-      
-        update_records = df_to_update[[ 
+        
+        # Добавляем аналитические поля в колонки для временной таблицы
+        all_columns = [
              'trigger_type',
              'RepairTime',
              'Status_P',
@@ -469,50 +511,46 @@ class CycleProcessor:
              'stock_mi8t',
              'stock_mi17',
              'stock_empty',
-             'stock_total'
-        ]]
-        for col in [
+             'stock_total',
+             # Добавляем аналитические поля
+             'ops_count',
+             'hbs_count',
+             'repair_count',
+             'total_operable',
+             'entry_count', 
+             'exit_count',
+             'into_repair',
+             'complete_repair',
+             'remain_repair',
+             'remain',
+             'midfire_repair',
+             'midfire',
+             'hours'
+        ]
+      
+        update_records = df_to_update[all_columns]
+        
+        # Заполняем NaN нулями для числовых полей
+        numeric_fields = [
             'trigger_type', 'RepairTime', 'repair_days', 'sne', 'ppr',
             'daily_flight_hours', 'daily_flight_hours_f', 'BR', 'll', 'oh',
             'threshold', 'mi8t_count', 'mi17_count', 'balance_mi8t', 'balance_mi17',
             'balance_empty', 'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty',
             'stock_total'
-        ]:
-            update_records[col] = update_records[col].fillna(0.0).astype(np.float32)
+        ] + self.analytics_fields
+        
+        for col in numeric_fields:
+            if col in update_records.columns:
+                update_records[col] = update_records[col].fillna(0.0).astype(np.float32)
         
         update_records = update_records.replace({np.nan: None})
         records = list(update_records.itertuples(index=False, name=None))
 
+        # Составляем запрос INSERT с учетом аналитических полей
+        columns_str = ", ".join(all_columns)
         insert_query = f"""
         INSERT INTO {self.database_name}.tmp_OlapCube_update (
-             trigger_type,
-             RepairTime,
-             Status_P,
-             repair_days,
-             sne,
-             ppr,
-             Status,
-             location,
-             ac_typ,
-             daily_flight_hours,
-             daily_flight_hours_f,
-             BR,
-             ll,
-             oh,
-             threshold,
-             Effectivity,
-             serialno,
-             Dates,
-             mi8t_count,
-             mi17_count,
-             balance_mi8t,
-             balance_mi17,
-             balance_empty,
-             balance_total,
-             stock_mi8t,
-             stock_mi17,
-             stock_empty,
-             stock_total
+            {columns_str}
         ) VALUES
         """
         self.client.execute(insert_query, records, settings={'max_threads': 8})
@@ -522,66 +560,12 @@ class CycleProcessor:
         tmp_count = self.client.execute(count_query)[0][0]
         self.logger.info(f"Количество записей во временной таблице: {tmp_count}")
 
+        # Обновленный INSERT в основную таблицу с учетом аналитических полей
         insert_main_query = f"""
         INSERT INTO {self.database_name}.OlapCube_VNV (
-             trigger_type,
-             RepairTime,
-             Status_P,
-             repair_days,
-             sne,
-             ppr,
-             Status,
-             location,
-             ac_typ,
-             daily_flight_hours,
-             daily_flight_hours_f,
-             BR,
-             ll,
-             oh,
-             threshold,
-             Effectivity,
-             serialno,
-             Dates,
-             mi8t_count,
-             mi17_count,
-             balance_mi8t,
-             balance_mi17,
-             balance_empty,
-             balance_total,
-             stock_mi8t,
-             stock_mi17,
-             stock_empty,
-             stock_total
+            {columns_str}
         )
-        SELECT
-             trigger_type,
-             RepairTime,
-             Status_P,
-             repair_days,
-             sne,
-             ppr,
-             Status,
-             location,
-             ac_typ,
-             daily_flight_hours,
-             daily_flight_hours_f,
-             BR,
-             ll,
-             oh,
-             threshold,
-             Effectivity,
-             serialno,
-             Dates,
-             mi8t_count,
-             mi17_count,
-             balance_mi8t,
-             balance_mi17,
-             balance_empty,
-             balance_total,
-             stock_mi8t,
-             stock_mi17,
-             stock_empty,
-             stock_total
+        SELECT {columns_str}
         FROM {self.database_name}.tmp_OlapCube_update
         """
         self.client.execute(insert_main_query, settings={'max_threads': 8})
@@ -597,17 +581,114 @@ class CycleProcessor:
 
         records = None
         update_records = None
-
-        main_sample_query = f"""
-        SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days
+        
+        # Проверяем результаты, включая аналитические поля
+        check_query = f"""
+        SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days, 
+               ops_count, hbs_count, repair_count, hours
         FROM {self.database_name}.OlapCube_VNV
         WHERE Dates = '2024-11-26'
         LIMIT 10
         """
-        main_sample_result = self.client.execute(main_sample_query)
-        self.logger.info("Пример данных из основной таблицы на 2024-11-26 после обновления:")
-        for row in main_sample_result:
+        check_result = self.client.execute(check_query)
+        self.logger.info("Пример данных из основной таблицы на 2024-11-26 после обновления (включая аналитику):")
+        for row in check_result:
             self.logger.info(row)
+
+    def calculate_analytics_metrics(self):
+        """Вычисляет значения аналитических метрик для загруженных данных"""
+        if self.df is None or len(self.df) == 0:
+            self.logger.warning("Нет данных для расчета аналитических метрик")
+            return
+        
+        # Добавляем колонки для аналитических полей
+        for field in self.analytics_fields:
+            self.df[field] = np.float32(0.0)
+            
+        # Список уникальных дат
+        all_dates = sorted(self.df['Dates'].unique())
+        if len(all_dates) < 2:
+            self.logger.warning("Недостаточно дат для вычисления аналитических метрик")
+            return
+            
+        self.logger.info("Начинаем расчет аналитических метрик...")
+        
+        for i in range(1, len(all_dates)):
+            d_curr = all_dates[i]
+            d_prev = all_dates[i-1]
+            
+            df_curr = self.df[self.df['Dates'] == d_curr]
+            df_prev = self.df[self.df['Dates'] == d_prev]
+            
+            # Расчет базовых счетчиков
+            ops_count_val = len(df_curr[df_curr['Status'] == 'Эксплуатация'])
+            hbs_count_val = len(df_curr[df_curr['Status'] == 'Исправен'])
+            repair_count_val = len(df_curr[df_curr['Status'] == 'Ремонт'])
+            total_operable_val = ops_count_val + hbs_count_val + repair_count_val
+            
+            # Расчет на основе сравнения с предыдущим днем
+            merged = df_prev[['serialno', 'Status', 'Status_P']].merge(
+                df_curr[['serialno', 'Status', 'Status_P']],
+                on='serialno',
+                suffixes=('_prev', '_curr')
+            )
+            
+            # Переходы между статусами
+            entry_count_val = len(merged[
+                (merged['Status_prev'] != 'Эксплуатация') &
+                (merged['Status_curr'] == 'Эксплуатация')
+            ])
+            
+            exit_count_val = len(merged[
+                (merged['Status_prev'] == 'Эксплуатация') &
+                (merged['Status_curr'] != 'Эксплуатация')
+            ])
+            
+            into_repair_val = len(merged[
+                (merged['Status_prev'] != 'Ремонт') &
+                (merged['Status_curr'] == 'Ремонт')
+            ])
+            
+            complete_repair_val = len(merged[
+                (merged['Status_prev'] == 'Ремонт') &
+                (merged['Status_curr'] != 'Ремонт')
+            ])
+            
+            remain_repair_val = repair_count_val - into_repair_val + complete_repair_val
+            
+            # Оставшиеся показатели
+            remain_val = len(df_curr) - total_operable_val
+            
+            # Midfire расчеты (требуется уточнение по бизнес-логике)
+            midfire_val = len(merged[
+                (merged['Status_prev'] == 'Эксплуатация') &
+                (merged['Status_curr'] == 'Хранение')
+            ])
+            
+            midfire_repair_val = len(merged[
+                (merged['Status_prev'] == 'Эксплуатация') &
+                (merged['Status_curr'] == 'Ремонт')
+            ])
+            
+            # Общий налет часов
+            hours_val = df_curr['daily_flight_hours'].sum()
+            
+            # Запись значений в DataFrame
+            self.df.loc[self.df['Dates'] == d_curr, 'ops_count'] = ops_count_val
+            self.df.loc[self.df['Dates'] == d_curr, 'hbs_count'] = hbs_count_val
+            self.df.loc[self.df['Dates'] == d_curr, 'repair_count'] = repair_count_val
+            self.df.loc[self.df['Dates'] == d_curr, 'total_operable'] = total_operable_val
+            self.df.loc[self.df['Dates'] == d_curr, 'entry_count'] = entry_count_val
+            self.df.loc[self.df['Dates'] == d_curr, 'exit_count'] = exit_count_val
+            self.df.loc[self.df['Dates'] == d_curr, 'into_repair'] = into_repair_val
+            self.df.loc[self.df['Dates'] == d_curr, 'complete_repair'] = complete_repair_val
+            self.df.loc[self.df['Dates'] == d_curr, 'remain_repair'] = remain_repair_val
+            self.df.loc[self.df['Dates'] == d_curr, 'remain'] = remain_val
+            self.df.loc[self.df['Dates'] == d_curr, 'midfire_repair'] = midfire_repair_val
+            self.df.loc[self.df['Dates'] == d_curr, 'midfire'] = midfire_val
+            self.df.loc[self.df['Dates'] == d_curr, 'hours'] = hours_val
+
+        self.logger.info("Расчет аналитических метрик завершен")
     
 if __name__ == "__main__":
     processor = CycleProcessor(total_days=4000)

@@ -1,4 +1,4 @@
-import os
+iimport os
 import logging
 import pandas as pd
 import numpy as np
@@ -142,9 +142,8 @@ class CycleProcessor:
             self.df[col] = self.df[col].astype(np.float32, errors='ignore')
 
         # Приводим оставшиеся строковые поля к типу str
-        str_cols = ['Status_P', 'Status', 'location', 'ac_typ', 'Effectivity']
-        for col in str_cols:
-            self.df[col] = self.df[col].astype(str)
+        for col in ['Status_P', 'Status', 'location', 'ac_typ', 'Effectivity']:
+            self.df[col] = self.df[col].fillna('').astype(str)
 
         # Приводим столбец Dates к типу date
         self.df['Dates'] = pd.to_datetime(self.df['Dates']).dt.date
@@ -165,9 +164,21 @@ class CycleProcessor:
         self.logger.info("Начинаем обработку дат...")
         self.process_all_dates(period_start, period_end)
 
-        self.logger.info("Выгружаем промежуточный результат в Excel для отладки.")
-        df_cycle = self.df[(self.df['Dates'] >= period_start) & (self.df['Dates'] < period_end)]
-        df_cycle.to_excel("debug_df_before_save.xlsx", index=False, engine="openpyxl")
+        # Удаляем или комментируем строку общего экспорта, которая превышает лимит строк Excel
+        # df_cycle.to_excel("debug_df_before_save.xlsx", index=False, engine="openpyxl")
+
+        # Расчёт середины периода
+        half_period = period_start + (period_end - period_start) / 2
+
+        # Первая половина данных
+        df_first_half = self.df[(self.df['Dates'] >= period_start) & (self.df['Dates'] < half_period)]
+        df_first_half.to_excel("debug_first_half.xlsx", index=False, engine="openpyxl")
+        self.logger.info(f"Данные за период {period_start} - {half_period} сохранены в debug_first_half.xlsx")
+
+        # Вторая половина данных
+        df_second_half = self.df[(self.df['Dates'] >= half_period) & (self.df['Dates'] < period_end)]
+        df_second_half.to_excel("debug_second_half.xlsx", index=False, engine="openpyxl")
+        self.logger.info(f"Данные за период {half_period} - {period_end} сохранены в debug_second_half.xlsx")
 
         self.save_all_results(period_start, period_end)
         self.logger.info("Обработка завершена. Результаты записаны в базу.")
@@ -274,8 +285,12 @@ class CycleProcessor:
         stock_mi8t = len(curr_data[(curr_data['Status_P'] == 'Исправен') & (curr_data['ac_typ'] == 'Ми-8Т')])
         balance_mi17 = len(curr_data[(curr_data['Status_P'] == 'Эксплуатация') & (curr_data['ac_typ'] == 'Ми-17')])
         stock_mi17 = len(curr_data[(curr_data['Status_P'] == 'Исправен') & (curr_data['ac_typ'] == 'Ми-17')])
-        balance_empty = len(curr_data[(curr_data['Status_P'] == 'Эксплуатация') & (curr_data['ac_typ'].isna())])
-        stock_empty = len(curr_data[(curr_data['Status_P'] == 'Исправен') & (curr_data['ac_typ'].isna())])
+        
+        # Новое условие для пустого значения ac_typ: учитываем NaN, пустые строки и, при необходимости, строку 'None'
+        empty_ac_typ = (curr_data['ac_typ'].isna() | (curr_data['ac_typ'].str.strip() == '') 
+                        | (curr_data['ac_typ'].str.strip().str.lower() == 'none'))
+        balance_empty = len(curr_data[(curr_data['Status_P'] == 'Эксплуатация') & empty_ac_typ])
+        stock_empty = len(curr_data[(curr_data['Status_P'] == 'Исправен') & empty_ac_typ])
 
         final_balance_mi8t = balance_mi8t - mi8t_count
         final_balance_mi17 = balance_mi17 - mi17_count
@@ -595,6 +610,5 @@ class CycleProcessor:
             self.logger.info(row)
     
 if __name__ == "__main__":
-    processor = CycleProcessor(total_days=365)
+    processor = CycleProcessor(total_days=4000)
     processor.run_cycle()
-
