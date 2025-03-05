@@ -1,2 +1,5 @@
 .gitconfig
 .lesshst
+.local/
+.env/
+venv/
