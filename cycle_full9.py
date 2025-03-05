@@ -42,7 +42,7 @@ class CycleProcessor:
         # Поля для аналитики
         self.analytics_fields = [
             'ops_count','hbs_count','repair_count','total_operable','entry_count','exit_count',
-            'into_repair','complete_repair','remain_repair','remain','midfire_repair','midfire','hours'
+            'into_repair','complete_repair','remain_repair','remain','midlife_repair','midlife','hours'
         ]
         
         # Добавляем колонки для аналитики
@@ -64,8 +64,8 @@ class CycleProcessor:
             ADD COLUMN IF NOT EXISTS complete_repair Float32,
             ADD COLUMN IF NOT EXISTS remain_repair Float32,
             ADD COLUMN IF NOT EXISTS remain Float32,
-            ADD COLUMN IF NOT EXISTS midfire_repair Float32,
-            ADD COLUMN IF NOT EXISTS midfire Float32,
+            ADD COLUMN IF NOT EXISTS midlife_repair Float32,
+            ADD COLUMN IF NOT EXISTS midlife Float32,
             ADD COLUMN IF NOT EXISTS hours Float32
             """
             self.client.execute(new_columns_ddl)
@@ -201,28 +201,48 @@ class CycleProcessor:
         # Добавляем расчет аналитических метрик
         self.calculate_analytics_metrics()
         
-        # Сохраняем разбивку для отладки если нужно
-        # Остальной код без изменений...
+        # Удаляем выгрузки в Excel
+        # Сохраняем разбивку для отладки если нужно - удалено
         
         self.save_all_results(period_start, period_end)
         self.logger.info("Обработка завершена. Результаты записаны в базу.")
 
-        check_date = datetime(2024, 11, 26).date()
-        check_query = f"""
-        SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days
+        # Вместо проверки конкретного дня, выведем статистику за весь обработанный период
+        stats_query = f"""
+        SELECT 
+            toYear(Dates) AS Year,
+            toMonth(Dates) AS Month,
+            count(*) AS Records,
+            countIf(Status = 'Эксплуатация') AS Exploitation,
+            countIf(Status = 'Исправен') AS Serviceable,
+            countIf(Status = 'Ремонт') AS InRepair
         FROM {self.database_name}.OlapCube_VNV
-        WHERE Dates = '{check_date}'
-        LIMIT 10
+        WHERE Dates >= '{period_start.strftime('%Y-%m-%d')}'
+          AND Dates < '{period_end.strftime('%Y-%m-%d')}'
+        GROUP BY Year, Month
+        ORDER BY Year, Month
         """
-        after_result = self.client.execute(check_query)
-        self.logger.info("Пример данных на 2024-11-26 после обновления:")
-        for row in after_result:
-            self.logger.info(row)
+        stats_result = self.client.execute(stats_query)
+        self.logger.info("Итоговая статистика по месяцам:")
+        for row in stats_result:
+            self.logger.info(f"  {row[0]}-{row[1]:02d}: Всего записей: {row[2]}, Эксплуатация: {row[3]}, Исправен: {row[4]}, Ремонт: {row[5]}")
 
     def process_all_dates(self, period_start, period_end):
         unique_dates = np.sort(self.df['Dates'].unique())
         cycle_dates = [d for d in unique_dates if period_start <= d < period_end]
-        self.logger.info(f"Даты для обработки: {cycle_dates}")
+        self.logger.info(f"Даты для обработки: всего {len(cycle_dates)} дней с {cycle_dates[0]} по {cycle_dates[-1]}")
+
+        # Группировка по месяцам для логирования
+        month_groups = {}
+        for date in cycle_dates:
+            month_key = date.strftime('%Y-%m')
+            if month_key not in month_groups:
+                month_groups[month_key] = []
+            month_groups[month_key].append(date)
+
+        # Вывод информации о количестве дней по месяцам
+        for month, dates in month_groups.items():
+            self.logger.info(f"Месяц {month}: {len(dates)} дней для обработки")
 
         for curr_date in cycle_dates[1:]:
             prev_date = cycle_dates[cycle_dates.index(curr_date) - 1]
@@ -232,22 +252,23 @@ class CycleProcessor:
             self.step_3(curr_date)
             self.step_4(prev_date, curr_date)
 
-            curr_data = self.df[self.df['Dates'] == curr_date]
-            status_counts = curr_data['Status'].value_counts()
-            status_p_counts = curr_data['Status_P'].value_counts()
+            # Логирование только в конце месяца или при последнем дне обработки
+            month_key = curr_date.strftime('%Y-%m')
+            is_last_day_of_month = curr_date == month_groups[month_key][-1]
+            is_last_day_overall = curr_date == cycle_dates[-1]
+            
+            if is_last_day_of_month or is_last_day_overall:
+                # Собираем статистику за месяц
+                month_data = self.df[self.df['Dates'] == curr_date]
+                status_counts = month_data['Status'].value_counts()
+                status_p_counts = month_data['Status_P'].value_counts()
 
-            self.logger.info(f"Статистика на {curr_date} - Status:")
-            for st, cnt in status_counts.items():
-                self.logger.info(f"  {st}: {cnt}")
-            self.logger.info(f"Статистика на {curr_date} - Status_P:")
-            for st, cnt in status_p_counts.items():
-                self.logger.info(f"  {st}: {cnt}")
-
-        if cycle_dates:
-            sample_date = cycle_dates[0]
-            subset = self.df[self.df['Dates'] == sample_date].head(10)
-            self.logger.info(f"Пример данных на {sample_date} (не обновляется, только расчёты):")
-            self.logger.info(subset)
+                self.logger.info(f"Статистика на конец {month_key} (дата {curr_date}) - Status:")
+                for st, cnt in status_counts.items():
+                    self.logger.info(f"  {st}: {cnt}")
+                self.logger.info(f"Статистика на конец {month_key} (дата {curr_date}) - Status_P:")
+                for st, cnt in status_p_counts.items():
+                    self.logger.info(f"  {st}: {cnt}")
 
     def step_1(self, prev_date, curr_date):
         # Логика обработки для step_1 (без изменений)
@@ -460,8 +481,8 @@ class CycleProcessor:
             complete_repair Float32,
             remain_repair Float32,
             remain Float32,
-            midfire_repair Float32,
-            midfire Float32,
+            midlife_repair Float32,
+            midlife Float32,
             hours Float32
         ) ENGINE = Memory
         """
@@ -523,8 +544,8 @@ class CycleProcessor:
              'complete_repair',
              'remain_repair',
              'remain',
-             'midfire_repair',
-             'midfire',
+             'midlife_repair',
+             'midlife',
              'hours'
         ]
       
@@ -576,7 +597,7 @@ class CycleProcessor:
         self.logger.info("Оптимизация таблицы выполнена (FINAL).")
 
         drop_query = f"DROP TABLE {self.database_name}.tmp_OlapCube_update"
-        self.client.execute(drop_query, settings={'max_threads': 8})
+        self.client.execute(drop_query)
         self.logger.info("Временная таблица удалена после обновления.")
 
         records = None
@@ -596,26 +617,32 @@ class CycleProcessor:
             self.logger.info(row)
 
     def calculate_analytics_metrics(self):
-        """Вычисляет значения аналитических метрик для загруженных данных"""
+        """Вычисляет значения аналитических метрик только для заданного периода"""
         if self.df is None or len(self.df) == 0:
             self.logger.warning("Нет данных для расчета аналитических метрик")
             return
         
-        # Добавляем колонки для аналитических полей
-        for field in self.analytics_fields:
-            self.df[field] = np.float32(0.0)
-            
-        # Список уникальных дат
-        all_dates = sorted(self.df['Dates'].unique())
-        if len(all_dates) < 2:
-            self.logger.warning("Недостаточно дат для вычисления аналитических метрик")
-            return
-            
-        self.logger.info("Начинаем расчет аналитических метрик...")
+        # Определяем период для расчета аналитических метрик
+        period_start = self.first_date
+        period_end = period_start + timedelta(days=self.total_days)
         
-        for i in range(1, len(all_dates)):
-            d_curr = all_dates[i]
-            d_prev = all_dates[i-1]
+        # Отфильтровываем только даты из указанного периода
+        period_dates = sorted([d for d in self.df['Dates'].unique() if period_start <= d < period_end])
+        
+        if len(period_dates) < 2:
+            self.logger.warning("Недостаточно дат в указанном периоде для вычисления аналитических метрик")
+            return
+                
+        self.logger.info(f"Начинаем расчет аналитических метрик для периода {period_start} - {period_end}...")
+        
+        # Создаем отдельный DataFrame для хранения аналитических значений по датам
+        analytics_by_date = pd.DataFrame(index=period_dates[1:])
+        for field in self.analytics_fields:
+            analytics_by_date[field] = np.float32(0.0)
+        
+        for i in range(1, len(period_dates)):
+            d_curr = period_dates[i]
+            d_prev = period_dates[i-1]
             
             df_curr = self.df[self.df['Dates'] == d_curr]
             df_prev = self.df[self.df['Dates'] == d_prev]
@@ -635,17 +662,17 @@ class CycleProcessor:
             
             # Переходы между статусами
             entry_count_val = len(merged[
-                (merged['Status_prev'] != 'Эксплуатация') &
+                (merged['Status_prev'] == 'Неактивно') &
                 (merged['Status_curr'] == 'Эксплуатация')
             ])
             
             exit_count_val = len(merged[
                 (merged['Status_prev'] == 'Эксплуатация') &
-                (merged['Status_curr'] != 'Эксплуатация')
+                (merged['Status_curr'] == 'Хранение')
             ])
             
             into_repair_val = len(merged[
-                (merged['Status_prev'] != 'Ремонт') &
+                (merged['Status_prev'] == 'Эксплуатация') &
                 (merged['Status_curr'] == 'Ремонт')
             ])
             
@@ -654,40 +681,61 @@ class CycleProcessor:
                 (merged['Status_curr'] != 'Ремонт')
             ])
             
-            remain_repair_val = repair_count_val - into_repair_val + complete_repair_val
+            # Расчет оставшегося ресурса
+            operating_tech = df_curr[df_curr['Status'].isin(['Эксплуатация', 'Исправен'])]
+            remain_repair_val = (operating_tech['oh'] - operating_tech['ppr']).fillna(0).sum() if len(operating_tech) > 0 else 0
             
-            # Оставшиеся показатели
-            remain_val = len(df_curr) - total_operable_val
+            serviceable_tech = df_curr[df_curr['Status'].isin(['Эксплуатация', 'Исправен', 'Ремонт'])]
+            remain_val = (serviceable_tech['ll'] - serviceable_tech['sne']).fillna(0).sum() if len(serviceable_tech) > 0 else 0
             
-            # Midfire расчеты (требуется уточнение по бизнес-логике)
-            midfire_val = len(merged[
-                (merged['Status_prev'] == 'Эксплуатация') &
-                (merged['Status_curr'] == 'Хранение')
-            ])
+            # Относительные показатели
+            total_ll = serviceable_tech['ll'].fillna(0).sum() if len(serviceable_tech) > 0 else 0
+            midlife_val = remain_val / total_ll if total_ll > 0 else 0
             
-            midfire_repair_val = len(merged[
-                (merged['Status_prev'] == 'Эксплуатация') &
-                (merged['Status_curr'] == 'Ремонт')
-            ])
+            total_oh = operating_tech['oh'].fillna(0).sum() if len(operating_tech) > 0 else 0
+            midlife_repair_val = remain_repair_val / total_oh if total_oh > 0 else 0
             
             # Общий налет часов
-            hours_val = df_curr['daily_flight_hours'].sum()
+            hours_val = df_curr[df_curr['Status'] == 'Эксплуатация']['daily_flight_hours'].sum()
             
-            # Запись значений в DataFrame
-            self.df.loc[self.df['Dates'] == d_curr, 'ops_count'] = ops_count_val
-            self.df.loc[self.df['Dates'] == d_curr, 'hbs_count'] = hbs_count_val
-            self.df.loc[self.df['Dates'] == d_curr, 'repair_count'] = repair_count_val
-            self.df.loc[self.df['Dates'] == d_curr, 'total_operable'] = total_operable_val
-            self.df.loc[self.df['Dates'] == d_curr, 'entry_count'] = entry_count_val
-            self.df.loc[self.df['Dates'] == d_curr, 'exit_count'] = exit_count_val
-            self.df.loc[self.df['Dates'] == d_curr, 'into_repair'] = into_repair_val
-            self.df.loc[self.df['Dates'] == d_curr, 'complete_repair'] = complete_repair_val
-            self.df.loc[self.df['Dates'] == d_curr, 'remain_repair'] = remain_repair_val
-            self.df.loc[self.df['Dates'] == d_curr, 'remain'] = remain_val
-            self.df.loc[self.df['Dates'] == d_curr, 'midfire_repair'] = midfire_repair_val
-            self.df.loc[self.df['Dates'] == d_curr, 'midfire'] = midfire_val
-            self.df.loc[self.df['Dates'] == d_curr, 'hours'] = hours_val
-
+            # Сохраняем значения в промежуточном DataFrame
+            analytics_by_date.loc[d_curr, 'ops_count'] = ops_count_val
+            analytics_by_date.loc[d_curr, 'hbs_count'] = hbs_count_val
+            analytics_by_date.loc[d_curr, 'repair_count'] = repair_count_val
+            analytics_by_date.loc[d_curr, 'total_operable'] = total_operable_val
+            analytics_by_date.loc[d_curr, 'entry_count'] = entry_count_val
+            analytics_by_date.loc[d_curr, 'exit_count'] = exit_count_val
+            analytics_by_date.loc[d_curr, 'into_repair'] = into_repair_val
+            analytics_by_date.loc[d_curr, 'complete_repair'] = complete_repair_val
+            analytics_by_date.loc[d_curr, 'remain_repair'] = remain_repair_val
+            analytics_by_date.loc[d_curr, 'remain'] = remain_val
+            analytics_by_date.loc[d_curr, 'midlife_repair'] = midlife_repair_val
+            analytics_by_date.loc[d_curr, 'midlife'] = midlife_val
+            analytics_by_date.loc[d_curr, 'hours'] = hours_val
+            
+            # Логирование прогресса каждые 100 дней или каждые 10% от общего количества
+            log_interval = max(100, int(len(period_dates) * 0.1))
+            if i % log_interval == 0 or i == len(period_dates) - 1:
+                self.logger.info(f"Обработано {i} дат из {len(period_dates)-1} ({i/(len(period_dates)-1)*100:.1f}%)")
+        
+        self.logger.info("Копирование аналитических метрик во все строки...")
+        
+        # Оптимизированная копия значений в основной DataFrame
+        # Создаем словарь {дата: {поле: значение}} для быстрого доступа
+        analytics_dict = {date: {} for date in period_dates[1:]}
+        for date in period_dates[1:]:
+            for field in self.analytics_fields:
+                analytics_dict[date][field] = analytics_by_date.loc[date, field]
+        
+        # Применяем значения ко всем записям с соответствующей датой
+        for date in period_dates[1:]:
+            date_mask = (self.df['Dates'] == date)
+            if not date_mask.any():
+                continue
+                
+            for field in self.analytics_fields:
+                self.df.loc[date_mask, field] = analytics_dict[date][field]
+        
         self.logger.info("Расчет аналитических метрик завершен")
     
 if __name__ == "__main__":
