@@ -1,4 +1,12 @@
+<<<<<<< HEAD
 .gitconfig
 .lesshst
 .local
 .npm
+=======
+.gitconfig
+.lesshst
+.local/
+.env/
+venv/
+>>>>>>> 1bdbb936187fabc140757ee5d025516db726ed91
