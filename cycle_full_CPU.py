@@ -6,82 +6,17 @@ from clickhouse_driver import Client
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import sys
-import importlib.util
-
-# Настройка логгера
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-# Проверка доступности CUDA и cuDF
-has_cuda = False
-try:
-    # Проверяем существуют ли все необходимые библиотеки
-    import cudf
-    import cupy
-    from numba import cuda
-    
-    # Проверяем доступность CUDA устройства
-    if cuda.is_available():
-        # Проверяем свободную память на GPU
-        try:
-            # Через cupy (более надежный способ)
-            mem_info = cupy.cuda.runtime.memGetInfo()
-            free_memory = mem_info[0] / (1024 ** 3)  # перевод в ГБ
-            total_memory = mem_info[1] / (1024 ** 3)
-            
-            # Нам нужно минимум 2 ГБ
-            if free_memory >= 2.0:
-                device = cuda.get_current_device()
-                has_cuda = True
-                logger.info(f"CUDA доступна: {device.name}, свободная память: {free_memory:.2f} ГБ из {total_memory:.2f} ГБ")
-            else:
-                logger.warning(f"CUDA обнаружена, но недостаточно памяти: {free_memory:.2f} ГБ (требуется минимум 2 ГБ)")
-        except Exception as e:
-            logger.warning(f"Ошибка при проверке памяти GPU: {str(e)}")
-            # Если не удалось проверить память, просто предполагаем, что CUDA доступна
-            has_cuda = True
-            logger.info("CUDA доступна, но не удалось точно определить доступную память")
-    else:
-        logger.info("CUDA установлена, но устройство недоступно")
-except ImportError as e:
-    logger.info(f"CUDA или необходимые библиотеки не установлены: {str(e)}")
-except Exception as e:
-    logger.warning(f"Неизвестная ошибка при проверке CUDA: {str(e)}")
-
-# Если CUDA доступна, пытаемся использовать GPU-версию
-if has_cuda:
-    try:
-        gpu_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cycle_full_GPU.py")
-        
-        if os.path.exists(gpu_script_path):
-            logger.info(f"Найдена GPU-версия скрипта: {gpu_script_path}")
-            logger.info("Передаю управление на GPU-версию...")
-            
-            # Динамический импорт и запуск GPU-версии
-            spec = importlib.util.spec_from_file_location("cycle_full_GPU", gpu_script_path)
-            gpu_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(gpu_module)
-            
-            if hasattr(gpu_module, "CycleProcessor"):
-                # Запускаем GPU-версию с теми же параметрами
-                gpu_processor = gpu_module.CycleProcessor(total_days=4000)
-                gpu_processor.run_cycle()
-                logger.info("GPU-обработка завершена успешно")
-                sys.exit(0)  # Успешный выход
-            else:
-                logger.error("В GPU-версии не найден класс CycleProcessor")
-        else:
-            logger.error(f"GPU-версия скрипта не найдена по пути: {gpu_script_path}")
-    except Exception as e:
-        logger.error(f"Ошибка при запуске GPU-версии: {str(e)}")
-        logger.info("Продолжаю выполнение на CPU...")
-
-# Если CUDA недоступна или возникла ошибка при запуске GPU-версии, используем CPU-версию
-logger.info("Запуск CPU-версии...")
 
 # Загрузка переменных окружения
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)  # DEBUG для детальной отладки
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+if not logger.handlers:
+    logger.addHandler(handler)
+
 
 class CycleProcessor:
     def __init__(self, total_days=2):  # Тестовый период – 2 дня
@@ -354,12 +289,12 @@ class CycleProcessor:
         working_df.loc[working_df['Status_prev'] == 'Хранение', 'Status_P'] = 'Хранение'
         working_df.loc[working_df['Status_prev'] == 'Исправен', 'Status_P'] = 'Исправен'
         working_df.loc[
-            (working_df['Status_prev'] == 'Ремонт') & 
+            (working_df['Status_prev'] == 'Ремонт') &
             (working_df['repair_days_prev'] < working_df['RepairTime']),
             'Status_P'
         ] = 'Ремонт'
         working_df.loc[
-            (working_df['Status_prev'] == 'Ремонт') & 
+            (working_df['Status_prev'] == 'Ремонт') &
             (working_df['repair_days_prev'] >= working_df['RepairTime']),
             'Status_P'
         ] = 'Исправен'
@@ -727,22 +662,22 @@ class CycleProcessor:
             
             # Переходы между статусами
             entry_count_val = len(merged[
-                (merged['Status_prev'] == 'Неактивно') & 
+                (merged['Status_prev'] == 'Неактивно') &
                 (merged['Status_curr'] == 'Эксплуатация')
             ])
             
             exit_count_val = len(merged[
-                (merged['Status_prev'] == 'Эксплуатация') & 
+                (merged['Status_prev'] == 'Эксплуатация') &
                 (merged['Status_curr'] == 'Хранение')
             ])
             
             into_repair_val = len(merged[
-                (merged['Status_prev'] == 'Эксплуатация') & 
+                (merged['Status_prev'] == 'Эксплуатация') &
                 (merged['Status_curr'] == 'Ремонт')
             ])
             
             complete_repair_val = len(merged[
-                (merged['Status_prev'] == 'Ремонт') & 
+                (merged['Status_prev'] == 'Ремонт') &
                 (merged['Status_curr'] != 'Ремонт')
             ])
             
