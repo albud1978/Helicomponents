@@ -78,18 +78,25 @@ class CycleProcessorGPU:
         first_date = result[0][0]
         if not first_date:
             raise Exception("Не найдена начальная дата (база пустая?)")
+        
+        # Явное преобразование в datetime
+        if not isinstance(first_date, datetime):
+            self.logger.debug(f"get_first_date: преобразование из {type(first_date)} в datetime")
+            first_date = datetime.strptime(str(first_date), '%Y-%m-%d')
+        
         return first_date
 
     def load_all_data(self):
-        """
-        Загружаем данные в cudf DataFrame.
-        """
+        self.logger.debug("=== load_all_data: начало ===")
+        
         self.ensure_analytics_columns()
+        self.logger.debug("ensure_analytics_columns() выполнен")
+        
         first_date = self.get_first_date()
-        self.first_date = first_date
         period_end = first_date + timedelta(days=self.total_days)
+        self.first_date = first_date
         self.logger.info(f"GPU: Загружаем данные с {first_date} до {period_end}")
-
+        
         query = f"""
         SELECT
             trigger_type,
@@ -120,8 +127,6 @@ class CycleProcessorGPU:
             stock_mi17,
             stock_empty,
             stock_total,
-            
-            -- Аналитические поля
             ops_count,
             hbs_count,
             repair_count,
@@ -140,62 +145,69 @@ class CycleProcessorGPU:
           AND Dates < '{period_end.strftime('%Y-%m-%d')}'
         ORDER BY Dates, serialno
         """
+        self.logger.debug("SQL-запрос:\n%s", query)
+        
         result = self.client.execute(query, settings={'max_threads': 8})
+        self.logger.debug("Количество строк в результате запроса: %d", len(result))
+        
         if not result:
             raise Exception("Нет данных для заданного периода")
         
         columns = [
-            'trigger_type',
-            'RepairTime',
-            'Status_P',
-            'repair_days',
-            'sne',
-            'ppr',
-            'Status',
-            'location',
-            'ac_typ',
-            'daily_flight_hours',
-            'daily_flight_hours_f',
-            'BR',
-            'll',
-            'oh',
-            'threshold',
-            'Effectivity',
-            'serialno',
-            'Dates',
-            'mi8t_count',
-            'mi17_count',
-            'balance_mi8t',
-            'balance_mi17',
-            'balance_empty',
-            'balance_total',
-            'stock_mi8t',
-            'stock_mi17',
-            'stock_empty',
-            'stock_total',
-            # Аналитические поля
-            'ops_count',
-            'hbs_count',
-            'repair_count',
-            'total_operable',
-            'entry_count',
-            'exit_count',
-            'into_repair',
-            'complete_repair',
-            'remain_repair',
-            'remain',
-            'midlife_repair',
-            'midlife',
-            'hours'
+            'trigger_type', 'RepairTime', 'Status_P', 'repair_days', 'sne', 'ppr',
+            'Status', 'location', 'ac_typ', 'daily_flight_hours', 'daily_flight_hours_f',
+            'BR', 'll', 'oh', 'threshold', 'Effectivity', 'serialno', 'Dates',
+            'mi8t_count', 'mi17_count', 'balance_mi8t', 'balance_mi17', 'balance_empty',
+            'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty', 'stock_total',
+            'ops_count', 'hbs_count', 'repair_count', 'total_operable', 'entry_count',
+            'exit_count', 'into_repair', 'complete_repair', 'remain_repair', 'remain',
+            'midlife_repair', 'midlife', 'hours'
         ]
-        
-        # Переводим результат в cudf DataFrame
-        import pandas as pd  # временно, чтобы из результата сделать pd.DataFrame
+        import pandas as pd
         df_pd = pd.DataFrame(result, columns=columns)
-        self.df = cudf.from_pandas(df_pd)
         
-        # Приводим типы при необходимости (пример)
-        # В cudf можно делать self.df['col'] = self.df['col'].astype('float32')
+        self.logger.debug("DataFrame создан: shape=%s", df_pd.shape)
+        self.logger.debug("Типы столбцов исходного df_pd:\n%s", df_pd.dtypes)
+        
+        # Выводим первые уникальные значения по каждому столбцу
+        for col in df_pd.columns:
+            unique_vals = df_pd[col].drop_duplicates().head(5).tolist()
+            self.logger.debug("Колонка '%s': dtype=%s, примеры: %s", col, df_pd[col].dtype, unique_vals)
+        
+        # Преобразуем столбец Dates в datetime64[ns]
+        self.logger.debug("Преобразуем столбец Dates в datetime64[ns]")
+        try:
+            df_pd['Dates'] = pd.to_datetime(df_pd['Dates'], errors='coerce').astype('datetime64[ns]')
+            self.logger.debug("Столбец Dates успешно преобразован. Примеры: %s",
+                              df_pd['Dates'].drop_duplicates().head(5).tolist())
+        except Exception as e:
+            self.logger.error("Ошибка преобразования столбца Dates: %s", e, exc_info=True)
+        
+        # Универсальное преобразование столбцов типа object, содержащих даты
+        self.logger.debug("Универсальное преобразование столбцов типа object, содержащих даты")
+        for col in df_pd.columns:
+            if df_pd[col].dtype == object:
+                # Получаем первую ненулевую запись
+                non_null = df_pd[col].dropna()
+                if not non_null.empty and isinstance(non_null.iloc[0], (datetime.date, datetime.datetime)):
+                    self.logger.debug("Колонка '%s' содержит объекты даты. Преобразуем её в datetime64.", col)
+                    try:
+                        df_pd[col] = pd.to_datetime(df_pd[col], errors='coerce')
+                    except Exception as e:
+                        self.logger.error("Ошибка преобразования колонки %s: %s", col, e, exc_info=True)
+        
+        # Сохраним даты в строковом формате для последующего восстановления
+        df_pd['Dates_str'] = df_pd['Dates'].apply(lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x))
+        
+        # Полностью удаляем проблемную колонку Dates до импорта в cuDF
+        df_pd.drop('Dates', axis=1, inplace=True)
+        
+        # Преобразовываем все object-колонки в строки
+        for col in df_pd.columns:
+            if df_pd[col].dtype == object:
+                df_pd[col] = df_pd[col].astype(str)
+        
+        # Преобразование числовых столбцов
         numeric_cols = [
             'trigger_type', 'RepairTime', 'repair_days', 'sne', 'ppr',
             'daily_flight_hours', 'daily_flight_hours_f', 'BR', 'll', 'oh',
@@ -203,19 +215,54 @@ class CycleProcessorGPU:
             'balance_empty', 'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty',
             'stock_total'
         ] + self.analytics_fields
+        self.logger.debug("Преобразуем числовые поля: %s", numeric_cols)
+        for col in numeric_cols:
+            if col in df_pd.columns:
+                df_pd[col] = df_pd[col].astype('float32', errors='ignore')
         
+        # Преобразование строковых столбцов
+        str_cols = ['Status_P', 'Status', 'location', 'ac_typ', 'Effectivity', 'serialno']
+        self.logger.debug("Преобразуем строковые поля: %s", str_cols)
+        for col in str_cols:
+            if col in df_pd.columns:
+                df_pd[col] = df_pd[col].fillna('').astype(str)
+        
+        self.logger.debug("Типы столбцов после преобразований в df_pd:\n%s", df_pd.dtypes)
+        
+        # Ещё раз логируем уникальные примеры по каждому столбцу
+        for col in df_pd.columns:
+            unique_vals = df_pd[col].drop_duplicates().head(5).tolist()
+            self.logger.debug("После преобразований - колонка '%s': dtype=%s, примеры: %s", col, df_pd[col].dtype, unique_vals)
+        
+        self.logger.debug("Проверка типов значений в столбцах перед переходом в cuDF:")
+        for col in df_pd.columns:
+            # Получаем уникальные типы для каждого столбца
+            types = df_pd[col].apply(lambda v: type(v)).unique()
+            self.logger.debug("Колонка '%s': уникальные типы значений: %s", col, types)
+        
+        self.logger.debug("Создаём cuDF DataFrame из df_pd")
+        try:
+            self.df = cudf.from_pandas(df_pd)
+        except Exception as e:
+            self.logger.error("Ошибка при создании cuDF DataFrame: %s", e, exc_info=True)
+            raise
+        
+        # Восстанавливаем колонку Dates из строкового представления
+        self.df['Dates'] = cudf.to_datetime(self.df['Dates_str'])
+        self.df.drop('Dates_str', axis=1, inplace=True)
+        
+        # Дополнительное приведение типов для cuDF DataFrame
         for col in numeric_cols:
             if col in self.df.columns:
                 self.df[col] = self.df[col].astype('float32')
+        for col in str_cols:
+            if col in self.df.columns:
+                self.df[col] = self.df[col].fillna('').astype('str')
         
-        # Dates -> datetime64[ns] (cudf)
-        self.df['Dates'] = cudf.to_datetime(self.df['Dates'])
+        self.logger.debug("Типы столбцов self.df после окончательных преобразований:\n%s", self.df.dtypes)
         
-        # Прочие поля как строки
-        for col in ['Status_P', 'Status', 'location', 'ac_typ', 'Effectivity', 'serialno']:
-            self.df[col] = self.df[col].fillna('').astype('str')
-        
-        self.logger.info(f"GPU: Данные загружены в cudf DF: всего {len(self.df)} записей")
+        self.logger.info(f"GPU: Данные успешно загружены в cudf DF: всего {len(self.df)} записей")
+        self.logger.debug("=== load_all_data: завершение ===")
 
     def run_cycle(self):
         """
@@ -698,6 +745,14 @@ class CycleProcessorGPU:
         df_insert_pd = df_to_insert.to_pandas()
         records = list(df_insert_pd.itertuples(index=False, name=None))
         
+        self.logger.debug("Список колонок для вставки: %s", all_columns)
+        self.logger.debug("Количество столбцов: %d", len(all_columns))
+
+        self.logger.debug("Типы столбцов:\n%s", df_insert_pd.dtypes)
+        self.logger.debug("Пример (до 5 строк) для вставки:\n%s", df_insert_pd.head(5))
+
+        self.logger.debug("Всего кортежей в records: %d", len(records))
+
         columns_str = ", ".join(all_columns)
         insert_query = f"""
         INSERT INTO {self.database_name}.tmp_OlapCube_update ({columns_str}) VALUES
@@ -729,5 +784,5 @@ class CycleProcessorGPU:
         # ...
     
 if __name__ == "__main__":
-    processor = CycleProcessorGPU(total_days=4000)
+    processor = CycleProcessorGPU(total_days=30)
     processor.run_cycle()
