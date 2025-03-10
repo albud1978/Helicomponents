@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 import cupy as cp              # вместо numpy
 import cudf                    # вместо pandas
+import pandas as pd            # добавляем pandas в начало файла
 from clickhouse_driver import Client
 from dotenv import load_dotenv
 
@@ -163,7 +164,6 @@ class CycleProcessorGPU:
             'exit_count', 'into_repair', 'complete_repair', 'remain_repair', 'remain',
             'midlife_repair', 'midlife', 'hours'
         ]
-        import pandas as pd
         df_pd = pd.DataFrame(result, columns=columns)
         
         self.logger.debug("DataFrame создан: shape=%s", df_pd.shape)
@@ -218,7 +218,15 @@ class CycleProcessorGPU:
         self.logger.debug("Преобразуем числовые поля: %s", numeric_cols)
         for col in numeric_cols:
             if col in df_pd.columns:
-                df_pd[col] = df_pd[col].astype('float32', errors='ignore')
+                try:
+                    df_pd[col] = df_pd[col].astype('float32', errors='ignore')
+                except Exception as e:
+                    self.logger.warning(f"Ошибка при преобразовании столбца {col} в float32: {e}")
+                    # Пытаемся сначала преобразовать в строку, затем в float
+                    try:
+                        df_pd[col] = df_pd[col].astype(str).str.replace(',', '.').astype('float32', errors='ignore')
+                    except Exception as e2:
+                        self.logger.error(f"Не удалось преобразовать столбец {col}: {e2}")
         
         # Преобразование строковых столбцов
         str_cols = ['Status_P', 'Status', 'location', 'ac_typ', 'Effectivity', 'serialno']
@@ -245,11 +253,43 @@ class CycleProcessorGPU:
             self.df = cudf.from_pandas(df_pd)
         except Exception as e:
             self.logger.error("Ошибка при создании cuDF DataFrame: %s", e, exc_info=True)
-            raise
+            # Попытка исправить проблемные столбцы
+            problematic_columns = []
+            for col in df_pd.columns:
+                try:
+                    # Проверяем каждый столбец по отдельности
+                    test_df = cudf.Series(df_pd[col])
+                except Exception as col_error:
+                    self.logger.warning(f"Проблемный столбец: {col}, ошибка: {col_error}")
+                    problematic_columns.append(col)
+                    # Преобразуем проблемный столбец в строку
+                    df_pd[col] = df_pd[col].astype(str)
+            
+            # Повторная попытка создания cuDF DataFrame
+            try:
+                self.df = cudf.from_pandas(df_pd)
+                self.logger.info(f"cuDF DataFrame создан после исправления проблемных столбцов: {problematic_columns}")
+            except Exception as e2:
+                self.logger.error("Не удалось создать cuDF DataFrame даже после исправлений: %s", e2, exc_info=True)
+                raise
         
         # Восстанавливаем колонку Dates из строкового представления
-        self.df['Dates'] = cudf.to_datetime(self.df['Dates_str'])
-        self.df.drop('Dates_str', axis=1, inplace=True)
+        try:
+            self.df['Dates'] = cudf.to_datetime(self.df['Dates_str'])
+            self.df.drop('Dates_str', axis=1, inplace=True)
+        except Exception as e:
+            self.logger.error(f"Ошибка при преобразовании Dates_str в datetime: {e}")
+            # Альтернативный подход - использовать pandas для преобразования
+            try:
+                dates_pd = pd.to_datetime(self.df['Dates_str'].to_pandas())
+                self.df['Dates'] = cudf.from_pandas(dates_pd)
+                self.df.drop('Dates_str', axis=1, inplace=True)
+                self.logger.info("Колонка Dates восстановлена с помощью pandas")
+            except Exception as e2:
+                self.logger.error(f"Не удалось восстановить колонку Dates: {e2}")
+                # Оставляем строковую версию как запасной вариант
+                self.df['Dates'] = self.df['Dates_str']
+                self.logger.warning("Используем строковую версию Dates вместо datetime")
         
         # Дополнительное приведение типов для cuDF DataFrame
         for col in numeric_cols:
@@ -275,12 +315,37 @@ class CycleProcessorGPU:
         self.logger.info(f"GPU: Начинаем обработку дат... {period_start} - {period_end}")
         
         # Собираем уникальные даты
-        unique_dates = self.df['Dates'].unique().sort_values()
-        # cudf.Series -> нужно перевести в host для фильтра, либо сразу сравнивать c cudf.Timestamp
-        # Для упрощения делаем datetime -> фильтруем на CPU, но можно и полностью в GPU
-        unique_dates_pd = unique_dates.to_pandas()
-        cycle_dates = [d for d in unique_dates_pd if period_start <= d < period_end]
-        cycle_dates.sort()
+        try:
+            unique_dates = self.df['Dates'].unique().sort_values()
+            # cudf.Series -> нужно перевести в host для фильтра, либо сразу сравнивать c cudf.Timestamp
+            # Для упрощения делаем datetime -> фильтруем на CPU, но можно и полностью в GPU
+            unique_dates_pd = unique_dates.to_pandas()
+            
+            # Проверяем, что даты имеют правильный тип
+            if not pd.api.types.is_datetime64_any_dtype(unique_dates_pd):
+                self.logger.warning("Даты не в формате datetime64, пытаемся преобразовать")
+                unique_dates_pd = pd.to_datetime(unique_dates_pd, errors='coerce')
+            
+            cycle_dates = [d for d in unique_dates_pd if period_start <= d < period_end]
+            cycle_dates.sort()
+        except Exception as e:
+            self.logger.error(f"Ошибка при обработке уникальных дат: {e}", exc_info=True)
+            # Альтернативный подход - использовать строковое представление дат
+            try:
+                self.logger.info("Пробуем альтернативный подход со строковыми датами")
+                # Получаем уникальные строковые даты
+                if 'Dates_str' in self.df.columns:
+                    unique_dates_str = self.df['Dates_str'].unique().to_pandas()
+                else:
+                    unique_dates_str = self.df['Dates'].astype('str').unique().to_pandas()
+                
+                # Преобразуем в datetime
+                unique_dates_pd = pd.to_datetime(unique_dates_str)
+                cycle_dates = [d for d in unique_dates_pd if period_start <= d < period_end]
+                cycle_dates.sort()
+            except Exception as e2:
+                self.logger.error(f"Не удалось обработать даты даже альтернативным способом: {e2}", exc_info=True)
+                raise
         
         if len(cycle_dates) < 2:
             self.logger.warning("GPU: Недостаточно дат для цикла обработки.")
@@ -291,16 +356,29 @@ class CycleProcessorGPU:
             prev_date = cycle_dates[i-1]
             curr_date = cycle_dates[i]
             
-            self.step_1(prev_date, curr_date)
-            self.step_2(curr_date)
-            self.step_3(curr_date)
-            self.step_4(prev_date, curr_date)
+            try:
+                self.step_1(prev_date, curr_date)
+                self.step_2(curr_date)
+                self.step_3(curr_date)
+                self.step_4(prev_date, curr_date)
+                self.logger.info(f"GPU: Успешно обработаны даты {prev_date} -> {curr_date}")
+            except Exception as e:
+                self.logger.error(f"Ошибка при обработке дат {prev_date} -> {curr_date}: {e}", exc_info=True)
+                # Продолжаем со следующей датой
+                continue
         
         # Расчет аналитики
-        self.calculate_analytics_metrics()
+        try:
+            self.calculate_analytics_metrics()
+        except Exception as e:
+            self.logger.error(f"Ошибка при расчете аналитических метрик: {e}", exc_info=True)
         
         # Сохранение в ClickHouse
-        self.save_all_results(period_start, period_end)
+        try:
+            self.save_all_results(period_start, period_end)
+        except Exception as e:
+            self.logger.error(f"Ошибка при сохранении результатов: {e}", exc_info=True)
+            raise
         
         self.logger.info("GPU: Обработка завершена.")
     
@@ -493,8 +571,16 @@ class CycleProcessorGPU:
                 'repair_days':'repair_days_prev'
             }),
             on='serialno',
+            suffixes=('', '_prev'),
             how='left'
         )
+        
+        # Заполняем NaN значения для строк, которых не было в предыдущий день
+        merged['Status_prev'] = merged['Status_prev'].fillna('Неактивно')
+        merged['Status_P_prev'] = merged['Status_P_prev'].fillna('Неактивно')
+        merged['sne_prev'] = merged['sne_prev'].fillna(0.0)
+        merged['ppr_prev'] = merged['ppr_prev'].fillna(0.0)
+        merged['repair_days_prev'] = merged['repair_days_prev'].fillna(0.0)
         
         # Создаём новые колонки (new_sne, new_ppr, new_repair)
         merged['new_sne'] = merged['sne']   # default
@@ -656,70 +742,130 @@ class CycleProcessorGPU:
         self.logger.info("GPU: Метрики рассчитаны и записаны в self.df")
     
     def ensure_tmp_table_exists(self):
-        drop_ddl = f"DROP TABLE IF EXISTS {self.database_name}.tmp_OlapCube_update"
-        self.client.execute(drop_ddl)
-        self.logger.info("GPU: Старая временная таблица удалена (если была).")
-        
-        ddl = f"""
-        CREATE TABLE {self.database_name}.tmp_OlapCube_update
-        (
-            trigger_type Float32,
-            RepairTime Float32,
-            Status_P String,
-            repair_days Nullable(Float32),
-            sne Decimal(10,2),
-            ppr Decimal(10,2),
-            Status String,
-            location String,
-            ac_typ String,
-            daily_flight_hours Decimal(10,2),
-            daily_flight_hours_f Decimal(10,2),
-            BR Float32,
-            ll Float32,
-            oh Float32,
-            threshold Float32,
-            Effectivity String,
-            serialno String,
-            Dates Date,
-            mi8t_count Float32,
-            mi17_count Float32,
-            balance_mi8t Float32,
-            balance_mi17 Float32,
-            balance_empty Float32,
-            balance_total Float32,
-            stock_mi8t Float32,
-            stock_mi17 Float32,
-            stock_empty Float32,
-            stock_total Float32,
+        try:
+            drop_ddl = f"DROP TABLE IF EXISTS {self.database_name}.tmp_OlapCube_update"
+            self.client.execute(drop_ddl)
+            self.logger.info("GPU: Старая временная таблица удалена (если была).")
             
-            /* Аналитические поля */
-            ops_count Float32,
-            hbs_count Float32,
-            repair_count Float32,
-            total_operable Float32,
-            entry_count Float32,
-            exit_count Float32,
-            into_repair Float32,
-            complete_repair Float32,
-            remain_repair Float32,
-            remain Float32,
-            midlife_repair Float32,
-            midlife Float32,
-            hours Float32
-        ) ENGINE = Memory
-        """
-        self.client.execute(ddl)
-        self.logger.info("GPU: Временная таблица tmp_OlapCube_update создана.")
+            ddl = f"""
+            CREATE TABLE {self.database_name}.tmp_OlapCube_update
+            (
+                trigger_type Float32,
+                RepairTime Float32,
+                Status_P String,
+                repair_days Nullable(Float32),
+                sne Decimal(10,2),
+                ppr Decimal(10,2),
+                Status String,
+                location String,
+                ac_typ String,
+                daily_flight_hours Decimal(10,2),
+                daily_flight_hours_f Decimal(10,2),
+                BR Float32,
+                ll Float32,
+                oh Float32,
+                threshold Float32,
+                Effectivity String,
+                serialno String,
+                Dates Date,
+                mi8t_count Float32,
+                mi17_count Float32,
+                balance_mi8t Float32,
+                balance_mi17 Float32,
+                balance_empty Float32,
+                balance_total Float32,
+                stock_mi8t Float32,
+                stock_mi17 Float32,
+                stock_empty Float32,
+                stock_total Float32,
+                
+                /* Аналитические поля */
+                ops_count Float32,
+                hbs_count Float32,
+                repair_count Float32,
+                total_operable Float32,
+                entry_count Float32,
+                exit_count Float32,
+                into_repair Float32,
+                complete_repair Float32,
+                remain_repair Float32,
+                remain Float32,
+                midlife_repair Float32,
+                midlife Float32,
+                hours Float32
+            ) ENGINE = Memory
+            """
+            self.client.execute(ddl)
+            self.logger.info("GPU: Временная таблица tmp_OlapCube_update создана.")
+        except Exception as e:
+            self.logger.error(f"Ошибка при создании временной таблицы: {e}", exc_info=True)
+            # Пробуем альтернативный вариант с другим движком
+            try:
+                self.logger.info("Пробуем создать таблицу с движком MergeTree")
+                ddl_alt = f"""
+                CREATE TABLE {self.database_name}.tmp_OlapCube_update
+                (
+                    trigger_type Float32,
+                    RepairTime Float32,
+                    Status_P String,
+                    repair_days Nullable(Float32),
+                    sne Decimal(10,2),
+                    ppr Decimal(10,2),
+                    Status String,
+                    location String,
+                    ac_typ String,
+                    daily_flight_hours Decimal(10,2),
+                    daily_flight_hours_f Decimal(10,2),
+                    BR Float32,
+                    ll Float32,
+                    oh Float32,
+                    threshold Float32,
+                    Effectivity String,
+                    serialno String,
+                    Dates Date,
+                    mi8t_count Float32,
+                    mi17_count Float32,
+                    balance_mi8t Float32,
+                    balance_mi17 Float32,
+                    balance_empty Float32,
+                    balance_total Float32,
+                    stock_mi8t Float32,
+                    stock_mi17 Float32,
+                    stock_empty Float32,
+                    stock_total Float32,
+                    
+                    /* Аналитические поля */
+                    ops_count Float32,
+                    hbs_count Float32,
+                    repair_count Float32,
+                    total_operable Float32,
+                    entry_count Float32,
+                    exit_count Float32,
+                    into_repair Float32,
+                    complete_repair Float32,
+                    remain_repair Float32,
+                    remain Float32,
+                    midlife_repair Float32,
+                    midlife Float32,
+                    hours Float32
+                ) ENGINE = MergeTree()
+                ORDER BY (Dates, serialno)
+                """
+                self.client.execute(ddl_alt)
+                self.logger.info("GPU: Временная таблица создана с движком MergeTree.")
+            except Exception as e2:
+                self.logger.error(f"Не удалось создать временную таблицу даже с альтернативным движком: {e2}", exc_info=True)
+                raise
     
     def save_all_results(self, period_start, period_end):
         self.logger.info(f"GPU: Сохранение записей за {period_start} - {period_end}")
         # Фильтруем нужные даты
-        mask_period = (self.df['Dates'] >= str(period_start)) & (self.df['Dates'] < str(period_end))
+        mask_period = (self.df['Dates'] >= cudf.Timestamp(period_start)) & (self.df['Dates'] < cudf.Timestamp(period_end))
         cycle_df = self.df[mask_period].copy()
         
         # Не обновляем самую первую дату
         # (если логика такая же, как в CPU)
-        cycle_df = cycle_df[cycle_df['Dates'] > str(self.first_date)]
+        cycle_df = cycle_df[cycle_df['Dates'] > cudf.Timestamp(self.first_date)]
         
         # Округления
         # В cudf можно .round(decimals=2), но иногда нужно переводить в float
@@ -757,28 +903,36 @@ class CycleProcessorGPU:
         insert_query = f"""
         INSERT INTO {self.database_name}.tmp_OlapCube_update ({columns_str}) VALUES
         """
-        self.client.execute(insert_query, records, settings={'max_threads': 8})
-        
-        tmp_count = self.client.execute(f"SELECT count(*) FROM {self.database_name}.tmp_OlapCube_update")[0][0]
-        self.logger.info(f"GPU: Временная таблица заполнена {tmp_count} записями.")
-        
-        # Переносим в основную
-        insert_main_query = f"""
-        INSERT INTO {self.database_name}.OlapCube_VNV ({columns_str})
-        SELECT {columns_str}
-        FROM {self.database_name}.tmp_OlapCube_update
-        """
-        self.client.execute(insert_main_query, settings={'max_threads': 8})
-        
-        self.logger.info("GPU: Записи вставлены в основную таблицу OlapCube_VNV.")
-        
-        optimize_query = f"OPTIMIZE TABLE {self.database_name}.OlapCube_VNV FINAL"
-        self.client.execute(optimize_query)
-        self.logger.info("GPU: OPTIMIZE выполнен.")
-        
-        drop_query = f"DROP TABLE {self.database_name}.tmp_OlapCube_update"
-        self.client.execute(drop_query)
-        self.logger.info("GPU: Временная таблица удалена.")
+        try:
+            self.client.execute(insert_query, records, settings={'max_threads': 8})
+            
+            tmp_count = self.client.execute(f"SELECT count(*) FROM {self.database_name}.tmp_OlapCube_update")[0][0]
+            self.logger.info(f"GPU: Временная таблица заполнена {tmp_count} записями.")
+            
+            # Переносим в основную
+            insert_main_query = f"""
+            INSERT INTO {self.database_name}.OlapCube_VNV ({columns_str})
+            SELECT {columns_str}
+            FROM {self.database_name}.tmp_OlapCube_update
+            """
+            self.client.execute(insert_main_query, settings={'max_threads': 8})
+            
+            self.logger.info("GPU: Записи вставлены в основную таблицу OlapCube_VNV.")
+            
+            optimize_query = f"OPTIMIZE TABLE {self.database_name}.OlapCube_VNV FINAL"
+            self.client.execute(optimize_query)
+            self.logger.info("GPU: OPTIMIZE выполнен.")
+        except Exception as e:
+            self.logger.error(f"Ошибка при выполнении SQL-запросов: {e}", exc_info=True)
+            raise
+        finally:
+            # Удаляем временную таблицу в любом случае
+            try:
+                drop_query = f"DROP TABLE {self.database_name}.tmp_OlapCube_update"
+                self.client.execute(drop_query)
+                self.logger.info("GPU: Временная таблица удалена.")
+            except Exception as e:
+                self.logger.warning(f"Не удалось удалить временную таблицу: {e}")
         
         # По желанию — проверка
         # ...
