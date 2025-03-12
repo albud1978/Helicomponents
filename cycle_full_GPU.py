@@ -1,29 +1,31 @@
 import os
 import logging
-import sys
-from datetime import datetime, timedelta
-
-import cupy as cp              # вместо numpy
-import cudf                    # вместо pandas
-import pandas as pd            # добавляем pandas в начало файла
+import numpy as np
+import cudf
+import cupy as cp
+import pandas as pd
 from clickhouse_driver import Client
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
+import sys
+import time
 
+# Загрузка переменных окружения
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)  # DEBUG для детальной отладки
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 if not logger.handlers:
     logger.addHandler(handler)
 
 
-class CycleProcessorGPU:
-    def __init__(self, total_days=2):
+class CycleCUDAProcessor:
+    def __init__(self, total_days):
         self.logger = logger
         self.total_days = total_days
-        
+
         clickhouse_host = os.getenv('CLICKHOUSE_HOST', '10.95.19.132')
         clickhouse_user = os.getenv('CLICKHOUSE_USER', 'default')
         clickhouse_password = os.getenv('CLICKHOUSE_PASSWORD', 'quie1ahpoo5Su0wohpaedae8keeph6bi')
@@ -38,40 +40,17 @@ class CycleProcessorGPU:
             settings={'strings_encoding': 'utf-8'}
         )
         self.database_name = database_name
+        self.gpu_df = None
         
-        self.df = None  # Здесь будет cudf DataFrame
-        
-        # Аналитические поля
-        self.analytics_fields = [
-            'ops_count','hbs_count','repair_count','total_operable','entry_count','exit_count',
-            'into_repair','complete_repair','remain_repair','remain','midlife_repair','midlife','hours'
-        ]
-
-    def ensure_analytics_columns(self):
-        """
-        Аналог CPU-варианта: добавляет недостающие поля в таблицу ClickHouse.
-        """
+        # Проверка доступности GPU
         try:
-            new_columns_ddl = f"""
-            ALTER TABLE {self.database_name}.OlapCube_VNV
-            ADD COLUMN IF NOT EXISTS ops_count Float32,
-            ADD COLUMN IF NOT EXISTS hbs_count Float32,
-            ADD COLUMN IF NOT EXISTS repair_count Float32,
-            ADD COLUMN IF NOT EXISTS total_operable Float32,
-            ADD COLUMN IF NOT EXISTS entry_count Float32,
-            ADD COLUMN IF NOT EXISTS exit_count Float32,
-            ADD COLUMN IF NOT EXISTS into_repair Float32,
-            ADD COLUMN IF NOT EXISTS complete_repair Float32,
-            ADD COLUMN IF NOT EXISTS remain_repair Float32,
-            ADD COLUMN IF NOT EXISTS remain Float32,
-            ADD COLUMN IF NOT EXISTS midlife_repair Float32,
-            ADD COLUMN IF NOT EXISTS midlife Float32,
-            ADD COLUMN IF NOT EXISTS hours Float32
-            """
-            self.client.execute(new_columns_ddl)
-            self.logger.info("GPU: Аналитические поля добавлены/проверены в OlapCube_VNV.")
+            self.logger.info(f"CUDA доступен: {cp.cuda.is_available()}")
+            self.logger.info(f"Количество GPU: {cp.cuda.runtime.getDeviceCount()}")
+            for i in range(cp.cuda.runtime.getDeviceCount()):
+                props = cp.cuda.runtime.getDeviceProperties(i)
+                self.logger.info(f"GPU {i}: {props['name'].decode()}, Память: {props['totalGlobalMem'] / (1024**3):.2f} ГБ")
         except Exception as e:
-            self.logger.error(f"GPU: Ошибка при добавлении аналитических полей: {e}", exc_info=True)
+            self.logger.warning(f"Ошибка при проверке GPU: {e}")
 
     def get_first_date(self) -> datetime:
         query = f"SELECT MIN(Dates) as first_date FROM {self.database_name}.OlapCube_VNV"
@@ -79,864 +58,716 @@ class CycleProcessorGPU:
         first_date = result[0][0]
         if not first_date:
             raise Exception("Не найдена начальная дата (база пустая?)")
-        
-        # Явное преобразование в datetime
-        if not isinstance(first_date, datetime):
-            self.logger.debug(f"get_first_date: преобразование из {type(first_date)} в datetime")
-            first_date = datetime.strptime(str(first_date), '%Y-%m-%d')
-        
         return first_date
 
     def load_all_data(self):
-        self.logger.debug("=== load_all_data: начало ===")
-        
-        self.ensure_analytics_columns()
-        self.logger.debug("ensure_analytics_columns() выполнен")
-        
+        """
+        Загружаем данные из куба за период [first_date, first_date + total_days).
+        Используем cuDF для загрузки данных в GPU память.
+        """
+        start_time = time.time()
         first_date = self.get_first_date()
-        period_end = first_date + timedelta(days=self.total_days)
         self.first_date = first_date
-        self.logger.info(f"GPU: Загружаем данные с {first_date} до {period_end}")
-        
+        period_end = first_date + timedelta(days=self.total_days)
+        self.logger.info(f"Загружаются данные с {first_date} до {period_end}")
+
         query = f"""
         SELECT
-            trigger_type,
-            RepairTime,
-            Status_P,
-            repair_days,
-            sne,
-            ppr,
-            Status,
-            location,
-            ac_typ,
-            daily_flight_hours,
-            daily_flight_hours_f,
-            BR,
-            ll,
-            oh,
-            threshold,
-            Effectivity,
-            serialno,
-            Dates,
-            mi8t_count,
-            mi17_count,
-            balance_mi8t,
-            balance_mi17,
-            balance_empty,
-            balance_total,
-            stock_mi8t,
-            stock_mi17,
-            stock_empty,
-            stock_total,
-            ops_count,
-            hbs_count,
-            repair_count,
-            total_operable,
-            entry_count,
-            exit_count,
-            into_repair,
-            complete_repair,
-            remain_repair,
-            remain,
-            midlife_repair,
-            midlife,
-            hours
+             trigger_type,
+             RepairTime,
+             Status_P,
+             repair_days,
+             sne,
+             ppr,
+             Status,
+             location,
+             ac_typ,
+             daily_flight_hours,
+             daily_flight_hours_f,
+             BR,
+             ll,
+             oh,
+             threshold,
+             Effectivity,
+             serialno,
+             Dates,
+             mi8t_count,
+             mi17_count,
+             balance_mi8t,
+             balance_mi17,
+             balance_empty,
+             balance_total,
+             stock_mi8t,
+             stock_mi17,
+             stock_empty,
+             stock_total
         FROM {self.database_name}.OlapCube_VNV
         WHERE Dates >= '{first_date.strftime('%Y-%m-%d')}'
           AND Dates < '{period_end.strftime('%Y-%m-%d')}'
         ORDER BY Dates, serialno
         """
-        self.logger.debug("SQL-запрос:\n%s", query)
-        
         result = self.client.execute(query, settings={'max_threads': 8})
-        self.logger.debug("Количество строк в результате запроса: %d", len(result))
-        
         if not result:
             raise Exception("Нет данных для заданного периода")
-        
         columns = [
-            'trigger_type', 'RepairTime', 'Status_P', 'repair_days', 'sne', 'ppr',
-            'Status', 'location', 'ac_typ', 'daily_flight_hours', 'daily_flight_hours_f',
-            'BR', 'll', 'oh', 'threshold', 'Effectivity', 'serialno', 'Dates',
-            'mi8t_count', 'mi17_count', 'balance_mi8t', 'balance_mi17', 'balance_empty',
-            'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty', 'stock_total',
-            'ops_count', 'hbs_count', 'repair_count', 'total_operable', 'entry_count',
-            'exit_count', 'into_repair', 'complete_repair', 'remain_repair', 'remain',
-            'midlife_repair', 'midlife', 'hours'
+             'trigger_type',
+             'RepairTime',
+             'Status_P',
+             'repair_days',
+             'sne',
+             'ppr',
+             'Status',
+             'location',
+             'ac_typ',
+             'daily_flight_hours',
+             'daily_flight_hours_f',
+             'BR',
+             'll',
+             'oh',
+             'threshold',
+             'Effectivity',
+             'serialno',
+             'Dates',
+             'mi8t_count',
+             'mi17_count',
+             'balance_mi8t',
+             'balance_mi17',
+             'balance_empty',
+             'balance_total',
+             'stock_mi8t',
+             'stock_mi17',
+             'stock_empty',
+             'stock_total'
         ]
-        df_pd = pd.DataFrame(result, columns=columns)
         
-        self.logger.debug("DataFrame создан: shape=%s", df_pd.shape)
-        self.logger.debug("Типы столбцов исходного df_pd:\n%s", df_pd.dtypes)
+        # Создаем pandas DataFrame для предварительной обработки
+        df = pd.DataFrame(result, columns=columns)
         
-        # Выводим первые уникальные значения по каждому столбцу
-        for col in df_pd.columns:
-            unique_vals = df_pd[col].drop_duplicates().head(5).tolist()
-            self.logger.debug("Колонка '%s': dtype=%s, примеры: %s", col, df_pd[col].dtype, unique_vals)
-        
-        # Преобразуем столбец Dates в datetime64[ns]
-        self.logger.debug("Преобразуем столбец Dates в datetime64[ns]")
-        try:
-            df_pd['Dates'] = pd.to_datetime(df_pd['Dates'], errors='coerce').astype('datetime64[ns]')
-            self.logger.debug("Столбец Dates успешно преобразован. Примеры: %s",
-                              df_pd['Dates'].drop_duplicates().head(5).tolist())
-        except Exception as e:
-            self.logger.error("Ошибка преобразования столбца Dates: %s", e, exc_info=True)
-        
-        # Универсальное преобразование столбцов типа object, содержащих даты
-        self.logger.debug("Универсальное преобразование столбцов типа object, содержащих даты")
-        for col in df_pd.columns:
-            if df_pd[col].dtype == object:
-                # Получаем первую ненулевую запись
-                non_null = df_pd[col].dropna()
-                if not non_null.empty and isinstance(non_null.iloc[0], (datetime.date, datetime.datetime)):
-                    self.logger.debug("Колонка '%s' содержит объекты даты. Преобразуем её в datetime64.", col)
-                    try:
-                        df_pd[col] = pd.to_datetime(df_pd[col], errors='coerce')
-                    except Exception as e:
-                        self.logger.error("Ошибка преобразования колонки %s: %s", col, e, exc_info=True)
-        
-        # Сохраним даты в строковом формате для последующего восстановления
-        df_pd['Dates_str'] = df_pd['Dates'].apply(lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x))
-        
-        # Полностью удаляем проблемную колонку Dates до импорта в cuDF
-        df_pd.drop('Dates', axis=1, inplace=True)
-        
-        # Преобразовываем все object-колонки в строки
-        for col in df_pd.columns:
-            if df_pd[col].dtype == object:
-                df_pd[col] = df_pd[col].astype(str)
-        
-        # Преобразование числовых столбцов
+        # Преобразуем числовые поля
         numeric_cols = [
+            'trigger_type',
+            'RepairTime', 'repair_days', 'sne', 'ppr', 'daily_flight_hours',
+            'daily_flight_hours_f', 'BR', 'll', 'oh', 'threshold',
+            'mi8t_count', 'mi17_count', 'balance_mi8t', 'balance_mi17', 'balance_empty',
+            'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty', 'stock_total'
+        ]
+        for col in numeric_cols:
+            df[col] = df[col].astype(np.float32, errors='ignore')
+
+        # Преобразуем строковые поля
+        for col in ['Status_P', 'Status', 'location', 'ac_typ', 'Effectivity']:
+            df[col] = df[col].fillna('').astype(str)
+
+        # Преобразуем столбец Dates к типу date
+        df['Dates'] = pd.to_datetime(df['Dates']).dt.date
+        
+        # Округляем числовые поля
+        df['daily_flight_hours'] = df['daily_flight_hours'].astype(np.float64).round(2).astype(np.float32)
+        df['daily_flight_hours_f'] = df['daily_flight_hours_f'].astype(np.float64).round(2).astype(np.float32)
+        
+        # Преобразуем даты в строки для cuDF и сохраняем оригинальные даты для сравнения
+        self.dates_dict = {str(date): date for date in df['Dates'].unique()}
+        df['Dates'] = df['Dates'].astype(str)
+        
+        # Создаем cuDF DataFrame
+        self.gpu_df = cudf.DataFrame.from_pandas(df)
+        
+        # Не преобразуем обратно в datetime для GPU, оставляем как строки
+        # self.gpu_df['Dates'] = self.gpu_df['Dates'].astype('datetime64[D]')
+        
+        self.logger.info(f"Данные загружены в GPU память: всего {len(self.gpu_df)} записей.")
+        self.logger.info(f"Время загрузки данных: {time.time() - start_time:.2f} секунд")
+
+    def run_cycle(self):
+        start_time = time.time()
+        self.load_all_data()
+
+        period_start = self.first_date
+        period_end = period_start + timedelta(days=self.total_days)
+        self.logger.info(f"Обработка производится для периода {period_start} - {period_end}")
+
+        self.logger.info("Начинаем обработку дат...")
+        self.process_all_dates(period_start, period_end)
+        
+        self.save_all_results(period_start, period_end)
+        self.logger.info("Обработка завершена. Результаты записаны в базу.")
+        self.logger.info(f"Общее время выполнения: {time.time() - start_time:.2f} секунд")
+
+        # Статистика за весь обработанный период
+        stats_query = f"""
+        SELECT 
+            toYear(Dates) AS Year,
+            toMonth(Dates) AS Month,
+            count(*) AS Records,
+            countIf(Status = 'Эксплуатация') AS Exploitation,
+            countIf(Status = 'Исправен') AS Serviceable,
+            countIf(Status = 'Ремонт') AS InRepair
+        FROM {self.database_name}.OlapCube_VNV
+        WHERE Dates >= '{period_start.strftime('%Y-%m-%d')}'
+          AND Dates < '{period_end.strftime('%Y-%m-%d')}'
+        GROUP BY Year, Month
+        ORDER BY Year, Month
+        """
+        stats_result = self.client.execute(stats_query)
+        self.logger.info("Итоговая статистика по месяцам:")
+        for row in stats_result:
+            self.logger.info(f"  {row[0]}-{row[1]:02d}: Всего записей: {row[2]}, Эксплуатация: {row[3]}, Исправен: {row[4]}, Ремонт: {row[5]}")
+
+    def process_all_dates(self, period_start, period_end):
+        # Получаем уникальные даты с использованием GPU
+        unique_dates_str = self.gpu_df['Dates'].unique().to_pandas().sort_values().to_numpy()
+        # Преобразуем строковые даты обратно в объекты datetime
+        unique_dates = [self.dates_dict[date_str] for date_str in unique_dates_str]
+            
+        cycle_dates = [d for d in unique_dates if period_start <= d < period_end]
+        
+        if not cycle_dates:
+            self.logger.warning(f"Нет дат для обработки в периоде {period_start} - {period_end}")
+            return
+            
+        self.logger.info(f"Даты для обработки: всего {len(cycle_dates)} дней с {cycle_dates[0]} по {cycle_dates[-1]}")
+
+        # Группировка по месяцам для логирования
+        month_groups = {}
+        for date in cycle_dates:
+            month_key = date.strftime('%Y-%m')
+            if month_key not in month_groups:
+                month_groups[month_key] = []
+            month_groups[month_key].append(date)
+
+        # Вывод информации о количестве дней по месяцам
+        for month, dates in month_groups.items():
+            self.logger.info(f"Месяц {month}: {len(dates)} дней для обработки")
+
+        # Обработка дат с использованием CUDA
+        for i in range(1, len(cycle_dates)):
+            curr_date = cycle_dates[i]
+            prev_date = cycle_dates[i-1]
+            
+            # Проверяем наличие данных для текущей и предыдущей даты
+            curr_date_str = str(curr_date)
+            prev_date_str = str(prev_date)
+            curr_data = self.gpu_df[self.gpu_df['Dates'] == curr_date_str]
+            prev_data = self.gpu_df[self.gpu_df['Dates'] == prev_date_str]
+            
+            if len(curr_data) == 0:
+                self.logger.warning(f"Нет данных для даты {curr_date}, пропускаем")
+                continue
+                
+            if len(prev_data) == 0:
+                self.logger.warning(f"Нет данных для предыдущей даты {prev_date}, пропускаем")
+                continue
+            
+            start_time = time.time()
+            self.step_1(prev_date, curr_date)
+            step1_time = time.time() - start_time
+            
+            start_time = time.time()
+            self.step_2(curr_date)
+            step2_time = time.time() - start_time
+            
+            start_time = time.time()
+            self.step_3(curr_date)
+            step3_time = time.time() - start_time
+            
+            start_time = time.time()
+            self.step_4(prev_date, curr_date)
+            step4_time = time.time() - start_time
+
+            # Логирование только в конце месяца или при последнем дне обработки
+            month_key = curr_date.strftime('%Y-%m')
+            is_last_day_of_month = curr_date == month_groups[month_key][-1]
+            is_last_day_overall = curr_date == cycle_dates[-1]
+            
+            if is_last_day_of_month or is_last_day_overall:
+                # Собираем статистику за месяц
+                curr_date_str = str(curr_date)
+                month_data = self.gpu_df[self.gpu_df['Dates'] == curr_date_str]
+                status_counts = month_data['Status'].value_counts().to_pandas()
+                status_p_counts = month_data['Status_P'].value_counts().to_pandas()
+
+                self.logger.info(f"Статистика на конец {month_key} (дата {curr_date}) - Status:")
+                for st, cnt in status_counts.items():
+                    self.logger.info(f"  {st}: {cnt}")
+                self.logger.info(f"Статистика на конец {month_key} (дата {curr_date}) - Status_P:")
+                for st, cnt in status_p_counts.items():
+                    self.logger.info(f"  {st}: {cnt}")
+                
+                self.logger.info(f"Время выполнения шагов для даты {curr_date}: "
+                                f"step1={step1_time:.3f}с, step2={step2_time:.3f}с, "
+                                f"step3={step3_time:.3f}с, step4={step4_time:.3f}с")
+
+    def step_1(self, prev_date, curr_date):
+        """
+        Реализация step_1 с использованием CUDA и cuDF
+        """
+        # Преобразуем даты в строки для работы с cuDF
+        prev_date_str = str(prev_date)
+        curr_date_str = str(curr_date)
+        
+        # Получаем данные для текущей и предыдущей даты
+        prev_data = self.gpu_df[self.gpu_df['Dates'] == prev_date_str]
+        curr_data = self.gpu_df[self.gpu_df['Dates'] == curr_date_str]
+        
+        if len(curr_data) == 0 or len(prev_data) == 0:
+            self.logger.warning(f"Нет данных для {curr_date} или {prev_date}")
+            return
+        
+        # Преобразуем данные в pandas для обработки
+        prev_data_pd = prev_data.to_pandas()
+        curr_data_pd = curr_data.to_pandas()
+        
+        # Создаем словарь для быстрого доступа к предыдущим данным
+        prev_dict = {}
+        for _, row in prev_data_pd.iterrows():
+            serialno = row['serialno']
+            prev_dict[serialno] = {
+                'Status': row['Status'],
+                'Status_P': row['Status_P'],
+                'sne': row['sne'],
+                'ppr': row['ppr'],
+                'repair_days': row['repair_days'],
+                'RepairTime': row['RepairTime']
+            }
+        
+        # Обновляем Status_P для каждой записи текущей даты
+        for idx, row in curr_data_pd.iterrows():
+            serialno = row['serialno']
+            
+            # Если нет данных для этого serialno в предыдущей дате, пропускаем
+            if serialno not in prev_dict:
+                continue
+                
+            prev_row = prev_dict[serialno]
+            prev_status = prev_row['Status']
+            
+            # Определяем новый Status_P на основе предыдущего Status
+            new_status_p = ''
+            
+            # Неактивно
+            if prev_status == 'Неактивно':
+                new_status_p = 'Неактивно'
+            # Хранение
+            elif prev_status == 'Хранение':
+                new_status_p = 'Хранение'
+            # Исправен
+            elif prev_status == 'Исправен':
+                new_status_p = 'Исправен'
+            # Ремонт (repair_days < RepairTime)
+            elif prev_status == 'Ремонт' and prev_row['repair_days'] is not None and prev_row['RepairTime'] is not None:
+                if prev_row['repair_days'] < prev_row['RepairTime']:
+                    new_status_p = 'Ремонт'
+                else:
+                    new_status_p = 'Исправен'
+            # Эксплуатация
+            elif prev_status == 'Эксплуатация':
+                daily_flight_hours = row['daily_flight_hours']
+                
+                if prev_row['sne'] < (row['ll'] - daily_flight_hours) and prev_row['ppr'] < (row['oh'] - daily_flight_hours):
+                    new_status_p = 'Эксплуатация'
+                elif prev_row['sne'] >= (row['ll'] - daily_flight_hours):
+                    new_status_p = 'Хранение'
+                elif prev_row['ppr'] >= (row['oh'] - daily_flight_hours):
+                    if prev_row['sne'] < row['BR']:
+                        new_status_p = 'Ремонт'
+                    else:
+                        new_status_p = 'Хранение'
+            
+            # Обновляем Status_P в основном DataFrame
+            self.gpu_df.loc[idx, 'Status_P'] = new_status_p
+
+    def step_2(self, curr_date):
+        """
+        Реализация step_2 с использованием CUDA и cuDF
+        """
+        # Преобразуем дату в строку для работы с cuDF
+        curr_date_str = str(curr_date)
+        
+        # Получаем данные для текущей даты
+        curr_data = self.gpu_df[self.gpu_df['Dates'] == curr_date_str]
+        
+        if len(curr_data) == 0:
+            self.logger.warning(f"Нет данных для {curr_date}")
+            return
+        
+        # Вычисляем balance_total с явным приведением типов
+        balance_mi8t = curr_data['balance_mi8t'].sum()
+        balance_mi17 = curr_data['balance_mi17'].sum()
+        balance_empty = curr_data['balance_empty'].sum()
+        
+        # Явно приводим к float32 для избежания предупреждений
+        balance_total = np.float32(balance_mi8t + balance_mi17 + balance_empty)
+        
+        # Обновляем balance_total для всех записей текущей даты
+        self.gpu_df.loc[curr_data.index, 'balance_total'] = balance_total
+
+    def step_3(self, curr_date):
+        """
+        Реализация step_3 с использованием CUDA и cuDF
+        """
+        # Преобразуем дату в строку для работы с cuDF
+        curr_date_str = str(curr_date)
+        
+        # Получаем данные для текущей даты
+        curr_data = self.gpu_df[self.gpu_df['Dates'] == curr_date_str]
+        
+        if len(curr_data) == 0:
+            self.logger.warning(f"Нет данных для {curr_date}")
+            return
+        
+        # Получаем balance_total
+        balance_total = curr_data['balance_total'].iloc[0]
+        
+        # Обновляем Status из Status_P для всех записей
+        # Преобразуем индекс в pandas перед итерацией
+        for idx in curr_data.index.to_pandas():
+            self.gpu_df.loc[idx, 'Status'] = self.gpu_df.loc[idx, 'Status_P']
+        
+        # Обрабатываем случай balance_total > 0
+        if balance_total > 0:
+            abs_balance = int(balance_total)
+            
+            # Находим записи с Status_P == 'Исправен'
+            serviceable_mask = (curr_data['Status_P'] == 'Исправен')
+            serviceable_indices = curr_data[serviceable_mask].index.to_pandas().tolist()
+            
+            # Сортируем индексы для стабильного порядка
+            serviceable_indices.sort()
+            
+            serviceable_count = min(abs_balance, len(serviceable_indices))
+            
+            if serviceable_count > 0:
+                # Изменяем Status на 'Ремонт' для первых serviceable_count записей
+                for idx in serviceable_indices[:serviceable_count]:
+                    self.gpu_df.loc[idx, 'Status'] = 'Ремонт'
+                abs_balance -= serviceable_count
+            
+            # Если еще остались записи для изменения, ищем 'Эксплуатация'
+            if abs_balance > 0:
+                exploitation_mask = (curr_data['Status_P'] == 'Эксплуатация')
+                exploitation_indices = curr_data[exploitation_mask].index.to_pandas().tolist()
+                
+                # Сортируем индексы для стабильного порядка
+                exploitation_indices.sort()
+                
+                exploitation_count = min(abs_balance, len(exploitation_indices))
+                
+                if exploitation_count > 0:
+                    # Изменяем Status на 'Ремонт' для первых exploitation_count записей
+                    for idx in exploitation_indices[:exploitation_count]:
+                        self.gpu_df.loc[idx, 'Status'] = 'Ремонт'
+        
+        # Обрабатываем случай balance_total < 0
+        elif balance_total < 0:
+            abs_balance = abs(int(balance_total))
+            
+            # Находим записи с Status_P == 'Исправен'
+            serviceable_mask = (curr_data['Status_P'] == 'Исправен')
+            serviceable_indices = curr_data[serviceable_mask].index.to_pandas().tolist()
+            
+            # Сортируем индексы для стабильного порядка
+            serviceable_indices.sort()
+            
+            serviceable_count = min(abs_balance, len(serviceable_indices))
+            
+            if serviceable_count > 0:
+                # Изменяем Status на 'Эксплуатация' для первых serviceable_count записей
+                for idx in serviceable_indices[:serviceable_count]:
+                    self.gpu_df.loc[idx, 'Status'] = 'Эксплуатация'
+                abs_balance -= serviceable_count
+            
+            # Если еще остались записи для изменения, ищем 'Неактивно'
+            if abs_balance > 0:
+                inactive_mask = (curr_data['Status_P'] == 'Неактивно')
+                inactive_indices = curr_data[inactive_mask].index.to_pandas().tolist()
+                
+                # Сортируем индексы для стабильного порядка
+                inactive_indices.sort()
+                
+                inactive_count = min(abs_balance, len(inactive_indices))
+                
+                if inactive_count > 0:
+                    # Изменяем Status на 'Эксплуатация' для первых inactive_count записей
+                    for idx in inactive_indices[:inactive_count]:
+                        self.gpu_df.loc[idx, 'Status'] = 'Эксплуатация'
+
+    def step_4(self, prev_date, curr_date):
+        """
+        Реализация step_4 с использованием CUDA и cuDF
+        """
+        # Преобразуем даты в строки для работы с cuDF
+        prev_date_str = str(prev_date)
+        curr_date_str = str(curr_date)
+        
+        # Получаем данные для текущей и предыдущей даты
+        curr_data = self.gpu_df[self.gpu_df['Dates'] == curr_date_str]
+        prev_data = self.gpu_df[self.gpu_df['Dates'] == prev_date_str]
+        
+        # Преобразуем в pandas DataFrame для итерации
+        prev_data_pd = prev_data.to_pandas()
+        curr_data_pd = curr_data.to_pandas()
+        
+        # Создаем словарь для быстрого доступа к предыдущим данным по serialno
+        prev_dict = {}
+        for i, row in prev_data_pd.iterrows():
+            serialno = row['serialno']
+            prev_dict[serialno] = {
+                'sne': row['sne'],
+                'ppr': row['ppr'],
+                'repair_days': row['repair_days'],
+                'Status': row['Status'],
+                'Status_P': row['Status_P']
+            }
+        
+        # Создаем словарь для быстрого доступа к индексам текущих данных
+        curr_indices_dict = {}
+        for i, row in curr_data_pd.iterrows():
+            serialno = row['serialno']
+            # Если serialno уже есть в словаре, это дубликат - логируем предупреждение
+            if serialno in curr_indices_dict:
+                self.logger.warning(f"Найден дубликат serialno: {serialno} для даты {curr_date}")
+            # Получаем индекс для текущего serialno
+            serialno_indices = curr_data[curr_data['serialno'] == serialno].index.to_pandas()
+            if len(serialno_indices) > 0:
+                curr_indices_dict[serialno] = serialno_indices[0]
+        
+        # Обрабатываем каждую запись текущей даты
+        for i, row in curr_data_pd.iterrows():
+            serialno = row['serialno']
+            status = row['Status_P']
+            daily_flight_hours = row['daily_flight_hours']
+            
+            # Проверяем, есть ли данные для этого serialno в предыдущей дате
+            if serialno not in prev_dict:
+                continue
+            
+            # Проверяем, есть ли индекс для этого serialno
+            if serialno not in curr_indices_dict:
+                self.logger.warning(f"serialno {serialno} отсутствует в словаре индексов")
+                continue
+            
+            prev_row = prev_dict[serialno]
+            prev_sne = prev_row['sne']
+            prev_ppr = prev_row['ppr']
+            prev_repair = prev_row['repair_days']
+            prev_status = prev_row['Status']
+            prev_status_p = prev_row['Status_P']
+            
+            # Проверка на None или NaN
+            if pd.isna(prev_sne) or prev_sne == '':
+                continue
+            
+            # Получаем индекс из словаря
+            curr_idx = curr_indices_dict[serialno]
+            
+            # Обновляем значения в зависимости от статуса с явным приведением типов
+            if status == 'Эксплуатация':
+                new_sne = np.float32(round(float(prev_sne + daily_flight_hours), 2))
+                new_ppr = np.float32(round(float(prev_ppr + daily_flight_hours), 2))
+                self.gpu_df.loc[curr_idx, 'sne'] = new_sne
+                self.gpu_df.loc[curr_idx, 'ppr'] = new_ppr
+            elif status == 'Исправен':
+                if prev_status_p == 'Ремонт':
+                    self.gpu_df.loc[curr_idx, 'sne'] = np.float32(round(float(prev_sne), 2))
+                    self.gpu_df.loc[curr_idx, 'ppr'] = np.float32(0.0)
+                    self.gpu_df.loc[curr_idx, 'repair_days'] = None
+                else:
+                    self.gpu_df.loc[curr_idx, 'sne'] = np.float32(round(float(prev_sne), 2))
+                    self.gpu_df.loc[curr_idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
+                    self.gpu_df.loc[curr_idx, 'repair_days'] = prev_repair
+            elif status == 'Ремонт':
+                if prev_status == 'Эксплуатация':
+                    self.gpu_df.loc[curr_idx, 'sne'] = np.float32(round(float(prev_sne), 2))
+                    self.gpu_df.loc[curr_idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
+                    self.gpu_df.loc[curr_idx, 'repair_days'] = np.float32(1.0)
+                else:
+                    self.gpu_df.loc[curr_idx, 'sne'] = np.float32(round(float(prev_sne), 2))
+                    self.gpu_df.loc[curr_idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
+                    if prev_repair is not None:
+                        self.gpu_df.loc[curr_idx, 'repair_days'] = np.float32(prev_repair + 1)
+            elif status in ['Хранение', 'Неактивно']:
+                self.gpu_df.loc[curr_idx, 'sne'] = np.float32(round(float(prev_sne), 2))
+                self.gpu_df.loc[curr_idx, 'ppr'] = np.float32(round(float(prev_ppr), 2))
+                self.gpu_df.loc[curr_idx, 'repair_days'] = prev_repair
+
+    def ensure_tmp_table_exists(self):
+        """Создает временную таблицу без аналитических полей"""
+        drop_ddl = f"DROP TABLE IF EXISTS {self.database_name}.tmp_OlapCube_update"
+        self.client.execute(drop_ddl)
+        self.logger.info("Старая временная таблица tmp_OlapCube_update удалена (если существовала).")
+
+        # Создаем структуру таблицы
+        ddl = f"""
+        CREATE TABLE {self.database_name}.tmp_OlapCube_update
+        (
+            trigger_type Float32,
+            RepairTime Float32,
+            Status_P String,
+            repair_days Nullable(Float32),
+            sne Decimal(10,2),
+            ppr Decimal(10,2),
+            Status String,
+            location String,
+            ac_typ String,
+            daily_flight_hours Decimal(10,2),
+            daily_flight_hours_f Decimal(10,2),
+            BR Float32,
+            ll Float32,
+            oh Float32,
+            threshold Float32,
+            Effectivity String,
+            serialno String,
+            Dates Date,
+            mi8t_count Float32,
+            mi17_count Float32,
+            balance_mi8t Float32,
+            balance_mi17 Float32,
+            balance_empty Float32,
+            balance_total Float32,
+            stock_mi8t Float32,
+            stock_mi17 Float32,
+            stock_empty Float32,
+            stock_total Float32
+        ) ENGINE = Memory
+        """
+        self.client.execute(ddl)
+        self.logger.info("Новая временная таблица tmp_OlapCube_update создана.")
+
+    def save_all_results(self, period_start, period_end):
+        """
+        Сохраняет результаты обработки в базу данных с использованием GPU-ускорения
+        """
+        self.logger.info(f"Начинаем сохранение записей за период {period_start} - {period_end}")
+        
+        # Преобразуем даты в строки для работы с cuDF
+        period_start_str = str(period_start)
+        period_end_str = str(period_end)
+        first_date_str = str(self.first_date)
+        
+        # Фильтруем данные для сохранения
+        # Для строковых дат нужно использовать другой подход
+        cycle_dates_str = [str(d) for d in self.dates_dict.values() 
+                          if period_start <= d < period_end]
+        cycle_mask = self.gpu_df['Dates'].isin(cycle_dates_str)
+        cycle_df = self.gpu_df[cycle_mask]
+        
+        # Проверяем, есть ли данные для сохранения
+        if len(cycle_df) == 0:
+            self.logger.warning(f"Нет данных для сохранения за период {period_start} - {period_end}")
+            return
+        
+        # Дополнительно фильтруем, чтобы не обновлять первую дату
+        update_mask = ~(cycle_df['Dates'] == first_date_str)
+        df_to_update = cycle_df[update_mask]
+        
+        # Проверяем, остались ли данные после фильтрации
+        if len(df_to_update) == 0:
+            self.logger.warning(f"Нет данных для обновления после фильтрации первой даты")
+            return
+        
+        # Округляем числовые поля
+        df_to_update['sne'] = df_to_update['sne'].astype(np.float64).round(2).astype(np.float32)
+        df_to_update['ppr'] = df_to_update['ppr'].astype(np.float64).round(2).astype(np.float32)
+        df_to_update['daily_flight_hours'] = df_to_update['daily_flight_hours'].astype(np.float64).round(2).astype(np.float32)
+        df_to_update['daily_flight_hours_f'] = df_to_update['daily_flight_hours_f'].astype(np.float64).round(2).astype(np.float32)
+        
+        # Создаем временную таблицу
+        self.ensure_tmp_table_exists()
+        
+        # Список всех колонок
+        all_columns = [
+             'trigger_type',
+             'RepairTime',
+             'Status_P',
+             'repair_days',
+             'sne',
+             'ppr',
+             'Status',
+             'location',
+             'ac_typ',
+             'daily_flight_hours',
+             'daily_flight_hours_f',
+             'BR',
+             'll',
+             'oh',
+             'threshold',
+             'Effectivity',
+             'serialno',
+             'Dates',
+             'mi8t_count',
+             'mi17_count',
+             'balance_mi8t',
+             'balance_mi17',
+             'balance_empty',
+             'balance_total',
+             'stock_mi8t',
+             'stock_mi17',
+             'stock_empty',
+             'stock_total'
+        ]
+        
+        # Заполняем NaN нулями для числовых полей
+        numeric_fields = [
             'trigger_type', 'RepairTime', 'repair_days', 'sne', 'ppr',
             'daily_flight_hours', 'daily_flight_hours_f', 'BR', 'll', 'oh',
             'threshold', 'mi8t_count', 'mi17_count', 'balance_mi8t', 'balance_mi17',
             'balance_empty', 'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty',
             'stock_total'
-        ] + self.analytics_fields
-        self.logger.debug("Преобразуем числовые поля: %s", numeric_cols)
-        for col in numeric_cols:
-            if col in df_pd.columns:
-                try:
-                    df_pd[col] = df_pd[col].astype('float32', errors='ignore')
-                except Exception as e:
-                    self.logger.warning(f"Ошибка при преобразовании столбца {col} в float32: {e}")
-                    # Пытаемся сначала преобразовать в строку, затем в float
-                    try:
-                        df_pd[col] = df_pd[col].astype(str).str.replace(',', '.').astype('float32', errors='ignore')
-                    except Exception as e2:
-                        self.logger.error(f"Не удалось преобразовать столбец {col}: {e2}")
+        ]
         
-        # Преобразование строковых столбцов
-        str_cols = ['Status_P', 'Status', 'location', 'ac_typ', 'Effectivity', 'serialno']
-        self.logger.debug("Преобразуем строковые поля: %s", str_cols)
-        for col in str_cols:
-            if col in df_pd.columns:
-                df_pd[col] = df_pd[col].fillna('').astype(str)
+        for col in numeric_fields:
+            if col in df_to_update.columns:
+                df_to_update[col] = df_to_update[col].fillna(0.0).astype(np.float32)
         
-        self.logger.debug("Типы столбцов после преобразований в df_pd:\n%s", df_pd.dtypes)
+        # Преобразуем cuDF DataFrame в pandas DataFrame для вставки в ClickHouse
+        update_records = df_to_update.to_pandas()
         
-        # Ещё раз логируем уникальные примеры по каждому столбцу
-        for col in df_pd.columns:
-            unique_vals = df_pd[col].drop_duplicates().head(5).tolist()
-            self.logger.debug("После преобразований - колонка '%s': dtype=%s, примеры: %s", col, df_pd[col].dtype, unique_vals)
+        # Преобразуем строковые даты обратно в объекты datetime.date для ClickHouse
+        update_records['Dates'] = update_records['Dates'].apply(lambda x: self.dates_dict[x])
         
-        self.logger.debug("Проверка типов значений в столбцах перед переходом в cuDF:")
-        for col in df_pd.columns:
-            # Получаем уникальные типы для каждого столбца
-            types = df_pd[col].apply(lambda v: type(v)).unique()
-            self.logger.debug("Колонка '%s': уникальные типы значений: %s", col, types)
+        update_records = update_records.replace({np.nan: None})
+        records = list(update_records.itertuples(index=False, name=None))
         
-        self.logger.debug("Создаём cuDF DataFrame из df_pd")
-        try:
-            self.df = cudf.from_pandas(df_pd)
-        except Exception as e:
-            self.logger.error("Ошибка при создании cuDF DataFrame: %s", e, exc_info=True)
-            # Попытка исправить проблемные столбцы
-            problematic_columns = []
-            for col in df_pd.columns:
-                try:
-                    # Проверяем каждый столбец по отдельности
-                    test_df = cudf.Series(df_pd[col])
-                except Exception as col_error:
-                    self.logger.warning(f"Проблемный столбец: {col}, ошибка: {col_error}")
-                    problematic_columns.append(col)
-                    # Преобразуем проблемный столбец в строку
-                    df_pd[col] = df_pd[col].astype(str)
-            
-            # Повторная попытка создания cuDF DataFrame
-            try:
-                self.df = cudf.from_pandas(df_pd)
-                self.logger.info(f"cuDF DataFrame создан после исправления проблемных столбцов: {problematic_columns}")
-            except Exception as e2:
-                self.logger.error("Не удалось создать cuDF DataFrame даже после исправлений: %s", e2, exc_info=True)
-                raise
-        
-        # Восстанавливаем колонку Dates из строкового представления
-        try:
-            self.df['Dates'] = cudf.to_datetime(self.df['Dates_str'])
-            self.df.drop('Dates_str', axis=1, inplace=True)
-        except Exception as e:
-            self.logger.error(f"Ошибка при преобразовании Dates_str в datetime: {e}")
-            # Альтернативный подход - использовать pandas для преобразования
-            try:
-                dates_pd = pd.to_datetime(self.df['Dates_str'].to_pandas())
-                self.df['Dates'] = cudf.from_pandas(dates_pd)
-                self.df.drop('Dates_str', axis=1, inplace=True)
-                self.logger.info("Колонка Dates восстановлена с помощью pandas")
-            except Exception as e2:
-                self.logger.error(f"Не удалось восстановить колонку Dates: {e2}")
-                # Оставляем строковую версию как запасной вариант
-                self.df['Dates'] = self.df['Dates_str']
-                self.logger.warning("Используем строковую версию Dates вместо datetime")
-        
-        # Дополнительное приведение типов для cuDF DataFrame
-        for col in numeric_cols:
-            if col in self.df.columns:
-                self.df[col] = self.df[col].astype('float32')
-        for col in str_cols:
-            if col in self.df.columns:
-                self.df[col] = self.df[col].fillna('').astype('str')
-        
-        self.logger.debug("Типы столбцов self.df после окончательных преобразований:\n%s", self.df.dtypes)
-        
-        self.logger.info(f"GPU: Данные успешно загружены в cudf DF: всего {len(self.df)} записей")
-        self.logger.debug("=== load_all_data: завершение ===")
-
-    def run_cycle(self):
-        """
-        Основной метод, аналогичный CPU-версии.
-        """
-        self.load_all_data()
-        period_start = self.first_date
-        period_end = period_start + timedelta(days=self.total_days)
-        
-        self.logger.info(f"GPU: Начинаем обработку дат... {period_start} - {period_end}")
-        
-        # Собираем уникальные даты
-        try:
-            unique_dates = self.df['Dates'].unique().sort_values()
-            # cudf.Series -> нужно перевести в host для фильтра, либо сразу сравнивать c cudf.Timestamp
-            # Для упрощения делаем datetime -> фильтруем на CPU, но можно и полностью в GPU
-            unique_dates_pd = unique_dates.to_pandas()
-            
-            # Проверяем, что даты имеют правильный тип
-            if not pd.api.types.is_datetime64_any_dtype(unique_dates_pd):
-                self.logger.warning("Даты не в формате datetime64, пытаемся преобразовать")
-                unique_dates_pd = pd.to_datetime(unique_dates_pd, errors='coerce')
-            
-            cycle_dates = [d for d in unique_dates_pd if period_start <= d < period_end]
-            cycle_dates.sort()
-        except Exception as e:
-            self.logger.error(f"Ошибка при обработке уникальных дат: {e}", exc_info=True)
-            # Альтернативный подход - использовать строковое представление дат
-            try:
-                self.logger.info("Пробуем альтернативный подход со строковыми датами")
-                # Получаем уникальные строковые даты
-                if 'Dates_str' in self.df.columns:
-                    unique_dates_str = self.df['Dates_str'].unique().to_pandas()
-                else:
-                    unique_dates_str = self.df['Dates'].astype('str').unique().to_pandas()
-                
-                # Преобразуем в datetime
-                unique_dates_pd = pd.to_datetime(unique_dates_str)
-                cycle_dates = [d for d in unique_dates_pd if period_start <= d < period_end]
-                cycle_dates.sort()
-            except Exception as e2:
-                self.logger.error(f"Не удалось обработать даты даже альтернативным способом: {e2}", exc_info=True)
-                raise
-        
-        if len(cycle_dates) < 2:
-            self.logger.warning("GPU: Недостаточно дат для цикла обработки.")
-            return
-        
-        # Шаги step_1..step_4 векторизованно
-        for i in range(1, len(cycle_dates)):
-            prev_date = cycle_dates[i-1]
-            curr_date = cycle_dates[i]
-            
-            try:
-                self.step_1(prev_date, curr_date)
-                self.step_2(curr_date)
-                self.step_3(curr_date)
-                self.step_4(prev_date, curr_date)
-                self.logger.info(f"GPU: Успешно обработаны даты {prev_date} -> {curr_date}")
-            except Exception as e:
-                self.logger.error(f"Ошибка при обработке дат {prev_date} -> {curr_date}: {e}", exc_info=True)
-                # Продолжаем со следующей датой
-                continue
-        
-        # Расчет аналитики
-        try:
-            self.calculate_analytics_metrics()
-        except Exception as e:
-            self.logger.error(f"Ошибка при расчете аналитических метрик: {e}", exc_info=True)
-        
-        # Сохранение в ClickHouse
-        try:
-            self.save_all_results(period_start, period_end)
-        except Exception as e:
-            self.logger.error(f"Ошибка при сохранении результатов: {e}", exc_info=True)
-            raise
-        
-        self.logger.info("GPU: Обработка завершена.")
-    
-    def step_1(self, prev_date, curr_date):
-        """
-        Переносим логику CPU-шного step_1, но в стиле векторных операций cudf.
-        """
-        prev_data = self.df[self.df['Dates'] == prev_date]
-        curr_data = self.df[self.df['Dates'] == curr_date]
-        
-        if len(prev_data) == 0 or len(curr_data) == 0:
-            self.logger.warning(f"GPU: Нет данных для {prev_date} или {curr_date}")
-            return
-        
-        # Объединяем по serialno (inner join)
-        merged = curr_data.merge(
-            prev_data[['serialno','Status','Status_P','sne','ppr','repair_days']],
-            on='serialno',
-            suffixes=('', '_prev'),
-            how='inner'
-        )
-        
-        # Создаём столбец Status_P заново
-        merged['new_Status_P'] = None
-        
-        # Пример масочных присвоений:
-        mask1 = (merged['Status_prev'] == 'Неактивно') | (merged['Status_prev'] == 'Хранение') | (merged['Status_prev'] == 'Исправен')
-        merged.loc[mask1, 'new_Status_P'] = merged['Status_prev']
-        
-        # Ремонт: если repair_days_prev < RepairTime, тогда 'Ремонт', иначе 'Исправен'
-        mask_repair_not_done = (merged['Status_prev'] == 'Ремонт') & (merged['repair_days_prev'] < merged['RepairTime'])
-        merged.loc[mask_repair_not_done, 'new_Status_P'] = 'Ремонт'
-        
-        mask_repair_complete = (merged['Status_prev'] == 'Ремонт') & (merged['repair_days_prev'] >= merged['RepairTime'])
-        merged.loc[mask_repair_complete, 'new_Status_P'] = 'Исправен'
-        
-        # Эксплуатация
-        explo_mask = (merged['Status_prev'] == 'Эксплуатация')
-        sne_check = merged['sne_prev'] < (merged['ll'] - merged['daily_flight_hours'])
-        ppr_check = merged['ppr_prev'] < (merged['oh'] - merged['daily_flight_hours'])
-        
-        mask_explo = explo_mask & sne_check & ppr_check
-        merged.loc[mask_explo, 'new_Status_P'] = 'Эксплуатация'
-        
-        # sne_limit
-        sne_limit = merged['sne_prev'] >= (merged['ll'] - merged['daily_flight_hours'])
-        mask_to_storage = explo_mask & sne_limit
-        merged.loc[mask_to_storage, 'new_Status_P'] = 'Хранение'
-        
-        # Если ppr_prev >= (oh - daily_flight_hours),
-        # то либо 'Ремонт', либо 'Хранение' (проверка sne_prev < BR?)
-        # Вместо функции exploitation_to_repair_or_storage - делаем ещё одну маску:
-        mask_explo_to_repair_or_storage = explo_mask & (merged['ppr_prev'] >= (merged['oh'] - merged['daily_flight_hours']))
-        
-        # Делим внутри по sne_prev < BR
-        # Для таких логик нам придётся сделать 2 подмаски
-        mask_to_repair = mask_explo_to_repair_or_storage & (merged['sne_prev'] < merged['BR'])
-        merged.loc[mask_to_repair, 'new_Status_P'] = 'Ремонт'
-        
-        # Остальные -> 'Хранение'
-        mask_to_storage2 = mask_explo_to_repair_or_storage & (merged['sne_prev'] >= merged['BR'])
-        merged.loc[mask_to_storage2, 'new_Status_P'] = 'Хранение'
-        
-        # Теперь нужно записать обратно в self.df
-        # Для этого можно сделать update через merge
-        # merged[['serialno','Dates','new_Status_P']] -> join self.df
-        # Или применить индексы, если они совпадают. Проще - ещё раз merge + mask.
-        
-        # Способ: соберём нужные поля, затем объединим:
-        updated = merged[['serialno','Dates','new_Status_P']]
-        # left_on='serialno', right_on='serialno'
-        
-        # Выполним merge с self.df, там, где Dates == curr_date
-        # потом присвоим new_Status_P -> self.df['Status_P']
-        
-        # Но проще делать такую конструкцию:
-        self.df = self.df.merge(
-            updated.rename(columns={'new_Status_P':'merged_Status_P'}),
-            on=['serialno','Dates'],
-            how='left'
-        )
-        # Теперь в self.df есть новый столбец merged_Status_P (NaN, если не было в merge)
-        
-        # И присваиваем:
-        mask_curr = (self.df['Dates'] == curr_date) & (self.df['merged_Status_P'].notnull())
-        self.df.loc[mask_curr, 'Status_P'] = self.df.loc[mask_curr, 'merged_Status_P']
-        
-        # Удалим вспомогательный столбец:
-        self.df = self.df.drop('merged_Status_P', axis=1)
-    
-    def step_2(self, curr_date):
-        """
-        Аналог CPU: расчёт баланса.
-        """
-        mask_curr = (self.df['Dates'] == curr_date)
-        curr_data = self.df[mask_curr]
-        if len(curr_data) == 0:
-            return
-        
-        # Возьмём первое значение mi8t_count, mi17_count
-        # (В cudf может быть .iloc, но старайтесь избегать, если много строк. Допустим, тут 1 строка?)
-        mi8t_count = curr_data['mi8t_count'].iloc[0]
-        mi17_count = curr_data['mi17_count'].iloc[0]
-        
-        # Считаем balance_mi8t как кол-во Status_P=Эксплуатация & ac_typ=Ми-8Т
-        # и т.д.
-        balance_mi8t_val = len(curr_data[(curr_data['Status_P'] == 'Эксплуатация') & (curr_data['ac_typ'] == 'Ми-8Т')])
-        stock_mi8t_val = len(curr_data[(curr_data['Status_P'] == 'Исправен') & (curr_data['ac_typ'] == 'Ми-8Т')])
-        balance_mi17_val = len(curr_data[(curr_data['Status_P'] == 'Эксплуатация') & (curr_data['ac_typ'] == 'Ми-17')])
-        stock_mi17_val = len(curr_data[(curr_data['Status_P'] == 'Исправен') & (curr_data['ac_typ'] == 'Ми-17')])
-        
-        # Пустое ac_typ
-        empty_mask = (curr_data['ac_typ'].str.strip() == '') | (curr_data['ac_typ'].str.lower() == 'none')
-        balance_empty_val = len(curr_data[(curr_data['Status_P'] == 'Эксплуатация') & empty_mask])
-        stock_empty_val = len(curr_data[(curr_data['Status_P'] == 'Исправен') & empty_mask])
-        
-        final_balance_mi8t = balance_mi8t_val - mi8t_count
-        final_balance_mi17 = balance_mi17_val - mi17_count
-        final_balance_total = final_balance_mi8t + final_balance_mi17 + balance_empty_val
-        
-        # Присваиваем всем строкам этого дня
-        self.df.loc[mask_curr, 'balance_mi8t'] = final_balance_mi8t
-        self.df.loc[mask_curr, 'balance_mi17'] = final_balance_mi17
-        self.df.loc[mask_curr, 'balance_empty'] = balance_empty_val
-        self.df.loc[mask_curr, 'balance_total'] = final_balance_total
-        
-        self.df.loc[mask_curr, 'stock_mi8t'] = balance_mi8t_val
-        self.df.loc[mask_curr, 'stock_mi17'] = stock_mi17_val
-        self.df.loc[mask_curr, 'stock_empty'] = stock_empty_val
-        self.df.loc[mask_curr, 'stock_total'] = (balance_mi8t_val + stock_mi17_val + stock_empty_val)
-    
-    def step_3(self, curr_date):
-        """
-        Распределяем 'Эксплуатация' <-> 'Исправен' в зависимости от balance_total.
-        """
-        mask_curr = (self.df['Dates'] == curr_date)
-        curr_data = self.df[mask_curr]
-        if len(curr_data) == 0:
-            return
-        
-        balance_total = curr_data['balance_total'].iloc[0]
-        
-        # Сначала все Status = Status_P
-        self.df.loc[mask_curr, 'Status'] = self.df.loc[mask_curr, 'Status_P']
-        
-        if balance_total > 0:
-            # перевод части 'Эксплуатация' -> 'Исправен'
-            explo_idx = curr_data[curr_data['Status_P'] == 'Эксплуатация'].index
-            change_count = min(int(balance_total), len(explo_idx))
-            if change_count > 0:
-                # Меняем у первых change_count в explo_idx
-                idx_to_change = explo_idx[:change_count]
-                self.df.loc[idx_to_change, 'Status'] = 'Исправен'
-        elif balance_total < 0:
-            abs_balance = abs(int(balance_total))
-            # перевод 'Исправен' -> 'Эксплуатация'
-            serviceable_idx = curr_data[curr_data['Status_P'] == 'Исправен'].index
-            serviceable_count = min(abs_balance, len(serviceable_idx))
-            if serviceable_count > 0:
-                idx_to_change = serviceable_idx[:serviceable_count]
-                self.df.loc[idx_to_change, 'Status'] = 'Эксплуатация'
-                abs_balance -= serviceable_count
-            
-            # Если ещё есть остаток
-            if abs_balance > 0:
-                # перевод 'Неактивно' -> 'Эксплуатация'
-                inactive_idx = curr_data[curr_data['Status_P'] == 'Неактивно'].index
-                inactive_count = min(abs_balance, len(inactive_idx))
-                if inactive_count > 0:
-                    idx_to_change2 = inactive_idx[:inactive_count]
-                    self.df.loc[idx_to_change2, 'Status'] = 'Эксплуатация'
-                    abs_balance -= inactive_count
-    
-    def step_4(self, prev_date, curr_date):
-        """
-        Обновление sne/ppr/repair_days и т.д.
-        Задача: также сделать максимально векторно.
-        """
-        prev_data = self.df[self.df['Dates'] == prev_date][['serialno','Status','Status_P','sne','ppr','repair_days']]
-        curr_data = self.df[self.df['Dates'] == curr_date][['serialno','Status','Status_P','daily_flight_hours','sne','ppr','repair_days']]
-        if len(prev_data) == 0 or len(curr_data) == 0:
-            return
-        
-        merged = curr_data.merge(
-            prev_data.rename(columns={
-                'Status':'Status_prev',
-                'Status_P':'Status_P_prev',
-                'sne':'sne_prev',
-                'ppr':'ppr_prev',
-                'repair_days':'repair_days_prev'
-            }),
-            on='serialno',
-            suffixes=('', '_prev'),
-            how='left'
-        )
-        
-        # Заполняем NaN значения для строк, которых не было в предыдущий день
-        merged['Status_prev'] = merged['Status_prev'].fillna('Неактивно')
-        merged['Status_P_prev'] = merged['Status_P_prev'].fillna('Неактивно')
-        merged['sne_prev'] = merged['sne_prev'].fillna(0.0)
-        merged['ppr_prev'] = merged['ppr_prev'].fillna(0.0)
-        merged['repair_days_prev'] = merged['repair_days_prev'].fillna(0.0)
-        
-        # Создаём новые колонки (new_sne, new_ppr, new_repair)
-        merged['new_sne'] = merged['sne']   # default
-        merged['new_ppr'] = merged['ppr']
-        merged['new_repair_days'] = merged['repair_days']
-        
-        # Условие: если Status == 'Эксплуатация'
-        mask_explo = (merged['Status'] == 'Эксплуатация')
-        merged.loc[mask_explo, 'new_sne'] = merged['sne_prev'] + merged['daily_flight_hours']
-        merged.loc[mask_explo, 'new_ppr'] = merged['ppr_prev'] + merged['daily_flight_hours']
-        
-        # Если Status == 'Исправен'
-        mask_hbs = (merged['Status'] == 'Исправен')
-        # Если раньше был ремонт, теперь исправен => обнуляем ppr, repair_days
-        mask_hbs_from_repair = mask_hbs & (merged['Status_P_prev'] == 'Ремонт')
-        merged.loc[mask_hbs_from_repair, 'new_sne'] = merged['sne_prev']
-        merged.loc[mask_hbs_from_repair, 'new_ppr'] = cp.float32(0.0)
-        merged.loc[mask_hbs_from_repair, 'new_repair_days'] = cp.float32(0.0)
-        
-        # Если Status == 'Ремонт'
-        mask_rep = (merged['Status'] == 'Ремонт')
-        mask_rep_from_explo = mask_rep & (merged['Status_prev'] == 'Эксплуатация')
-        # если вчера была Эксплуатация, значит начинаем repair_days=1
-        merged.loc[mask_rep_from_explo, 'new_repair_days'] = cp.float32(1.0)
-        
-        mask_rep_other = mask_rep & (merged['Status_prev'] != 'Эксплуатация')
-        merged.loc[mask_rep_other, 'new_repair_days'] = merged['repair_days_prev'] + cp.float32(1.0)
-        
-        # Если 'Хранение' или 'Неактивно' - sne/ppr/repair_days = prev
-        mask_storage = (merged['Status'].isin(['Хранение','Неактивно']))
-        merged.loc[mask_storage, 'new_sne'] = merged['sne_prev']
-        merged.loc[mask_storage, 'new_ppr'] = merged['ppr_prev']
-        merged.loc[mask_storage, 'new_repair_days'] = merged['repair_days_prev']
-        
-        # Теперь пишем обратно в self.df
-        # Готовим updated
-        updated = merged[['serialno','new_sne','new_ppr','new_repair_days']]
-        updated = updated.rename(columns={
-            'new_sne':'sne',
-            'new_ppr':'ppr',
-            'new_repair_days':'repair_days'
-        })
-        
-        # merge с self.df
-        self.df = self.df.merge(
-            updated,
-            on='serialno',
-            how='left',
-            suffixes=('', '_upd')
-        )
-        
-        # Присваиваем только для строк curr_date
-        mask_curr_date = (self.df['Dates'] == curr_date) & self.df['sne_upd'].notnull()
-        self.df.loc[mask_curr_date, 'sne'] = self.df.loc[mask_curr_date, 'sne_upd']
-        self.df.loc[mask_curr_date, 'ppr'] = self.df.loc[mask_curr_date, 'ppr_upd']
-        self.df.loc[mask_curr_date, 'repair_days'] = self.df.loc[mask_curr_date, 'repair_days_upd']
-        
-        # Удаляем временные поля
-        self.df.drop(['sne_upd','ppr_upd','repair_days_upd'], axis=1, inplace=True)
-    
-    def calculate_analytics_metrics(self):
-        """
-        В целом можно повторить логику CPU-версии.
-        Важно делать группировки/merge в cudf без apply().
-        """
-        if len(self.df) == 0:
-            self.logger.warning("GPU: Нет данных для метрик")
-            return
-        
-        period_start = self.first_date
-        period_end = period_start + timedelta(days=self.total_days)
-        
-        # Собираем нужные даты
-        dates_unique = self.df['Dates'].unique().sort_values().to_pandas()
-        period_dates = [d for d in dates_unique if period_start <= d < period_end]
-        
-        if len(period_dates) < 2:
-            self.logger.warning("GPU: Недостаточно дат для метрик")
-            return
-        
-        self.logger.info(f"GPU: Расчёт метрик для {period_start} - {period_end}")
-        
-        # Создадим промежуточный словарь {дата -> {field: value}}
-        analytics_results = {}
-        for i in range(1, len(period_dates)):
-            d_curr = period_dates[i]
-            d_prev = period_dates[i-1]
-            
-            df_curr = self.df[self.df['Dates'] == d_curr]
-            df_prev = self.df[self.df['Dates'] == d_prev]
-            
-            ops_count_val = len(df_curr[df_curr['Status'] == 'Эксплуатация'])
-            hbs_count_val = len(df_curr[df_curr['Status'] == 'Исправен'])
-            repair_count_val = len(df_curr[df_curr['Status'] == 'Ремонт'])
-            total_operable_val = ops_count_val + hbs_count_val + repair_count_val
-            
-            # Сравнение статусов (merge)
-            merged = df_prev[['serialno','Status']].merge(
-                df_curr[['serialno','Status']],
-                on='serialno',
-                suffixes=('_prev','_curr'),
-                how='inner'
-            )
-            
-            entry_count_val = len(merged[
-                (merged['Status_prev'] == 'Неактивно') & (merged['Status_curr'] == 'Эксплуатация')
-            ])
-            exit_count_val = len(merged[
-                (merged['Status_prev'] == 'Эксплуатация') & (merged['Status_curr'] == 'Хранение')
-            ])
-            into_repair_val = len(merged[
-                (merged['Status_prev'] == 'Эксплуатация') & (merged['Status_curr'] == 'Ремонт')
-            ])
-            complete_repair_val = len(merged[
-                (merged['Status_prev'] == 'Ремонт') & (merged['Status_curr'] != 'Ремонт')
-            ])
-            
-            # Остаток
-            operating_tech = df_curr[df_curr['Status'].isin(['Эксплуатация','Исправен'])]
-            remain_repair_val = ((operating_tech['oh'] - operating_tech['ppr']).fillna(0)).sum()
-            
-            serviceable_tech = df_curr[df_curr['Status'].isin(['Эксплуатация','Исправен','Ремонт'])]
-            remain_val = ((serviceable_tech['ll'] - serviceable_tech['sne']).fillna(0)).sum()
-            
-            total_ll = serviceable_tech['ll'].fillna(0).sum()
-            midlife_val = (remain_val / total_ll) if total_ll > 0 else 0.0
-            
-            total_oh = operating_tech['oh'].fillna(0).sum()
-            midlife_repair_val = (remain_repair_val / total_oh) if total_oh > 0 else 0.0
-            
-            hours_val = df_curr[df_curr['Status'] == 'Эксплуатация']['daily_flight_hours'].fillna(0).sum()
-            
-            analytics_results[d_curr] = {
-                'ops_count': ops_count_val,
-                'hbs_count': hbs_count_val,
-                'repair_count': repair_count_val,
-                'total_operable': total_operable_val,
-                'entry_count': entry_count_val,
-                'exit_count': exit_count_val,
-                'into_repair': into_repair_val,
-                'complete_repair': complete_repair_val,
-                'remain_repair': float(remain_repair_val),
-                'remain': float(remain_val),
-                'midlife_repair': float(midlife_repair_val),
-                'midlife': float(midlife_val),
-                'hours': float(hours_val)
-            }
-        
-        # Применяем к self.df
-        for d in period_dates[1:]:
-            if d not in analytics_results:
-                continue
-            row = analytics_results[d]
-            mask = (self.df['Dates'] == d)
-            for field in self.analytics_fields:
-                val = row[field]
-                self.df.loc[mask, field] = val
-        
-        self.logger.info("GPU: Метрики рассчитаны и записаны в self.df")
-    
-    def ensure_tmp_table_exists(self):
-        try:
-            drop_ddl = f"DROP TABLE IF EXISTS {self.database_name}.tmp_OlapCube_update"
-            self.client.execute(drop_ddl)
-            self.logger.info("GPU: Старая временная таблица удалена (если была).")
-            
-            ddl = f"""
-            CREATE TABLE {self.database_name}.tmp_OlapCube_update
-            (
-                trigger_type Float32,
-                RepairTime Float32,
-                Status_P String,
-                repair_days Nullable(Float32),
-                sne Decimal(10,2),
-                ppr Decimal(10,2),
-                Status String,
-                location String,
-                ac_typ String,
-                daily_flight_hours Decimal(10,2),
-                daily_flight_hours_f Decimal(10,2),
-                BR Float32,
-                ll Float32,
-                oh Float32,
-                threshold Float32,
-                Effectivity String,
-                serialno String,
-                Dates Date,
-                mi8t_count Float32,
-                mi17_count Float32,
-                balance_mi8t Float32,
-                balance_mi17 Float32,
-                balance_empty Float32,
-                balance_total Float32,
-                stock_mi8t Float32,
-                stock_mi17 Float32,
-                stock_empty Float32,
-                stock_total Float32,
-                
-                /* Аналитические поля */
-                ops_count Float32,
-                hbs_count Float32,
-                repair_count Float32,
-                total_operable Float32,
-                entry_count Float32,
-                exit_count Float32,
-                into_repair Float32,
-                complete_repair Float32,
-                remain_repair Float32,
-                remain Float32,
-                midlife_repair Float32,
-                midlife Float32,
-                hours Float32
-            ) ENGINE = Memory
-            """
-            self.client.execute(ddl)
-            self.logger.info("GPU: Временная таблица tmp_OlapCube_update создана.")
-        except Exception as e:
-            self.logger.error(f"Ошибка при создании временной таблицы: {e}", exc_info=True)
-            # Пробуем альтернативный вариант с другим движком
-            try:
-                self.logger.info("Пробуем создать таблицу с движком MergeTree")
-                ddl_alt = f"""
-                CREATE TABLE {self.database_name}.tmp_OlapCube_update
-                (
-                    trigger_type Float32,
-                    RepairTime Float32,
-                    Status_P String,
-                    repair_days Nullable(Float32),
-                    sne Decimal(10,2),
-                    ppr Decimal(10,2),
-                    Status String,
-                    location String,
-                    ac_typ String,
-                    daily_flight_hours Decimal(10,2),
-                    daily_flight_hours_f Decimal(10,2),
-                    BR Float32,
-                    ll Float32,
-                    oh Float32,
-                    threshold Float32,
-                    Effectivity String,
-                    serialno String,
-                    Dates Date,
-                    mi8t_count Float32,
-                    mi17_count Float32,
-                    balance_mi8t Float32,
-                    balance_mi17 Float32,
-                    balance_empty Float32,
-                    balance_total Float32,
-                    stock_mi8t Float32,
-                    stock_mi17 Float32,
-                    stock_empty Float32,
-                    stock_total Float32,
-                    
-                    /* Аналитические поля */
-                    ops_count Float32,
-                    hbs_count Float32,
-                    repair_count Float32,
-                    total_operable Float32,
-                    entry_count Float32,
-                    exit_count Float32,
-                    into_repair Float32,
-                    complete_repair Float32,
-                    remain_repair Float32,
-                    remain Float32,
-                    midlife_repair Float32,
-                    midlife Float32,
-                    hours Float32
-                ) ENGINE = MergeTree()
-                ORDER BY (Dates, serialno)
-                """
-                self.client.execute(ddl_alt)
-                self.logger.info("GPU: Временная таблица создана с движком MergeTree.")
-            except Exception as e2:
-                self.logger.error(f"Не удалось создать временную таблицу даже с альтернативным движком: {e2}", exc_info=True)
-                raise
-    
-    def save_all_results(self, period_start, period_end):
-        self.logger.info(f"GPU: Сохранение записей за {period_start} - {period_end}")
-        # Фильтруем нужные даты
-        mask_period = (self.df['Dates'] >= cudf.Timestamp(period_start)) & (self.df['Dates'] < cudf.Timestamp(period_end))
-        cycle_df = self.df[mask_period].copy()
-        
-        # Не обновляем самую первую дату
-        # (если логика такая же, как в CPU)
-        cycle_df = cycle_df[cycle_df['Dates'] > cudf.Timestamp(self.first_date)]
-        
-        # Округления
-        # В cudf можно .round(decimals=2), но иногда нужно переводить в float
-        cycle_df['sne'] = cycle_df['sne'].round(2).astype('float32')
-        cycle_df['ppr'] = cycle_df['ppr'].round(2).astype('float32')
-        cycle_df['daily_flight_hours'] = cycle_df['daily_flight_hours'].round(2).astype('float32')
-        cycle_df['daily_flight_hours_f'] = cycle_df['daily_flight_hours_f'].round(2).astype('float32')
-        
-        self.ensure_tmp_table_exists()
-        
-        # Формируем список колонок
-        all_columns = [
-            'trigger_type','RepairTime','Status_P','repair_days','sne','ppr','Status',
-            'location','ac_typ','daily_flight_hours','daily_flight_hours_f','BR','ll','oh','threshold',
-            'Effectivity','serialno','Dates','mi8t_count','mi17_count','balance_mi8t','balance_mi17',
-            'balance_empty','balance_total','stock_mi8t','stock_mi17','stock_empty','stock_total'
-        ] + self.analytics_fields
-        
-        df_to_insert = cycle_df[all_columns].fillna(0)  # или нан -> 0
-        # Вставка в ClickHouse требует либо list of tuples, либо pandas DataFrame + мы делаем .to_records()
-        
-        # Переводим cudf -> pandas
-        df_insert_pd = df_to_insert.to_pandas()
-        records = list(df_insert_pd.itertuples(index=False, name=None))
-        
-        self.logger.debug("Список колонок для вставки: %s", all_columns)
-        self.logger.debug("Количество столбцов: %d", len(all_columns))
-
-        self.logger.debug("Типы столбцов:\n%s", df_insert_pd.dtypes)
-        self.logger.debug("Пример (до 5 строк) для вставки:\n%s", df_insert_pd.head(5))
-
-        self.logger.debug("Всего кортежей в records: %d", len(records))
-
+        # Составляем запрос INSERT
         columns_str = ", ".join(all_columns)
         insert_query = f"""
-        INSERT INTO {self.database_name}.tmp_OlapCube_update ({columns_str}) VALUES
+        INSERT INTO {self.database_name}.tmp_OlapCube_update (
+            {columns_str}
+        ) VALUES
         """
-        try:
-            self.client.execute(insert_query, records, settings={'max_threads': 8})
-            
-            tmp_count = self.client.execute(f"SELECT count(*) FROM {self.database_name}.tmp_OlapCube_update")[0][0]
-            self.logger.info(f"GPU: Временная таблица заполнена {tmp_count} записями.")
-            
-            # Переносим в основную
-            insert_main_query = f"""
-            INSERT INTO {self.database_name}.OlapCube_VNV ({columns_str})
-            SELECT {columns_str}
-            FROM {self.database_name}.tmp_OlapCube_update
-            """
-            self.client.execute(insert_main_query, settings={'max_threads': 8})
-            
-            self.logger.info("GPU: Записи вставлены в основную таблицу OlapCube_VNV.")
-            
-            optimize_query = f"OPTIMIZE TABLE {self.database_name}.OlapCube_VNV FINAL"
-            self.client.execute(optimize_query)
-            self.logger.info("GPU: OPTIMIZE выполнен.")
-        except Exception as e:
-            self.logger.error(f"Ошибка при выполнении SQL-запросов: {e}", exc_info=True)
-            raise
-        finally:
-            # Удаляем временную таблицу в любом случае
-            try:
-                drop_query = f"DROP TABLE {self.database_name}.tmp_OlapCube_update"
-                self.client.execute(drop_query)
-                self.logger.info("GPU: Временная таблица удалена.")
-            except Exception as e:
-                self.logger.warning(f"Не удалось удалить временную таблицу: {e}")
+        self.client.execute(insert_query, records, settings={'max_threads': 8})
+        self.logger.info("Данные вставлены во временную таблицу.")
         
-        # По желанию — проверка
-        # ...
-    
+        # Обновленный INSERT в основную таблицу
+        insert_main_query = f"""
+        INSERT INTO {self.database_name}.OlapCube_VNV (
+            {columns_str}
+        )
+        SELECT {columns_str}
+        FROM {self.database_name}.tmp_OlapCube_update
+        """
+        self.client.execute(insert_main_query, settings={'max_threads': 8})
+        self.logger.info("Новые версии записей вставлены в основную таблицу.")
+        
+        optimize_query = f"OPTIMIZE TABLE {self.database_name}.OlapCube_VNV FINAL"
+        self.client.execute(optimize_query, settings={'max_threads': 8})
+        self.logger.info("Оптимизация таблицы выполнена.")
+        
+        drop_query = f"DROP TABLE {self.database_name}.tmp_OlapCube_update"
+        self.client.execute(drop_query)
+        
+        records = None
+        update_records = None
+
+
 if __name__ == "__main__":
-    processor = CycleProcessorGPU(total_days=30)
-    processor.run_cycle()
+    try:
+        start_time = time.time()
+        processor = CycleCUDAProcessor(total_days=7)
+        processor.run_cycle()
+        total_time = time.time() - start_time
+        print(f"Скрипт успешно завершен! Общее время выполнения: {total_time:.2f} секунд")
+    except Exception as e:
+        print(f"Ошибка при выполнении скрипта: {e}")
+        import traceback
+        traceback.print_exc()

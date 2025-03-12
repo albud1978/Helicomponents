@@ -6,6 +6,7 @@ from clickhouse_driver import Client
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import sys
+import time
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -19,7 +20,7 @@ if not logger.handlers:
 
 
 class CycleProcessor:
-    def __init__(self, total_days=2):  # Тестовый период – 2 дня
+    def __init__(self, total_days):  # Убрано значение по умолчанию
         self.logger = logger
         self.total_days = total_days
 
@@ -39,39 +40,11 @@ class CycleProcessor:
         self.database_name = database_name
         self.df = None
         
-        # Поля для аналитики
-        self.analytics_fields = [
-            'ops_count','hbs_count','repair_count','total_operable','entry_count','exit_count',
-            'into_repair','complete_repair','remain_repair','remain','midlife_repair','midlife','hours'
-        ]
+        # Удаляем определение поля self.analytics_fields
         
-        # Добавляем колонки для аналитики
-        self.ensure_analytics_columns()
-        
-    def ensure_analytics_columns(self):
-        """Добавляем колонки для аналитики, если их нет"""
-        try:
-            # ALTER TABLE для добавления необходимых полей
-            new_columns_ddl = f"""
-            ALTER TABLE {self.database_name}.OlapCube_VNV
-            ADD COLUMN IF NOT EXISTS ops_count Float32,
-            ADD COLUMN IF NOT EXISTS hbs_count Float32,
-            ADD COLUMN IF NOT EXISTS repair_count Float32,
-            ADD COLUMN IF NOT EXISTS total_operable Float32,
-            ADD COLUMN IF NOT EXISTS entry_count Float32,
-            ADD COLUMN IF NOT EXISTS exit_count Float32,
-            ADD COLUMN IF NOT EXISTS into_repair Float32,
-            ADD COLUMN IF NOT EXISTS complete_repair Float32,
-            ADD COLUMN IF NOT EXISTS remain_repair Float32,
-            ADD COLUMN IF NOT EXISTS remain Float32,
-            ADD COLUMN IF NOT EXISTS midlife_repair Float32,
-            ADD COLUMN IF NOT EXISTS midlife Float32,
-            ADD COLUMN IF NOT EXISTS hours Float32
-            """
-            self.client.execute(new_columns_ddl)
-            self.logger.info("Аналитические поля (если их не было) успешно добавлены в OlapCube_VNV.")
-        except Exception as e:
-            self.logger.error(f"Ошибка при добавлении аналитических полей: {e}", exc_info=True)
+        # Удаляем вызов self.ensure_analytics_columns()
+    
+    # Удаляем метод ensure_analytics_columns()
 
     def get_first_date(self) -> datetime:
         query = f"SELECT MIN(Dates) as first_date FROM {self.database_name}.OlapCube_VNV"
@@ -198,11 +171,7 @@ class CycleProcessor:
         self.logger.info("Начинаем обработку дат...")
         self.process_all_dates(period_start, period_end)
         
-        # Добавляем расчет аналитических метрик
-        self.calculate_analytics_metrics()
-        
-        # Удаляем выгрузки в Excel
-        # Сохраняем разбивку для отладки если нужно - удалено
+        # Удаляем вызов calculate_analytics_metrics()
         
         self.save_all_results(period_start, period_end)
         self.logger.info("Обработка завершена. Результаты записаны в базу.")
@@ -432,12 +401,12 @@ class CycleProcessor:
                 continue
 
     def ensure_tmp_table_exists(self):
-        """Создает временную таблицу с учетом аналитических полей"""
+        """Создает временную таблицу без аналитических полей"""
         drop_ddl = f"DROP TABLE IF EXISTS {self.database_name}.tmp_OlapCube_update"
         self.client.execute(drop_ddl)
         self.logger.info("Старая временная таблица tmp_OlapCube_update удалена (если существовала).")
 
-        # Добавляем аналитические поля в структуру таблицы
+        # Удаляем аналитические поля из структуры таблицы
         ddl = f"""
         CREATE TABLE {self.database_name}.tmp_OlapCube_update
         (
@@ -468,26 +437,11 @@ class CycleProcessor:
             stock_mi8t Float32,
             stock_mi17 Float32,
             stock_empty Float32,
-            stock_total Float32,
-            
-            /* Аналитические поля */
-            ops_count Float32,
-            hbs_count Float32,
-            repair_count Float32,
-            total_operable Float32,
-            entry_count Float32,
-            exit_count Float32,
-            into_repair Float32,
-            complete_repair Float32,
-            remain_repair Float32,
-            remain Float32,
-            midlife_repair Float32,
-            midlife Float32,
-            hours Float32
+            stock_total Float32
         ) ENGINE = Memory
         """
         self.client.execute(ddl)
-        self.logger.info("Новая временная таблица tmp_OlapCube_update создана (с аналитическими полями).")
+        self.logger.info("Новая временная таблица tmp_OlapCube_update создана (без аналитических полей).")
 
     def save_all_results(self, period_start, period_end):
         self.logger.info(f"Начинаем сохранение записей за период {period_start} - {period_end}")
@@ -503,7 +457,7 @@ class CycleProcessor:
         
         self.ensure_tmp_table_exists()
         
-        # Добавляем аналитические поля в колонки для временной таблицы
+        # Убираем аналитические поля из списка колонок
         all_columns = [
              'trigger_type',
              'RepairTime',
@@ -532,33 +486,19 @@ class CycleProcessor:
              'stock_mi8t',
              'stock_mi17',
              'stock_empty',
-             'stock_total',
-             # Добавляем аналитические поля
-             'ops_count',
-             'hbs_count',
-             'repair_count',
-             'total_operable',
-             'entry_count', 
-             'exit_count',
-             'into_repair',
-             'complete_repair',
-             'remain_repair',
-             'remain',
-             'midlife_repair',
-             'midlife',
-             'hours'
+             'stock_total'
         ]
       
         update_records = df_to_update[all_columns]
         
-        # Заполняем NaN нулями для числовых полей
+        # Заполняем NaN нулями для числовых полей (удаляем упоминание self.analytics_fields)
         numeric_fields = [
             'trigger_type', 'RepairTime', 'repair_days', 'sne', 'ppr',
             'daily_flight_hours', 'daily_flight_hours_f', 'BR', 'll', 'oh',
             'threshold', 'mi8t_count', 'mi17_count', 'balance_mi8t', 'balance_mi17',
             'balance_empty', 'balance_total', 'stock_mi8t', 'stock_mi17', 'stock_empty',
             'stock_total'
-        ] + self.analytics_fields
+        ]
         
         for col in numeric_fields:
             if col in update_records.columns:
@@ -567,7 +507,7 @@ class CycleProcessor:
         update_records = update_records.replace({np.nan: None})
         records = list(update_records.itertuples(index=False, name=None))
 
-        # Составляем запрос INSERT с учетом аналитических полей
+        # Составляем запрос INSERT без аналитических полей
         columns_str = ", ".join(all_columns)
         insert_query = f"""
         INSERT INTO {self.database_name}.tmp_OlapCube_update (
@@ -581,7 +521,7 @@ class CycleProcessor:
         tmp_count = self.client.execute(count_query)[0][0]
         self.logger.info(f"Количество записей во временной таблице: {tmp_count}")
 
-        # Обновленный INSERT в основную таблицу с учетом аналитических полей
+        # Обновленный INSERT в основную таблицу без аналитических полей
         insert_main_query = f"""
         INSERT INTO {self.database_name}.OlapCube_VNV (
             {columns_str}
@@ -603,141 +543,28 @@ class CycleProcessor:
         records = None
         update_records = None
         
-        # Проверяем результаты, включая аналитические поля
+        # Проверяем результаты без аналитических полей
         check_query = f"""
-        SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days, 
-               ops_count, hbs_count, repair_count, hours
+        SELECT serialno, Dates, Status, Status_P, sne, ppr, repair_days
         FROM {self.database_name}.OlapCube_VNV
         WHERE Dates = '2024-11-26'
         LIMIT 10
         """
         check_result = self.client.execute(check_query)
-        self.logger.info("Пример данных из основной таблицы на 2024-11-26 после обновления (включая аналитику):")
+        self.logger.info("Пример данных из основной таблицы на 2024-11-26 после обновления:")
         for row in check_result:
             self.logger.info(row)
 
-    def calculate_analytics_metrics(self):
-        """Вычисляет значения аналитических метрик только для заданного периода"""
-        if self.df is None or len(self.df) == 0:
-            self.logger.warning("Нет данных для расчета аналитических метрик")
-            return
-        
-        # Определяем период для расчета аналитических метрик
-        period_start = self.first_date
-        period_end = period_start + timedelta(days=self.total_days)
-        
-        # Отфильтровываем только даты из указанного периода
-        period_dates = sorted([d for d in self.df['Dates'].unique() if period_start <= d < period_end])
-        
-        if len(period_dates) < 2:
-            self.logger.warning("Недостаточно дат в указанном периоде для вычисления аналитических метрик")
-            return
-                
-        self.logger.info(f"Начинаем расчет аналитических метрик для периода {period_start} - {period_end}...")
-        
-        # Создаем отдельный DataFrame для хранения аналитических значений по датам
-        analytics_by_date = pd.DataFrame(index=period_dates[1:])
-        for field in self.analytics_fields:
-            analytics_by_date[field] = np.float32(0.0)
-        
-        for i in range(1, len(period_dates)):
-            d_curr = period_dates[i]
-            d_prev = period_dates[i-1]
-            
-            df_curr = self.df[self.df['Dates'] == d_curr]
-            df_prev = self.df[self.df['Dates'] == d_prev]
-            
-            # Расчет базовых счетчиков
-            ops_count_val = len(df_curr[df_curr['Status'] == 'Эксплуатация'])
-            hbs_count_val = len(df_curr[df_curr['Status'] == 'Исправен'])
-            repair_count_val = len(df_curr[df_curr['Status'] == 'Ремонт'])
-            total_operable_val = ops_count_val + hbs_count_val + repair_count_val
-            
-            # Расчет на основе сравнения с предыдущим днем
-            merged = df_prev[['serialno', 'Status', 'Status_P']].merge(
-                df_curr[['serialno', 'Status', 'Status_P']],
-                on='serialno',
-                suffixes=('_prev', '_curr')
-            )
-            
-            # Переходы между статусами
-            entry_count_val = len(merged[
-                (merged['Status_prev'] == 'Неактивно') &
-                (merged['Status_curr'] == 'Эксплуатация')
-            ])
-            
-            exit_count_val = len(merged[
-                (merged['Status_prev'] == 'Эксплуатация') &
-                (merged['Status_curr'] == 'Хранение')
-            ])
-            
-            into_repair_val = len(merged[
-                (merged['Status_prev'] == 'Эксплуатация') &
-                (merged['Status_curr'] == 'Ремонт')
-            ])
-            
-            complete_repair_val = len(merged[
-                (merged['Status_prev'] == 'Ремонт') &
-                (merged['Status_curr'] != 'Ремонт')
-            ])
-            
-            # Расчет оставшегося ресурса
-            operating_tech = df_curr[df_curr['Status'].isin(['Эксплуатация', 'Исправен'])]
-            remain_repair_val = (operating_tech['oh'] - operating_tech['ppr']).fillna(0).sum() if len(operating_tech) > 0 else 0
-            
-            serviceable_tech = df_curr[df_curr['Status'].isin(['Эксплуатация', 'Исправен', 'Ремонт'])]
-            remain_val = (serviceable_tech['ll'] - serviceable_tech['sne']).fillna(0).sum() if len(serviceable_tech) > 0 else 0
-            
-            # Относительные показатели
-            total_ll = serviceable_tech['ll'].fillna(0).sum() if len(serviceable_tech) > 0 else 0
-            midlife_val = remain_val / total_ll if total_ll > 0 else 0
-            
-            total_oh = operating_tech['oh'].fillna(0).sum() if len(operating_tech) > 0 else 0
-            midlife_repair_val = remain_repair_val / total_oh if total_oh > 0 else 0
-            
-            # Общий налет часов
-            hours_val = df_curr[df_curr['Status'] == 'Эксплуатация']['daily_flight_hours'].sum()
-            
-            # Сохраняем значения в промежуточном DataFrame
-            analytics_by_date.loc[d_curr, 'ops_count'] = ops_count_val
-            analytics_by_date.loc[d_curr, 'hbs_count'] = hbs_count_val
-            analytics_by_date.loc[d_curr, 'repair_count'] = repair_count_val
-            analytics_by_date.loc[d_curr, 'total_operable'] = total_operable_val
-            analytics_by_date.loc[d_curr, 'entry_count'] = entry_count_val
-            analytics_by_date.loc[d_curr, 'exit_count'] = exit_count_val
-            analytics_by_date.loc[d_curr, 'into_repair'] = into_repair_val
-            analytics_by_date.loc[d_curr, 'complete_repair'] = complete_repair_val
-            analytics_by_date.loc[d_curr, 'remain_repair'] = remain_repair_val
-            analytics_by_date.loc[d_curr, 'remain'] = remain_val
-            analytics_by_date.loc[d_curr, 'midlife_repair'] = midlife_repair_val
-            analytics_by_date.loc[d_curr, 'midlife'] = midlife_val
-            analytics_by_date.loc[d_curr, 'hours'] = hours_val
-            
-            # Логирование прогресса каждые 100 дней или каждые 10% от общего количества
-            log_interval = max(100, int(len(period_dates) * 0.1))
-            if i % log_interval == 0 or i == len(period_dates) - 1:
-                self.logger.info(f"Обработано {i} дат из {len(period_dates)-1} ({i/(len(period_dates)-1)*100:.1f}%)")
-        
-        self.logger.info("Копирование аналитических метрик во все строки...")
-        
-        # Оптимизированная копия значений в основной DataFrame
-        # Создаем словарь {дата: {поле: значение}} для быстрого доступа
-        analytics_dict = {date: {} for date in period_dates[1:]}
-        for date in period_dates[1:]:
-            for field in self.analytics_fields:
-                analytics_dict[date][field] = analytics_by_date.loc[date, field]
-        
-        # Применяем значения ко всем записям с соответствующей датой
-        for date in period_dates[1:]:
-            date_mask = (self.df['Dates'] == date)
-            if not date_mask.any():
-                continue
-                
-            for field in self.analytics_fields:
-                self.df.loc[date_mask, field] = analytics_dict[date][field]
-        
-        self.logger.info("Расчет аналитических метрик завершен")
+    # Удаляем метод calculate_analytics_metrics()
     
 if __name__ == "__main__":
-    processor = CycleProcessor(total_days=4000)
-    processor.run_cycle()
+    try:
+        start_time = time.time()
+        processor = CycleProcessor(total_days=7)
+        processor.run_cycle()
+        total_time = time.time() - start_time
+        print(f"CPU-версия успешно завершена! Общее время выполнения: {total_time:.2f} секунд")
+    except Exception as e:
+        print(f"Ошибка при выполнении CPU-версии: {e}")
+        import traceback
+        traceback.print_exc()
