@@ -1,0 +1,89 @@
+2025-03-16 17:29:55,819 - INFO - Подключение к ClickHouse успешно установлено
+2025-03-16 17:29:55,916 - INFO - Используем последнюю версию: v20241125
+2025-03-16 17:29:55,985 - INFO - Загружено 185 записей из Standard Table Report 251124 ВНВ rev KDV.xlsx
+2025-03-16 17:29:55,989 - INFO - Загружено 13 записей из Агрегат.xlsx
+2025-03-16 17:29:55,993 - INFO - Загружено 14 записей из Program.xlsx
+2025-03-16 17:29:55,993 - INFO - Найден столбец с датой: mfg_date
+2025-03-16 17:29:55,994 - INFO - В столбце mfg_date найдено 185 валидных дат
+2025-03-16 17:29:55,995 - INFO - Примеры дат из mfg_date: [Timestamp('1900-01-01 00:00:00'), Timestamp('1977-06-30 00:00:00'), Timestamp('1978-02-20 00:00:00')]
+2025-03-16 17:29:55,995 - INFO - Найден столбец с датой: oh_at_date
+2025-03-16 17:29:55,996 - INFO - В столбце oh_at_date найдено 116 валидных дат
+2025-03-16 17:29:55,996 - INFO - Примеры дат из oh_at_date: [Timestamp('2011-10-04 00:00:00'), Timestamp('2011-12-23 00:00:00'), Timestamp('2013-03-27 00:00:00')]
+2025-03-16 17:29:55,996 - INFO - Найден столбец с датой: removal_date
+2025-03-16 17:29:55,996 - INFO - В столбце removal_date найдено 127 валидных дат
+2025-03-16 17:29:55,996 - INFO - Примеры дат из removal_date: [Timestamp('2020-07-13 00:00:00'), Timestamp('2020-08-12 00:00:00'), Timestamp('2021-01-24 00:00:00')]
+2025-03-16 17:29:55,997 - INFO - Найден столбец с датой: repair_date
+2025-03-16 17:29:55,997 - INFO - В столбце repair_date найдено 4 валидных дат
+2025-03-16 17:29:55,997 - INFO - Примеры дат из repair_date: [Timestamp('2024-10-10 00:00:00'), Timestamp('2024-10-30 00:00:00'), Timestamp('2024-11-01 00:00:00')]
+2025-03-16 17:29:55,998 - INFO - Найдено 399 дат после 2000 года
+2025-03-16 17:29:55,998 - INFO - Всего найдено 432 валидных дат
+2025-03-16 17:29:55,998 - INFO - Выбранная дата для анализа: 2008-06-28 00:00:00
+2025-03-16 17:29:55,998 - INFO - Форматированная дата для анализа: 2008-06-28
+2025-03-16 17:29:55,998 - INFO - Проверка доступных таблиц в базе данных...
+2025-03-16 17:29:56,073 - INFO - Доступные таблицы в базе данных default:
+2025-03-16 17:29:56,074 - INFO -   - .inner_id.8f8d5349-601a-4439-8deb-37da395fee51
+2025-03-16 17:29:56,074 - INFO -   - Agregat
+2025-03-16 17:29:56,074 - INFO -   - Heli_Components
+2025-03-16 17:29:56,074 - INFO -   - Heli_Components_Monthly
+2025-03-16 17:29:56,074 - INFO -   - OlapCube_Analytics
+2025-03-16 17:29:56,074 - INFO -   - OlapCube_VNV
+2025-03-16 17:29:56,074 - INFO -   - Vygruzka
+2025-03-16 17:29:56,074 - INFO -   - fleet
+2025-03-16 17:29:56,074 - INFO -   - flight_hours
+2025-03-16 17:29:56,074 - INFO -   - flight_hours_mv
+2025-03-16 17:29:56,074 - INFO -   - monthly_flight_hours
+2025-03-16 17:29:56,074 - INFO - Используем таблицу Heli_Components
+2025-03-16 17:29:56,074 - INFO - Выполняем запрос к БД: 
+            SELECT version_id
+            FROM default.Heli_Components
+            WHERE Dates = '2008-06-28'
+            ORDER BY created_at DESC
+            LIMIT 1
+            
+2025-03-16 17:29:56,154 - WARNING - Не найдена версия для даты 2008-06-28, ищем ближайшую доступную дату
+2025-03-16 17:29:56,255 - INFO - Используем последнюю доступную дату: 2035-11-08
+2025-03-16 17:29:56,375 - INFO - Найдена версия v20241125 для даты 2035-11-08
+2025-03-16 17:29:56,595 - INFO - Загружено 420 записей из OLAP-куба
+2025-03-16 17:29:56,688 - ERROR - Ошибка при получении данных из аналитической таблицы: Code: 47.
+DB::Exception: Unknown expression identifier `mi8t_count` in scope SELECT Dates, ops_count, hbs_count, repair_count, total_operable, entry_count, exit_count, into_repair, complete_repair, mi8t_count, mi17_count FROM default.Heli_Components WHERE version_id = 'v20241125' ORDER BY Dates ASC. Maybe you meant: ['exit_count']. Stack trace:
+
+0. DB::Exception::Exception(DB::Exception::MessageMasked&&, int, bool) @ 0x000000000cf720fb
+1. DB::Exception::Exception(PreformattedMessage&&, int) @ 0x0000000007ea888c
+2. DB::Exception::Exception<char const*, String&, String, String, String>(int, FormatStringHelperImpl<std::type_identity<char const*>::type, std::type_identity<String&>::type, std::type_identity<String>::type, std::type_identity<String>::type, std::type_identity<String>::type>, char const*&&, String&, String&&, String&&, String&&) @ 0x0000000010b84f8f
+3. DB::QueryAnalyzer::resolveExpressionNode(std::shared_ptr<DB::IQueryTreeNode>&, DB::IdentifierResolveScope&, bool, bool, bool) @ 0x0000000010b57a03
+4. DB::QueryAnalyzer::resolveExpressionNodeList(std::shared_ptr<DB::IQueryTreeNode>&, DB::IdentifierResolveScope&, bool, bool) @ 0x0000000010b53d7a
+5. DB::QueryAnalyzer::resolveProjectionExpressionNodeList(std::shared_ptr<DB::IQueryTreeNode>&, DB::IdentifierResolveScope&) @ 0x0000000010b85967
+6. DB::QueryAnalyzer::resolveQuery(std::shared_ptr<DB::IQueryTreeNode> const&, DB::IdentifierResolveScope&) @ 0x0000000010b4a5e6
+7. DB::QueryAnalyzer::resolve(std::shared_ptr<DB::IQueryTreeNode>&, std::shared_ptr<DB::IQueryTreeNode> const&, std::shared_ptr<DB::Context const>) @ 0x0000000010b4892c
+8. DB::QueryAnalysisPass::run(std::shared_ptr<DB::IQueryTreeNode>&, std::shared_ptr<DB::Context const>) @ 0x0000000010b481e5
+9. DB::QueryTreePassManager::run(std::shared_ptr<DB::IQueryTreeNode>) @ 0x0000000011180756
+10. DB::(anonymous namespace)::buildQueryTreeAndRunPasses(std::shared_ptr<DB::IAST> const&, DB::SelectQueryOptions const&, std::shared_ptr<DB::Context const> const&, std::shared_ptr<DB::IStorage> const&) (.llvm.15107487084620985776) @ 0x00000000113c031d
+11. DB::InterpreterSelectQueryAnalyzer::InterpreterSelectQueryAnalyzer(std::shared_ptr<DB::IAST> const&, std::shared_ptr<DB::Context const> const&, DB::SelectQueryOptions const&, std::vector<String, std::allocator<String>> const&) @ 0x00000000113be2bc
+12. std::unique_ptr<DB::IInterpreter, std::default_delete<DB::IInterpreter>> std::__function::__policy_invoker<std::unique_ptr<DB::IInterpreter, std::default_delete<DB::IInterpreter>> (DB::InterpreterFactory::Arguments const&)>::__call_impl<std::__function::__default_alloc_func<DB::registerInterpreterSelectQueryAnalyzer(DB::InterpreterFactory&)::$_0, std::unique_ptr<DB::IInterpreter, std::default_delete<DB::IInterpreter>> (DB::InterpreterFactory::Arguments const&)>>(std::__function::__policy_storage const*, DB::InterpreterFactory::Arguments const&) (.llvm.15107487084620985776) @ 0x00000000113c2042
+13. DB::InterpreterFactory::get(std::shared_ptr<DB::IAST>&, std::shared_ptr<DB::Context>, DB::SelectQueryOptions const&) @ 0x000000001135318c
+14. DB::executeQueryImpl(char const*, char const*, std::shared_ptr<DB::Context>, DB::QueryFlags, DB::QueryProcessingStage::Enum, DB::ReadBuffer*) @ 0x0000000011726954
+15. DB::executeQuery(String const&, std::shared_ptr<DB::Context>, DB::QueryFlags, DB::QueryProcessingStage::Enum) @ 0x0000000011722f5a
+16. DB::TCPHandler::runImpl() @ 0x0000000012913354
+17. DB::TCPHandler::run() @ 0x000000001292e7b8
+18. Poco::Net::TCPServerConnection::start() @ 0x00000000157fc747
+19. Poco::Net::TCPServerDispatcher::run() @ 0x00000000157fcbd9
+20. Poco::PooledThread::run() @ 0x00000000157c9741
+21. Poco::ThreadImpl::runnableEntry(void*) @ 0x00000000157c7cfd
+22. ? @ 0x00007fcf0187d609
+23. ? @ 0x00007fcf017a2353
+
+2025-03-16 17:29:56,688 - INFO - Проверка согласованности данных между Excel-файлами и OLAP-кубом
+2025-03-16 17:29:56,689 - INFO - Проверка согласованности данных на дату: 2035-11-08
+2025-03-16 17:29:56,690 - INFO - Исключаем 235 агрегатов с серийными номерами, начинающимися на S при сравнении с Excel
+2025-03-16 17:29:56,690 - INFO - ✅ Количество агрегатов по serialno совпадает: 185
+2025-03-16 17:29:56,691 - ERROR - ❌ Обнаружены расхождения в суммах sne и ppr
+2025-03-16 17:29:56,691 - ERROR -    - Разница в sne: 515964.99 (100.00%)
+2025-03-16 17:29:56,691 - ERROR -    - Разница в ppr: 136818.64 (100.00%)
+2025-03-16 17:29:56,692 - INFO - ✅ Количество агрегатов по статусам совпадает
+2025-03-16 17:29:56,692 - INFO - Проверка согласованности данных между OLAP-кубом и аналитической таблицей
+2025-03-16 17:29:56,692 - ERROR - Данные из аналитической таблицы пусты, пропускаем проверки
+2025-03-16 17:29:56,692 - INFO - 
+Итоги проверок:
+2025-03-16 17:29:56,692 - INFO - ✅ Успешно: 2
+2025-03-16 17:29:56,692 - INFO - ❌ Ошибок: 1
+2025-03-16 17:29:56,692 - INFO - ⚠️ Предупреждений: 1
