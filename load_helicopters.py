@@ -20,13 +20,13 @@ excel_file = './Выгрузка ВС/Standard Table Report30140512042025 rev BA
 
 # Определение типов для известных столбцов
 specified_columns = {
-    'll': 'Nullable(Float64)',
+    'll': 'Nullable(Float32)',
     'll_ind': 'Nullable(String)',
-    'oh': 'Nullable(Float64)',
+    'oh': 'Nullable(Float32)',
     'oh_ind': 'Nullable(String)',
-    'sne': 'Nullable(Float64)',
-    'ppr': 'Nullable(Float64)',
-    'shop_visit_counter': 'Nullable(Float64)',
+    'sne': 'Nullable(Float32)',
+    'ppr': 'Nullable(Float32)',
+    'shop_visit_counter': 'Nullable(Float32)',
     'mfg_date': 'Nullable(Date)',
     'oh_at_date': 'Nullable(Date)',
     'removal_date': 'Nullable(Date)',
