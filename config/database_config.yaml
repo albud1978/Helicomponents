@@ -1,0 +1,21 @@
+# Конфигурация подключения к ClickHouse
+# Используем ту же СУБД, что и в старом проекте
+
+database:
+  # Параметры подключения
+  host: "10.95.19.132"
+  port: 9000
+  user: "default"
+  password: "quie1ahpoo5Su0wohpaedae8keeph6bi"
+  database: "default"
+  
+  # Настройки подключения
+  settings:
+    strings_encoding: "utf-8"
+    max_threads: 8
+
+logging:
+  # Логирование операций с БД
+  log_queries: true
+  log_performance: true
+  log_errors: true 
