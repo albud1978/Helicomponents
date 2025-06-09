@@ -1,21 +1,30 @@
 # Конфигурация подключения к ClickHouse
-# Используем ту же СУБД, что и в старом проекте
+# На основе архивного опыта с поддержкой environment variables
 
 database:
-  # Параметры подключения
-  host: "10.95.19.132"
+  # Основные параметры подключения (defaults, переопределяются через ENV)
+  host: '10.95.19.132'
   port: 9000
-  user: "default"
-  password: "quie1ahpoo5Su0wohpaedae8keeph6bi"
-  database: "default"
+  database: 'default'
+  user: 'default'
+  # Пароль берется из CLICKHOUSE_PASSWORD environment variable
   
-  # Настройки подключения
+  # Настройки производительности
   settings:
-    strings_encoding: "utf-8"
+    use_numpy: true
+    max_memory_usage: 10000000000  # 10GB
+    max_execution_time: 300  # 5 минут
     max_threads: 8
-
-logging:
-  # Логирование операций с БД
-  log_queries: true
-  log_performance: true
-  log_errors: true 
+    
+  # Настройки для батчевой загрузки
+  batch:
+    size: 5000  # Оптимальный размер из архивного проекта
+    max_retries: 3
+    timeout: 60
+    
+  # Поддержка environment variables (как в архивном проекте)
+  env:
+    host_var: 'CLICKHOUSE_HOST'
+    port_var: 'CLICKHOUSE_PORT'
+    user_var: 'CLICKHOUSE_USER'
+    password_var: 'CLICKHOUSE_PASSWORD' 

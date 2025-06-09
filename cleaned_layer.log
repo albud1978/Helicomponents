@@ -1,0 +1,33 @@
+2025-06-09 19:03:54,808 - INFO - ✅ Конфиг загружен: 10.95.19.132:9000/default
+2025-06-09 19:03:54,808 - INFO - 🚀 Начинаю создание CLEANED слоя...
+2025-06-09 19:03:54,808 - INFO - 📂 Загружаю справочник data_input/master_data/MD_Сomponents.xlsx
+2025-06-09 19:03:54,863 - INFO - ✅ Загружено 31 компонентов из справочника
+2025-06-09 19:03:54,863 - INFO - 📋 Столбцы: ['partno', 'component_name', 'qty_per_aircraft', 'group_by', 'effectivity_type', 'type_restricted']
+2025-06-09 19:03:54,863 - INFO - 📋 Примеры данных:
+2025-06-09 19:03:54,863 - INFO -    nan | partno | effectivity_type
+2025-06-09 19:03:54,864 - INFO -    Ми-8Т | МИ-8Т
+МИ-8П
+МИ-8ПС
+Ми-8ТП | 0b00100000
+2025-06-09 19:03:54,864 - INFO -    Ми-17 | МИ-8АМТ
+МИ-8МТВ | 0b01000000
+2025-06-09 19:03:54,885 - INFO - ✅ Создана справочная таблица dim_effectivity_type
+2025-06-09 19:03:54,895 - INFO - ✅ Создана таблица Status_Components_cleaned
+2025-06-09 19:03:54,897 - ERROR - 💥 Ошибка при создании CLEANED слоя: Code: 62.
+DB::Exception: Syntax error: failed at position 65 (''CLEANED слой статусов компонентов с фильтрацией по MD_Components и битовыми масками'') (line 3, col 17): 'CLEANED слой статусов компонентов с фильтрацией по MD_Components и битовыми масками'
+        . Expected COLUMN. Stack trace:
+
+0. DB::Exception::Exception(DB::Exception::MessageMasked&&, int, bool) @ 0x000000000cf720fb
+1. DB::Exception::createDeprecated(String const&, int, bool) @ 0x000000000cfd724d
+2. DB::parseQueryAndMovePosition(DB::IParser&, char const*&, char const*, String const&, bool, unsigned long, unsigned long, unsigned long) @ 0x00000000132a9512
+3. DB::executeQueryImpl(char const*, char const*, std::shared_ptr<DB::Context>, DB::QueryFlags, DB::QueryProcessingStage::Enum, DB::ReadBuffer*) @ 0x0000000011723d02
+4. DB::executeQuery(String const&, std::shared_ptr<DB::Context>, DB::QueryFlags, DB::QueryProcessingStage::Enum) @ 0x0000000011722f5a
+5. DB::TCPHandler::runImpl() @ 0x0000000012913354
+6. DB::TCPHandler::run() @ 0x000000001292e7b8
+7. Poco::Net::TCPServerConnection::start() @ 0x00000000157fc747
+8. Poco::Net::TCPServerDispatcher::run() @ 0x00000000157fcbd9
+9. Poco::PooledThread::run() @ 0x00000000157c9741
+10. Poco::ThreadImpl::runnableEntry(void*) @ 0x00000000157c7cfd
+11. ? @ 0x00007fcf0187d609
+12. ? @ 0x00007fcf017a2353
+
