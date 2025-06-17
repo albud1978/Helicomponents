@@ -4,6 +4,7 @@
 С защитой от дублирования и версионным управлением данных
 """
 import os
+import sys
 import pandas as pd
 import numpy as np
 from clickhouse_driver import Client
@@ -13,6 +14,7 @@ import yaml
 import time
 import traceback
 from typing import Tuple, List
+from pathlib import Path
 
 def setup_logging():
     """Настройка детального логирования"""
