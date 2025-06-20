@@ -22,7 +22,7 @@
 - **Бит 7 (96 = 64+32)**: Универсальные компоненты (оба типа)
 
 ### Стратегия сжатия:
-**String → LowCardinality[UInt16]**
+**String → UInt16**
 ```sql
 0b01100000 → 1  -- Универсальные
 0b01000000 → 2  -- Только Ми-17 
@@ -80,7 +80,7 @@
 - **30 уникальных партномеров**
 - **Средняя длина**: 13.0 символов  
 - **Максимальная длина**: 33 символа
-- **Экономия LowCardinality[UInt16]**: 93.9%
+- **Экономия UInt16**: 93.9%
 
 ### Проблема многострочных партномеров:
 Некоторые партномера содержат несколько вариантов через `\n`:
@@ -93,7 +93,7 @@
 ### Рекомендация:
 1. **Разделить** многострочные партномера на отдельные записи
 2. **Создать mapping-таблицу** partno_id → actual_partno  
-3. **Использовать LowCardinality[UInt16]** в основных таблицах
+3. **Использовать UInt16 кодирование** в основных таблицах
 
 ## 5. ClickHouse DDL для сжатия
 
@@ -128,11 +128,11 @@ CREATE TABLE group_by_mapping (
 ### 5.2. Оптимизированная структура фактовой таблицы
 ```sql
 CREATE TABLE components_optimized (
-    component_name LowCardinality(String),
-    partno_id LowCardinality(UInt16),          -- вместо String
+    component_name String,
+partno_id UInt16,          -- вместо String
     qty_per_aircraft UInt8,
     group_by_id UInt8,                         -- вместо UInt16
-    effectivity_type_id LowCardinality(UInt16), -- вместо String  
+    effectivity_type_id UInt16, -- вместо String  
     type_restricted UInt8,
     effectivity_shaft UInt8,
     -- остальные поля...

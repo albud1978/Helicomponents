@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Проверка всех зависимостей для VNV Prediction Project
+Проверка всех зависимостей для Helicopter Component Lifecycle Prediction
 """
 import sys
 

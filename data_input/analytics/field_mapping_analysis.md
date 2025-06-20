@@ -9,10 +9,10 @@
 
 | №  | Поле                | Тип исходный | NULL  | Уникальных | Тип ClickHouse       | Оптимизация         |
 |----|---------------------|--------------|-------|------------|---------------------|-------------------|
-| 1  | partno              | object       | 0     | 4,722      | UInt16 (dim_partno) | LowCardinality → ID |
-| 2  | serialno            | object       | 4     | 91,097     | LowCardinality(String) | Высокая кардинальность |
-| 3  | ac_typ              | object       | 19,341| 14         | UInt8 (dim_ac_typ)  | LowCardinality → ID |
-| 4  | location            | object       | 4     | 726        | LowCardinality(String) | Номера ВС |
+| 1  | partno              | object       | 0     | 4,722      | UInt16 (dim_partno) | String → ID |
+| 2  | serialno            | object       | 4     | 91,097     | UInt16 (двухуровневая) | String → ID |
+| 3  | ac_typ              | object       | 19,341| 14         | UInt8 (dim_ac_typ)  | String → ID |
+| 4  | location            | object       | 4     | 726        | UInt16 (номер ВС)   | String → ID |
 | 5  | ll                  | float64      | 42,506| 3,117      | UInt32              | Минуты → оптимизация |
 | 6  | oh                  | float64      | 64,398| 1,927      | UInt32              | Минуты → оптимизация |
 | 7  | oh_threshold        | float64      | 65,921| 29         | UInt32              | Минуты → оптимизация |
@@ -22,8 +22,8 @@
 | 11 | removal_date        | datetime64   | 89,327| 1,639      | Nullable(Date)      | Уже дата |
 | 12 | target_date         | object       | 108,314| 108       | Nullable(Date)      | Конвертация в дату |
 | 13 | lease_restricted    | object       | 96,874| 1          | UInt8               | Булево поле |
-| 14 | owner               | object       | 0     | 9          | UInt8 (dim_owner)   | LowCardinality → ID |
-| 15 | condition           | object       | 0     | 17         | UInt8 (dim_condition)| LowCardinality → ID |
+| 14 | owner               | object       | 0     | 9          | UInt8 (dim_owner)   | String → ID |
+| 15 | condition           | object       | 0     | 17         | UInt8 (dim_condition)| String → ID |
 | 16 | version_date        | метаданные   | 0     | 1          | Date                | Из метаданных файла |
 | ❌ | oh_interval         | float64      | 64,411| 28         | ❌ Не загружается   | Не требуется по ETL |
 | ❌ | oh_at_date          | datetime64   | 66,535| 4,499      | ❌ Не загружается   | Не требуется по ETL |
@@ -31,7 +31,7 @@
 | ❌ | repair_date         | object       | 106,899| 311       | ❌ Не загружается   | Не требуется по ETL |
 | ❌ | Счет                | float64      | 108,350| 1         | ❌ Не загружается   | Служебное поле |
 
-## 🎯 Ключевые категориальные поля для LowCardinality
+## 🎯 Ключевые категориальные поля для числового кодирования
 
 ### ac_typ (14 значений)
 ```
@@ -97,8 +97,8 @@ ORDER BY (version_date, partno_id, location, serialno, ac_typ_id)
 | ac_typ       | String(10) | UInt8     | 92%       |
 | owner        | String(15) | UInt8     | 94%       |
 | condition    | String(30) | UInt8     | 97%       |
-| serialno     | String(20) | LowCard   | 60%       |
-| location     | String(10) | LowCard   | 70%       |
+| serialno     | String(20) | UInt16    | 75%       |
+| location     | String(10) | UInt16    | 80%       |
 | **ИТОГО**    | **~2.1GB** | **~0.8GB**| **62%**   |
 
 ## 🚀 Выгоды для Flame GPU
