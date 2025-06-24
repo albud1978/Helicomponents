@@ -613,468 +613,495 @@ def prepare_data_for_clickhouse(df, version_date, logger, enable_partno_filter=F
 
 def validate_data_quality(df, logger) -> bool:
     """
-    Комплексная проверка качества загруженных данных из Excel
-    
-    Проводит многоуровневую валидацию:
-    - Структурная целостность
-    - Бизнес-логика данных  
-    - Статистическая валидация
-    - Проверка совместимости с ClickHouse
+    Комплексная проверка качества данных перед загрузкой
     """
-    logger.info("🔍 === КОМПЛЕКСНАЯ ПРОВЕРКА КАЧЕСТВА ДАННЫХ ===")
+    logger.info("🔍 === ВАЛИДАЦИЯ КАЧЕСТВА ДАННЫХ ===")
     
-    quality_issues = []
-    warnings = []
-    quality_score = 100  # Начинаем со 100% качества
+    quality_passed = True
     
-    # =============== БАЗОВЫЕ СТРУКТУРНЫЕ ПРОВЕРКИ ===============
-    logger.info("📋 Структурные проверки...")
-    
-    # 1. Проверка базовой структуры
+    # 1. Проверка размера DataFrame
     if df.empty:
-        quality_issues.append("КРИТИЧНО: DataFrame пуст")
-        quality_score -= 50
+        logger.error("❌ DataFrame пустой!")
+        return False
     
-    if len(df.columns) == 0:
-        quality_issues.append("КРИТИЧНО: Отсутствуют столбцы")
-        quality_score -= 50
-        
-    logger.info(f"📊 Базовая структура: {len(df)} строк, {len(df.columns)} столбцов")
+    logger.info(f"📊 Общий размер DataFrame: {len(df):,} записей")
     
-    # 2. Проверка на полностью пустые строки/столбцы
-    empty_rows = df.isnull().all(axis=1).sum()
-    empty_cols = df.isnull().all(axis=0).sum()
-    
-    if empty_rows > 0:
-        warnings.append(f"Найдено {empty_rows} полностью пустых строк")
-        quality_score -= min(5, empty_rows * 0.1)
-        
-    if empty_cols > 0:
-        empty_col_names = df.columns[df.isnull().all(axis=0)].tolist()
-        warnings.append(f"Найдено {empty_cols} пустых столбцов: {empty_col_names}")
-        quality_score -= empty_cols * 2
-    
-    # =============== КРИТИЧНЫЕ ПОЛЯ ===============
-    logger.info("🔑 Проверка критичных полей...")
-    
-    critical_fields = ['partno', 'serialno']
+    # 2. Проверка критических полей
+    critical_fields = ['partno', 'serialno', 'ac_typ']
     for field in critical_fields:
-        if field in df.columns:
+        if field not in df.columns:
+            logger.error(f"❌ Отсутствует критическое поле: {field}")
+            quality_passed = False
+        else:
             null_count = df[field].isnull().sum()
-            null_percentage = (null_count / len(df)) * 100
+            null_percent = (null_count / len(df)) * 100
             
-            if null_count > 0:
-                if null_percentage > 10:  # Более 10% - критично
-                    quality_issues.append(f"КРИТИЧНО: {field} - {null_count} пустых значений ({null_percentage:.1f}%)")
-                    quality_score -= 15
-                else:
-                    warnings.append(f"{field}: {null_count} пустых значений ({null_percentage:.1f}%)")
-                    quality_score -= min(5, null_percentage * 0.5)
+            if null_percent > 50:  # Более 50% пустых значений - критично
+                logger.error(f"❌ Критическое поле {field}: {null_percent:.1f}% пустых значений")
+                quality_passed = False
+            elif null_percent > 10:  # Более 10% - предупреждение
+                logger.warning(f"⚠️  Поле {field}: {null_percent:.1f}% пустых значений")
             else:
-                logger.info(f"✅ {field}: все значения заполнены")
-        else:
-            warnings.append(f"Отсутствует критичное поле: {field}")
-            quality_score -= 5
-
-    # =============== ДУБЛИКАТЫ ===============
-    logger.info("🔍 Проверка дубликатов...")
+                logger.info(f"✅ Поле {field}: {null_percent:.1f}% пустых значений")
     
-    # Дубликаты по ключевым полям
-    if 'partno' in df.columns and 'serialno' in df.columns:
-        key_fields = ['partno', 'serialno']
-        duplicates = df.duplicated(subset=key_fields, keep=False)
-        dup_count = duplicates.sum()
-        
-        if dup_count > 0:
-            dup_percentage = (dup_count / len(df)) * 100
-            if dup_percentage > 5:  # Более 5% дубликатов - критично
-                quality_issues.append(f"КРИТИЧНО: {dup_count} дубликатов по ключу (partno, serialno) - {dup_percentage:.1f}%")
-                quality_score -= 20
-            else:
-                warnings.append(f"Найдено {dup_count} дубликатов по ключу (partno, serialno)")
-                quality_score -= min(10, dup_percentage)
-        else:
-            logger.info("✅ Дубликаты по ключевым полям не найдены")
-
-    # =============== ВАЛИДАЦИЯ ДАТ ===============
-    logger.info("📅 Проверка дат...")
-    
-    date_fields = ['mfg_date', 'removal_date', 'target_date', 'oh_at_date', 'repair_date']
-    current_year = pd.Timestamp.now().year
-    
-    for field in date_fields:
-        if field in df.columns:
-            # Конвертируем в даты
-            try:
-                dates = pd.to_datetime(df[field], errors='coerce', dayfirst=True)
-                valid_dates = dates.dropna()
-                invalid_count = len(df) - len(valid_dates)
+    # 3. Проверка дубликатов
+    duplicate_cols = ['partno', 'serialno']
+    if all(col in df.columns for col in duplicate_cols):
+        # Проверяем дубликаты по комбинации партномер+серийный
+        subset_df = df.dropna(subset=duplicate_cols)
+        if len(subset_df) > 0:
+            duplicates = subset_df.duplicated(subset=duplicate_cols, keep=False)
+            duplicate_count = duplicates.sum()
+            
+            if duplicate_count > 0:
+                duplicate_percent = (duplicate_count / len(df)) * 100
+                logger.warning(f"⚠️  Найдены дубликаты partno+serialno: {duplicate_count} ({duplicate_percent:.1f}%)")
                 
-                if len(valid_dates) > 0:
-                    min_date = valid_dates.min()
-                    max_date = valid_dates.max()
-                    
-                    # Проверка на разумность дат
-                    future_dates = (valid_dates > pd.Timestamp.now()).sum()
-                    old_dates = (valid_dates < pd.Timestamp('1980-01-01')).sum()
-                    
-                    if future_dates > 0:
-                        warnings.append(f"{field}: {future_dates} дат в будущем")
-                        quality_score -= min(5, future_dates * 0.1)
-                        
-                    if old_dates > 0:
-                        warnings.append(f"{field}: {old_dates} дат до 1980 года")
-                        quality_score -= min(5, old_dates * 0.1)
-                    
-                    logger.info(f"📅 {field}: {len(valid_dates)} валидных дат ({min_date.strftime('%Y-%m-%d')} - {max_date.strftime('%Y-%m-%d')})")
-                    
-                if invalid_count > 0:
-                    invalid_percentage = (invalid_count / len(df)) * 100
-                    if invalid_percentage > 20:
-                        warnings.append(f"{field}: {invalid_count} невалидных дат ({invalid_percentage:.1f}%)")
-                        quality_score -= min(10, invalid_percentage * 0.3)
-                        
-            except Exception as e:
-                warnings.append(f"Ошибка обработки дат в {field}: {e}")
-                quality_score -= 5
-
-    # =============== РЕСУРСНЫЕ ПОЛЯ (UInt32) ===============
-    logger.info("🔢 Проверка ресурсных полей...")
+                # Показываем примеры дубликатов
+                duplicate_examples = subset_df[duplicates][duplicate_cols].head(5)
+                logger.warning(f"📋 Примеры дубликатов:")
+                for _, row in duplicate_examples.iterrows():
+                    logger.warning(f"   {row['partno']} + {row['serialno']}")
+            else:
+                logger.info("✅ Дубликаты по partno+serialno не найдены")
     
+    # 4. Проверка диапазонов ресурсных данных
     resource_fields = ['oh', 'oh_threshold', 'll', 'sne', 'ppr']
-    
     for field in resource_fields:
         if field in df.columns:
+            numeric_data = pd.to_numeric(df[field], errors='coerce')
+            
+            # Проверка отрицательных значений
+            negative_count = (numeric_data < 0).sum()
+            if negative_count > 0:
+                logger.warning(f"⚠️  Поле {field}: {negative_count} отрицательных значений")
+            
+            # Проверка экстремальных значений (больше 50,000 часов = ~6 лет непрерывной работы)
+            extreme_count = (numeric_data > 50000).sum()
+            if extreme_count > 0:
+                logger.warning(f"⚠️  Поле {field}: {extreme_count} экстремальных значений (>50,000 часов)")
+            
+            # Статистика по ненулевым значениям
+            non_zero_data = numeric_data[numeric_data > 0]
+            if len(non_zero_data) > 0:
+                logger.info(f"📊 Поле {field}: мин={non_zero_data.min():.0f}, макс={non_zero_data.max():.0f}, медиана={non_zero_data.median():.0f}")
+    
+    # 5. Проверка типов ВС
+    if 'ac_typ' in df.columns:
+        unique_ac_types = df['ac_typ'].dropna().unique()
+        logger.info(f"✈️  Типы ВС в данных ({len(unique_ac_types)}): {', '.join(unique_ac_types)}")
+        
+        # Проверка на неизвестные типы ВС
+        known_types = ['Ми-26', 'МИ26Т', 'Ми-17', 'Ми-8Т', 'Ка-32', 'AS-350', '350B3', 'AS-355', '355NP', 'R-44']
+        unknown_types = [t for t in unique_ac_types if t not in known_types]
+        if unknown_types:
+            logger.warning(f"⚠️  Неизвестные типы ВС: {', '.join(unknown_types)}")
+    
+    # 6. Проверка состояний
+    if 'condition' in df.columns:
+        unique_conditions = df['condition'].dropna().unique()
+        logger.info(f"🔧 Состояния компонентов ({len(unique_conditions)}): {', '.join(unique_conditions)}")
+        
+        known_conditions = ['ИСПРАВНЫЙ', 'НЕИСПРАВНЫЙ', 'ДОНОР', 'СНЯТ ЗАКАЗЧИКОМ', 'СНЯТ', 'НЕ УСТАНОВЛЕН', 'ПОСТАВКА']
+        unknown_conditions = [c for c in unique_conditions if c not in known_conditions]
+        if unknown_conditions:
+            logger.warning(f"⚠️  Неизвестные состояния: {', '.join(unknown_conditions)}")
+    
+    # 7. Проверка дат
+    date_fields = ['mfg_date', 'removal_date', 'target_date']
+    for field in date_fields:
+        if field in df.columns:
+            # Попытка конвертации в даты
             try:
-                # Попытка конвертации в числа
-                numeric_series = pd.to_numeric(df[field], errors='coerce')
-                valid_numbers = numeric_series.dropna()
-                invalid_count = len(df) - len(valid_numbers)
+                date_series = pd.to_datetime(df[field], errors='coerce')
+                null_dates = date_series.isnull().sum()
+                valid_dates = len(date_series) - null_dates
                 
-                if len(valid_numbers) > 0:
-                    negative_count = (valid_numbers < 0).sum()
-                    zero_count = (valid_numbers == 0).sum()
-                    extreme_values = valid_numbers[(valid_numbers > valid_numbers.quantile(0.99)) | 
-                                                 (valid_numbers < valid_numbers.quantile(0.01))]
+                if valid_dates > 0:
+                    min_date = date_series.min()
+                    max_date = date_series.max()
+                    logger.info(f"📅 Поле {field}: {valid_dates} валидных дат ({min_date.date()} - {max_date.date()})")
                     
-                    # Статистики
-                    logger.info(f"🔢 {field}: {len(valid_numbers)} валидных значений, "
-                              f"среднее: {valid_numbers.mean():.2f}, "
-                              f"медиана: {valid_numbers.median():.2f}")
-                    
-                    # Проверки
-                    if negative_count > 0:
-                        # Все ресурсные поля не должны быть отрицательными - будут обнулены
-                        quality_issues.append(f"{field}: {negative_count} отрицательных значений (будут обнулены для GPU)")
-                        quality_score -= 10
-                    
-                    if zero_count > len(valid_numbers) * 0.5:  # Более 50% нулей
-                        warnings.append(f"{field}: {zero_count} нулевых значений ({(zero_count/len(valid_numbers)*100):.1f}%)")
-                        quality_score -= 5
-                        
-                    if len(extreme_values) > 0:
-                        warnings.append(f"{field}: {len(extreme_values)} экстремальных значений")
-                        quality_score -= 2
-                
-                if invalid_count > 0:
-                    invalid_percentage = (invalid_count / len(df)) * 100
-                    if invalid_percentage > 10:
-                        warnings.append(f"{field}: {invalid_count} нечисловых значений ({invalid_percentage:.1f}%)")
-                        quality_score -= min(8, invalid_percentage * 0.4)
-                        
+                    # Проверка на будущие даты (кроме target_date)
+                    if field != 'target_date':
+                        future_dates = (date_series > pd.Timestamp.now()).sum()
+                        if future_dates > 0:
+                            logger.warning(f"⚠️  Поле {field}: {future_dates} дат в будущем")
+                else:
+                    logger.warning(f"⚠️  Поле {field}: нет валидных дат")
             except Exception as e:
-                warnings.append(f"Ошибка обработки числового поля {field}: {e}")
-                quality_score -= 3
-
-    # =============== КОНСИСТЕНТНОСТЬ ДАННЫХ ===============
-    logger.info("🔗 Проверка консистентности...")
+                logger.warning(f"⚠️  Ошибка обработки дат в поле {field}: {e}")
     
-    # Проверка связей между полями
-    if 'mfg_date' in df.columns and 'removal_date' in df.columns:
-        try:
-            mfg_dates = pd.to_datetime(df['mfg_date'], errors='coerce')
-            removal_dates = pd.to_datetime(df['removal_date'], errors='coerce')
-            
-            # Даты снятия раньше даты изготовления
-            invalid_sequence = ((removal_dates < mfg_dates) & 
-                              mfg_dates.notna() & removal_dates.notna()).sum()
-            
-            if invalid_sequence > 0:
-                quality_issues.append(f"ЛОГИЧЕСКАЯ ОШИБКА: {invalid_sequence} случаев снятия раньше изготовления")
-                quality_score -= 15
-                
-        except Exception as e:
-            warnings.append(f"Ошибка проверки последовательности дат: {e}")
-
-    # =============== СОВМЕСТИМОСТЬ С CLICKHOUSE ===============
-    logger.info("🗄️ Проверка совместимости с ClickHouse...")
-    
-    # Проверка на типы данных, которые могут вызвать проблемы
-    for col in df.columns:
-        # Очень длинные строки
-        if df[col].dtype == 'object':
-            max_length = df[col].astype(str).str.len().max()
-            if max_length > 1000:
-                warnings.append(f"Столбец {col}: максимальная длина строки {max_length} символов")
-                quality_score -= 2
-        
-        # Специальные символы в именах столбцов
-        if not col.replace('_', '').replace('-', '').isalnum():
-            warnings.append(f"Имя столбца содержит специальные символы: {col}")
-            quality_score -= 1
-
-    # =============== ИТОГОВАЯ ОЦЕНКА ===============
-    quality_score = max(0, min(100, quality_score))  # Ограничиваем 0-100
-    
-    logger.info(f"📊 === РЕЗУЛЬТАТЫ ПРОВЕРКИ КАЧЕСТВА ===")
-    logger.info(f"🎯 Общий балл качества: {quality_score:.1f}/100")
-    
-    if quality_issues:
-        logger.error("❌ КРИТИЧЕСКИЕ ПРОБЛЕМЫ:")
-        for issue in quality_issues:
-            logger.error(f"  🚨 {issue}")
-    
-    if warnings:
-        logger.warning("⚠️  ПРЕДУПРЕЖДЕНИЯ:")
-        for warning in warnings:
-            logger.warning(f"  ⚠️  {warning}")
-    
-    if not quality_issues and not warnings:
-        logger.info("✅ Проблем качества данных не обнаружено")
-        return True
-        
-    # Определяем критичность
-    is_critical = len(quality_issues) > 0 or quality_score < 60
-    
-    if is_critical:
-        print(f"\n🚨 ОБНАРУЖЕНЫ КРИТИЧЕСКИЕ ПРОБЛЕМЫ КАЧЕСТВА ДАННЫХ!")
-        print(f"📊 Оценка качества: {quality_score:.1f}/100")
-        print(f"\n❌ Критические проблемы ({len(quality_issues)}):")
-        for issue in quality_issues:
-            print(f"  🚨 {issue}")
+    # 8. Финальная оценка качества
+    if quality_passed:
+        logger.info("✅ === ДАННЫЕ ПРОШЛИ ВАЛИДАЦИЮ КАЧЕСТВА ===")
     else:
-        print(f"\n⚠️  Обнаружены проблемы качества данных")
-        print(f"📊 Оценка качества: {quality_score:.1f}/100")
+        logger.error("❌ === ДАННЫЕ НЕ ПРОШЛИ ВАЛИДАЦИЮ КАЧЕСТВА ===")
     
-    if warnings:
-        print(f"\n⚠️  Предупреждения ({len(warnings)}):")
-        for warning in warnings:
-            print(f"  ⚠️  {warning}")
+    return quality_passed
+
+def get_file_path(logger) -> str:
+    """Интерактивный выбор файла для загрузки"""
+    logger.info("📁 === ВЫБОР ФАЙЛА ДЛЯ ЗАГРУЗКИ ===")
     
-    # Интерактивный выбор действия
+    # Стандартный путь к файлу
+    default_file = 'data_input/source_data/Status_Components.xlsx'
+    
+    print(f"\n📂 ФАЙЛ ДЛЯ ЗАГРУЗКИ:")
+    print(f"1️⃣  Стандартный файл: {default_file}")
+    print(f"2️⃣  Указать другой файл")
+    print(f"3️⃣  Отмена")
+    
     while True:
-        if is_critical:
-            print(f"\n🚨 Рекомендация: ИСПРАВИТЬ данные перед загрузкой")
-            choice = input("Продолжить несмотря на критические проблемы? (y/n): ").strip().lower()
-        else:
-            print(f"\n💡 Рекомендация: Можно продолжить с предупреждениями")
-            choice = input("Продолжить загрузку? (y/n): ").strip().lower()
+        try:
+            choice = input(f"\nВыберите файл (1-3): ").strip()
+            if choice == '1':
+                if os.path.exists(default_file):
+                    logger.info(f"✅ Выбран стандартный файл: {default_file}")
+                    return default_file
+                else:
+                    logger.error(f"❌ Стандартный файл не найден: {default_file}")
+                    print(f"❌ Файл не найден. Выберите другой вариант.")
+                    continue
+            elif choice == '2':
+                custom_path = input(f"Введите путь к файлу: ").strip()
+                if os.path.exists(custom_path):
+                    logger.info(f"✅ Выбран файл: {custom_path}")
+                    return custom_path
+                else:
+                    logger.error(f"❌ Файл не найден: {custom_path}")
+                    print(f"❌ Файл не найден. Попробуйте еще раз.")
+                    continue
+            elif choice == '3':
+                logger.info("❌ Операция отменена пользователем")
+                return None
+            else:
+                print("❌ Введите 1, 2 или 3")
+        except KeyboardInterrupt:
+            print("\n👋 Операция отменена пользователем")
+            return None
+
+def batch_insert_to_clickhouse(client, table_name: str, df: pd.DataFrame, logger):
+    """Батчевая загрузка данных в ClickHouse с мониторингом производительности"""
+    logger.info("🚀 === БАТЧЕВАЯ ЗАГРУЗКА В CLICKHOUSE ===")
+    
+    total_start_time = time.time()
+    batch_size = 5000
+    total_rows = len(df)
+    
+    success_count = 0
+    total_records = 0
+    
+    logger.info(f"📊 Параметры загрузки:")
+    logger.info(f"   📄 Всего записей: {total_rows:,}")
+    logger.info(f"   📦 Размер батча: {batch_size:,}")
+    logger.info(f"   🔢 Количество батчей: {(total_rows + batch_size - 1) // batch_size}")
+    
+    for i in range(0, total_rows, batch_size):
+        batch = df.iloc[i:i + batch_size]
+        batch_num = (i // batch_size) + 1
+        total_batches = (total_rows + batch_size - 1) // batch_size
+        
+        start_time = time.time()
+        
+        try:
+            # Конвертируем DataFrame в список кортежей
+            # Arrow backend может ускорить это преобразование
+            data_tuples = [tuple(row) for row in batch.values]
             
-        if choice == 'y':
-            logger.info(f"✅ Пользователь решил продолжить (качество: {quality_score:.1f}/100)")
-            return True
-        elif choice == 'n':
-            logger.info(f"❌ Пользователь отменил загрузку (качество: {quality_score:.1f}/100)")
-            return False
-        else:
-            print("Введите 'y' для продолжения или 'n' для отмены")
+            # Выполняем INSERT
+            client.execute(f'INSERT INTO {table_name} VALUES', data_tuples)
+            
+            batch_time = time.time() - start_time
+            rows_per_sec = len(data_tuples) / batch_time if batch_time > 0 else 0
+            
+            logger.info(f"✅ Батч {batch_num}/{total_batches}: {len(data_tuples):,} записей за {batch_time:.2f}с ({rows_per_sec:,.0f} записей/сек)")
+            
+            success_count += 1
+            total_records += len(batch)
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка загрузки батча {batch_num}: {e}")
+            raise  # Прерываем выполнение при ошибке
+    
+    # Финальная статистика
+    total_time = time.time() - total_start_time
+    
+    if success_count == (total_rows + batch_size - 1) // batch_size:
+        logger.info(f"🎉 === БАТЧЕВАЯ ЗАГРУЗКА ЗАВЕРШЕНА УСПЕШНО ===")
+        logger.info(f"✅ Обработано батчей: {success_count}")
+        logger.info(f"✅ Загружено записей: {total_records:,}")
+        logger.info(f"⏱️  Общее время: {total_time:.2f} секунд")
+        logger.info(f"⚡ Производительность: {total_records/total_time:,.0f} записей/сек")
+        logger.info(f"🚀 Использованы Arrow оптимизации: dtype_backend='pyarrow'")
+    else:
+        logger.error(f"💥 Загрузка завершена с ошибками!")
+        logger.error(f"❌ Успешных батчей: {success_count}")
+        raise Exception("Батчевая загрузка не завершена")
 
 def main():
-    """Основная функция умной загрузки в ClickHouse с Arrow оптимизациями"""
-    logger = setup_logging()
-    # Общий таймер запускаем только после пользовательского взаимодействия
-    total_start_time = None
-    enable_partno_filter = False  # Инициализируем переменную в начале функции
-    
+    """Основная функция загрузки с выбором режима обработки"""
     try:
-        logger.info("🚀 === УМНАЯ ЗАГРУЗКА STATUS_COMPONENTS В CLICKHOUSE (Arrow оптимизации) ===")
+        logger = setup_logging()
+        logger.info("🚀 === SMART RAW LOADER v2.1 ===")
+        logger.info("📊 Helicopter Component Lifecycle Prediction Project")
         
-        # Параметры
-        TABLE_NAME = 'heli_raw'
-        EXCEL_FILE = 'data_input/source_data/Status_Components.xlsx'
-        
-        # 1. Загрузка конфигурации
+        # Загрузка конфигурации
         config = load_config()
-        logger.info(f"⚙️  Конфигурация: {config['host']}:{config['port']}/{config['database']}")
+        logger.info("✅ Конфигурация загружена")
         
-        # 2. Подключение к ClickHouse
-        client = connect_clickhouse(config, logger)
+        # Интерактивный выбор файла
+        file_path = get_file_path(logger)
+        if not file_path:
+            return
         
-        # 3. Проверка/создание таблицы
-        if not create_table_if_not_exists(client, TABLE_NAME, logger):
-            raise Exception("Не удалось создать таблицу")
+        # Проверка существования файла
+        if not os.path.exists(file_path):
+            logger.error(f"❌ Файл не найден: {file_path}")
+            return
         
-        # 4. Предварительная загрузка данных для анализа изменений
-        logger.info(f"📥 Предварительная загрузка файла {EXCEL_FILE}...")
+        # === НОВЫЙ ВЫБОР РЕЖИМА ОБРАБОТКИ ===
+        print("\n🎯 РЕЖИМ ОБРАБОТКИ ДАННЫХ:")
+        print("1️⃣  Загрузка в ClickHouse RAW слой (как раньше)")
+        print("2️⃣  Создание DataFrame с цифровизацией полей (новое)")
+        print("3️⃣  Оба режима: DataFrame + ClickHouse")
         
-        # Загружаем Excel с Arrow backend
-        df = load_excel_data(EXCEL_FILE, logger)
-        
-        # 5. Определение версии данных
-        version_date = extract_version_date_from_excel(EXCEL_FILE, logger)
-        logger.info(f"🗓️  Потенциальная версия данных: {version_date}")
-        
-        # 5.1. НОВАЯ ФУНКЦИОНАЛЬНОСТЬ: Выбор режима фильтрации данных
-        print(f"\n🎯 РЕЖИМ ЗАГРУЗКИ ДАННЫХ:")
-        print(f"   1. ВСЕ данные (полная загрузка)")
-        print(f"   2. ОБОРОТНЫЕ агрегаты (только 37 критичных партномеров)")
-        print(f"   3. ОТМЕНА")
-        
-        enable_partno_filter = False
         while True:
             try:
-                choice = input(f"\nВыберите режим (1-3): ").strip()
-                if choice == '1':
-                    enable_partno_filter = False
-                    logger.info("🌍 Выбран режим: ПОЛНАЯ загрузка всех данных")
+                mode_choice = input("\n🎯 Выберите режим (1-3): ").strip()
+                if mode_choice in ['1', '2', '3']:
                     break
-                elif choice == '2':
-                    enable_partno_filter = True
-                    logger.info("🎯 Выбран режим: ОБОРОТНЫЕ агрегаты (37 партномеров)")
-                    break
-                elif choice == '3':
-                    logger.info("❌ Загрузка отменена пользователем")
-                    return
-                else:
-                    print("❌ Неверный выбор. Введите 1, 2 или 3.")
+                print("❌ Введите 1, 2 или 3")
             except KeyboardInterrupt:
-                print(f"\n❌ Загрузка отменена пользователем")
+                print("\n👋 Операция отменена пользователем")
                 return
         
-        # Подготавливаем данные для анализа
-        prepared_df = prepare_data_for_clickhouse(df, version_date, logger, enable_partno_filter)
+        mode_choice = int(mode_choice)
         
-        # Проверяем что после фильтрации остались данные
-        if len(prepared_df) == 0:
-            logger.error("❌ После обработки не осталось данных для загрузки!")
-            if enable_partno_filter:
-                logger.error("💡 Оборотные агрегаты не найдены в файле")
-            else:
-                logger.error("💡 Файл не содержит данных")
-            return
+        # Выбор фильтрации по оборотным агрегатам (для всех режимов)
+        print("\n📋 ФИЛЬТРАЦИЯ ДАННЫХ:")
+        print("1️⃣  ВСЕ данные из файла")
+        print("2️⃣  Только ОБОРОТНЫЕ агрегаты (37 партномеров)")
         
-        # 6. Быстрая проверка конфликта версий
-        result = client.execute(f"""
-            SELECT COUNT(*) FROM {TABLE_NAME} 
-            WHERE version_date = '{version_date}'
-        """)
-        existing_count = result[0][0]
-        
-        if existing_count > 0:
-            # 6.1. Конфликт версий - всегда спрашиваем пользователя
-            logger.warning(f"⚠️  Обнаружен конфликт версий!")
-            logger.warning(f"   Данные за {version_date} уже существуют ({existing_count:,} записей)")
-            
-            print(f"\n🚨 КОНФЛИКТ ВЕРСИЙ ДАННЫХ!")
-            print(f"   Дата версии: {version_date}")
-            print(f"   Существующих записей: {existing_count:,}")
-            print(f"\nВыберите действие:")
-            print(f"   1. ЗАМЕНИТЬ существующие данные")
-            print(f"   2. ОТМЕНИТЬ загрузку")
-            
-            while True:
-                try:
-                    choice = input(f"\nВаш выбор (1-2): ").strip()
-                    if choice == '1':
-                        logger.info(f"🔄 Замена существующих данных за {version_date}...")
-                        client.execute(f"DELETE FROM {TABLE_NAME} WHERE version_date = '{version_date}'")
-                        logger.info(f"✅ Удалено {existing_count:,} существующих записей")
-                        break
-                    elif choice == '2':
-                        logger.info(f"❌ Загрузка отменена пользователем")
-                        return
-                    else:
-                        print("❌ Неверный выбор. Введите 1 или 2.")
-                except KeyboardInterrupt:
-                    print(f"\n❌ Загрузка отменена пользователем")
-                    return
-        else:
-            logger.info(f"✅ Новая версия данных - продолжаем загрузку")
-        
-        # 7. Запускаем таймер производительности ПОСЛЕ всех пользовательских взаимодействий
-        total_start_time = time.time()
-        logger.info("⏱️  Начинаем замер производительности системы...")
-            
-        # 8. Проверка качества данных
-        if not validate_data_quality(prepared_df, logger):
-            logger.info("❌ Загрузка отменена из-за проблем качества")
-            return
-        
-        # 9. Загрузка в ClickHouse с оптимизацией
-        logger.info(f"🚀 Начинаем загрузку в ClickHouse...")
-        
-        # Создаем батчи для оптимальной загрузки
-        batch_size = 5000
-        total_rows = len(prepared_df)
-        
-        success_count = 0
-        total_records = 0
-        
-        for i in range(0, total_rows, batch_size):
-            batch = prepared_df.iloc[i:i + batch_size]
-            batch_num = (i // batch_size) + 1
-            total_batches = (total_rows + batch_size - 1) // batch_size
-            
-            start_time = time.time()
-            
+        while True:
             try:
-                # Конвертируем DataFrame в список кортежей
-                # Arrow backend может ускорить это преобразование
-                data_tuples = [tuple(row) for row in batch.values]
-                
-                # Выполняем INSERT
-                client.execute(f'INSERT INTO {TABLE_NAME} VALUES', data_tuples)
-                
-                batch_time = time.time() - start_time
-                rows_per_sec = len(data_tuples) / batch_time if batch_time > 0 else 0
-                
-                logger.info(f"✅ Батч {batch_num}/{total_batches}: {len(data_tuples):,} записей за {batch_time:.2f}с ({rows_per_sec:,.0f} записей/сек)")
-                
-                success_count += 1
-                total_records += len(batch)
-                
-            except Exception as e:
-                logger.error(f"❌ Ошибка загрузки батча {batch_num}: {e}")
-                break
+                filter_choice = input("\n📋 Выберите данные для обработки (1-2): ").strip()
+                if filter_choice in ['1', '2']:
+                    break
+                print("❌ Введите 1 или 2")
+            except KeyboardInterrupt:
+                print("\n👋 Операция отменена пользователем")
+                return
         
-        # 10. Финальная статистика
-        total_time = time.time() - total_start_time if total_start_time else 0
+        enable_partno_filter = (filter_choice == '2')
         
-        if success_count == (total_rows + batch_size - 1) // batch_size:
-            logger.info(f"🎉 === ЗАГРУЗКА ЗАВЕРШЕНА УСПЕШНО ===")
-            logger.info(f"✅ Обработано батчей: {success_count}")
-            logger.info(f"✅ Загружено записей: {total_records:,}")
-            logger.info(f"⏱️  Общее время: {total_time:.2f} секунд")
-            logger.info(f"⚡ Производительность: {total_records/total_time:,.0f} записей/сек")
-            logger.info(f"📅 Версия данных: {version_date}")
-            logger.info(f"🚀 Использованы Arrow оптимизации: dtype_backend='pyarrow'")
-            
-            # Информация о режиме загрузки
-            if enable_partno_filter:
-                logger.info(f"🎯 Режим: ОБОРОТНЫЕ агрегаты (37 критичных партномеров)")
-                repairable_partnos = get_repairable_partno_list()
-                logger.info(f"📦 Оборотные агрегаты: {', '.join(repairable_partnos[:5])}... (всего {len(repairable_partnos)})")
-            else:
-                logger.info(f"🌍 Режим: ПОЛНАЯ загрузка всех данных")
-            
-            # Проверяем результат в таблице
-            final_count = client.execute(f"SELECT COUNT(*) FROM {TABLE_NAME} WHERE version_date = '{version_date}'")[0][0]
-            logger.info(f"🔍 Проверка в БД: {final_count:,} записей с версией {version_date}")
-            
-            # 11. Постзагрузочная валидация качества в ClickHouse
-            logger.info("🔍 === ПОСТЗАГРУЗОЧНАЯ ВАЛИДАЦИЯ В CLICKHOUSE ===")
-            validate_data_in_clickhouse(client, TABLE_NAME, version_date, logger)
-            
-        else:
-            logger.error(f"💥 Загрузка завершена с ошибками!")
-            logger.error(f"❌ Успешных батчей: {success_count}")
+        # Извлечение версии данных из Excel
+        version_date = extract_version_date_from_excel(file_path, logger)
+        if not version_date:
+            logger.error("❌ Не удалось определить версию файла")
+            return
         
+        # Загрузка данных из Excel
+        df = load_excel_data(file_path, logger)
+        if df is None or df.empty:
+            logger.error("❌ Не удалось загрузить данные из Excel")
+            return
+        
+        # Фильтрация по оборотным агрегатам
+        df = filter_by_repairable_partnos(df, logger, enable_partno_filter)
+        
+        # === РЕЖИМ 2: ТОЛЬКО DATAFRAME С ЦИФРОВИЗАЦИЕЙ ===
+        if mode_choice == 2:
+            logger.info("🔄 === РЕЖИМ: DATAFRAME С ЦИФРОВИЗАЦИЕЙ ===")
+            
+            # Подготовка данных с цифровизацией
+            processed_df = prepare_data_for_clickhouse(df, version_date, logger, enable_partno_filter)
+            
+            # Цифровизация текстовых полей
+            digital_df = digitize_text_fields(processed_df, logger)
+            
+            # Сохранение результата в файл
+            output_path = f"test_output/digitized_dataframe_{version_date.strftime('%Y%m%d')}.parquet"
+            digital_df.to_parquet(output_path, index=False)
+            logger.info(f"💾 Цифровизованный DataFrame сохранен: {output_path}")
+            
+            # Показ статистики
+            display_dataframe_stats(digital_df, logger)
+            return
+        
+        # === РЕЖИМ 1 И 3: ПОДКЛЮЧЕНИЕ К CLICKHOUSE ===
+        if mode_choice in [1, 3]:
+            client = connect_clickhouse(config['database']['clickhouse'], logger)
+            
+            table_name = "heli_raw"
+            
+            # Создание таблицы если не существует
+            if not create_table_if_not_exists(client, table_name, logger):
+                return
+            
+            # Проверка изменений данных
+            if not check_data_changes(client, table_name, df, version_date, logger):
+                logger.info("✅ Загрузка завершена - данные не изменились")
+                return
+            
+            # Подготовка данных для ClickHouse
+            processed_df = prepare_data_for_clickhouse(df, version_date, logger, enable_partno_filter)
+            
+            # === РЕЖИМ 3: СОХРАНЕНИЕ DATAFRAME С ЦИФРОВИЗАЦИЕЙ ===
+            if mode_choice == 3:
+                digital_df = digitize_text_fields(processed_df.copy(), logger)
+                output_path = f"test_output/digitized_dataframe_{version_date.strftime('%Y%m%d')}.parquet"
+                digital_df.to_parquet(output_path, index=False)
+                logger.info(f"💾 Цифровизованный DataFrame сохранен: {output_path}")
+            
+            # Валидация качества данных
+            if not validate_data_quality(processed_df, logger):
+                logger.error("❌ Данные не прошли валидацию качества")
+                return
+            
+            # Загрузка в ClickHouse
+            batch_insert_to_clickhouse(client, table_name, processed_df, logger)
+            
+            # Валидация данных в ClickHouse
+            validate_data_in_clickhouse(client, table_name, version_date, logger)
+        
+        logger.info("🎉 === ЗАГРУЗКА ЗАВЕРШЕНА УСПЕШНО ===")
+        
+    except KeyboardInterrupt:
+        logger.info("⚠️ Операция прервана пользователем")
     except Exception as e:
-        total_time = time.time() - total_start_time if total_start_time else 0
-        logger.error(f"💥 Критическая ошибка после {total_time:.2f} сек: {e}")
-        logger.error("Трассировка ошибки:")
-        logger.error(traceback.format_exc())
-        raise
+        logger.error(f"💥 Критическая ошибка: {e}")
+        logger.error(f"📋 Детали: {traceback.format_exc()}")
+
+def digitize_text_fields(df: pd.DataFrame, logger) -> pd.DataFrame:
+    """
+    Цифровизация текстовых полей в DataFrame
+    Создание ID-маппингов и битовых масок
+    """
+    logger.info("🔄 === ЦИФРОВИЗАЦИЯ ТЕКСТОВЫХ ПОЛЕЙ ===")
+    
+    digital_df = df.copy()
+    
+    # === 1. СОЗДАНИЕ ID ДЛЯ ПАРТНОМЕРОВ ===
+    unique_partnos = df['partno'].dropna().unique()
+    partno_mapping = {partno: idx + 1 for idx, partno in enumerate(sorted(unique_partnos))}
+    
+    digital_df['partno_id'] = df['partno'].map(partno_mapping)
+    logger.info(f"✅ Создано {len(partno_mapping)} ID для партномеров")
+    
+    # === 2. СОЗДАНИЕ ID ДЛЯ СЕРИЙНЫХ НОМЕРОВ ===
+    unique_serialnos = df['serialno'].dropna().unique()
+    serialno_mapping = {serialno: idx + 1 for idx, serialno in enumerate(sorted(unique_serialnos))}
+    
+    digital_df['serialno_id'] = df['serialno'].map(serialno_mapping)
+    logger.info(f"✅ Создано {len(serialno_mapping)} ID для серийных номеров")
+    
+    # === 3. СОЗДАНИЕ ID ДЛЯ ЛОКАЦИЙ ===
+    unique_locations = df['location'].dropna().unique()
+    location_mapping = {location: idx + 1 for idx, location in enumerate(sorted(unique_locations))}
+    
+    digital_df['location_id'] = df['location'].map(location_mapping)
+    logger.info(f"✅ Создано {len(location_mapping)} ID для локаций")
+    
+    # === 4. БИТОВЫЕ МАСКИ ДЛЯ ТИПОВ ВС ===
+    ac_type_masks = {
+        'Ми-26': 128, 'МИ26Т': 128,    # 0b10000000
+        'Ми-17': 64,                    # 0b01000000  
+        'Ми-8Т': 32,                    # 0b00100000
+        'Ка-32': 16,                    # 0b00010000
+        'AS-350': 8, '350B3': 8,        # 0b00001000
+        'AS-355': 4, '355NP': 4,        # 0b00000100
+        'R-44': 2,                      # 0b00000010
+    }
+    
+    digital_df['ac_typ_mask'] = df['ac_typ'].map(ac_type_masks).fillna(0).astype('uint8')
+    logger.info(f"✅ Создано {len(ac_type_masks)} битовых масок для типов ВС")
+    
+    # === 5. БИТОВЫЕ МАСКИ ДЛЯ СОСТОЯНИЙ ===
+    condition_mapping = {
+        'ИСПРАВНЫЙ': 7,        # 0b111 - Эксплуатация
+        'НЕИСПРАВНЫЙ': 4,      # 0b100 - Ремонт  
+        'ДОНОР': 1,            # 0b001 - Хранение
+        'СНЯТ ЗАКАЗЧИКОМ': 0,  # 0b000 - Неактивно
+        'СНЯТ': 0,             # 0b000 - Неактивно
+        'НЕ УСТАНОВЛЕН': 6,    # 0b110 - Исправен, счетчики не работают
+        'ПОСТАВКА': 3,         # 0b011 - Резерв
+    }
+    
+    digital_df['condition_mask'] = df['condition'].map(condition_mapping).fillna(0).astype('uint8')
+    logger.info(f"✅ Создано {len(condition_mapping)} битовых масок для состояний")
+    
+    # === 6. ID ДЛЯ ВЛАДЕЛЬЦЕВ ===
+    owner_mapping = {
+        'ЮТ-ВУ': 1, 'UTE': 2, 'ГТЛК': 3, 'СБЕР ЛИЗИНГ': 4,
+        'ГПМ': 5, 'АО ГПМ': 6, 'ИП': 7, 'АРВ': 8, 'И': 9
+    }
+    
+    digital_df['owner_id'] = df['owner'].map(owner_mapping).fillna(0).astype('uint8')
+    logger.info(f"✅ Создано {len(owner_mapping)} ID для владельцев")
+    
+    # === 7. СОХРАНЕНИЕ МАППИНГОВ ===
+    mappings = {
+        'partno_mapping': partno_mapping,
+        'serialno_mapping': serialno_mapping,
+        'location_mapping': location_mapping,
+        'ac_type_masks': ac_type_masks,
+        'condition_mapping': condition_mapping,
+        'owner_mapping': owner_mapping
+    }
+    
+    # Сохранение маппингов в JSON для дальнейшего использования
+    import json
+    mapping_file = f"test_output/field_mappings_{pd.Timestamp.now().strftime('%Y%m%d')}.json"
+    with open(mapping_file, 'w', encoding='utf-8') as f:
+        # Конвертируем все в строки для JSON сериализации
+        json_mappings = {}
+        for key, mapping in mappings.items():
+            json_mappings[key] = {str(k): int(v) for k, v in mapping.items()}
+        json.dump(json_mappings, f, ensure_ascii=False, indent=2)
+    
+    logger.info(f"💾 Маппинги сохранены в: {mapping_file}")
+    
+    return digital_df
+
+def display_dataframe_stats(df: pd.DataFrame, logger):
+    """Отображение статистики цифровизованного DataFrame"""
+    logger.info("📊 === СТАТИСТИКА ЦИФРОВИЗОВАННОГО DATAFRAME ===")
+    
+    # Основная информация
+    logger.info(f"📄 Всего записей: {len(df):,}")
+    logger.info(f"📋 Всего колонок: {len(df.columns)}")
+    
+    # Исходные текстовые поля
+    text_fields = ['partno', 'serialno', 'location', 'ac_typ', 'condition', 'owner']
+    digital_fields = ['partno_id', 'serialno_id', 'location_id', 'ac_typ_mask', 'condition_mask', 'owner_id']
+    
+    logger.info("\n🔄 Сравнение исходных и цифровых полей:")
+    for text_field, digital_field in zip(text_fields, digital_fields):
+        if text_field in df.columns and digital_field in df.columns:
+            unique_text = df[text_field].nunique()
+            unique_digital = df[digital_field].nunique()
+            logger.info(f"  {text_field:15} → {digital_field:15}: {unique_text:4} → {unique_digital:4} уникальных")
+    
+    # Битовые маски
+    if 'ac_typ_mask' in df.columns:
+        mask_stats = df['ac_typ_mask'].value_counts().sort_index()
+        logger.info(f"\n🎭 Битовые маски типов ВС:")
+        for mask, count in mask_stats.items():
+            if mask > 0:
+                logger.info(f"  Маска {mask:3} (0b{mask:08b}): {count:,} записей")
+    
+    # Размер данных
+    memory_usage = df.memory_usage(deep=True).sum() / 1024 / 1024
+    logger.info(f"\n💾 Размер DataFrame в памяти: {memory_usage:.2f} MB")
+    
+    # Показать первые несколько записей
+    logger.info(f"\n📋 Первые 3 записи цифровизованных данных:")
+    display_cols = [col for col in ['partno_id', 'serialno_id', 'ac_typ_mask', 'condition_mask'] if col in df.columns]
+    if display_cols:
+        sample_data = df[display_cols].head(3)
+        for idx, row in sample_data.iterrows():
+            logger.info(f"  Запись {idx}: {dict(row)}")
 
 def validate_data_in_clickhouse(client, table_name, version_date, logger):
     """
