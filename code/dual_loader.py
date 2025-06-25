@@ -9,6 +9,9 @@
 4. Проверяет соответствие количества записей
 5. Диалоги перезаписи существующих данных
 
+Улучшения v2.1:
+- lease_restricted оптимизировано до UInt8 (Y/1→1, остальное→0)
+
 Использование:
     python3 dual_loader.py
 """
@@ -32,7 +35,7 @@ def load_config():
         sys.exit(1)
 
 def extract_version_date_from_excel(file_path):
-    """Извлекает дату версии из метаданных Excel файла"""
+    """Извлекает дату версии из метаданных Excel файла с проверкой корректности года"""
     try:
         print("📅 Определение версии данных из Excel метаданных...")
         
@@ -40,27 +43,32 @@ def extract_version_date_from_excel(file_path):
         workbook = openpyxl.load_workbook(file_path, read_only=True)
         props = workbook.properties
         
-        version_date = None
+        version_datetime = None
         source_type = None
+        current_year = datetime.now().year
         
-        # Приоритет 1: Дата создания файла
+        # Приоритет 1: Дата создания файла (если не старше года)
         if props.created:
-            version_date = props.created.date()
-            source_type = "Excel created"
-            print(f"📅 Дата создания Excel: {version_date}")
-            
-        # Приоритет 2: Дата модификации
-        elif props.modified:
-            version_date = props.modified.date()
+            created_year = props.created.year
+            if abs(created_year - current_year) <= 1:  # Не старше года
+                version_datetime = props.created
+                source_type = "Excel created"
+                print(f"📅 Дата создания Excel: {version_datetime}")
+            else:
+                print(f"⚠️ Дата создания {props.created} отличается от текущего года более чем на год, используем дату модификации")
+                
+        # Приоритет 2: Дата модификации (если создание некорректно или отсутствует)
+        if version_datetime is None and props.modified:
+            version_datetime = props.modified
             source_type = "Excel modified"
-            print(f"📅 Дата модификации Excel: {version_date}")
+            print(f"📅 Дата модификации Excel: {version_datetime}")
             
         # Приоритет 3: Время модификации файла в ОС
-        else:
+        if version_datetime is None:
             file_mtime = os.path.getmtime(file_path)
-            version_date = datetime.fromtimestamp(file_mtime).date()
+            version_datetime = datetime.fromtimestamp(file_mtime)
             source_type = "OS file mtime"
-            print(f"📅 Время модификации файла: {version_date}")
+            print(f"📅 Время модификации файла: {version_datetime}")
         
         workbook.close()
         
@@ -72,7 +80,8 @@ def extract_version_date_from_excel(file_path):
         print(f"🕐 Модификация ОС: {file_mtime}")
         print(f"🎯 Источник версии: {source_type}")
         
-        return version_date
+        # Возвращаем только дату (без времени) для совместимости
+        return version_datetime.date()
         
     except Exception as e:
         print(f"⚠️ Ошибка извлечения метаданных Excel: {e}")
@@ -80,9 +89,9 @@ def extract_version_date_from_excel(file_path):
         # Fallback к дате файла
         try:
             file_mtime = os.path.getmtime(file_path)
-            version_date = datetime.fromtimestamp(file_mtime).date()
-            print(f"📅 Fallback: используем время модификации файла: {version_date}")
-            return version_date
+            version_datetime = datetime.fromtimestamp(file_mtime)
+            print(f"📅 Fallback: используем время модификации файла: {version_datetime}")
+            return version_datetime.date()
         except Exception as fallback_error:
             print(f"❌ Критическая ошибка определения версии: {fallback_error}")
             # Последний fallback - сегодняшняя дата
@@ -99,14 +108,14 @@ def get_md_partnos():
             print(f"❌ Файл {md_path} не найден")
             sys.exit(1)
         
-        # Читаем MD_Components
-        df = pd.read_excel(md_path, sheet_name='Агрегаты', header=7, engine='openpyxl')
+        # Читаем MD_Components с правильным header (вторая строка)
+        df = pd.read_excel(md_path, sheet_name='Агрегаты', header=1, engine='openpyxl')
         
-        # Очищаем и получаем партномера
-        df_clean = df.dropna(subset=['Чертежный номер'])
-        df_clean = df_clean[df_clean['Чертежный номер'] != 'partno']
+        # Очищаем и получаем партномера из колонки 'partno'
+        df_clean = df.dropna(subset=['partno'])
+        df_clean = df_clean[df_clean['partno'] != 'partno']
         
-        partnos_raw = df_clean['Чертежный номер'].dropna().unique()
+        partnos_raw = df_clean['partno'].dropna().unique()
         
         # Разворачиваем многострочные партномера (ctrl+enter)
         all_partnos = []
@@ -179,17 +188,17 @@ def prepare_data(df, version_date, filter_partnos=None):
         # Добавляем версию данных
         df['version_date'] = version_date
         
-        # Обработка дат для ClickHouse
-        from datetime import date
-        min_date = date(1900, 1, 1)  # Минимальная дата вместо None
-        
+        # Обработка дат для ClickHouse (как в архивном проекте)
         date_columns = ['mfg_date', 'removal_date', 'target_date']
         for col in date_columns:
             if col in df.columns:
-                # Сначала конвертируем в datetime
-                df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
-                # Заменяем None на минимальную дату
-                df[col] = df[col].apply(lambda x: x.date() if pd.notnull(x) else min_date)
+                df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce').dt.date
+                df[col] = df[col].where(df[col].notnull(), None)
+        
+        # Специальная обработка version_date для ClickHouse
+        if 'version_date' in df.columns:
+            # version_date уже является date объектом, ничего не делаем
+            pass
 
         # Обработка ресурсных полей - исправленная версия
         import numpy as np
@@ -203,8 +212,17 @@ def prepare_data(df, version_date, filter_partnos=None):
                 # Приводим к обычному int (не UInt32, так как clickhouse_driver с ним плохо работает)
                 df[col] = numeric_series.astype('int64')
 
+        # Специальная обработка lease_restricted (преобразуем в UInt8)
+        if 'lease_restricted' in df.columns:
+            # Приводим к строкам для обработки
+            df['lease_restricted'] = df['lease_restricted'].astype(str)
+            # Преобразуем Y/1 -> 1, все остальное -> 0
+            df['lease_restricted'] = df['lease_restricted'].apply(
+                lambda x: 1 if x in ['Y', '1', '1.0'] else 0
+            ).astype('int64')  # Python int64 для совместимости с clickhouse_driver
+        
         # Обработка строковых полей для ClickHouse
-        string_columns = ['partno', 'serialno', 'ac_typ', 'location', 'condition', 'owner', 'lease_restricted']
+        string_columns = ['partno', 'serialno', 'ac_typ', 'location', 'condition', 'owner']
         for col in string_columns:
             if col in df.columns:
                 # Приводим к строкам и заменяем None/NaN на пустые строки
@@ -224,7 +242,7 @@ def prepare_data(df, version_date, filter_partnos=None):
 def create_tables(client):
     """Создает таблицы в ClickHouse если не существуют"""
     try:
-        # Таблица для всех данных (RAW)
+        # Таблица для всех данных (RAW) - возвращаем к рабочей схеме
         create_raw_sql = """
         CREATE TABLE IF NOT EXISTS heli_raw (
             -- Основные идентификаторы
@@ -233,27 +251,22 @@ def create_tables(client):
             `ac_typ` Nullable(String),              
             `location` Nullable(String),            
             
-            -- Ресурсные данные
-            `ll` Nullable(UInt32),                  
-            `oh` Nullable(UInt32),                  
-            `oh_threshold` Nullable(UInt32),        
-            `oh_interval` Nullable(UInt32),         
-            `sne` Nullable(UInt32),                 
-            `ppr` Nullable(UInt32),                 
-            
             -- Даты
             `mfg_date` Nullable(Date),              
-            `oh_at_date` Nullable(Date),            
-            `shop_visit_counter` Nullable(UInt32),  
             `removal_date` Nullable(Date),          
-            `repair_date` Nullable(Date),           
             `target_date` Nullable(Date),           
             
             -- Состояние и владение
-            `owner` Nullable(String),               
             `condition` Nullable(String),           
-            `lease_restricted` Nullable(String),    
-            `Счет` Nullable(String),                
+            `owner` Nullable(String),               
+            `lease_restricted` UInt8 DEFAULT 0,     
+            
+            -- Ресурсные данные
+            `oh` Nullable(UInt32),                  
+            `oh_threshold` Nullable(UInt32),        
+            `ll` Nullable(UInt32),                  
+            `sne` Nullable(UInt32),                 
+            `ppr` Nullable(UInt32),                 
             
             -- Метаданные файла
             `version_date` Date DEFAULT today()     
@@ -281,7 +294,7 @@ def create_tables(client):
             -- Состояние и владение
             `condition` Nullable(String),           
             `owner` Nullable(String),               
-            `lease_restricted` Nullable(String),    
+            `lease_restricted` UInt8 DEFAULT 0,     
             
             -- Ресурсные данные
             `oh` Nullable(UInt32),                  
@@ -308,19 +321,19 @@ def create_tables(client):
         sys.exit(1)
 
 def check_version_conflicts(client, version_date):
-    """Проверяет конфликты версий и спрашивает пользователя"""
+    """Проверяет конфликты версий с улучшенной логикой"""
     try:
-        # Проверяем обе таблицы
+        # Проверяем обе таблицы на точное совпадение даты
         raw_count = client.execute(f"SELECT COUNT(*) FROM heli_raw WHERE version_date = '{version_date}'")[0][0]
         pandas_count = client.execute(f"SELECT COUNT(*) FROM heli_pandas WHERE version_date = '{version_date}'")[0][0]
         
         if raw_count > 0 or pandas_count > 0:
-            print(f"\n🚨 КОНФЛИКТ ВЕРСИЙ ДАННЫХ!")
+            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ДАТОЙ ВЕРСИИ!")
             print(f"   Дата версии: {version_date}")
             print(f"   heli_raw: {raw_count:,} записей")
             print(f"   heli_pandas: {pandas_count:,} записей")
             print(f"\nВыберите действие:")
-            print(f"   1. ЗАМЕНИТЬ существующие данные")
+            print(f"   1. ЗАМЕНИТЬ существующие данные (DELETE + INSERT)")
             print(f"   2. ОТМЕНИТЬ загрузку")
             
             while True:
@@ -482,7 +495,7 @@ def main():
                 print(f"📅 Версия данных: {version_date}")
                 print(f"📊 heli_raw: {raw_loaded:,} записей (все данные)")
                 print(f"📊 heli_pandas: {pandas_loaded:,} записей (фильтрованные)")
-                print(f"⚡ Использованы Arrow оптимизации pandas")
+                print(f"⚡ Улучшенная версионность с проверкой года")
                 print(f"🔍 Проверки качества: ✅ ПРОЙДЕНЫ")
             else:
                 print(f"\n⚠️ Загрузка завершена, но обнаружены проблемы качества")
