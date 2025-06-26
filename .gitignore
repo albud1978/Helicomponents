@@ -1,2 +1,4 @@
-FLAMEGPU2/ # Environment files
+FLAMEGPU2/
 .env
+
+# Environment files
