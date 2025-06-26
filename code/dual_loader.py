@@ -24,15 +24,7 @@ import yaml
 import openpyxl
 import os
 
-def load_config():
-    """Загружает конфигурацию ClickHouse"""
-    try:
-        with open('config/database_config.yaml', 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)['database']
-        return config
-    except Exception as e:
-        print(f"❌ Ошибка загрузки конфигурации: {e}")
-        sys.exit(1)
+# Безопасная конфигурация через utils.config_loader
 
 def extract_version_date_from_excel(file_path):
     """Извлекает дату версии из метаданных Excel файла с проверкой корректности года"""
@@ -99,25 +91,33 @@ def extract_version_date_from_excel(file_path):
             print(f"🚨 Экстренный fallback: используем сегодняшнюю дату: {version_date}")
             return version_date
 
-def get_md_partnos():
-    """Читает список партномеров из MD_Components.xlsx"""
+def get_md_partnos(client):
+    """Читает список партномеров из таблицы md_components в ClickHouse"""
     try:
-        md_path = Path('data_input/master_data/MD_Сomponents.xlsx')
+        print("📋 Загружаем список партномеров из таблицы md_components...")
         
-        if not md_path.exists():
-            print(f"❌ Файл {md_path} не найден")
+        # Проверяем наличие таблицы
+        check_table_query = "SELECT COUNT(*) FROM system.tables WHERE name = 'md_components'"
+        table_exists = client.execute(check_table_query)[0][0] > 0
+        
+        if not table_exists:
+            print("❌ Таблица md_components не найдена в ClickHouse!")
+            print("💡 Сначала запустите: python3 code/md_components_loader.py")
             sys.exit(1)
         
-        # Читаем MD_Components с правильным header (вторая строка)
-        df = pd.read_excel(md_path, sheet_name='Агрегаты', header=1, engine='openpyxl')
+        # Получаем все партномера из таблицы
+        query = """
+        SELECT DISTINCT partno 
+        FROM md_components 
+        WHERE partno IS NOT NULL 
+        AND partno != ''
+        ORDER BY partno
+        """
         
-        # Очищаем и получаем партномера из колонки 'partno'
-        df_clean = df.dropna(subset=['partno'])
-        df_clean = df_clean[df_clean['partno'] != 'partno']
+        result = client.execute(query)
+        partnos_raw = [row[0] for row in result if row[0]]
         
-        partnos_raw = df_clean['partno'].dropna().unique()
-        
-        # Разворачиваем многострочные партномера (ctrl+enter)
+        # Разворачиваем многострочные партномера (если остались после загрузки)
         all_partnos = []
         for partno in partnos_raw:
             if isinstance(partno, str):
@@ -127,11 +127,22 @@ def get_md_partnos():
                 all_partnos.append(str(partno).strip())
         
         unique_partnos = sorted(list(set(all_partnos)))
-        print(f"✅ Загружено {len(unique_partnos)} партномеров из MD_Components")
+        print(f"✅ Загружено {len(unique_partnos)} партномеров из таблицы md_components")
+        
+        # Показываем статистику по версиям данных
+        version_query = "SELECT version_date, COUNT(*) FROM md_components GROUP BY version_date ORDER BY version_date DESC"
+        versions = client.execute(version_query)
+        
+        if versions:
+            print("📊 Статистика данных md_components:")
+            for version_date, count in versions:
+                print(f"   {version_date}: {count:,} записей")
+        
         return unique_partnos
         
     except Exception as e:
-        print(f"❌ Ошибка чтения MD_Components: {e}")
+        print(f"❌ Ошибка чтения данных из md_components: {e}")
+        print("💡 Убедитесь что данные загружены: python3 code/md_components_loader.py")
         sys.exit(1)
 
 def load_status_components():
@@ -433,18 +444,12 @@ def main():
     print("🚀 === ДВОЙНОЙ ЗАГРУЗЧИК STATUS_COMPONENTS ===")
     
     try:
-        # 1. Подключение к ClickHouse (как в smart_raw_loader)
-        config = load_config()
-        from clickhouse_driver import Client
-        client = Client(
-            host=config['host'],
-            port=config['port'],
-            user=config['user'],
-            password=os.getenv('CLICKHOUSE_PASSWORD', 'quie1ahpoo5Su0wohpaedae8keeph6bi'),
-            database=config['database'],
-            settings={'strings_encoding': 'utf-8', 'max_threads': 8}
-        )
-        print(f"✅ Подключились к ClickHouse: {config['host']}:{config['port']}")
+        # 1. Подключение к ClickHouse через безопасную систему
+        # Пароли только из environment variables, НЕТ захардкоженных паролей!
+        import sys
+        sys.path.append(str(Path(__file__).parent))
+        from utils.config_loader import get_clickhouse_client
+        client = get_clickhouse_client()
         
         # 2. Создание таблиц
         create_tables(client)
@@ -462,8 +467,8 @@ def main():
         if not check_version_conflicts(client, version_date):
             return
         
-        # 6. Получение списка партномеров для фильтрации
-        md_partnos = get_md_partnos()
+        # 6. Получение списка партномеров для фильтрации из ClickHouse
+        md_partnos = get_md_partnos(client)
         
         # 7. Подготовка данных для обеих таблиц
         print(f"\n📦 Подготовка данных для загрузки...")
