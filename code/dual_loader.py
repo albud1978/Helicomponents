@@ -184,6 +184,10 @@ def prepare_data(df, version_date, filter_partnos=None):
             'oh', 'oh_threshold', 'll', 'sne', 'ppr'
         ]
         
+        # Добавляем status если есть в DataFrame (после обработки status_processor)
+        if 'status' in df.columns:
+            required_columns.append('status')
+        
         # Фильтруем колонки (оставляем только те что есть в данных)
         available_columns = [col for col in required_columns if col in df.columns]
         missing_columns = [col for col in required_columns if col not in df.columns]
@@ -196,8 +200,18 @@ def prepare_data(df, version_date, filter_partnos=None):
         # Оставляем только нужные колонки
         df = df[available_columns].copy()
         
-        # Добавляем версию данных
+        # КРИТИЧНО: порядок колонок должен соответствовать схеме таблицы!
+        # Сначала добавляем version_date
         df['version_date'] = version_date
+        
+        # Если есть status, нужно переставить его ПЕРЕД version_date (согласно схеме таблицы)
+        if 'status' in df.columns:
+            # Сохраняем колонку status
+            status_column = df['status'].copy()
+            # Удаляем ее из DataFrame
+            df = df.drop('status', axis=1)
+            # Добавляем status ПЕРЕД version_date
+            df.insert(len(df.columns) - 1, 'status', status_column)
         
         # Обработка дат для ClickHouse (как в архивном проекте)
         date_columns = ['mfg_date', 'removal_date', 'target_date']
@@ -231,6 +245,12 @@ def prepare_data(df, version_date, filter_partnos=None):
             df['lease_restricted'] = df['lease_restricted'].apply(
                 lambda x: 1 if x in ['Y', '1', '1.0'] else 0
             ).astype('int64')  # Python int64 для совместимости с clickhouse_driver
+        
+        # Специальная обработка status (преобразуем в UInt8)
+        if 'status' in df.columns:
+            # Приводим к int64 для совместимости с clickhouse_driver
+            # Убеждаемся что значения простые Python int, а НЕ pandas/numpy объекты
+            df['status'] = pd.to_numeric(df['status'], errors='coerce').fillna(0).astype(int)
         
         # Обработка строковых полей для ClickHouse
         string_columns = ['partno', 'serialno', 'ac_typ', 'location', 'condition', 'owner']
@@ -288,7 +308,7 @@ def create_tables(client):
         SETTINGS index_granularity = 8192
         """
         
-        # Таблица для фильтрованных данных (PANDAS)
+        # Таблица для фильтрованных данных (PANDAS) - с полем status
         create_pandas_sql = """
         CREATE TABLE IF NOT EXISTS heli_pandas (
             -- Основные идентификаторы
@@ -313,6 +333,9 @@ def create_tables(client):
             `ll` Nullable(UInt32),                  
             `sne` Nullable(UInt32),                 
             `ppr` Nullable(UInt32),                 
+            
+            -- Статус компонента (новое поле)
+            `status` UInt8 DEFAULT 0,               
             
             -- Метаданные файла
             `version_date` Date DEFAULT today()     
@@ -380,7 +403,8 @@ def insert_data(client, df, table_name, description):
     try:
         print(f"🚀 Загружаем {len(df):,} записей в {table_name} ({description})...")
         
-        # Конвертируем в список кортежей
+        # ВОЗВРАЩАЕМСЯ К ПРОСТОМУ РАБОЧЕМУ ПОДХОДУ
+        # Конвертируем в список кортежей (как в оригинальном рабочем коде)
         data_tuples = [tuple(row) for row in df.values]
         
         # Загружаем
@@ -478,6 +502,26 @@ def main():
         
         # Фильтрованные данные для PANDAS
         pandas_df = prepare_data(df.copy(), version_date, filter_partnos=md_partnos)
+        
+        # 7.5. ОБРАБОТКА СТАТУСОВ для pandas_df
+        # Импортируем модуль обработки статусов
+        try:
+            from status_processor import process_status_field
+            print(f"\n🚀 === ВСТРАИВАНИЕ ОБРАБОТКИ СТАТУСОВ ===")
+            pandas_df = process_status_field(pandas_df, client)
+        except ImportError as e:
+            print(f"⚠️ Модуль status_processor не найден: {e}")
+            print(f"💡 Создайте файл code/status_processor.py")
+            # Добавляем колонку status по умолчанию
+            if 'status' not in pandas_df.columns:
+                pandas_df['status'] = pd.Series(0, index=pandas_df.index, dtype='int64')
+                print(f"➕ Добавлена колонка 'status' со значением по умолчанию 0")
+        except Exception as e:
+            print(f"❌ Ошибка обработки статусов: {e}")
+            # Добавляем колонку status по умолчанию при ошибке
+            if 'status' not in pandas_df.columns:
+                pandas_df['status'] = pd.Series(0, index=pandas_df.index, dtype='int64')
+                print(f"➕ Добавлена колонка 'status' со значением по умолчанию 0 (fallback)")
         
         # 8. Загрузка в обе таблицы
         print(f"\n🚀 === НАЧИНАЕМ ДВОЙНУЮ ЗАГРУЗКУ ===")
