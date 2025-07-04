@@ -167,7 +167,7 @@ def load_status_components():
         print(f"❌ Ошибка загрузки Status_Components: {e}")
         sys.exit(1)
 
-def prepare_data(df, version_date, filter_partnos=None):
+def prepare_data(df, version_date, filter_partnos=None, table_name='heli_raw'):
     """Подготавливает данные для ClickHouse"""
     try:
         # Фильтрация если нужна
@@ -184,9 +184,13 @@ def prepare_data(df, version_date, filter_partnos=None):
             'oh', 'oh_threshold', 'll', 'sne', 'ppr'
         ]
         
-        # Добавляем status если есть в DataFrame (после обработки status_processor)
+        # Дополнительные поля status и aircraft_number добавляются отдельными скриптами
+        # Здесь работаем только с базовыми полями из Excel
         if 'status' in df.columns:
             required_columns.append('status')
+            
+        if 'aircraft_number' in df.columns:
+            required_columns.append('aircraft_number')
         
         # Фильтруем колонки (оставляем только те что есть в данных)
         available_columns = [col for col in required_columns if col in df.columns]
@@ -195,25 +199,40 @@ def prepare_data(df, version_date, filter_partnos=None):
         if missing_columns:
             print(f"⚠️  Отсутствующие колонки: {missing_columns}")
         
-        print(f"✅ Используем колонки: {available_columns}")
+        print(f"✅ Используем колонки для {table_name}: {available_columns}")
         
         # Оставляем только нужные колонки
         df = df[available_columns].copy()
+        
+        # КРИТИЧНО: ДОБАВЛЯЕМ ОТСУТСТВУЮЩИЕ КОЛОНКИ С ДЕФОЛТНЫМИ ЗНАЧЕНИЯМИ!
+        print(f"🔧 Добавляем отсутствующие колонки с дефолтными значениями...")
+        for col in missing_columns:
+            if col == 'lease_restricted':
+                df[col] = 0  # UInt8 DEFAULT 0
+                print(f"   ➕ {col}: 0 (UInt8)")
+            elif col in ['oh', 'oh_threshold', 'll', 'sne', 'ppr']:
+                # Создаем колонку с dtype object для правильной обработки None
+                df[col] = pd.Series([None] * len(df), dtype=object)
+                print(f"   ➕ {col}: None (Nullable UInt32)")
+            elif col == 'status':
+                df[col] = 0  # UInt8 DEFAULT 0  
+                print(f"   ➕ {col}: 0 (UInt8)")
+            elif col == 'aircraft_number':
+                df[col] = 0  # UInt16 DEFAULT 0
+                print(f"   ➕ {col}: 0 (UInt16)")
+            else:
+                # Строковые поля по умолчанию
+                df[col] = ''
+                print(f"   ➕ {col}: '' (String)")
         
         # КРИТИЧНО: порядок колонок должен соответствовать схеме таблицы!
         # Сначала добавляем version_date
         df['version_date'] = version_date
         
-        # Если есть status, нужно переставить его ПЕРЕД version_date (согласно схеме таблицы)
-        if 'status' in df.columns:
-            # Сохраняем колонку status
-            status_column = df['status'].copy()
-            # Удаляем ее из DataFrame
-            df = df.drop('status', axis=1)
-            # Добавляем status ПЕРЕД version_date
-            df.insert(len(df.columns) - 1, 'status', status_column)
+        # Базовые поля в правильном порядке согласно схеме таблицы
+        # Дополнительные поля (status, aircraft_number) будут добавлены отдельными скриптами
         
-        # Обработка дат для ClickHouse (как в архивном проекте)
+        # Обработка дат для ClickHouse - как в рабочем архивном проекте
         date_columns = ['mfg_date', 'removal_date', 'target_date']
         for col in date_columns:
             if col in df.columns:
@@ -225,32 +244,40 @@ def prepare_data(df, version_date, filter_partnos=None):
             # version_date уже является date объектом, ничего не делаем
             pass
 
-        # Обработка ресурсных полей - исправленная версия
-        import numpy as np
+        # Обработка ресурсных полей - ПРОСТОЙ РАБОЧИЙ ПОДХОД как в успешных загрузчиках
         resource_columns = ['oh', 'oh_threshold', 'll', 'sne', 'ppr']
         for col in resource_columns:
             if col in df.columns:
-                # Конвертируем в числа, отрицательные значения обнуляем
-                numeric_series = pd.to_numeric(df[col], errors='coerce')
-                # Заменяем NaN на 0 и отрицательные значения на 0
-                numeric_series = numeric_series.fillna(0).clip(lower=0)
-                # Приводим к обычному int (не UInt32, так как clickhouse_driver с ним плохо работает)
-                df[col] = numeric_series.astype('int64')
+                print(f"🔧 Обрабатываем ресурсное поле {col}...")
+                
+                # Проверяем есть ли вообще данные для обработки
+                non_null_count = df[col].notna().sum()
+                if non_null_count == 0:
+                    print(f"   {col}: колонка пустая, заполняем нулями")
+                    # КРИТИЧНО: заполняем пустые колонки 0 и продолжаем обработку
+                    df[col] = 0
+                
+                # Улучшенная обработка для clickhouse_driver совместимости
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                # Убираем отрицательные значения
+                df[col] = df[col].clip(lower=0)
+                # КРИТИЧНО: для clickhouse_driver Nullable колонок используем fillna(0) вместо None
+                # clickhouse_driver лучше работает с 0 чем с None для Nullable(UInt32)
+                df[col] = df[col].fillna(0).astype('int64')
+                
+                # Статистика
+                none_count = df[col].isnull().sum()
+                valid_count = len(df) - none_count
+                print(f"   {col}: {valid_count} валидных значений, {none_count} None")
 
-        # Специальная обработка lease_restricted (преобразуем в UInt8)
+        # Обработка lease_restricted - ИСПРАВЛЯЕМ ПРОБЛЕМУ С NaN
         if 'lease_restricted' in df.columns:
-            # Приводим к строкам для обработки
+            # КРИТИЧНО: сначала заменяем NaN на пустую строку
+            df['lease_restricted'] = df['lease_restricted'].fillna('')
             df['lease_restricted'] = df['lease_restricted'].astype(str)
-            # Преобразуем Y/1 -> 1, все остальное -> 0
             df['lease_restricted'] = df['lease_restricted'].apply(
                 lambda x: 1 if x in ['Y', '1', '1.0'] else 0
-            ).astype('int64')  # Python int64 для совместимости с clickhouse_driver
-        
-        # Специальная обработка status (преобразуем в UInt8)
-        if 'status' in df.columns:
-            # Приводим к int64 для совместимости с clickhouse_driver
-            # Убеждаемся что значения простые Python int, а НЕ pandas/numpy объекты
-            df['status'] = pd.to_numeric(df['status'], errors='coerce').fillna(0).astype(int)
+            ).astype(int)
         
         # Обработка строковых полей для ClickHouse
         string_columns = ['partno', 'serialno', 'ac_typ', 'location', 'condition', 'owner']
@@ -263,7 +290,8 @@ def prepare_data(df, version_date, filter_partnos=None):
         # Убираем оставшиеся NaN (заменяем на значения по умолчанию)
         # Для числовых полей NaN уже заменены на 0, для строк на '', для дат на min_date
         
-        print(f"📊 Подготовлено {len(df):,} записей с {len(df.columns)} колонками")
+        print(f"✅ Подготовлено {len(df):,} записей с {len(df.columns)} колонками")
+        print(f"📋 Итоговые колонки: {list(df.columns)}")
         return df
         
     except Exception as e:
@@ -308,7 +336,7 @@ def create_tables(client):
         SETTINGS index_granularity = 8192
         """
         
-        # Таблица для фильтрованных данных (PANDAS) - с полем status
+        # Таблица для фильтрованных данных (PANDAS) - полная схема с обогащенными полями
         create_pandas_sql = """
         CREATE TABLE IF NOT EXISTS heli_pandas (
             -- Основные идентификаторы
@@ -334,11 +362,12 @@ def create_tables(client):
             `sne` Nullable(UInt32),                 
             `ppr` Nullable(UInt32),                 
             
-            -- Статус компонента (новое поле)
-            `status` UInt8 DEFAULT 0,               
-            
             -- Метаданные файла
-            `version_date` Date DEFAULT today()     
+            `version_date` Date DEFAULT today(),
+            
+            -- Обогащенные поля (добавляются dual_loader.py)
+            `status` UInt8 DEFAULT 0,               -- Статус компонента (через status_processor.py)
+            `aircraft_number` UInt16 DEFAULT 0      -- Номер вертолета из RA-XXXXX
             
         ) ENGINE = MergeTree()
         ORDER BY version_date
@@ -403,8 +432,16 @@ def insert_data(client, df, table_name, description):
     try:
         print(f"🚀 Загружаем {len(df):,} записей в {table_name} ({description})...")
         
-        # ВОЗВРАЩАЕМСЯ К ПРОСТОМУ РАБОЧЕМУ ПОДХОДУ
-        # Конвертируем в список кортежей (как в оригинальном рабочем коде)
+        # Простая диагностика ресурсных полей (как в рабочих загрузчиках)
+        resource_cols = ['oh', 'oh_threshold', 'll', 'sne', 'ppr']
+        for col in resource_cols:
+            if col in df.columns:
+                sample_vals = df[col].dropna().head(2).tolist()
+                sample_types = [type(v).__name__ for v in sample_vals]
+                none_count = df[col].isnull().sum()
+                print(f"🔍 {col}: примеры={sample_vals} типы={sample_types} null={none_count}")
+        
+        # Простой рабочий подход - как в успешных загрузчиках
         data_tuples = [tuple(row) for row in df.values]
         
         # Загружаем
@@ -415,6 +452,15 @@ def insert_data(client, df, table_name, description):
         
     except Exception as e:
         print(f"❌ Ошибка загрузки в {table_name}: {e}")
+        
+        # Минимальная диагностика при ошибке
+        if "sne" in str(e) and data_tuples:
+            print(f"🔍 ПЕРВАЯ ПРОБЛЕМНАЯ ЗАПИСЬ:")
+            sne_col_index = list(df.columns).index('sne') if 'sne' in df.columns else -1
+            if sne_col_index >= 0:
+                sne_value = data_tuples[0][sne_col_index]
+                print(f"   sne = {sne_value} ({type(sne_value)})")
+        
         return 0
 
 def validate_data_counts(client, version_date, original_count, raw_count, pandas_count, filtered_partnos_count):
@@ -463,6 +509,60 @@ def validate_data_counts(client, version_date, original_count, raw_count, pandas
         print(f"✅ Фильтрация: {db_pandas_count/db_raw_count*100:.1f}% записей прошли фильтр")
         return True
 
+def add_aircraft_number_in_memory(pandas_df):
+    """Добавляет поле aircraft_number в DataFrame в памяти (логика из process_location_field.py)"""
+    try:
+        print("🔍 Извлечение номеров вертолетов из RA- значений...")
+        
+        # Добавляем колонку aircraft_number со значением по умолчанию
+        pandas_df['aircraft_number'] = 0
+        
+        # Ищем все RA- значения в location
+        ra_mask = pandas_df['location'].str.startswith('RA-', na=False)
+        ra_locations = pandas_df[ra_mask]['location'].unique()
+        
+        aircraft_mapping = {}
+        invalid_count = 0
+        
+        for location in ra_locations:
+            # Убираем префикс 'RA-'
+            digits_part = location[3:]
+            
+            # Проверяем что это 5 цифр
+            if len(digits_part) == 5 and digits_part.isdigit():
+                aircraft_number = int(digits_part)
+                aircraft_mapping[location] = aircraft_number
+            else:
+                invalid_count += 1
+                print(f"⚠️ Неправильный формат: {location}")
+        
+        print(f"✅ Извлечено {len(aircraft_mapping)} номеров вертолетов")
+        if invalid_count > 0:
+            print(f"⚠️ Найдено {invalid_count} значений неправильного формата")
+        
+        # Обновляем aircraft_number для соответствующих записей
+        for location, aircraft_number in aircraft_mapping.items():
+            mask = pandas_df['location'] == location
+            pandas_df.loc[mask, 'aircraft_number'] = aircraft_number
+        
+        # Очищаем location для не-RA значений
+        non_ra_mask = ~pandas_df['location'].str.startswith('RA-', na=False)
+        pandas_df.loc[non_ra_mask, 'location'] = ''
+        
+        aircraft_count = (pandas_df['aircraft_number'] > 0).sum()
+        print(f"✅ Обогащено {aircraft_count} записей номерами вертолетов")
+        
+        return pandas_df
+        
+    except Exception as e:
+        print(f"❌ Ошибка добавления aircraft_number: {e}")
+        # Добавляем пустую колонку при ошибке
+        if 'aircraft_number' not in pandas_df.columns:
+            pandas_df['aircraft_number'] = 0
+        return pandas_df
+
+# Функция add_status_in_memory удалена - заменена на status_processor.py
+
 def main():
     """Основная функция"""
     print("🚀 === ДВОЙНОЙ ЗАГРУЗЧИК STATUS_COMPONENTS ===")
@@ -491,43 +591,126 @@ def main():
         if not check_version_conflicts(client, version_date):
             return
         
-        # 6. Получение списка партномеров для фильтрации из ClickHouse
+        # 6. Получение списка партномеров из MD_Components для фильтрации
+        # ИСПРАВЛЕНО: используем ВСЕ партномера из md_components, не только планеры!
         md_partnos = get_md_partnos(client)
+        print(f"📦 Используем фильтр ВСЕ компоненты: {len(md_partnos)} партномеров из MD_Components")
+        print(f"📋 Первые 10 партномеров: {md_partnos[:10]}")
+        if len(md_partnos) > 10:
+            print(f"📋 ... и еще {len(md_partnos)-10} партномеров")
         
         # 7. Подготовка данных для обеих таблиц
         print(f"\n📦 Подготовка данных для загрузки...")
         
         # Все данные для RAW
-        raw_df = prepare_data(df.copy(), version_date)
+        raw_df = prepare_data(df.copy(), version_date, table_name='heli_raw')
+        
+        # КРИТИЧНО: Упорядочиваем колонки для heli_raw согласно схеме (16 полей)
+        raw_column_order = [
+            'partno', 'serialno', 'ac_typ', 'location',
+            'mfg_date', 'removal_date', 'target_date',
+            'condition', 'owner', 'lease_restricted',
+            'oh', 'oh_threshold', 'll', 'sne', 'ppr',
+            'version_date'
+        ]
+        
+        # Проверяем и упорядочиваем колонки для raw
+        missing_raw_columns = [col for col in raw_column_order if col not in raw_df.columns]
+        if missing_raw_columns:
+            print(f"❌ Отсутствующие колонки в heli_raw: {missing_raw_columns}")
+        else:
+            raw_df = raw_df[raw_column_order]
+            print(f"✅ heli_raw: порядок колонок установлен ({len(raw_df.columns)} полей)")
         
         # Фильтрованные данные для PANDAS
-        pandas_df = prepare_data(df.copy(), version_date, filter_partnos=md_partnos)
+        pandas_df = prepare_data(df.copy(), version_date, filter_partnos=md_partnos, table_name='heli_pandas')
         
-        # 7.5. ОБРАБОТКА СТАТУСОВ для pandas_df
-        # Импортируем модуль обработки статусов
+        # 8. Загрузка heli_raw и обработка pandas_df в памяти
+        print(f"\n🚀 === НАЧИНАЕМ ОПТИМИЗИРОВАННУЮ ЗАГРУЗКУ ===")
+        
+        # 8.1 Сразу записываем heli_raw (архивная копия - больше не нужна)
+        raw_loaded = insert_data(client, raw_df, 'heli_raw', 'все данные')
+        print(f"✅ heli_raw записана и освобождена из памяти")
+        del raw_df  # Освобождаем память
+        
+        # 8.2 Обрабатываем pandas_df В ПАМЯТИ для оптимальной производительности
+        print(f"\n🔧 === ОБРАБОТКА PANDAS_DF В ПАМЯТИ ===")
+        
+        # Добавляем поле aircraft_number через извлечение из location
+        print(f"🚁 Добавление aircraft_number из поля location...")
+        pandas_df = add_aircraft_number_in_memory(pandas_df)
+        
+        # Добавляем поле status через обработку статусов (НОВАЯ ЛОГИКА)
+        print(f"📊 Добавление status через систему процессоров...")
         try:
+            # ЭТАП 1: Обработка статусов капремонта (status_overhaul)
+            print(f"🔧 Этап 1: Статусы капремонта...")
             from status_processor import process_status_field
-            print(f"\n🚀 === ВСТРАИВАНИЕ ОБРАБОТКИ СТАТУСОВ ===")
             pandas_df = process_status_field(pandas_df, client)
+            
+            # ЭТАП 2: Обработка статусов эксплуатации (program_ac)
+            print(f"🔧 Этап 2: Статусы эксплуатации...")
+            from program_ac_status_processor import process_program_ac_status_field
+            pandas_df = process_program_ac_status_field(pandas_df, client)
+            
         except ImportError as e:
-            print(f"⚠️ Модуль status_processor не найден: {e}")
-            print(f"💡 Создайте файл code/status_processor.py")
+            print(f"⚠️ Модуль статусов не найден: {e}")
+            print(f"💡 Убедитесь что созданы: status_processor.py, program_ac_status_processor.py")
             # Добавляем колонку status по умолчанию
             if 'status' not in pandas_df.columns:
-                pandas_df['status'] = pd.Series(0, index=pandas_df.index, dtype='int64')
+                pandas_df['status'] = 0
                 print(f"➕ Добавлена колонка 'status' со значением по умолчанию 0")
         except Exception as e:
             print(f"❌ Ошибка обработки статусов: {e}")
             # Добавляем колонку status по умолчанию при ошибке
             if 'status' not in pandas_df.columns:
-                pandas_df['status'] = pd.Series(0, index=pandas_df.index, dtype='int64')
+                pandas_df['status'] = 0
                 print(f"➕ Добавлена колонка 'status' со значением по умолчанию 0 (fallback)")
         
-        # 8. Загрузка в обе таблицы
-        print(f"\n🚀 === НАЧИНАЕМ ДВОЙНУЮ ЗАГРУЗКУ ===")
+        # 8.3 Записываем финальную heli_pandas с полной структурой
+        print(f"🔧 Выравнивание порядка колонок согласно схеме таблицы...")
         
-        raw_loaded = insert_data(client, raw_df, 'heli_raw', 'все данные')
-        pandas_loaded = insert_data(client, pandas_df, 'heli_pandas', 'фильтрованные по MD_Components')
+        # Правильный порядок согласно схеме heli_pandas (18 полей)
+        correct_column_order = [
+            'partno', 'serialno', 'ac_typ', 'location',
+            'mfg_date', 'removal_date', 'target_date',
+            'condition', 'owner', 'lease_restricted',
+            'oh', 'oh_threshold', 'll', 'sne', 'ppr',
+            'version_date', 'status', 'aircraft_number'
+        ]
+        
+        # Проверяем наличие всех колонок
+        missing_columns = [col for col in correct_column_order if col not in pandas_df.columns]
+        extra_columns = [col for col in pandas_df.columns if col not in correct_column_order]
+        
+        if missing_columns:
+            print(f"⚠️ Отсутствующие колонки: {missing_columns}")
+            # Добавляем отсутствующие колонки с дефолтными значениями
+            for col in missing_columns:
+                if col in ['status', 'aircraft_number']:
+                    pandas_df[col] = 0
+                    print(f"   ➕ Добавлена колонка {col}: 0")
+                elif col in ['oh', 'oh_threshold', 'll', 'sne', 'ppr']:
+                    pandas_df[col] = None
+                    print(f"   ➕ Добавлена колонка {col}: None")
+                elif col == 'lease_restricted':
+                    pandas_df[col] = 0
+                    print(f"   ➕ Добавлена колонка {col}: 0")
+                else:
+                    pandas_df[col] = ''
+                    print(f"   ➕ Добавлена колонка {col}: ''")
+        
+        if extra_columns:
+            print(f"⚠️ Лишние колонки: {extra_columns}")
+        
+        # Переупорядочиваем колонки согласно схеме
+        available_columns = [col for col in correct_column_order if col in pandas_df.columns]
+        pandas_df = pandas_df[available_columns]
+        
+        print(f"✅ Порядок колонок выровнен: {len(pandas_df.columns)} полей")
+        print(f"📋 Колонки: {list(pandas_df.columns)}")
+        
+        pandas_loaded = insert_data(client, pandas_df, 'heli_pandas', 'фильтрованные + обогащенные')
         
         # 9. Проверка результатов
         if raw_loaded > 0 and pandas_loaded > 0:
