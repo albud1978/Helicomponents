@@ -19,18 +19,19 @@ def compare_marked_aircraft():
     program_path = 'data_input/source_data/Program_AC.xlsx'
     program_df = pd.read_excel(program_path, header=0, engine='openpyxl')
     
-    mi8_types = ['МИ8', 'МИ8МТВ', 'МИ8АМТ']
+    mi8_types = ['Ми-8Т', 'Ми-17']  # Обновлено для новых данных
     program_mi8 = program_df[program_df['ac_typ'].isin(mi8_types)]
     program_aircraft = set(str(ac) for ac in program_mi8['ac_registr'].unique())
     
-    print(f'📊 Program_AC - Ми-8: {len(program_aircraft)} ВС')
+    print(f'📊 Program_AC - Ми-8/Ми-17: {len(program_aircraft)} ВС')
     
-    # 2. heli_pandas - ТОЛЬКО размеченные (статус 2 или 4)
-    marked_query = """
+    # 2. heli_pandas - ТОЛЬКО размеченные ВС из program_ac (статус 2 или 4)
+    program_aircraft_list = "', '".join(program_aircraft)
+    marked_query = f"""
     SELECT serialno, partno, status
     FROM heli_pandas 
     WHERE version_date = '2025-05-28'
-      AND partno LIKE 'МИ-%'
+      AND serialno IN ('{program_aircraft_list}')
       AND status IN (2, 4)
     ORDER BY serialno
     """

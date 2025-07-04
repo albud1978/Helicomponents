@@ -645,7 +645,7 @@ def main():
         try:
             # ЭТАП 1: Обработка статусов капремонта (status_overhaul)
             print(f"🔧 Этап 1: Статусы капремонта...")
-            from status_processor import process_status_field
+            from overhaul_status_processor import process_status_field
             pandas_df = process_status_field(pandas_df, client)
             
             # ЭТАП 2: Обработка статусов эксплуатации (program_ac)
@@ -653,9 +653,14 @@ def main():
             from program_ac_status_processor import process_program_ac_status_field
             pandas_df = process_program_ac_status_field(pandas_df, client)
             
+            # ЭТАП 3: Обработка статусов неактивности планеров (МИ-8Т, МИ-8П и т.д.)
+            print(f"🔧 Этап 3: Статусы неактивности планеров...")
+            from inactive_planery_processor import process_inactive_planery_status
+            pandas_df = process_inactive_planery_status(pandas_df, client)
+            
         except ImportError as e:
             print(f"⚠️ Модуль статусов не найден: {e}")
-            print(f"💡 Убедитесь что созданы: status_processor.py, program_ac_status_processor.py")
+            print(f"💡 Убедитесь что созданы: overhaul_status_processor.py, program_ac_status_processor.py, inactive_planery_processor.py")
             # Добавляем колонку status по умолчанию
             if 'status' not in pandas_df.columns:
                 pandas_df['status'] = 0

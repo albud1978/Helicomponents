@@ -118,14 +118,52 @@ def prepare_status_overhaul_data(df, version_date):
             # ac_registr - серийный номер ВС (UInt32)
             result_df['ac_registr'] = pd.to_numeric(result_df['ac_registr'], errors='coerce').fillna(0).astype('int64')
 
-        # Обработка дат для ClickHouse
+        # Обработка дат для ClickHouse (надежный парсер для русских дат)
+        def parse_russian_date(date_str):
+            """Парсит русские даты формата '05.февр..2024'"""
+            if pd.isna(date_str) or date_str == '' or date_str == 'nan':
+                return None
+            
+            try:
+                date_str = str(date_str).strip()
+                # Словарь русских месяцев
+                month_mapping = {
+                    'янв': '01', 'февр': '02', 'мар': '03', 'апр': '04',
+                    'мая': '05', 'май': '05', 'июн': '06', 'июл': '07', 
+                    'авг': '08', 'сент': '09', 'окт': '10', 'нояб': '11', 'дек': '12'
+                }
+                
+                # Ищем паттерн: день.месяц..год
+                parts = date_str.split('.')
+                if len(parts) >= 3:
+                    day = parts[0].zfill(2)
+                    month_ru = parts[1].lower().rstrip('.')
+                    year = parts[-1]
+                    
+                    # Находим соответствие месяца
+                    month_num = None
+                    for ru_month, num in month_mapping.items():
+                        if month_ru.startswith(ru_month):
+                            month_num = num
+                            break
+                    
+                    if month_num:
+                        # Формируем ISO дату и парсим
+                        iso_date = f'{year}-{month_num}-{day}'
+                        return pd.to_datetime(iso_date).date()
+                
+                # Если не удалось, пробуем стандартный парсер
+                return pd.to_datetime(date_str, errors='coerce').date()
+                
+            except:
+                return None
+        
         date_columns = ['sched_start_date', 'sched_end_date', 'act_start_date', 'act_end_date']
         for col in date_columns:
             if col in result_df.columns:
-                # Конвертируем в date объекты
-                result_df[col] = pd.to_datetime(result_df[col], errors='coerce').dt.date
-                # Заменяем NaT на None для nullable полей
-                result_df[col] = result_df[col].where(result_df[col].notnull(), None)
+                print(f"   Обрабатываем даты в колонке {col}...")
+                # Применяем парсер к каждой дате
+                result_df[col] = result_df[col].apply(parse_russian_date)
 
         # Специальная обработка version_date
         if 'version_date' in result_df.columns:

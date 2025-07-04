@@ -19,14 +19,14 @@ def compare_program_heli():
     program_path = 'data_input/source_data/Program_AC.xlsx'
     program_df = pd.read_excel(program_path, header=0, engine='openpyxl')
     
-    # Фильтруем только Ми-8 и модификации
-    mi8_types = ['МИ8', 'МИ8МТВ', 'МИ8АМТ']
+    # Фильтруем только Ми-8/Ми-17 (новые форматы)
+    mi8_types = ['Ми-8Т', 'Ми-17']  # Обновлено для новых данных
     program_mi8 = program_df[program_df['ac_typ'].isin(mi8_types)].copy()
     
     # Получаем ТОЧНЫЕ номера ВС из Program_AC
     program_aircraft = set(str(ac) for ac in program_mi8['ac_registr'].unique())
     
-    print(f'📊 Program_AC.xlsx - Ми-8 всего: {len(program_aircraft)} ВС')
+    print(f'📊 Program_AC.xlsx - Ми-8/Ми-17 всего: {len(program_aircraft)} ВС')
     
     # Группируем по типам в Program_AC
     program_by_type = program_mi8.groupby('ac_typ')['ac_registr'].nunique()
@@ -34,12 +34,13 @@ def compare_program_heli():
     for ac_type, count in program_by_type.items():
         print(f'     {ac_type}: {count} ВС')
     
-    # 2. Получаем ВСЕ планеры из heli_pandas
-    heli_query = """
-    SELECT serialno, partno, status
+    # 2. Проверяем какие ВС из program_ac есть в heli_pandas (ищем по serialno)
+    program_aircraft_list = "', '".join(program_aircraft)
+    heli_query = f"""
+    SELECT DISTINCT serialno, partno, status
     FROM heli_pandas 
     WHERE version_date = '2025-05-28'
-      AND partno LIKE 'МИ-%'
+      AND serialno IN ('{program_aircraft_list}')
     ORDER BY serialno
     """
     
