@@ -11,8 +11,7 @@ from typing import Dict, List, Tuple, Any
 
 # Добавляем путь к утилитам
 sys.path.append(str(Path(__file__).parent / 'utils'))
-from config_loader import load_clickhouse_config
-import clickhouse_connect
+from config_loader import get_clickhouse_client
 
 class BeyondRepairCalculator:
     """Калькулятор Beyond Repair для md_components"""
@@ -20,13 +19,6 @@ class BeyondRepairCalculator:
     def __init__(self):
         """Инициализация калькулятора"""
         self.logger = self._setup_logging()
-        self.config = load_clickhouse_config()
-        
-        # Исправляем конфигурацию для работы с ClickHouse
-        self.config['port'] = 8123  # HTTP порт
-        if 'settings' in self.config:
-            self.config['settings'] = {k: v for k, v in self.config['settings'].items() if k != 'use_numpy'}
-        
         self.client = None
     
     def _setup_logging(self) -> logging.Logger:
@@ -40,8 +32,8 @@ class BeyondRepairCalculator:
     def connect_to_database(self) -> bool:
         """Подключение к ClickHouse"""
         try:
-            self.client = clickhouse_connect.get_client(**self.config)
-            result = self.client.query('SELECT 1 as test')
+            self.client = get_clickhouse_client()
+            result = self.client.execute('SELECT 1 as test')
             self.logger.info(f"✅ Подключение к ClickHouse успешно!")
             return True
         except Exception as e:
@@ -55,7 +47,7 @@ class BeyondRepairCalculator:
         try:
             # Добавляем колонку если её нет
             alter_query = "ALTER TABLE md_components ADD COLUMN IF NOT EXISTS br Nullable(UInt16) DEFAULT NULL"
-            self.client.query(alter_query)
+            self.client.execute(alter_query)
             
             self.logger.info("✅ Колонка br (UInt16) добавлена в md_components")
             return True
@@ -70,7 +62,7 @@ class BeyondRepairCalculator:
         
         try:
             # Получаем компоненты с полными данными для расчета BR
-            components_result = self.client.query("""
+            components_result = self.client.execute("""
                 SELECT 
                     partno,
                     ll_mi8, ll_mi17,
@@ -87,7 +79,7 @@ class BeyondRepairCalculator:
             """)
             
             components_data = {}
-            for row in components_result.result_rows:
+            for row in components_result:
                 partno, ll_mi8, ll_mi17, oh_mi8, oh_mi17, repair_price, purchase_price, ac_typ = row
                 
                 components_data[partno] = {
@@ -125,7 +117,7 @@ class BeyondRepairCalculator:
             repair_price: Стоимость ремонта
             purchase_price: Стоимость покупки
             
-                 Returns:
+        Returns:
             int: Пороговая наработка Beyond Repair (округленная до целых)
         """
         try:
@@ -198,7 +190,7 @@ class BeyondRepairCalculator:
         
         try:
             # Сначала очищаем поле
-            self.client.query("ALTER TABLE md_components UPDATE br = NULL WHERE 1=1")
+            self.client.execute("ALTER TABLE md_components UPDATE br = NULL WHERE 1=1")
             
             # Обновляем значения BR
             updated_count = 0
@@ -208,7 +200,7 @@ class BeyondRepairCalculator:
                 UPDATE br = {br_value}
                 WHERE partno = '{partno}'
                 """
-                self.client.query(update_query)
+                self.client.execute(update_query)
                 updated_count += 1
             
             self.logger.info(f"✅ Обновлено {updated_count} записей с BR")
@@ -224,7 +216,7 @@ class BeyondRepairCalculator:
         
         try:
             # Статистика BR
-            stats_result = self.client.query("""
+            stats_result = self.client.execute("""
                 SELECT 
                     COUNT(*) as total_components,
                     countIf(br IS NOT NULL) as with_br,
@@ -235,7 +227,7 @@ class BeyondRepairCalculator:
                 WHERE purchase_price > 0 AND repair_price > 0
             """)
             
-            total, with_br, avg_br, min_br, max_br = stats_result.result_rows[0]
+            total, with_br, avg_br, min_br, max_br = stats_result[0]
             coverage = (with_br / total) * 100 if total > 0 else 0
             
             self.logger.info(f"📊 Статистика BR:")
@@ -246,7 +238,7 @@ class BeyondRepairCalculator:
                 self.logger.info(f"   Диапазон BR: {min_br:.0f} - {max_br:.0f} часов")
             
             # Примеры с BR
-            examples_result = self.client.query("""
+            examples_result = self.client.execute("""
                 SELECT partno, purchase_price, repair_price, br,
                        (repair_price / purchase_price * 100) as repair_pct
                 FROM md_components 
@@ -256,7 +248,7 @@ class BeyondRepairCalculator:
             """)
             
             self.logger.info("📋 Примеры рассчитанных BR:")
-            for row in examples_result.result_rows:
+            for row in examples_result:
                 partno, purchase, repair, br, repair_pct = row
                 self.logger.info(f"   {partno}: BR={br:.0f}h (ремонт {repair_pct:.1f}%)")
             

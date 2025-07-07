@@ -160,6 +160,11 @@ def load_status_components():
         df = pd.read_excel(status_path, header=0, engine='openpyxl')
         print("📖 Загружен Excel файл")
         
+        # Удаляем служебную колонку "Счет" если она присутствует
+        if 'Счет' in df.columns:
+            df = df.drop(columns=['Счет'])
+            print("🗑️ Удалена служебная колонка: Счет")
+        
         print(f"📊 Загружено: {len(df):,} записей")
         return df
         
@@ -183,6 +188,12 @@ def prepare_data(df, version_date, filter_partnos=None, table_name='heli_raw'):
             'condition', 'owner', 'lease_restricted',
             'oh', 'oh_threshold', 'll', 'sne', 'ppr'
         ]
+        
+        # Встроенные ID поля из нового Excel (если есть)
+        embedded_id_columns = ['partseqno_i', 'psn', 'address_i', 'ac_type_i']
+        for col in embedded_id_columns:
+            if col in df.columns:
+                required_columns.append(col)
         
         # Дополнительные поля status и aircraft_number добавляются отдельными скриптами
         # Здесь работаем только с базовыми полями из Excel
@@ -269,6 +280,24 @@ def prepare_data(df, version_date, filter_partnos=None, table_name='heli_raw'):
                 none_count = df[col].isnull().sum()
                 valid_count = len(df) - none_count
                 print(f"   {col}: {valid_count} валидных значений, {none_count} None")
+
+        # Обработка встроенных ID полей из Excel
+        embedded_id_columns = ['partseqno_i', 'psn', 'address_i', 'ac_type_i']
+        for col in embedded_id_columns:
+            if col in df.columns:
+                print(f"🔧 Обрабатываем встроенное ID поле {col}...")
+                
+                # Конвертируем в числовой формат
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                # ID поля не могут быть отрицательными
+                df[col] = df[col].clip(lower=0)
+                # Для Nullable полей оставляем None вместо fillna(0) чтобы сохранить информацию об отсутствии
+                df[col] = df[col].where(df[col].notna(), None)
+                
+                # Статистика
+                non_null_count = df[col].notna().sum()
+                null_count = df[col].isnull().sum()
+                print(f"   {col}: {non_null_count} валидных ID, {null_count} None")
 
         # Обработка lease_restricted - ИСПРАВЛЯЕМ ПРОБЛЕМУ С NaN
         if 'lease_restricted' in df.columns:
@@ -365,9 +394,16 @@ def create_tables(client):
             -- Метаданные файла
             `version_date` Date DEFAULT today(),
             
-            -- Обогащенные поля (добавляются dual_loader.py)
+            -- Встроенные ID поля из Excel (новые поля вместо генерируемых словарей)
+            `partseqno_i` Nullable(UInt32),         -- Встроенный ID партномера из Excel
+            `psn` Nullable(UInt32),                 -- Встроенный ID серийного номера из Excel  
+            `address_i` Nullable(UInt16),           -- Встроенный ID владельца из Excel
+            `ac_type_i` Nullable(UInt16),           -- Встроенный ID типа ВС из Excel
+            
+            -- Обогащенные поля (добавляются dual_loader.py и enrich_heli_pandas.py)
             `status` UInt8 DEFAULT 0,               -- Статус компонента (через status_processor.py)
-            `aircraft_number` UInt16 DEFAULT 0      -- Номер вертолета из RA-XXXXX
+            `aircraft_number` UInt16 DEFAULT 0,     -- Номер вертолета из RA-XXXXX
+            `ac_type_mask` UInt8 DEFAULT 0          -- Битовая маска типа ВС для multihot (через enrich_heli_pandas.py)
             
         ) ENGINE = MergeTree()
         ORDER BY version_date
@@ -509,57 +545,7 @@ def validate_data_counts(client, version_date, original_count, raw_count, pandas
         print(f"✅ Фильтрация: {db_pandas_count/db_raw_count*100:.1f}% записей прошли фильтр")
         return True
 
-def add_aircraft_number_in_memory(pandas_df):
-    """Добавляет поле aircraft_number в DataFrame в памяти (логика из process_location_field.py)"""
-    try:
-        print("🔍 Извлечение номеров вертолетов из RA- значений...")
-        
-        # Добавляем колонку aircraft_number со значением по умолчанию
-        pandas_df['aircraft_number'] = 0
-        
-        # Ищем все RA- значения в location
-        ra_mask = pandas_df['location'].str.startswith('RA-', na=False)
-        ra_locations = pandas_df[ra_mask]['location'].unique()
-        
-        aircraft_mapping = {}
-        invalid_count = 0
-        
-        for location in ra_locations:
-            # Убираем префикс 'RA-'
-            digits_part = location[3:]
-            
-            # Проверяем что это 5 цифр
-            if len(digits_part) == 5 and digits_part.isdigit():
-                aircraft_number = int(digits_part)
-                aircraft_mapping[location] = aircraft_number
-            else:
-                invalid_count += 1
-                print(f"⚠️ Неправильный формат: {location}")
-        
-        print(f"✅ Извлечено {len(aircraft_mapping)} номеров вертолетов")
-        if invalid_count > 0:
-            print(f"⚠️ Найдено {invalid_count} значений неправильного формата")
-        
-        # Обновляем aircraft_number для соответствующих записей
-        for location, aircraft_number in aircraft_mapping.items():
-            mask = pandas_df['location'] == location
-            pandas_df.loc[mask, 'aircraft_number'] = aircraft_number
-        
-        # Очищаем location для не-RA значений
-        non_ra_mask = ~pandas_df['location'].str.startswith('RA-', na=False)
-        pandas_df.loc[non_ra_mask, 'location'] = ''
-        
-        aircraft_count = (pandas_df['aircraft_number'] > 0).sum()
-        print(f"✅ Обогащено {aircraft_count} записей номерами вертолетов")
-        
-        return pandas_df
-        
-    except Exception as e:
-        print(f"❌ Ошибка добавления aircraft_number: {e}")
-        # Добавляем пустую колонку при ошибке
-        if 'aircraft_number' not in pandas_df.columns:
-            pandas_df['aircraft_number'] = 0
-        return pandas_df
+# Функция add_aircraft_number_in_memory перенесена в aircraft_number_processor.py
 
 # Функция add_status_in_memory удалена - заменена на status_processor.py
 
@@ -638,7 +624,23 @@ def main():
         
         # Добавляем поле aircraft_number через извлечение из location
         print(f"🚁 Добавление aircraft_number из поля location...")
-        pandas_df = add_aircraft_number_in_memory(pandas_df)
+        try:
+            from aircraft_number_processor import process_aircraft_numbers_in_memory
+            pandas_df, aircraft_count, invalid_count = process_aircraft_numbers_in_memory(pandas_df)
+            if invalid_count > 0:
+                print(f"⚠️ Найдено {invalid_count} значений неправильного формата")
+        except ImportError as e:
+            print(f"⚠️ Модуль aircraft_number_processor не найден: {e}")
+            # Fallback - добавляем пустую колонку
+            if 'aircraft_number' not in pandas_df.columns:
+                pandas_df['aircraft_number'] = 0
+                print(f"➕ Добавлена колонка 'aircraft_number' со значением по умолчанию 0")
+        except Exception as e:
+            print(f"❌ Ошибка обработки aircraft_number: {e}")
+            # Fallback - добавляем пустую колонку
+            if 'aircraft_number' not in pandas_df.columns:
+                pandas_df['aircraft_number'] = 0
+                print(f"➕ Добавлена колонка 'aircraft_number' со значением по умолчанию 0 (fallback)")
         
         # Добавляем поле status через обработку статусов (НОВАЯ ЛОГИКА)
         print(f"📊 Добавление status через систему процессоров...")
@@ -675,13 +677,14 @@ def main():
         # 8.3 Записываем финальную heli_pandas с полной структурой
         print(f"🔧 Выравнивание порядка колонок согласно схеме таблицы...")
         
-        # Правильный порядок согласно схеме heli_pandas (18 полей)
+        # Правильный порядок согласно схеме heli_pandas (23 поля: dual_loader создает 22 + enrich_heli_pandas заполняет ac_type_mask)
         correct_column_order = [
             'partno', 'serialno', 'ac_typ', 'location',
             'mfg_date', 'removal_date', 'target_date',
             'condition', 'owner', 'lease_restricted',
             'oh', 'oh_threshold', 'll', 'sne', 'ppr',
-            'version_date', 'status', 'aircraft_number'
+            'version_date', 'partseqno_i', 'psn', 'address_i', 'ac_type_i',
+            'status', 'aircraft_number', 'ac_type_mask'
         ]
         
         # Проверяем наличие всех колонок
@@ -692,9 +695,12 @@ def main():
             print(f"⚠️ Отсутствующие колонки: {missing_columns}")
             # Добавляем отсутствующие колонки с дефолтными значениями
             for col in missing_columns:
-                if col in ['status', 'aircraft_number']:
+                if col in ['status', 'aircraft_number', 'ac_type_mask']:
                     pandas_df[col] = 0
                     print(f"   ➕ Добавлена колонка {col}: 0")
+                elif col in ['partseqno_i', 'psn', 'address_i', 'ac_type_i']:
+                    pandas_df[col] = None  # Nullable UInt полея
+                    print(f"   ➕ Добавлена колонка {col}: None")
                 elif col in ['oh', 'oh_threshold', 'll', 'sne', 'ppr']:
                     pandas_df[col] = None
                     print(f"   ➕ Добавлена колонка {col}: None")

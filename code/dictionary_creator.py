@@ -160,10 +160,10 @@ class DictionaryCreator:
             
             dictionaries['serialno'] = {
                 'mapping': serialno_dict,
-                'target_type': 'UInt16',
+                'target_type': 'UInt32',
                 'description': f"Серийные номера: {len(serialno_dict)} значений"
             }
-            self.logger.info(f"  ✅ serialno: {len(serialno_dict)} серийных номеров → UInt16")
+            self.logger.info(f"  ✅ serialno: {len(serialno_dict)} серийных номеров → UInt32")
         
         return dictionaries
     
@@ -200,7 +200,7 @@ class DictionaryCreator:
             # 4. Таблица серийных номеров
             serialno_dict_sql = """
             CREATE TABLE IF NOT EXISTS dict_serialno_flat (
-                serialno_id UInt16,        -- FLAT layout key (1,2,3...)
+                serialno_id UInt32,        -- FLAT layout key (1,2,3...)
                 serialno String
             ) ENGINE = Memory
             """
@@ -346,7 +346,7 @@ class DictionaryCreator:
             # 4. Dictionary для серийных номеров (FLAT layout)
             serialno_dict_ddl = f"""
             CREATE OR REPLACE DICTIONARY serialno_dict_flat (
-                serialno_id UInt16,
+                serialno_id UInt32,
                 serialno String
             )
             PRIMARY KEY serialno_id
@@ -356,7 +356,7 @@ class DictionaryCreator:
                 TABLE 'dict_serialno_flat'
                 DB '{self.config['database']}'
             ))
-            LAYOUT(FLAT(INITIAL_ARRAY_SIZE 10000 MAX_ARRAY_SIZE 10000))
+            LAYOUT(FLAT(INITIAL_ARRAY_SIZE 150000 MAX_ARRAY_SIZE 200000))
             LIFETIME(MIN 0 MAX 3600)
             """
             

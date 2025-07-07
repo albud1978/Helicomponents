@@ -1,0 +1,85 @@
+2025-07-07 18:54:05,019 - INFO - 🎯 ===== ЗАПУСК ETL ПАЙПЛАЙНА HELICOPTER COMPONENT LIFECYCLE =====
+2025-07-07 18:54:05,020 - INFO - 📋 Архитектура: встроенные ID поля из Excel (partseqno_i, psn, address_i, ac_type_i)
+2025-07-07 18:54:05,020 - INFO - 🚀 Запуск: Создание базовых справочников
+2025-07-07 18:54:05,021 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436240580>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:54:05,021 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:54:05,021 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f04362408b0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:54:05,021 - ERROR - ❌ Скрипт dictionary_creator.py не найден!
+2025-07-07 18:54:05,021 - ERROR - ❌ Критическая ошибка в dictionary_creator.py
+2025-07-07 18:54:05,021 - INFO - 🚀 Запуск: Создание справочника номеров ВС
+2025-07-07 18:54:05,022 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436240f40>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:54:05,022 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:54:05,022 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436241120>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:54:05,022 - ERROR - ❌ Скрипт aircraft_number_dict_creator.py не найден!
+2025-07-07 18:54:05,022 - ERROR - ❌ Критическая ошибка в aircraft_number_dict_creator.py
+2025-07-07 18:54:05,022 - INFO - 🚀 Запуск: Загрузка данных Status_Components.xlsx со встроенными ID
+2025-07-07 18:54:05,022 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436241480>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:54:05,023 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:54:05,023 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436241690>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:54:05,023 - ERROR - ❌ Скрипт dual_loader.py не найден!
+2025-07-07 18:54:05,023 - ERROR - ❌ Критическая ошибка в dual_loader.py
+2025-07-07 18:54:05,023 - INFO - 🚀 Запуск: Обогащение данных ac_type_mask
+2025-07-07 18:54:05,023 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f04362419f0>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:54:05,023 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:54:05,023 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436241c00>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:54:05,023 - ERROR - ❌ Скрипт enrich_heli_pandas.py не найден!
+2025-07-07 18:54:05,023 - ERROR - ❌ Критическая ошибка в enrich_heli_pandas.py
+2025-07-07 18:54:05,023 - INFO - 🚀 Запуск: Загрузка данных статуса и капремонта
+2025-07-07 18:54:05,024 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436241f60>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:54:05,024 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:54:05,024 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f04362417b0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:54:05,024 - ERROR - ❌ Скрипт status_overhaul_loader.py не найден!
+2025-07-07 18:54:05,024 - ERROR - ❌ Критическая ошибка в status_overhaul_loader.py
+2025-07-07 18:54:05,024 - INFO - 🚀 Запуск: Загрузка данных программ
+2025-07-07 18:54:05,024 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f04362419f0>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:54:05,024 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:54:05,024 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436241240>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:54:05,024 - ERROR - ❌ Скрипт program_loader.py не найден!
+2025-07-07 18:54:05,024 - ERROR - ❌ Критическая ошибка в program_loader.py
+2025-07-07 18:54:05,025 - INFO - 🚀 Запуск: Загрузка связки программ и ВС
+2025-07-07 18:54:05,025 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436241480>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:54:05,025 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:54:05,025 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436240910>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:54:05,025 - ERROR - ❌ Скрипт program_ac_loader.py не найден!
+2025-07-07 18:54:05,025 - ERROR - ❌ Критическая ошибка в program_ac_loader.py
+2025-07-07 18:54:05,025 - INFO - 🚀 Запуск: Загрузка MD компонентов
+2025-07-07 18:54:05,025 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436240f40>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:54:05,025 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:54:05,025 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f04362402e0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:54:05,026 - ERROR - ❌ Скрипт md_components_loader.py не найден!
+2025-07-07 18:54:05,026 - ERROR - ❌ Критическая ошибка в md_components_loader.py
+2025-07-07 18:54:05,026 - INFO - 🚀 Запуск: Расчет Beyond Repair (br) для md_components
+2025-07-07 18:54:05,026 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436240640>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:54:05,026 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:54:05,026 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f0436242170>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:54:05,026 - ERROR - ❌ Скрипт calculate_beyond_repair.py не найден!
+2025-07-07 18:54:05,026 - ERROR - ❌ Критическая ошибка в calculate_beyond_repair.py
+2025-07-07 18:54:05,026 - INFO - 
+🔍 ===== ФИНАЛЬНАЯ ПРОВЕРКА ГОТОВНОСТИ =====
+2025-07-07 18:54:05,026 - INFO - 🔍 Проверка готовности данных для GPU...
+2025-07-07 18:54:05,026 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f04362424a0>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:54:05,027 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:54:05,027 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f04362426b0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:54:05,027 - ERROR - ❌ Нет подключения к ClickHouse
+2025-07-07 18:54:05,027 - INFO - 
+📊 ===== ИТОГИ ETL ПАЙПЛАЙНА =====
+2025-07-07 18:54:05,027 - INFO - ✅ Успешно выполнено: 0/9 шагов
+2025-07-07 18:54:05,027 - INFO - ⏱️  Общее время выполнения: 0.01 сек
+2025-07-07 18:54:05,027 - INFO - 🎯 Готовность для GPU: ❌ НЕТ
+2025-07-07 18:54:05,027 - WARNING - ⚠️  Требуется дополнительная настройка перед GPU обработкой
+2025-07-07 18:58:29,107 - INFO - 🎯 ===== ЗАПУСК ETL ПАЙПЛАЙНА HELICOPTER COMPONENT LIFECYCLE =====
+2025-07-07 18:58:29,107 - INFO - 📋 Архитектура: встроенные ID поля из Excel (partseqno_i, psn, address_i, ac_type_i)
+2025-07-07 18:58:29,107 - INFO - 🚀 Запуск: Создание базовых справочников
+2025-07-07 18:58:29,109 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f571eefc730>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:58:29,109 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:58:29,109 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f571eefca60>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:58:29,551 - INFO - ✅ Создание базовых справочников выполнено за 0.44 сек
+2025-07-07 18:58:29,551 - INFO - 🚀 Запуск: Создание справочника номеров ВС
+2025-07-07 18:58:29,551 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f571eefd150>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:58:29,552 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:58:29,552 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f571eefd360>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2025-07-07 18:58:29,964 - INFO - ✅ Создание справочника номеров ВС выполнено за 0.41 сек
+2025-07-07 18:58:29,964 - INFO - 🚀 Запуск: Загрузка данных Status_Components.xlsx со встроенными ID
+2025-07-07 18:58:29,964 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f571eefd750>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2025-07-07 18:58:29,965 - WARNING - Unexpected Http Driver Exception
+2025-07-07 18:58:29,965 - ERROR - Ошибка подключения к ClickHouse: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f571eefd960>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
