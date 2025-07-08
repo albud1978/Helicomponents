@@ -1,0 +1,9 @@
+2025-07-08 17:04:12,817 - INFO - Первая дата в OlapCube_VNV: 2024-11-25
+2025-07-08 17:04:12,859 - INFO - balance_mi8t: -11.0 (balance_mi8t_count: 75 - mi8t_count: 86.0)
+2025-07-08 17:04:12,895 - INFO - balance_mi17: 17.0 (balance_mi17_count: 87 - mi17_count: 70.0)
+2025-07-08 17:04:12,895 - INFO - balance_total: 6.0 (balance_mi8t: -11.0 + balance_mi17: 17.0)
+2025-07-08 17:04:12,913 - INFO - stock_mi8t: 3
+2025-07-08 17:04:12,934 - INFO - stock_mi17: 5
+2025-07-08 17:04:12,954 - INFO - stock_empty: 1
+2025-07-08 17:04:12,954 - INFO - stock_total: 9 (stock_mi8t: 3 + stock_mi17: 5 + stock_empty: 1)
+2025-07-08 17:04:12,960 - INFO - Баланс и запасы успешно обновлены для первой даты.
