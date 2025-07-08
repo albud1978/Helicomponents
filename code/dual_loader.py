@@ -23,6 +23,7 @@ from datetime import datetime
 import yaml
 import openpyxl
 import os
+import time
 
 # Безопасная конфигурация через utils.config_loader
 
@@ -177,9 +178,43 @@ def prepare_data(df, version_date, filter_partnos=None, table_name='heli_raw'):
     try:
         # Фильтрация если нужна
         if filter_partnos:
+            print(f"🔍 ДИАГНОСТИКА ФИЛЬТРАЦИИ:")
+            print(f"   DataFrame: {len(df):,} записей")
+            print(f"   filter_partnos: {type(filter_partnos)} с {len(filter_partnos)} элементами")
+            print(f"   Примеры filter_partnos: {filter_partnos[:3]}")
+            
             original_count = len(df)
-            df = df[df['partno'].isin(filter_partnos)].copy()
+            
+            # ДИАГНОСТИКА: проверяем тип данных в partno колонке
+            print(f"   Тип данных df['partno']: {df['partno'].dtype}")
+            print(f"   Примеры df['partno']: {df['partno'].head(3).tolist()}")
+            
+            # ОПТИМИЗАЦИЯ: конвертируем filter_partnos в set для быстрого поиска
+            print(f"🔧 Конвертирую filter_partnos в set для оптимизации...")
+            filter_partnos_set = set(filter_partnos)
+            print(f"   Создан set с {len(filter_partnos_set)} элементами")
+            
+            # ДИАГНОСТИКА: показываем прогресс
+            print(f"🔧 Начинаю фильтрацию .isin() для {original_count:,} записей...")
+            
+            # ОПТИМИЗИРОВАННАЯ фильтрация
+            start_time = time.time()
+            mask = df['partno'].isin(filter_partnos_set)
+            filter_time = time.time() - start_time
+            print(f"   ✅ .isin() завершен за {filter_time:.2f} сек")
+            
+            print(f"   Найдено {mask.sum():,} совпадений из {original_count:,}")
+            
+            # Применяем фильтр
+            print(f"🔧 Применяю фильтр и создаю копию...")
+            copy_start = time.time()
+            df = df[mask].copy()
+            copy_time = time.time() - copy_start
+            print(f"   ✅ Копирование завершено за {copy_time:.2f} сек")
+            
             print(f"📊 После фильтрации: {len(df):,} из {original_count:,} записей")
+        
+        print(f"🔧 Продолжаю обработку колонок...")
         
         # Выбираем только нужные колонки согласно схеме таблицы
         required_columns = [
@@ -402,6 +437,7 @@ def create_tables(client):
             
             -- Обогащенные поля (добавляются dual_loader.py и enrich_heli_pandas.py)
             `status` UInt8 DEFAULT 0,               -- Статус компонента (через status_processor.py)
+            `repair_days` Nullable(Int16),          -- Остаток дней до окончания ремонта (target_date - version_date)
             `aircraft_number` UInt16 DEFAULT 0,     -- Номер вертолета из RA-XXXXX
             `ac_type_mask` UInt8 DEFAULT 0          -- Битовая маска типа ВС для multihot (через enrich_heli_pandas.py)
             
@@ -622,6 +658,19 @@ def main():
         # 8.2 Обрабатываем pandas_df В ПАМЯТИ для оптимальной производительности
         print(f"\n🔧 === ОБРАБОТКА PANDAS_DF В ПАМЯТИ ===")
         
+        # КРИТИЧНО: Создаем обогащенные поля ДО обработки процессорами
+        print(f"🔧 Инициализация обогащенных полей...")
+        
+        # Поле repair_days - должно быть создано ДО обработки статусов
+        if 'repair_days' not in pandas_df.columns:
+            pandas_df['repair_days'] = None  # Nullable Int16 поле
+            print(f"   ➕ Создано поле repair_days: None (заполнится при обработке статусов)")
+        
+        # Поле status - инициализируем значением по умолчанию
+        if 'status' not in pandas_df.columns:
+            pandas_df['status'] = 0  # По умолчанию 0 (не определен)
+            print(f"   ➕ Создано поле status: 0 (обновится процессорами)")
+        
         # Добавляем поле aircraft_number через извлечение из location
         print(f"🚁 Добавление aircraft_number из поля location...")
         try:
@@ -643,10 +692,10 @@ def main():
                 print(f"➕ Добавлена колонка 'aircraft_number' со значением по умолчанию 0 (fallback)")
         
         # Добавляем поле status через обработку статусов (НОВАЯ ЛОГИКА)
-        print(f"📊 Добавление status через систему процессоров...")
+        print(f"📊 Обработка статусов и repair_days через систему процессоров...")
         try:
-            # ЭТАП 1: Обработка статусов капремонта (status_overhaul)
-            print(f"🔧 Этап 1: Статусы капремонта...")
+            # ЭТАП 1: Обработка статусов капремонта (status_overhaul) + repair_days
+            print(f"🔧 Этап 1: Статусы капремонта + repair_days...")
             from overhaul_status_processor import process_status_field
             pandas_df = process_status_field(pandas_df, client)
             
@@ -663,28 +712,20 @@ def main():
         except ImportError as e:
             print(f"⚠️ Модуль статусов не найден: {e}")
             print(f"💡 Убедитесь что созданы: overhaul_status_processor.py, program_ac_status_processor.py, inactive_planery_processor.py")
-            # Добавляем колонку status по умолчанию
-            if 'status' not in pandas_df.columns:
-                pandas_df['status'] = 0
-                print(f"➕ Добавлена колонка 'status' со значением по умолчанию 0")
         except Exception as e:
             print(f"❌ Ошибка обработки статусов: {e}")
-            # Добавляем колонку status по умолчанию при ошибке
-            if 'status' not in pandas_df.columns:
-                pandas_df['status'] = 0
-                print(f"➕ Добавлена колонка 'status' со значением по умолчанию 0 (fallback)")
         
         # 8.3 Записываем финальную heli_pandas с полной структурой
         print(f"🔧 Выравнивание порядка колонок согласно схеме таблицы...")
         
-        # Правильный порядок согласно схеме heli_pandas (23 поля: dual_loader создает 22 + enrich_heli_pandas заполняет ac_type_mask)
+        # Правильный порядок согласно схеме heli_pandas (24 поля: dual_loader создает 23 + enrich_heli_pandas заполняет ac_type_mask)
         correct_column_order = [
             'partno', 'serialno', 'ac_typ', 'location',
             'mfg_date', 'removal_date', 'target_date',
             'condition', 'owner', 'lease_restricted',
             'oh', 'oh_threshold', 'll', 'sne', 'ppr',
             'version_date', 'partseqno_i', 'psn', 'address_i', 'ac_type_i',
-            'status', 'aircraft_number', 'ac_type_mask'
+            'status', 'repair_days', 'aircraft_number', 'ac_type_mask'
         ]
         
         # Проверяем наличие всех колонок
@@ -698,6 +739,9 @@ def main():
                 if col in ['status', 'aircraft_number', 'ac_type_mask']:
                     pandas_df[col] = 0
                     print(f"   ➕ Добавлена колонка {col}: 0")
+                elif col == 'repair_days':
+                    pandas_df[col] = None  # Nullable Int16 поле
+                    print(f"   ➕ Добавлена колонка {col}: None")
                 elif col in ['partseqno_i', 'psn', 'address_i', 'ac_type_i']:
                     pandas_df[col] = None  # Nullable UInt полея
                     print(f"   ➕ Добавлена колонка {col}: None")

@@ -116,6 +116,15 @@ def process_aircraft_status(pandas_df, client):
             pandas_df['status'] = 0  # По умолчанию 0 (не определен)
             print("➕ Добавлена колонка 'status' со значением по умолчанию 0")
         
+        # Добавляем колонку repair_days если ее нет
+        if 'repair_days' not in pandas_df.columns:
+            pandas_df['repair_days'] = None  # По умолчанию None (не определен)
+            print("➕ Добавлена колонка 'repair_days' со значением по умолчанию None")
+        
+        # Определяем version_date для расчета repair_days
+        version_date = pandas_df['version_date'].iloc[0] if 'version_date' in pandas_df.columns else date.today()
+        print(f"📅 Используем version_date для расчета repair_days: {version_date}")
+        
         # Создаем словарь для быстрого поиска: ac_registr -> данные капремонта
         status_dict = {}
         for _, row in status_overhaul_df.iterrows():
@@ -163,6 +172,12 @@ def process_aircraft_status(pandas_df, client):
                     pandas_df.at[idx, 'target_date'] = overhaul_data['sched_end_date']
                     dates_updated_count += 1
                     print(f"   ✅ target_date = {overhaul_data['sched_end_date']}")
+                
+                # Рассчитываем repair_days
+                if pandas_df.at[idx, 'target_date'] and pandas_df.at[idx, 'version_date']:
+                    repair_days = (pandas_df.at[idx, 'target_date'] - pandas_df.at[idx, 'version_date']).days
+                    pandas_df.at[idx, 'repair_days'] = repair_days
+                    print(f"   ✅ repair_days = {repair_days} дней")
                 
                 matches_found += 1
         

@@ -161,15 +161,26 @@ class HeliPandasEnricher:
                 else:
                     self.logger.warning(f"  ⚠️ {ac_typ}: не найдено записей для обновления")
             
+            # Применяем мутации принудительно (ClickHouse UPDATE асинхронный)
+            self.logger.info("⏳ Ожидание завершения UPDATE операций...")
+            try:
+                self.client.query("OPTIMIZE TABLE heli_pandas FINAL")
+                self.logger.info("✅ Мутации применены принудительно")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Не удалось применить OPTIMIZE: {e}")
+                # Небольшая пауза для асинхронных операций
+                import time
+                time.sleep(2)
+            
             # Финальная проверка результата
             result = self.client.query("SELECT COUNT(*) FROM heli_pandas WHERE ac_type_mask > 0")
             final_enriched_count = result.result_rows[0][0]
             
             self.logger.info(f"✅ Обогащено {final_enriched_count} записей типами ВС")
             
-            # Дополнительная диагностика если ничего не обогащено
+            # Если все равно 0 - проблема не в асинхронности, делаем диагностику
             if final_enriched_count == 0:
-                self.logger.warning("⚠️ ac_type_mask не обогащен! Проверяем диагностику...")
+                self.logger.warning("⚠️ ac_type_mask не обогащен даже после OPTIMIZE! Проверяем диагностику...")
                 
                 # Проверяем какие типы ВС есть в данных
                 ac_types_result = self.client.query("SELECT DISTINCT ac_typ, COUNT(*) FROM heli_pandas GROUP BY ac_typ ORDER BY COUNT(*) DESC")
@@ -177,6 +188,14 @@ class HeliPandasEnricher:
                 for ac_typ, count in ac_types_result.result_rows:
                     mask_status = "✅" if ac_typ in mappings['ac_typ'] else "❌"
                     self.logger.info(f"  {mask_status} '{ac_typ}': {count} записей")
+            else:
+                # Успех! Показываем статистику
+                self.logger.info("🎯 Статистика по ac_type_mask:")
+                mask_stats = self.client.query("SELECT ac_type_mask, COUNT(*) FROM heli_pandas WHERE ac_type_mask > 0 GROUP BY ac_type_mask ORDER BY ac_type_mask")
+                for mask, count in mask_stats.result_rows:
+                    # Находим какой тип ВС соответствует маске
+                    ac_type_for_mask = next((ac_typ for ac_typ, m in mappings['ac_typ'].items() if m == mask), f"mask_{mask}")
+                    self.logger.info(f"  ✅ {ac_type_for_mask} (mask={mask}): {count} записей")
             
             return final_enriched_count > 0
             

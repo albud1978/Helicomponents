@@ -14,6 +14,7 @@ from pathlib import Path
 from config_loader import get_clickhouse_client
 
 # Настройка логгирования
+Path('logs').mkdir(exist_ok=True)  # Создаем директорию для логов
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -107,14 +108,28 @@ def run_script(script_name, description, required_tables=None, check_result_tabl
     
     try:
         start_time = time.time()
+        
         # Запускаем из корневой директории проекта
         project_root = Path(__file__).parent.parent.parent
-        result = subprocess.run([sys.executable, str(script_path)], 
-                              capture_output=True, text=True, check=True,
-                              cwd=str(project_root))
+        
+        result = subprocess.run(
+            [sys.executable, str(script_path)], 
+            capture_output=True, 
+            text=True, 
+            check=True,
+            cwd=str(project_root),
+            input="1\n1\n1\n1\n1\n"  # Автоматические ответы для диалогов перезаписи
+        )
         
         execution_time = time.time() - start_time
         logger.info(f"✅ {description} выполнено за {execution_time:.2f} сек")
+        
+        # Показываем последние строки вывода для диагностики
+        if result.stdout:
+            output_lines = result.stdout.strip().split('\n')
+            logger.info(f"📝 Последние строки вывода:")
+            for line in output_lines[-3:]:  # Последние 3 строки
+                logger.info(f"   {line}")
         
         # Проверка результата
         if check_result_table and client:
@@ -127,12 +142,20 @@ def run_script(script_name, description, required_tables=None, check_result_tabl
         return True
         
     except subprocess.CalledProcessError as e:
-        logger.error(f"❌ Ошибка в {script_name}:")
-        logger.error(f"STDOUT: {e.stdout}")
-        logger.error(f"STDERR: {e.stderr}")
+        execution_time = time.time() - start_time
+        logger.error(f"❌ Ошибка в {script_name} (выполнялся {execution_time:.1f} сек):")
+        logger.error(f"Return code: {e.returncode}")
+        if e.stdout:
+            logger.error(f"STDOUT (последние 10 строк):")
+            for line in e.stdout.strip().split('\n')[-10:]:
+                logger.error(f"  {line}")
+        if e.stderr:
+            logger.error(f"STDERR:")
+            logger.error(f"  {e.stderr}")
         return False
     except Exception as e:
-        logger.error(f"❌ Неожиданная ошибка в {script_name}: {e}")
+        execution_time = time.time() - start_time
+        logger.error(f"❌ Неожиданная ошибка в {script_name} (выполнялся {execution_time:.1f} сек): {e}")
         return False
 
 def check_gpu_readiness():
@@ -149,7 +172,7 @@ def check_gpu_readiness():
         'heli_pandas': ['partseqno_i', 'psn', 'address_i', 'ac_type_i', 'ac_type_mask'],
         'status_overhaul': ['partseqno_i', 'psn'],
         'program_ac': ['ac_type_i'],
-        'program': ['program_id'],
+        'flight_program': ['program_id'],
         'md_components': ['partseqno_i']
     }
     
@@ -173,80 +196,100 @@ def check_gpu_readiness():
     
     return all_ready
 
-def main():
+def main(start_from_step=None):
     """Основной ETL пайплайн"""
     logger.info("🎯 ===== ЗАПУСК ETL ПАЙПЛАЙНА HELICOPTER COMPONENT LIFECYCLE =====")
     logger.info("📋 Архитектура: встроенные ID поля из Excel (partseqno_i, psn, address_i, ac_type_i)")
     
+    if start_from_step:
+        logger.info(f"🎯 Запуск с этапа: {start_from_step}")
+    
     start_time = time.time()
+    
+    # ОЧИСТКА ТОЛЬКО НАШИХ ТАБЛИЦ ПРОЕКТА (хардкод)
+    if not start_from_step:
+        logger.info("🗑️ ===== ОЧИСТКА ТАБЛИЦ ПРОЕКТА =====")
+        client = get_clickhouse_client_etl()
+        if client:
+            # ТОЛЬКО наши таблицы проекта - никого больше не трогаем!
+            our_tables_only = ['heli_pandas', 'heli_raw']
+            
+            for table in our_tables_only:
+                try:
+                    client.execute(f'DROP TABLE IF EXISTS {table}')
+                    logger.info(f"✅ Удалена таблица: {table}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Ошибка удаления {table}: {e}")
+            logger.info("✅ Очистка завершена - готовы для ETL Pipeline")
+        else:
+            logger.error("❌ Нет подключения к ClickHouse для очистки таблиц")
+            return False
+    else:
+        logger.info(f"⏭️ Пропускаем очистку таблиц - запуск с этапа {start_from_step}")
     
     # ETL последовательность
     etl_steps = [
-        # 1. Базовые справочники
+        # ЭТАП 1: Базовые таблицы (источники данных) - ТОЛЬКО НЕЗАВИСИМЫЕ
         {
-            'script': 'dictionary_creator.py',
-            'description': 'Создание базовых справочников',
+            'script': 'md_components_loader.py',
+            'description': 'Загрузка MD компонентов (КРИТИЧНО ПЕРВЫМ для фильтрации)',
             'required_tables': None,
-            'result_table': 'dict_status_flat'
+            'result_table': 'md_components'
         },
         
-        # 2. Справочник номеров ВС
-        {
-            'script': 'aircraft_number_dict_creator.py', 
-            'description': 'Создание справочника номеров ВС',
-            'required_tables': None,
-            'result_table': 'aircraft_number_dict'
-        },
-        
-        # 3. Загрузка основных данных со встроенными ID
-        {
-            'script': 'dual_loader.py',
-            'description': 'Загрузка данных Status_Components.xlsx со встроенными ID',
-            'required_tables': ['dict_status_flat'],
-            'result_table': 'heli_pandas'
-        },
-        
-        # 4. Обогащение данных (только ac_type_mask)
-        {
-            'script': 'enrich_heli_pandas.py',
-            'description': 'Обогащение данных ac_type_mask',
-            'required_tables': ['heli_pandas', 'ac_type_dict_flat'],
-            'result_table': 'heli_pandas'
-        },
-        
-        # 5. Обработка данных статуса и капремонта
         {
             'script': 'status_overhaul_loader.py',
             'description': 'Загрузка данных статуса и капремонта',
-            'required_tables': ['heli_pandas'],
+            'required_tables': None,
             'result_table': 'status_overhaul'
         },
         
-        # 6. Обработка данных программ
         {
             'script': 'program_loader.py',
             'description': 'Загрузка данных программ',
             'required_tables': None,
-            'result_table': 'program'
+            'result_table': 'flight_program'
         },
         
-        # 7. Обработка связки программ и ВС
         {
             'script': 'program_ac_loader.py',
             'description': 'Загрузка связки программ и ВС',
-            'required_tables': ['program'],
+            'required_tables': ['flight_program'],
             'result_table': 'program_ac'
         },
         
-        # 8. Загрузка MD компонентов
+        # ЭТАП 2: Основная таблица (зависит от всех базовых)
         {
-            'script': 'md_components_loader.py',
-            'description': 'Загрузка MD компонентов',
-            'required_tables': ['heli_pandas'],
-            'result_table': 'md_components'
+            'script': 'dual_loader.py',
+            'description': 'Загрузка Status_Components + процессоры статусов + repair_days',
+            'required_tables': ['md_components', 'status_overhaul', 'program_ac'],
+            'result_table': 'heli_pandas'
         },
         
-        # 9. Расчет Beyond Repair
+        # ЭТАП 3: Справочники (зависят от heli_pandas)
+        {
+            'script': 'dictionary_creator.py',
+            'description': 'Создание базовых справочников (после heli_pandas)',
+            'required_tables': ['heli_pandas'],
+            'result_table': 'dict_status_flat'
+        },
+        
+        {
+            'script': 'aircraft_number_dict_creator.py', 
+            'description': 'Создание справочника номеров ВС (после heli_pandas)',
+            'required_tables': ['heli_pandas'],
+            'result_table': 'aircraft_number_dict'
+        },
+        
+        # ЭТАП 4: Обогащение данных
+        {
+            'script': 'enrich_heli_pandas.py',
+            'description': 'Обогащение данных ac_type_mask',
+            'required_tables': ['heli_pandas'],
+            'result_table': 'heli_pandas'
+        },
+        
+        # ЭТАП 5: Расчеты
         {
             'script': 'calculate_beyond_repair.py',
             'description': 'Расчет Beyond Repair (br) для md_components',
@@ -257,7 +300,20 @@ def main():
     
     # Выполнение ETL шагов
     success_count = 0
-    for step in etl_steps:
+    skip_until_found = bool(start_from_step)
+    
+    for i, step in enumerate(etl_steps, 1):
+        # Пропускаем этапы до нужного
+        if skip_until_found:
+            if step['script'] != start_from_step:
+                logger.info(f"⏭️ Пропускаем этап {i}/{len(etl_steps)}: {step['script']}")
+                continue
+            else:
+                skip_until_found = False
+                logger.info(f"🎯 Начинаем с этапа {i}/{len(etl_steps)}: {step['script']}")
+        
+        logger.info(f"🚀 Этап {i}/{len(etl_steps)}: {step['script']}")
+        
         success = run_script(
             step['script'], 
             step['description'], 
@@ -267,8 +323,10 @@ def main():
         
         if success:
             success_count += 1
+            logger.info(f"✅ Этап {i}/{len(etl_steps)} завершен: {step['script']}")
         else:
             logger.error(f"❌ Критическая ошибка в {step['script']}")
+            logger.info(f"⚠️ Продолжаем выполнение следующих этапов...")
             # Продолжаем выполнение несмотря на ошибки
     
     # Финальная проверка
@@ -290,5 +348,13 @@ def main():
     return success_count == len(etl_steps) and gpu_ready
 
 if __name__ == "__main__":
-    success = main()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='ETL Pipeline Runner для Helicopter Component Lifecycle')
+    parser.add_argument('--start-from', dest='start_from_step', 
+                        help='Начать с определенного этапа (например: dual_loader.py)')
+    
+    args = parser.parse_args()
+    
+    success = main(start_from_step=args.start_from_step)
     sys.exit(0 if success else 1) 

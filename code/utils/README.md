@@ -28,15 +28,15 @@
 ## 🎯 Основные сценарии использования
 
 ### Автоматизированный ETL (рекомендуется)
-```bash
+  ```bash
 # Полная перезагрузка всех данных
 python3 code/utils/etl_pipeline_runner.py
-```
+  ```
 
 ### Проверка системы
-```bash
+  ```bash
 # Проверка зависимостей Python
-python3 code/utils/check_dependencies.py
+  python3 code/utils/check_dependencies.py
 
 # Очистка базы данных
 python3 code/utils/database_cleanup.py
