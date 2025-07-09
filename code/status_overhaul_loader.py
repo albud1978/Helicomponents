@@ -101,7 +101,7 @@ def load_status_overhaul_data():
         print(f"❌ Ошибка загрузки Status_Overhaul.xlsx: {e}")
         sys.exit(1)
 
-def prepare_status_overhaul_data(df, version_date):
+def prepare_status_overhaul_data(df, version_date, version_id=1):
     """Подготавливает данные о статусе капитального ремонта для ClickHouse"""
     try:
         print(f"📦 Подготовка данных о статусе капитального ремонта для ClickHouse...")
@@ -109,8 +109,9 @@ def prepare_status_overhaul_data(df, version_date):
         # Создаем копию
         result_df = df.copy()
         
-        # Добавляем дату версии
+        # Добавляем версию данных
         result_df['version_date'] = version_date
+        result_df['version_id'] = version_id
         
         # Обработка строковых полей для ClickHouse
         string_columns = ['ac_typ', 'wpno', 'description', 'status', 'owner', 'operator']
@@ -221,10 +222,11 @@ def create_status_overhaul_table(client):
             `operator` String,                      -- Оператор
             
             -- Метаданные
-            `version_date` Date DEFAULT today()     -- Дата версии данных
+            `version_date` Date DEFAULT today(),    -- Дата версии данных
+            `version_id` UInt8 DEFAULT 1            -- ID версии
             
         ) ENGINE = MergeTree()
-        ORDER BY (ac_registr, wpno, status)
+        ORDER BY (ac_registr, wpno, status, version_date, version_id)
         PARTITION BY toYYYYMM(version_date)
         SETTINGS index_granularity = 8192
         """
@@ -236,15 +238,15 @@ def create_status_overhaul_table(client):
         print(f"❌ Ошибка создания таблицы status_overhaul: {e}")
         sys.exit(1)
 
-def check_version_conflicts(client, version_date):
+def check_version_conflicts(client, version_date, version_id):
     """Проверяет конфликты версий для status_overhaul"""
     try:
-        # Проверяем таблицу на точное совпадение даты
-        count = client.execute(f"SELECT COUNT(*) FROM status_overhaul WHERE version_date = '{version_date}'")[0][0]
+        # Проверяем таблицу на точное совпадение версии
+        count = client.execute(f"SELECT COUNT(*) FROM status_overhaul WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
         
         if count > 0:
-            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ДАТОЙ ВЕРСИИ!")
-            print(f"   Дата версии: {version_date}")
+            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ВЕРСИЕЙ!")
+            print(f"   Дата версии: {version_date}, version_id: {version_id}")
             print(f"   status_overhaul: {count:,} записей")
             print(f"\nВыберите действие:")
             print(f"   1. ЗАМЕНИТЬ существующие данные (DELETE + INSERT)")
@@ -254,8 +256,8 @@ def check_version_conflicts(client, version_date):
                 try:
                     choice = input(f"\nВаш выбор (1-2): ").strip()
                     if choice == '1':
-                        print(f"🔄 Удаляем существующие данные за {version_date}...")
-                        client.execute(f"DELETE FROM status_overhaul WHERE version_date = '{version_date}'")
+                        print(f"🔄 Удаляем существующие данные за {version_date} v{version_id}...")
+                        client.execute(f"DELETE FROM status_overhaul WHERE version_date = '{version_date}' AND version_id = {version_id}")
                         print(f"✅ Удалено {count:,} записей из status_overhaul")
                         return True
                     elif choice == '2':
@@ -318,12 +320,12 @@ def insert_status_overhaul_data(client, df):
         print(f"❌ Ошибка загрузки в status_overhaul: {e}")
         return 0
 
-def validate_status_overhaul_data(client, version_date, original_count):
+def validate_status_overhaul_data(client, version_date, version_id, original_count):
     """Проверка качества загруженных данных о статусе капитального ремонта"""
     print(f"\n🔍 === ПРОВЕРКА КАЧЕСТВА STATUS_OVERHAUL ===")
     
     # Проверяем в БД
-    db_count = client.execute(f"SELECT COUNT(*) FROM status_overhaul WHERE version_date = '{version_date}'")[0][0]
+    db_count = client.execute(f"SELECT COUNT(*) FROM status_overhaul WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
     
     print(f"📊 Исходный Excel файл: {original_count:,} записей")
     print(f"📊 status_overhaul: {db_count:,} записей")
@@ -339,7 +341,7 @@ def validate_status_overhaul_data(client, version_date, original_count):
             MIN(sched_start_date) as min_sched_date,
             MAX(sched_end_date) as max_sched_date
         FROM status_overhaul 
-        WHERE version_date = '{version_date}'
+        WHERE version_date = '{version_date}' AND version_id = {version_id}
         GROUP BY ac_typ, status
         ORDER BY ac_typ, status
     """)
@@ -359,7 +361,7 @@ def validate_status_overhaul_data(client, version_date, original_count):
             COUNT(*) as count,
             COUNT(CASE WHEN act_end_date IS NOT NULL THEN 1 END) as completed_count
         FROM status_overhaul 
-        WHERE version_date = '{version_date}'
+        WHERE version_date = '{version_date}' AND version_id = {version_id}
         GROUP BY status
         ORDER BY count DESC
     """)
@@ -377,7 +379,7 @@ def validate_status_overhaul_data(client, version_date, original_count):
         issues.append(f"❌ Количество записей не совпадает: {db_count} != {original_count}")
     
     # Проверяем наличие обязательных данных
-    null_registr = client.execute(f"SELECT COUNT(*) FROM status_overhaul WHERE ac_registr = 0 AND version_date = '{version_date}'")[0][0]
+    null_registr = client.execute(f"SELECT COUNT(*) FROM status_overhaul WHERE ac_registr = 0 AND version_date = '{version_date}' AND version_id = {version_id}")[0][0]
     if null_registr > 0:
         issues.append(f"❌ Записи без регистрационного номера: {null_registr}")
     
@@ -392,8 +394,8 @@ def validate_status_overhaul_data(client, version_date, original_count):
         print(f"✅ Загружено записей: {db_count}/{original_count}")
         return True
 
-def main():
-    """Основная функция"""
+def main(version_date=None, version_id=None):
+    """Основная функция с поддержкой версионирования"""
     print("🚀 === ЗАГРУЗЧИК STATUS_OVERHAUL (СТАТУС КАПИТАЛЬНОГО РЕМОНТА) ===")
     
     try:
@@ -407,17 +409,24 @@ def main():
         df = load_status_overhaul_data()
         original_count = len(df)
         
-        # 4. Определение версии данных из метаданных Excel
-        status_overhaul_path = Path('data_input/source_data/Status_Overhaul.xlsx')
-        version_date = extract_version_date_from_excel(status_overhaul_path)
-        print(f"🗓️ Версия данных: {version_date}")
+        # 4. Определение версии данных
+        if version_date is None:
+            # Автоматическое извлечение из метаданных Excel (совместимость)
+            status_overhaul_path = Path('data_input/source_data/Status_Overhaul.xlsx')
+            version_date = extract_version_date_from_excel(status_overhaul_path)
+            print(f"🗓️ Версия данных (из Excel): {version_date}")
+        else:
+            print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
+        
+        if version_id is None:
+            version_id = 1
         
         # 5. Проверка конфликтов версий
-        if not check_version_conflicts(client, version_date):
+        if not check_version_conflicts(client, version_date, version_id):
             return
         
         # 6. Подготовка данных
-        prepared_df = prepare_status_overhaul_data(df, version_date)
+        prepared_df = prepare_status_overhaul_data(df, version_date, version_id)
         
         # 7. Загрузка данных с автоматической конвертацией типов
         print(f"\n🚀 === НАЧИНАЕМ ЗАГРУЗКУ STATUS_OVERHAUL ===")
@@ -428,11 +437,11 @@ def main():
         if loaded_count > 0:
             print(f"\n🎉 === ЗАГРУЗКА STATUS_OVERHAUL ЗАВЕРШЕНА ===")
             
-            validation_success = validate_status_overhaul_data(client, version_date, original_count)
+            validation_success = validate_status_overhaul_data(client, version_date, version_id, original_count)
             
             if validation_success:
                 print(f"\n🎯 === ИТОГОВАЯ СТАТИСТИКА ===")
-                print(f"📅 Версия данных: {version_date}")
+                print(f"📅 Версия данных: {version_date} (version_id={version_id})")
                 print(f"📊 status_overhaul: {loaded_count:,} записей")
                 print(f"📈 Статус капитального ремонта загружен")
                 print(f"🔍 Проверки качества: ✅ ПРОЙДЕНЫ")
@@ -447,4 +456,18 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Status Overhaul Loader для Helicopter Component Lifecycle')
+    parser.add_argument('--version-date', type=str, help='Дата версии (YYYY-MM-DD)')
+    parser.add_argument('--version-id', type=int, help='ID версии')
+    
+    args = parser.parse_args()
+    
+    # Передаем параметры версионирования в main, если они заданы
+    if args.version_date and args.version_id:
+        from datetime import datetime
+        version_date = datetime.strptime(args.version_date, '%Y-%m-%d').date()
+        main(version_date=version_date, version_id=args.version_id)
+    else:
+        main() 

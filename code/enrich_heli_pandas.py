@@ -20,8 +20,6 @@ from typing import Dict, List, Tuple, Any
 
 # Добавляем путь к утилитам
 sys.path.append(str(Path(__file__).parent / 'utils'))
-from config_loader import load_clickhouse_config
-import clickhouse_connect
 
 class HeliPandasEnricher:
     """Обогащение heli_pandas ТОЛЬКО полем ac_type_mask для GPU"""
@@ -29,13 +27,6 @@ class HeliPandasEnricher:
     def __init__(self):
         """Инициализация обогатителя"""
         self.logger = self._setup_logging()
-        self.config = load_clickhouse_config()
-        
-        # Исправляем конфигурацию для работы с ClickHouse
-        self.config['port'] = 8123  # HTTP порт
-        if 'settings' in self.config:
-            self.config['settings'] = {k: v for k, v in self.config['settings'].items() if k != 'use_numpy'}
-        
         self.client = None
         
         # Битовые маски для типов ВС (расширенный список)
@@ -70,8 +61,10 @@ class HeliPandasEnricher:
     def connect_to_database(self) -> bool:
         """Подключение к ClickHouse"""
         try:
-            self.client = clickhouse_connect.get_client(**self.config)
-            result = self.client.query('SELECT 1 as test')
+            # Используем правильный клиент для совместимости с execute()
+            from config_loader import get_clickhouse_client
+            self.client = get_clickhouse_client()
+            result = self.client.execute('SELECT 1 as test')
             self.logger.info(f"✅ Подключение к ClickHouse успешно!")
             return True
         except Exception as e:
@@ -84,8 +77,8 @@ class HeliPandasEnricher:
         
         try:
             # Проверяем что ac_type_mask уже есть в схеме таблицы
-            structure_result = self.client.query("DESCRIBE heli_pandas")
-            columns = [row[0] for row in structure_result.result_rows]
+            structure_result = self.client.execute("DESCRIBE heli_pandas")
+            columns = [row[0] for row in structure_result]
             
             if 'ac_type_mask' in columns:
                 self.logger.info("✅ Колонка ac_type_mask найдена в схеме heli_pandas")
@@ -117,7 +110,7 @@ class HeliPandasEnricher:
         
         try:
             # Проверяем покрытие встроенных ID полей
-            coverage_result = self.client.query("""
+            coverage_result = self.client.execute("""
                 SELECT 
                     COUNT(*) as total_records,
                     COUNT(partseqno_i) as partseqno_filled,
@@ -127,11 +120,11 @@ class HeliPandasEnricher:
                 FROM heli_pandas
             """)
             
-            if not coverage_result.result_rows:
+            if not coverage_result:
                 self.logger.warning("⚠️ Нет данных в heli_pandas")
                 return False
             
-            total, partseqno_filled, psn_filled, address_filled, ac_type_filled = coverage_result.result_rows[0]
+            total, partseqno_filled, psn_filled, address_filled, ac_type_filled = coverage_result[0]
             
             self.logger.info(f"📊 Покрытие встроенных ID полей (всего записей: {total:,}):")
             self.logger.info(f"  partseqno_i: {partseqno_filled:,} ({partseqno_filled/total*100:.1f}%)")
@@ -151,16 +144,16 @@ class HeliPandasEnricher:
         
         try:
             # Проверяем существование таблицы словаря типов ВС
-            check_table = self.client.query("SELECT COUNT(*) FROM system.tables WHERE name = 'dict_ac_type_flat'")
+            check_table = self.client.execute("SELECT COUNT(*) FROM system.tables WHERE name = 'dict_ac_type_flat'")
             
-            if check_table.result_rows[0][0] == 0:
+            if check_table[0][0] == 0:
                 self.logger.info("💡 Таблица dict_ac_type_flat не найдена, используем встроенные маски")
                 ac_type_mapping = self.ac_type_masks.copy()
             else:
                 # Загружаем из таблицы словаря
                 self.logger.info("📚 Загружаем маппинги из таблицы dict_ac_type_flat")
-                ac_type_result = self.client.query("SELECT ac_type_mask, ac_typ FROM dict_ac_type_flat")
-                ac_type_mapping = {row[1]: row[0] for row in ac_type_result.result_rows}
+                ac_type_result = self.client.execute("SELECT ac_type_mask, ac_typ FROM dict_ac_type_flat")
+                ac_type_mapping = {row[1]: row[0] for row in ac_type_result}
                 
                 # Дополняем встроенными масками (fallback)
                 for ac_type, mask in self.ac_type_masks.items():
@@ -211,8 +204,8 @@ class HeliPandasEnricher:
                 self.client.execute(update_query)
                 
                 # Проверяем сколько записей обновилось
-                count_result = self.client.query(f"SELECT COUNT(*) FROM heli_pandas WHERE ac_typ = '{escaped_ac_type}'")
-                type_count = count_result.result_rows[0][0]
+                count_result = self.client.execute(f"SELECT COUNT(*) FROM heli_pandas WHERE ac_typ = '{escaped_ac_type}'")
+                type_count = count_result[0][0]
                 
                 if type_count > 0:
                     updated_count += type_count
@@ -233,12 +226,12 @@ class HeliPandasEnricher:
         
         try:
             # Общая статистика
-            total_result = self.client.query("SELECT COUNT(*) FROM heli_pandas")
-            total_count = total_result.result_rows[0][0]
+            total_result = self.client.execute("SELECT COUNT(*) FROM heli_pandas")
+            total_count = total_result[0][0]
             
             # Проверяем ac_type_mask
-            mask_result = self.client.query("SELECT COUNT(*) FROM heli_pandas WHERE ac_type_mask > 0")
-            mask_count = mask_result.result_rows[0][0]
+            mask_result = self.client.execute("SELECT COUNT(*) FROM heli_pandas WHERE ac_type_mask > 0")
+            mask_count = mask_result[0][0]
             mask_coverage = (mask_count / total_count) * 100 if total_count > 0 else 0
             
             self.logger.info(f"📊 Результаты обогащения (всего записей: {total_count:,}):")
@@ -246,7 +239,7 @@ class HeliPandasEnricher:
             
             # Статистика встроенных ID полей (информационно)
             self.logger.info(f"💡 Встроенные ID поля (из Excel, не обрабатываются):")
-            embedded_stats = self.client.query("""
+            embedded_stats = self.client.execute("""
                 SELECT 
                     COUNT(partseqno_i) as partseqno_filled,
                     COUNT(psn) as psn_filled,
@@ -255,15 +248,15 @@ class HeliPandasEnricher:
                 FROM heli_pandas
             """)
             
-            if embedded_stats.result_rows:
-                partseqno_filled, psn_filled, address_filled, ac_type_filled = embedded_stats.result_rows[0]
+            if embedded_stats:
+                partseqno_filled, psn_filled, address_filled, ac_type_filled = embedded_stats[0]
                 self.logger.info(f"  partseqno_i: {partseqno_filled:,} ({partseqno_filled/total_count*100:.1f}%)")
                 self.logger.info(f"  psn: {psn_filled:,} ({psn_filled/total_count*100:.1f}%)")
                 self.logger.info(f"  address_i: {address_filled:,} ({address_filled/total_count*100:.1f}%)")
                 self.logger.info(f"  ac_type_i: {ac_type_filled:,} ({ac_type_filled/total_count*100:.1f}%)")
             
             # Статистика по типам ВС
-            types_result = self.client.query("""
+            types_result = self.client.execute("""
                 SELECT ac_typ, ac_type_mask, COUNT(*) as count
                 FROM heli_pandas 
                 WHERE ac_type_mask > 0
@@ -272,23 +265,23 @@ class HeliPandasEnricher:
                 LIMIT 10
             """)
             
-            if types_result.result_rows:
+            if types_result:
                 self.logger.info("📋 Статистика по типам ВС (топ-10):")
-                for row in types_result.result_rows:
+                for row in types_result:
                     ac_typ, mask, count = row
                     self.logger.info(f"  {ac_typ}: маска {mask} (0b{mask:08b}) → {count:,} записей")
             
             # Проверяем примеры обогащения
-            examples_result = self.client.query("""
+            examples_result = self.client.execute("""
                 SELECT ac_typ, ac_type_mask, partseqno_i, psn, address_i
                 FROM heli_pandas 
                 WHERE ac_type_mask > 0 
                 LIMIT 3
             """)
             
-            if examples_result.result_rows:
+            if examples_result:
                 self.logger.info("📋 Примеры обогащенных записей:")
-                for row in examples_result.result_rows:
+                for row in examples_result:
                     ac_typ, mask, partseqno_i, psn, address_i = row
                     self.logger.info(f"  ac_typ: '{ac_typ}' → ac_type_mask: {mask}")
                     self.logger.info(f"    встроенные ID: partseqno_i={partseqno_i}, psn={psn}, address_i={address_i}")

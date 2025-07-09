@@ -134,7 +134,7 @@ def remove_service_columns(df):
     
     return df
 
-def prepare_program_ac_data(df, version_date):
+def prepare_program_ac_data(df, version_date, version_id=1):
     """Подготавливает данные реестра вертолетов для ClickHouse"""
     try:
         print(f"📦 Подготовка данных реестра вертолетов для ClickHouse...")
@@ -145,8 +145,9 @@ def prepare_program_ac_data(df, version_date):
         # Удаляем служебные колонки
         result_df = remove_service_columns(result_df)
         
-        # Добавляем дату версии
+        # Добавляем версию данных
         result_df['version_date'] = version_date
+        result_df['version_id'] = version_id
         
         # Обработка строковых полей для ClickHouse
         string_columns = ['ac_typ', 'object_type', 'description', 'owner', 'operator', 
@@ -214,10 +215,11 @@ def create_program_ac_table(client):
             `directorate` String,                   -- Дирекция (ЗАПАДНО-СИБИРСКАЯ ДИРЕКЦИЯ и т.д.)
             
             -- Метаданные
-            `version_date` Date DEFAULT today()     -- Дата версии данных
+            `version_date` Date DEFAULT today(),    -- Дата версии данных
+            `version_id` UInt8 DEFAULT 1            -- ID версии
             
         ) ENGINE = MergeTree()
-        ORDER BY (ac_registr, ac_typ)
+        ORDER BY (ac_registr, ac_typ, version_date, version_id)
         PARTITION BY toYYYYMM(version_date)
         SETTINGS index_granularity = 8192
         """
@@ -229,15 +231,15 @@ def create_program_ac_table(client):
         print(f"❌ Ошибка создания таблицы program_ac: {e}")
         sys.exit(1)
 
-def check_version_conflicts(client, version_date):
+def check_version_conflicts(client, version_date, version_id):
     """Проверяет конфликты версий для program_ac"""
     try:
-        # Проверяем таблицу на точное совпадение даты
-        count = client.execute(f"SELECT COUNT(*) FROM program_ac WHERE version_date = '{version_date}'")[0][0]
+        # Проверяем таблицу на точное совпадение версии
+        count = client.execute(f"SELECT COUNT(*) FROM program_ac WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
         
         if count > 0:
-            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ДАТОЙ ВЕРСИИ!")
-            print(f"   Дата версии: {version_date}")
+            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ВЕРСИЕЙ!")
+            print(f"   Дата версии: {version_date}, version_id: {version_id}")
             print(f"   program_ac: {count:,} записей")
             print(f"\nВыберите действие:")
             print(f"   1. ЗАМЕНИТЬ существующие данные (DELETE + INSERT)")
@@ -247,8 +249,8 @@ def check_version_conflicts(client, version_date):
                 try:
                     choice = input(f"\nВаш выбор (1-2): ").strip()
                     if choice == '1':
-                        print(f"🔄 Удаляем существующие данные за {version_date}...")
-                        client.execute(f"DELETE FROM program_ac WHERE version_date = '{version_date}'")
+                        print(f"🔄 Удаляем существующие данные за {version_date} v{version_id}...")
+                        client.execute(f"DELETE FROM program_ac WHERE version_date = '{version_date}' AND version_id = {version_id}")
                         print(f"✅ Удалено {count:,} записей из program_ac")
                         return True
                     elif choice == '2':
@@ -309,12 +311,12 @@ def insert_program_ac_data(client, df):
         print(f"❌ Ошибка загрузки в program_ac: {e}")
         return 0
 
-def validate_program_ac_data(client, version_date, original_count):
+def validate_program_ac_data(client, version_date, version_id, original_count):
     """Проверка качества загруженных данных реестра вертолетов"""
     print(f"\n🔍 === ПРОВЕРКА КАЧЕСТВА PROGRAM_AC ===")
     
     # Проверяем в БД
-    db_count = client.execute(f"SELECT COUNT(*) FROM program_ac WHERE version_date = '{version_date}'")[0][0]
+    db_count = client.execute(f"SELECT COUNT(*) FROM program_ac WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
     
     print(f"📊 Исходный Excel файл: {original_count:,} записей")
     print(f"📊 program_ac: {db_count:,} записей")
@@ -329,7 +331,7 @@ def validate_program_ac_data(client, version_date, original_count):
             COUNT(DISTINCT homebase) as unique_bases,
             COUNT(DISTINCT directorate) as unique_directorates
         FROM program_ac 
-        WHERE version_date = '{version_date}'
+        WHERE version_date = '{version_date}' AND version_id = {version_id}
         GROUP BY ac_typ, owner
         ORDER BY ac_typ, records_count DESC
     """)
@@ -350,7 +352,7 @@ def validate_program_ac_data(client, version_date, original_count):
             COUNT(DISTINCT owner) as owners_count,
             COUNT(DISTINCT homebase) as bases_count
         FROM program_ac 
-        WHERE version_date = '{version_date}'
+        WHERE version_date = '{version_date}' AND version_id = {version_id}
         GROUP BY ac_typ
         ORDER BY count DESC
     """)
@@ -366,7 +368,7 @@ def validate_program_ac_data(client, version_date, original_count):
             COUNT(*) as count,
             COUNT(DISTINCT homebase) as bases_count
         FROM program_ac 
-        WHERE version_date = '{version_date}'
+        WHERE version_date = '{version_date}' AND version_id = {version_id}
         GROUP BY directorate
         ORDER BY count DESC
         LIMIT 5
@@ -385,7 +387,7 @@ def validate_program_ac_data(client, version_date, original_count):
         issues.append(f"❌ Количество записей не совпадает: {db_count} != {original_count}")
     
     # Проверяем наличие обязательных данных
-    null_registr = client.execute(f"SELECT COUNT(*) FROM program_ac WHERE ac_registr = 0 AND version_date = '{version_date}'")[0][0]
+    null_registr = client.execute(f"SELECT COUNT(*) FROM program_ac WHERE ac_registr = 0 AND version_date = '{version_date}' AND version_id = {version_id}")[0][0]
     if null_registr > 0:
         issues.append(f"❌ Записи без регистрационного номера: {null_registr}")
     
@@ -394,7 +396,7 @@ def validate_program_ac_data(client, version_date, original_count):
         SELECT COUNT(*) FROM (
             SELECT ac_registr 
             FROM program_ac 
-            WHERE version_date = '{version_date}'
+            WHERE version_date = '{version_date}' AND version_id = {version_id}
             GROUP BY ac_registr 
             HAVING COUNT(*) > 1
         )
@@ -413,8 +415,8 @@ def validate_program_ac_data(client, version_date, original_count):
         print(f"✅ Загружено записей: {db_count}/{original_count}")
         return True
 
-def main():
-    """Основная функция"""
+def main(version_date=None, version_id=None):
+    """Основная функция с поддержкой версионирования"""
     print("🚀 === ЗАГРУЗЧИК PROGRAM_AC (РЕЕСТР ВЕРТОЛЕТОВ В ЭКСПЛУАТАЦИИ) ===")
     
     try:
@@ -428,17 +430,24 @@ def main():
         df = load_program_ac_data()
         original_count = len(df)
         
-        # 4. Определение версии данных из метаданных Excel
-        program_ac_path = Path('data_input/source_data/Program_AC.xlsx')
-        version_date = extract_version_date_from_excel(program_ac_path)
-        print(f"🗓️ Версия данных: {version_date}")
+        # 4. Определение версии данных
+        if version_date is None:
+            # Автоматическое извлечение из метаданных Excel (совместимость)
+            program_ac_path = Path('data_input/source_data/Program_AC.xlsx')
+            version_date = extract_version_date_from_excel(program_ac_path)
+            print(f"🗓️ Версия данных (из Excel): {version_date}")
+        else:
+            print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
+        
+        if version_id is None:
+            version_id = 1
         
         # 5. Проверка конфликтов версий
-        if not check_version_conflicts(client, version_date):
+        if not check_version_conflicts(client, version_date, version_id):
             return
         
         # 6. Подготовка данных
-        prepared_df = prepare_program_ac_data(df, version_date)
+        prepared_df = prepare_program_ac_data(df, version_date, version_id)
         
         # 7. Загрузка данных с автоматической конвертацией типов
         print(f"\n🚀 === НАЧИНАЕМ ЗАГРУЗКУ PROGRAM_AC ===")
@@ -449,11 +458,11 @@ def main():
         if loaded_count > 0:
             print(f"\n🎉 === ЗАГРУЗКА PROGRAM_AC ЗАВЕРШЕНА ===")
             
-            validation_success = validate_program_ac_data(client, version_date, original_count)
+            validation_success = validate_program_ac_data(client, version_date, version_id, original_count)
             
             if validation_success:
                 print(f"\n🎯 === ИТОГОВАЯ СТАТИСТИКА ===")
-                print(f"📅 Версия данных: {version_date}")
+                print(f"📅 Версия данных: {version_date} (version_id={version_id})")
                 print(f"📊 program_ac: {loaded_count:,} записей")
                 print(f"📈 Реестр вертолетов в эксплуатации загружен")
                 print(f"🔍 Проверки качества: ✅ ПРОЙДЕНЫ")
@@ -468,4 +477,18 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Program AC Loader для Helicopter Component Lifecycle')
+    parser.add_argument('--version-date', type=str, help='Дата версии (YYYY-MM-DD)')
+    parser.add_argument('--version-id', type=int, help='ID версии')
+    
+    args = parser.parse_args()
+    
+    # Передаем параметры версионирования в main, если они заданы
+    if args.version_date and args.version_id:
+        from datetime import datetime
+        version_date = datetime.strptime(args.version_date, '%Y-%m-%d').date()
+        main(version_date=version_date, version_id=args.version_id)
+    else:
+        main()

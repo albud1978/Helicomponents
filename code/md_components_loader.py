@@ -107,13 +107,14 @@ def load_md_components():
         print(f"❌ Ошибка загрузки MD_Components: {e}")
         sys.exit(1)
 
-def prepare_md_data(df, version_date):
+def prepare_md_data(df, version_date, version_id=1):
     """Подготавливает данные MD_Components для ClickHouse"""
     try:
         print(f"📦 Подготовка данных MD_Components...")
         
         # Добавляем версию данных
         df['version_date'] = version_date
+        df['version_id'] = version_id
         
         # Обработка строковых полей для ClickHouse
         string_columns = ['partno', 'group_by', 'ac_typ']
@@ -138,6 +139,15 @@ def prepare_md_data(df, version_date):
                 # Конвертируем в числа, NaN заменяем на None
                 df[col] = pd.to_numeric(df[col], errors='coerce')
                 df[col] = df[col].where(df[col].notnull(), None)
+
+        # Добавляем дополнительные поля для совместимости с полной схемой таблицы
+        if 'br' not in df.columns:
+            df['br'] = None  # Beyond Repair будет вычислен позже
+            print("➕ Добавлено поле br = None (будет вычислено позже)")
+            
+        if 'partno_comp' not in df.columns:
+            df['partno_comp'] = None  # Компонентные ID будут добавлены позже
+            print("➕ Добавлено поле partno_comp = None (будет вычислено позже)")
 
         print(f"📊 Подготовлено {len(df):,} записей с {len(df.columns)} колонками")
         return df
@@ -186,10 +196,15 @@ def create_md_table(client):
             `ppr` Nullable(Float64),                -- PPR
             
             -- Метаданные файла
-            `version_date` Date DEFAULT today()     -- Дата версии
+            `version_date` Date DEFAULT today(),    -- Дата версии
+            `version_id` UInt8 DEFAULT 1,           -- ID версии
+            
+            -- Дополнительные поля (добавляются обогатителями)
+            `br` Nullable(UInt16) DEFAULT NULL,    -- Beyond Repair (calculate_beyond_repair.py)
+            `partno_comp` Nullable(UInt32) DEFAULT NULL  -- Component ID (md_components_enricher.py)
             
         ) ENGINE = MergeTree()
-        ORDER BY version_date
+        ORDER BY (version_date, version_id)
         PARTITION BY toYYYYMM(version_date)
         SETTINGS index_granularity = 8192
         """
@@ -201,14 +216,14 @@ def create_md_table(client):
         print(f"❌ Ошибка создания таблицы md_components: {e}")
         sys.exit(1)
 
-def check_version_conflicts(client, version_date):
+def check_version_conflicts(client, version_date, version_id):
     """Проверяет конфликты версий"""
     try:
-        count = client.execute(f"SELECT COUNT(*) FROM md_components WHERE version_date = '{version_date}'")[0][0]
+        count = client.execute(f"SELECT COUNT(*) FROM md_components WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
         
         if count > 0:
-            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ДАТОЙ ВЕРСИИ!")
-            print(f"   Дата версии: {version_date}")
+            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ВЕРСИЕЙ!")
+            print(f"   Дата версии: {version_date}, version_id: {version_id}")
             print(f"   md_components: {count:,} записей")
             print(f"\nВыберите действие:")
             print(f"   1. ЗАМЕНИТЬ существующие данные (DELETE + INSERT)")
@@ -218,8 +233,8 @@ def check_version_conflicts(client, version_date):
                 try:
                     choice = input(f"\nВаш выбор (1-2): ").strip()
                     if choice == '1':
-                        print(f"🔄 Удаляем существующие данные за {version_date}...")
-                        client.execute(f"DELETE FROM md_components WHERE version_date = '{version_date}'")
+                        print(f"🔄 Удаляем существующие данные за {version_date} v{version_id}...")
+                        client.execute(f"DELETE FROM md_components WHERE version_date = '{version_date}' AND version_id = {version_id}")
                         print(f"✅ Удалено {count:,} записей из md_components")
                         return True
                     elif choice == '2':
@@ -256,12 +271,12 @@ def insert_md_data(client, df):
         print(f"❌ Ошибка загрузки в md_components: {e}")
         return 0
 
-def validate_md_data(client, version_date, original_count):
+def validate_md_data(client, version_date, version_id, original_count):
     """Проверка качества загруженных данных MD_Components"""
     print(f"\n🔍 === ПРОВЕРКА КАЧЕСТВА MD_COMPONENTS ===")
     
     # Проверяем в БД
-    db_count = client.execute(f"SELECT COUNT(*) FROM md_components WHERE version_date = '{version_date}'")[0][0]
+    db_count = client.execute(f"SELECT COUNT(*) FROM md_components WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
     
     print(f"📊 Исходный Excel файл: {original_count:,} записей")
     print(f"📊 md_components: {db_count:,} записей")
@@ -273,7 +288,7 @@ def validate_md_data(client, version_date, original_count):
         issues.append(f"❌ Количество записей: ожидали {original_count:,}, получили {db_count:,}")
     
     # Проверяем уникальные партномера
-    unique_partnos_result = client.execute(f"SELECT COUNT(DISTINCT partno) FROM md_components WHERE version_date = '{version_date}'")
+    unique_partnos_result = client.execute(f"SELECT COUNT(DISTINCT partno) FROM md_components WHERE version_date = '{version_date}' AND version_id = {version_id}")
     unique_partnos = unique_partnos_result[0][0]
     
     print(f"📦 Уникальных партномеров: {unique_partnos}")
@@ -283,7 +298,7 @@ def validate_md_data(client, version_date, original_count):
         SELECT 
             SUM(CASE WHEN partno IS NOT NULL AND partno != '' THEN 1 ELSE 0 END) as filled_partno,
             SUM(CASE WHEN comp_number IS NOT NULL THEN 1 ELSE 0 END) as filled_comp_number
-        FROM md_components WHERE version_date = '{version_date}'
+        FROM md_components WHERE version_date = '{version_date}' AND version_id = {version_id}
     """)
     
     filled_partno, filled_comp_number = key_fields_check[0]
@@ -307,8 +322,8 @@ def validate_md_data(client, version_date, original_count):
         print(f"✅ Качество данных: высокое")
         return True
 
-def main():
-    """Основная функция"""
+def main(version_date=None, version_id=None):
+    """Основная функция с поддержкой версионирования"""
     print("🚀 === ЗАГРУЗЧИК MD_COMPONENTS ===")
     
     try:
@@ -324,17 +339,24 @@ def main():
         df = load_md_components()
         original_count = len(df)
         
-        # 4. Определение версии данных из метаданных Excel
-        md_path = Path('data_input/master_data/MD_Сomponents.xlsx')
-        version_date = extract_version_date_from_excel(md_path)
-        print(f"🗓️ Версия данных: {version_date}")
+        # 4. Определение версии данных
+        if version_date is None:
+            # Автоматическое извлечение из метаданных Excel (совместимость)
+            md_path = Path('data_input/master_data/MD_Сomponents.xlsx')
+            version_date = extract_version_date_from_excel(md_path)
+            print(f"🗓️ Версия данных (из Excel): {version_date}")
+        else:
+            print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
+        
+        if version_id is None:
+            version_id = 1
         
         # 5. Проверка конфликтов версий
-        if not check_version_conflicts(client, version_date):
+        if not check_version_conflicts(client, version_date, version_id):
             return
         
         # 6. Подготовка данных
-        prepared_df = prepare_md_data(df, version_date)
+        prepared_df = prepare_md_data(df, version_date, version_id)
         
         # 7. Загрузка данных
         print(f"\n🚀 === НАЧИНАЕМ ЗАГРУЗКУ MD_COMPONENTS ===")
@@ -345,11 +367,11 @@ def main():
         if loaded_count > 0:
             print(f"\n🎉 === ЗАГРУЗКА MD_COMPONENTS ЗАВЕРШЕНА ===")
             
-            validation_success = validate_md_data(client, version_date, original_count)
+            validation_success = validate_md_data(client, version_date, version_id, original_count)
             
             if validation_success:
                 print(f"\n🎯 === ИТОГОВАЯ СТАТИСТИКА ===")
-                print(f"📅 Версия данных: {version_date}")
+                print(f"📅 Версия данных: {version_date} (version_id={version_id})")
                 print(f"📊 md_components: {loaded_count:,} записей")
                 print(f"🔍 Проверки качества: ✅ ПРОЙДЕНЫ")
             else:
@@ -363,5 +385,19 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='MD Components Loader для Helicopter Component Lifecycle')
+    parser.add_argument('--version-date', type=str, help='Дата версии (YYYY-MM-DD)')
+    parser.add_argument('--version-id', type=int, help='ID версии')
+    
+    args = parser.parse_args()
+    
+    # Передаем параметры версионирования в main, если они заданы
+    if args.version_date and args.version_id:
+        from datetime import datetime
+        version_date = datetime.strptime(args.version_date, '%Y-%m-%d').date()
+        main(version_date=version_date, version_id=args.version_id)
+    else:
+        main()
  

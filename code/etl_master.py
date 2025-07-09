@@ -1,0 +1,550 @@
+#!/usr/bin/env python3
+"""
+ETL Master - главный оркестратор для системы Helicopter Component Lifecycle
+
+Микросервисная архитектура:
+- Централизованное управление версиями и политиками
+- Координация всех ETL загрузчиков
+- Единая точка входа с выбором режима (тест/прод)
+- Быстрое тестирование с полной перезагрузкой
+"""
+
+import subprocess
+import sys
+import time
+import logging
+from pathlib import Path
+from datetime import date, datetime
+from typing import List, Dict, Optional
+
+# Добавляем путь к утилитам
+sys.path.append(str(Path(__file__).parent / 'utils'))
+from config_loader import get_clickhouse_client
+from etl_version_manager import ETLVersionManager
+
+# Настройка логгирования
+Path('logs').mkdir(exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/etl_master.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+class ETLMaster:
+    """Главный оркестратор ETL системы"""
+    
+    # Конфигурация ETL пайплайна в правильном порядке
+    ETL_PIPELINE = [
+        {
+            'script': 'md_components_loader.py',
+            'description': 'MD Components - мастер-данные компонентов',
+            'dependencies': [],
+            'result_table': 'md_components',
+            'critical': True  # Критичен для фильтрации
+        },
+        {
+            'script': 'status_overhaul_loader.py', 
+            'description': 'Status & Overhaul - статусы и капремонт',
+            'dependencies': [],
+            'result_table': 'status_overhaul',
+            'critical': True
+        },
+        {
+            'script': 'program_loader.py',
+            'description': 'Flight Program - программы полетов', 
+            'dependencies': [],
+            'result_table': 'flight_program',
+            'critical': True
+        },
+        {
+            'script': 'program_ac_loader.py',
+            'description': 'Program AC - связка программ и ВС',
+            'dependencies': ['flight_program'],
+            'result_table': 'program_ac', 
+            'critical': True
+        },
+        {
+            'script': 'dual_loader.py',
+            'description': 'Status Components - основные данные + процессинг',
+            'dependencies': ['md_components', 'status_overhaul', 'program_ac'],
+            'result_table': 'heli_pandas',
+            'critical': True
+        },
+        {
+            'script': 'dictionary_creator.py',
+            'description': 'Базовые справочники',
+            'dependencies': ['heli_pandas'],
+            'result_table': 'dict_status_flat',
+            'critical': False
+        },
+        {
+            'script': 'aircraft_number_dict_creator.py',
+            'description': 'Справочник номеров ВС', 
+            'dependencies': ['heli_pandas'],
+            'result_table': 'aircraft_number_dict',
+            'critical': False
+        },
+        {
+            'script': 'enrich_heli_pandas.py',
+            'description': 'Обогащение ac_type_mask',
+            'dependencies': ['heli_pandas'],
+            'result_table': 'heli_pandas',
+            'critical': False
+        },
+        {
+            'script': 'calculate_beyond_repair.py',
+            'description': 'Расчет Beyond Repair (br)',
+            'dependencies': ['md_components'],
+            'result_table': 'md_components', 
+            'critical': False
+        },
+        {
+            'script': 'md_components_enricher.py',
+            'description': 'Обогащение MD Components',
+            'dependencies': ['md_components', 'heli_pandas'],
+            'result_table': 'md_components',
+            'critical': False
+        }
+    ]
+    
+    def __init__(self):
+        """Инициализация ETL Master"""
+        self.client = None
+        self.version_manager = None
+        self.version_date = None
+        self.version_id = None
+        self.mode = None  # 'test' или 'prod'
+        
+    def initialize(self) -> bool:
+        """Инициализация подключений и менеджеров"""
+        try:
+            # Подключение к ClickHouse
+            self.client = get_clickhouse_client()
+            if not self.client:
+                logger.error("❌ Не удалось подключиться к ClickHouse")
+                return False
+                
+            # Инициализация версионного менеджера
+            self.version_manager = ETLVersionManager(self.client)
+            
+            logger.info("✅ ETL Master инициализирован")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка инициализации: {e}")
+            return False
+    
+    def select_mode(self) -> bool:
+        """Выбор режима работы: тест или прод"""
+        print("\n" + "="*70)
+        print("🎯 ETL MASTER - HELICOPTER COMPONENT LIFECYCLE")
+        print("="*70)
+        print("\n🔧 Выберите режим работы:")
+        print("1. 🧪 ТЕСТ - удалить ВСЕ таблицы и создать заново (быстро)")
+        print("2. 🏭 ПРОД - дополнить существующие данные (версионирование)")
+        print("3. ❌ ОТМЕНА")
+        
+        while True:
+            try:
+                choice = input("\nВаш выбор (1/2/3): ").strip()
+                
+                if choice == '1':
+                    self.mode = 'test'
+                    logger.info("🧪 Выбран ТЕСТОВЫЙ режим - полная перезагрузка")
+                    return True
+                elif choice == '2':
+                    self.mode = 'prod'
+                    logger.info("🏭 Выбран ПРОДОВЫЙ режим - версионирование")
+                    return True
+                elif choice == '3':
+                    logger.info("❌ Операция отменена пользователем")
+                    return False
+                else:
+                    print("❌ Неверный выбор. Введите 1, 2 или 3.")
+                    
+            except KeyboardInterrupt:
+                print("\n❌ Операция отменена пользователем")
+                return False
+    
+    def prepare_test_mode(self) -> bool:
+        """Подготовка тестового режима - удаление всех таблиц"""
+        try:
+            logger.info("🧪 === РЕЖИМ ТЕСТ: ПОЛНАЯ ОЧИСТКА ===")
+            
+            # Список всех таблиц проекта для удаления
+            tables_to_drop = [
+                'heli_pandas', 'heli_raw', 'md_components', 'status_overhaul',
+                'flight_program', 'program_ac', 'dict_status_flat', 
+                'dict_partno_flat', 'dict_serialno_flat', 'dict_owner_flat',
+                'dict_ac_type_flat', 'aircraft_number_dict', 'OlapCube_Analytics'
+            ]
+            
+            print(f"\n🗑️ Удаление {len(tables_to_drop)} таблиц проекта...")
+            deleted_count = 0
+            
+            for table in tables_to_drop:
+                try:
+                    # Проверяем существование таблицы
+                    exists = self.client.execute(f"EXISTS TABLE {table}")[0][0]
+                    if exists:
+                        self.client.execute(f"DROP TABLE {table}")
+                        logger.info(f"✅ Удалена таблица: {table}")
+                        deleted_count += 1
+                    else:
+                        logger.debug(f"⏭️ Таблица {table} не существует")
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ Ошибка удаления {table}: {e}")
+            
+            # В тестовом режиме всегда version_id = 1
+            self.version_date = date.today()
+            self.version_id = 1
+            
+            logger.info(f"✅ Тестовый режим подготовлен: удалено {deleted_count} таблиц")
+            logger.info(f"🎯 Версия: {self.version_date} (version_id=1)")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка подготовки тестового режима: {e}")
+            return False
+    
+    def prepare_prod_mode(self) -> bool:
+        """Подготовка продового режима - версионирование"""
+        try:
+            logger.info("🏭 === РЕЖИМ ПРОД: ВЕРСИОНИРОВАНИЕ ===")
+            
+            # Добавляем поля version_id в существующие таблицы
+            if not self.version_manager.add_version_id_fields():
+                logger.error("❌ Ошибка добавления полей version_id")
+                return False
+            
+            # Определяем дату версии (можно задать параметром или взять текущую)
+            self.version_date = date.today()
+            
+            # Обрабатываем политику версионирования
+            policy, version_id = self.version_manager.handle_version_policy(self.version_date)
+            
+            if policy == 'cancel':
+                logger.info("❌ Загрузка отменена пользователем")
+                return False
+            
+            self.version_id = version_id
+            
+            # Выполняем политику перезаписи если выбрана
+            if policy == 'rewrite':
+                if not self.version_manager.execute_rewrite_policy(self.version_date):
+                    logger.error("❌ Ошибка выполнения политики перезаписи")
+                    return False
+            
+            logger.info(f"✅ Продовый режим подготовлен")
+            logger.info(f"🎯 Версия: {self.version_date} (version_id={self.version_id})")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка подготовки продового режима: {e}")
+            return False
+    
+    def run_microservice(self, step: Dict) -> bool:
+        """Запуск отдельного ETL микросервиса"""
+        script_name = step['script']
+        description = step['description']
+        
+        logger.info(f"🚀 Запуск микросервиса: {script_name}")
+        logger.info(f"📋 Описание: {description}")
+        
+        script_path = Path('code') / script_name
+        
+        if not script_path.exists():
+            logger.error(f"❌ Скрипт не найден: {script_path}")
+            return False
+        
+        try:
+            start_time = time.time()
+            
+            # Формируем команду с параметрами версионирования
+            cmd_with_params = [
+                sys.executable, str(script_path),
+                '--version-date', str(self.version_date),
+                '--version-id', str(self.version_id)
+            ]
+            
+            # Сначала пробуем с параметрами версионирования
+            result = subprocess.run(
+                cmd_with_params,
+                capture_output=True,
+                text=True,
+                timeout=1800,  # 30 минут максимум
+                cwd=Path.cwd()  # Запускаем из корневой директории
+            )
+            
+            # Если скрипт не поддерживает версионирование, пробуем без параметров
+            if result.returncode != 0 and ("unrecognized arguments" in result.stderr or "unknown option" in result.stderr):
+                logger.warning(f"⚠️ Скрипт {script_name} не поддерживает версионирование, запускаем без параметров")
+                
+                cmd_without_params = [sys.executable, str(script_path)]
+                
+                result = subprocess.run(
+                    cmd_without_params,
+                    capture_output=True,
+                    text=True,
+                    timeout=1800,
+                    cwd=Path.cwd()
+                )
+            
+            execution_time = time.time() - start_time
+            
+            if result.returncode == 0:
+                logger.info(f"✅ Микросервис {script_name} завершен успешно за {execution_time:.1f}с")
+                
+                # Показываем последние строки вывода
+                if result.stdout:
+                    stdout_lines = result.stdout.strip().split('\n')
+                    logger.info("📊 Последние строки вывода:")
+                    for line in stdout_lines[-3:]:
+                        logger.info(f"   {line}")
+                
+                return True
+            else:
+                logger.error(f"❌ Микросервис {script_name} завершился с ошибкой (код: {result.returncode})")
+                
+                if result.stderr:
+                    logger.error("❌ STDERR:")
+                    for line in result.stderr.strip().split('\n'):
+                        logger.error(f"   {line}")
+                
+                if result.stdout:
+                    logger.error("❌ STDOUT:")
+                    for line in result.stdout.strip().split('\n'):
+                        logger.error(f"   {line}")
+                
+                return False
+                
+        except subprocess.TimeoutExpired:
+            logger.error(f"❌ Микросервис {script_name} превысил время выполнения (30 минут)")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Ошибка запуска микросервиса {script_name}: {e}")
+            return False
+    
+    def validate_dependencies(self, step: Dict) -> bool:
+        """Проверка зависимостей для этапа"""
+        dependencies = step.get('dependencies', [])
+        if not dependencies:
+            return True
+        
+        logger.debug(f"🔍 Проверка зависимостей для {step['script']}: {dependencies}")
+        
+        for table_name in dependencies:
+            try:
+                exists = self.client.execute(f"EXISTS TABLE {table_name}")[0][0]
+                if not exists:
+                    logger.warning(f"⚠️ Зависимость {table_name} не найдена, но продолжаем")
+                    return True  # Продолжаем даже если зависимость отсутствует
+                
+                count = self.client.execute(f"SELECT count() FROM {table_name}")[0][0]
+                logger.debug(f"✅ Зависимость {table_name}: {count:,} записей")
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Ошибка проверки зависимости {table_name}: {e}")
+        
+        return True
+    
+    def validate_result(self, step: Dict) -> Dict:
+        """Валидация результата этапа"""
+        result_table = step.get('result_table')
+        if not result_table:
+            return {'success': True, 'message': 'Нет таблицы для проверки'}
+        
+        try:
+            # Проверяем существование таблицы
+            exists = self.client.execute(f"EXISTS TABLE {result_table}")[0][0]
+            if not exists:
+                return {'success': False, 'message': f'Таблица {result_table} не создана'}
+            
+            # Проверяем наличие поля version_id
+            has_version_id = self.client.execute(f"""
+                SELECT count() 
+                FROM system.columns 
+                WHERE table = '{result_table}' AND name = 'version_id'
+            """)[0][0] > 0
+            
+            if has_version_id:
+                # Таблица поддерживает версионирование - считаем для конкретной версии
+                count_sql = f"""
+                SELECT count() 
+                FROM {result_table} 
+                WHERE version_date = '{self.version_date}' AND version_id = {self.version_id}
+                """
+                
+                count = self.client.execute(count_sql)[0][0]
+                
+                if count == 0:
+                    return {'success': False, 'message': f'Нет данных в {result_table} для версии {self.version_date}v{self.version_id}'}
+                
+                return {'success': True, 'message': f'{result_table}: {count:,} записей (версия {self.version_id})'}
+            else:
+                # Таблица еще не поддерживает версионирование - считаем общее количество
+                count_sql = f"SELECT count() FROM {result_table}"
+                count = self.client.execute(count_sql)[0][0]
+                
+                if count == 0:
+                    return {'success': False, 'message': f'Нет данных в {result_table}'}
+                
+                return {'success': True, 'message': f'{result_table}: {count:,} записей (без версионирования)'}
+            
+        except Exception as e:
+            return {'success': False, 'message': f'Ошибка проверки {result_table}: {e}'}
+    
+    def run_pipeline(self) -> bool:
+        """Запуск полного ETL пайплайна"""
+        logger.info("🚀 === ЗАПУСК ETL ПАЙПЛАЙНА ===")
+        
+        total_steps = len(self.ETL_PIPELINE)
+        success_count = 0
+        failed_steps = []
+        
+        for i, step in enumerate(self.ETL_PIPELINE, 1):
+            logger.info(f"\n📋 ЭТАП {i}/{total_steps}: {step['script']}")
+            
+            # Проверка зависимостей
+            if not self.validate_dependencies(step):
+                logger.warning(f"⚠️ Проблемы с зависимостями для {step['script']}, но продолжаем")
+            
+            # Запуск микросервиса
+            success = self.run_microservice(step)
+            
+            if success:
+                success_count += 1
+                
+                # Валидация результата
+                validation = self.validate_result(step)
+                if validation['success']:
+                    logger.info(f"✅ ЭТАП {i} завершен: {validation['message']}")
+                else:
+                    logger.warning(f"⚠️ ЭТАП {i} завершен с предупреждениями: {validation['message']}")
+            else:
+                failed_steps.append(step['script'])
+                
+                if step['critical']:
+                    logger.error(f"❌ КРИТИЧЕСКИЙ ЭТАП {i} провален: {step['script']}")
+                    logger.error("🛑 Останавливаем пайплайн из-за критической ошибки")
+                    break
+                else:
+                    logger.warning(f"⚠️ НЕКРИТИЧЕСКИЙ ЭТАП {i} провален: {step['script']}, продолжаем")
+        
+        # Итоговая статистика
+        logger.info(f"\n📊 === ИТОГИ ПАЙПЛАЙНА ===")
+        logger.info(f"✅ Успешно: {success_count}/{total_steps} этапов")
+        logger.info(f"🎯 Версия данных: {self.version_date} (version_id={self.version_id})")
+        logger.info(f"🔧 Режим: {self.mode.upper()}")
+        
+        if failed_steps:
+            logger.warning(f"⚠️ Проваленные этапы: {', '.join(failed_steps)}")
+        
+        # Финальная проверка системы
+        self.final_validation()
+        
+        return success_count == total_steps
+    
+    def final_validation(self):
+        """Финальная валидация готовности системы"""
+        logger.info("\n🔍 === ФИНАЛЬНАЯ ВАЛИДАЦИЯ ===")
+        
+        # Ключевые таблицы для GPU
+        critical_tables = ['heli_pandas', 'md_components', 'status_overhaul', 'flight_program']
+        
+        all_ready = True
+        total_records = 0
+        
+        for table in critical_tables:
+            try:
+                exists = self.client.execute(f"EXISTS TABLE {table}")[0][0]
+                if exists:
+                    count = self.client.execute(f"SELECT count() FROM {table}")[0][0]
+                    total_records += count
+                    
+                    # Проверяем наличие поля version_id
+                    has_version_id = self.client.execute(f"""
+                        SELECT count() 
+                        FROM system.columns 
+                        WHERE table = '{table}' AND name = 'version_id'
+                    """)[0][0] > 0
+                    
+                    if has_version_id:
+                        version_count = self.client.execute(
+                            f"SELECT count() FROM {table} WHERE version_date = '{self.version_date}' AND version_id = {self.version_id}"
+                        )[0][0]
+                        
+                        logger.info(f"✅ {table}: {count:,} записей всего, {version_count:,} для версии {self.version_id}")
+                        
+                        if version_count == 0:
+                            all_ready = False
+                    else:
+                        logger.info(f"✅ {table}: {count:,} записей (без версионирования)")
+                        
+                        # Для таблиц без версионирования считаем готовными если есть данные
+                        if count == 0:
+                            all_ready = False
+                else:
+                    logger.error(f"❌ Критическая таблица {table} отсутствует")
+                    all_ready = False
+                    
+            except Exception as e:
+                logger.error(f"❌ Ошибка проверки {table}: {e}")
+                all_ready = False
+        
+        if all_ready:
+            logger.info(f"\n🎉 СИСТЕМА ГОТОВА ДЛЯ FLAME GPU!")
+            logger.info(f"📊 Общий объем данных: {total_records:,} записей")
+            logger.info(f"🚀 Можно запускать Agent-Based моделирование")
+        else:
+            logger.warning(f"\n⚠️ Система требует дополнительной настройки")
+
+def main():
+    """Главная функция ETL Master"""
+    master = ETLMaster()
+    
+    try:
+        # Инициализация
+        if not master.initialize():
+            sys.exit(1)
+        
+        # Выбор режима
+        if not master.select_mode():
+            sys.exit(0)
+        
+        # Подготовка в зависимости от режима
+        if master.mode == 'test':
+            if not master.prepare_test_mode():
+                sys.exit(1)
+        elif master.mode == 'prod':
+            if not master.prepare_prod_mode():
+                sys.exit(1)
+        
+        # Запуск пайплайна
+        start_time = time.time()
+        success = master.run_pipeline()
+        total_time = time.time() - start_time
+        
+        logger.info(f"\n⏱️ Общее время выполнения: {total_time:.1f} секунд")
+        
+        if success:
+            logger.info("🎉 ETL ПАЙПЛАЙН ЗАВЕРШЕН УСПЕШНО!")
+            sys.exit(0)
+        else:
+            logger.warning("⚠️ ETL ПАЙПЛАЙН ЗАВЕРШЕН С ОШИБКАМИ")
+            sys.exit(1)
+            
+    except KeyboardInterrupt:
+        logger.info("\n❌ ETL Master прерван пользователем")
+        sys.exit(130)
+    except Exception as e:
+        logger.error(f"💥 Критическая ошибка ETL Master: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main() 

@@ -173,7 +173,7 @@ def load_status_components():
         print(f"❌ Ошибка загрузки Status_Components: {e}")
         sys.exit(1)
 
-def prepare_data(df, version_date, filter_partnos=None, table_name='heli_raw'):
+def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name='heli_raw'):
     """Подготавливает данные для ClickHouse"""
     try:
         # Фильтрация если нужна
@@ -272,8 +272,9 @@ def prepare_data(df, version_date, filter_partnos=None, table_name='heli_raw'):
                 print(f"   ➕ {col}: '' (String)")
         
         # КРИТИЧНО: порядок колонок должен соответствовать схеме таблицы!
-        # Сначала добавляем version_date
+        # Сначала добавляем version_date и version_id
         df['version_date'] = version_date
+        df['version_id'] = version_id
         
         # Базовые поля в правильном порядке согласно схеме таблицы
         # Дополнительные поля (status, aircraft_number) будут добавлены отдельными скриптами
@@ -392,10 +393,11 @@ def create_tables(client):
             `ppr` Nullable(UInt32),                 
             
             -- Метаданные файла
-            `version_date` Date DEFAULT today()     
+            `version_date` Date DEFAULT today(),
+            `version_id` UInt8 DEFAULT 1
             
         ) ENGINE = MergeTree()
-        ORDER BY version_date
+        ORDER BY (version_date, version_id)
         PARTITION BY toYYYYMM(version_date)
         SETTINGS index_granularity = 8192
         """
@@ -428,6 +430,7 @@ def create_tables(client):
             
             -- Метаданные файла
             `version_date` Date DEFAULT today(),
+            `version_id` UInt8 DEFAULT 1,
             
             -- Встроенные ID поля из Excel (новые поля вместо генерируемых словарей)
             `partseqno_i` Nullable(UInt32),         -- Встроенный ID партномера из Excel
@@ -442,7 +445,7 @@ def create_tables(client):
             `ac_type_mask` UInt8 DEFAULT 0          -- Битовая маска типа ВС для multihot (через enrich_heli_pandas.py)
             
         ) ENGINE = MergeTree()
-        ORDER BY version_date
+        ORDER BY (version_date, version_id)
         PARTITION BY toYYYYMM(version_date)
         SETTINGS index_granularity = 8192
         """
@@ -455,16 +458,16 @@ def create_tables(client):
         print(f"❌ Ошибка создания таблиц: {e}")
         sys.exit(1)
 
-def check_version_conflicts(client, version_date):
+def check_version_conflicts(client, version_date, version_id):
     """Проверяет конфликты версий с улучшенной логикой"""
     try:
-        # Проверяем обе таблицы на точное совпадение даты
-        raw_count = client.execute(f"SELECT COUNT(*) FROM heli_raw WHERE version_date = '{version_date}'")[0][0]
-        pandas_count = client.execute(f"SELECT COUNT(*) FROM heli_pandas WHERE version_date = '{version_date}'")[0][0]
+        # Проверяем обе таблицы на точное совпадение версии
+        raw_count = client.execute(f"SELECT COUNT(*) FROM heli_raw WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
+        pandas_count = client.execute(f"SELECT COUNT(*) FROM heli_pandas WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
         
         if raw_count > 0 or pandas_count > 0:
-            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ДАТОЙ ВЕРСИИ!")
-            print(f"   Дата версии: {version_date}")
+            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ВЕРСИЕЙ!")
+            print(f"   Дата версии: {version_date}, version_id: {version_id}")
             print(f"   heli_raw: {raw_count:,} записей")
             print(f"   heli_pandas: {pandas_count:,} записей")
             print(f"\nВыберите действие:")
@@ -475,12 +478,12 @@ def check_version_conflicts(client, version_date):
                 try:
                     choice = input(f"\nВаш выбор (1-2): ").strip()
                     if choice == '1':
-                        print(f"🔄 Удаляем существующие данные за {version_date}...")
+                        print(f"🔄 Удаляем существующие данные за {version_date} v{version_id}...")
                         if raw_count > 0:
-                            client.execute(f"DELETE FROM heli_raw WHERE version_date = '{version_date}'")
+                            client.execute(f"DELETE FROM heli_raw WHERE version_date = '{version_date}' AND version_id = {version_id}")
                             print(f"✅ Удалено {raw_count:,} записей из heli_raw")
                         if pandas_count > 0:
-                            client.execute(f"DELETE FROM heli_pandas WHERE version_date = '{version_date}'")
+                            client.execute(f"DELETE FROM heli_pandas WHERE version_date = '{version_date}' AND version_id = {version_id}")
                             print(f"✅ Удалено {pandas_count:,} записей из heli_pandas")
                         return True
                     elif choice == '2':
@@ -535,13 +538,13 @@ def insert_data(client, df, table_name, description):
         
         return 0
 
-def validate_data_counts(client, version_date, original_count, raw_count, pandas_count, filtered_partnos_count):
+def validate_data_counts(client, version_date, version_id, original_count, raw_count, pandas_count, filtered_partnos_count):
     """Минимальная проверка количества записей"""
     print(f"\n🔍 === ПРОВЕРКА КОЛИЧЕСТВА ЗАПИСЕЙ ===")
     
     # Проверяем в БД
-    db_raw_count = client.execute(f"SELECT COUNT(*) FROM heli_raw WHERE version_date = '{version_date}'")[0][0]
-    db_pandas_count = client.execute(f"SELECT COUNT(*) FROM heli_pandas WHERE version_date = '{version_date}'")[0][0]
+    db_raw_count = client.execute(f"SELECT COUNT(*) FROM heli_raw WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
+    db_pandas_count = client.execute(f"SELECT COUNT(*) FROM heli_pandas WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
     
     print(f"📊 Исходный Excel файл: {original_count:,} записей")
     print(f"📊 heli_raw (все данные): {db_raw_count:,} записей")
@@ -561,7 +564,7 @@ def validate_data_counts(client, version_date, original_count, raw_count, pandas
         issues.append(f"❌ heli_pandas больше чем heli_raw - логическая ошибка")
     
     # Проверяем уникальные партномера в pandas
-    unique_partnos_result = client.execute(f"SELECT COUNT(DISTINCT partno) FROM heli_pandas WHERE version_date = '{version_date}'")
+    unique_partnos_result = client.execute(f"SELECT COUNT(DISTINCT partno) FROM heli_pandas WHERE version_date = '{version_date}' AND version_id = {version_id}")
     unique_partnos_in_db = unique_partnos_result[0][0]
     
     print(f"📦 Уникальных партномеров в heli_pandas: {unique_partnos_in_db}")
@@ -585,55 +588,81 @@ def validate_data_counts(client, version_date, original_count, raw_count, pandas
 
 # Функция add_status_in_memory удалена - заменена на status_processor.py
 
-def main():
-    """Основная функция"""
+def main(version_date=None, version_id=None):
+    """Основная функция с поддержкой версионирования"""
     print("🚀 === ДВОЙНОЙ ЗАГРУЗЧИК STATUS_COMPONENTS ===")
+    start_time = time.time()
     
     try:
         # 1. Подключение к ClickHouse через безопасную систему
-        # Пароли только из environment variables, НЕТ захардкоженных паролей!
+        print(f"🔗 [ЭТАП 1] Подключение к ClickHouse...")
         import sys
         sys.path.append(str(Path(__file__).parent))
         from utils.config_loader import get_clickhouse_client
         client = get_clickhouse_client()
+        print(f"✅ [ЭТАП 1] Подключение установлено за {time.time() - start_time:.2f}с")
         
         # 2. Создание таблиц
+        print(f"🏗️ [ЭТАП 2] Создание таблиц...")
+        step_start = time.time()
         create_tables(client)
+        print(f"✅ [ЭТАП 2] Таблицы созданы за {time.time() - step_start:.2f}с")
         
         # 3. Загрузка исходных данных
+        print(f"📖 [ЭТАП 3] Загрузка Excel файла...")
+        step_start = time.time()
         df = load_status_components()
         original_count = len(df)
+        print(f"✅ [ЭТАП 3] Excel загружен за {time.time() - step_start:.2f}с: {original_count:,} записей")
         
-        # 4. Определение версии данных из метаданных Excel
-        status_path = Path('data_input/source_data/Status_Components.xlsx')
-        version_date = extract_version_date_from_excel(status_path)
-        print(f"🗓️ Версия данных: {version_date}")
+        # 4. Определение версии данных
+        print(f"🗓️ [ЭТАП 4] Определение версии...")
+        step_start = time.time()
+        if version_date is None:
+            # Автоматическое извлечение из метаданных Excel (совместимость)
+            status_path = Path('data_input/source_data/Status_Components.xlsx')
+            version_date = extract_version_date_from_excel(status_path)
+            print(f"✅ [ЭТАП 4] Версия определена (из Excel): {version_date}")
+        else:
+            print(f"✅ [ЭТАП 4] Версия получена (из ETL): {version_date}, version_id: {version_id}")
+        
+        if version_id is None:
+            version_id = 1
+        print(f"✅ [ЭТАП 4] Завершен за {time.time() - step_start:.2f}с")
         
         # 5. Проверка конфликтов версий с диалогом
-        if not check_version_conflicts(client, version_date):
+        print(f"🔍 [ЭТАП 5] Проверка конфликтов версий...")
+        step_start = time.time()
+        if not check_version_conflicts(client, version_date, version_id):
             return
+        print(f"✅ [ЭТАП 5] Конфликты проверены за {time.time() - step_start:.2f}с")
         
         # 6. Получение списка партномеров из MD_Components для фильтрации
-        # ИСПРАВЛЕНО: используем ВСЕ партномера из md_components, не только планеры!
+        print(f"📦 [ЭТАП 6] Получение партномеров из MD_Components...")
+        step_start = time.time()
         md_partnos = get_md_partnos(client)
-        print(f"📦 Используем фильтр ВСЕ компоненты: {len(md_partnos)} партномеров из MD_Components")
+        print(f"✅ [ЭТАП 6] Получено {len(md_partnos)} партномеров за {time.time() - step_start:.2f}с")
         print(f"📋 Первые 10 партномеров: {md_partnos[:10]}")
         if len(md_partnos) > 10:
             print(f"📋 ... и еще {len(md_partnos)-10} партномеров")
         
         # 7. Подготовка данных для обеих таблиц
-        print(f"\n📦 Подготовка данных для загрузки...")
+        print(f"\n📦 [ЭТАП 7] Подготовка данных для загрузки...")
+        step_start = time.time()
         
         # Все данные для RAW
-        raw_df = prepare_data(df.copy(), version_date, table_name='heli_raw')
+        print(f"🔧 [ЭТАП 7a] Подготовка данных для heli_raw...")
+        raw_start = time.time()
+        raw_df = prepare_data(df.copy(), version_date, version_id=version_id, table_name='heli_raw')
+        print(f"✅ [ЭТАП 7a] heli_raw подготовлен за {time.time() - raw_start:.2f}с: {len(raw_df):,} записей")
         
-        # КРИТИЧНО: Упорядочиваем колонки для heli_raw согласно схеме (16 полей)
+        # КРИТИЧНО: Упорядочиваем колонки для heli_raw согласно схеме (17 полей)
         raw_column_order = [
             'partno', 'serialno', 'ac_typ', 'location',
             'mfg_date', 'removal_date', 'target_date',
             'condition', 'owner', 'lease_restricted',
             'oh', 'oh_threshold', 'll', 'sne', 'ppr',
-            'version_date'
+            'version_date', 'version_id'
         ]
         
         # Проверяем и упорядочиваем колонки для raw
@@ -644,22 +673,31 @@ def main():
             raw_df = raw_df[raw_column_order]
             print(f"✅ heli_raw: порядок колонок установлен ({len(raw_df.columns)} полей)")
         
-        # Фильтрованные данные для PANDAS
-        pandas_df = prepare_data(df.copy(), version_date, filter_partnos=md_partnos, table_name='heli_pandas')
+        # Фильтрованные данные для PANDAS (САМЫЙ ТЯЖЕЛЫЙ ЭТАП!)
+        print(f"🔧 [ЭТАП 7b] Подготовка данных для heli_pandas (фильтрация)...")
+        pandas_start = time.time()
+        pandas_df = prepare_data(df.copy(), version_date, version_id=version_id, filter_partnos=md_partnos, table_name='heli_pandas')
+        print(f"✅ [ЭТАП 7b] heli_pandas подготовлен за {time.time() - pandas_start:.2f}с: {len(pandas_df):,} записей")
+        print(f"✅ [ЭТАП 7] Общее время подготовки: {time.time() - step_start:.2f}с")
         
         # 8. Загрузка heli_raw и обработка pandas_df в памяти
-        print(f"\n🚀 === НАЧИНАЕМ ОПТИМИЗИРОВАННУЮ ЗАГРУЗКУ ===")
+        print(f"\n🚀 [ЭТАП 8] НАЧИНАЕМ ОПТИМИЗИРОВАННУЮ ЗАГРУЗКУ")
+        step_start = time.time()
         
         # 8.1 Сразу записываем heli_raw (архивная копия - больше не нужна)
+        print(f"💾 [ЭТАП 8.1] Загрузка heli_raw в ClickHouse...")
+        raw_insert_start = time.time()
         raw_loaded = insert_data(client, raw_df, 'heli_raw', 'все данные')
-        print(f"✅ heli_raw записана и освобождена из памяти")
+        print(f"✅ [ЭТАП 8.1] heli_raw записана за {time.time() - raw_insert_start:.2f}с, освобождаем память")
         del raw_df  # Освобождаем память
         
         # 8.2 Обрабатываем pandas_df В ПАМЯТИ для оптимальной производительности
-        print(f"\n🔧 === ОБРАБОТКА PANDAS_DF В ПАМЯТИ ===")
+        print(f"\n🔧 [ЭТАП 8.2] ОБРАБОТКА PANDAS_DF В ПАМЯТИ")
+        memory_start = time.time()
         
         # КРИТИЧНО: Создаем обогащенные поля ДО обработки процессорами
-        print(f"🔧 Инициализация обогащенных полей...")
+        print(f"🔧 [ЭТАП 8.2a] Инициализация обогащенных полей...")
+        init_start = time.time()
         
         # Поле repair_days - должно быть создано ДО обработки статусов
         if 'repair_days' not in pandas_df.columns:
@@ -670,6 +708,8 @@ def main():
         if 'status' not in pandas_df.columns:
             pandas_df['status'] = 0  # По умолчанию 0 (не определен)
             print(f"   ➕ Создано поле status: 0 (обновится процессорами)")
+        
+        print(f"✅ [ЭТАП 8.2a] Поля инициализированы за {time.time() - init_start:.2f}с")
         
         # Добавляем поле aircraft_number через извлечение из location
         print(f"🚁 Добавление aircraft_number из поля location...")
@@ -716,15 +756,19 @@ def main():
             print(f"❌ Ошибка обработки статусов: {e}")
         
         # 8.3 Записываем финальную heli_pandas с полной структурой
-        print(f"🔧 Выравнивание порядка колонок согласно схеме таблицы...")
+        print(f"\n💾 [ЭТАП 8.3] Финальная загрузка heli_pandas...")
+        final_start = time.time()
         
-        # Правильный порядок согласно схеме heli_pandas (24 поля: dual_loader создает 23 + enrich_heli_pandas заполняет ac_type_mask)
+        print(f"🔧 [ЭТАП 8.3a] Выравнивание порядка колонок...")
+        column_start = time.time()
+        
+        # Правильный порядок согласно схеме heli_pandas (25 полей: dual_loader создает 24 + enrich_heli_pandas заполняет ac_type_mask)
         correct_column_order = [
             'partno', 'serialno', 'ac_typ', 'location',
             'mfg_date', 'removal_date', 'target_date',
             'condition', 'owner', 'lease_restricted',
             'oh', 'oh_threshold', 'll', 'sne', 'ppr',
-            'version_date', 'partseqno_i', 'psn', 'address_i', 'ac_type_i',
+            'version_date', 'version_id', 'partseqno_i', 'psn', 'address_i', 'ac_type_i',
             'status', 'repair_days', 'aircraft_number', 'ac_type_mask'
         ]
         
@@ -762,10 +806,15 @@ def main():
         available_columns = [col for col in correct_column_order if col in pandas_df.columns]
         pandas_df = pandas_df[available_columns]
         
-        print(f"✅ Порядок колонок выровнен: {len(pandas_df.columns)} полей")
+        print(f"✅ [ЭТАП 8.3a] Колонки выровнены за {time.time() - column_start:.2f}с: {len(pandas_df.columns)} полей")
         print(f"📋 Колонки: {list(pandas_df.columns)}")
         
+        print(f"💾 [ЭТАП 8.3b] Загрузка в ClickHouse...")
+        insert_start = time.time()
         pandas_loaded = insert_data(client, pandas_df, 'heli_pandas', 'фильтрованные + обогащенные')
+        print(f"✅ [ЭТАП 8.3b] Данные загружены за {time.time() - insert_start:.2f}с")
+        print(f"✅ [ЭТАП 8.3] Финальная загрузка завершена за {time.time() - final_start:.2f}с")
+        print(f"✅ [ЭТАП 8] Общее время загрузки: {time.time() - step_start:.2f}с")
         
         # 9. Проверка результатов
         if raw_loaded > 0 and pandas_loaded > 0:
@@ -773,7 +822,7 @@ def main():
             
             # Минимальная проверка количества записей
             validation_success = validate_data_counts(
-                client, version_date, original_count, 
+                client, version_date, version_id, original_count, 
                 raw_loaded, pandas_loaded, len(md_partnos)
             )
             
@@ -784,16 +833,36 @@ def main():
                 print(f"📊 heli_pandas: {pandas_loaded:,} записей (фильтрованные)")
                 print(f"⚡ Улучшенная версионность с проверкой года")
                 print(f"🔍 Проверки качества: ✅ ПРОЙДЕНЫ")
+                print(f"⏱️ ОБЩЕЕ ВРЕМЯ ВЫПОЛНЕНИЯ: {time.time() - start_time:.2f}с")
             else:
                 print(f"\n⚠️ Загрузка завершена, но обнаружены проблемы качества")
+                print(f"⏱️ ОБЩЕЕ ВРЕМЯ ВЫПОЛНЕНИЯ: {time.time() - start_time:.2f}с")
                 
         else:
             print(f"💥 Загрузка завершена с ошибками!")
+            print(f"⏱️ ОБЩЕЕ ВРЕМЯ ВЫПОЛНЕНИЯ: {time.time() - start_time:.2f}с")
             
     except Exception as e:
-        print(f"💥 Критическая ошибка: {e}")
+        print(f"💥 [КРИТИЧЕСКАЯ ОШИБКА] {e}")
+        print(f"⏱️ ВРЕМЯ ДО ОШИБКИ: {time.time() - start_time:.2f}с")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Dual Loader для Helicopter Component Lifecycle')
+    parser.add_argument('--version-date', type=str, help='Дата версии (YYYY-MM-DD)')
+    parser.add_argument('--version-id', type=int, help='ID версии')
+    
+    args = parser.parse_args()
+    
+    # Передаем параметры версионирования в main, если они заданы
+    if args.version_date and args.version_id:
+        from datetime import datetime
+        version_date = datetime.strptime(args.version_date, '%Y-%m-%d').date()
+        main(version_date=version_date, version_id=args.version_id)
+    else:
+        main()
  

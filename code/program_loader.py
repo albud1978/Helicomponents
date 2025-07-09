@@ -121,7 +121,7 @@ def load_program_data():
         print(f"❌ Ошибка загрузки Program.xlsx: {e}")
         sys.exit(1)
 
-def transform_program_data(df, version_date):
+def transform_program_data(df, version_date, version_id=1):
     """Преобразует данные программы полетов в нормализованную форму"""
     try:
         print(f"📦 Преобразование данных программы полетов в нормализованную форму...")
@@ -155,7 +155,8 @@ def transform_program_data(df, version_date):
                         'month_number': month,
                         'program_year': 2025,
                         'value': int(value),
-                        'version_date': version_date
+                        'version_date': version_date,
+                        'version_id': version_id
                     })
         
         result_df = pd.DataFrame(normalized_data)
@@ -176,13 +177,13 @@ def _get_ac_type_from_partno(partno):
     else:
         return None
 
-def prepare_program_data(df, version_date):
+def prepare_program_data(df, version_date, version_id=1):
     """Подготавливает данные программы полетов для ClickHouse"""
     try:
         print(f"📦 Подготовка данных программы полетов для ClickHouse...")
         
         # Сначала нормализуем данные
-        normalized_df = transform_program_data(df, version_date)
+        normalized_df = transform_program_data(df, version_date, version_id)
         
         # Обработка строковых полей для ClickHouse
         string_columns = ['ac_type', 'field_type']
@@ -252,10 +253,11 @@ def create_program_table(client):
             `value` UInt32,                         -- Значение (количество операций/часы налета)
             
             -- Метаданные файла
-            `version_date` Date DEFAULT today()     -- Дата версии файла
+            `version_date` Date DEFAULT today(),    -- Дата версии файла
+            `version_id` UInt8 DEFAULT 1            -- ID версии
             
         ) ENGINE = MergeTree()
-        ORDER BY (program_year, month_number, field_type, version_date)
+        ORDER BY (program_year, month_number, field_type, version_date, version_id)
         PARTITION BY (program_year, toYYYYMM(version_date))
         SETTINGS index_granularity = 8192
         """
@@ -267,14 +269,14 @@ def create_program_table(client):
         print(f"❌ Ошибка создания таблицы flight_program: {e}")
         sys.exit(1)
 
-def check_version_conflicts(client, version_date):
+def check_version_conflicts(client, version_date, version_id):
     """Проверяет конфликты версий"""
     try:
-        count = client.execute(f"SELECT COUNT(*) FROM flight_program WHERE version_date = '{version_date}'")[0][0]
+        count = client.execute(f"SELECT COUNT(*) FROM flight_program WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
         
         if count > 0:
-            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ДАТОЙ ВЕРСИИ!")
-            print(f"   Дата версии: {version_date}")
+            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ВЕРСИЕЙ!")
+            print(f"   Дата версии: {version_date}, version_id: {version_id}")
             print(f"   flight_program: {count:,} записей")
             print(f"\nВыберите действие:")
             print(f"   1. ЗАМЕНИТЬ существующие данные (DELETE + INSERT)")
@@ -284,8 +286,8 @@ def check_version_conflicts(client, version_date):
                 try:
                     choice = input(f"\nВаш выбор (1-2): ").strip()
                     if choice == '1':
-                        print(f"🔄 Удаляем существующие данные за {version_date}...")
-                        client.execute(f"DELETE FROM flight_program WHERE version_date = '{version_date}'")
+                        print(f"🔄 Удаляем существующие данные за {version_date} v{version_id}...")
+                        client.execute(f"DELETE FROM flight_program WHERE version_date = '{version_date}' AND version_id = {version_id}")
                         print(f"✅ Удалено {count:,} записей из flight_program")
                         return True
                     elif choice == '2':
@@ -350,12 +352,12 @@ def insert_program_data(client, df):
         print(f"❌ Ошибка загрузки в flight_program: {e}")
         return 0
 
-def validate_program_data(client, version_date, original_count):
+def validate_program_data(client, version_date, version_id, original_count):
     """Проверка качества загруженных данных программы полетов"""
     print(f"\n🔍 === ПРОВЕРКА КАЧЕСТВА FLIGHT_PROGRAM ===")
     
     # Проверяем в БД
-    db_count = client.execute(f"SELECT COUNT(*) FROM flight_program WHERE version_date = '{version_date}'")[0][0]
+    db_count = client.execute(f"SELECT COUNT(*) FROM flight_program WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
     
     print(f"📊 Исходный Excel файл: {original_count:,} записей")
     print(f"📊 flight_program (нормализованные): {db_count:,} записей")
@@ -370,7 +372,7 @@ def validate_program_data(client, version_date, original_count):
             MIN(program_date) as min_date,
             MAX(program_date) as max_date
         FROM flight_program 
-        WHERE version_date = '{version_date}'
+        WHERE version_date = '{version_date}' AND version_id = {version_id}
         GROUP BY field_type
         ORDER BY field_type
     """)
@@ -390,7 +392,7 @@ def validate_program_data(client, version_date, original_count):
             COUNT(*) as records_count,
             COUNT(DISTINCT field_type) as field_types
         FROM flight_program 
-        WHERE version_date = '{version_date}'
+        WHERE version_date = '{version_date}' AND version_id = {version_id}
         GROUP BY month_number
         ORDER BY month_number
     """)
@@ -468,8 +470,8 @@ def prepare_data_for_clickhouse(df):
         traceback.print_exc()
         return df
 
-def main():
-    """Основная функция"""
+def main(version_date=None, version_id=None):
+    """Основная функция с поддержкой версионирования"""
     print("🚀 === ЗАГРУЗЧИК PROGRAM (ПРОГРАММА ПОЛЕТОВ) ===")
     
     try:
@@ -487,17 +489,24 @@ def main():
         df = load_program_data()
         original_count = len(df)
         
-        # 4. Определение версии данных из метаданных Excel
-        program_path = Path('data_input/source_data/Program.xlsx')
-        version_date = extract_version_date_from_excel(program_path)
-        print(f"🗓️ Версия данных: {version_date}")
+        # 4. Определение версии данных
+        if version_date is None:
+            # Автоматическое извлечение из метаданных Excel (совместимость)
+            program_path = Path('data_input/source_data/Program.xlsx')
+            version_date = extract_version_date_from_excel(program_path)
+            print(f"🗓️ Версия данных (из Excel): {version_date}")
+        else:
+            print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
+        
+        if version_id is None:
+            version_id = 1
         
         # 5. Проверка конфликтов версий
-        if not check_version_conflicts(client, version_date):
+        if not check_version_conflicts(client, version_date, version_id):
             return
         
         # 6. Подготовка и нормализация данных
-        prepared_df = prepare_program_data(df, version_date)
+        prepared_df = prepare_program_data(df, version_date, version_id)
         
         # 7. Загрузка данных с автоматической конвертацией типов
         print(f"\n🚀 === НАЧИНАЕМ ЗАГРУЗКУ FLIGHT_PROGRAM ===")
@@ -508,11 +517,11 @@ def main():
         if loaded_count > 0:
             print(f"\n🎉 === ЗАГРУЗКА FLIGHT_PROGRAM ЗАВЕРШЕНА ===")
             
-            validation_success = validate_program_data(client, version_date, original_count)
+            validation_success = validate_program_data(client, version_date, version_id, original_count)
             
             if validation_success:
                 print(f"\n🎯 === ИТОГОВАЯ СТАТИСТИКА ===")
-                print(f"📅 Версия данных: {version_date}")
+                print(f"📅 Версия данных: {version_date} (version_id={version_id})")
                 print(f"📊 flight_program: {loaded_count:,} записей (нормализованные)")
                 print(f"📈 Программа полетов на 2025 год загружена")
                 print(f"🔍 Проверки качества: ✅ ПРОЙДЕНЫ")
@@ -527,4 +536,18 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Program Loader для Helicopter Component Lifecycle')
+    parser.add_argument('--version-date', type=str, help='Дата версии (YYYY-MM-DD)')
+    parser.add_argument('--version-id', type=int, help='ID версии')
+    
+    args = parser.parse_args()
+    
+    # Передаем параметры версионирования в main, если они заданы
+    if args.version_date and args.version_id:
+        from datetime import datetime
+        version_date = datetime.strptime(args.version_date, '%Y-%m-%d').date()
+        main(version_date=version_date, version_id=args.version_id)
+    else:
+        main() 
