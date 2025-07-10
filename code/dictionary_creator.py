@@ -261,36 +261,48 @@ class DictionaryCreator:
                 except Exception as e:
                     self.logger.debug(f"Таблица {table} не существовала: {e}")
             
-            # Таблица партномеров - partno → partseqno_i
+            # Таблица партномеров - partno → partseqno_i (ИСТИННО АДДИТИВНАЯ)
             partno_dict_sql = """
             CREATE TABLE IF NOT EXISTS dict_partno_flat (
                 partseqno_i UInt32,
-                partno String
-            ) ENGINE = Memory
+                partno String,
+                load_timestamp DateTime DEFAULT now()
+            ) ENGINE = MergeTree()
+            ORDER BY (partseqno_i, partno, load_timestamp)
+            SETTINGS index_granularity = 8192
             """
             
-            # Таблица серийных номеров - serialno → psn
+            # Таблица серийных номеров - serialno → psn (ИСТИННО АДДИТИВНАЯ)
             serialno_dict_sql = """
             CREATE TABLE IF NOT EXISTS dict_serialno_flat (
                 psn UInt32,
-                serialno String
-            ) ENGINE = Memory
+                serialno String,
+                load_timestamp DateTime DEFAULT now()
+            ) ENGINE = MergeTree()
+            ORDER BY (psn, serialno, load_timestamp)
+            SETTINGS index_granularity = 8192
             """
             
-            # Таблица владельцев - owner → address_i
+            # Таблица владельцев - owner → address_i (ИСТИННО АДДИТИВНАЯ)
             owner_dict_sql = """
             CREATE TABLE IF NOT EXISTS dict_owner_flat (
                 address_i UInt32,
-                owner String
-            ) ENGINE = Memory
+                owner String,
+                load_timestamp DateTime DEFAULT now()
+            ) ENGINE = MergeTree()
+            ORDER BY (address_i, owner, load_timestamp)
+            SETTINGS index_granularity = 8192
             """
             
-            # Таблица типов ВС (битовые маски)
+            # Таблица типов ВС (битовые маски) (ИСТИННО АДДИТИВНАЯ)
             ac_type_dict_sql = """
             CREATE TABLE IF NOT EXISTS dict_ac_type_flat (
                 ac_type_mask UInt8,
-                ac_typ String
-            ) ENGINE = Memory
+                ac_typ String,
+                load_timestamp DateTime DEFAULT now()
+            ) ENGINE = MergeTree()
+            ORDER BY (ac_type_mask, ac_typ, load_timestamp)
+            SETTINGS index_granularity = 8192
             """
             
             # Создаем все таблицы
@@ -307,63 +319,62 @@ class DictionaryCreator:
             return False
 
     def populate_dictionary_tables(self, dictionaries: Dict[str, Dict]) -> bool:
-        """Заполнение Dictionary таблиц данными"""
-        self.logger.info("📊 Заполнение Dictionary таблиц...")
+        """Аддитивное заполнение Dictionary таблиц данными (без TRUNCATE)"""
+        self.logger.info("📊 Аддитивное заполнение Dictionary таблиц...")
         
         try:
-            # Заполнение партномеров - partno → partseqno_i
+            current_timestamp = datetime.now()
+            
+            # Заполнение партномеров - partno → partseqno_i (АДДИТИВНО)
             if 'partno' in dictionaries:
                 partno_data = []
                 for partno, partseqno_i in dictionaries['partno']['mapping'].items():
-                    partno_data.append([partseqno_i, partno])
+                    partno_data.append([partseqno_i, partno, current_timestamp])
                 
                 if partno_data:
-                    self.client.query("TRUNCATE TABLE dict_partno_flat")
                     self.client.insert('dict_partno_flat', partno_data,
-                                     column_names=['partseqno_i', 'partno'])
-                    self.logger.info(f"✅ Загружено {len(partno_data)} партномеров")
+                                     column_names=['partseqno_i', 'partno', 'load_timestamp'])
+                    self.logger.info(f"✅ Добавлено {len(partno_data)} партномеров (истинно аддитивно)")
             
-            # Заполнение серийных номеров - serialno → psn
+            # Заполнение серийных номеров - serialno → psn (АДДИТИВНО)
             if 'serialno' in dictionaries:
                 serialno_data = []
                 for serialno, psn in dictionaries['serialno']['mapping'].items():
-                    serialno_data.append([psn, serialno])
+                    serialno_data.append([psn, serialno, current_timestamp])
                 
                 if serialno_data:
-                    self.client.query("TRUNCATE TABLE dict_serialno_flat")
                     self.client.insert('dict_serialno_flat', serialno_data,
-                                     column_names=['psn', 'serialno'])
-                    self.logger.info(f"✅ Загружено {len(serialno_data)} серийных номеров")
+                                     column_names=['psn', 'serialno', 'load_timestamp'])
+                    self.logger.info(f"✅ Добавлено {len(serialno_data)} серийных номеров (истинно аддитивно)")
             
-            # Заполнение владельцев - owner → address_i
+            # Заполнение владельцев - owner → address_i (АДДИТИВНО)
             if 'owner' in dictionaries:
                 owner_data = []
                 for owner, address_i in dictionaries['owner']['mapping'].items():
-                    owner_data.append([address_i, owner])
+                    owner_data.append([address_i, owner, current_timestamp])
                 
                 if owner_data:
-                    self.client.query("TRUNCATE TABLE dict_owner_flat")
                     self.client.insert('dict_owner_flat', owner_data,
-                                     column_names=['address_i', 'owner'])
-                    self.logger.info(f"✅ Загружено {len(owner_data)} владельцев")
+                                     column_names=['address_i', 'owner', 'load_timestamp'])
+                    self.logger.info(f"✅ Добавлено {len(owner_data)} владельцев (истинно аддитивно)")
             
-            # Заполнение типов ВС (существующая логика)
+            # Заполнение типов ВС (АДДИТИВНО)
             if 'ac_typ' in dictionaries:
                 ac_type_data = []
                 
                 for ac_typ, ac_type_mask in dictionaries['ac_typ']['mapping'].items():
-                    ac_type_data.append([ac_type_mask, ac_typ])
+                    ac_type_data.append([ac_type_mask, ac_typ, current_timestamp])
                 
                 if ac_type_data:
-                    self.client.query("TRUNCATE TABLE dict_ac_type_flat")
                     self.client.insert('dict_ac_type_flat', ac_type_data,
-                                     column_names=['ac_type_mask', 'ac_typ'])
-                    self.logger.info(f"✅ Загружено {len(ac_type_data)} типов ВС")
+                                     column_names=['ac_type_mask', 'ac_typ', 'load_timestamp'])
+                    self.logger.info(f"✅ Добавлено {len(ac_type_data)} типов ВС (истинно аддитивно)")
             
+            self.logger.info("🎯 Аддитивное заполнение словарей завершено (без TRUNCATE)")
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Ошибка заполнения Dictionary таблиц: {e}")
+            self.logger.error(f"❌ Ошибка аддитивного заполнения Dictionary таблиц: {e}")
             return False
 
     def create_clickhouse_dictionary_objects(self) -> bool:

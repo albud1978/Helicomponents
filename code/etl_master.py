@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+1#!/usr/bin/env python3
 """
 ETL Master - главный оркестратор для системы Helicopter Component Lifecycle
 
@@ -21,6 +21,8 @@ from typing import List, Dict, Optional
 sys.path.append(str(Path(__file__).parent / 'utils'))
 from config_loader import get_clickhouse_client
 from etl_version_manager import ETLVersionManager
+import openpyxl
+import os
 
 # Настройка логгирования
 Path('logs').mkdir(exist_ok=True)
@@ -33,6 +35,65 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+def extract_unified_version_date():
+    """
+    КОСТЫЛЬ: Извлекает единую version_date из Status_Components.xlsx
+    для использования всеми загрузчиками (чтобы избежать разброса дат)
+    """
+    try:
+        status_path = Path('data_input/source_data/Status_Components.xlsx')
+        logger.info(f"📅 Извлечение единой version_date из {status_path.name}...")
+        
+        # Открываем Excel файл для чтения метаданных
+        workbook = openpyxl.load_workbook(status_path, read_only=True)
+        props = workbook.properties
+        
+        current_year = datetime.now().year
+        version_source = "unknown"
+        version_date = date.today()
+        
+        # Приоритет 1: дата создания файла (с проверкой года)
+        if props.created:
+            created_date = props.created
+            if abs(created_date.year - current_year) <= 1:
+                version_date = created_date.date()
+                version_source = "Excel created"
+                logger.info(f"📅 Дата создания Excel: {created_date}")
+            else:
+                logger.warning(f"⚠️ Дата создания {created_date} отличается от текущего года более чем на год")
+        
+        # Приоритет 2: дата модификации
+        if props.modified and version_source == "unknown":
+            version_date = props.modified.date()
+            version_source = "Excel modified"
+            logger.info(f"📅 Дата модификации Excel: {props.modified}")
+        elif props.modified:
+            logger.info(f"📅 Дата модификации Excel: {props.modified}")
+        
+        # Приоритет 3: время модификации файла в ОС
+        if version_source == "unknown":
+            mtime = os.path.getmtime(status_path)
+            version_date = datetime.fromtimestamp(mtime).date()
+            version_source = "OS modified"
+        
+        # Дополнительная информация
+        file_stats = os.stat(status_path)
+        logger.info(f"📋 Файл: {status_path.name}")
+        logger.info(f"📏 Размер: {file_stats.st_size:,} байт")
+        logger.info(f"🕐 Модификация ОС: {datetime.fromtimestamp(file_stats.st_mtime)}")
+        logger.info(f"🎯 Источник версии: {version_source}")
+        
+        workbook.close()
+        
+        logger.info(f"✅ Единая version_date для всех загрузчиков: {version_date}")
+        return version_date
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка извлечения версии из Status_Components.xlsx: {e}")
+        fallback_date = date.today()
+        logger.warning(f"🚨 Используем fallback дату: {fallback_date}")
+        return fallback_date
 
 class ETLMaster:
     """Главный оркестратор ETL системы"""
@@ -175,37 +236,70 @@ class ETLMaster:
         try:
             logger.info("🧪 === РЕЖИМ ТЕСТ: ПОЛНАЯ ОЧИСТКА ===")
             
-            # Список всех таблиц проекта для удаления
+            # Список ТОЛЬКО таблиц которые создаются текущим ETL пайплайном
+            # ЗАЩИЩЕНЫ ОТ УДАЛЕНИЯ: 
+            # - OlapCube_VNV (cycle_full9.py), Heli_Components (analytic_CPU.py), Helicopter_Components, OlapCube_Analytics (демо-стенд)
+            # - ИСТИННО АДДИТИВНЫЕ СЛОВАРИ: dict_partno_flat, dict_serialno_flat, dict_owner_flat, dict_ac_type_flat, aircraft_number_dict (MergeTree)
             tables_to_drop = [
-                'heli_pandas', 'heli_raw', 'md_components', 'status_overhaul',
-                'flight_program', 'program_ac', 'dict_status_flat', 
-                'dict_partno_flat', 'dict_serialno_flat', 'dict_owner_flat',
-                'dict_ac_type_flat', 'aircraft_number_dict', 'OlapCube_Analytics'
+                # Dictionary объекты (зависимые)
+                'aircraft_number_dictionary',  # создается aircraft_number_dict_creator.py
+                
+                # Основные таблицы ETL пайплайна
+                'heli_pandas', 'heli_raw',           # создается dual_loader.py  
+                'md_components',                     # создается md_components_loader.py
+                'status_overhaul',                   # создается status_overhaul_loader.py
+                'flight_program',                    # создается program_loader.py
+                'program_ac',                        # создается program_ac_loader.py
+                
+                # ИСКЛЮЧЕНЫ ИЗ УДАЛЕНИЯ - ИСТИННО АДДИТИВНЫЕ СЛОВАРНЫЕ ТАБЛИЦЫ (MergeTree):
+                # 'dict_partno_flat', 'dict_serialno_flat', 'dict_owner_flat',   # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
+                # 'dict_ac_type_flat', 'dict_status_flat',  # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
+                # 'aircraft_number_dict'               # создается aircraft_number_dict_creator.py (ИСТИННО АДДИТИВНЫЙ)
+                
+                # Не-словарные таблицы статуса (если есть)
+                'dict_status_flat'  # создается dictionary_creator.py (единственная не-аддитивная)
             ]
             
             print(f"\n🗑️ Удаление {len(tables_to_drop)} таблиц проекта...")
+            print("🛡️ ЗАЩИЩЕНЫ от удаления: истинно аддитивные словари (dict_partno_flat, dict_serialno_flat, dict_owner_flat, dict_ac_type_flat, aircraft_number_dict)")
             deleted_count = 0
             
             for table in tables_to_drop:
                 try:
-                    # Проверяем существование таблицы
-                    exists = self.client.execute(f"EXISTS TABLE {table}")[0][0]
-                    if exists:
-                        self.client.execute(f"DROP TABLE {table}")
-                        logger.info(f"✅ Удалена таблица: {table}")
-                        deleted_count += 1
+                    # Специальная обработка для Dictionary объектов
+                    if table == 'aircraft_number_dictionary':
+                        # Проверяем существование Dictionary
+                        dict_exists = self.client.execute(f"""
+                            SELECT COUNT(*) FROM system.dictionaries 
+                            WHERE database = 'default' AND name = '{table}'
+                        """)[0][0] > 0
+                        
+                        if dict_exists:
+                            self.client.execute(f"DROP DICTIONARY {table}")
+                            logger.info(f"✅ Удален Dictionary: {table}")
+                            deleted_count += 1
+                        else:
+                            logger.debug(f"⏭️ Dictionary {table} не существует")
                     else:
-                        logger.debug(f"⏭️ Таблица {table} не существует")
+                        # Обычные таблицы
+                        exists = self.client.execute(f"EXISTS TABLE {table}")[0][0]
+                        if exists:
+                            self.client.execute(f"DROP TABLE {table}")
+                            logger.info(f"✅ Удалена таблица: {table}")
+                            deleted_count += 1
+                        else:
+                            logger.debug(f"⏭️ Таблица {table} не существует")
                         
                 except Exception as e:
                     logger.warning(f"⚠️ Ошибка удаления {table}: {e}")
             
             # В тестовом режиме всегда version_id = 1
-            self.version_date = date.today()
+            # КОСТЫЛЬ: используем единую дату из Status_Components.xlsx для всех загрузчиков
+            self.version_date = extract_unified_version_date()
             self.version_id = 1
             
             logger.info(f"✅ Тестовый режим подготовлен: удалено {deleted_count} таблиц")
-            logger.info(f"🎯 Версия: {self.version_date} (version_id=1)")
+            logger.info(f"🎯 Единая версия для всех загрузчиков: {self.version_date} (version_id=1)")
             return True
             
         except Exception as e:

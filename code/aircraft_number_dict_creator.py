@@ -137,7 +137,7 @@ def create_aircraft_number_dict_table(client) -> bool:
 
 def populate_aircraft_number_dict(client, aircraft_numbers: Set[int]) -> bool:
     """
-    Заполняет словарь данными о номерах вертолетов
+    Аддитивно заполняет словарь данными о номерах вертолетов (без TRUNCATE)
     
     Args:
         client: ClickHouse client
@@ -147,16 +147,33 @@ def populate_aircraft_number_dict(client, aircraft_numbers: Set[int]) -> bool:
         bool: True если успешно заполнен
     """
     try:
-        print(f"📦 Заполнение словаря данными для {len(aircraft_numbers)} номеров...")
+        print(f"📦 Аддитивное заполнение словаря для {len(aircraft_numbers)} номеров...")
         
-        # Очищаем таблицу
-        client.execute("TRUNCATE TABLE aircraft_number_dict")
+        # Получаем уже существующие номера из словаря
+        existing_query = "SELECT DISTINCT aircraft_number FROM aircraft_number_dict"
+        try:
+            existing_result = client.execute(existing_query)
+            existing_numbers = {row[0] for row in existing_result}
+            print(f"📋 Найдено {len(existing_numbers)} существующих записей в словаре")
+        except:
+            # Таблица может не существовать или быть пустой
+            existing_numbers = set()
+            print("📋 Словарь пуст или таблица не существует")
         
-        # Подготавливаем данные
+        # Определяем новые номера для добавления
+        new_numbers = aircraft_numbers - existing_numbers
+        
+        if not new_numbers:
+            print("✅ Все номера уже существуют в словаре, новых записей не требуется")
+            return True
+        
+        print(f"🆕 Добавляем {len(new_numbers)} новых номеров (аддитивно)")
+        
+        # Подготавливаем данные только для новых номеров
         dict_data = []
         leading_zero_count = 0
         
-        for aircraft_number in sorted(aircraft_numbers):
+        for aircraft_number in sorted(new_numbers):
             formatted_number = f"{aircraft_number:05d}"
             registration_code = f"RA-{formatted_number}"
             is_leading_zero = 1 if aircraft_number < 10000 else 0
@@ -171,37 +188,37 @@ def populate_aircraft_number_dict(client, aircraft_numbers: Set[int]) -> bool:
                 is_leading_zero
             ))
         
-        # Загружаем данные батчами
+        # Загружаем только новые данные батчами
         batch_size = 100
+        inserted_count = 0
+        
         for i in range(0, len(dict_data), batch_size):
             batch = dict_data[i:i + batch_size]
             client.execute(
                 'INSERT INTO aircraft_number_dict (aircraft_number, formatted_number, registration_code, is_leading_zero) VALUES',
                 batch
             )
+            inserted_count += len(batch)
         
-        print(f"✅ Загружено {len(dict_data)} записей в aircraft_number_dict")
-        print(f"📊 Номеров с ведущими нулями: {leading_zero_count}")
-        print(f"📊 Обычных номеров: {len(dict_data) - leading_zero_count}")
+        print(f"✅ Добавлено {inserted_count} новых записей в aircraft_number_dict (аддитивно)")
+        print(f"📊 Новых номеров с ведущими нулями: {leading_zero_count}")
+        print(f"📊 Новых обычных номеров: {len(dict_data) - leading_zero_count}")
         
-        # Показываем примеры
-        print("📋 Примеры записей в словаре:")
-        sample_query = """
-        SELECT aircraft_number, formatted_number, registration_code, is_leading_zero
-        FROM aircraft_number_dict 
-        ORDER BY aircraft_number 
-        LIMIT 5
-        """
+        # Показываем примеры новых записей
+        if dict_data:
+            print("📋 Примеры добавленных записей:")
+            for i, (aircraft_number, formatted_number, registration_code, is_leading_zero) in enumerate(dict_data[:5]):
+                zero_flag = " (с ведущими нулями)" if is_leading_zero else ""
+                print(f"   {aircraft_number} → {formatted_number} → {registration_code}{zero_flag}")
         
-        samples = client.execute(sample_query)
-        for aircraft_number, formatted_number, registration_code, is_leading_zero in samples:
-            zero_flag = " (с ведущими нулями)" if is_leading_zero else ""
-            print(f"   {aircraft_number} → {formatted_number} → {registration_code}{zero_flag}")
+        # Показываем общую статистику
+        total_count = client.execute("SELECT COUNT(*) FROM aircraft_number_dict")[0][0]
+        print(f"📊 Общее количество записей в словаре: {total_count}")
         
         return True
         
     except Exception as e:
-        print(f"❌ Ошибка заполнения словаря: {e}")
+        print(f"❌ Ошибка аддитивного заполнения словаря: {e}")
         return False
 
 def validate_aircraft_number_dict(client, original_count: int) -> bool:
