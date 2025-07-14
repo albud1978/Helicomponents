@@ -12,7 +12,7 @@
 Структура данных:
 - ops_counter_mi8/mi17: количество операций по типам ВС (помесячно)
 - daily_flight: ежедневный налет для типов ВС и конкретных ВС (помесячно)
-- partno: код типа ВС (32=МИ-8, 64=МИ-17)
+- ac_type_mask: код типа ВС (32=МИ-8, 64=МИ-17)
 - serialno: серийный номер конкретного ВС
 """
 
@@ -111,7 +111,7 @@ def load_program_data():
         
         # Анализируем типы данных
         print(f"\n📈 Анализ данных:")
-        print(f"   Типы ВС (partno): {df['partno'].dropna().unique()}")
+        print(f"   Типы ВС (ac_type_mask): {df['ac_type_mask'].dropna().unique()}")
         print(f"   Серийные номера: {df['serialno'].dropna().unique()}")
         print(f"   Типы полей: {df['Поле'].unique()}")
         
@@ -133,7 +133,7 @@ def transform_program_data(df, version_date, version_id=1):
         print(f"📅 Найдены месяцы: {month_columns}")
         
         for idx, row in df.iterrows():
-            partno = row['partno'] if pd.notna(row['partno']) else None
+            ac_type_mask = row['ac_type_mask'] if pd.notna(row['ac_type_mask']) else None
             serialno = row['serialno'] if pd.notna(row['serialno']) else None
             field_type = row['Поле']
             
@@ -147,9 +147,9 @@ def transform_program_data(df, version_date, version_id=1):
                     program_date = date(2025, month, 1)
                     
                     normalized_data.append({
-                        'partno': int(partno) if partno is not None else None,
-                        'serialno': int(serialno) if serialno is not None else None,
-                        'ac_type': _get_ac_type_from_partno(partno),
+                                            'ac_type_mask': int(ac_type_mask) if ac_type_mask is not None else None,
+                    'serialno': int(serialno) if serialno is not None else None,
+                    'ac_type': _get_ac_type_from_mask(ac_type_mask),
                         'field_type': field_type,
                         'program_date': program_date,
                         'month_number': month,
@@ -168,11 +168,11 @@ def transform_program_data(df, version_date, version_id=1):
         print(f"❌ Ошибка преобразования данных: {e}")
         sys.exit(1)
 
-def _get_ac_type_from_partno(partno):
-    """Преобразует partno в тип ВС"""
-    if partno == 32:
+def _get_ac_type_from_mask(ac_type_mask):
+    """Преобразует ac_type_mask в тип ВС"""
+    if ac_type_mask == 32:
         return 'МИ-8'
-    elif partno == 64:
+    elif ac_type_mask == 64:
         return 'МИ-17'
     else:
         return None
@@ -193,11 +193,11 @@ def prepare_program_data(df, version_date, version_id=1):
                 normalized_df[col] = normalized_df[col].replace(['nan', 'None', 'NaT'], '')
 
         # Обработка числовых полей - КРИТИЧНО для ClickHouse!
-        numeric_columns = ['partno', 'serialno', 'month_number', 'program_year', 'value']
+        numeric_columns = ['ac_type_mask', 'serialno', 'month_number', 'program_year', 'value']
         for col in numeric_columns:
             if col in normalized_df.columns:
                 # Используем подход из памяти о совместимости с clickhouse_driver
-                if col in ['partno', 'serialno']:
+                if col in ['ac_type_mask', 'serialno']:
                     # Nullable UInt8/UInt32 - нужны обычные Python типы!
                     numeric_series = pd.to_numeric(normalized_df[col], errors='coerce')
                     # Сначала заменяем NaN на None
@@ -220,7 +220,7 @@ def prepare_program_data(df, version_date, version_id=1):
         
         # Отладочная информация
         print(f"🔍 Статистика None значений после обработки:")
-        for col in ['partno', 'serialno']:
+        for col in ['ac_type_mask', 'serialno']:
             none_count = normalized_df[col].isnull().sum()
             total_count = len(normalized_df)
             print(f"   {col}: {none_count}/{total_count} None значений")
@@ -237,7 +237,7 @@ def create_program_table(client):
         create_sql = """
         CREATE TABLE IF NOT EXISTS flight_program (
             -- Идентификаторы ВС
-            `partno` Nullable(UInt8),               -- Код типа ВС (32=МИ-8, 64=МИ-17)
+            `ac_type_mask` Nullable(UInt8),         -- Код типа ВС (32=МИ-8, 64=МИ-17)
             `serialno` Nullable(UInt32),            -- Серийный номер ВС
             `ac_type` Nullable(String),             -- Тип ВС (МИ-8, МИ-17)
             
@@ -317,7 +317,7 @@ def insert_program_data(client, df):
             # Ручная конвертация каждого значения в правильный Python тип
             row_tuple = []
             for i, (col_name, value) in enumerate(row.items()):
-                if col_name in ['partno', 'serialno']:
+                if col_name in ['ac_type_mask', 'serialno']:
                     # Nullable UInt8/UInt32
                     if pd.isna(value) or value is None or str(value).lower() == 'nan':
                         row_tuple.append(None)
@@ -339,7 +339,7 @@ def insert_program_data(client, df):
         if data_tuples:
             sample = data_tuples[0]
             print(f"🔍 Проверка типов в кортеже:")
-            print(f"   partno: {sample[0]} ({type(sample[0])})")
+            print(f"   ac_type_mask: {sample[0]} ({type(sample[0])})")
             print(f"   serialno: {sample[1]} ({type(sample[1])})")
         
         # Загружаем
@@ -367,7 +367,7 @@ def validate_program_data(client, version_date, version_id, original_count):
         SELECT 
             field_type,
             COUNT(*) as records_count,
-            COUNT(DISTINCT partno) as unique_partno,
+            COUNT(DISTINCT ac_type_mask) as unique_ac_type_mask,
             COUNT(DISTINCT serialno) as unique_serialno,
             MIN(program_date) as min_date,
             MAX(program_date) as max_date
@@ -378,10 +378,10 @@ def validate_program_data(client, version_date, version_id, original_count):
     """)
     
     print(f"\n📈 Анализ структуры данных:")
-    for field_type, records, partno_count, serialno_count, min_date, max_date in structure_analysis:
+    for field_type, records, ac_type_mask_count, serialno_count, min_date, max_date in structure_analysis:
         print(f"   {field_type}:")
         print(f"     📊 Записей: {records:,}")
-        print(f"     🔢 Типов ВС: {partno_count}")
+        print(f"     🔢 Типов ВС: {ac_type_mask_count}")
         print(f"     ✈️ Серийных номеров: {serialno_count}")
         print(f"     📅 Период: {min_date} - {max_date}")
     
@@ -434,9 +434,9 @@ def prepare_data_for_clickhouse(df):
         result_df = df.copy()
         
         # Простая ручная конвертация nullable полей
-        print(f"🔄 Конвертируем partno и serialno...")
+        print(f"🔄 Конвертируем ac_type_mask и serialno...")
         
-        for col in ['partno', 'serialno']:
+        for col in ['ac_type_mask', 'serialno']:
             if col in result_df.columns:
                 new_values = []
                 for i, value in enumerate(result_df[col]):
@@ -458,9 +458,9 @@ def prepare_data_for_clickhouse(df):
         print(f"🔍 Проверка типов после конвертации:")
         for i in range(min(3, len(result_df))):
             sample = result_df.iloc[i]
-            partno = sample['partno']
+            ac_type_mask = sample['ac_type_mask']
             serialno = sample['serialno']
-            print(f"   Строка {i}: partno={partno} ({type(partno)}), serialno={serialno} ({type(serialno)})")
+            print(f"   Строка {i}: ac_type_mask={ac_type_mask} ({type(ac_type_mask)}), serialno={serialno} ({type(serialno)})")
         
         return result_df
         
