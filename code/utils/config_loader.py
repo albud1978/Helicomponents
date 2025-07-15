@@ -13,21 +13,42 @@
 import os
 import yaml
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 import logging
 import sys
 
 logger = logging.getLogger(__name__)
 
 def auto_load_env_file():
-    """Автоматически загружает .env файл проекта если он существует"""
+    """
+    Автоматически загружает .env файл проекта если он существует
+    Поиск выполняется в нескольких возможных локациях для универсальности
+    """
     try:
         # Находим корень проекта (где находится .env)
         current_dir = Path(__file__).parent
-        project_root = current_dir.parent.parent  # из code/utils/ -> корень
-        env_file = project_root / '.env'
         
-        if env_file.exists():
+        # Список возможных путей к .env файлу в порядке приоритета
+        possible_paths: List[Path] = [
+            current_dir.parent.parent,  # из code/utils/ -> корень
+            current_dir.parent,         # из code/utils/ -> code/
+            Path.home(),                # домашняя директория пользователя
+            Path.cwd(),                 # текущая рабочая директория
+        ]
+        
+        # Добавляем путь из переменной окружения, если она установлена
+        if os.getenv('CUBE_CONFIG_PATH'):
+            possible_paths.insert(0, Path(os.getenv('CUBE_CONFIG_PATH')))
+        
+        # Ищем .env файл в возможных локациях
+        env_file: Optional[Path] = None
+        for path in possible_paths:
+            candidate = path / '.env'
+            if candidate.exists():
+                env_file = candidate
+                break
+        
+        if env_file and env_file.exists():
             # Читаем .env файл и устанавливаем переменные
             with open(env_file, 'r', encoding='utf-8') as f:
                 for line in f:
@@ -38,10 +59,12 @@ def auto_load_env_file():
                         value = value.strip('"\'')
                         os.environ[key.strip()] = value
             
-            print(f"✅ Environment variables автоматически загружены из .env")
+            print(f"✅ Environment variables автоматически загружены из {env_file}")
             return True
         else:
-            print(f"⚠️ Файл .env не найден в {project_root}")
+            print(f"⚠️ Файл .env не найден в проверенных директориях")
+            print(f"   Проверенные пути: {[str(p) for p in possible_paths]}")
+            print(f"   Для указания пути к .env установите переменную CUBE_CONFIG_PATH")
             return False
             
     except Exception as e:
@@ -104,11 +127,28 @@ def load_clickhouse_config():
         # АВТОМАТИЧЕСКАЯ ЗАГРУЗКА .env ФАЙЛА
         auto_load_env_file()
         
-        # Путь к конфигурации
-        config_path = Path(__file__).parent.parent.parent / 'config' / 'database_config.yaml'
+        # Поиск конфигурационного файла в нескольких возможных местах
+        possible_config_paths = [
+            Path(__file__).parent.parent.parent / 'config' / 'database_config.yaml',  # из code/utils/ -> корень/config/
+            Path(__file__).parent.parent / 'config' / 'database_config.yaml',         # из code/utils/ -> code/config/
+            Path.cwd() / 'config' / 'database_config.yaml',                           # текущая директория/config/
+        ]
         
-        if not config_path.exists():
-            print(f"❌ Файл конфигурации не найден: {config_path}")
+        # Добавляем путь из переменной окружения, если она установлена
+        if os.getenv('CUBE_CONFIG_PATH'):
+            possible_config_paths.insert(0, Path(os.getenv('CUBE_CONFIG_PATH')) / 'database_config.yaml')
+        
+        config_path = None
+        for path in possible_config_paths:
+            if path.exists():
+                config_path = path
+                break
+        
+        if not config_path:
+            print(f"❌ Файл конфигурации не найден в проверенных директориях:")
+            for path in possible_config_paths:
+                print(f"   - {path}")
+            print(f"Для указания пути к конфигурации установите переменную CUBE_CONFIG_PATH")
             sys.exit(1)
         
         # Загружаем YAML конфигурацию
@@ -123,10 +163,11 @@ def load_clickhouse_config():
         
         if not password:
             print(f"❌ ОШИБКА БЕЗОПАСНОСТИ: Пароль не найден в environment variable '{password_var}'")
-            print(f"🔒 Установите пароль:")
-            print(f"   export {password_var}='ваш_пароль'")
-            print(f"   # или добавьте в ~/.bashrc для постоянного использования")
-            print(f"   # или запустите: source load_env.sh")
+            print(f"🔒 Установите пароль одним из способов:")
+            print(f"   1. export {password_var}='ваш_пароль'")
+            print(f"   2. Добавьте в ~/.bashrc для постоянного использования")
+            print(f"   3. Создайте файл .env с {password_var}=ваш_пароль")
+            print(f"   4. Запустите: source load_env.sh (если файл .env существует)")
             sys.exit(1)
         
         # Собираем параметры подключения
@@ -139,7 +180,8 @@ def load_clickhouse_config():
             'settings': db_config['settings']
         }
         
-        print(f"✅ Конфигурация загружена: {connection_config['host']}:{connection_config['port']}")
+        print(f"✅ Конфигурация загружена из: {config_path}")
+        print(f"✅ Подключение: {connection_config['host']}:{connection_config['port']}")
         print(f"🔒 Пароль получен из environment variable: {password_var}")
         
         return connection_config
