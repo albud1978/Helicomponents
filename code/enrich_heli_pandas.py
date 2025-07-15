@@ -280,7 +280,7 @@ class HeliPandasEnricher:
             """)
             
             if examples_result:
-            self.logger.info("📋 Примеры обогащенных записей:")
+                self.logger.info("📋 Примеры обогащенных записей:")
                 for row in examples_result:
                     ac_typ, mask, partseqno_i, psn, address_i = row
                     self.logger.info(f"  ac_typ: '{ac_typ}' → ac_type_mask: {mask}")
@@ -290,7 +290,7 @@ class HeliPandasEnricher:
             success_threshold = 80.0
             if mask_coverage >= success_threshold:
                 self.logger.info(f"✅ Обогащение успешно: покрытие ac_type_mask {mask_coverage:.1f}% >= {success_threshold}%")
-            return True
+                return True
             else:
                 self.logger.warning(f"⚠️ Низкое покрытие ac_type_mask: {mask_coverage:.1f}% < {success_threshold}%")
                 return False
@@ -348,7 +348,7 @@ def main():
     print("✨ Обрабатываем ТОЛЬКО ac_type_mask для multihot битовых операций")
     
     try:
-    enricher = HeliPandasEnricher()
+        enricher = HeliPandasEnricher()
         success = enricher.run_enrichment()
         
         if success:

@@ -187,8 +187,8 @@ class DictionaryCreator:
                 'owner': {'pairs': owner_data},
                 'ac_typ': {'values': ac_type_data}
             }
-                
-            except Exception as e:
+        
+        except Exception as e:
             self.logger.error(f"❌ Ошибка анализа heli_pandas: {e}")
             return {}
     
@@ -526,7 +526,7 @@ def main():
     print("📊 Создаем словари: партномера, серийники, владельцы, типы ВС")
     
     try:
-    creator = DictionaryCreator()
+        creator = DictionaryCreator()
         success = creator.run_full_analysis()
         
         if success:
