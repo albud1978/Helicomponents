@@ -93,9 +93,9 @@ class DictionaryCreator:
                     COUNT(address_i) as address_filled,
                     COUNT(ac_type_i) as ac_type_filled,
                     MAX(version_date) as latest_date
-                FROM heli_pandas
-            """)
-            
+            FROM heli_pandas
+        """)
+        
             if not embedded_stats_result.result_rows:
                 self.logger.error("❌ Нет данных в heli_pandas")
                 return False
@@ -108,7 +108,7 @@ class DictionaryCreator:
             self.logger.info(f"  psn: {psn_filled:,} ({psn_filled/total*100:.1f}%)")
             self.logger.info(f"  address_i: {address_filled:,} ({address_filled/total*100:.1f}%)")
             self.logger.info(f"  ac_type_i: {ac_type_filled:,} ({ac_type_filled/total*100:.1f}%)")
-            
+        
             # Проверяем качество заполнения
             issues = []
             min_coverage = 90.0  # Минимальное покрытие 90%
@@ -173,11 +173,11 @@ class DictionaryCreator:
             # Анализ типов ВС (существующая логика)
             ac_type_result = self.client.query("""
                 SELECT ac_typ, count(*) as cnt
-                FROM heli_pandas 
+                    FROM heli_pandas 
                 WHERE ac_typ IS NOT NULL AND ac_typ != ''
                 GROUP BY ac_typ
-                ORDER BY cnt DESC
-            """)
+                    ORDER BY cnt DESC
+                """)
             ac_type_data = [(row[0], row[1]) for row in ac_type_result.result_rows]
             self.logger.info(f"📋 Найдено {len(ac_type_data)} уникальных типов ВС")
             
@@ -187,11 +187,11 @@ class DictionaryCreator:
                 'owner': {'pairs': owner_data},
                 'ac_typ': {'values': ac_type_data}
             }
-            
-        except Exception as e:
+                
+            except Exception as e:
             self.logger.error(f"❌ Ошибка анализа heli_pandas: {e}")
             return {}
-
+    
     def create_analytics_dictionaries(self, analysis: Dict[str, Dict]) -> Dict[str, Dict]:
         """Создание аналитических словарей на основе реальных ID из heli_pandas"""
         self.logger.info("🔢 Создание аналитических словарей...")
@@ -246,7 +246,7 @@ class DictionaryCreator:
             self.logger.info(f"✅ Создан словарь ac_typ: {len(ac_typ_dict)} типов ВС → UInt8")
         
         return dictionaries
-
+    
     def create_dictionary_tables(self) -> bool:
         """Создание ClickHouse Dictionary таблиц для аналитики"""
         self.logger.info("🏗️ Создание Dictionary таблиц для аналитики...")
@@ -317,7 +317,7 @@ class DictionaryCreator:
         except Exception as e:
             self.logger.error(f"❌ Ошибка создания Dictionary таблиц: {e}")
             return False
-
+    
     def populate_dictionary_tables(self, dictionaries: Dict[str, Dict]) -> bool:
         """Аддитивное заполнение Dictionary таблиц данными (без TRUNCATE)"""
         self.logger.info("📊 Аддитивное заполнение Dictionary таблиц...")
@@ -376,7 +376,7 @@ class DictionaryCreator:
         except Exception as e:
             self.logger.error(f"❌ Ошибка аддитивного заполнения Dictionary таблиц: {e}")
             return False
-
+    
     def create_clickhouse_dictionary_objects(self) -> bool:
         """Создание ClickHouse Dictionary объектов для аналитики"""
         self.logger.info("📚 Создание ClickHouse Dictionary объектов...")
@@ -471,7 +471,7 @@ class DictionaryCreator:
         except Exception as e:
             self.logger.error(f"❌ Ошибка создания ClickHouse Dictionary объектов: {e}")
             return False
-
+    
     def run_full_analysis(self) -> bool:
         """Запуск создания аналитических словарей"""
         self.logger.info("🚀 Создание словарей v3.0 - аналитические словари + типы ВС")
@@ -526,7 +526,7 @@ def main():
     print("📊 Создаем словари: партномера, серийники, владельцы, типы ВС")
     
     try:
-        creator = DictionaryCreator()
+    creator = DictionaryCreator()
         success = creator.run_full_analysis()
         
         if success:

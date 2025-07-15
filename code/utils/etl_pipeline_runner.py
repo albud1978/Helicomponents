@@ -17,14 +17,14 @@ from etl_version_manager import ETLVersionManager
 
 # Настройка логгирования
 Path('logs').mkdir(exist_ok=True)  # Создаем директорию для логов
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
         logging.FileHandler('logs/etl_pipeline.log'),
         logging.StreamHandler()
-    ]
-)
+            ]
+        )
 logger = logging.getLogger(__name__)
 
 def get_clickhouse_client_etl():
@@ -63,14 +63,14 @@ def get_table_count(client, table_name):
     try:
         count = client.execute(f"SELECT count() FROM {table_name}")[0][0]
         return count
-    except Exception as e:
+        except Exception as e:
         logger.warning(f"Ошибка получения количества записей в {table_name}: {e}")
         return 0
 
 def check_table_structure(client, table_name, expected_columns):
     """Проверяет структуру таблицы"""
     if client is None or not table_exists(client, table_name):
-        return False
+            return False
     
     try:
         query = f"""
@@ -87,7 +87,7 @@ def check_table_structure(client, table_name, expected_columns):
         else:
             logger.warning(f"Таблица {table_name} имеет недостаточно колонок: {len(columns)}")
             return False
-    except Exception as e:
+            except Exception as e:
         logger.warning(f"Ошибка проверки структуры {table_name}: {e}")
         return False
 
@@ -107,7 +107,7 @@ def run_script(script_name, description, version_date, version_id, required_tabl
     script_path = Path(__file__).parent.parent / script_name
     if not script_path.exists():
         logger.error(f"❌ Скрипт {script_name} не найден!")
-        return False
+            return False
     
     try:
         start_time = time.time()
@@ -244,8 +244,8 @@ def main(start_from_step=None, version_date=None):
     if policy == 'rewrite':
         if not version_manager.execute_rewrite_policy(version_date):
             logger.error("❌ Ошибка при выполнении политики перезаписи")
-            return False
-    
+                return False
+        
     logger.info(f"🎯 Целевая версия: version_date={version_date}, version_id={target_version_id}")
     logger.info("✅ Система готова для загрузки данных")
     

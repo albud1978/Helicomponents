@@ -148,7 +148,7 @@ def transform_program_data(df, version_date, version_id=1):
                     
                     normalized_data.append({
                                             'ac_type_mask': int(ac_type_mask) if ac_type_mask is not None else None,
-                    'serialno': int(serialno) if serialno is not None else None,
+                        'serialno': int(serialno) if serialno is not None else None,
                     'ac_type': _get_ac_type_from_mask(ac_type_mask),
                         'field_type': field_type,
                         'program_date': program_date,
@@ -492,8 +492,8 @@ def main(version_date=None, version_id=None):
         # 4. Определение версии данных
         if version_date is None:
             # Автоматическое извлечение из метаданных Excel (совместимость)
-            program_path = Path('data_input/source_data/Program.xlsx')
-            version_date = extract_version_date_from_excel(program_path)
+        program_path = Path('data_input/source_data/Program.xlsx')
+        version_date = extract_version_date_from_excel(program_path)
             print(f"🗓️ Версия данных (из Excel): {version_date}")
         else:
             print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
@@ -550,4 +550,4 @@ if __name__ == "__main__":
         version_date = datetime.strptime(args.version_date, '%Y-%m-%d').date()
         main(version_date=version_date, version_id=args.version_id)
     else:
-        main() 
+    main() 

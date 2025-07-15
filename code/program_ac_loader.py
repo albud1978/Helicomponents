@@ -433,8 +433,8 @@ def main(version_date=None, version_id=None):
         # 4. Определение версии данных
         if version_date is None:
             # Автоматическое извлечение из метаданных Excel (совместимость)
-            program_ac_path = Path('data_input/source_data/Program_AC.xlsx')
-            version_date = extract_version_date_from_excel(program_ac_path)
+        program_ac_path = Path('data_input/source_data/Program_AC.xlsx')
+        version_date = extract_version_date_from_excel(program_ac_path)
             print(f"🗓️ Версия данных (из Excel): {version_date}")
         else:
             print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
@@ -491,4 +491,4 @@ if __name__ == "__main__":
         version_date = datetime.strptime(args.version_date, '%Y-%m-%d').date()
         main(version_date=version_date, version_id=args.version_id)
     else:
-        main()
+    main()
