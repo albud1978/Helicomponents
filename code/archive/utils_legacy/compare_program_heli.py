@@ -67,7 +67,7 @@ def compare_program_heli():
         print(f'     {partno}: {count} ВС')
     
     status_names = {0: 'По умолчанию', 1: 'Неактивно', 2: 'Эксплуатация', 
-                   3: 'Исправен', 4: 'Ремонт', 5: 'Хранение'}
+                   3: 'Исправен', 4: 'Ремонт', 5: 'Резерв', 6: 'Хранение'}
     print('   По статусам в heli_pandas:')
     for status_id, count in heli_by_status.items():
         if count > 0:

@@ -22,14 +22,14 @@ from datetime import datetime, date
 
 
 def load_dict_status_flat():
-    """Возвращает словарь статусов из архивного проекта (без 'Резерва')"""
+    """Возвращает словарь статусов с правильной нумерацией"""
     return {
         1: "Неактивно",
         2: "Эксплуатация", 
         3: "Исправен",
         4: "Ремонт",
-        5: "Хранение"
-        # 6: "Резерв" - не используется в финальной логике согласно архиву
+        5: "Резерв",
+        6: "Хранение"
     }
 
 
@@ -111,10 +111,10 @@ def process_aircraft_status(pandas_df, client):
             print("ℹ️ Нет активных капремонтов - все планеры получат статус по умолчанию")
             return pandas_df
         
-        # Добавляем колонку status если ее нет
-        if 'status' not in pandas_df.columns:
-            pandas_df['status'] = 0  # По умолчанию 0 (не определен)
-            print("➕ Добавлена колонка 'status' со значением по умолчанию 0")
+        # Добавляем колонку status_id если ее нет
+        if 'status_id' not in pandas_df.columns:
+            pandas_df['status_id'] = 0  # По умолчанию 0 (не определен)
+            print("➕ Добавлена колонка 'status_id' со значением по умолчанию 0")
         
         # Добавляем колонку repair_days если ее нет
         if 'repair_days' not in pandas_df.columns:
@@ -155,12 +155,12 @@ def process_aircraft_status(pandas_df, client):
                 print(f"✅ СОВПАДЕНИЕ: serialno={serialno} - капремонт: {overhaul_data['status']}")
                 
                 # Устанавливаем статус 4 (Ремонт) только если текущий статус = 0
-                if pandas_df.at[idx, 'status'] == 0:
-                    pandas_df.at[idx, 'status'] = 4
+                if pandas_df.at[idx, 'status_id'] == 0:
+                    pandas_df.at[idx, 'status_id'] = 4
                     status_updated_count += 1
-                    print(f"   ✅ status = 4 (Ремонт)")
+                    print(f"   ✅ status_id = 4 (Ремонт)")
                 else:
-                    print(f"   ⚠️ status уже установлен ({pandas_df.at[idx, 'status']}), не перезаписываем")
+                    print(f"   ⚠️ status_id уже установлен ({pandas_df.at[idx, 'status_id']}), не перезаписываем")
                 
                 # Переносим даты если они есть
                 if overhaul_data['act_start_date']:
@@ -267,8 +267,8 @@ def process_status_field(pandas_df, client):
         pandas_df = process_component_status(pandas_df)
         
         # Проверяем результаты
-        if 'status' in pandas_df.columns:
-            status_counts = pandas_df['status'].value_counts().sort_index()
+        if 'status_id' in pandas_df.columns:
+            status_counts = pandas_df['status_id'].value_counts().sort_index()
             dict_status = load_dict_status_flat()
             
             print(f"\n📊 Итоговое распределение статусов:")
@@ -281,7 +281,7 @@ def process_status_field(pandas_df, client):
         
     except Exception as e:
         print(f"❌ Критическая ошибка обработки статусов: {e}")
-        # Возвращаем исходный DataFrame с колонкой status по умолчанию
-        if 'status' not in pandas_df.columns:
-            pandas_df['status'] = 0
+        # Возвращаем исходный DataFrame с колонкой status_id по умолчанию
+        if 'status_id' not in pandas_df.columns:
+            pandas_df['status_id'] = 0
         return pandas_df 

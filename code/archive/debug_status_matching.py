@@ -124,7 +124,7 @@ def debug_status_matching():
     print('\n📊 5. Статусы планеров в heli_pandas:')
     if len(aircraft_df) > 0:
         status_counts = aircraft_df['status'].value_counts().sort_index()
-        status_names = {0: 'По умолчанию', 1: 'Неактивно', 2: 'Эксплуатация', 3: 'Исправен', 4: 'Ремонт', 5: 'Хранение'}
+        status_names = {0: 'По умолчанию', 1: 'Неактивно', 2: 'Эксплуатация', 3: 'Исправен', 4: 'Ремонт', 5: 'Резерв', 6: 'Хранение'}
         
         for status_id, count in status_counts.items():
             status_name = status_names.get(status_id, f'Неизвестно({status_id})')

@@ -230,10 +230,10 @@ def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name
             if col in df.columns:
                 required_columns.append(col)
         
-        # Дополнительные поля status и aircraft_number добавляются отдельными скриптами
+        # Дополнительные поля status_id и aircraft_number добавляются отдельными скриптами
         # Здесь работаем только с базовыми полями из Excel
-        if 'status' in df.columns:
-            required_columns.append('status')
+        if 'status_id' in df.columns:
+            required_columns.append('status_id')
             
         if 'aircraft_number' in df.columns:
             required_columns.append('aircraft_number')
@@ -260,7 +260,7 @@ def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name
                 # Создаем колонку с dtype object для правильной обработки None
                 df[col] = pd.Series([None] * len(df), dtype=object)
                 print(f"   ➕ {col}: None (Nullable UInt32)")
-            elif col == 'status':
+            elif col == 'status_id':
                 df[col] = 0  # UInt8 DEFAULT 0  
                 print(f"   ➕ {col}: 0 (UInt8)")
             elif col == 'aircraft_number':
@@ -439,7 +439,7 @@ def create_tables(client):
             `ac_type_i` Nullable(UInt16),           -- Встроенный ID типа ВС из Excel
             
             -- Обогащенные поля (добавляются dual_loader.py и enrich_heli_pandas.py)
-            `status` UInt8 DEFAULT 0,               -- Статус компонента (через status_processor.py)
+            `status_id` UInt8 DEFAULT 0,            -- Статус компонента (через status_processor.py)
             `repair_days` Nullable(Int16),          -- Остаток дней до окончания ремонта (target_date - version_date)
             `aircraft_number` UInt16 DEFAULT 0,     -- Номер вертолета из RA-XXXXX
             `ac_type_mask` UInt8 DEFAULT 0          -- Битовая маска типа ВС для multihot (через enrich_heli_pandas.py)
@@ -704,10 +704,10 @@ def main(version_date=None, version_id=None):
             pandas_df['repair_days'] = None  # Nullable Int16 поле
             print(f"   ➕ Создано поле repair_days: None (заполнится при обработке статусов)")
         
-        # Поле status - инициализируем значением по умолчанию
-        if 'status' not in pandas_df.columns:
-            pandas_df['status'] = 0  # По умолчанию 0 (не определен)
-            print(f"   ➕ Создано поле status: 0 (обновится процессорами)")
+        # Поле status_id - инициализируем значением по умолчанию
+        if 'status_id' not in pandas_df.columns:
+            pandas_df['status_id'] = 0  # По умолчанию 0 (не определен)
+            print(f"   ➕ Создано поле status_id: 0 (обновится процессорами)")
         
         print(f"✅ [ЭТАП 8.2a] Поля инициализированы за {time.time() - init_start:.2f}с")
         
@@ -731,7 +731,7 @@ def main(version_date=None, version_id=None):
                 pandas_df['aircraft_number'] = 0
                 print(f"➕ Добавлена колонка 'aircraft_number' со значением по умолчанию 0 (fallback)")
         
-        # Добавляем поле status через обработку статусов (НОВАЯ ЛОГИКА)
+        # Добавляем поле status_id через обработку статусов (НОВАЯ ЛОГИКА)
         print(f"📊 Обработка статусов и repair_days через систему процессоров...")
         try:
             # ЭТАП 1: Обработка статусов капремонта (status_overhaul) + repair_days
@@ -769,7 +769,7 @@ def main(version_date=None, version_id=None):
             'condition', 'owner', 'lease_restricted',
             'oh', 'oh_threshold', 'll', 'sne', 'ppr',
             'version_date', 'version_id', 'partseqno_i', 'psn', 'address_i', 'ac_type_i',
-            'status', 'repair_days', 'aircraft_number', 'ac_type_mask'
+            'status_id', 'repair_days', 'aircraft_number', 'ac_type_mask'
         ]
         
         # Проверяем наличие всех колонок
@@ -780,7 +780,7 @@ def main(version_date=None, version_id=None):
             print(f"⚠️ Отсутствующие колонки: {missing_columns}")
             # Добавляем отсутствующие колонки с дефолтными значениями
             for col in missing_columns:
-                if col in ['status', 'aircraft_number', 'ac_type_mask']:
+                if col in ['status_id', 'aircraft_number', 'ac_type_mask']:
                     pandas_df[col] = 0
                     print(f"   ➕ Добавлена колонка {col}: 0")
                 elif col == 'repair_days':

@@ -1,0 +1,29 @@
+# Helicopter Component Lifecycle Prediction - Dependencies
+# Основные зависимости для ETL пайплайна
+
+# Обработка данных
+pandas>=1.5.0
+numpy>=1.21.0
+openpyxl>=3.0.0
+
+# База данных ClickHouse
+clickhouse-driver>=0.2.6
+clickhouse-connect>=0.7.0
+
+# Конфигурация и YAML
+PyYAML>=6.0
+
+# Системные зависимости
+pathlib2>=2.3.0
+
+# Логирование и утилиты (встроенные в Python 3.8+)
+# logging, sys, os, time, datetime, subprocess - встроенные модули
+
+# GPU зависимости (опциональные - установить отдельно)
+# cudf>=24.0.0  # Для GPU ускорения
+# pyflamegpu>=2.0.0  # Для GPU симуляций
+
+# Для анализа данных (опциональные)
+# matplotlib>=3.5.0
+# seaborn>=0.11.0
+# jupyter>=1.0.0 

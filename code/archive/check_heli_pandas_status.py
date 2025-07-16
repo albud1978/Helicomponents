@@ -25,19 +25,19 @@ def check_heli_pandas_status():
     has_status = False
     for row in structure:
         print(f'   {row[0]}: {row[1]}')
-        if row[0] == 'status':
+        if row[0] == 'status_id':
             has_status = True
     
-    # Проверяем поле status если есть
+    # Проверяем поле status_id если есть
     if has_status:
-        print('\n📊 РАСПРЕДЕЛЕНИЕ ПО ПОЛЮ STATUS:')
+        print('\n📊 РАСПРЕДЕЛЕНИЕ ПО ПОЛЮ STATUS_ID:')
         
         status_query = """
-        SELECT status, COUNT(*) as count
+        SELECT status_id, COUNT(*) as count
         FROM heli_pandas 
         WHERE version_date = '2025-05-28'
-        GROUP BY status
-        ORDER BY status
+        GROUP BY status_id
+        ORDER BY status_id
         """
         
         status_stats = client.execute(status_query)
@@ -49,7 +49,8 @@ def check_heli_pandas_status():
             2: 'Эксплуатация',
             3: 'Исправен',
             4: 'Ремонт',
-            5: 'Хранение'
+            5: 'Резерв',
+            6: 'Хранение'
         }
         
         total_with_status = 0
@@ -58,10 +59,10 @@ def check_heli_pandas_status():
             print(f'   {status_id} - {status_name}: {count:,} записей')
             total_with_status += count
         
-        print(f'\n📋 ИТОГО с указанным status: {total_with_status:,} записей')
+        print(f'\n📋 ИТОГО с указанным status_id: {total_with_status:,} записей')
         
     else:
-        print('\n⚠️ Поле status НЕ НАЙДЕНО в структуре таблицы')
+        print('\n⚠️ Поле status_id НЕ НАЙДЕНО в структуре таблицы')
     
     # Уникальные партномера
     unique_partnos_query = """

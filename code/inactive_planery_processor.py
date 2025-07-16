@@ -34,10 +34,10 @@ def process_inactive_planery_status(pandas_df, client):
         # Список планеров со скрина
         planery_partno = ['МИ-8Т', 'МИ-8П', 'МИ-8ПС', 'МИ-8ТП', 'МИ-8АМТ', 'МИ-8МТВ']
         
-        # Проверяем наличие колонки status
-        if 'status' not in pandas_df.columns:
-            print("⚠️ Колонка 'status' отсутствует - добавляем со значением 0")
-            pandas_df['status'] = 0
+        # Проверяем наличие колонки status_id
+        if 'status_id' not in pandas_df.columns:
+            print("⚠️ Колонка 'status_id' отсутствует - добавляем со значением 0")
+            pandas_df['status_id'] = 0
         
         # Фильтруем данные по планерам
         planery_mask = pandas_df['partno'].isin(planery_partno)
@@ -51,12 +51,12 @@ def process_inactive_planery_status(pandas_df, client):
         
         # Анализируем статусы планеров ДО обработки
         print("📊 Статусы планеров ДО обработки:")
-        status_counts_before = planery_df['status'].value_counts().sort_index()
+        status_counts_before = planery_df['status_id'].value_counts().sort_index()
         for status, count in status_counts_before.items():
             print(f"  Статус {status}: {count} записей")
         
         # Находим планеры со статусом 0 (не обработанные предыдущими процессорами)
-        inactive_mask = planery_mask & (pandas_df['status'] == 0)
+        inactive_mask = planery_mask & (pandas_df['status_id'] == 0)
         inactive_count = inactive_mask.sum()
         
         if inactive_count == 0:
@@ -66,12 +66,12 @@ def process_inactive_planery_status(pandas_df, client):
         print(f"🎯 Найдено {inactive_count} планеров со статусом 0 → устанавливаем статус 1 (неактивно)")
         
         # Устанавливаем статус 1 (неактивно) для планеров со статусом 0
-        pandas_df.loc[inactive_mask, 'status'] = 1
+        pandas_df.loc[inactive_mask, 'status_id'] = 1
         
         # Анализируем статусы планеров ПОСЛЕ обработки
         planery_df_after = pandas_df[planery_mask]
         print("📊 Статусы планеров ПОСЛЕ обработки:")
-        status_counts_after = planery_df_after['status'].value_counts().sort_index()
+        status_counts_after = planery_df_after['status_id'].value_counts().sort_index()
         for status, count in status_counts_after.items():
             print(f"  Статус {status}: {count} записей")
         
@@ -81,7 +81,7 @@ def process_inactive_planery_status(pandas_df, client):
             partno_mask = pandas_df['partno'] == partno
             partno_count = partno_mask.sum()
             if partno_count > 0:
-                partno_inactive = ((pandas_df['partno'] == partno) & (pandas_df['status'] == 1)).sum()
+                partno_inactive = ((pandas_df['partno'] == partno) & (pandas_df['status_id'] == 1)).sum()
                 print(f"  {partno}: {partno_count} записей, {partno_inactive} неактивных")
         
         print(f"✅ Процессор неактивности планеров: обработано {inactive_count} записей")
