@@ -167,7 +167,7 @@ def load_clickhouse_config():
             print(f"   1. export {password_var}='ваш_пароль'")
             print(f"   2. Добавьте в ~/.bashrc для постоянного использования")
             print(f"   3. Создайте файл .env с {password_var}=ваш_пароль")
-            print(f"   4. Запустите: source load_env.sh (если файл .env существует)")
+            print(f"   4. Запустите: source config/load_env.sh (если файл .env существует)")
             sys.exit(1)
         
         # Собираем параметры подключения

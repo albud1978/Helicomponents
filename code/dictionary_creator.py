@@ -84,6 +84,14 @@ class DictionaryCreator:
         self.logger.info("🔍 Валидация встроенных ID полей из Excel...")
         
         try:
+            # Сначала проверяем существование таблицы heli_pandas
+            table_exists = self.client.query("EXISTS TABLE heli_pandas").result_rows[0][0]
+            if not table_exists:
+                self.logger.error("❌ Таблица heli_pandas не существует!")
+                self.logger.error("💡 Словари создаются ПОСЛЕ загрузки данных в heli_pandas")
+                self.logger.error("🔄 Запустите сначала dual_loader.py или полный ETL цикл")
+                return False
+            
             # Получаем статистику по встроенным ID полям
             embedded_stats_result = self.client.query("""
                 SELECT 
@@ -518,31 +526,278 @@ class DictionaryCreator:
         except Exception as e:
             self.logger.error(f"❌ Ошибка: {e}")
             return False
-
-def main():
-    """Основная функция"""
-    print("🚀 === СОЗДАТЕЛЬ АНАЛИТИЧЕСКИХ СЛОВАРЕЙ v3.0 ===")
-    print("💡 Встроенные ID из Excel + аналитические словари из DISTINCT heli_pandas")
-    print("📊 Создаем словари: партномера, серийники, владельцы, типы ВС")
     
-    try:
-        creator = DictionaryCreator()
-        success = creator.run_full_analysis()
+    def create_status_dictionary(self) -> bool:
+        """Создание словаря статусов dict_status_flat (НЕ аддитивный)"""
+        self.logger.info("📋 Создание словаря статусов...")
         
-        if success:
-            print(f"\n🎯 === АНАЛИТИЧЕСКИЕ СЛОВАРИ ГОТОВЫ ===")
-            print(f"✅ Встроенные ID: partseqno_i, psn, address_i, ac_type_i")
-            print(f"📊 Аналитические словари: partno, serialno, owner (DISTINCT из heli_pandas)")
-            print(f"✨ Битовые маски: ac_type_mask для multihot GPU операций")
-            print(f"🚀 Готово для аналитики и Flame GPU!")
-            return 0
-        else:
-            print(f"\n❌ === ОШИБКА СОЗДАНИЯ СЛОВАРЕЙ ===")
-            return 1
+        try:
+            # Импортируем словарь статусов из процессора
+            from overhaul_status_processor import load_dict_status_flat
+            
+            # Удаляем старые таблицы/словари если существуют
+            try:
+                self.client.query("DROP DICTIONARY IF EXISTS status_dict_flat")
+                self.client.query("DROP TABLE IF EXISTS dict_status_flat")
+                self.logger.info("🗑️ Удалены старые объекты dict_status_flat")
+            except Exception as e:
+                self.logger.debug(f"Старые объекты не существовали: {e}")
+            
+            # Создаем таблицу словаря статусов
+            status_table_sql = """
+            CREATE TABLE dict_status_flat (
+                status_id UInt8,
+                status_name String,
+                load_timestamp DateTime DEFAULT now()
+            ) ENGINE = MergeTree()
+            ORDER BY (status_id, load_timestamp)
+            SETTINGS index_granularity = 8192
+            """
+            
+            self.client.query(status_table_sql)
+            
+            # Получаем словарь статусов
+            status_mapping = load_dict_status_flat()
+            
+            # Заполняем данными
+            status_data = []
+            current_timestamp = datetime.now()
+            
+            for status_id, status_name in status_mapping.items():
+                status_data.append([status_id, status_name, current_timestamp])
+            
+            self.client.insert('dict_status_flat', status_data,
+                             column_names=['status_id', 'status_name', 'load_timestamp'])
+            
+            # Создаем ClickHouse Dictionary объект
+            status_dict_ddl = f"""
+            CREATE OR REPLACE DICTIONARY status_dict_flat (
+                status_id UInt8,
+                status_name String
+            )
+            PRIMARY KEY status_id
+            SOURCE(CLICKHOUSE(
+                HOST '{self.config['host']}'
+                PORT {self.config['port']}
+                TABLE 'dict_status_flat'
+                DB '{self.config['database']}'
+            ))
+            LAYOUT(FLAT())
+            LIFETIME(MIN 0 MAX 3600)
+            """
+            
+            self.client.query(status_dict_ddl)
+            
+            self.logger.info(f"✅ Словарь статусов создан: {len(status_data)} записей")
+            self.logger.info("📋 Статусы:")
+            for status_id, status_name in sorted(status_mapping.items()):
+                self.logger.info(f"   {status_id}: {status_name}")
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка создания словаря статусов: {e}")
+            return False
+    
+    def create_aircraft_number_dictionary(self) -> bool:
+        """Создание аддитивного словаря номеров ВС dict_aircraft_number_flat"""
+        self.logger.info("🚁 Создание аддитивного словаря номеров ВС...")
         
-    except Exception as e:
-        print(f"❌ Критическая ошибка: {e}")
-        return 1
+        try:
+            # Проверяем существование таблицы heli_pandas
+            table_exists = self.client.query("EXISTS TABLE heli_pandas").result_rows[0][0]
+            if not table_exists:
+                self.logger.error("❌ Таблица heli_pandas не существует!")
+                self.logger.error("💡 Словарь номеров ВС создается ПОСЛЕ загрузки данных в heli_pandas")
+                return False
+            
+            # Получаем уникальные номера ВС из heli_pandas
+            aircraft_query = """
+            SELECT DISTINCT aircraft_number
+            FROM heli_pandas 
+            WHERE aircraft_number IS NOT NULL AND aircraft_number > 0
+            ORDER BY aircraft_number
+            """
+            
+            result = self.client.query(aircraft_query)
+            if not result.result_rows:
+                self.logger.warning("⚠️ Нет данных о номерах ВС в heli_pandas")
+                return True
+            
+            aircraft_numbers = {row[0] for row in result.result_rows}
+            
+            # Создаем таблицу если не существует (АДДИТИВНАЯ)
+            aircraft_table_sql = """
+            CREATE TABLE IF NOT EXISTS dict_aircraft_number_flat (
+                aircraft_number UInt16,
+                formatted_number String,
+                registration_code String,
+                is_leading_zero UInt8 DEFAULT 0,
+                load_timestamp DateTime DEFAULT now()
+            ) ENGINE = MergeTree()
+            ORDER BY (aircraft_number, load_timestamp)
+            SETTINGS index_granularity = 8192
+            """
+            
+            self.client.query(aircraft_table_sql)
+            
+            # Получаем существующие номера для аддитивности
+            existing_query = "SELECT DISTINCT aircraft_number FROM dict_aircraft_number_flat"
+            try:
+                existing_result = self.client.query(existing_query)
+                existing_numbers = {row[0] for row in existing_result.result_rows}
+                self.logger.info(f"📋 Найдено {len(existing_numbers)} существующих номеров ВС")
+            except:
+                existing_numbers = set()
+                self.logger.info("📋 Словарь номеров ВС пуст")
+            
+            # Определяем новые номера для добавления
+            new_numbers = aircraft_numbers - existing_numbers
+            
+            if not new_numbers:
+                self.logger.info("✅ Все номера ВС уже существуют в словаре")
+            else:
+                # Подготавливаем данные только для новых номеров
+                aircraft_data = []
+                current_timestamp = datetime.now()
+                
+                for aircraft_number in sorted(new_numbers):
+                    formatted_number = f"{aircraft_number:05d}"
+                    registration_code = f"RA-{formatted_number}"
+                    is_leading_zero = 1 if aircraft_number < 10000 else 0
+                    
+                    aircraft_data.append([
+                        aircraft_number, formatted_number, registration_code, 
+                        is_leading_zero, current_timestamp
+                    ])
+                
+                # Аддитивная загрузка
+                self.client.insert('dict_aircraft_number_flat', aircraft_data,
+                                 column_names=['aircraft_number', 'formatted_number', 
+                                             'registration_code', 'is_leading_zero', 'load_timestamp'])
+                
+                self.logger.info(f"✅ Добавлено {len(aircraft_data)} новых номеров ВС (аддитивно)")
+            
+            # Создаем/обновляем ClickHouse Dictionary объект
+            aircraft_dict_ddl = f"""
+            CREATE OR REPLACE DICTIONARY aircraft_number_dict_flat (
+                aircraft_number UInt16,
+                formatted_number String,
+                registration_code String,
+                is_leading_zero UInt8
+            )
+            PRIMARY KEY aircraft_number
+            SOURCE(CLICKHOUSE(
+                HOST '{self.config['host']}'
+                PORT {self.config['port']}
+                TABLE 'dict_aircraft_number_flat'
+                DB '{self.config['database']}'
+            ))
+            LAYOUT(FLAT())
+            LIFETIME(MIN 0 MAX 3600)
+            """
+            
+            self.client.query(aircraft_dict_ddl)
+            
+            total_count = len(existing_numbers) + len(new_numbers if new_numbers else [])
+            self.logger.info(f"✅ Словарь номеров ВС готов: {total_count} записей")
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка создания словаря номеров ВС: {e}")
+            return False
+    
+    def create_all_dictionaries_with_dictget(self) -> bool:
+        """Создание ВСЕХ словарей с полной поддержкой dictGet"""
+        self.logger.info("🚀 === СОЗДАНИЕ ВСЕХ СЛОВАРЕЙ С ПОДДЕРЖКОЙ DICTGET ===")
+        
+        try:
+            # 1. Подключение
+            if not self.connect_to_database():
+                return False
+            
+            # 2. Создание основных аналитических словарей (АДДИТИВНЫЕ)
+            if not self.run_full_analysis():
+                self.logger.error("❌ Ошибка создания основных аналитических словарей")
+                return False
+            
+            # 3. Создание словаря статусов (НЕ АДДИТИВНЫЙ)
+            if not self.create_status_dictionary():
+                self.logger.error("❌ Ошибка создания словаря статусов")
+                return False
+            
+            # 4. Создание словаря номеров ВС (АДДИТИВНЫЙ)  
+            if not self.create_aircraft_number_dictionary():
+                self.logger.error("❌ Ошибка создания словаря номеров ВС")
+                return False
+            
+            # 5. Проверка всех Dictionary объектов
+            self.verify_all_dictionaries()
+            
+            self.logger.info("🎯 === ВСЕ СЛОВАРИ СОЗДАНЫ И ГОТОВЫ К РАБОТЕ ===")
+            self.logger.info("✅ АДДИТИВНЫЕ словари:")
+            self.logger.info("   - dict_partno_flat → partno_dict_flat")
+            self.logger.info("   - dict_serialno_flat → serialno_dict_flat") 
+            self.logger.info("   - dict_owner_flat → owner_dict_flat")
+            self.logger.info("   - dict_ac_type_flat → ac_type_dict_flat")
+            self.logger.info("   - dict_aircraft_number_flat → aircraft_number_dict_flat")
+            self.logger.info("✅ НЕ АДДИТИВНЫЙ словарь:")
+            self.logger.info("   - dict_status_flat → status_dict_flat")
+            self.logger.info("🔥 Поддержка dictGet: ПОЛНАЯ для всех словарей")
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Критическая ошибка создания всех словарей: {e}")
+            return False
+    
+    def verify_all_dictionaries(self) -> None:
+        """Проверка всех созданных словарей и Dictionary объектов"""
+        self.logger.info("🔍 Проверка всех словарей...")
+        
+        # Список всех словарей для проверки
+        dictionaries_to_check = [
+            ('dict_partno_flat', 'partno_dict_flat'),
+            ('dict_serialno_flat', 'serialno_dict_flat'),
+            ('dict_owner_flat', 'owner_dict_flat'),
+            ('dict_ac_type_flat', 'ac_type_dict_flat'),
+            ('dict_status_flat', 'status_dict_flat'),
+            ('dict_aircraft_number_flat', 'aircraft_number_dict_flat')
+        ]
+        
+        for table_name, dict_name in dictionaries_to_check:
+            try:
+                # Проверка таблицы
+                table_count = self.client.query(f"SELECT COUNT(*) FROM {table_name}").result_rows[0][0]
+                
+                # Проверка Dictionary объекта
+                dict_check = self.client.query(f"SELECT COUNT(*) FROM system.dictionaries WHERE name = '{dict_name}'").result_rows[0][0]
+                
+                status = "✅" if dict_check > 0 else "❌"
+                self.logger.info(f"   {status} {table_name} ({table_count} записей) → {dict_name}")
+                
+            except Exception as e:
+                self.logger.warning(f"   ⚠️ Ошибка проверки {table_name}: {e}")
+
 
 if __name__ == "__main__":
-    exit(main()) 
+    """Основная функция запуска"""
+    creator = DictionaryCreator()
+    
+    # Выбор режима работы
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == '--legacy':
+        # Создание только основных аналитических словарей (legacy режим)
+        success = creator.run_full_analysis()
+        print("⚠️ LEGACY режим: созданы только аналитические словари")
+    else:
+        # Создание ВСЕХ словарей (новое поведение по умолчанию)
+        success = creator.create_all_dictionaries_with_dictget()
+    
+    if success:
+        print("🎯 Успешно!")
+        sys.exit(0)
+    else:
+        print("❌ Ошибка!")
+        sys.exit(1) 

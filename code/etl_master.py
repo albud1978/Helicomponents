@@ -137,16 +137,9 @@ class ETLMaster:
         },
         {
             'script': 'dictionary_creator.py',
-            'description': 'Базовые справочники',
+            'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
             'dependencies': ['heli_pandas'],
             'result_table': 'dict_status_flat',
-            'critical': False
-        },
-        {
-            'script': 'aircraft_number_dict_creator.py',
-            'description': 'Справочник номеров ВС', 
-            'dependencies': ['heli_pandas'],
-            'result_table': 'aircraft_number_dict',
             'critical': False
         },
         {
@@ -241,8 +234,14 @@ class ETLMaster:
             # - OlapCube_VNV (cycle_full9.py), Heli_Components (analytic_CPU.py), Helicopter_Components, OlapCube_Analytics (демо-стенд)
             # - ИСТИННО АДДИТИВНЫЕ СЛОВАРИ: dict_partno_flat, dict_serialno_flat, dict_owner_flat, dict_ac_type_flat, aircraft_number_dict (MergeTree)
             tables_to_drop = [
-                # Dictionary объекты (зависимые)
-                'aircraft_number_dictionary',  # создается aircraft_number_dict_creator.py
+                # Dictionary объекты (создаются dictionary_creator.py)
+                'aircraft_number_dictionary',      # legacy Dictionary объект
+                'status_dict_flat',                # Dictionary объект для статусов
+                'partno_dict_flat',               # Dictionary объект для партномеров  
+                'serialno_dict_flat',             # Dictionary объект для серийников
+                'owner_dict_flat',                # Dictionary объект для владельцев
+                'ac_type_dict_flat',              # Dictionary объект для типов ВС
+                'aircraft_number_dict_flat',      # Dictionary объект для номеров ВС
                 
                 # Основные таблицы ETL пайплайна
                 'heli_pandas', 'heli_raw',           # создается dual_loader.py  
@@ -253,10 +252,9 @@ class ETLMaster:
                 
                 # ИСКЛЮЧЕНЫ ИЗ УДАЛЕНИЯ - ИСТИННО АДДИТИВНЫЕ СЛОВАРНЫЕ ТАБЛИЦЫ (MergeTree):
                 # 'dict_partno_flat', 'dict_serialno_flat', 'dict_owner_flat',   # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
-                # 'dict_ac_type_flat', 'dict_status_flat',  # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
-                # 'aircraft_number_dict'               # создается aircraft_number_dict_creator.py (ИСТИННО АДДИТИВНЫЙ)
+                # 'dict_ac_type_flat', 'dict_aircraft_number_flat'               # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
                 
-                # Не-словарные таблицы статуса (если есть)
+                # Не-аддитивная таблица статуса (пересоздается каждый раз)
                 'dict_status_flat'  # создается dictionary_creator.py (единственная не-аддитивная)
             ]
             
@@ -267,7 +265,12 @@ class ETLMaster:
             for table in tables_to_drop:
                 try:
                     # Специальная обработка для Dictionary объектов
-                    if table == 'aircraft_number_dictionary':
+                    dictionary_objects = [
+                        'aircraft_number_dictionary', 'status_dict_flat', 'partno_dict_flat',
+                        'serialno_dict_flat', 'owner_dict_flat', 'ac_type_dict_flat', 'aircraft_number_dict_flat'
+                    ]
+                    
+                    if table in dictionary_objects:
                         # Проверяем существование Dictionary
                         dict_exists = self.client.execute(f"""
                             SELECT COUNT(*) FROM system.dictionaries 
