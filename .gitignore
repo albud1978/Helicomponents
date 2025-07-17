@@ -27,3 +27,68 @@ dist/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Downloaded libraries and dependencies (not needed on other computers)
+# GPU libraries downloads
+FLAMEGPU2/
+pyflamegpu*.whl
+cudf*.whl
+*.whl
+
+# Temporary installation files
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+
+# Conda/Miniconda environments
+miniconda*/
+anaconda*/
+.conda/
+envs/
+
+# pip cache and temporary files
+.pip/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Package management artifacts
+=*.*.*
+path==*
+*==*.*.*
+
+# Logs and temporary data (keep local)
+logs/*.log
+*.log
+*.tmp
+*.temp
+*.cache
+*.bak
+*.backup
+*_OLD
+*_old
+*_backup
+*_bak
+copy_*
+*_copy*
+
+# Database connection files (security)
+.env.*
+db_config.local
+connection_*.yaml
+credentials.*
+
+# Development and test outputs
+test_output/
+debug_*/
+analyze_*/
+check_*/
+*.debug
+*.test

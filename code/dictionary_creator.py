@@ -526,7 +526,7 @@ class DictionaryCreator:
         except Exception as e:
             self.logger.error(f"❌ Ошибка: {e}")
             return False
-    
+
     def create_status_dictionary(self) -> bool:
         """Создание словаря статусов dict_status_flat (НЕ аддитивный)"""
         self.logger.info("📋 Создание словаря статусов...")
