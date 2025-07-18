@@ -600,8 +600,8 @@ class DictionaryCreator:
             return False
     
     def create_aircraft_number_dictionary(self) -> bool:
-        """Создание аддитивного словаря номеров ВС dict_aircraft_number_flat"""
-        self.logger.info("🚁 Создание аддитивного словаря номеров ВС...")
+        """Создание аддитивного словаря номеров ВС dict_aircraft_number_flat с ac_type_mask"""
+        self.logger.info("🚁 Создание аддитивного словаря номеров ВС с ac_type_mask...")
         
         try:
             # Проверяем существование таблицы heli_pandas
@@ -611,12 +611,24 @@ class DictionaryCreator:
                 self.logger.error("💡 Словарь номеров ВС создается ПОСЛЕ загрузки данных в heli_pandas")
                 return False
             
-            # Получаем уникальные номера ВС из heli_pandas
+            # Получаем уникальные номера ВС с их ac_type_mask из heli_pandas
+            # ЛОГИКА: 
+            # 1. Берем ТОЛЬКО ВС которые имеют планерные partno (строгая фильтрация ВС)
+            # 2. Но ac_type_mask берем от ЛЮБЫХ записей этого ВС (не только планерных)
             aircraft_query = """
-            SELECT DISTINCT aircraft_number
-            FROM heli_pandas 
-            WHERE aircraft_number IS NOT NULL AND aircraft_number > 0
-            ORDER BY aircraft_number
+            SELECT 
+                h1.aircraft_number,
+                any(h2.ac_type_mask) as ac_type_mask
+            FROM (
+                SELECT DISTINCT aircraft_number
+                FROM heli_pandas 
+                WHERE aircraft_number IS NOT NULL AND aircraft_number > 0
+                    AND partno IN ('МИ-8Т', 'МИ-8П', 'МИ-8ПС', 'МИ-8ТП', 'МИ-8АМТ', 'МИ-8МТВ', 'МИ-17', 'МИ-26')
+            ) h1
+            JOIN heli_pandas h2 ON h1.aircraft_number = h2.aircraft_number
+            WHERE h2.ac_type_mask IS NOT NULL AND h2.ac_type_mask > 0
+            GROUP BY h1.aircraft_number
+            ORDER BY h1.aircraft_number
             """
             
             result = self.client.query(aircraft_query)
@@ -624,15 +636,23 @@ class DictionaryCreator:
                 self.logger.warning("⚠️ Нет данных о номерах ВС в heli_pandas")
                 return True
             
-            aircraft_numbers = {row[0] for row in result.result_rows}
+            # Создаем словарь aircraft_number -> ac_type_mask
+            aircraft_data_map = {}
             
-            # Создаем таблицу если не существует (АДДИТИВНАЯ)
+            for row in result.result_rows:
+                aircraft_number, ac_type_mask = row
+                aircraft_data_map[aircraft_number] = ac_type_mask
+            
+            self.logger.info(f"📋 Найдено {len(aircraft_data_map)} уникальных номеров ВС с ac_type_mask")
+            
+            # Создаем таблицу если не существует (АДДИТИВНАЯ) с новым полем ac_type_mask
             aircraft_table_sql = """
             CREATE TABLE IF NOT EXISTS dict_aircraft_number_flat (
                 aircraft_number UInt16,
                 formatted_number String,
                 registration_code String,
                 is_leading_zero UInt8 DEFAULT 0,
+                ac_type_mask UInt8 DEFAULT 0,
                 load_timestamp DateTime DEFAULT now()
             ) ENGINE = MergeTree()
             ORDER BY (aircraft_number, load_timestamp)
@@ -640,6 +660,43 @@ class DictionaryCreator:
             """
             
             self.client.query(aircraft_table_sql)
+            
+            # Проверяем и добавляем поле ac_type_mask если его нет в существующей таблице
+            try:
+                structure_result = self.client.query("DESCRIBE dict_aircraft_number_flat")
+                columns = [row[0] for row in structure_result.result_rows]
+                
+                if 'ac_type_mask' not in columns:
+                    self.logger.info("🔧 Добавляем поле ac_type_mask к существующей таблице...")
+                    alter_sql = "ALTER TABLE dict_aircraft_number_flat ADD COLUMN ac_type_mask UInt8 DEFAULT 0"
+                    self.client.query(alter_sql)
+                    self.logger.info("✅ Поле ac_type_mask добавлено к существующей таблице")
+                else:
+                    self.logger.info("💡 Поле ac_type_mask уже существует в таблице")
+                
+                # Заполняем ac_type_mask для существующих записей если они пустые
+                empty_count_result = self.client.query("SELECT COUNT(*) FROM dict_aircraft_number_flat WHERE ac_type_mask = 0")
+                empty_count = empty_count_result.result_rows[0][0]
+                
+                if empty_count > 0:
+                    self.logger.info(f"🔧 Заполняем ac_type_mask для {empty_count} существующих записей...")
+                    
+                    # Заполняем ac_type_mask на основе данных из heli_pandas
+                    for aircraft_number, ac_type_mask in aircraft_data_map.items():
+                        update_sql = f"""
+                        ALTER TABLE dict_aircraft_number_flat 
+                        UPDATE ac_type_mask = {ac_type_mask}
+                        WHERE aircraft_number = {aircraft_number} AND ac_type_mask = 0
+                        """
+                        self.client.query(update_sql)
+                    
+                    self.logger.info(f"✅ ac_type_mask заполнен для существующих записей")
+                else:
+                    self.logger.info("💡 ac_type_mask уже заполнен для всех записей")
+                    
+            except Exception as alter_error:
+                self.logger.warning(f"⚠️ Не удалось проверить/добавить поле ac_type_mask: {alter_error}")
+                # Продолжаем выполнение
             
             # Получаем существующие номера для аддитивности
             existing_query = "SELECT DISTINCT aircraft_number FROM dict_aircraft_number_flat"
@@ -652,7 +709,7 @@ class DictionaryCreator:
                 self.logger.info("📋 Словарь номеров ВС пуст")
             
             # Определяем новые номера для добавления
-            new_numbers = aircraft_numbers - existing_numbers
+            new_numbers = set(aircraft_data_map.keys()) - existing_numbers
             
             if not new_numbers:
                 self.logger.info("✅ Все номера ВС уже существуют в словаре")
@@ -665,26 +722,33 @@ class DictionaryCreator:
                     formatted_number = f"{aircraft_number:05d}"
                     registration_code = f"RA-{formatted_number}"
                     is_leading_zero = 1 if aircraft_number < 10000 else 0
+                    ac_type_mask = aircraft_data_map[aircraft_number]
                     
                     aircraft_data.append([
                         aircraft_number, formatted_number, registration_code, 
-                        is_leading_zero, current_timestamp
+                        is_leading_zero, ac_type_mask, current_timestamp
                     ])
                 
-                # Аддитивная загрузка
+                # Аддитивная загрузка с новым полем ac_type_mask
                 self.client.insert('dict_aircraft_number_flat', aircraft_data,
                                  column_names=['aircraft_number', 'formatted_number', 
-                                             'registration_code', 'is_leading_zero', 'load_timestamp'])
+                                             'registration_code', 'is_leading_zero', 'ac_type_mask', 'load_timestamp'])
                 
-                self.logger.info(f"✅ Добавлено {len(aircraft_data)} новых номеров ВС (аддитивно)")
+                self.logger.info(f"✅ Добавлено {len(aircraft_data)} новых номеров ВС с ac_type_mask (аддитивно)")
+                
+                # Показываем примеры обогащенных данных
+                self.logger.info("📋 Примеры обогащенных записей:")
+                for i, (aircraft_number, formatted_number, registration_code, is_leading_zero, ac_type_mask, _) in enumerate(aircraft_data[:3]):
+                    self.logger.info(f"  {aircraft_number} → {registration_code} (ac_type_mask: {ac_type_mask})")
             
-            # Создаем/обновляем ClickHouse Dictionary объект
+            # Создаем/обновляем ClickHouse Dictionary объект с полем ac_type_mask
             aircraft_dict_ddl = f"""
             CREATE OR REPLACE DICTIONARY aircraft_number_dict_flat (
                 aircraft_number UInt16,
                 formatted_number String,
                 registration_code String,
-                is_leading_zero UInt8
+                is_leading_zero UInt8,
+                ac_type_mask UInt8
             )
             PRIMARY KEY aircraft_number
             SOURCE(CLICKHOUSE(
@@ -700,7 +764,7 @@ class DictionaryCreator:
             self.client.query(aircraft_dict_ddl)
             
             total_count = len(existing_numbers) + len(new_numbers if new_numbers else [])
-            self.logger.info(f"✅ Словарь номеров ВС готов: {total_count} записей")
+            self.logger.info(f"✅ Словарь номеров ВС с ac_type_mask готов: {total_count} записей")
             
             return True
             
@@ -741,10 +805,11 @@ class DictionaryCreator:
             self.logger.info("   - dict_serialno_flat → serialno_dict_flat") 
             self.logger.info("   - dict_owner_flat → owner_dict_flat")
             self.logger.info("   - dict_ac_type_flat → ac_type_dict_flat")
-            self.logger.info("   - dict_aircraft_number_flat → aircraft_number_dict_flat")
+            self.logger.info("   - dict_aircraft_number_flat → aircraft_number_dict_flat (с ac_type_mask)")
             self.logger.info("✅ НЕ АДДИТИВНЫЙ словарь:")
             self.logger.info("   - dict_status_flat → status_dict_flat")
             self.logger.info("🔥 Поддержка dictGet: ПОЛНАЯ для всех словарей")
+            self.logger.info("🚁 aircraft_number_dict_flat теперь содержит ac_type_mask для Flame GPU")
             
             return True
             

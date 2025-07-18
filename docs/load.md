@@ -44,31 +44,22 @@
 - `dict_serialno_flat` → `serialno_dict_flat` (Dictionary объект)  
 - `dict_owner_flat` → `owner_dict_flat` (Dictionary объект)
 - `dict_ac_type_flat` → `ac_type_dict_flat` (Dictionary объект)
-- `dict_aircraft_number_flat` → `aircraft_number_dict_flat` (Dictionary объект)
+- `dict_aircraft_number_flat` → `aircraft_number_dict_flat` (Dictionary объект + ac_type_mask для Flame GPU, 279 ВС)
 
 #### НЕ АДДИТИВНЫЙ словарь (пересоздается)
 - `dict_status_flat` → `status_dict_flat` (Dictionary объект)
 
 ### Использование dictGet
-```sql
--- Получение партномера по ID
-SELECT dictGet('partno_dict_flat', 'partno', partseqno_i) FROM heli_pandas;
-
--- Получение названия статуса по ID  
-SELECT dictGet('status_dict_flat', 'status_name', status_id) FROM heli_pandas;
-
--- Получение регистрационного кода ВС
-SELECT dictGet('aircraft_number_dict_flat', 'registration_code', aircraft_number) FROM heli_pandas;
-```
+Система поддерживает получение данных из словарей через функции dictGet:
+- Партномера по ID из partno_dict_flat
+- Названия статусов по ID из status_dict_flat  
+- Регистрационные коды ВС из aircraft_number_dict_flat
+- ac_type_mask для Flame GPU операций из aircraft_number_dict_flat (возвращает корректные значения 32 для Ми-8 или 64 для Ми-17, НЕ нули)
 
 ### Создание всех словарей
-```bash
-# Создание всех словарей одной командой
-python3 code/create_all_dictionaries.py
-
-# Создание только основных словарей (старое поведение)
-python3 code/dictionary_creator.py
-```
+Доступны утилиты для создания словарей:
+- create_all_dictionaries.py - создание всех словарей одной командой
+- dictionary_creator.py - создание только основных словарей (старое поведение)
 
 ### Аддитивность
 - **АДДИТИВНЫЕ** словари сохраняют данные между запусками ETL

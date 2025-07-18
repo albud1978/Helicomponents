@@ -136,17 +136,17 @@ class ETLMaster:
             'critical': True
         },
         {
-            'script': 'dictionary_creator.py',
-            'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
-            'dependencies': ['heli_pandas'],
-            'result_table': 'dict_status_flat',
-            'critical': False
-        },
-        {
             'script': 'enrich_heli_pandas.py',
             'description': 'Обогащение ac_type_mask',
             'dependencies': ['heli_pandas'],
             'result_table': 'heli_pandas',
+            'critical': False
+        },
+        {
+            'script': 'dictionary_creator.py',
+            'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
+            'dependencies': ['heli_pandas'],
+            'result_table': 'dict_status_flat',
             'critical': False
         },
         {

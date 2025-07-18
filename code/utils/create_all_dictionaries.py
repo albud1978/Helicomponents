@@ -55,7 +55,7 @@ def main():
             print("   - dict_serialno_flat → serialno_dict_flat (dictGet)")
             print("   - dict_owner_flat → owner_dict_flat (dictGet)")
             print("   - dict_ac_type_flat → ac_type_dict_flat (dictGet)")
-            print("   - dict_aircraft_number_flat → aircraft_number_dict_flat (dictGet)")
+            print("   - dict_aircraft_number_flat → aircraft_number_dict_flat (dictGet + ac_type_mask)")
             print("✅ НЕ АДДИТИВНЫЙ словарь готов:")
             print("   - dict_status_flat → status_dict_flat (dictGet)")
             print()
@@ -63,9 +63,11 @@ def main():
             print("   SELECT dictGet('partno_dict_flat', 'partno', partseqno_i) FROM heli_pandas")
             print("   SELECT dictGet('status_dict_flat', 'status_name', status_id) FROM heli_pandas")
             print("   SELECT dictGet('aircraft_number_dict_flat', 'registration_code', aircraft_number) FROM heli_pandas")
+            print("   SELECT dictGet('aircraft_number_dict_flat', 'ac_type_mask', aircraft_number) FROM heli_pandas")
             print()
             print("💡 Аддитивные словари автоматически обновляются при новых данных!")
             print("📋 Словарь статусов пересоздается при каждом запуске")
+            print("🚁 aircraft_number_dict_flat содержит ac_type_mask для Flame GPU операций")
             
             return 0
         else:

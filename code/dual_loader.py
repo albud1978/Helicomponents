@@ -620,8 +620,8 @@ def main(version_date=None, version_id=None):
         step_start = time.time()
         if version_date is None:
             # Автоматическое извлечение из метаданных Excel (совместимость)
-            status_path = Path('data_input/source_data/Status_Components.xlsx')
-            version_date = extract_version_date_from_excel(status_path)
+        status_path = Path('data_input/source_data/Status_Components.xlsx')
+        version_date = extract_version_date_from_excel(status_path)
             print(f"✅ [ЭТАП 4] Версия определена (из Excel): {version_date}")
         else:
             print(f"✅ [ЭТАП 4] Версия получена (из ETL): {version_date}, version_id: {version_id}")
@@ -864,5 +864,5 @@ if __name__ == "__main__":
         version_date = datetime.strptime(args.version_date, '%Y-%m-%d').date()
         main(version_date=version_date, version_id=args.version_id)
     else:
-        main()
+    main()
  
