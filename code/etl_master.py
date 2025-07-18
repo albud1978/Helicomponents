@@ -115,16 +115,9 @@ class ETLMaster:
             'critical': True
         },
         {
-            'script': 'program_loader.py',
-            'description': 'Flight Program - программы полетов', 
-            'dependencies': [],
-            'result_table': 'flight_program',
-            'critical': True
-        },
-        {
             'script': 'program_ac_loader.py',
             'description': 'Program AC - связка программ и ВС',
-            'dependencies': ['flight_program'],
+            'dependencies': [],
             'result_table': 'program_ac', 
             'critical': True
         },
@@ -147,6 +140,13 @@ class ETLMaster:
             'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
             'dependencies': ['heli_pandas'],
             'result_table': 'dict_status_flat',
+            'critical': False
+        },
+        {
+            'script': 'program_fl_direct_loader.py',
+            'description': 'Flight Program FL Direct - прямой тензор программ полетов на 4000 дней',
+            'dependencies': ['dict_aircraft_number_flat'],
+            'result_table': 'flight_program_fl',
             'critical': False
         },
         {
@@ -247,8 +247,8 @@ class ETLMaster:
                 'heli_pandas', 'heli_raw',           # создается dual_loader.py  
                 'md_components',                     # создается md_components_loader.py
                 'status_overhaul',                   # создается status_overhaul_loader.py
-                'flight_program',                    # создается program_loader.py
                 'program_ac',                        # создается program_ac_loader.py
+                'flight_program_fl',                 # создается program_fl_direct_loader.py
                 
                 # ИСКЛЮЧЕНЫ ИЗ УДАЛЕНИЯ - ИСТИННО АДДИТИВНЫЕ СЛОВАРНЫЕ ТАБЛИЦЫ (MergeTree):
                 # 'dict_partno_flat', 'dict_serialno_flat', 'dict_owner_flat',   # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
