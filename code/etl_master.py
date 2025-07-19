@@ -143,13 +143,6 @@ class ETLMaster:
             'critical': False
         },
         {
-            'script': 'program_fl_direct_loader.py',
-            'description': 'Flight Program FL Direct - прямой тензор программ полетов на 4000 дней',
-            'dependencies': ['dict_aircraft_number_flat'],
-            'result_table': 'flight_program_fl',
-            'critical': False
-        },
-        {
             'script': 'calculate_beyond_repair.py',
             'description': 'Расчет Beyond Repair (br)',
             'dependencies': ['md_components'],
@@ -161,6 +154,21 @@ class ETLMaster:
             'description': 'Обогащение MD Components',
             'dependencies': ['md_components', 'heli_pandas'],
             'result_table': 'md_components',
+            'critical': False
+        },
+        # === ТЕНЗОРЫ (в самом конце, когда все данные готовы) ===
+        {
+            'script': 'program_fl_direct_loader.py',
+            'description': 'Flight Program FL Direct - прямой тензор программ полетов на 4000 дней',
+            'dependencies': ['dict_aircraft_number_flat'],
+            'result_table': 'flight_program_fl',
+            'critical': False
+        },
+        {
+            'script': 'program_ac_direct_loader.py',
+            'description': 'Flight Program AC Direct - прямой тензор операций ВС на 4000 дней с постпроцессингом',
+            'dependencies': ['heli_pandas', 'md_components'],
+            'result_table': 'flight_program_ac',
             'critical': False
         }
     ]
@@ -249,6 +257,7 @@ class ETLMaster:
                 'status_overhaul',                   # создается status_overhaul_loader.py
                 'program_ac',                        # создается program_ac_loader.py
                 'flight_program_fl',                 # создается program_fl_direct_loader.py
+                'flight_program_ac',                 # создается program_ac_direct_loader.py
                 
                 # ИСКЛЮЧЕНЫ ИЗ УДАЛЕНИЯ - ИСТИННО АДДИТИВНЫЕ СЛОВАРНЫЕ ТАБЛИЦЫ (MergeTree):
                 # 'dict_partno_flat', 'dict_serialno_flat', 'dict_owner_flat',   # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)

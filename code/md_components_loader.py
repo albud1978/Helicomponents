@@ -117,7 +117,7 @@ def prepare_md_data(df, version_date, version_id=1):
         df['version_id'] = version_id
         
         # Обработка строковых полей для ClickHouse
-        string_columns = ['partno', 'group_by', 'ac_typ']
+        string_columns = ['partno', 'ac_typ']
         for col in string_columns:
             if col in df.columns:
                 df[col] = df[col].astype(str)
@@ -128,7 +128,7 @@ def prepare_md_data(df, version_date, version_id=1):
 
         # Обработка числовых полей
         numeric_columns = [
-            'comp_number', 'type_restricted', 'common_restricted1', 'common_restricted2',
+            'comp_number', 'group_by', 'type_restricted', 'common_restricted1', 'common_restricted2',
             'trigger_interval', 'partout_time', 'assembly_time', 'repair_time',
             'll_mi8', 'oh_mi8', 'oh_threshold_mi8', 'll_mi17', 'oh_mi17',
             'repair_price', 'purchase_price', 'sne', 'ppr'
@@ -164,7 +164,7 @@ def create_md_table(client):
             -- Основные идентификаторы
             `partno` Nullable(String),              -- Чертежный номер
             `comp_number` Nullable(Float64),        -- Количество на ВС
-            `group_by` Nullable(String),            -- Группировка
+            `group_by` Nullable(UInt8),             -- Группировка
             `ac_typ` Nullable(String),              -- Тип ВС
             
             -- Ограничения

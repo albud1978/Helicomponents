@@ -175,18 +175,30 @@ class YearExpansionEngine:
     
     def find_matching_data(self, target_month: int, target_year: int, monthly_data: Dict[int, float]) -> float:
         """
-        Находит подходящие данные по месяцу/году
+        Находит подходящие данные по месяцу/году используя последнее известное релевантное значение
         
         Логика:
-        1. Ищем точное совпадение месяца в доступных данных
-        2. Если нет - возвращаем 0.0
+        1. Если есть точное совпадение месяца - используем его
+        2. Если нет - ищем последний заполненный месяц (по убыванию от target_month)
+        3. Если ничего не найдено до января - ищем от декабря вниз
+        4. Если ничего не найдено - возвращаем 0.0
         """
         try:
-            # Проверяем наличие данных за этот месяц
-            if target_month in monthly_data:
+            # 1. Точное совпадение месяца
+            if target_month in monthly_data and monthly_data[target_month] != 0:
                 return monthly_data[target_month]
             
-            # Если нет данных за этот месяц - возвращаем 0
+            # 2. Ищем последний заполненный месяц (от target_month вниз до 1)
+            for month in range(target_month - 1, 0, -1):
+                if month in monthly_data and monthly_data[month] != 0:
+                    return monthly_data[month]
+            
+            # 3. Ищем от декабря вниз до target_month
+            for month in range(12, target_month, -1):
+                if month in monthly_data and monthly_data[month] != 0:
+                    return monthly_data[month]
+            
+            # 4. Если ничего не найдено - возвращаем 0
             return 0.0
             
         except Exception as e:
