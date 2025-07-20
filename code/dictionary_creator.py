@@ -648,7 +648,7 @@ class DictionaryCreator:
             # Создаем таблицу если не существует (АДДИТИВНАЯ) с новым полем ac_type_mask
             aircraft_table_sql = """
             CREATE TABLE IF NOT EXISTS dict_aircraft_number_flat (
-                aircraft_number UInt16,
+                aircraft_number UInt32,
                 formatted_number String,
                 registration_code String,
                 is_leading_zero UInt8 DEFAULT 0,
@@ -744,7 +744,7 @@ class DictionaryCreator:
             # Создаем/обновляем ClickHouse Dictionary объект с полем ac_type_mask
             aircraft_dict_ddl = f"""
             CREATE OR REPLACE DICTIONARY aircraft_number_dict_flat (
-                aircraft_number UInt16,
+                aircraft_number UInt32,
                 formatted_number String,
                 registration_code String,
                 is_leading_zero UInt8,

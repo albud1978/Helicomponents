@@ -436,27 +436,31 @@ class ProgramACDirectLoader:
             return []
     
     def create_flight_program_ac_table(self) -> bool:
-        """Создание таблицы flight_program_ac"""
+        """Создание оптимизированной таблицы flight_program_ac"""
         try:
             # Удаляем таблицу если существует
             self.client.execute("DROP TABLE IF EXISTS flight_program_ac")
             
-            # Создаем новую таблицу
+            # Создаем новую оптимизированную таблицу (flat structure)
             create_table_sql = """
             CREATE TABLE flight_program_ac (
-                ac_type_mask UInt8,
-                flight_date Date,
-                field_name String,
-                daily_value Float32,
+                dates Date,                        -- переименовано из flight_date
+                ops_counter_mi8 UInt16,            -- счетчики операций: 0-65535 достаточно
+                ops_counter_mi17 UInt16,           -- счетчики операций: 0-65535 достаточно
+                ops_counter_total UInt16,          -- вычисляемое поле: сумма двух UInt16
+                new_counter_mi17 UInt8,            -- новые поставки: 0-255 достаточно
+                trigger_program_mi8 Int8,          -- триггеры: -128 до 127 достаточно
+                trigger_program_mi17 Int8,         -- триггеры: -128 до 127 достаточно
+                trigger_program Int8,              -- триггеры: -128 до 127 достаточно
                 version_date Date DEFAULT today(),
                 version_id UInt8 DEFAULT 1
             ) ENGINE = MergeTree()
-            ORDER BY (ac_type_mask, field_name, flight_date)
+            ORDER BY dates
             SETTINGS index_granularity = 8192
             """
             
             self.client.execute(create_table_sql)
-            self.logger.info("✅ Таблица flight_program_ac создана")
+            self.logger.info("✅ Оптимизированная таблица flight_program_ac создана")
             return True
             
         except Exception as e:
@@ -467,49 +471,79 @@ class ProgramACDirectLoader:
                            tensor_engine: ACTensorEngine, calendar: List[Tuple],
                            year_mapping: Dict[str, Tuple[int, int]], 
                            base_date: date, version_id: int = 1) -> List[List]:
-        """Генерирует данные тензора для всех полей и дат"""
+        """Генерирует данные тензора в flat структуре (одна запись на дату)"""
         try:
-            self.logger.info("🔄 Генерация данных тензора...")
+            self.logger.info("🔄 Генерация оптимизированных данных тензора...")
             
-            # Объединяем все данные
-            all_data = ops_data + new_data
+            # Создаем индексы данных по полям для быстрого доступа
+            ops_data_by_field = {}
+            new_data_by_field = {}
+            
+            for record in ops_data:
+                field_name = record['field_name']
+                ops_data_by_field[field_name] = record
+            
+            for record in new_data:
+                field_name = record['field_name'] 
+                new_data_by_field[field_name] = record
             
             insert_data = []
             
-            # Получаем уникальные типы ВС из данных
-            unique_ac_types = set()
-            for record in all_data:
-                unique_ac_types.add(record['ac_type_mask'])
+            self.logger.info(f"📊 Генерация flat-структуры: {len(calendar):,} дат")
             
-            self.logger.info(f"📊 Обрабатываем {len(all_data)} полей для {len(unique_ac_types)} типов ВС")
-            
-            for record in all_data:
-                ac_type_mask = record['ac_type_mask']
-                field_name = record['field_name'] 
-                column_data = record['column_data']
-                distribution_type = record['distribution_type']
+            # Генерируем одну запись на дату со всеми полями
+            for flight_date, month_number, year_number, is_last_day in calendar:
                 
-                self.logger.info(f"   🔄 Обработка {field_name} (ac_type_mask={ac_type_mask})")
+                # Получаем значения для всех полей (приводим к целым числам)
+                ops_mi8 = 0
+                ops_mi17 = 0
+                new_mi17 = 0
                 
-                # Генерируем значения для каждого дня
-                for flight_date, month_number, year_number, is_last_day in calendar:
-                    # Распределяем значение по дням
-                    # Передаем все данные по колонкам и соответствие колонок для правильного размножения
-                    daily_value = tensor_engine.distribute_column_value(
-                        flight_date, month_number, year_number, column_data, 
-                        distribution_type, year_mapping
-                    )
+                # ops_counter_mi8 (приводим к UInt16)
+                if 'ops_counter_mi8' in ops_data_by_field:
+                    record = ops_data_by_field['ops_counter_mi8']
+                    ops_mi8 = int(tensor_engine.distribute_column_value(
+                        flight_date, month_number, year_number, record['column_data'],
+                        record['distribution_type'], year_mapping
+                    ))
+                
+                # ops_counter_mi17 (приводим к UInt16)
+                if 'ops_counter_mi17' in ops_data_by_field:
+                    record = ops_data_by_field['ops_counter_mi17']
+                    ops_mi17 = int(tensor_engine.distribute_column_value(
+                        flight_date, month_number, year_number, record['column_data'],
+                        record['distribution_type'], year_mapping
+                    ))
+                
+                # new_counter_mi17 (приводим к UInt8)
+                if 'new_counter_mi17' in new_data_by_field:
+                    record = new_data_by_field['new_counter_mi17']
+                    new_mi17 = int(tensor_engine.distribute_column_value(
+                        flight_date, month_number, year_number, record['column_data'],
+                        record['distribution_type'], year_mapping
+                    ))
                     
-                    insert_data.append([
-                        ac_type_mask,
-                        flight_date,
-                        field_name,
-                        daily_value,
-                        base_date,
-                        version_id
-                    ])
+                # Вычисляемые поля (рассчитываются позже в add_calculated_fields)
+                ops_total = 0  # будет рассчитано позже (UInt16)
+                trigger_mi8 = 0  # будет рассчитано позже (Int8)
+                trigger_mi17 = 0  # будет рассчитано позже (Int8) 
+                trigger_total = 0  # будет рассчитано позже (Int8)
+                
+                # Добавляем запись с flat структурой
+                insert_data.append([
+                    flight_date,    # dates
+                    ops_mi8,        # ops_counter_mi8
+                    ops_mi17,       # ops_counter_mi17
+                    ops_total,      # ops_counter_total (рассчитается позже)
+                    new_mi17,       # new_counter_mi17
+                    trigger_mi8,    # trigger_program_mi8 (рассчитается позже)
+                    trigger_mi17,   # trigger_program_mi17 (рассчитается позже)
+                    trigger_total,  # trigger_program (рассчитается позже)
+                    base_date,      # version_date
+                    version_id      # version_id
+                ])
             
-            self.logger.info(f"✅ Сгенерировано {len(insert_data):,} записей тензора")
+            self.logger.info(f"✅ Сгенерировано {len(insert_data):,} записей flat-тензора")
             return insert_data
             
         except Exception as e:
@@ -517,13 +551,15 @@ class ProgramACDirectLoader:
             raise
     
     def insert_tensor_data(self, insert_data: List[List]) -> bool:
-        """Массовая вставка тензора в ClickHouse"""
+        """Массовая вставка оптимизированного тензора в ClickHouse"""
         try:
-            self.logger.info(f"💾 Начинаем вставку {len(insert_data):,} записей...")
+            self.logger.info(f"💾 Начинаем вставку {len(insert_data):,} записей в flat структуру...")
             
+            # Новая структура колонок (flat)
             column_names = [
-                'ac_type_mask', 'flight_date', 'field_name', 
-                'daily_value', 'version_date', 'version_id'
+                'dates', 'ops_counter_mi8', 'ops_counter_mi17', 'ops_counter_total',
+                'new_counter_mi17', 'trigger_program_mi8', 'trigger_program_mi17', 
+                'trigger_program', 'version_date', 'version_id'
             ]
             
             # Вставляем батчами
@@ -533,7 +569,7 @@ class ProgramACDirectLoader:
                 self.client.execute('INSERT INTO flight_program_ac VALUES', batch)
                 self.logger.info(f"📦 Вставлено {i + len(batch):,} / {len(insert_data):,} записей")
             
-            self.logger.info("✅ Данные успешно загружены в flight_program_ac")
+            self.logger.info("✅ Оптимизированные данные успешно загружены в flight_program_ac")
             return True
             
         except Exception as e:
@@ -541,21 +577,19 @@ class ProgramACDirectLoader:
             return False
     
     def validate_tensor(self) -> bool:
-        """Валидация созданного тензора flight_program_ac"""
+        """Валидация оптимизированного тензора flight_program_ac"""
         try:
-            self.logger.info("🔍 === ВАЛИДАЦИЯ ТЕНЗОРА flight_program_ac ===")
+            self.logger.info("🔍 === ВАЛИДАЦИЯ ОПТИМИЗИРОВАННОГО ТЕНЗОРА ===")
             
             # 1. Общая статистика
             stats_query = """
             SELECT 
                 COUNT(*) as total_records,
-                COUNT(DISTINCT ac_type_mask) as unique_ac_types,
-                COUNT(DISTINCT field_name) as unique_fields,
-                COUNT(DISTINCT flight_date) as unique_dates,
-                MIN(flight_date) as min_date,
-                MAX(flight_date) as max_date,
-                AVG(daily_value) as avg_value,
-                SUM(CASE WHEN daily_value > 0 THEN 1 ELSE 0 END) as non_zero_records
+                COUNT(DISTINCT dates) as unique_dates,
+                MIN(dates) as min_date,
+                MAX(dates) as max_date,
+                SUM(ops_counter_mi8 + ops_counter_mi17 + new_counter_mi17) as total_sum,
+                COUNT(CASE WHEN ops_counter_total > 0 THEN 1 END) as non_zero_records
             FROM flight_program_ac
             """
             stats_result = self.client.execute(stats_query)
@@ -563,60 +597,52 @@ class ProgramACDirectLoader:
             
             self.logger.info(f"📊 Общая статистика:")
             self.logger.info(f"   Всего записей: {row[0]:,}")
-            self.logger.info(f"   Типов ВС: {row[1]:,}")
-            self.logger.info(f"   Полей: {row[2]:,}")
-            self.logger.info(f"   Уникальных дат: {row[3]:,}")
-            self.logger.info(f"   Период: {row[4]} - {row[5]}")
-            self.logger.info(f"   Среднее значение: {row[6]:.2f}")
-            self.logger.info(f"   Записей с значением > 0: {row[7]:,}")
+            self.logger.info(f"   Уникальных дат: {row[1]:,}")
+            self.logger.info(f"   Период: {row[2]} - {row[3]}")
+            self.logger.info(f"   Общая сумма значений: {row[4]:.1f}")
+            self.logger.info(f"   Записей с ops_counter_total > 0: {row[5]:,}")
             
-            # 2. Распределение по типам полей
-            field_type_stats = self.client.execute("""
-            SELECT 
-                CASE 
-                    WHEN field_name LIKE 'ops_counter%' THEN 'ops_counter'
-                    WHEN field_name LIKE 'new_counter%' THEN 'new_counter'
-                    ELSE 'other'
-                END as field_type,
-                COUNT(*) as records_count,
-                COUNT(DISTINCT field_name) as fields_count,
-                SUM(CASE WHEN daily_value > 0 THEN 1 ELSE 0 END) as non_zero_count
-            FROM flight_program_ac
-            GROUP BY field_type
-            ORDER BY field_type
-            """)
-            
-            self.logger.info(f"📋 Распределение по типам полей:")
-            for field_type, records, fields, non_zero in field_type_stats:
-                self.logger.info(f"   {field_type}: {records:,} записей, {fields} полей, {non_zero:,} ненулевых")
-            
-            # 3. Проверка полей
+            # 2. Проверка полей
             field_stats = self.client.execute("""
             SELECT 
-                field_name,
-                COUNT(DISTINCT ac_type_mask) as ac_types,
-                SUM(daily_value) as total_value,
-                SUM(CASE WHEN daily_value > 0 THEN 1 ELSE 0 END) as non_zero_count
+                'ops_counter_mi8' as field_name,
+                toInt64(SUM(ops_counter_mi8)) as total_sum,
+                toInt64(COUNT(CASE WHEN ops_counter_mi8 > 0 THEN 1 END)) as non_zero
             FROM flight_program_ac
-            GROUP BY field_name
-            ORDER BY field_name
+            UNION ALL
+            SELECT 
+                'ops_counter_mi17' as field_name,
+                toInt64(SUM(ops_counter_mi17)) as total_sum,
+                toInt64(COUNT(CASE WHEN ops_counter_mi17 > 0 THEN 1 END)) as non_zero
+            FROM flight_program_ac
+            UNION ALL
+            SELECT 
+                'ops_counter_total' as field_name,
+                toInt64(SUM(ops_counter_total)) as total_sum,
+                toInt64(COUNT(CASE WHEN ops_counter_total > 0 THEN 1 END)) as non_zero
+            FROM flight_program_ac
+            UNION ALL
+            SELECT 
+                'trigger_program' as field_name,
+                toInt64(SUM(trigger_program)) as total_sum,
+                toInt64(COUNT(CASE WHEN trigger_program != 0 THEN 1 END)) as non_zero
+            FROM flight_program_ac
             """)
             
             self.logger.info(f"📋 Статистика по полям:")
-            for field_name, ac_types, total_val, non_zero in field_stats:
-                field_type = 'ops_counter' if 'ops_counter' in field_name else 'new_counter' if 'new_counter' in field_name else 'other'
-                self.logger.info(f"   {field_name} ({field_type}): {ac_types} типов ВС, сумма={total_val:.1f}, ненулевых={non_zero:,}")
+            for field_name, total_sum, non_zero in field_stats:
+                self.logger.info(f"   {field_name}: сумма={total_sum:.1f}, ненулевых={non_zero:,}")
             
-            # 4. Простые проверки качества
+            # 3. Простые проверки качества
             issues = []
             
             if row[0] == 0:
                 issues.append("❌ Нет записей в таблице")
             
-            if row[3] != 4000:
-                issues.append(f"❌ Неправильное количество дней: {row[3]} вместо 4000")
+            if row[1] != 4000:
+                issues.append(f"❌ Неправильное количество дней: {row[1]} вместо 4000")
             
-            if row[7] == 0:
+            if row[4] == 0:
                 issues.append("❌ Все значения равны нулю")
             
             # Результат валидации
@@ -627,7 +653,7 @@ class ProgramACDirectLoader:
                 return False
             else:
                 self.logger.info(f"✅ Все проверки валидации пройдены успешно!")
-                self.logger.info(f"✅ Тензор flight_program_ac готов для использования!")
+                self.logger.info(f"✅ Оптимизированный тензор готов для использования!")
                 return True
                 
         except Exception as e:
@@ -635,130 +661,91 @@ class ProgramACDirectLoader:
             return False
     
     def add_calculated_fields(self) -> bool:
-        """Добавляет вычисляемые поля в таблицу flight_program_ac"""
+        """Обновляет вычисляемые поля в оптимизированной таблице flight_program_ac"""
         try:
-            self.logger.info("🔄 === ПОСТПРОЦЕССИНГ: ДОБАВЛЕНИЕ ВЫЧИСЛЯЕМЫХ ПОЛЕЙ ===")
+            self.logger.info("🔄 === ПОСТПРОЦЕССИНГ: РАСЧЁТ ВЫЧИСЛЯЕМЫХ ПОЛЕЙ ===")
             
-            # 1. ops_counter_total = ops_counter_mi8 + ops_counter_mi17
-            self.logger.info("📊 Добавление поля ops_counter_total...")
-            total_query = """
-            INSERT INTO flight_program_ac (ac_type_mask, flight_date, field_name, daily_value, version_date, version_id)
-            SELECT 
-                96 as ac_type_mask,  -- Multihot для МИ-8 + МИ-17 (32+64=96)
-                flight_date,
-                'ops_counter_total' as field_name,
-                COALESCE(mi8.daily_value, 0) + COALESCE(mi17.daily_value, 0) as daily_value,
-                mi8.version_date,
-                mi8.version_id
-            FROM (
-                SELECT flight_date, daily_value, version_date, version_id
-                FROM flight_program_ac 
-                WHERE field_name = 'ops_counter_mi8'
-            ) mi8
-            FULL OUTER JOIN (
-                SELECT flight_date, daily_value
-                FROM flight_program_ac 
-                WHERE field_name = 'ops_counter_mi17'
-            ) mi17 ON mi8.flight_date = mi17.flight_date
+            # 1. ops_counter_total = ops_counter_mi8 + ops_counter_mi17 (простое UPDATE)
+            self.logger.info("📊 Расчёт ops_counter_total...")
+            total_update = """
+            ALTER TABLE flight_program_ac
+            UPDATE ops_counter_total = ops_counter_mi8 + ops_counter_mi17
+            WHERE 1 = 1
             """
-            self.client.execute(total_query)
+            self.client.execute(total_update)
             
-            # 2. trigger_program_mi8 = current - previous (временно без корректировки первой даты)
-            self.logger.info("📊 Добавление поля trigger_program_mi8...")
-            trigger_mi8_query = """
-            INSERT INTO flight_program_ac (ac_type_mask, flight_date, field_name, daily_value, version_date, version_id)
-            WITH ranked_data AS (
+            # 2. Trigger поля вычисляем через временную таблицу и замену
+            self.logger.info("📊 Расчёт trigger полей через временную таблицу...")
+            
+            # Создаем временную таблицу с вычисленными trigger полями (с правильной структурой MergeTree)
+            temp_calc_sql = """
+            CREATE TABLE flight_program_ac_temp (
+                dates Date,
+                ops_counter_mi8 UInt16,
+                ops_counter_mi17 UInt16,
+                ops_counter_total UInt16,
+                new_counter_mi17 UInt8,
+                trigger_program_mi8 Int8,
+                trigger_program_mi17 Int8,
+                trigger_program Int8,
+                version_date Date,
+                version_id UInt8
+            ) ENGINE = MergeTree()
+            ORDER BY dates
+            AS
                 SELECT 
-                    flight_date,
-                    daily_value,
-                    version_date,
-                    version_id,
-                    lagInFrame(daily_value, 1, 0) OVER (ORDER BY flight_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as prev_value
-                FROM flight_program_ac 
-                WHERE field_name = 'ops_counter_mi8'
-                ORDER BY flight_date
-            )
-            SELECT 
-                32 as ac_type_mask,
-                flight_date,
-                'trigger_program_mi8' as field_name,
-                daily_value - prev_value as daily_value,
+                dates,
+                ops_counter_mi8,
+                ops_counter_mi17, 
+                ops_counter_total,
+                new_counter_mi17,
+                toInt8(ops_counter_mi8 - lagInFrame(ops_counter_mi8, 1, 0) 
+                    OVER (ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi8,
+                toInt8(ops_counter_mi17 - lagInFrame(ops_counter_mi17, 1, 0)
+                    OVER (ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi17,
+                toInt8(0) as trigger_program,  -- временное значение, будет пересчитано
                 version_date,
                 version_id
-            FROM ranked_data
+            FROM flight_program_ac
+            ORDER BY dates
             """
-            self.client.execute(trigger_mi8_query)
+            self.client.execute(temp_calc_sql)
             
-            # 3. trigger_program_mi17 = current - previous (временно без корректировки первой даты)
-            self.logger.info("📊 Добавление поля trigger_program_mi17...")
-            trigger_mi17_query = """
-            INSERT INTO flight_program_ac (ac_type_mask, flight_date, field_name, daily_value, version_date, version_id)
-            WITH ranked_data AS (
-                SELECT 
-                    flight_date,
-                    daily_value,
-                    version_date,
-                    version_id,
-                    lagInFrame(daily_value, 1, 0) OVER (ORDER BY flight_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as prev_value
-                FROM flight_program_ac 
-                WHERE field_name = 'ops_counter_mi17'
-                ORDER BY flight_date
-            )
-            SELECT 
-                64 as ac_type_mask,
-                flight_date,
-                'trigger_program_mi17' as field_name,
-                daily_value - prev_value as daily_value,
-                version_date,
-                version_id
-            FROM ranked_data
+            # Добавляем trigger_program = trigger_program_mi8 + trigger_program_mi17  
+            update_trigger_total_sql = """
+            ALTER TABLE flight_program_ac_temp
+            UPDATE trigger_program = trigger_program_mi8 + trigger_program_mi17
+            WHERE 1 = 1
             """
-            self.client.execute(trigger_mi17_query)
+            self.client.execute(update_trigger_total_sql)
             
-            # 4. trigger_program = trigger_program_mi8 + trigger_program_mi17
-            self.logger.info("📊 Добавление поля trigger_program...")
-            trigger_total_query = """
-            INSERT INTO flight_program_ac (ac_type_mask, flight_date, field_name, daily_value, version_date, version_id)
-            SELECT 
-                96 as ac_type_mask,  -- Multihot для МИ-8 + МИ-17 (32+64=96)
-                flight_date,
-                'trigger_program' as field_name,
-                COALESCE(mi8.daily_value, 0) + COALESCE(mi17.daily_value, 0) as daily_value,
-                mi8.version_date,
-                mi8.version_id
-            FROM (
-                SELECT flight_date, daily_value, version_date, version_id
-                FROM flight_program_ac 
-                WHERE field_name = 'trigger_program_mi8'
-            ) mi8
-            FULL OUTER JOIN (
-                SELECT flight_date, daily_value
-                FROM flight_program_ac 
-                WHERE field_name = 'trigger_program_mi17'
-            ) mi17 ON mi8.flight_date = mi17.flight_date
-            """
-            self.client.execute(trigger_total_query)
+            # Заменяем исходную таблицу
+            self.logger.info("📊 Замена таблицы с обновленными данными...")
+            self.client.execute("DROP TABLE flight_program_ac")
+            self.client.execute("RENAME TABLE flight_program_ac_temp TO flight_program_ac")
             
-            # Проверяем результаты
+            # Проверяем результаты расчётов
+            self.logger.info("🔍 Проверка результатов постпроцессинга...")
             stats_query = """
             SELECT 
-                field_name,
-                COUNT(*) as records,
-                SUM(CASE WHEN daily_value != 0 THEN 1 ELSE 0 END) as non_zero,
-                AVG(daily_value) as avg_value,
-                MIN(daily_value) as min_value,
-                MAX(daily_value) as max_value
+                COUNT(*) as total_records,
+                toInt64(SUM(ops_counter_total)) as sum_total,
+                toInt64(SUM(trigger_program)) as sum_trigger,
+                COUNT(CASE WHEN ops_counter_total > 0 THEN 1 END) as non_zero_total,
+                COUNT(CASE WHEN trigger_program != 0 THEN 1 END) as non_zero_trigger
             FROM flight_program_ac 
-            WHERE field_name IN ('ops_counter_total', 'trigger_program_mi8', 'trigger_program_mi17', 'trigger_program')
-            GROUP BY field_name
-            ORDER BY field_name
             """
             
             stats_result = self.client.execute(stats_query)
             
-            self.logger.info("✅ Вычисляемые поля добавлены:")
-            for field_name, records, non_zero, avg_val, min_val, max_val in stats_result:
-                self.logger.info(f"   {field_name}: {records} записей, ненулевых {non_zero}, среднее {avg_val:.1f}, диапазон [{min_val:.1f}, {max_val:.1f}]")
+            if stats_result:
+                row = stats_result[0]
+                self.logger.info("✅ Результаты постпроцессинга:")
+                self.logger.info(f"   Всего записей: {row[0]:,}")
+                self.logger.info(f"   Сумма ops_counter_total: {row[1]:.1f}")
+                self.logger.info(f"   Сумма trigger_program: {row[2]:.1f}")
+                self.logger.info(f"   Записей с ops_counter_total > 0: {row[3]:,}")
+                self.logger.info(f"   Записей с trigger_program ≠ 0: {row[4]:,}")
             
             return True
             
@@ -771,8 +758,8 @@ class ProgramACDirectLoader:
         try:
             self.logger.info("🔄 === КОРРЕКТИРОВКА ПЕРВЫХ ЗНАЧЕНИЙ TRIGGER ПОЛЕЙ ===")
             
-            # Получаем первую дату
-            first_date_query = "SELECT MIN(flight_date) FROM flight_program_ac"
+            # Получаем первую дату из новой структуры
+            first_date_query = "SELECT MIN(dates) FROM flight_program_ac"
             first_date_result = self.client.execute(first_date_query)
             first_date = first_date_result[0][0]
             self.logger.info(f"📅 Первая дата в календаре: {first_date}")
@@ -795,12 +782,11 @@ class ProgramACDirectLoader:
             mi8_component_count = mi8_count_result[0][0]
             self.logger.info(f"   МИ-8 компонентов в статусе 2: {mi8_component_count}")
             
-            # Получаем текущее первое значение ops_counter_mi8
+            # Получаем текущее первое значение ops_counter_mi8 из новой структуры
             mi8_first_ops_query = f"""
-            SELECT daily_value 
+            SELECT ops_counter_mi8 
             FROM flight_program_ac 
-            WHERE field_name = 'ops_counter_mi8' 
-            AND flight_date = '{first_date}'
+            WHERE dates = '{first_date}'
             """
             mi8_first_result = self.client.execute(mi8_first_ops_query)
             mi8_first_ops = mi8_first_result[0][0] if mi8_first_result else 0
@@ -810,12 +796,11 @@ class ProgramACDirectLoader:
             mi8_correction = mi8_component_count - mi8_first_ops
             self.logger.info(f"   Корректировка МИ-8: {mi8_component_count} - {mi8_first_ops} = {mi8_correction}")
             
-            # Обновляем первое значение
+            # Обновляем первое значение в новой структуре
             mi8_update_query = f"""
             ALTER TABLE flight_program_ac 
-            UPDATE daily_value = {mi8_correction}
-            WHERE field_name = 'trigger_program_mi8' 
-            AND flight_date = '{first_date}'
+            UPDATE trigger_program_mi8 = {mi8_correction}
+            WHERE dates = '{first_date}'
             """
             self.client.execute(mi8_update_query)
             
@@ -837,12 +822,11 @@ class ProgramACDirectLoader:
             mi17_component_count = mi17_count_result[0][0]
             self.logger.info(f"   МИ-17 компонентов в статусе 2: {mi17_component_count}")
             
-            # Получаем текущее первое значение ops_counter_mi17
+            # Получаем текущее первое значение ops_counter_mi17 из новой структуры
             mi17_first_ops_query = f"""
-            SELECT daily_value 
+            SELECT ops_counter_mi17 
             FROM flight_program_ac 
-            WHERE field_name = 'ops_counter_mi17' 
-            AND flight_date = '{first_date}'
+            WHERE dates = '{first_date}'
             """
             mi17_first_result = self.client.execute(mi17_first_ops_query)
             mi17_first_ops = mi17_first_result[0][0] if mi17_first_result else 0
@@ -852,51 +836,40 @@ class ProgramACDirectLoader:
             mi17_correction = mi17_component_count - mi17_first_ops
             self.logger.info(f"   Корректировка МИ-17: {mi17_component_count} - {mi17_first_ops} = {mi17_correction}")
             
-            # Обновляем первое значение
+            # Обновляем первое значение в новой структуре
             mi17_update_query = f"""
             ALTER TABLE flight_program_ac 
-            UPDATE daily_value = {mi17_correction}
-            WHERE field_name = 'trigger_program_mi17' 
-            AND flight_date = '{first_date}'
+            UPDATE trigger_program_mi17 = {mi17_correction}
+            WHERE dates = '{first_date}'
             """
             self.client.execute(mi17_update_query)
             
-            # 3. Пересчитываем trigger_program = trigger_program_mi8 + trigger_program_mi17
+            # 3. Пересчитываем trigger_program = trigger_program_mi8 + trigger_program_mi17 в новой структуре
             self.logger.info("🔧 Пересчет trigger_program...")
             trigger_total_update_query = f"""
             ALTER TABLE flight_program_ac 
-            UPDATE daily_value = (
-                SELECT COALESCE(mi8.daily_value, 0) + COALESCE(mi17.daily_value, 0)
-                FROM (
-                    SELECT daily_value FROM flight_program_ac 
-                    WHERE field_name = 'trigger_program_mi8' AND flight_date = '{first_date}'
-                ) mi8
-                CROSS JOIN (
-                    SELECT daily_value FROM flight_program_ac 
-                    WHERE field_name = 'trigger_program_mi17' AND flight_date = '{first_date}'
-                ) mi17
-            )
-            WHERE field_name = 'trigger_program' 
-            AND flight_date = '{first_date}'
+            UPDATE trigger_program = trigger_program_mi8 + trigger_program_mi17
+            WHERE dates = '{first_date}'
             """
             self.client.execute(trigger_total_update_query)
             
-            # 4. Проверяем результаты
+            # 4. Проверяем результаты в новой структуре
             verification_query = f"""
             SELECT 
-                field_name,
-                daily_value
+                trigger_program_mi8,
+                trigger_program_mi17,
+                trigger_program
             FROM flight_program_ac 
-            WHERE field_name IN ('trigger_program_mi8', 'trigger_program_mi17', 'trigger_program')
-            AND flight_date = '{first_date}'
-            ORDER BY field_name
+            WHERE dates = '{first_date}'
             """
             verification_result = self.client.execute(verification_query)
             
-            self.logger.info("✅ Корректировка завершена:")
-            for field_name, daily_value in verification_result:
-                aircraft_type = "МИ-8" if "mi8" in field_name else "МИ-17" if "mi17" in field_name else "Общий"
-                self.logger.info(f"   {field_name} ({aircraft_type}): {daily_value}")
+            if verification_result:
+                mi8_val, mi17_val, total_val = verification_result[0]
+                self.logger.info("✅ Корректировка завершена:")
+                self.logger.info(f"   trigger_program_mi8 (МИ-8): {mi8_val}")
+                self.logger.info(f"   trigger_program_mi17 (МИ-17): {mi17_val}")
+                self.logger.info(f"   trigger_program (Общий): {total_val}")
             
             return True
             

@@ -170,6 +170,14 @@ class ETLMaster:
             'dependencies': ['heli_pandas', 'md_components'],
             'result_table': 'flight_program_ac',
             'critical': False
+        },
+        # === МЕТА-СЛОВАРЬ (финальный этап после всех таблиц) ===
+        {
+            'script': 'digital_values_dictionary_creator.py',
+            'description': 'Digital Values Dictionary - аддитивный словарь всех полей для Flame GPU macroproperty',
+            'dependencies': ['heli_pandas', 'md_components', 'flight_program_ac', 'flight_program_fl'],
+            'result_table': 'dict_digital_values_flat',
+            'critical': False
         }
     ]
     
@@ -250,6 +258,7 @@ class ETLMaster:
                 'owner_dict_flat',                # Dictionary объект для владельцев
                 'ac_type_dict_flat',              # Dictionary объект для типов ВС
                 'aircraft_number_dict_flat',      # Dictionary объект для номеров ВС
+                'digital_values_dict_flat',       # Dictionary объект для цифровых значений полей
                 
                 # Основные таблицы ETL пайплайна
                 'heli_pandas', 'heli_raw',           # создается dual_loader.py  
@@ -262,6 +271,7 @@ class ETLMaster:
                 # ИСКЛЮЧЕНЫ ИЗ УДАЛЕНИЯ - ИСТИННО АДДИТИВНЫЕ СЛОВАРНЫЕ ТАБЛИЦЫ (MergeTree):
                 # 'dict_partno_flat', 'dict_serialno_flat', 'dict_owner_flat',   # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
                 # 'dict_ac_type_flat', 'dict_aircraft_number_flat'               # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
+                # 'dict_digital_values_flat'                                     # создается digital_values_dictionary_creator.py (ИСТИННО АДДИТИВНЫЙ)
                 
                 # Не-аддитивная таблица статуса (пересоздается каждый раз)
                 'dict_status_flat'  # создается dictionary_creator.py (единственная не-аддитивная)
@@ -276,7 +286,8 @@ class ETLMaster:
                     # Специальная обработка для Dictionary объектов
                     dictionary_objects = [
                         'aircraft_number_dictionary', 'status_dict_flat', 'partno_dict_flat',
-                        'serialno_dict_flat', 'owner_dict_flat', 'ac_type_dict_flat', 'aircraft_number_dict_flat'
+                        'serialno_dict_flat', 'owner_dict_flat', 'ac_type_dict_flat', 'aircraft_number_dict_flat',
+                        'digital_values_dict_flat'
                     ]
                     
                     if table in dictionary_objects:
@@ -561,7 +572,7 @@ class ETLMaster:
         logger.info("\n🔍 === ФИНАЛЬНАЯ ВАЛИДАЦИЯ ===")
         
         # Ключевые таблицы для GPU
-        critical_tables = ['heli_pandas', 'md_components', 'status_overhaul', 'flight_program']
+        critical_tables = ['heli_pandas', 'md_components', 'status_overhaul', 'program_ac']
         
         all_ready = True
         total_records = 0

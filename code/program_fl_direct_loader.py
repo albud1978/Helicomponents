@@ -278,14 +278,14 @@ class FlightProgramDirectLoader:
             # Создаем новую таблицу
             create_table_sql = """
             CREATE TABLE flight_program_fl (
-                aircraft_number UInt16,
-                flight_date Date,
-                daily_hours Float32,
+                aircraft_number UInt32,
+                dates Date,
+                daily_hours UInt32,
                 ac_type_mask UInt8,
                 version_date Date DEFAULT today(),
                 version_id UInt8 DEFAULT 1
             ) ENGINE = MergeTree()
-            ORDER BY (aircraft_number, flight_date)
+            ORDER BY (aircraft_number, dates)
             SETTINGS index_granularity = 8192
             """
             
@@ -358,8 +358,8 @@ class FlightProgramDirectLoader:
                     
                     insert_data.append([
                         aircraft_number,
-                        flight_date,
-                        daily_hours,
+                        flight_date,  # dates (переименовано из flight_date)
+                        int(daily_hours),  # Конвертируем в UInt32
                         ac_type_mask,
                         base_date,
                         version_id
@@ -383,7 +383,7 @@ class FlightProgramDirectLoader:
             self.logger.info(f"💾 Начинаем вставку {len(insert_data):,} записей...")
             
             column_names = [
-                'aircraft_number', 'flight_date', 'daily_hours', 
+                'aircraft_number', 'dates', 'daily_hours', 
                 'ac_type_mask', 'version_date', 'version_id'
             ]
             
@@ -416,9 +416,9 @@ class FlightProgramDirectLoader:
             SELECT 
                 COUNT(*) as total_records,
                 COUNT(DISTINCT aircraft_number) as unique_aircraft,
-                COUNT(DISTINCT flight_date) as unique_dates,
-                MIN(flight_date) as min_date,
-                MAX(flight_date) as max_date,
+                COUNT(DISTINCT dates) as unique_dates,
+                MIN(dates) as min_date,
+                MAX(dates) as max_date,
                 AVG(daily_hours) as avg_hours,
                 SUM(CASE WHEN daily_hours > 0 THEN 1 ELSE 0 END) as non_zero_records
             FROM flight_program_fl
@@ -484,7 +484,7 @@ class FlightProgramDirectLoader:
             null_check_query = """
             SELECT 
                 SUM(CASE WHEN aircraft_number IS NULL THEN 1 ELSE 0 END) as null_aircraft,
-                SUM(CASE WHEN flight_date IS NULL THEN 1 ELSE 0 END) as null_dates,
+                SUM(CASE WHEN dates IS NULL THEN 1 ELSE 0 END) as null_dates,
                 SUM(CASE WHEN daily_hours IS NULL THEN 1 ELSE 0 END) as null_hours,
                 SUM(CASE WHEN ac_type_mask IS NULL THEN 1 ELSE 0 END) as null_mask
             FROM flight_program_fl

@@ -126,19 +126,63 @@ def prepare_md_data(df, version_date, version_id=1):
                 if col == 'partno':
                     df[col] = df[col].str.replace('\n', '', regex=False)
 
-        # Обработка числовых полей
-        numeric_columns = [
+        # Обработка числовых полей с валидацией диапазонов для GPU-оптимизированных типов
+        
+        # UInt8 поля (0-255)
+        uint8_columns = [
             'comp_number', 'group_by', 'type_restricted', 'common_restricted1', 'common_restricted2',
-            'trigger_interval', 'partout_time', 'assembly_time', 'repair_time',
-            'll_mi8', 'oh_mi8', 'oh_threshold_mi8', 'll_mi17', 'oh_mi17',
-            'repair_price', 'purchase_price', 'sne', 'ppr'
+            'trigger_interval', 'partout_time', 'assembly_time'
         ]
         
-        for col in numeric_columns:
+        # UInt16 поля (0-65535)
+        uint16_columns = ['repair_time']
+        
+        # UInt32 поля (0-4294967295)
+        uint32_columns = ['ll_mi8', 'oh_mi8', 'oh_threshold_mi8', 'll_mi17', 'oh_mi17']
+        
+        # Float32 поля (денежные поля оптимизированы для GPU)  
+        float32_columns = ['repair_price', 'purchase_price']
+        
+        # Float64 поля (оставляем без изменений)
+        float64_columns = ['sne', 'ppr']
+        
+        # Обработка UInt8 полей
+        for col in uint8_columns:
             if col in df.columns:
-                # Конвертируем в числа, NaN заменяем на None
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = df[col].clip(lower=0, upper=255)  # Валидация диапазона UInt8
+                df[col] = df[col].fillna(0).astype('int64')  # Стандартный паттерн как в dual_loader.py
+                print(f"   🔧 {col}: UInt8 (0-255)")
+        
+        # Обработка UInt16 полей
+        for col in uint16_columns:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = df[col].clip(lower=0, upper=65535)  # Валидация диапазона UInt16
+                df[col] = df[col].fillna(0).astype('int64')  # Стандартный паттерн как в dual_loader.py
+                print(f"   🔧 {col}: UInt16 (0-65535)")
+        
+        # Обработка UInt32 полей
+        for col in uint32_columns:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = df[col].clip(lower=0, upper=4294967295)  # Валидация диапазона UInt32
+                df[col] = df[col].fillna(0).astype('int64')  # Стандартный паттерн как в dual_loader.py
+                print(f"   🔧 {col}: UInt32 (0-4294967295)")
+        
+        # Обработка Float32 полей (оптимизированы для GPU)
+        for col in float32_columns:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = df[col].where(df[col].notnull(), None).astype('float32')
+                print(f"   🔧 {col}: Float32 (GPU-оптимизированный)")
+        
+        # Обработка Float64 полей (без изменений)
+        for col in float64_columns:
+            if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
                 df[col] = df[col].where(df[col].notnull(), None)
+                print(f"   🔧 {col}: Float64 (без изменений)")
 
         # Добавляем дополнительные поля для совместимости с полной схемой таблицы
         if 'br' not in df.columns:
@@ -163,35 +207,35 @@ def create_md_table(client):
         CREATE TABLE IF NOT EXISTS md_components (
             -- Основные идентификаторы
             `partno` Nullable(String),              -- Чертежный номер
-            `comp_number` Nullable(Float64),        -- Количество на ВС
+            `comp_number` Nullable(UInt8),          -- Количество на ВС (было Float64 → uint8)
             `group_by` Nullable(UInt8),             -- Группировка
             `ac_typ` Nullable(String),              -- Тип ВС
             
-            -- Ограничения
-            `type_restricted` Nullable(Float64),    -- Ограничение по типу
-            `common_restricted1` Nullable(Float64), -- Общее ограничение 1
-            `common_restricted2` Nullable(Float64), -- Общее ограничение 2
+            -- Ограничения (оптимизированы для GPU)
+            `type_restricted` Nullable(UInt8),      -- Ограничение по типу (было Float64 → uint8 multihot)
+            `common_restricted1` Nullable(UInt8),   -- Общее ограничение 1 (было Float64 → uint8 multihot)
+            `common_restricted2` Nullable(UInt8),   -- Общее ограничение 2 (было Float64 → uint8 multihot)
             
-            -- Временные характеристики
-            `trigger_interval` Nullable(Float64),   -- Интервал срабатывания
-            `partout_time` Nullable(Float64),       -- Время снятия
-            `assembly_time` Nullable(Float64),      -- Время установки
-            `repair_time` Nullable(Float64),        -- Время ремонта
+            -- Временные характеристики (оптимизированы для GPU)
+            `trigger_interval` Nullable(UInt8),     -- Интервал срабатывания (было Float64 → uint8)
+            `partout_time` Nullable(UInt8),         -- Время снятия (было Float64 → uint8)
+            `assembly_time` Nullable(UInt8),        -- Время установки (было Float64 → uint8)
+            `repair_time` Nullable(UInt16),         -- Время ремонта (было Float64 → uint16)
             
-            -- Ресурсы МИ-8
-            `ll_mi8` Nullable(Float64),             -- LL МИ-8
-            `oh_mi8` Nullable(Float64),             -- OH МИ-8
-            `oh_threshold_mi8` Nullable(Float64),   -- Порог OH МИ-8
+            -- Ресурсы МИ-8 (оптимизированы для GPU)
+            `ll_mi8` Nullable(UInt32),              -- LL МИ-8 (было Float64 → uint32)
+            `oh_mi8` Nullable(UInt32),              -- OH МИ-8 (было Float64 → uint32)
+            `oh_threshold_mi8` Nullable(UInt32),    -- Порог OH МИ-8 (было Float64 → uint32)
             
-            -- Ресурсы МИ-17
-            `ll_mi17` Nullable(Float64),            -- LL МИ-17
-            `oh_mi17` Nullable(Float64),            -- OH МИ-17
+            -- Ресурсы МИ-17 (оптимизированы для GPU)
+            `ll_mi17` Nullable(UInt32),             -- LL МИ-17 (было Float64 → uint32)
+            `oh_mi17` Nullable(UInt32),             -- OH МИ-17 (было Float64 → uint32)
             
-            -- Стоимостные характеристики
-            `repair_price` Nullable(Float64),       -- Цена ремонта
-            `purchase_price` Nullable(Float64),     -- Цена покупки
+            -- Стоимостные характеристики (оптимизированы для GPU)
+            `repair_price` Nullable(Float32),       -- Цена ремонта (было Float64 → float32)
+            `purchase_price` Nullable(Float32),     -- Цена покупки (было Float64 → float32)
             
-            -- Дополнительные ресурсы
+            -- Дополнительные ресурсы (оставляем Float64)
             `sne` Nullable(Float64),                -- SNE
             `ppr` Nullable(Float64),                -- PPR
             
@@ -199,8 +243,8 @@ def create_md_table(client):
             `version_date` Date DEFAULT today(),    -- Дата версии
             `version_id` UInt8 DEFAULT 1,           -- ID версии
             
-            -- Дополнительные поля (добавляются обогатителями)
-            `br` Nullable(UInt16) DEFAULT NULL,    -- Beyond Repair (calculate_beyond_repair.py)
+            -- Дополнительные поля (обогащенные с GPU-оптимизацией)
+            `br` Nullable(UInt32) DEFAULT NULL,    -- Beyond Repair (было UInt16 → uint32)
             `partno_comp` Nullable(UInt32) DEFAULT NULL  -- Component ID (md_components_enricher.py)
             
         ) ENGINE = MergeTree()

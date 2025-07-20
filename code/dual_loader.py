@@ -440,8 +440,8 @@ def create_tables(client):
             
             -- Обогащенные поля (добавляются dual_loader.py и enrich_heli_pandas.py)
             `status_id` UInt8 DEFAULT 0,            -- Статус компонента (через status_processor.py)
-            `repair_days` Nullable(Int16),          -- Остаток дней до окончания ремонта (target_date - version_date)
-            `aircraft_number` UInt16 DEFAULT 0,     -- Номер вертолета из RA-XXXXX
+            `repair_days` Nullable(UInt16),         -- Остаток дней до окончания ремонта (было Int16 → uint16, без минусов)
+            `aircraft_number` UInt32 DEFAULT 0,     -- Номер ВС из RA-XXXXX (расширен для самолетов)
             `ac_type_mask` UInt8 DEFAULT 0          -- Битовая маска типа ВС для multihot (через enrich_heli_pandas.py)
             
         ) ENGINE = MergeTree()
