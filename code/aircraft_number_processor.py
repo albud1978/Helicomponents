@@ -4,7 +4,7 @@
 
 Функционал:
 - Извлекает номера вертолетов из значений RA-XXXXX (5 цифр)
-- Создает поле aircraft_number (UInt16)
+- Создает поле aircraft_number (UInt32)
 - Очищает location от не-вертолетных значений
 - Поддерживает работу с DataFrame (in-memory) и ClickHouse (SQL)
 - Валидация и статистика обработки
@@ -166,7 +166,7 @@ def process_aircraft_numbers_in_clickhouse(client, table_name: str = 'heli_panda
     try:
         # 1. Добавляем колонку aircraft_number если её нет
         logger.info("🔧 Добавление колонки aircraft_number...")
-        alter_query = f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS aircraft_number UInt16 DEFAULT 0"
+        alter_query = f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS aircraft_number UInt32 DEFAULT 0"
         client.execute(alter_query)
         logger.info("✅ Колонка aircraft_number добавлена")
         

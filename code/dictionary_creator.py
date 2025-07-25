@@ -613,22 +613,19 @@ class DictionaryCreator:
             
             # Получаем уникальные номера ВС с их ac_type_mask из heli_pandas
             # ЛОГИКА: 
-            # 1. Берем ТОЛЬКО ВС которые имеют планерные partno (строгая фильтрация ВС)
-            # 2. Но ac_type_mask берем от ЛЮБЫХ записей этого ВС (не только планерных)
+            # 1. Берем ТОЛЬКО планеры используя md_components.group_by IN (1, 2)
+            # 2. ac_type_mask берем от этих записей
             aircraft_query = """
             SELECT 
-                h1.aircraft_number,
-                any(h2.ac_type_mask) as ac_type_mask
-            FROM (
-                SELECT DISTINCT aircraft_number
-                FROM heli_pandas 
-                WHERE aircraft_number IS NOT NULL AND aircraft_number > 0
-                    AND partno IN ('МИ-8Т', 'МИ-8П', 'МИ-8ПС', 'МИ-8ТП', 'МИ-8АМТ', 'МИ-8МТВ', 'МИ-17', 'МИ-26')
-            ) h1
-            JOIN heli_pandas h2 ON h1.aircraft_number = h2.aircraft_number
-            WHERE h2.ac_type_mask IS NOT NULL AND h2.ac_type_mask > 0
-            GROUP BY h1.aircraft_number
-            ORDER BY h1.aircraft_number
+                h.aircraft_number,
+                any(h.ac_type_mask) as ac_type_mask
+            FROM heli_pandas h
+            JOIN md_components m ON h.partseqno_i = m.partno_comp
+            WHERE h.aircraft_number IS NOT NULL AND h.aircraft_number > 0
+                AND h.ac_type_mask IS NOT NULL AND h.ac_type_mask > 0
+                AND m.group_by IN (1, 2)
+            GROUP BY h.aircraft_number
+            ORDER BY h.aircraft_number
             """
             
             result = self.client.query(aircraft_query)

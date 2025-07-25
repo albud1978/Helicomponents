@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
-ETL Master - главный оркестратор для системы Helicopter Component Lifecycle
+Extract Master - Оркестратор Extract этапа
+Микросервисная архитектура ETL: Extract → Transform → Load
 
-Микросервисная архитектура:
-- Централизованное управление версиями и политиками
-- Координация всех ETL загрузчиков
-- Единая точка входа с выбором режима (тест/прод)
-- Быстрое тестирование с полной перезагрузкой
+Дата создания: 19-07-2025  
+Последнее обновление: 24-07-2025
+
+Роль: Координация всех Extract процессов
+- Загрузка Excel данных  
+- Обогащение справочниками
+- Создание словарей
+- Обработка статусов
+- Подготовка данных для Transform
 """
 
 import subprocess
@@ -136,13 +141,6 @@ class ETLMaster:
             'critical': False
         },
         {
-            'script': 'dictionary_creator.py',
-            'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
-            'dependencies': ['heli_pandas'],
-            'result_table': 'dict_status_flat',
-            'critical': False
-        },
-        {
             'script': 'calculate_beyond_repair.py',
             'description': 'Расчет Beyond Repair (br)',
             'dependencies': ['md_components'],
@@ -154,6 +152,13 @@ class ETLMaster:
             'description': 'Обогащение MD Components',
             'dependencies': ['md_components', 'heli_pandas'],
             'result_table': 'md_components',
+            'critical': False
+        },
+        {
+            'script': 'dictionary_creator.py',
+            'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
+            'dependencies': ['heli_pandas', 'md_components'],
+            'result_table': 'dict_aircraft_number_flat',
             'critical': False
         },
         # === ТЕНЗОРЫ (в самом конце, когда все данные готовы) ===
@@ -267,10 +272,11 @@ class ETLMaster:
                 'program_ac',                        # создается program_ac_loader.py
                 'flight_program_fl',                 # создается program_fl_direct_loader.py
                 'flight_program_ac',                 # создается program_ac_direct_loader.py
+                'dict_aircraft_number_flat',         # создается dictionary_creator.py (ЗАВИСИТ от heli_pandas!)
                 
                 # ИСКЛЮЧЕНЫ ИЗ УДАЛЕНИЯ - ИСТИННО АДДИТИВНЫЕ СЛОВАРНЫЕ ТАБЛИЦЫ (MergeTree):
                 # 'dict_partno_flat', 'dict_serialno_flat', 'dict_owner_flat',   # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
-                # 'dict_ac_type_flat', 'dict_aircraft_number_flat'               # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
+                # 'dict_ac_type_flat'                                            # создается dictionary_creator.py (ИСТИННО АДДИТИВНЫЕ)
                 # 'dict_digital_values_flat'                                     # создается digital_values_dictionary_creator.py (ИСТИННО АДДИТИВНЫЙ)
                 
                 # Не-аддитивная таблица статуса (пересоздается каждый раз)
