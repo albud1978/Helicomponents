@@ -193,6 +193,23 @@ def prepare_md_data(df, version_date, version_id=1):
             df['partno_comp'] = None  # Компонентные ID будут добавлены позже
             print("➕ Добавлено поле partno_comp = None (будет вычислено позже)")
 
+        # Добавляем поле restrictions_mask (битовая маска ограничений)
+        if 'restrictions_mask' not in df.columns:
+            # Простой расчет: type_restricted + common_restricted1*2 + common_restricted2*4 + trigger_interval*8
+            df['restrictions_mask'] = (
+                df['type_restricted'].fillna(0).astype(int) * 1 +
+                df['common_restricted1'].fillna(0).astype(int) * 2 +
+                df['common_restricted2'].fillna(0).astype(int) * 4 +
+                df['trigger_interval'].fillna(0).astype(int) * 8
+            ).astype('int64')
+            print("➕ Добавлено поле restrictions_mask (битовая маска ограничений)")
+            
+            # Диагностика
+            mask_min = df['restrictions_mask'].min()
+            mask_max = df['restrictions_mask'].max()
+            unique_masks = sorted(df['restrictions_mask'].unique())
+            print(f"   📊 restrictions_mask: диапазон {mask_min}-{mask_max}, уникальные: {unique_masks}")
+
         print(f"📊 Подготовлено {len(df):,} записей с {len(df.columns)} колонками")
         return df
         
@@ -245,7 +262,8 @@ def create_md_table(client):
             
             -- Дополнительные поля (обогащенные с GPU-оптимизацией)
             `br` Nullable(UInt32) DEFAULT NULL,    -- Beyond Repair (было UInt16 → uint32)
-            `partno_comp` Nullable(UInt32) DEFAULT NULL  -- Component ID (md_components_enricher.py)
+            `partno_comp` Nullable(UInt32) DEFAULT NULL,  -- Component ID (md_components_enricher.py)
+            `restrictions_mask` UInt8 DEFAULT 0     -- Битовая маска всех ограничений (multihot[u8])
             
         ) ENGINE = MergeTree()
         ORDER BY (version_date, version_id)
