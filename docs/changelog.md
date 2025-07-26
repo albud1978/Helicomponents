@@ -1,5 +1,28 @@
 # Changelog - История изменений проекта
-**Последнее обновление:** 23-07-2025
+**Последнее обновление:** 26-07-2025
+
+## [26-07-2025] - Исправление repair_days и циклических зависимостей
+
+### Добавлено
+- Новый скрипт `code/repair_days_calculator.py` для расчета repair_days после md_components_enricher.py
+- ЭТАП 8 в ETL pipeline для корректного расчета repair_days с зависимостями
+- Улучшенные фильтры дат для установки status=4 в overhaul_status_processor.py
+
+### Изменено
+- Формула repair_days: `repair_time - (target_date - version_date)` вместо `(target_date - version_date)`
+- Порядок ETL: repair_days_calculator.py добавлен после md_components_enricher.py
+- Условия установки status=4: проверка sched_start_date и act_start_date < version_date
+- Убран расчет repair_days из overhaul_status_processor.py
+
+### Исправлено
+- Циклическая зависимость между dual_loader.py и md_components_enricher.py
+- Негативные значения repair_days (пример: ВС 24116 с -40 днями)
+- Установка status=4 для ВС с будущими датами начала ремонта
+
+### Технические детали
+- ВС 24116: исключен из status=4 из-за дат больше version_date
+- 7 ВС получили корректные repair_days: 117, 157, 131, 154, 152, 107, 169 дней
+- Новый порядок: md_components_enricher.py → repair_days_calculator.py → dictionary_creator.py
 
 ## [23-07-2025] - Переход в Transform stage + RTC Balance архитектура
 ### Добавлено

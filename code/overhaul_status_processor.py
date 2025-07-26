@@ -56,6 +56,7 @@ def get_status_overhaul_data(client):
         SELECT 
             ac_registr,
             status,
+            sched_start_date,
             act_start_date,
             sched_end_date,
             act_end_date
@@ -68,10 +69,10 @@ def get_status_overhaul_data(client):
         
         if not result:
             print("ℹ️ Нет активных записей капитального ремонта (все имеют status='Закрыто')")
-            return pd.DataFrame(columns=['ac_registr', 'status', 'act_start_date', 'sched_end_date', 'act_end_date'])
+            return pd.DataFrame(columns=['ac_registr', 'status', 'sched_start_date', 'act_start_date', 'sched_end_date', 'act_end_date'])
         
         # Создаем DataFrame
-        df = pd.DataFrame(result, columns=['ac_registr', 'status', 'act_start_date', 'sched_end_date', 'act_end_date'])
+        df = pd.DataFrame(result, columns=['ac_registr', 'status', 'sched_start_date', 'act_start_date', 'sched_end_date', 'act_end_date'])
         
         print(f"✅ Загружено {len(df)} записей активного капремонта ВС")
         print(f"📊 Статусы: {df['status'].value_counts().to_dict()}")
@@ -131,6 +132,7 @@ def process_aircraft_status(pandas_df, client):
             ac_registr = str(row['ac_registr'])  # Простое приведение к строке
             status_dict[ac_registr] = {
                 'status': row['status'],
+                'sched_start_date': row['sched_start_date'],
                 'act_start_date': row['act_start_date'],
                 'sched_end_date': row['sched_end_date'],
                 'act_end_date': row['act_end_date']
@@ -154,7 +156,34 @@ def process_aircraft_status(pandas_df, client):
                 
                 print(f"✅ СОВПАДЕНИЕ: serialno={serialno} - капремонт: {overhaul_data['status']}")
                 
-                # Устанавливаем статус 4 (Ремонт) только если текущий статус = 0
+                # НОВАЯ ПРОВЕРКА ДАТ: хотя бы одна из дат должна быть меньше version_date
+                sched_start_date = overhaul_data.get('sched_start_date')
+                act_start_date = overhaul_data.get('act_start_date')
+                
+                # Проверяем условия для установки status=4
+                date_condition_met = False
+                
+                # Условие 1: sched_start_date не пустая и меньше version_date
+                if sched_start_date and sched_start_date < version_date:
+                    date_condition_met = True
+                    print(f"   ✅ sched_start_date ({sched_start_date}) < version_date ({version_date})")
+                
+                # Условие 2: act_start_date не пустая и меньше version_date
+                if act_start_date and act_start_date < version_date:
+                    date_condition_met = True
+                    print(f"   ✅ act_start_date ({act_start_date}) < version_date ({version_date})")
+                
+                # Если обе даты пустые или нулевые
+                if not sched_start_date and not act_start_date:
+                    print(f"   ⚠️ Обе даты (sched_start_date и act_start_date) пустые - НЕ устанавливаем status=4")
+                    continue
+                
+                # Если ни одна дата не меньше version_date
+                if not date_condition_met:
+                    print(f"   ⚠️ Ни одна дата не меньше version_date - НЕ устанавливаем status=4")
+                    continue
+                
+                # Устанавливаем статус 4 (Ремонт) только если текущий статус = 0 И даты подходят
                 if pandas_df.at[idx, 'status_id'] == 0:
                     pandas_df.at[idx, 'status_id'] = 4
                     status_updated_count += 1
@@ -173,11 +202,8 @@ def process_aircraft_status(pandas_df, client):
                     dates_updated_count += 1
                     print(f"   ✅ target_date = {overhaul_data['sched_end_date']}")
                 
-                # Рассчитываем repair_days
-                if pandas_df.at[idx, 'target_date'] and pandas_df.at[idx, 'version_date']:
-                    repair_days = (pandas_df.at[idx, 'target_date'] - pandas_df.at[idx, 'version_date']).days
-                    pandas_df.at[idx, 'repair_days'] = repair_days
-                    print(f"   ✅ repair_days = {repair_days} дней")
+                # ПРИМЕЧАНИЕ: repair_days теперь рассчитывается отдельным скриптом repair_days_calculator.py
+                # после заполнения repair_time в md_components_enricher.py
                 
                 matches_found += 1
         

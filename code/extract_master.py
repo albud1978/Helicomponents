@@ -155,6 +155,13 @@ class ETLMaster:
             'critical': False
         },
         {
+            'script': 'repair_days_calculator.py',
+            'description': 'Расчет repair_days для ВС в ремонте',
+            'dependencies': ['md_components', 'heli_pandas', 'status_overhaul'],
+            'result_table': 'heli_pandas',
+            'critical': False
+        },
+        {
             'script': 'dictionary_creator.py',
             'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
             'dependencies': ['heli_pandas', 'md_components'],
