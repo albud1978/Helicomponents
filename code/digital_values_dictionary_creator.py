@@ -195,6 +195,45 @@ class DigitalValuesDictionaryCreator:
             self.logger.error(f"❌ Ошибка подключения к ClickHouse: {e}")
             return False
     
+    def get_version_from_heli_pandas(self) -> Tuple[str, int]:
+        """Получает актуальные версионные параметры из таблицы heli_pandas"""
+        try:
+            self.logger.info("📅 Получение версионных параметров из heli_pandas...")
+            
+            # Проверяем существование таблицы heli_pandas
+            table_exists_result = self.client.execute("EXISTS TABLE heli_pandas")
+            if not table_exists_result or not table_exists_result[0][0]:
+                self.logger.error("❌ Таблица heli_pandas не существует!")
+                self.logger.error("💡 Мета-словарь создается ПОСЛЕ загрузки данных в heli_pandas")
+                self.logger.error("🔄 Запустите сначала dual_loader.py или полный ETL цикл")
+                return None, None
+            
+            # Получаем актуальные версионные параметры
+            version_query = """
+                SELECT 
+                    MAX(version_date) as latest_version_date,
+                    MAX(version_id) as latest_version_id
+                FROM heli_pandas 
+                WHERE version_date = (SELECT MAX(version_date) FROM heli_pandas)
+            """
+            
+            version_result = self.client.execute(version_query)
+            if not version_result:
+                self.logger.error("❌ Нет данных в heli_pandas")
+                return None, None
+            
+            latest_version_date, latest_version_id = version_result[0]
+            
+            self.logger.info(f"✅ Версионные параметры из heli_pandas:")
+            self.logger.info(f"   version_date: {latest_version_date}")
+            self.logger.info(f"   version_id: {latest_version_id}")
+            
+            return latest_version_date, latest_version_id
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка получения версионных параметров: {e}")
+            return None, None
+    
     def get_distinct_fields(self) -> List[Tuple[str, str, str, str, bool]]:
         """Получает DISTINCT список всех полей из всех таблиц ETL с РЕАЛЬНЫМИ типами из ClickHouse"""
         self.logger.info("📊 Создание DISTINCT списка всех полей ETL из реальных таблиц...")
@@ -277,14 +316,17 @@ class DigitalValuesDictionaryCreator:
                 field_description String,         -- Описание назначения поля
                 data_type String,                 -- Тип данных ClickHouse
                 is_nullable UInt8,                -- Может ли быть NULL (0/1)
+                version_date Date DEFAULT today(), -- Дата версии данных (из heli_pandas)
+                version_id UInt8 DEFAULT 1,       -- ID версии данных (из heli_pandas)
                 load_timestamp DateTime DEFAULT now()  -- Время загрузки (аддитивность)
             ) ENGINE = MergeTree()
-            ORDER BY (field_id, primary_table, field_name, load_timestamp)
+            ORDER BY (field_id, primary_table, field_name, version_date, version_id, load_timestamp)
+            PARTITION BY toYYYYMM(version_date)
             SETTINGS index_granularity = 8192
             """
             
             self.client.execute(create_table_sql)
-            self.logger.info("✅ Таблица dict_digital_values_flat создана")
+            self.logger.info("✅ Таблица dict_digital_values_flat создана с версионностью")
             return True
             
         except Exception as e:
@@ -296,31 +338,43 @@ class DigitalValuesDictionaryCreator:
         try:
             self.logger.info("💾 Аддитивная загрузка данных в dict_digital_values_flat...")
             
-            # Получаем уже существующие field_id
-            existing_query = "SELECT DISTINCT field_id FROM dict_digital_values_flat"
-            existing_result = self.client.execute(existing_query)
+            # Получаем актуальные версионные параметры из heli_pandas
+            version_date, version_id = self.get_version_from_heli_pandas()
+            if version_date is None or version_id is None:
+                self.logger.error("❌ Не удалось получить версионные параметры из heli_pandas")
+                return False
+            
+            # Получаем уже существующие field_id для данной версии
+            existing_query = """
+                SELECT DISTINCT field_id 
+                FROM dict_digital_values_flat 
+                WHERE version_date = %(version_date)s AND version_id = %(version_id)s
+            """
+            existing_result = self.client.execute(existing_query, {'version_date': version_date, 'version_id': version_id})
             existing_ids = {row[0] for row in existing_result}
             
-            # Фильтруем только новые поля
+            # Фильтруем только новые поля для данной версии
             new_fields = []
             for field_data in fields_data:
                 field_id = field_data[0]
                 if field_id not in existing_ids:
-                    new_fields.append(field_data)
+                    # Добавляем версионные параметры к данным поля
+                    field_with_version = field_data + (version_date, version_id)
+                    new_fields.append(field_with_version)
             
             if not new_fields:
-                self.logger.info("ℹ️ Все поля уже существуют в словаре")
+                self.logger.info(f"ℹ️ Все поля уже существуют в словаре для версии {version_date} v{version_id}")
                 return True
             
-            # Вставляем новые поля (load_timestamp автоматически заполняется DEFAULT now())
+            # Вставляем новые поля с версионными параметрами
             insert_query = """
             INSERT INTO dict_digital_values_flat 
-                (field_id, primary_table, field_name, field_description, data_type, is_nullable) 
+                (field_id, primary_table, field_name, field_description, data_type, is_nullable, version_date, version_id) 
             VALUES
             """
             self.client.execute(insert_query, new_fields)
             
-            self.logger.info(f"✅ Добавлено {len(new_fields)} новых полей в словарь")
+            self.logger.info(f"✅ Добавлено {len(new_fields)} новых полей в словарь (версия {version_date} v{version_id})")
             return True
             
         except Exception as e:
@@ -347,7 +401,9 @@ class DigitalValuesDictionaryCreator:
                 field_name String,
                 field_description String,
                 data_type String,
-                is_nullable UInt8
+                is_nullable UInt8,
+                version_date Date,
+                version_id UInt8
             )
             PRIMARY KEY field_id
             SOURCE(CLICKHOUSE(
@@ -376,37 +432,43 @@ class DigitalValuesDictionaryCreator:
         try:
             self.logger.info("🔍 === ВАЛИДАЦИЯ СЛОВАРЯ ЦИФРОВЫХ ЗНАЧЕНИЙ ===")
             
-            # 1. Общая статистика
+            # 1. Общая статистика с версионностью
             stats_query = """
             SELECT 
                 COUNT(*) as total_fields,
                 COUNT(DISTINCT field_id) as unique_field_ids,
                 COUNT(DISTINCT primary_table) as unique_tables,
-                COUNT(DISTINCT field_name) as unique_field_names
+                COUNT(DISTINCT field_name) as unique_field_names,
+                COUNT(DISTINCT version_date) as unique_versions,
+                MAX(version_date) as latest_version_date,
+                any(version_id) as latest_version_id
             FROM dict_digital_values_flat
             """
             stats_result = self.client.execute(stats_query)
-            total, unique_ids, unique_tables, unique_names = stats_result[0]
+            total, unique_ids, unique_tables, unique_names, unique_versions, latest_version_date, latest_version_id = stats_result[0]
             
             self.logger.info(f"📊 Статистика словаря:")
             self.logger.info(f"   Всего записей: {total}")
             self.logger.info(f"   Уникальных field_id: {unique_ids}")
             self.logger.info(f"   Уникальных таблиц: {unique_tables}")
             self.logger.info(f"   Уникальных полей: {unique_names}")
+            self.logger.info(f"   Версий данных: {unique_versions}")
+            self.logger.info(f"   Актуальная версия: {latest_version_date} v{latest_version_id}")
             
-            # 2. Примеры полей по типам данных
+            # 2. Примеры полей по типам данных (последняя версия)
             types_query = """
             SELECT 
                 data_type,
                 COUNT(*) as field_count,
                 arraySlice(groupArray(field_name), 1, 3) as examples
             FROM dict_digital_values_flat 
+            WHERE version_date = (SELECT MAX(version_date) FROM dict_digital_values_flat)
             GROUP BY data_type 
             ORDER BY field_count DESC
             """
             types_result = self.client.execute(types_query)
             
-            self.logger.info("🏷️ Распределение по типам данных:")
+            self.logger.info("🏷️ Распределение по типам данных (актуальная версия):")
             for data_type, count, examples in types_result:
                 examples_str = ", ".join(examples)
                 self.logger.info(f"   {data_type}: {count} полей (примеры: {examples_str})")

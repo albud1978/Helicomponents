@@ -39,6 +39,10 @@ class DictionaryCreator:
         
         self.client = None
         
+        # Версионность (устанавливается в main)
+        self.version_date = None
+        self.version_id = None
+        
         # Битовые маски для типов ВС (из OLAP MultiBOM)
         self.ac_type_masks = {
             'Ми-26': 128,    # 0b10000000
@@ -75,9 +79,49 @@ class DictionaryCreator:
             result = self.client.query('SELECT 1 as test')
             self.logger.info(f"✅ Подключение к ClickHouse успешно!")
             return True
+            
         except Exception as e:
-            self.logger.error(f"❌ Ошибка подключения: {e}")
+            self.logger.error(f"❌ Ошибка подключения к ClickHouse: {e}")
             return False
+    
+    def get_version_from_heli_pandas(self) -> Tuple[str, int]:
+        """Получает актуальные версионные параметры из таблицы heli_pandas"""
+        try:
+            self.logger.info("📅 Получение версионных параметров из heli_pandas...")
+            
+            # Проверяем существование таблицы heli_pandas
+            table_exists = self.client.query("EXISTS TABLE heli_pandas").result_rows[0][0]
+            if not table_exists:
+                self.logger.error("❌ Таблица heli_pandas не существует!")
+                self.logger.error("💡 Словари создаются ПОСЛЕ загрузки данных в heli_pandas")
+                self.logger.error("🔄 Запустите сначала dual_loader.py или полный ETL цикл")
+                return None, None
+            
+            # Получаем актуальные версионные параметры
+            version_query = """
+                SELECT 
+                    MAX(version_date) as latest_version_date,
+                    MAX(version_id) as latest_version_id
+                FROM heli_pandas 
+                WHERE version_date = (SELECT MAX(version_date) FROM heli_pandas)
+            """
+            
+            version_result = self.client.query(version_query)
+            if not version_result.result_rows:
+                self.logger.error("❌ Нет данных в heli_pandas")
+                return None, None
+            
+            latest_version_date, latest_version_id = version_result.result_rows[0]
+            
+            self.logger.info(f"✅ Версионные параметры из heli_pandas:")
+            self.logger.info(f"   version_date: {latest_version_date}")
+            self.logger.info(f"   version_id: {latest_version_id}")
+            
+            return latest_version_date, latest_version_id
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка получения версионных параметров: {e}")
+            return None, None
     
     def validate_embedded_id_fields(self) -> bool:
         """Валидация встроенных ID полей из Excel"""
@@ -269,47 +313,59 @@ class DictionaryCreator:
                 except Exception as e:
                     self.logger.debug(f"Таблица {table} не существовала: {e}")
             
-            # Таблица партномеров - partno → partseqno_i (ИСТИННО АДДИТИВНАЯ)
+            # Таблица партномеров - partno → partseqno_i (АДДИТИВНАЯ + ВЕРСИОННАЯ)
             partno_dict_sql = """
             CREATE TABLE IF NOT EXISTS dict_partno_flat (
                 partseqno_i UInt32,
                 partno String,
+                version_date Date DEFAULT today(),
+                version_id UInt8 DEFAULT 1,
                 load_timestamp DateTime DEFAULT now()
             ) ENGINE = MergeTree()
-            ORDER BY (partseqno_i, partno, load_timestamp)
+            ORDER BY (partseqno_i, partno, version_date, version_id, load_timestamp)
+            PARTITION BY toYYYYMM(version_date)
             SETTINGS index_granularity = 8192
             """
             
-            # Таблица серийных номеров - serialno → psn (ИСТИННО АДДИТИВНАЯ)
+            # Таблица серийных номеров - serialno → psn (АДДИТИВНАЯ + ВЕРСИОННАЯ)
             serialno_dict_sql = """
             CREATE TABLE IF NOT EXISTS dict_serialno_flat (
                 psn UInt32,
                 serialno String,
+                version_date Date DEFAULT today(),
+                version_id UInt8 DEFAULT 1,
                 load_timestamp DateTime DEFAULT now()
             ) ENGINE = MergeTree()
-            ORDER BY (psn, serialno, load_timestamp)
+            ORDER BY (psn, serialno, version_date, version_id, load_timestamp)
+            PARTITION BY toYYYYMM(version_date)
             SETTINGS index_granularity = 8192
             """
             
-            # Таблица владельцев - owner → address_i (ИСТИННО АДДИТИВНАЯ)
+            # Таблица владельцев - owner → address_i (АДДИТИВНАЯ + ВЕРСИОННАЯ)
             owner_dict_sql = """
             CREATE TABLE IF NOT EXISTS dict_owner_flat (
                 address_i UInt32,
                 owner String,
+                version_date Date DEFAULT today(),
+                version_id UInt8 DEFAULT 1,
                 load_timestamp DateTime DEFAULT now()
             ) ENGINE = MergeTree()
-            ORDER BY (address_i, owner, load_timestamp)
+            ORDER BY (address_i, owner, version_date, version_id, load_timestamp)
+            PARTITION BY toYYYYMM(version_date)
             SETTINGS index_granularity = 8192
             """
             
-            # Таблица типов ВС (битовые маски) (ИСТИННО АДДИТИВНАЯ)
+            # Таблица типов ВС (битовые маски) (АДДИТИВНАЯ + ВЕРСИОННАЯ)
             ac_type_dict_sql = """
             CREATE TABLE IF NOT EXISTS dict_ac_type_flat (
                 ac_type_mask UInt8,
                 ac_typ String,
+                version_date Date DEFAULT today(),
+                version_id UInt8 DEFAULT 1,
                 load_timestamp DateTime DEFAULT now()
             ) ENGINE = MergeTree()
-            ORDER BY (ac_type_mask, ac_typ, load_timestamp)
+            ORDER BY (ac_type_mask, ac_typ, version_date, version_id, load_timestamp)
+            PARTITION BY toYYYYMM(version_date)
             SETTINGS index_granularity = 8192
             """
             
@@ -327,56 +383,66 @@ class DictionaryCreator:
             return False
     
     def populate_dictionary_tables(self, dictionaries: Dict[str, Dict]) -> bool:
-        """Аддитивное заполнение Dictionary таблиц данными (без TRUNCATE)"""
-        self.logger.info("📊 Аддитивное заполнение Dictionary таблиц...")
-        
+        """Заполнение Dictionary таблиц данными (АДДИТИВНО + ВЕРСИОННО)"""
         try:
+            self.logger.info("📊 Аддитивное заполнение Dictionary таблиц...")
+            
+            # Получаем актуальные версионные параметры из heli_pandas
+            version_date, version_id = self.get_version_from_heli_pandas()
+            if version_date is None or version_id is None:
+                self.logger.error("❌ Не удалось получить версионные параметры из heli_pandas")
+                return False
+            
+            # Устанавливаем версионные параметры для использования в остальной логике
+            self.version_date = version_date
+            self.version_id = version_id
+            
             current_timestamp = datetime.now()
             
-            # Заполнение партномеров - partno → partseqno_i (АДДИТИВНО)
+            # Заполнение партномеров - partno → partseqno_i (АДДИТИВНО + ВЕРСИОННО)
             if 'partno' in dictionaries:
                 partno_data = []
                 for partno, partseqno_i in dictionaries['partno']['mapping'].items():
-                    partno_data.append([partseqno_i, partno, current_timestamp])
+                    partno_data.append([partseqno_i, partno, self.version_date, self.version_id, current_timestamp])
                 
                 if partno_data:
                     self.client.insert('dict_partno_flat', partno_data,
-                                     column_names=['partseqno_i', 'partno', 'load_timestamp'])
-                    self.logger.info(f"✅ Добавлено {len(partno_data)} партномеров (истинно аддитивно)")
+                                     column_names=['partseqno_i', 'partno', 'version_date', 'version_id', 'load_timestamp'])
+                    self.logger.info(f"✅ Добавлено {len(partno_data)} партномеров (аддитивно + версионно)")
             
-            # Заполнение серийных номеров - serialno → psn (АДДИТИВНО)
+            # Заполнение серийных номеров - serialno → psn (АДДИТИВНО + ВЕРСИОННО)
             if 'serialno' in dictionaries:
                 serialno_data = []
                 for serialno, psn in dictionaries['serialno']['mapping'].items():
-                    serialno_data.append([psn, serialno, current_timestamp])
+                    serialno_data.append([psn, serialno, self.version_date, self.version_id, current_timestamp])
                 
                 if serialno_data:
                     self.client.insert('dict_serialno_flat', serialno_data,
-                                     column_names=['psn', 'serialno', 'load_timestamp'])
-                    self.logger.info(f"✅ Добавлено {len(serialno_data)} серийных номеров (истинно аддитивно)")
+                                     column_names=['psn', 'serialno', 'version_date', 'version_id', 'load_timestamp'])
+                    self.logger.info(f"✅ Добавлено {len(serialno_data)} серийных номеров (аддитивно + версионно)")
             
-            # Заполнение владельцев - owner → address_i (АДДИТИВНО)
+            # Заполнение владельцев - owner → address_i (АДДИТИВНО + ВЕРСИОННО)
             if 'owner' in dictionaries:
                 owner_data = []
                 for owner, address_i in dictionaries['owner']['mapping'].items():
-                    owner_data.append([address_i, owner, current_timestamp])
+                    owner_data.append([address_i, owner, self.version_date, self.version_id, current_timestamp])
                 
                 if owner_data:
                     self.client.insert('dict_owner_flat', owner_data,
-                                     column_names=['address_i', 'owner', 'load_timestamp'])
-                    self.logger.info(f"✅ Добавлено {len(owner_data)} владельцев (истинно аддитивно)")
+                                     column_names=['address_i', 'owner', 'version_date', 'version_id', 'load_timestamp'])
+                    self.logger.info(f"✅ Добавлено {len(owner_data)} владельцев (аддитивно + версионно)")
             
-            # Заполнение типов ВС (АДДИТИВНО)
+            # Заполнение типов ВС (АДДИТИВНО + ВЕРСИОННО)
             if 'ac_typ' in dictionaries:
                 ac_type_data = []
                 
                 for ac_typ, ac_type_mask in dictionaries['ac_typ']['mapping'].items():
-                    ac_type_data.append([ac_type_mask, ac_typ, current_timestamp])
+                    ac_type_data.append([ac_type_mask, ac_typ, self.version_date, self.version_id, current_timestamp])
                 
                 if ac_type_data:
                     self.client.insert('dict_ac_type_flat', ac_type_data,
-                                     column_names=['ac_type_mask', 'ac_typ', 'load_timestamp'])
-                    self.logger.info(f"✅ Добавлено {len(ac_type_data)} типов ВС (истинно аддитивно)")
+                                     column_names=['ac_type_mask', 'ac_typ', 'version_date', 'version_id', 'load_timestamp'])
+                    self.logger.info(f"✅ Добавлено {len(ac_type_data)} типов ВС (аддитивно + версионно)")
             
             self.logger.info("🎯 Аддитивное заполнение словарей завершено (без TRUNCATE)")
             return True
@@ -642,7 +708,7 @@ class DictionaryCreator:
             
             self.logger.info(f"📋 Найдено {len(aircraft_data_map)} уникальных номеров ВС с ac_type_mask")
             
-            # Создаем таблицу если не существует (АДДИТИВНАЯ) с новым полем ac_type_mask
+            # Создаем таблицу если не существует (АДДИТИВНАЯ + ВЕРСИОННАЯ) с новым полем ac_type_mask
             aircraft_table_sql = """
             CREATE TABLE IF NOT EXISTS dict_aircraft_number_flat (
                 aircraft_number UInt32,
@@ -650,9 +716,12 @@ class DictionaryCreator:
                 registration_code String,
                 is_leading_zero UInt8 DEFAULT 0,
                 ac_type_mask UInt8 DEFAULT 0,
+                version_date Date DEFAULT today(),
+                version_id UInt8 DEFAULT 1,
                 load_timestamp DateTime DEFAULT now()
             ) ENGINE = MergeTree()
-            ORDER BY (aircraft_number, load_timestamp)
+            ORDER BY (aircraft_number, version_date, version_id, load_timestamp)
+            PARTITION BY toYYYYMM(version_date)
             SETTINGS index_granularity = 8192
             """
             
@@ -723,19 +792,21 @@ class DictionaryCreator:
                     
                     aircraft_data.append([
                         aircraft_number, formatted_number, registration_code, 
-                        is_leading_zero, ac_type_mask, current_timestamp
+                        is_leading_zero, ac_type_mask, self.version_date, self.version_id, current_timestamp
                     ])
                 
-                # Аддитивная загрузка с новым полем ac_type_mask
+                # Аддитивная загрузка с новым полем ac_type_mask + версионность
                 self.client.insert('dict_aircraft_number_flat', aircraft_data,
                                  column_names=['aircraft_number', 'formatted_number', 
-                                             'registration_code', 'is_leading_zero', 'ac_type_mask', 'load_timestamp'])
+                                             'registration_code', 'is_leading_zero', 'ac_type_mask', 
+                                             'version_date', 'version_id', 'load_timestamp'])
                 
                 self.logger.info(f"✅ Добавлено {len(aircraft_data)} новых номеров ВС с ac_type_mask (аддитивно)")
                 
                 # Показываем примеры обогащенных данных
                 self.logger.info("📋 Примеры обогащенных записей:")
-                for i, (aircraft_number, formatted_number, registration_code, is_leading_zero, ac_type_mask, _) in enumerate(aircraft_data[:3]):
+                for i, aircraft_record in enumerate(aircraft_data[:3]):
+                    aircraft_number, formatted_number, registration_code, is_leading_zero, ac_type_mask = aircraft_record[:5]
                     self.logger.info(f"  {aircraft_number} → {registration_code} (ac_type_mask: {ac_type_mask})")
             
             # Создаем/обновляем ClickHouse Dictionary объект с полем ac_type_mask
@@ -843,23 +914,46 @@ class DictionaryCreator:
                 self.logger.warning(f"   ⚠️ Ошибка проверки {table_name}: {e}")
 
 
-if __name__ == "__main__":
-    """Основная функция запуска"""
-    creator = DictionaryCreator()
+def main(version_date=None, version_id=None):
+    """Основная функция с поддержкой версионирования"""
+    print("🚀 === ЗАГРУЗЧИК DICTIONARY_CREATOR ===")
     
-    # Выбор режима работы
+    try:
+        creator = DictionaryCreator()
+        
+        # Версионные параметры будут получены из heli_pandas в populate_dictionary_tables
+        if version_date is not None and version_id is not None:
+            print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
+            print("💡 Версионные параметры будут получены из heli_pandas для единой синхронизации")
+        else:
+            print("📅 Версионные параметры будут получены из heli_pandas автоматически")
+        
+        # Создание ВСЕХ словарей с версионностью из heli_pandas
+        success = creator.create_all_dictionaries_with_dictget()
+        
+        if success:
+            print("🎯 Словари созданы успешно!")
+            return True
+        else:
+            print("❌ Ошибка создания словарей!")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Критическая ошибка: {e}")
+        return False
+
+
+if __name__ == "__main__":
+    """Точка входа скрипта"""
     import sys
+    
     if len(sys.argv) > 1 and sys.argv[1] == '--legacy':
-        # Создание только основных аналитических словарей (legacy режим)
+        # Legacy режим без версионности
+        creator = DictionaryCreator()
         success = creator.run_full_analysis()
         print("⚠️ LEGACY режим: созданы только аналитические словари")
     else:
-        # Создание ВСЕХ словарей (новое поведение по умолчанию)
-        success = creator.create_all_dictionaries_with_dictget()
+        # Новый режим с версионностью
+        success = main()
     
-    if success:
-        print("🎯 Успешно!")
-        sys.exit(0)
-    else:
-        print("❌ Ошибка!")
-        sys.exit(1) 
+    sys.exit(0 if success else 1) 
