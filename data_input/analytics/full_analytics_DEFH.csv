@@ -1,10 +1,10 @@
-Поле,Объект Flame GPU,Источник DWH или Flame GPU,"cudf - Flame GPU
-TRANSFORM"
+Поле,Объект Flame GPU,Источник DWH или Flame GPU,cudf - Flame GPU TRANSFORM
 partno_comp,Environment MacroProperty1,md_components,uint32
 type_restricted,Environment MacroProperty1,md_components,multihot[u8]
 common_restricted1,,,
 common_restricted2,,,
 trigger_interval,,,
+restrictions_mask,Environment MacroProperty1,md_components,uint8
 group_by,Environment MacroProperty1,md_components,uint8
 comp_number,Environment MacroProperty1,md_components,uint8
 ll_mi8,Environment MacroProperty1,md_components,uint32
@@ -27,9 +27,10 @@ version_date,Environment MacroProperty2,LoggingLayer Planes,Date
 version_id,Environment MacroProperty2,LoggingLayer Planes,uint8
 mfg_date,Environment MacroProperty2,LoggingLayer Planes,Date
 active_trigger,Environment MacroProperty2,LoggingLayer Planes,Date
+aircraft_age_years,Environment Property3,heli_pandas,uint8
 version_date,Property,heli_pandas,Date
 version_id,Property,heli_pandas,uint8
-partseqno_i,Environment Property3,heli_pandas,uint16
+partseqno_i,Environment MacroProperty3,heli_pandas,uint32
 psn,Environment Property3,heli_pandas,uint32
 address_i,Environment Property3,heli_pandas,uint16
 lease_restricted,Environment Property3,heli_pandas,uint8
@@ -43,7 +44,6 @@ sne,Environment Property3,heli_pandas,uint32
 ppr,Environment Property3,heli_pandas,uint32
 repair_days,Environment Property3,heli_pandas,uint16
 mfg_date,Environment Property3,heli_pandas,Date
-aircraft_age_years,Environment Property3,heli_pandas,uint8
 dates,Environment MacroProperty4,flight_program_ac,Date
 ops_counter_mi8,Environment MacroProperty4,flight_program_ac,uint16
 ops_counter_mi17,Environment MacroProperty4,flight_program_ac,uint16
@@ -52,9 +52,9 @@ new_counter_mi17,Environment MacroProperty4,flight_program_ac,uint8
 trigger_program_mi8,Environment MacroProperty4,flight_program_ac,int8
 trigger_program_mi17,Environment MacroProperty4,flight_program_ac,int8
 trigger_program,Environment MacroProperty4,flight_program_ac,int8
-dates,Environment MacroProperty5,flight_program_fl,uint16
-aircraft_number,Environment MacroProperty5,flight_program_fl,uint16
-ac_typ_mask,Environment MacroProperty5,flight_program_fl,multihot[u8]
+dates,Environment MacroProperty5,flight_program_fl,Date
+aircraft_number,Environment MacroProperty5,flight_program_fl,uint32
+ac_type_mask,Environment MacroProperty5,flight_program_fl,multihot[u8]
 daily_hours,Environment MacroProperty5,flight_program_fl,uint32
 ops_counter_mi8,LoggingLayer,LoggingLayer Main,uint16
 ops_counter_mi17,LoggingLayer,LoggingLayer Main,uint16
