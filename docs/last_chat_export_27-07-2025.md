@@ -5442,7 +5442,7 @@ restrictions_mask = type_restricted * 1 +
 
 Теперь тестирую изменения:
 
-Файл не найден. Запускаю через ETL master для полного тестирования:
+Файл не найден. Запускаю через Extract master для полного тестирования:
 
 Система работает, но ожидает запуска из корневой папки. Проверяю что таблица flight_program_fl была пересоздана с правильной DDL:
 
@@ -6628,7 +6628,7 @@ restrictions_mask = type_restricted * 1 +
 4. Добавить `PARTITION BY toYYYYMM(version_date)`
 
 **ИЗМЕНЕНИЯ ЛОГИКИ:**
-- Передавать `version_date` и `version_id` из ETL master
+- Передавать `version_date` и `version_id` из Extract master
 - Учитывать версионность в аддитивной логике
 
 ## АРХИТЕКТУРНЫЙ ПЛАН:

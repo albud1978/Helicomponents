@@ -174,7 +174,7 @@ LOG_LEVEL=DEBUG python3 code/etl_master.py
 
 **Native протокол (clickhouse_driver, порт 9000):**
 - Высокая производительность для массовых операций
-- Основной ETL пайплайн
+- Основной Extract пайплайн
 - Файлы: `dual_loader.py`, процессоры статусов
 
 **HTTP протокол (clickhouse_connect, порт 8123):**

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Extract Master - Оркестратор Extract этапа
-Микросервисная архитектура ETL: Extract → Transform → Load
+Микросервисная архитектура: Extract → Transform → Load (этап Extract)
 
 Дата создания: 19-07-2025  
 Последнее обновление: 24-07-2025
@@ -35,7 +35,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('logs/etl_master.log'),
+        logging.FileHandler('logs/extract_master.log'),
         logging.StreamHandler()
     ]
 )
@@ -100,11 +100,11 @@ def extract_unified_version_date():
         logger.warning(f"🚨 Используем fallback дату: {fallback_date}")
         return fallback_date
 
-class ETLMaster:
-    """Главный оркестратор ETL системы"""
+class ExtractMaster:
+    """Главный оркестратор Extract этапа"""
     
-    # Конфигурация ETL пайплайна в правильном порядке
-    ETL_PIPELINE = [
+    # Конфигурация Extract пайплайна в правильном порядке
+    EXTRACT_PIPELINE = [
         {
             'script': 'md_components_loader.py',
             'description': 'MD Components - мастер-данные компонентов',
@@ -194,7 +194,7 @@ class ETLMaster:
     ]
     
     def __init__(self):
-        """Инициализация ETL Master"""
+        """Инициализация Extract Master"""
         self.client = None
         self.version_manager = None
         self.version_date = None
@@ -213,7 +213,7 @@ class ETLMaster:
             # Инициализация версионного менеджера
             self.version_manager = ETLVersionManager(self.client)
             
-            logger.info("✅ ETL Master инициализирован")
+            logger.info("✅ Extract Master инициализирован")
             return True
             
         except Exception as e:
@@ -223,7 +223,7 @@ class ETLMaster:
     def select_mode(self) -> bool:
         """Выбор режима работы: тест или прод"""
         print("\n" + "="*70)
-        print("🎯 ETL MASTER - HELICOPTER COMPONENT LIFECYCLE")
+        print("🎯 EXTRACT MASTER - HELICOPTER COMPONENT LIFECYCLE")
         print("="*70)
         print("\n🔧 Выберите режим работы:")
         print("1. 🧪 ТЕСТ - удалить ВСЕ таблицы и создать заново (быстро)")
@@ -257,7 +257,7 @@ class ETLMaster:
         try:
             logger.info("🧪 === РЕЖИМ ТЕСТ: ПОЛНАЯ ОЧИСТКА ===")
             
-            # Список ТОЛЬКО таблиц которые создаются текущим ETL пайплайном
+            # Список ТОЛЬКО таблиц которые создаются текущим Extract пайплайном
             # ЗАЩИЩЕНЫ ОТ УДАЛЕНИЯ: 
             # - OlapCube_VNV (cycle_full9.py), Heli_Components (analytic_CPU.py), Helicopter_Components, OlapCube_Analytics (демо-стенд)
             # - ИСТИННО АДДИТИВНЫЕ СЛОВАРИ: dict_partno_flat, dict_serialno_flat, dict_owner_flat, dict_ac_type_flat, aircraft_number_dict (MergeTree)
@@ -272,7 +272,7 @@ class ETLMaster:
                 'aircraft_number_dict_flat',      # Dictionary объект для номеров ВС
                 'digital_values_dict_flat',       # Dictionary объект для цифровых значений полей
                 
-                # Основные таблицы ETL пайплайна
+                # Основные таблицы Extract пайплайна
                 'heli_pandas', 'heli_raw',           # создается dual_loader.py  
                 'md_components',                     # создается md_components_loader.py
                 'status_overhaul',                   # создается status_overhaul_loader.py
@@ -379,7 +379,7 @@ class ETLMaster:
             return False
     
     def run_microservice(self, step: Dict) -> bool:
-        """Запуск отдельного ETL микросервиса"""
+        """Запуск отдельного Extract микросервиса"""
         script_name = step['script']
         description = step['description']
         
@@ -530,14 +530,14 @@ class ETLMaster:
             return {'success': False, 'message': f'Ошибка проверки {result_table}: {e}'}
     
     def run_pipeline(self) -> bool:
-        """Запуск полного ETL пайплайна"""
-        logger.info("🚀 === ЗАПУСК ETL ПАЙПЛАЙНА ===")
+        """Запуск полного Extract пайплайна"""
+        logger.info("🚀 === ЗАПУСК EXTRACT ПАЙПЛАЙНА ===")
         
-        total_steps = len(self.ETL_PIPELINE)
+        total_steps = len(self.EXTRACT_PIPELINE)
         success_count = 0
         failed_steps = []
         
-        for i, step in enumerate(self.ETL_PIPELINE, 1):
+        for i, step in enumerate(self.EXTRACT_PIPELINE, 1):
             logger.info(f"\n📋 ЭТАП {i}/{total_steps}: {step['script']}")
             
             # Проверка зависимостей
@@ -635,8 +635,8 @@ class ETLMaster:
             logger.warning(f"\n⚠️ Система требует дополнительной настройки")
 
 def main():
-    """Главная функция ETL Master"""
-    master = ETLMaster()
+    """Главная функция Extract Master"""
+    master = ExtractMaster()
     
     try:
         # Инициализация
@@ -663,17 +663,17 @@ def main():
         logger.info(f"\n⏱️ Общее время выполнения: {total_time:.1f} секунд")
         
         if success:
-            logger.info("🎉 ETL ПАЙПЛАЙН ЗАВЕРШЕН УСПЕШНО!")
+            logger.info("🎉 EXTRACT ПАЙПЛАЙН ЗАВЕРШЕН УСПЕШНО!")
             sys.exit(0)
         else:
-            logger.warning("⚠️ ETL ПАЙПЛАЙН ЗАВЕРШЕН С ОШИБКАМИ")
+            logger.warning("⚠️ EXTRACT ПАЙПЛАЙН ЗАВЕРШЕН С ОШИБКАМИ")
             sys.exit(1)
             
     except KeyboardInterrupt:
-        logger.info("\n❌ ETL Master прерван пользователем")
+        logger.info("\n❌ Extract Master прерван пользователем")
         sys.exit(130)
     except Exception as e:
-        logger.error(f"💥 Критическая ошибка ETL Master: {e}")
+        logger.error(f"💥 Критическая ошибка Extract Master: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
