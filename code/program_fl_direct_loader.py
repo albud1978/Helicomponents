@@ -278,7 +278,7 @@ class FlightProgramDirectLoader:
             # Создаем новую таблицу
             create_table_sql = """
             CREATE TABLE flight_program_fl (
-                aircraft_number UInt32,
+                aircraft_number UInt16,
                 dates Date,
                 daily_hours UInt32,
                 ac_type_mask UInt8,
