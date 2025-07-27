@@ -19,65 +19,7 @@ import os
 
 # Конфигурация теперь загружается через utils.config_loader
 
-def extract_version_date_from_excel(file_path):
-    """Извлекает дату версии из метаданных Excel файла"""
-    try:
-        print("📅 Определение версии данных из Excel метаданных...")
-        
-        workbook = openpyxl.load_workbook(file_path, read_only=True)
-        props = workbook.properties
-        
-        version_datetime = None
-        source_type = None
-        current_year = datetime.now().year
-        
-        # Приоритет 1: Дата создания файла
-        if props.created:
-            created_year = props.created.year
-            if abs(created_year - current_year) <= 1:
-                version_datetime = props.created
-                source_type = "Excel created"
-                print(f"📅 Дата создания Excel: {version_datetime}")
-            else:
-                print(f"⚠️ Дата создания {props.created} отличается от текущего года более чем на год")
-                
-        # Приоритет 2: Дата модификации
-        if version_datetime is None and props.modified:
-            version_datetime = props.modified
-            source_type = "Excel modified"
-            print(f"📅 Дата модификации Excel: {version_datetime}")
-            
-        # Приоритет 3: Время модификации файла в ОС
-        if version_datetime is None:
-            file_mtime = os.path.getmtime(file_path)
-            version_datetime = datetime.fromtimestamp(file_mtime)
-            source_type = "OS file mtime"
-            print(f"📅 Время модификации файла: {version_datetime}")
-        
-        workbook.close()
-        
-        file_size = os.path.getsize(file_path)
-        file_mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
-        print(f"📋 Файл: {os.path.basename(file_path)}")
-        print(f"📏 Размер: {file_size:,} байт")
-        print(f"🕐 Модификация ОС: {file_mtime}")
-        print(f"🎯 Источник версии: {source_type}")
-        
-        return version_datetime.date()
-        
-    except Exception as e:
-        print(f"⚠️ Ошибка извлечения метаданных Excel: {e}")
-        
-        try:
-            file_mtime = os.path.getmtime(file_path)
-            version_datetime = datetime.fromtimestamp(file_mtime)
-            print(f"📅 Fallback: используем время модификации файла: {version_datetime}")
-            return version_datetime.date()
-        except Exception as fallback_error:
-            print(f"❌ Критическая ошибка определения версии: {fallback_error}")
-            version_date = datetime.now().date()
-            print(f"🚨 Экстренный fallback: используем сегодняшнюю дату: {version_date}")
-            return version_date
+# Функция extract_version_date_from_excel удалена - используется общая utils.version_utils.extract_unified_version_date()
 
 def load_md_components():
     """Загружает MD_Components.xlsx"""
@@ -403,10 +345,10 @@ def main(version_date=None, version_id=None):
         
         # 4. Определение версии данных
         if version_date is None:
-            # Автоматическое извлечение из метаданных Excel (совместимость)
-            md_path = Path('data_input/master_data/MD_Сomponents.xlsx')
-            version_date = extract_version_date_from_excel(md_path)
-            print(f"🗓️ Версия данных (из Excel): {version_date}")
+            # ЕДИНЫЙ ИСТОЧНИК ВЕРСИОННОСТИ: Status_Components.xlsx
+            from utils.version_utils import extract_unified_version_date
+            version_date = extract_unified_version_date()
+            print(f"🗓️ Версия данных (из Status_Components.xlsx): {version_date}")
         else:
             print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
         

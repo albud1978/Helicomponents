@@ -32,47 +32,7 @@ sys.path.append(str(Path(__file__).parent / 'utils'))
 from config_loader import get_clickhouse_client
 from excel_utils import clean_excel_data
 
-def extract_version_date_from_excel(file_path):
-    """Извлекает дату версии из метаданных Excel файла"""
-    try:
-        print(f"📄 Извлечение версии из {Path(file_path).name}...")
-        
-        # Загружаем рабочую книгу
-        workbook = openpyxl.load_workbook(file_path, data_only=True)
-        
-        # Пытаемся найти дату в метаданных
-        version_date = None
-        version_source = "unknown"
-        
-        # 1. Проверяем встроенные метаданные
-        if hasattr(workbook, 'properties') and workbook.properties:
-            if workbook.properties.created:
-                version_date = workbook.properties.created.date()
-                version_source = "created date"
-            elif workbook.properties.modified:
-                version_date = workbook.properties.modified.date()
-                version_source = "modified date"
-        
-        # 2. Если метаданных нет, используем дату файла
-        if version_date is None:
-            file_stats = os.stat(file_path)
-            version_date = datetime.fromtimestamp(file_stats.st_mtime).date()
-            version_source = "file modification time"
-        
-        # Дополнительная информация
-        file_stats = os.stat(file_path)
-        print(f"📋 Файл: {Path(file_path).name}")
-        print(f"📏 Размер: {file_stats.st_size:,} байт")
-        print(f"🕐 Модификация ОС: {datetime.fromtimestamp(file_stats.st_mtime)}")
-        
-        print(f"🎯 Источник версии: {version_source}")
-        workbook.close()
-        
-        return version_date
-        
-    except Exception as e:
-        print(f"⚠️ Ошибка извлечения версии: {e}")
-        return date.today()
+# Функция extract_version_date_from_excel удалена - используется общая utils.version_utils.extract_unified_version_date()
 
 def load_program_ac_data():
     """Загружает данные реестра вертолетов в эксплуатации"""
@@ -430,12 +390,12 @@ def main(version_date=None, version_id=None):
         df = load_program_ac_data()
         original_count = len(df)
         
-                # 4. Определение версии данных
+        # 4. Определение версии данных
         if version_date is None:
-            # Автоматическое извлечение из метаданных Excel (совместимость)
-            program_ac_path = Path('data_input/source_data/Program_AC.xlsx')
-            version_date = extract_version_date_from_excel(program_ac_path)
-            print(f"🗓️ Версия данных (из Excel): {version_date}")
+            # ЕДИНЫЙ ИСТОЧНИК ВЕРСИОННОСТИ: Status_Components.xlsx
+            from utils.version_utils import extract_unified_version_date
+            version_date = extract_unified_version_date()
+            print(f"🗓️ Версия данных (из Status_Components.xlsx): {version_date}")
         else:
             print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
         

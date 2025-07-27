@@ -27,70 +27,7 @@ import time
 
 # Безопасная конфигурация через utils.config_loader
 
-def extract_version_date_from_excel(file_path):
-    """Извлекает дату версии из метаданных Excel файла с проверкой корректности года"""
-    try:
-        print("📅 Определение версии данных из Excel метаданных...")
-        
-        # Открываем файл для чтения метаданных
-        workbook = openpyxl.load_workbook(file_path, read_only=True)
-        props = workbook.properties
-        
-        version_datetime = None
-        source_type = None
-        current_year = datetime.now().year
-        
-        # Приоритет 1: Дата создания файла (если не старше года)
-        if props.created:
-            created_year = props.created.year
-            if abs(created_year - current_year) <= 1:  # Не старше года
-                version_datetime = props.created
-                source_type = "Excel created"
-                print(f"📅 Дата создания Excel: {version_datetime}")
-            else:
-                print(f"⚠️ Дата создания {props.created} отличается от текущего года более чем на год, используем дату модификации")
-                
-        # Приоритет 2: Дата модификации (если создание некорректно или отсутствует)
-        if version_datetime is None and props.modified:
-            version_datetime = props.modified
-            source_type = "Excel modified"
-            print(f"📅 Дата модификации Excel: {version_datetime}")
-            
-        # Приоритет 3: Время модификации файла в ОС
-        if version_datetime is None:
-            file_mtime = os.path.getmtime(file_path)
-            version_datetime = datetime.fromtimestamp(file_mtime)
-            source_type = "OS file mtime"
-            print(f"📅 Время модификации файла: {version_datetime}")
-        
-        workbook.close()
-        
-        # Дополнительная информация
-        file_size = os.path.getsize(file_path)
-        file_mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
-        print(f"📋 Файл: {os.path.basename(file_path)}")
-        print(f"📏 Размер: {file_size:,} байт")
-        print(f"🕐 Модификация ОС: {file_mtime}")
-        print(f"🎯 Источник версии: {source_type}")
-        
-        # Возвращаем только дату (без времени) для совместимости
-        return version_datetime.date()
-        
-    except Exception as e:
-        print(f"⚠️ Ошибка извлечения метаданных Excel: {e}")
-        
-        # Fallback к дате файла
-        try:
-            file_mtime = os.path.getmtime(file_path)
-            version_datetime = datetime.fromtimestamp(file_mtime)
-            print(f"📅 Fallback: используем время модификации файла: {version_datetime}")
-            return version_datetime.date()
-        except Exception as fallback_error:
-            print(f"❌ Критическая ошибка определения версии: {fallback_error}")
-            # Последний fallback - сегодняшняя дата
-            version_date = datetime.now().date()
-            print(f"🚨 Экстренный fallback: используем сегодняшнюю дату: {version_date}")
-            return version_date
+# Функция extract_version_date_from_excel удалена - используется общая utils.version_utils.extract_unified_version_date()
 
 def get_md_partnos(client):
     """Читает список партномеров из таблицы md_components в ClickHouse"""
@@ -619,10 +556,10 @@ def main(version_date=None, version_id=None):
         print(f"🗓️ [ЭТАП 4] Определение версии...")
         step_start = time.time()
         if version_date is None:
-            # Автоматическое извлечение из метаданных Excel (совместимость)
-            status_path = Path('data_input/source_data/Status_Components.xlsx')
-            version_date = extract_version_date_from_excel(status_path)
-            print(f"✅ [ЭТАП 4] Версия определена (из Excel): {version_date}")
+            # ЕДИНЫЙ ИСТОЧНИК ВЕРСИОННОСТИ: Status_Components.xlsx
+            from utils.version_utils import extract_unified_version_date
+            version_date = extract_unified_version_date()
+            print(f"✅ [ЭТАП 4] Версия определена (из Status_Components.xlsx): {version_date}")
         else:
             print(f"✅ [ЭТАП 4] Версия получена (из ETL): {version_date}, version_id: {version_id}")
         

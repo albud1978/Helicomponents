@@ -9,55 +9,7 @@ import os
 sys.path.append(str(Path(__file__).parent))
 from utils.config_loader import get_clickhouse_client
 
-def extract_version_date_from_excel(file_path):
-    """Извлекает дату версии из метаданных Excel файла"""
-    try:
-        print(f"📅 Определение версии данных из Excel метаданных...")
-        
-        # Открываем Excel файл для чтения метаданных
-        workbook = openpyxl.load_workbook(file_path, read_only=True)
-        props = workbook.properties
-        
-        current_year = datetime.now().year
-        version_source = "unknown"
-        version_date = date.today()
-        
-        # Приоритет 1: дата создания файла (с проверкой года)
-        if props.created:
-            created_date = props.created
-            if abs(created_date.year - current_year) <= 1:
-                version_date = created_date.date()
-                version_source = "Excel created"
-            else:
-                print(f"⚠️ Дата создания {created_date} отличается от текущего года более чем на год")
-        
-        # Приоритет 2: дата модификации
-        if props.modified and version_source == "unknown":
-            version_date = props.modified.date()
-            version_source = "Excel modified"
-        elif props.modified:
-            print(f"📅 Дата модификации Excel: {props.modified}")
-        
-        # Приоритет 3: время модификации файла в ОС
-        if version_source == "unknown":
-            mtime = os.path.getmtime(file_path)
-            version_date = datetime.fromtimestamp(mtime).date()
-            version_source = "OS modified"
-        
-        # Дополнительная информация
-        file_stats = os.stat(file_path)
-        print(f"📋 Файл: {Path(file_path).name}")
-        print(f"📏 Размер: {file_stats.st_size:,} байт")
-        print(f"🕐 Модификация ОС: {datetime.fromtimestamp(file_stats.st_mtime)}")
-        
-        print(f"🎯 Источник версии: {version_source}")
-        workbook.close()
-        
-        return version_date
-        
-    except Exception as e:
-        print(f"⚠️ Ошибка извлечения версии: {e}")
-        return date.today()
+# Функция extract_version_date_from_excel удалена - используется общая utils.version_utils.extract_unified_version_date()
 
 def load_status_overhaul_data():
     """Загружает данные о статусе капитального ремонта"""
@@ -411,10 +363,10 @@ def main(version_date=None, version_id=None):
         
         # 4. Определение версии данных
         if version_date is None:
-            # Автоматическое извлечение из метаданных Excel (совместимость)
-            status_overhaul_path = Path('data_input/source_data/Status_Overhaul.xlsx')
-            version_date = extract_version_date_from_excel(status_overhaul_path)
-            print(f"🗓️ Версия данных (из Excel): {version_date}")
+            # ЕДИНЫЙ ИСТОЧНИК ВЕРСИОННОСТИ: Status_Components.xlsx
+            from utils.version_utils import extract_unified_version_date
+            version_date = extract_unified_version_date()
+            print(f"🗓️ Версия данных (из Status_Components.xlsx): {version_date}")
         else:
             print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
         
