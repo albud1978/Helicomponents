@@ -92,3 +92,35 @@ analyze_*/
 check_*/
 *.debug
 *.test
+
+# GPU libraries and external dependencies (28-07-2025 update)
+FLAMEGPU2/
+miniconda*/
+anaconda*/
+
+# Installation artifacts
+*.whl
+*.tar.gz
+
+# Confidential data
+.env.*
+credentials.*
+db_config.local
+
+# Failed command artifacts
+=*.*.*
+path==*
+*==*.*.*
+
+# Temporary development files
+*.tmp
+*.backup
+*.bak
+*_backup*
+*_copy*
+
+# Logs and cache
+*.log
+.tmp/
+.cache/
+.download/
