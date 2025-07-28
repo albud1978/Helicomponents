@@ -155,13 +155,6 @@ class ExtractMaster:
             'critical': False
         },
         {
-            'script': 'repair_days_calculator.py',
-            'description': 'Расчет repair_days для ВС в ремонте',
-            'dependencies': ['md_components', 'heli_pandas', 'status_overhaul'],
-            'result_table': 'heli_pandas',
-            'critical': False
-        },
-        {
             'script': 'dictionary_creator.py',
             'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
             'dependencies': ['heli_pandas', 'md_components'],
@@ -190,6 +183,14 @@ class ExtractMaster:
             'dependencies': ['heli_pandas', 'md_components', 'flight_program_ac', 'flight_program_fl'],
             'result_table': 'dict_digital_values_flat',
             'critical': False
+        },
+        # === ФИНАЛЬНЫЕ РАСЧЕТЫ (после всех словарей и тензоров) ===
+        {
+            'script': 'repair_days_calculator.py',
+            'description': 'Расчет repair_days для ВС в ремонте',
+            'dependencies': ['md_components', 'heli_pandas', 'status_overhaul', 'dict_digital_values_flat'],
+            'result_table': 'heli_pandas',
+            'critical': True
         }
     ]
     

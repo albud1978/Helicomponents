@@ -59,7 +59,7 @@ def prepare_md_data(df, version_date, version_id=1):
         df['version_id'] = version_id
         
         # Обработка строковых полей для ClickHouse
-        string_columns = ['partno', 'ac_typ']
+        string_columns = ['partno']
         for col in string_columns:
             if col in df.columns:
                 df[col] = df[col].astype(str)
@@ -67,13 +67,21 @@ def prepare_md_data(df, version_date, version_id=1):
                 # Очищаем переносы строк в partno
                 if col == 'partno':
                     df[col] = df[col].str.replace('\n', '', regex=False)
+        
+        # Обработка ac_type_mask (переименование и преобразование в UInt8)
+        if 'ac_type_mask' in df.columns:
+            # Преобразуем в числовой формат (32, 64, 96)
+            df['ac_type_mask'] = pd.to_numeric(df['ac_type_mask'], errors='coerce')
+            df['ac_type_mask'] = df['ac_type_mask'].clip(lower=0, upper=255)
+            df['ac_type_mask'] = df['ac_type_mask'].fillna(0).astype('int64')
+            print(f"   🔧 ac_type_mask: UInt8 (маски типов ВС: 32, 64, 96)")
 
         # Обработка числовых полей с валидацией диапазонов для GPU-оптимизированных типов
         
         # UInt8 поля (0-255)
         uint8_columns = [
             'comp_number', 'group_by', 'type_restricted', 'common_restricted1', 'common_restricted2',
-            'trigger_interval', 'partout_time', 'assembly_time'
+            'trigger_interval', 'partout_time', 'assembly_time', 'ac_type_mask'
         ]
         
         # UInt16 поля (0-65535)
@@ -85,8 +93,8 @@ def prepare_md_data(df, version_date, version_id=1):
         # Float32 поля (денежные поля оптимизированы для GPU)  
         float32_columns = ['repair_price', 'purchase_price']
         
-        # Float64 поля (оставляем без изменений)
-        float64_columns = ['sne', 'ppr']
+        # UInt32 поля (переименованные поля, оптимизированы Float64→UInt32)
+        uint32_sne_ppr_columns = ['sne_new', 'ppr_new']
         
         # Обработка UInt8 полей
         for col in uint8_columns:
@@ -119,12 +127,13 @@ def prepare_md_data(df, version_date, version_id=1):
                 df[col] = df[col].where(df[col].notnull(), None).astype('float32')
                 print(f"   🔧 {col}: Float32 (GPU-оптимизированный)")
         
-        # Обработка Float64 полей (без изменений)
-        for col in float64_columns:
+        # Обработка UInt32 полей для sne_new, ppr_new (оптимизированы Float64→UInt32)
+        for col in uint32_sne_ppr_columns:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
-                df[col] = df[col].where(df[col].notnull(), None)
-                print(f"   🔧 {col}: Float64 (без изменений)")
+                df[col] = df[col].clip(lower=0, upper=4294967295)  # Валидация диапазона UInt32
+                df[col] = df[col].fillna(0).astype('int64')  # Стандартный паттерн как в dual_loader.py
+                print(f"   🔧 {col}: UInt32 (оптимизировано Float64→UInt32)")
 
         # Добавляем дополнительные поля для совместимости с полной схемой таблицы
         if 'br' not in df.columns:
@@ -160,15 +169,19 @@ def prepare_md_data(df, version_date, version_id=1):
         sys.exit(1)
 
 def create_md_table(client):
-    """Создает таблицу md_components в ClickHouse"""
+    """Создает таблицу md_components в ClickHouse с обновленной схемой"""
     try:
+        # Удаляем старую таблицу для пересоздания с новыми полями
+        print("🗑️ Удаление старой таблицы md_components...")
+        client.execute("DROP TABLE IF EXISTS md_components")
+        
         create_sql = """
-        CREATE TABLE IF NOT EXISTS md_components (
+        CREATE TABLE md_components (
             -- Основные идентификаторы
             `partno` Nullable(String),              -- Чертежный номер
             `comp_number` Nullable(UInt8),          -- Количество на ВС (было Float64 → uint8)
             `group_by` Nullable(UInt8),             -- Группировка
-            `ac_typ` Nullable(String),              -- Тип ВС
+            `ac_type_mask` Nullable(UInt8),         -- Тип ВС (маска: 32, 64, 96)
             
             -- Ограничения (оптимизированы для GPU)
             `type_restricted` Nullable(UInt8),      -- Ограничение по типу (было Float64 → uint8 multihot)
@@ -194,9 +207,9 @@ def create_md_table(client):
             `repair_price` Nullable(Float32),       -- Цена ремонта (было Float64 → float32)
             `purchase_price` Nullable(Float32),     -- Цена покупки (было Float64 → float32)
             
-            -- Дополнительные ресурсы (оставляем Float64)
-            `sne` Nullable(Float64),                -- SNE
-            `ppr` Nullable(Float64),                -- PPR
+            -- Дополнительные ресурсы (переименованные поля, оптимизированы для GPU)
+            `sne_new` Nullable(UInt32),             -- SNE (переименовано из sne, Float64→UInt32)
+            `ppr_new` Nullable(UInt32),             -- PPR (переименовано из ppr, Float64→UInt32)
             
             -- Метаданные файла
             `version_date` Date DEFAULT today(),    -- Дата версии

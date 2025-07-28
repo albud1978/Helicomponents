@@ -202,15 +202,17 @@ class DictionaryCreator:
             partno_data = [(row[0], row[1]) for row in partno_result.result_rows]
             self.logger.info(f"📋 Найдено {len(partno_data)} уникальных пар partno → partseqno_i")
             
-            # Анализ серийных номеров - берем DISTINCT пары serialno, psn
+            # Анализ серийных номеров - берем DISTINCT пары (partno, serialno), psn
             serialno_result = self.client.query("""
-                SELECT DISTINCT serialno, psn
+                SELECT DISTINCT partno, serialno, psn
                 FROM heli_pandas 
-                WHERE serialno IS NOT NULL AND serialno != '' AND psn IS NOT NULL
+                WHERE partno IS NOT NULL AND partno != '' 
+                  AND serialno IS NOT NULL AND serialno != '' 
+                  AND psn IS NOT NULL
                 ORDER BY psn
             """)
-            serialno_data = [(row[0], row[1]) for row in serialno_result.result_rows]
-            self.logger.info(f"📋 Найдено {len(serialno_data)} уникальных пар serialno → psn")
+            serialno_data = [(row[0], row[1], row[2]) for row in serialno_result.result_rows]
+            self.logger.info(f"📋 Найдено {len(serialno_data)} уникальных троек (partno, serialno) → psn")
             
             # Анализ владельцев - берем DISTINCT пары owner, address_i
             owner_result = self.client.query("""
@@ -260,15 +262,15 @@ class DictionaryCreator:
             }
             self.logger.info(f"✅ Создан словарь partno: {len(partno_dict)} партномеров → partseqno_i (UInt32)")
         
-        # Создание словаря серийных номеров - используем реальные psn
+        # Создание словаря серийных номеров - используем пары (partno, serialno) → psn
         if 'serialno' in analysis:
             serialno_pairs = analysis['serialno']['pairs']
-            serialno_dict = {serialno: psn for serialno, psn in serialno_pairs}
+            serialno_dict = {(partno, serialno): psn for partno, serialno, psn in serialno_pairs}
             dictionaries['serialno'] = {
                 'mapping': serialno_dict,
                 'target_type': 'UInt32'
             }
-            self.logger.info(f"✅ Создан словарь serialno: {len(serialno_dict)} серийных номеров → psn (UInt32)")
+            self.logger.info(f"✅ Создан словарь serialno: {len(serialno_dict)} пар (partno, serialno) → psn (UInt32)")
         
         # Создание словаря владельцев - используем реальные address_i
         if 'owner' in analysis:
@@ -327,16 +329,17 @@ class DictionaryCreator:
             SETTINGS index_granularity = 8192
             """
             
-            # Таблица серийных номеров - serialno → psn (АДДИТИВНАЯ + ВЕРСИОННАЯ)
+            # Таблица серийных номеров - (partno, serialno) → psn (АДДИТИВНАЯ + ВЕРСИОННАЯ)
             serialno_dict_sql = """
             CREATE TABLE IF NOT EXISTS dict_serialno_flat (
                 psn UInt32,
+                partno String,
                 serialno String,
                 version_date Date DEFAULT today(),
                 version_id UInt8 DEFAULT 1,
                 load_timestamp DateTime DEFAULT now()
             ) ENGINE = MergeTree()
-            ORDER BY (psn, serialno, version_date, version_id, load_timestamp)
+            ORDER BY (psn, partno, serialno, version_date, version_id, load_timestamp)
             PARTITION BY toYYYYMM(version_date)
             SETTINGS index_granularity = 8192
             """
@@ -410,16 +413,16 @@ class DictionaryCreator:
                                      column_names=['partseqno_i', 'partno', 'version_date', 'version_id', 'load_timestamp'])
                     self.logger.info(f"✅ Добавлено {len(partno_data)} партномеров (аддитивно + версионно)")
             
-            # Заполнение серийных номеров - serialno → psn (АДДИТИВНО + ВЕРСИОННО)
+            # Заполнение серийных номеров - (partno, serialno) → psn (АДДИТИВНО + ВЕРСИОННО)
             if 'serialno' in dictionaries:
                 serialno_data = []
-                for serialno, psn in dictionaries['serialno']['mapping'].items():
-                    serialno_data.append([psn, serialno, self.version_date, self.version_id, current_timestamp])
+                for (partno, serialno), psn in dictionaries['serialno']['mapping'].items():
+                    serialno_data.append([psn, partno, serialno, self.version_date, self.version_id, current_timestamp])
                 
                 if serialno_data:
                     self.client.insert('dict_serialno_flat', serialno_data,
-                                     column_names=['psn', 'serialno', 'version_date', 'version_id', 'load_timestamp'])
-                    self.logger.info(f"✅ Добавлено {len(serialno_data)} серийных номеров (аддитивно + версионно)")
+                                     column_names=['psn', 'partno', 'serialno', 'version_date', 'version_id', 'load_timestamp'])
+                    self.logger.info(f"✅ Добавлено {len(serialno_data)} пар (partno, serialno) (аддитивно + версионно)")
             
             # Заполнение владельцев - owner → address_i (АДДИТИВНО + ВЕРСИОННО)
             if 'owner' in dictionaries:
@@ -482,10 +485,11 @@ class DictionaryCreator:
             LIFETIME(MIN 0 MAX 3600)
             """
             
-            # Dictionary для серийных номеров - psn → serialno
+            # Dictionary для серийных номеров - psn → (partno, serialno)
             serialno_dict_ddl = f"""
             CREATE OR REPLACE DICTIONARY serialno_dict_flat (
                 psn UInt32,
+                partno String,
                 serialno String
             )
             PRIMARY KEY psn
@@ -921,10 +925,11 @@ def main(version_date=None, version_id=None):
     try:
         creator = DictionaryCreator()
         
-        # Версионные параметры будут получены из heli_pandas в populate_dictionary_tables
+        # Устанавливаем версионные параметры если переданы
         if version_date is not None and version_id is not None:
+            creator.version_date = version_date
+            creator.version_id = version_id
             print(f"🗓️ Версия данных (из параметров ETL): {version_date}, version_id: {version_id}")
-            print("💡 Версионные параметры будут получены из heli_pandas для единой синхронизации")
         else:
             print("📅 Версионные параметры будут получены из heli_pandas автоматически")
         
@@ -946,14 +951,37 @@ def main(version_date=None, version_id=None):
 if __name__ == "__main__":
     """Точка входа скрипта"""
     import sys
+    import argparse
+    from datetime import datetime
     
-    if len(sys.argv) > 1 and sys.argv[1] == '--legacy':
+    parser = argparse.ArgumentParser(description='Dictionary Creator - Создание всех словарей')
+    parser.add_argument('--version-date', type=str, help='Дата версии данных (YYYY-MM-DD)')
+    parser.add_argument('--version-id', type=int, help='ID версии данных')
+    parser.add_argument('--legacy', action='store_true', help='Legacy режим без версионности')
+    
+    args = parser.parse_args()
+    
+    if args.legacy:
         # Legacy режим без версионности
         creator = DictionaryCreator()
         success = creator.run_full_analysis()
         print("⚠️ LEGACY режим: созданы только аналитические словари")
     else:
+        # Парсинг версионных параметров
+        version_date_parsed = None
+        version_id_parsed = None
+        
+        if args.version_date:
+            try:
+                version_date_parsed = datetime.strptime(args.version_date, '%Y-%m-%d').date()
+            except ValueError:
+                print(f"❌ Неверный формат даты: {args.version_date}. Используйте YYYY-MM-DD")
+                sys.exit(1)
+        
+        if args.version_id:
+            version_id_parsed = args.version_id
+        
         # Новый режим с версионностью
-        success = main()
+        success = main(version_date=version_date_parsed, version_id=version_id_parsed)
     
     sys.exit(0 if success else 1) 

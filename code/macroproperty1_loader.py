@@ -83,17 +83,15 @@ class MacroProperty1Loader:
         try:
             # Если указаны версионные параметры, используем их
             if self.version_date and self.version_id:
-                query = """
+                # Преобразуем datetime в строку даты для ClickHouse
+                version_date_str = self.version_date.strftime('%Y-%m-%d') if hasattr(self.version_date, 'strftime') else str(self.version_date)
+                query = f"""
                     SELECT * FROM md_components 
-                    WHERE version_date = %(version_date)s 
-                    AND version_id = %(version_id)s
+                    WHERE version_date = '{version_date_str}' 
+                    AND version_id = {self.version_id}
                     ORDER BY partno_comp
                 """
-                params = {
-                    'version_date': self.version_date, 
-                    'version_id': self.version_id
-                }
-                result = self.client.execute(query, params)
+                result = self.client.execute(query)
             else:
                 # Загружаем последнюю версию
                 query = """

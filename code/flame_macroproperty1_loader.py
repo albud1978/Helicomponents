@@ -83,7 +83,7 @@ class FlameMacroProperty1Loader:
             
             self.field_mapping = field_mapping
             self.stats['field_mapping'] = field_mapping
-            self.logger.info(f"✅ Загружено {len(field_mapping)} field_id маппингов")
+            self.logger.info(f"✅ Загружено {len(field_mapping)} field_id маппингов из md_components (из них будет использовано 20 для MacroProperty1)")
             
             return field_mapping
             
@@ -114,27 +114,61 @@ class FlameMacroProperty1Loader:
             raise
     
     def load_md_components_from_clickhouse(self) -> Tuple[List[Tuple], List[str]]:
-        """Загрузка данных md_components из ClickHouse"""
+        """Загрузка данных md_components из ClickHouse с фильтрацией по analytics_fields"""
         self.logger.info("📊 Загрузка данных md_components из ClickHouse...")
         
+        # Определяем поля для аналитики MacroProperty1 (20 полей - расширенная аналитика)
+        analytics_fields = [
+            # Основные поля компонентов (14 полей из базовой аналитики)
+            'partno_comp',         # field_id: 44
+            'type_restricted',     # field_id: 68
+            'group_by',           # field_id: 20
+            'comp_number',        # field_id: 13
+            'll_mi8',             # field_id: 27
+            'll_mi17',            # field_id: 26
+            'oh_mi8',             # field_id: 35
+            'oh_mi17',            # field_id: 34
+            'oh_threshold_mi8',   # field_id: 37
+            'repair_time',        # field_id: 54
+            'partout_time',       # field_id: 45
+            'assembly_time',      # field_id: 9
+            'br',                 # field_id: 10
+            'restrictions_mask',  # field_id: 55
+            
+            # Дополнительные поля для симуляции (6 полей)
+            'common_restricted1', # field_id: 11 - нужен для restrictions_mask
+            'common_restricted2', # field_id: 12 - нужен для restrictions_mask  
+            'trigger_interval',   # field_id: 64 - нужен для restrictions_mask
+            'ac_type_mask',       # field_id: 4  - нужен для симуляции МИ-8/МИ-17
+            'sne_new',            # field_id: 93 - оптимизированное поле
+            'ppr_new'             # field_id: 88 - оптимизированное поле
+        ]
+        
+        # Исключаем лишние поля
+        excluded_fields = ['partno', 'repair_price', 'purchase_price']
+        
+        self.logger.info(f"🔍 Фильтрация MacroProperty1: {len(analytics_fields)} полей аналитики")
+        self.logger.info(f"🗑️ Исключаем поля: {excluded_fields}")
+        
         try:
+            # Формируем SELECT с фильтрацией полей
+            fields_str = ', '.join(analytics_fields)
+            
             # Определяем версионные параметры
             if self.version_date and self.version_id:
-                query = """
-                    SELECT * FROM md_components 
-                    WHERE version_date = %(version_date)s 
-                    AND version_id = %(version_id)s
+                # Преобразуем datetime в строку даты для ClickHouse
+                version_date_str = self.version_date.strftime('%Y-%m-%d') if hasattr(self.version_date, 'strftime') else str(self.version_date)
+                query = f"""
+                    SELECT {fields_str} FROM md_components 
+                    WHERE version_date = '{version_date_str}' 
+                    AND version_id = {self.version_id}
                     ORDER BY partno_comp
                 """
-                params = {
-                    'version_date': self.version_date, 
-                    'version_id': self.version_id
-                }
-                result = self.client.execute(query, params)
+                result = self.client.execute(query)
             else:
                 # Загружаем последнюю версию
-                query = """
-                    SELECT * FROM md_components 
+                query = f"""
+                    SELECT {fields_str} FROM md_components 
                     WHERE (version_date, version_id) = (
                         SELECT version_date, version_id 
                         FROM md_components 
@@ -145,15 +179,8 @@ class FlameMacroProperty1Loader:
                 """
                 result = self.client.execute(query)
             
-            # Получаем порядок полей
-            field_order_query = """
-                SELECT name, position 
-                FROM system.columns 
-                WHERE database = 'default' AND table = 'md_components'
-                ORDER BY position
-            """
-            column_info = self.client.execute(field_order_query)
-            field_order = [col_name for col_name, pos in column_info]
+            # Порядок полей соответствует analytics_fields
+            field_order = analytics_fields
             
             self.component_count = len(result)
             self.stats['total_records'] = len(result)
@@ -233,7 +260,7 @@ class FlameMacroProperty1Loader:
                     else:
                         self.logger.warning(f"   ⚠️ Неизвестный тип {ch_type} для поля {field_name}")
             
-            self.stats['loaded_macroproperties'] = created_properties
+            self.stats['created_properties'] = created_properties
             self.logger.info(f"🎯 Создано {created_properties} Property Arrays в FLAME GPU Environment")
             
             return env
@@ -304,8 +331,19 @@ class FlameMacroProperty1Loader:
                             default_val = default
                             break
                     
-                    # Заменяем None на дефолтные значения
-                    column_data = [default_val if val is None else val for val in raw_column_data]
+                    # Заменяем None на дефолтные значения и обрабатываем Date
+                    column_data = []
+                    for val in raw_column_data:
+                        if val is None:
+                            column_data.append(default_val)
+                        elif 'Date' in ch_type and hasattr(val, 'year'):
+                            # Конвертируем Date в days since epoch (для UInt16)
+                            epoch_date = datetime(1970, 1, 1).date()
+                            date_val = val if hasattr(val, 'year') else val.date()
+                            days_since_epoch = (date_val - epoch_date).days
+                            column_data.append(days_since_epoch)
+                        else:
+                            column_data.append(val)
                     
                     # Определяем метод установки
                     set_method = None
@@ -327,6 +365,7 @@ class FlameMacroProperty1Loader:
                     else:
                         self.logger.warning(f"   ⚠️ Метод {set_method} не найден для поля {field_name}")
             
+            self.stats['loaded_macroproperties'] = loaded_properties
             self.logger.info(f"🎯 Загружено {loaded_properties} Property Arrays с данными")
             
         except Exception as e:

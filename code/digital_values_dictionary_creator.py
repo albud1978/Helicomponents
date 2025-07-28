@@ -67,7 +67,7 @@ class DigitalValuesDictionaryCreator:
             'partno': ('Nullable(String)', 'Чертежный номер'),
             'comp_number': ('Nullable(UInt8)', 'Количество на ВС (оптимизировано: Float64→UInt8)'),
             'group_by': ('Nullable(UInt8)', 'Группировка для расчетов'),
-            'ac_typ': ('Nullable(String)', 'Тип ВС'),
+            'ac_type_mask': ('Nullable(UInt8)', 'Тип ВС (маска: 32, 64, 96)'),
             'type_restricted': ('Nullable(UInt8)', 'Ограничение по типу (оптимизировано: Float64→UInt8)'),
             'common_restricted1': ('Nullable(UInt8)', 'Общее ограничение 1 (оптимизировано: Float64→UInt8)'),
             'common_restricted2': ('Nullable(UInt8)', 'Общее ограничение 2 (оптимизировано: Float64→UInt8)'),
@@ -80,14 +80,15 @@ class DigitalValuesDictionaryCreator:
             'oh_threshold_mi8': ('Nullable(UInt32)', 'Порог МРР МИ-8 (оптимизировано: Float64→UInt32)'),
             'll_mi17': ('Nullable(UInt32)', 'Назначенный ресурс МИ-17 (оптимизировано: Float64→UInt32)'),
             'oh_mi17': ('Nullable(UInt32)', 'Межремонтный ресурс МИ-17 (оптимизировано: Float64→UInt32)'),
-            'repair_price': ('Nullable(Float32)', 'Цена ремонта'),
-            'purchase_price': ('Nullable(Float32)', 'Цена покупки'),
-            'sne': ('Nullable(Float64)', 'SNE'),
-            'ppr': ('Nullable(Float64)', 'PPR'),
+            'repair_price': ('Nullable(Float32)', 'Цена ремонта (НЕ для аналитики)'),
+            'purchase_price': ('Nullable(Float32)', 'Цена покупки (НЕ для аналитики)'),
+            'sne_new': ('Nullable(UInt32)', 'SNE (переименовано из sne, оптимизировано Float64→UInt32)'),
+            'ppr_new': ('Nullable(UInt32)', 'PPR (переименовано из ppr, оптимизировано Float64→UInt32)'),
             'version_date': ('Date', 'Дата версии данных'),
             'version_id': ('UInt8', 'ID версии данных'),
             'br': ('Nullable(UInt32)', 'Beyond Repair (оптимизировано: UInt16→UInt32)'),
-            'partno_comp': ('Nullable(UInt32)', 'Component ID')
+            'partno_comp': ('Nullable(UInt32)', 'Component ID'),
+            'restrictions_mask': ('UInt8', 'Битовая маска ограничений')
         },
         'flight_program_ac': {
             'dates': ('Date', 'Календарные даты'),
@@ -266,20 +267,17 @@ class DigitalValuesDictionaryCreator:
                     else:
                         description = f"Поле {field_name} из таблицы {table_name}"
                     
-                    field_key = field_name  # DISTINCT по имени поля
+                    field_key = (table_name, field_name)  # DISTINCT по паре (таблица, поле)
                     
-                    if field_key not in field_details:
-                        field_details[field_key] = {
-                            'field_name': field_name,
-                            'primary_table': table_name,  # Первая встреченная таблица
-                            'data_type': clean_type,      # РЕАЛЬНЫЙ тип из ClickHouse
-                            'description': description,
-                            'is_nullable': is_nullable,
-                            'tables': [table_name]
-                        }
-                    else:
-                        # Добавляем таблицу к существующему полю
-                        field_details[field_key]['tables'].append(table_name)
+                    # Каждая пара (таблица, поле) является уникальной записью
+                    field_details[field_key] = {
+                        'field_name': field_name,
+                        'primary_table': table_name,
+                        'data_type': clean_type,      # РЕАЛЬНЫЙ тип из ClickHouse
+                        'description': description,
+                        'is_nullable': is_nullable,
+                        'tables': [table_name]
+                    }
                         
             except Exception as e:
                 self.logger.warning(f"⚠️ Таблица {table_name} недоступна: {e}")

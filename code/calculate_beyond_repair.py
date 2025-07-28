@@ -69,7 +69,7 @@ class BeyondRepairCalculator:
                     oh_threshold_mi8, oh_mi17,
                     repair_price,
                     purchase_price,
-                    ac_typ
+                    ac_type_mask
                 FROM md_components 
                 WHERE purchase_price > 0 
                   AND repair_price > 0 
@@ -80,7 +80,7 @@ class BeyondRepairCalculator:
             
             components_data = {}
             for row in components_result:
-                partno, ll_mi8, ll_mi17, oh_mi8, oh_mi17, repair_price, purchase_price, ac_typ = row
+                partno, ll_mi8, ll_mi17, oh_mi8, oh_mi17, repair_price, purchase_price, ac_type_mask = row
                 
                 components_data[partno] = {
                     'll_mi8': ll_mi8 or 0,
@@ -89,7 +89,7 @@ class BeyondRepairCalculator:
                     'oh_threshold_mi17': oh_mi17 or 0,
                     'repair_price': repair_price,
                     'purchase_price': purchase_price,
-                    'ac_typ': ac_typ
+                    'ac_type_mask': ac_type_mask
                 }
             
             self.logger.info(f"📋 Найдено {len(components_data)} компонентов с полными данными")
