@@ -60,8 +60,8 @@ class FlameMacroProperty4Exporter:
             for field_name, field_id in sorted(field_mapping.items(), key=lambda x: x[1]):
                 if field_name in field_types:
                     ch_type = field_types[field_name]
-                    # Используем field_id для имен столбцов
-                    columns.append(f"field_{field_id} {ch_type}")
+                    # Используем реальные имена полей для тестирования (как в MacroProperty1 и 3)
+                    columns.append(f"{field_name} {ch_type} COMMENT 'field_id: {field_id}'")
             
             # Добавляем метаданные
             columns.extend([
@@ -136,11 +136,10 @@ class FlameMacroProperty4Exporter:
                 
                 export_data.append(row)
             
-            # Подготавливаем имена столбцов
+            # Подготавливаем имена столбцов (реальные имена полей)
             column_names = ["record_index"]
             for field_name in sorted(field_mapping.keys(), key=lambda x: field_mapping[x]):
-                field_id = field_mapping[field_name]
-                column_names.append(f"field_{field_id}")
+                column_names.append(field_name)  # Используем реальные имена полей
             column_names.extend(["export_timestamp", "flame_gpu_version", "data_version_date", "data_version_id"])
             
             # Подготавливаем INSERT запрос
