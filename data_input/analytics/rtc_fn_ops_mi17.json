@@ -1,0 +1,113 @@
+{
+  "rtc_function": "fn_ops_mi17",
+  "aircraft_type": "МИ-17",
+  "ac_type_mask": 64,
+  "aircraft_type": "МИ-17",
+  "ac_type_mask": 64,
+  "status_id": 2,
+  "status_name": "Эксплуатация",
+  "execution_order": 1,
+  "description": "RTC функция для планеров в эксплуатации - основная рабочая функция",
+  
+  "triggers": [
+    {
+      "name": "no_trigger",
+      "condition": "always",
+      "description": "Ежедневное накопление налета и наработки"
+    },
+    {
+      "name": "trigger_ll", 
+      "condition": "(ll - sne) < daily_hours",
+      "action": "status_change",
+      "new_status": 6,
+      "description": "Исчерпание жизненного лимита"
+    },
+    {
+      "name": "trigger_oh_br",
+      "condition": "(oh - ppr) < daily_hours AND sne >= br", 
+      "action": "status_change",
+      "new_status": 6,
+      "description": "Исчерпание ремонтного ресурса у НЕремонтопригодного планера",
+      "logic": "Планер слишком изношен (sne >= br) для экономически целесообразного ремонта",
+      "result": "Окончательное списание в хранение"
+    },
+    {
+      "name": "trigger_oh",
+      "condition": "(oh - ppr) < daily_hours AND sne < br",
+      "action": "multi_variable_change", 
+      "new_status": 4,
+      "description": "Исчерпание ремонтного ресурса у ремонтопригодного планера",
+      "variables_updated": [
+        {"name": "status_id", "value": 4, "description": "Перевод в ремонт"},
+        {"name": "repair_days", "value": 1, "description": "Начало счетчика дней ремонта"},
+        {"name": "partout_trigger", "formula": "current_date + partout_time", "type": "UInt16", "target": "MacroProperty2"},
+        {"name": "assembly_trigger", "formula": "current_date + repair_time - assembly_time", "type": "UInt16", "target": "MacroProperty2"}
+      ],
+      "macroproperty1_sources": [
+        {"name": "partout_time", "field_id": 62, "type": "UInt8"},
+        {"name": "repair_time", "field_id": 64, "type": "UInt16"},
+        {"name": "assembly_time", "field_id": 50, "type": "UInt8"}
+      ]
+    },
+    {
+      "name": "trigger_pr",
+      "condition": "trigger_program != 0",
+      "action": "global_balance_only",
+      "description": "Изменение программы операций извне",
+      "agent_changes": "none",
+      "logic": [
+        "1. Проверить trigger_program в MacroProperty4 на current_date",
+        "2. Если trigger_program != 0: вызвать fn_balance_ac",
+        "3. Балансировка ТОЛЬКО между статусами 1↔2↔3↔5",
+        "4. Статусы 4 (Ремонт) и 6 (Хранение) НЕ участвуют в балансировке"
+      ],
+      "data_source": {
+        "source": "MacroProperty4",
+        "field_id": 80,
+        "type": "Int8", 
+        "search": "dates == current_date"
+      },
+      "balance_impact": {
+        "positive": "trigger_program > 0 → увеличение потребности → активация планеров",
+        "negative": "trigger_program < 0 → уменьшение потребности → деактивация планеров"
+      }
+    }
+  ],
+  
+  "variables": {
+    "input": [
+      {"name": "sne", "type": "Variable", "source": "agent"},
+      {"name": "ppr", "type": "Variable", "source": "agent"},
+      {"name": "ll", "type": "MacroProperty3", "field_id": 39, "source": "ll_array[agent_index]"},
+      {"name": "oh", "type": "MacroProperty3", "field_id": 40, "source": "oh_array[agent_index]"},
+      {"name": "br", "type": "MacroProperty1", "field_id": 51, "source": "br_array[agent_index]"},
+      {"name": "daily_hours", "type": "MacroProperty5", "field_id": 84, "search": "dates==current_date AND aircraft_number==agent.aircraft_number"}
+    ],
+    "output": [
+      {"name": "sne", "type": "Variable", "target": "agent", "action": "increment", "formula": "sne + daily_hours"},
+      {"name": "ppr", "type": "Variable", "target": "agent", "action": "increment", "formula": "ppr + daily_hours"},
+      {"name": "partout_trigger", "type": "MacroProperty2", "field_id": 14, "formula": "current_date + partout_time"},
+      {"name": "assembly_trigger", "type": "MacroProperty2", "field_id": 15, "formula": "current_date + repair_time - assembly_time"}
+    ]
+  },
+  
+  "logic": {
+    "sequence": [
+      "1. Найти daily_hours в MacroProperty5 по (current_date, aircraft_number)",
+      "2. Проверить триггеры ll, oh-br, oh ПЕРЕД налетом",
+      "3. Если триггер сработал: изменить status_id, вызвать fn_balance_ac",
+      "4. Если триггера нет: выполнить налет (sne += daily_hours, ppr += daily_hours)"
+    ]
+  },
+  
+  "balance_triggers": [
+    {
+      "step": 1,
+      "function": "fn_balance_ac", 
+      "condition": "any_resource_trigger_fired",
+      "description": "Восполнение дефицита после списания/ремонта планера"
+    }
+  ],
+  
+  "notes": "Единственная функция, которая активно накапливает ресурсы sne и ppr"
+}

@@ -205,4 +205,42 @@ client.execute("CREATE TABLE name (columns) ENGINE = MergeTree() ORDER BY key")
 
 # Вставка данных
 client.execute("INSERT INTO table (columns) VALUES", data_list)
-``` 
+```
+
+## РЕЗУЛЬТАТ ЭТАПА 1
+
+✅ **MacroProperty1** (md_components) - загружен и проверен  
+✅ **MacroProperty3** (heli_pandas) - загружен и проверен  
+✅ **Валидация данных** - roundtrip тесты пройдены  
+✅ **JSON конфигурации RTC** - созданы для раздельной архитектуры
+✅ **Раздельная архитектура** - 15 JSON файлов для независимых симуляций
+
+**Статус:** ЭТАП 1 ЗАВЕРШЕН ✅  
+**Следующий этап:** Инициализация агентов и две параллельные симуляции
+
+## АРХИТЕКТУРА РАЗДЕЛЬНЫХ СИМУЛЯЦИЙ (обновлено 31-07-2025)
+
+### Принцип раздельности:
+```
+Extract → MacroProperty1-5 (общие данные)
+         ↓
+Transform → [MI8_Simulation] + [MI17_Simulation] (параллельно)
+         ↓
+Load → MacroProperty2 (объединенные результаты)
+```
+
+### МИ-8Т Симуляция (7 RTC функций):
+- `fn_inactive_mi8`, `fn_ops_mi8`, `fn_stock_mi8`
+- `fn_repair_mi8`, `fn_reserve_mi8`, `fn_store_mi8`
+- `fn_balance_mi8` (БЕЗ spawn - не выпускаются)
+
+### МИ-17 Симуляция (8 RTC функций):
+- `fn_inactive_mi17`, `fn_ops_mi17`, `fn_stock_mi17`
+- `fn_repair_mi17`, `fn_reserve_mi17`, `fn_store_mi17` 
+- `fn_balance_mi17`, `fn_spawn_mi17` (С spawn - новые поставки)
+
+### Преимущества раздельности:
+- Параллельные CUDA потоки для каждого типа
+- Независимые Environment Property Arrays
+- Отсутствие фильтрации ac_type_mask в runtime
+- Простая отладка и тестирование 

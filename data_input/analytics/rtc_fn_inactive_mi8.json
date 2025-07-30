@@ -1,0 +1,48 @@
+{
+  "rtc_function": "fn_inactive_mi8",
+  "aircraft_type": "МИ-8Т",
+  "ac_type_mask": 32,
+  "aircraft_type": "МИ-8Т",
+  "ac_type_mask": 32,
+  "status_id": 1,
+  "status_name": "Неактивно",
+  "execution_order": 1,
+  "description": "RTC функция для МИ-8Т в неактивном состоянии",
+  
+  "triggers": [
+    {
+      "name": "no_trigger",
+      "condition": "always",
+      "description": "Базовая функция без условий активации"
+    }
+  ],
+  
+  "variables": {
+    "input": [
+      {"name": "status_id", "type": "Variable", "source": "agent", "value": 1},
+      {"name": "psn", "type": "Variable", "source": "agent", "description": "agent_id"},
+      {"name": "aircraft_number", "type": "Variable", "source": "agent", "description": "parent_id для поиска налета"}
+    ],
+    "output": [
+      {"name": "status_id", "type": "Variable", "target": "agent", "action": "no_change"}
+    ]
+  },
+  
+  "logic": {
+    "action": "static_state",
+    "description": "Планеры ждут активации, никаких изменений переменных",
+    "counters": "no_increment",
+    "resource_consumption": "none"
+  },
+  
+  "balance_triggers": [
+    {
+      "step": 4,
+      "function": "fn_balance_ac",
+      "condition": "called_by_global_triggers",
+      "description": "Активация неактивных планеров при дефиците в эксплуатации"
+    }
+  ],
+  
+  "notes": "Планеры в статусе 'Неактивно' не выполняют операций, ожидают команды от fn_balance_ac"
+}

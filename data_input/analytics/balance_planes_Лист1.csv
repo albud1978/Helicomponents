@@ -1,0 +1,8 @@
+Тип Variable/Macroproperty,Variable - initial,RTC,Условие RTC,Variable,Macroproperty2,RTC.1,Условие RTC.1,Variable.1,Variable/Macroproperty3,Variable/Macroproperty3.1,Variable/Macroproperty3.2,Macroproperty3,Macroproperty3.1,Macroproperty3.2,Macroproperty3.3,Macroproperty3.4,Macroproperty3.5,Macroproperty3.6,Macroproperty3.7
+Поле/RTC,status_id,fn_balance_ac,,status_id,active_trigger, fn_spawn_ac,,status_id,psn,sne,ppr,mfg_date,lease_restricted,address_i,partseqno_i,ac_type_mask,ll,oh,aircraft_number
+Неактивно,1,Step 4,count (status_id=2)-ops_counter_mi8(mi17)<0,2,current_date-repair_time,,,,,,,,,,,,,,
+Эксплуатация,2,Step 1,count (status_id=2)-ops_counter_mi8(mi17)>0,3,,,,,,,,,,,,,,,
+Исправен,3,Step 2,count (status_id=2)-ops_counter_mi8(mi17)<0,2,,Step 1,new_counter_mi17>0,3,Macroproperty3(MAX(psn))+1,0,0,current_date,1,17094,70482,64,MacroProperty1[partno_comp=70482].ll_mi17,MacroProperty1[partno_comp=70482].oh_mi17,MAX(last agents varialble[aircraft_number] OR last macroproperty3[aircraft_number])+1 in range 100000-150000
+Ремонт,4,,,,,,,,,,,,,,,,,,
+Резерв,5,Step 3,count (status_id=2)-ops_counter_mi8(mi17)<0,2,,,,,,,,,,,,,,,
+Хранение,6,,,,,,,,,,,,,,,,,,

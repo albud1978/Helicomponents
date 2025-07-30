@@ -1,0 +1,221 @@
+{
+  "rtc_function": "fn_balance_mi8",
+  "aircraft_type": "МИ-8Т",
+  "ac_type_mask": 32,
+  "type": "vertical_agent",
+  "execution_order": 2,
+  "description": "Глобальная функция балансировки планеров между статусами для поддержания программы",
+  
+  "triggers": [
+    {
+      "name": "trigger_ll",
+      "source": "fn_ops_ac",
+      "step": 1,
+      "condition": "планер списан в хранение по исчерпанию ll"
+    },
+    {
+      "name": "trigger_oh_br", 
+      "source": "fn_ops_ac",
+      "step": 1,
+      "condition": "планер списан в хранение по исчерпанию oh (неремонтопригодный)"
+    },
+    {
+      "name": "trigger_oh",
+      "source": "fn_ops_ac", 
+      "step": 1,
+      "condition": "планер отправлен в ремонт по исчерпанию oh (ремонтопригодный)"
+    },
+    {
+      "name": "trigger_pr",
+      "source": "MacroProperty4",
+      "step": 1, 
+      "condition": "trigger_program != 0 (изменение программы)"
+    }
+  ],
+  
+  "balanceable_statuses": {
+    "active": [1, 2, 3, 5],
+    "description": "Статусы, участвующие в балансировке"
+  },
+  
+  "non_balanceable_statuses": {
+    "isolated": [4, 6],
+    "reasons": {
+      "4": "Ремонт в процессе - нельзя прерывать", 
+      "6": "Списанные навсегда - неприкосновенные"
+    }
+  },
+  
+  "balance_logic": {
+    "mi8_balance": {
+      "step_4": {
+        "condition": "count(status_id=2 AND ac_type_mask=32) - ops_counter_mi8 < 0",
+        "action": "activate_inactive_mi8",
+        "source_status": 1,
+        "target_status": 2,
+        "aircraft_filter": "ac_type_mask=32",
+        "description": "Активация неактивных МИ-8Т при дефиците",
+        "macroproperty2_update": {
+          "active_trigger": "current_date - repair_time",
+          "description": "Дата активации МИ-8Т для MultiBOM постпроцессинга"
+        }
+      },
+      "step_3": {
+        "condition": "count(status_id=2 AND ac_type_mask=32) - ops_counter_mi8 < 0",
+        "action": "activate_reserve_mi8",
+        "source_status": 5,
+        "target_status": 2,
+        "aircraft_filter": "ac_type_mask=32",
+        "description": "Активация резервных МИ-8Т при дефиците",
+        "macroproperty2_update": {
+          "active_trigger": "current_date",
+          "description": "Резервные МИ-8Т активируются немедленно"
+        }
+      },
+      "step_2": {
+        "condition": "count(status_id=2 AND ac_type_mask=32) - ops_counter_mi8 < 0",
+        "action": "activate_stock_mi8",
+        "source_status": 3,
+        "target_status": 2,
+        "aircraft_filter": "ac_type_mask=32",
+        "description": "Активация исправных МИ-8Т при дефиците",
+        "macroproperty2_update": {
+          "active_trigger": "current_date",
+          "description": "Исправные МИ-8Т активируются немедленно"
+        }
+      },
+      "step_1": {
+        "condition": "count(status_id=2 AND ac_type_mask=32) - ops_counter_mi8 > 0",
+        "action": "deactivate_excess_mi8",
+        "source_status": 2,
+        "target_status": 3,
+        "aircraft_filter": "ac_type_mask=32",
+        "description": "Деактивация лишних МИ-8Т при избытке",
+        "macroproperty2_update": {
+          "active_trigger": "null",
+          "description": "Деактивированные МИ-8Т не имеют active_trigger"
+        }
+      }
+    },
+    "mi17_balance": {
+      "step_4": {
+        "condition": "count(status_id=2 AND ac_type_mask=64) - ops_counter_mi17 < 0",
+        "action": "activate_inactive_mi17",
+        "source_status": 1,
+        "target_status": 2,
+        "aircraft_filter": "ac_type_mask=64",
+        "description": "Активация неактивных МИ-17 при дефиците",
+        "macroproperty2_update": {
+          "active_trigger": "current_date - repair_time",
+          "description": "Дата активации МИ-17 для MultiBOM постпроцессинга"
+        }
+      },
+      "step_3": {
+        "condition": "count(status_id=2 AND ac_type_mask=64) - ops_counter_mi17 < 0",
+        "action": "activate_reserve_mi17",
+        "source_status": 5,
+        "target_status": 2,
+        "aircraft_filter": "ac_type_mask=64",
+        "description": "Активация резервных МИ-17 при дефиците",
+        "macroproperty2_update": {
+          "active_trigger": "current_date",
+          "description": "Резервные МИ-17 активируются немедленно"
+        }
+      },
+      "step_2": {
+        "condition": "count(status_id=2 AND ac_type_mask=64) - ops_counter_mi17 < 0",
+        "action": "activate_stock_mi17",
+        "source_status": 3,
+        "target_status": 2,
+        "aircraft_filter": "ac_type_mask=64",
+        "description": "Активация исправных МИ-17 при дефиците",
+        "macroproperty2_update": {
+          "active_trigger": "current_date",
+          "description": "Исправные МИ-17 активируются немедленно"
+        }
+      },
+      "step_1": {
+        "condition": "count(status_id=2 AND ac_type_mask=64) - ops_counter_mi17 > 0",
+        "action": "deactivate_excess_mi17",
+        "source_status": 2,
+        "target_status": 3,
+        "aircraft_filter": "ac_type_mask=64",
+        "description": "Деактивация лишних МИ-17 при избытке",
+        "macroproperty2_update": {
+          "active_trigger": "null",
+          "description": "Деактивированные МИ-17 не имеют active_trigger"
+        }
+      }
+    }
+  },
+  
+  "data_sources": {
+    "ops_counter_mi8": {
+      "source": "MacroProperty4",
+      "field_id": 74,
+      "type": "UInt16",
+      "search": "dates == current_date",
+      "description": "Потребность в МИ-8Т в эксплуатации"
+    },
+    "ops_counter_mi17": {
+      "source": "MacroProperty4",
+      "field_id": 75,
+      "type": "UInt16", 
+      "search": "dates == current_date",
+      "description": "Потребность в МИ-17 в эксплуатации"
+    },
+    "current_count_mi8": {
+      "source": "agent_population",
+      "method": "count(status_id=2 AND ac_type_mask=32)",
+      "description": "Текущее количество МИ-8Т в эксплуатации"
+    },
+    "current_count_mi17": {
+      "source": "agent_population", 
+      "method": "count(status_id=2 AND ac_type_mask=64)",
+      "description": "Текущее количество МИ-17 в эксплуатации"
+    }
+  },
+  
+  "aircraft_type_separation": {
+    "mi8": {
+      "ac_type_mask": 32,
+      "balance_target": "ops_counter_mi8",
+      "current_count": "current_count_mi8",
+      "independent_balance": true,
+      "spawn_capability": false,
+      "description": "МИ-8Т не выпускаются, только балансировка существующего парка"
+    },
+    "mi17": {
+      "ac_type_mask": 64,
+      "balance_target": "ops_counter_mi17",
+      "current_count": "current_count_mi17", 
+      "independent_balance": true,
+      "spawn_capability": true,
+      "spawn_trigger": "new_counter_mi17",
+      "description": "МИ-17 с возможностью пополнения парка через fn_spawn_ac"
+    }
+  },
+  
+  "execution_sequence": {
+    "parallel_execution": true,
+    "description": "МИ-8Т и МИ-17 балансируются независимо и одновременно",
+    "steps": [
+      "1. Подсчет current_count_mi8 и current_count_mi17",
+      "2. Получение ops_counter_mi8 и ops_counter_mi17 из MacroProperty4",
+      "3. ПАРАЛЛЕЛЬНО: применение mi8_balance и mi17_balance логики",
+      "4. Обновление active_trigger в MacroProperty2 для MultiBOM"
+    ]
+  },
+  
+  "multibom_integration": {
+    "purpose": "active_trigger для постпроцессинга MultiBOM следующего уровня",
+    "triggers_exported": {
+      "partout_trigger": "Дата разборки планера",
+      "assembly_trigger": "Дата сборки планера", 
+      "active_trigger": "Дата активации планера"
+    },
+    "next_level_usage": "Симуляция агрегатов использует триггеры родительских планеров"
+  },
+  
+  "notes": "Функция выполняется ПОСЛЕ изменения статусов отдельных агентов для восстановления баланса. Записывает active_trigger для MultiBOM постпроцессинга"
+}

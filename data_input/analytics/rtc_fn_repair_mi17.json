@@ -1,0 +1,60 @@
+{
+  "rtc_function": "fn_repair_mi17",
+  "aircraft_type": "МИ-17",
+  "ac_type_mask": 64,
+  "status_id": 4,
+  "status_name": "Ремонт",
+  "execution_order": 1,
+  "description": "RTC функция для планеров в ремонте",
+  
+  "triggers": [
+    {
+      "name": "no_trigger", 
+      "condition": "always",
+      "description": "Ежедневное увеличение счетчика дней ремонта"
+    },
+    {
+      "name": "trigger_repair",
+      "condition": "repair_days == repair_time",
+      "action": "status_change",
+      "new_status": 5,
+      "description": "Завершение ремонта, перевод в резерв"
+    }
+  ],
+  
+  "variables": {
+    "input": [
+      {"name": "repair_days", "type": "Variable", "source": "agent"},
+      {"name": "repair_time", "type": "MacroProperty1", "field_id": 64, "source": "repair_time_array[agent_index]"},
+      {"name": "sne", "type": "Variable", "source": "agent", "description": "не изменяется"},
+      {"name": "ppr", "type": "Variable", "source": "agent", "description": "обнуляется при входе в ремонт"}
+    ],
+    "output": [
+      {"name": "repair_days", "type": "Variable", "target": "agent", "action": "increment", "formula": "repair_days + 1"},
+      {"name": "ppr", "type": "Variable", "target": "agent", "action": "reset", "value": 0, "condition": "при завершении ремонта"},
+      {"name": "status_id", "type": "Variable", "target": "agent", "action": "conditional_change", "condition": "repair_days == repair_time", "new_value": 5, "description": "Завершение ремонта → Резерв (буферная зона)"}
+    ]
+  },
+  
+  "logic": {
+    "sequence": [
+      "1. Увеличить repair_days на 1",
+      "2. Проверить условие завершения ремонта (repair_days == repair_time)",
+      "3. Если ремонт завершен: status_id = 5, ppr = 0, repair_days = 0",
+      "4. НЕ вызывать fn_balance_ac (завершение ремонта независимо)"
+    ],
+    "resource_restoration": "ppr обнуляется (восстановление ремонтного ресурса)",
+    "life_limit_preservation": "sne сохраняется (жизненный лимит не восстанавливается)"
+  },
+  
+  "balance_triggers": [
+    {
+      "step": "none",
+      "function": "fn_balance_ac",
+      "condition": "not_triggered",
+      "description": "Завершение ремонта НЕ вызывает балансировку - планер идет в резерв как буферную зону"
+    }
+  ],
+  
+  "notes": "Независимый процесс: завершение ремонта → Резерв (буферная зона). НЕ зависит от других агентов, программы или балансировки"
+}

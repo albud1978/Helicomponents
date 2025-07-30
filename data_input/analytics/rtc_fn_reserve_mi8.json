@@ -1,0 +1,52 @@
+{
+  "rtc_function": "fn_reserve_mi8", 
+  "aircraft_type": "МИ-8Т",
+  "ac_type_mask": 32,
+  "status_id": 5,
+  "status_name": "Резерв",
+  "execution_order": 1,
+  "description": "RTC функция для планеров в резерве",
+  
+  "triggers": [
+    {
+      "name": "no_trigger",
+      "condition": "always", 
+      "description": "Состояние ожидания активации"
+    }
+  ],
+  
+  "variables": {
+    "input": [
+      {"name": "status_id", "type": "Variable", "source": "agent", "value": 5},
+      {"name": "psn", "type": "Variable", "source": "agent", "description": "agent_id"},
+      {"name": "aircraft_number", "type": "Variable", "source": "agent", "description": "parent_id"},
+      {"name": "sne", "type": "Variable", "source": "agent", "description": "жизненный лимит сохраняется"},
+      {"name": "ppr", "type": "Variable", "source": "agent", "description": "ремонтный ресурс восстановлен (обычно 0)"}
+    ],
+    "output": [
+      {"name": "status_id", "type": "Variable", "target": "agent", "action": "no_change"},
+      {"name": "sne", "type": "Variable", "target": "agent", "action": "no_change"},
+      {"name": "ppr", "type": "Variable", "target": "agent", "action": "no_change"}
+    ]
+  },
+  
+  "logic": {
+    "action": "static_state",
+    "description": "Планеры после ремонта готовы к использованию с восстановленным ремонтным ресурсом",
+    "counters": "no_increment", 
+    "resource_consumption": "none",
+    "availability": "priority_for_activation",
+    "resource_status": "ppr восстановлен, sne сохранен"
+  },
+  
+  "balance_triggers": [
+    {
+      "step": 3,
+      "function": "fn_balance_ac",
+      "condition": "deficit_in_operations",
+      "description": "Первоочередная активация резервных планеров при дефиците"
+    }
+  ],
+  
+  "notes": "Планеры в резерве имеют приоритет для активации перед исправными и неактивными"
+}

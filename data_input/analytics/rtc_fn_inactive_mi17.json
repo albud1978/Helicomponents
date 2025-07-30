@@ -1,0 +1,29 @@
+{
+  "rtc_function": "fn_inactive_mi17",
+  "aircraft_type": "МИ-17",
+  "ac_type_mask": 64,
+  "aircraft_type": "МИ-17",
+  "ac_type_mask": 64,
+  "status_id": 1,
+  "status_name": "Неактивно",
+  "execution_order": 1,
+  "description": "RTC функция для МИ-17 в неактивном состоянии",
+  "triggers": [
+    {
+      "name": "no_trigger",
+      "condition": "always",
+      "action": "none",
+      "description": "МИ-17 в неактивном состоянии не изменяют свои переменные, ожидают активации."
+    }
+  ],
+  "variables": {
+    "input": [
+      {"name": "status_id", "type": "Variable", "source": "agent"},
+      {"name": "psn", "type": "Variable", "source": "agent"},
+      {"name": "aircraft_number", "type": "Variable", "source": "agent"}
+    ],
+    "output": []
+  },
+  "balance_triggers": [],
+  "notes": "МИ-17 просто 'спят', не накапливают наработку."
+}
