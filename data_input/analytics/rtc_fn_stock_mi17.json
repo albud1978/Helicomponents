@@ -3,49 +3,24 @@
   "aircraft_type": "МИ-17",
   "ac_type_mask": 64,
   "status_id": 3,
-  "status_name": "Исправен",
-  "execution_order": 1,
-  "description": "RTC функция для планеров на складе в исправном состоянии",
-  
-  "triggers": [
-    {
-      "name": "no_trigger",
-      "condition": "always",
-      "description": "Статичное состояние готовности"
-    }
-  ],
+  "execution_condition": "status_id == 3",
   
   "variables": {
     "input": [
       {"name": "status_id", "type": "Variable", "source": "agent", "value": 3},
-      {"name": "psn", "type": "Variable", "source": "agent", "description": "agent_id"},
-      {"name": "aircraft_number", "type": "Variable", "source": "agent", "description": "parent_id"},
-      {"name": "sne", "type": "Variable", "source": "agent", "description": "сохраняется без изменений"},
-      {"name": "ppr", "type": "Variable", "source": "agent", "description": "сохраняется без изменений"}
+      {"name": "psn", "type": "Variable", "source": "agent"},
+      {"name": "aircraft_number", "type": "Variable", "source": "agent"},
+      {"name": "sne", "type": "Variable", "source": "agent"},
+      {"name": "ppr", "type": "Variable", "source": "agent"},
+      {"name": "repair_days", "type": "Variable", "source": "agent"}
     ],
     "output": [
       {"name": "status_id", "type": "Variable", "target": "agent", "action": "no_change"},
+      {"name": "psn", "type": "Variable", "target": "agent", "action": "no_change"},
+      {"name": "aircraft_number", "type": "Variable", "target": "agent", "action": "no_change"},
       {"name": "sne", "type": "Variable", "target": "agent", "action": "no_change"},
-      {"name": "ppr", "type": "Variable", "target": "agent", "action": "no_change"}
+      {"name": "ppr", "type": "Variable", "target": "agent", "action": "no_change"},
+      {"name": "repair_days", "type": "Variable", "target": "agent", "action": "no_change"}
     ]
-  },
-  
-  "logic": {
-    "action": "static_state",
-    "description": "Планеры готовы к использованию, но не накапливают наработку",
-    "counters": "no_increment",
-    "resource_consumption": "none",
-    "availability": "ready_for_activation"
-  },
-  
-  "balance_triggers": [
-    {
-      "step": 2,
-      "function": "fn_balance_ac",
-      "condition": "deficit_in_operations", 
-      "description": "Перевод исправных планеров в эксплуатацию при дефиците"
-    }
-  ],
-  
-  "notes": "Планеры в состоянии готовности, приоритетные для активации после резервных"
+  }
 }

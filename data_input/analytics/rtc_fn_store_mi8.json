@@ -3,50 +3,24 @@
   "aircraft_type": "МИ-8Т",
   "ac_type_mask": 32,
   "status_id": 6,
-  "status_name": "Хранение", 
-  "execution_order": 1,
-  "description": "RTC функция для планеров в хранении (списанных)",
-  
-  "triggers": [
-    {
-      "name": "no_trigger",
-      "condition": "always",
-      "description": "Окончательное списание"
-    }
-  ],
+  "execution_condition": "status_id == 6",
   
   "variables": {
     "input": [
       {"name": "status_id", "type": "Variable", "source": "agent", "value": 6},
-      {"name": "psn", "type": "Variable", "source": "agent", "description": "agent_id"},
-      {"name": "aircraft_number", "type": "Variable", "source": "agent", "description": "parent_id"},
-      {"name": "sne", "type": "Variable", "source": "agent", "description": "финальная наработка на момент списания"},
-      {"name": "ppr", "type": "Variable", "source": "agent", "description": "финальная наработка на момент списания"}
+      {"name": "psn", "type": "Variable", "source": "agent"},
+      {"name": "aircraft_number", "type": "Variable", "source": "agent"},
+      {"name": "sne", "type": "Variable", "source": "agent"},
+      {"name": "ppr", "type": "Variable", "source": "agent"},
+      {"name": "repair_days", "type": "Variable", "source": "agent"}
     ],
     "output": [
       {"name": "status_id", "type": "Variable", "target": "agent", "action": "no_change"},
-      {"name": "sne", "type": "Variable", "target": "agent", "action": "no_change"}, 
-      {"name": "ppr", "type": "Variable", "target": "agent", "action": "no_change"}
+      {"name": "psn", "type": "Variable", "target": "agent", "action": "no_change"},
+      {"name": "aircraft_number", "type": "Variable", "target": "agent", "action": "no_change"},
+      {"name": "sne", "type": "Variable", "target": "agent", "action": "no_change"},
+      {"name": "ppr", "type": "Variable", "target": "agent", "action": "no_change"},
+      {"name": "repair_days", "type": "Variable", "target": "agent", "action": "no_change"}
     ]
-  },
-  
-  "logic": {
-    "action": "final_state",
-    "description": "Планеры списаны по выработке ресурса, не участвуют в операциях",
-    "counters": "no_increment",
-    "resource_consumption": "none",
-    "availability": "not_available",
-    "finality": "permanent_retirement"
-  },
-  
-  "balance_triggers": [
-    {
-      "step": "none",
-      "function": "fn_balance_ac",
-      "condition": "not_participating",
-      "description": "Планеры в хранении не участвуют в балансировке"
-    }
-  ],
-  
-  "notes": "Окончательный статус - планеры больше не используются в симуляции активных операций"
+  }
 }

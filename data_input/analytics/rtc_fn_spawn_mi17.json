@@ -2,117 +2,74 @@
   "rtc_function": "fn_spawn_mi17",
   "aircraft_type": "МИ-17",
   "ac_type_mask": 64,
-  "type": "vertical_agent", 
-  "execution_order": 1,
-  "description": "Функция создания новых планеров МИ-17 при недостатке резерва",
+  "execution_condition": "new_counter_mi17 > 0",
   
-  "triggers": [
+  "macroproperty_sources": [
+    {"name": "new_counter_mi17", "type": "MacroProperty4", "field_id": 77}
+  ],
+  
+  "spawn_logic": {
+    "quantity": "new_counter_mi17",
+    "target_status": 3,
+    "description": "Создание множественных новых агентов МИ-17 в статусе Исправен"
+  },
+  
+  "new_agent_template": {
+    "status_id": 3,
+    "psn": "MAX(MacroProperty3.psn) + sequence_number",
+    "sne": 0,
+    "ppr": 0,
+    "repair_days": 0,
+    "mfg_date": "current_date",
+    "lease_restricted": 1,
+    "address_i": 17094,
+    "partseqno_i": 70482,
+    "ac_type_mask": 64,
+    "aircraft_number": "MAX(agents.aircraft_number OR MacroProperty3.aircraft_number) + sequence_number"
+  },
+  
+  "macroproperty_sources_for_new_agents": [
     {
-      "name": "trigger_new",
-      "condition": "new_counter_mi17 > 0",
-      "source": "MacroProperty4",
-      "field_id": 77,
-      "description": "Сигнал о необходимости создания новых МИ-17"
+      "name": "ll",
+      "source": "MacroProperty1[partno_comp=70482].ll_mi17",
+      "type": "MacroProperty1",
+      "field_id": 26
+    },
+    {
+      "name": "oh", 
+      "source": "MacroProperty1[partno_comp=70482].oh_mi17",
+      "type": "MacroProperty1", 
+      "field_id": 34
     }
   ],
   
-  "spawn_conditions": {
-    "aircraft_type": "МИ-17 только",
-    "ac_type_mask": 64,
-    "quantity": "new_counter_mi17 агентов",
-    "trigger_source": "MacroProperty4 по текущей дате"
+  "aircraft_number_range": {
+    "min": 100000,
+    "max": 150000,
+    "description": "Диапазон номеров ВС для МИ-17"
   },
   
-  "new_agent_properties": {
-    "psn": {
-      "formula": "MAX(MacroProperty3.psn) + 1",
-      "description": "Следующий доступный PSN"
+  "post_spawn_actions": [
+    {
+      "name": "reset_counter",
+      "action": "new_counter_mi17 = 0",
+      "description": "Сброс счетчика после создания агентов"
     },
-    "sne": {
-      "value": 0,
-      "description": "Новый планер без наработки"
-    },
-    "ppr": {
-      "value": 0, 
-      "description": "Новый планер без межремонтной наработки"
-    },
-    "mfg_date": {
-      "value": "current_date",
-      "description": "Дата производства = дата создания в симуляции"
-    },
-    "aircraft_number": {
-      "formula": "MAX(aircraft_number) + 1 в диапазоне 100000-150000",
-      "description": "Уникальный номер ВС для МИ-17"
-    },
-    "status_id": {
-      "value": 5,
-      "description": "Новые планеры создаются в статусе 'Резерв' (буферная зона)",
-      "note": "ФИНАЛЬНОЕ РЕШЕНИЕ: Резерв(5) для всех новых планеров"
+    {
+      "name": "expand_macroproperty3",
+      "action": "add_new_rows_to_macroproperty3",
+      "description": "Добавление новых строк в MacroProperty3 для созданных агентов"
     }
-  },
+  ],
   
-  "macroproperty1_source": {
-    "partno_comp": 70482,
-    "ll_mi17": {
-      "field_id": 56,
-      "description": "Жизненный лимит для новых МИ-17"
-    },
-    "oh_mi17": {
-      "field_id": 58,
-      "description": "Межремонтный ресурс для новых МИ-17"  
-    },
-    "br": {
-      "field_id": 51,
-      "description": "Beyond Repair лимит"
-    }
-  },
-  
-  "macroproperty3_expansion": {
-    "new_row_required": true,
-    "description": "Каждый новый планер добавляет строку в MacroProperty3",
-    "fields_populated": {
-      "psn": "MacroProperty3(MAX(psn)) + 1",
-      "sne": 0,
-      "ppr": 0,
-      "mfg_date": "current_date", 
-      "lease_restricted": 1,
-      "address_i": 17094,
-      "partseqno_i": 70482,
-      "ac_type_mask": 64,
-      "ll": "MacroProperty1[partno_comp=70482].ll_mi17",
-      "oh": "MacroProperty1[partno_comp=70482].oh_mi17",
-      "aircraft_number": "MAX(agents OR macroproperty3) + 1 in range 100000-150000"
-    }
-  },
-  
-  "host_function_approach": {
-    "method": "Host Function для динамического расширения MacroProperty3",
-    "advantages": [
-      "Эффективность памяти - избежание дублирования данных",
-      "Консистентность - один источник истины в MacroProperty3", 
-      "GPU оптимизация - векторизованные операции с массивами"
-    ],
-    "agent_variables": "Только status_id, repair_days, agent_index (легковесные агенты)",
-    "macroproperty3_expansion": "Динамическое расширение через Host Function между step'ами"
-  },
-  
-  "logic": {
-    "sequence": [
-      "1. Проверить new_counter_mi17 > 0 в MacroProperty4 на current_date",
-      "2. Получить нормативы из MacroProperty1 для partno_comp=70482",
-      "3. Создать new_counter_mi17 новых агентов с параметрами",
-      "4. Сигнализировать Host Function о необходимости расширения MacroProperty3",
-      "5. Host Function: расширить Environment Property Arrays с новыми записями",
-      "6. Создать легковесных агентов с status_id=5 (Резерв) и agent_index",
-      "7. НЕ вызывать fn_balance_ac (поставка ≠ балансировка)"
+  "variables": {
+    "output": [
+      {"name": "status_id", "type": "Variable", "target": "new_agent", "value": 3},
+      {"name": "psn", "type": "Variable", "target": "new_agent", "action": "auto_increment"},
+      {"name": "aircraft_number", "type": "Variable", "target": "new_agent", "action": "auto_increment"},
+      {"name": "sne", "type": "Variable", "target": "new_agent", "value": 0},
+      {"name": "ppr", "type": "Variable", "target": "new_agent", "value": 0},
+      {"name": "repair_days", "type": "Variable", "target": "new_agent", "value": 0}
     ]
-  },
-  
-  "integration_with_balance": {
-    "buffer_zone": "status_id=5 создает буферную зону планирования",
-    "no_immediate_balance": "fn_spawn_ac НЕ вызывает fn_balance_ac автоматически",
-    "reserve_priority": "Резервные планеры активируются через Step 3 при дефиците"
-  },
-  
-  "notes": "Создание новых МИ-17 планеров для восполнения убыли парка, интеграция с балансировкой"
+  }
 }
