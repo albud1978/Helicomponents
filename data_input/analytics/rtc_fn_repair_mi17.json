@@ -3,23 +3,47 @@
   "aircraft_type": "МИ-17",
   "ac_type_mask": 64,
   "status_id": 4,
-  "execution_condition": "status_id == 4",
+  
+  "execution_algorithm": "1. Проверить триггер trigger_repair, 2. Если не сработал - выполнить базовую функцию",
+  "trigger_priorities": "1=trigger_repair",
   
   "triggers": [
     {
       "name": "trigger_repair",
-      "condition": "repair_days == repair_time",
+      "priority": 1,
+      "condition": "repair_days >= repair_time",
+      "agent_variables": [
+        {"name": "repair_days", "type": "Variable", "source": "agent"},
+        {"name": "psn", "type": "Variable", "source": "agent"}
+      ],
       "macroproperty_sources": [
-        {"name": "repair_time", "type": "MacroProperty1", "field_id": 64}
+        {"name": "repair_time", "type": "MacroProperty1", "field_id": 64, "lookup_chain": [
+          {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
+          {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "repair_time"}
+        ]}
       ],
       "action": "status_change",
-      "new_status": 5
+      "new_status": 5,
+      "additional_actions": [
+        {"variable": "ppr", "action": "reset", "value": 0},
+        {"variable": "repair_days", "action": "reset", "value": 0}
+      ]
     }
   ],
   
+  "base_function": {
+    "description": "Выполняется если триггер выхода из ремонта НЕ сработал - продолжается ремонт",
+    "actions": [
+      {"variable": "repair_days", "action": "increment", "formula": "repair_days + 1"},
+      {"variable": "status_id", "action": "no_change"},
+      {"variable": "sne", "action": "no_change"},
+      {"variable": "ppr", "action": "no_change"}
+    ]
+  },
+  
   "variables": {
     "input": [
-      {"name": "status_id", "type": "Variable", "source": "agent", "value": 4},
+      {"name": "status_id", "type": "Variable", "source": "agent"},
       {"name": "psn", "type": "Variable", "source": "agent"},
       {"name": "aircraft_number", "type": "Variable", "source": "agent"},
       {"name": "sne", "type": "Variable", "source": "agent"},
@@ -27,11 +51,11 @@
       {"name": "repair_days", "type": "Variable", "source": "agent"}
     ],
     "output": [
-      {"name": "status_id", "type": "Variable", "target": "agent", "action": "conditional_change"},
+      {"name": "status_id", "type": "Variable", "target": "agent", "action": "no_change"},
       {"name": "psn", "type": "Variable", "target": "agent", "action": "no_change"},
       {"name": "aircraft_number", "type": "Variable", "target": "agent", "action": "no_change"},
       {"name": "sne", "type": "Variable", "target": "agent", "action": "no_change"},
-      {"name": "ppr", "type": "Variable", "target": "agent", "action": "conditional_reset"},
+      {"name": "ppr", "type": "Variable", "target": "agent", "action": "no_change"},
       {"name": "repair_days", "type": "Variable", "target": "agent", "action": "increment", "formula": "repair_days + 1"}
     ]
   }

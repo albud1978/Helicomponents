@@ -3,46 +3,107 @@
   "aircraft_type": "МИ-8Т",
   "ac_type_mask": 32,
   "status_id": 2,
-  "execution_condition": "status_id == 2",
+  
+  "execution_algorithm": "1. Проверить все триггеры, 2. Выбрать по приоритету, 3. Если ни один не сработал - выполнить базовую функцию",
+  "trigger_priorities": "1=trigger_ll, 2=trigger_oh/trigger_oh_br, 3=trigger_pr",
   
   "triggers": [
     {
       "name": "trigger_ll",
+      "priority": 1,
       "condition": "(ll - sne) < daily_hours",
+      "agent_variables": [
+        {"name": "sne", "type": "Variable", "source": "agent"},
+        {"name": "psn", "type": "Variable", "source": "agent"},
+        {"name": "aircraft_number", "type": "Variable", "source": "agent"}
+      ],
       "macroproperty_sources": [
-        {"name": "ll", "type": "MacroProperty3", "field_id": 39},
-        {"name": "daily_hours", "type": "MacroProperty5", "field_id": 84}
+        {"name": "ll", "type": "MacroProperty3", "field_id": 39, "lookup_key": "psn"},
+        {"name": "daily_hours", "type": "MacroProperty4", "field_id": 84, "lookup_chain": [
+          {"step": 1, "source": "MacroProperty4", "lookup_conditions": [
+            {"field": "aircraft_number", "value": "agent.aircraft_number"},
+            {"field": "dates", "value": "current_simulation_date"}
+          ], "get_field": "daily_hours"}
+        ]}
       ],
       "action": "status_change",
       "new_status": 6
     },
     {
       "name": "trigger_oh_br",
+      "priority": 2,
       "condition": "(oh - ppr) < daily_hours AND sne >= br",
+      "agent_variables": [
+        {"name": "ppr", "type": "Variable", "source": "agent"},
+        {"name": "sne", "type": "Variable", "source": "agent"},
+        {"name": "psn", "type": "Variable", "source": "agent"},
+        {"name": "aircraft_number", "type": "Variable", "source": "agent"}
+      ],
       "macroproperty_sources": [
-        {"name": "oh", "type": "MacroProperty3", "field_id": 40},
-        {"name": "br", "type": "MacroProperty1", "field_id": 51},
-        {"name": "daily_hours", "type": "MacroProperty5", "field_id": 84}
+        {"name": "oh", "type": "MacroProperty3", "field_id": 40, "lookup_key": "psn"},
+        {"name": "br", "type": "MacroProperty1", "field_id": 51, "lookup_chain": [
+          {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
+          {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "br"}
+        ]},
+        {"name": "daily_hours", "type": "MacroProperty4", "field_id": 84, "lookup_chain": [
+          {"step": 1, "source": "MacroProperty4", "lookup_conditions": [
+            {"field": "aircraft_number", "value": "agent.aircraft_number"},
+            {"field": "dates", "value": "current_simulation_date"}
+          ], "get_field": "daily_hours"}
+        ]}
       ],
       "action": "status_change",
       "new_status": 6
     },
     {
       "name": "trigger_oh",
+      "priority": 2,
       "condition": "(oh - ppr) < daily_hours AND sne < br",
+      "agent_variables": [
+        {"name": "ppr", "type": "Variable", "source": "agent"},
+        {"name": "sne", "type": "Variable", "source": "agent"},
+        {"name": "psn", "type": "Variable", "source": "agent"},
+        {"name": "aircraft_number", "type": "Variable", "source": "agent"}
+      ],
       "macroproperty_sources": [
-        {"name": "oh", "type": "MacroProperty3", "field_id": 40},
-        {"name": "br", "type": "MacroProperty1", "field_id": 51},
-        {"name": "daily_hours", "type": "MacroProperty5", "field_id": 84}
+        {"name": "oh", "type": "MacroProperty3", "field_id": 40, "lookup_key": "psn"},
+        {"name": "br", "type": "MacroProperty1", "field_id": 51, "lookup_chain": [
+          {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
+          {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "br"}
+        ]},
+        {"name": "daily_hours", "type": "MacroProperty4", "field_id": 84, "lookup_chain": [
+          {"step": 1, "source": "MacroProperty4", "lookup_conditions": [
+            {"field": "aircraft_number", "value": "agent.aircraft_number"},
+            {"field": "dates", "value": "current_simulation_date"}
+          ], "get_field": "daily_hours"}
+        ]}
       ],
       "action": "status_change",
       "new_status": 4
     }
   ],
   
+  "base_function": {
+    "description": "Выполняется если НИ ОДИН триггер не сработал",
+    "actions": [
+      {"variable": "sne", "action": "increment", "formula": "sne + daily_hours"},
+      {"variable": "ppr", "action": "increment", "formula": "ppr + daily_hours"},
+      {"variable": "status_id", "action": "no_change"},
+      {"variable": "repair_days", "action": "no_change"}
+    ],
+    "macroproperty_sources": [
+      {"name": "daily_hours", "type": "MacroProperty4", "field_id": 84, "lookup_chain": [
+        {"step": 1, "source": "MacroProperty4", "lookup_conditions": [
+          {"field": "aircraft_number", "value": "agent.aircraft_number"},
+          {"field": "dates", "value": "current_simulation_date"}
+        ], "get_field": "daily_hours"}
+      ]}
+    ]
+  },
+  
   "variables": {
     "input": [
-      {"name": "status_id", "type": "Variable", "source": "agent", "value": 2},
+      {"name": "status_id", "type": "Variable", "source": "agent"},
       {"name": "psn", "type": "Variable", "source": "agent"},
       {"name": "aircraft_number", "type": "Variable", "source": "agent"},
       {"name": "sne", "type": "Variable", "source": "agent"},
@@ -50,7 +111,7 @@
       {"name": "repair_days", "type": "Variable", "source": "agent"}
     ],
     "output": [
-      {"name": "status_id", "type": "Variable", "target": "agent", "action": "conditional_change"},
+      {"name": "status_id", "type": "Variable", "target": "agent", "action": "no_change"},
       {"name": "psn", "type": "Variable", "target": "agent", "action": "no_change"},
       {"name": "aircraft_number", "type": "Variable", "target": "agent", "action": "no_change"},
       {"name": "sne", "type": "Variable", "target": "agent", "action": "increment", "formula": "sne + daily_hours"},
