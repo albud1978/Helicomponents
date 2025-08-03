@@ -107,6 +107,9 @@ anaconda*/
 credentials.*
 db_config.local
 
+# Archive project with hardcoded passwords (SECURITY)
+archive_vnv_cpu_project/
+
 # Failed command artifacts
 =*.*.*
 path==*

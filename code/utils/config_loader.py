@@ -91,12 +91,19 @@ def load_database_config(config_path: str = 'config/database_config.yaml') -> Di
             base_config = yaml.safe_load(f)['database']
         
         # Переопределяем через environment variables (как в архивном проекте)
+        password = os.getenv('CLICKHOUSE_PASSWORD')
+        if not password:
+            logger.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Пароль CLICKHOUSE_PASSWORD не найден!")
+            logger.error("   Настройте environment variable CLICKHOUSE_PASSWORD")
+            logger.error("   Или создайте файл .env с CLICKHOUSE_PASSWORD=ваш_пароль")
+            raise ValueError("Отсутствует обязательная переменная CLICKHOUSE_PASSWORD")
+        
         config = {
             'host': os.getenv('CLICKHOUSE_HOST', base_config.get('host', '10.95.19.132')),
             'port': int(os.getenv('CLICKHOUSE_PORT', base_config.get('port', 9000))),
             'database': os.getenv('CLICKHOUSE_DATABASE', base_config.get('database', 'default')),
             'user': os.getenv('CLICKHOUSE_USER', base_config.get('user', 'default')),
-            'password': os.getenv('CLICKHOUSE_PASSWORD', 'quie1ahpoo5Su0wohpaedae8keeph6bi'),  # default из архива
+            'password': password,  # ОБЯЗАТЕЛЬНО из environment variable
         }
         
         # Дополнительные настройки

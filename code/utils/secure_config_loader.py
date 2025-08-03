@@ -144,10 +144,11 @@ class SecureConfigLoader:
             with open(config_file, 'r', encoding='utf-8') as f:
                 base_config = yaml.safe_load(f)['database']
             
-            # Добавляем дефолтный пароль из архива (только как fallback!)
+            # КРИТИЧНО: Пароль должен быть в environment variable или secrets файле!
             if not base_config.get('password'):
-                base_config['password'] = 'quie1ahpoo5Su0wohpaedae8keeph6bi'
-                logger.warning("⚠️ Используется дефолтный пароль из конфига! Настройте безопасные источники.")
+                logger.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Пароль не найден ни в конфиге, ни в environment variables!")
+                logger.error("   Настройте переменную CLICKHOUSE_PASSWORD или файл secrets/clickhouse.json")
+                return None
             
             logger.info(f"📁 Базовая конфигурация загружена из {config_path}")
             return base_config
