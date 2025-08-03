@@ -110,6 +110,8 @@ db_config.local
 # Archive project with hardcoded passwords (SECURITY)
 archive_vnv_cpu_project/
 
+
+
 # Failed command artifacts
 =*.*.*
 path==*
@@ -127,3 +129,8 @@ path==*
 .tmp/
 .cache/
 .download/
+
+# Large files (GitHub limit 50MB)
+debug_*.xlsx
+*.whl
+.cache/pip/
