@@ -2,10 +2,14 @@
   "rtc_function": "fn_spawn_mi17",
   "aircraft_type": "МИ-17",
   "ac_type_mask": 64,
-  "execution_condition": "new_counter_mi17 > 0",
+  "execution_algorithm": "Host Function: выполняется когда new_counter_mi17 > 0 - создание новых агентов МИ-17 через расширение MacroProperty3",
   
   "macroproperty_sources": [
-    {"name": "new_counter_mi17", "type": "MacroProperty4", "field_id": 77}
+    {"name": "new_counter_mi17", "type": "MacroProperty4", "field_id": 77, "lookup_chain": [
+      {"step": 1, "source": "MacroProperty4", "lookup_conditions": [
+        {"field": "dates", "value": "current_simulation_date"}
+      ], "get_field": "new_counter_mi17"}
+    ]}
   ],
   
   "spawn_logic": {

@@ -2,11 +2,19 @@
   "rtc_function": "fn_balance_mi17",
   "aircraft_type": "МИ-17",
   "ac_type_mask": 64,
-  "execution_condition": "trigger_program != 0",
+  "execution_algorithm": "Балансировка выполняется когда trigger_program != 0 - итеративная балансировка агентов МИ-17 между статусами до достижения баланса",
   
   "macroproperty_sources": [
-    {"name": "ops_counter_mi17", "type": "MacroProperty4", "field_id": 75},
-    {"name": "trigger_program", "type": "MacroProperty4", "field_id": 80}
+    {"name": "ops_counter_mi17", "type": "MacroProperty4", "field_id": 75, "lookup_chain": [
+      {"step": 1, "source": "MacroProperty4", "lookup_conditions": [
+        {"field": "dates", "value": "current_simulation_date"}
+      ], "get_field": "ops_counter_mi17"}
+    ]},
+    {"name": "trigger_program", "type": "MacroProperty4", "field_id": 80, "lookup_chain": [
+      {"step": 1, "source": "MacroProperty4", "lookup_conditions": [
+        {"field": "dates", "value": "current_simulation_date"}
+      ], "get_field": "trigger_program"}
+    ]}
   ],
   
   "deficit_calculation": "count(status_id=2 AND ac_type_mask=64) - ops_counter_mi17",
