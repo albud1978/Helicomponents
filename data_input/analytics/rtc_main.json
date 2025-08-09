@@ -1,0 +1,23 @@
+{
+  "rtc_function": "rtc_main",
+  "description": "Main merged function for stable layers (Inactive/Stock/Reserve/Store). Holds state only for agents with status_change=0",
+  "applies_to": {
+    "filters": [
+      {"field": "status_id", "op": "in", "value": [1,3,5,6]},
+      {"field": "status_change", "op": "=", "value": 0}
+    ]
+  },
+  "variables": {
+    "input": [
+      {"name": "status_id", "type": "Variable", "source": "agent"},
+      {"name": "status_change", "type": "Variable", "source": "agent"}
+    ]
+  },
+  "algorithm": {
+    "steps": [
+      {"step": 1, "name": "hold_state", "actions": [
+        {"variable": "status_id", "action": "no_change"}
+      ]}
+    ]
+  }
+}

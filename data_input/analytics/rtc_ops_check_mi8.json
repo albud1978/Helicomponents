@@ -1,0 +1,102 @@
+{
+  "rtc_function": "rtc_ops_check_mi8",
+  "description": "Ops check for MI-8: increment sne/ppr, evaluate LL/OH triggers, set status_change if needed",
+  "ac_type_mask": 32,
+  "applies_to": {
+    "filters": [
+      {"field": "status_id", "op": "=", "value": 2},
+      {"field": "status_change", "op": "=", "value": 0},
+      {"field": "ac_type_mask", "op": "bit_and", "value": 32}
+    ]
+  },
+  "variables": {
+    "input": [
+      {"name": "status_id", "type": "Variable", "source": "agent"},
+      {"name": "status_change", "type": "Variable", "source": "agent"},
+      {"name": "psn", "type": "Variable", "source": "agent"},
+      {"name": "aircraft_number", "type": "Variable", "source": "agent"},
+      {"name": "sne", "type": "Variable", "source": "agent"},
+      {"name": "ppr", "type": "Variable", "source": "agent"}
+    ],
+    "macroproperty_sources": [
+      {
+        "name": "ll",
+        "type": "MacroProperty3",
+        "field_id": 39,
+        "lookup_key": "psn"
+      },
+      {
+        "name": "oh",
+        "type": "MacroProperty3",
+        "field_id": 40,
+        "lookup_key": "psn"
+      },
+      {
+        "name": "br",
+        "type": "MacroProperty1",
+        "field_id": 51,
+        "lookup_chain": [
+          {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
+          {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "br"}
+        ]
+      },
+      {
+        "name": "daily_hours",
+        "type": "MacroProperty5",
+        "field_id": 84,
+        "lookup_chain": [
+          {
+            "step": 1,
+            "source": "MacroProperty5",
+            "lookup_conditions": [
+              {"field": "aircraft_number", "value": "agent.aircraft_number"},
+              {"field": "dates", "value": "current_simulation_date"}
+            ],
+            "get_field": "daily_hours"
+          }
+        ]
+      }
+    ]
+  },
+  "algorithm": {
+    "steps": [
+      {
+        "step": 1,
+        "name": "increment_ops_counters",
+        "actions": [
+          {"variable": "sne", "action": "increment", "formula": "sne + daily_hours"},
+          {"variable": "ppr", "action": "increment", "formula": "ppr + daily_hours"}
+        ]
+      },
+      {
+        "step": 2,
+        "name": "evaluate_triggers",
+        "triggers": [
+          {
+            "name": "trigger_ll",
+            "priority": 1,
+            "condition": "(ll - sne) < daily_hours",
+            "on_true": [{"variable": "status_change", "action": "set", "value": 6}]
+          },
+          {
+            "name": "trigger_oh_br",
+            "priority": 2,
+            "condition": "(oh - ppr) < daily_hours AND sne >= br",
+            "on_true": [{"variable": "status_change", "action": "set", "value": 6}]
+          },
+          {
+            "name": "trigger_oh",
+            "priority": 2,
+            "condition": "(oh - ppr) < daily_hours AND sne < br",
+            "on_true": [{"variable": "status_change", "action": "set", "value": 4}]
+          }
+        ]
+      }
+    ]
+  },
+  "export_to_macroproperty2": ["status_change"],
+  "notes": [
+    "daily_hours берется из MacroProperty5 (field_id=84)",
+    "trigger_pr исключен"
+  ]
+}

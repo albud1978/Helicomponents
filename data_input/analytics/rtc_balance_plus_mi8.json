@@ -1,0 +1,78 @@
+{
+  "rtc_function": "rtc_balance_plus_mi8",
+  "description": "If agents in Ops lack relative to MP4.ops_counter_mi8, move from Reserve->Stock->Inactive to Ops (status_change=2)",
+  "ac_type_mask": 32,
+  "applies_to": {
+    "group": {
+      "filter": {"field": "ac_type_mask", "op": "bit_and", "value": 32},
+      "current_ops": {"count_condition": "status_id=2 AND status_change=0"}
+    }
+  },
+  "resolve_ops_counter": {
+    "source": "MacroProperty4",
+    "field": "ops_counter_mi8",
+    "field_id": 74,
+    "lookup": {"date": "current_simulation_date"}
+  },
+  "algorithm": {
+    "compute": {"lack": "ops_counter - current_ops"},
+    "when_lack_gt_zero": {
+      "phases": [
+        {
+          "phase": 1,
+          "from_layer": "Reserve",
+          "select": {
+            "filter": [
+              {"field": "status_id", "op": "=", "value": 5},
+              {"field": "status_change", "op": "=", "value": 0},
+              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
+            ],
+            "order_by": [
+              {"field": "ppr", "dir": "desc"},
+              {"field": "sne", "dir": "desc"},
+              {"field": "mfg_date", "dir": "asc"}
+            ],
+            "limit": "remaining_lack"
+          },
+          "set": [{"variable": "status_change", "action": "set", "value": 2}]
+        },
+        {
+          "phase": 2,
+          "from_layer": "Stock",
+          "select": {
+            "filter": [
+              {"field": "status_id", "op": "=", "value": 3},
+              {"field": "status_change", "op": "=", "value": 0},
+              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
+            ],
+            "order_by": [
+              {"field": "ppr", "dir": "desc"},
+              {"field": "sne", "dir": "desc"},
+              {"field": "mfg_date", "dir": "asc"}
+            ],
+            "limit": "remaining_lack"
+          },
+          "set": [{"variable": "status_change", "action": "set", "value": 2}]
+        },
+        {
+          "phase": 3,
+          "from_layer": "Inactive",
+          "select": {
+            "filter": [
+              {"field": "status_id", "op": "=", "value": 1},
+              {"field": "status_change", "op": "=", "value": 0},
+              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
+            ],
+            "order_by": [
+              {"field": "mfg_date", "dir": "desc"}
+            ],
+            "limit": "remaining_lack"
+          },
+          "set": [{"variable": "status_change", "action": "set", "value": 2}]
+        }
+      ]
+    }
+  },
+  "export_to_macroproperty2": ["status_change", "lack"],
+  "notes": ["учитывать возможные ограничения lease_restricted/restrictions_mask во внедрении"]
+}

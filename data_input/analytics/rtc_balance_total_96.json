@@ -1,0 +1,26 @@
+{
+  "rtc_function": "rtc_balance_total_96",
+  "description": "Diagnostic balance over total fleet (ac_type_mask=96) using ops_counter_total = ops_counter_mi8 + ops_counter_mi17. No status_change applied, only reporting.",
+  "ac_type_mask": 96,
+  "applies_to": {
+    "group": {
+      "filter": {"field": "ac_type_mask", "op": "bit_and", "value": 96},
+      "current_ops": {"count_condition": "status_id=2 AND status_change=0"}
+    }
+  },
+  "resolve_ops_counter": {
+    "source": "MacroProperty4",
+    "fields": [
+      {"name": "ops_counter_mi8", "field_id": 74},
+      {"name": "ops_counter_mi17", "field_id": 75}
+    ],
+    "combine": "sum",
+    "lookup": {"date": "current_simulation_date"}
+  },
+  "algorithm": {
+    "compute": {"excess": "current_ops - (ops_counter_mi8 + ops_counter_mi17)"},
+    "output_only": true
+  },
+  "export_to_macroproperty2": ["excess"],
+  "notes": ["Используется для контроля консистентности. Балансировка выполняется по типам отдельно (32/64)"]
+}

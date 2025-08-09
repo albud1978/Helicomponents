@@ -1,0 +1,39 @@
+{
+  "rtc_function": "rtc_repair_tick",
+  "description": "Tick for agents in Repair: increment repair_days and set status_change=5 when finished",
+  "applies_to": {
+    "filters": [
+      {"field": "status_id", "op": "=", "value": 4}
+    ]
+  },
+  "variables": {
+    "input": [
+      {"name": "repair_days", "type": "Variable", "source": "agent"},
+      {"name": "psn", "type": "Variable", "source": "agent"}
+    ],
+    "macroproperty_sources": [
+      {
+        "name": "repair_time",
+        "type": "MacroProperty1",
+        "field_id": 64,
+        "lookup_chain": [
+          {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
+          {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "repair_time"}
+        ]
+      }
+    ]
+  },
+  "algorithm": {
+    "steps": [
+      {"step": 1, "name": "tick", "actions": [
+        {"variable": "repair_days", "action": "increment", "formula": "repair_days + 1"}
+      ]},
+      {"step": 2, "name": "check_finish", "triggers": [
+        {"name": "trigger_repair_finish", "priority": 1, "condition": "repair_days >= repair_time", "on_true": [
+          {"variable": "status_change", "action": "set", "value": 5}
+        ]}
+      ]}
+    ]
+  },
+  "export_to_macroproperty2": ["status_change"]
+}

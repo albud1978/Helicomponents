@@ -1,0 +1,65 @@
+{
+  "rtc_function": "rtc_change",
+  "description": "Apply status_change to agents and perform side-effects, then reset status_change to 0",
+  "applies_to": {
+    "filters": [
+      {"field": "status_change", "op": ">", "value": 0}
+    ]
+  },
+  "variables": {
+    "input": [
+      {"name": "status_id", "type": "Variable", "source": "agent"},
+      {"name": "status_change", "type": "Variable", "source": "agent"},
+      {"name": "sne", "type": "Variable", "source": "agent"},
+      {"name": "ppr", "type": "Variable", "source": "agent"},
+      {"name": "psn", "type": "Variable", "source": "agent"},
+      {"name": "aircraft_number", "type": "Variable", "source": "agent"}
+    ],
+    "macroproperty_sources": [
+      {"name": "daily_hours", "type": "MacroProperty5", "field_id": 84, "lookup_chain": [
+        {"step": 1, "source": "MacroProperty5", "lookup_conditions": [
+          {"field": "aircraft_number", "value": "agent.aircraft_number"},
+          {"field": "dates", "value": "current_simulation_date"}
+        ], "get_field": "daily_hours"}
+      ]},
+      {"name": "partout_time", "type": "MacroProperty1", "field_id": 62, "lookup_chain": [
+        {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
+        {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "partout_time"}
+      ]},
+      {"name": "repair_time", "type": "MacroProperty1", "field_id": 64, "lookup_chain": [
+        {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
+        {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "repair_time"}
+      ]},
+      {"name": "assembly_time", "type": "MacroProperty1", "field_id": 50, "lookup_chain": [
+        {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
+        {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "assembly_time"}
+      ]}
+    ]
+  },
+  "algorithm": {
+    "steps": [
+      {"step": 1, "name": "repair_side_effects", "apply_to": {"status_change": 4}, "actions": [
+        {"variable": "partout_trigger", "action": "set", "value": "current_date + partout_time"},
+        {"variable": "assembly_trigger", "action": "set", "value": "current_date + repair_time - assembly_time"}
+      ]},
+      {"step": 2, "name": "repair_finish_side_effects", "apply_to": {"status_change": 5}, "actions": [
+        {"variable": "ppr", "action": "set", "value": 0},
+        {"variable": "repair_days", "action": "set", "value": 0}
+      ]},
+      {"step": 3, "name": "enter_ops_increment_once", "apply_to": {"status_change": 2}, "actions": [
+        {"variable": "sne", "action": "increment", "formula": "sne + daily_hours"},
+        {"variable": "ppr", "action": "increment", "formula": "ppr + daily_hours"}
+      ]},
+      {"step": 4, "name": "apply_status", "actions": [
+        {"variable": "status_id", "action": "set", "value": "status_change"},
+        {"variable": "status_change", "action": "set", "value": 0}
+      ]}
+    ]
+  },
+  "export_to_macroproperty2": [
+    "status_id",
+    "status_change",
+    "partout_trigger",
+    "assembly_trigger"
+  ]
+}
