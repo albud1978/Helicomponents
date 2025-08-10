@@ -1,0 +1,73 @@
+version: "3.8"
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    restart: unless-stopped
+    environment:
+      - CLICKHOUSE_DB=default
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+    ports:
+      - "9000:9000"   # Native
+      - "8123:8123"   # HTTP
+    volumes:
+      - ch_data:/var/lib/clickhouse
+      - ch_logs:/var/log/clickhouse-server
+
+  gpu-sim:
+    build:
+      context: ./gpu
+      dockerfile: Dockerfile
+      args:
+        - PY_VERSION=3.10
+        - CUDA_VERSION=12.2.0
+        # Optional: provide a direct URL to pyflamegpu wheel or copy wheel into gpu/ and set ARG
+        - PYFLAMEGPU_WHEEL_URL=
+    container_name: flamegpu
+    depends_on:
+      - clickhouse
+    environment:
+      - PIP_EXTRA_INDEX_URL=https://pypi.nvidia.com
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - CLICKHOUSE_DATABASE=default
+    # Requires: Docker with GPU support (Docker 20.10+, compose v2.0+, nvidia-container-toolkit)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    # For classic docker compose, this is also supported:
+    # gpus: all
+    volumes:
+      - ../:/app:rw
+    working_dir: /app
+    command: ["bash", "-lc", "python3 -c 'print(\"GPU container ready\")'"]
+
+  etl-dev:
+    build:
+      context: ./dev
+      dockerfile: Dockerfile
+      args:
+        - PY_VERSION=3.10
+    container_name: etl-dev
+    depends_on:
+      - clickhouse
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - CLICKHOUSE_DATABASE=default
+    volumes:
+      - ../:/app:rw
+    working_dir: /app
+    command: ["bash", "-lc", "python3 code/extract_master.py || bash"]
+
+volumes:
+  ch_data:
+  ch_logs:
