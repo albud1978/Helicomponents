@@ -295,3 +295,16 @@ Load → MacroProperty2 (объединенные результаты)
   - Реализовать логику RTC в `flame_gpu_helicopter_model.py` по описанию раздела «Архитектурные намерения для RTC».
   - Прогнать 1–3 суток симуляции с логированием инвариантов (начисление sne/ppr ровно 1 раз; отсутствие необработанных `status_id=2/4` к `rtc_pass_through`).
   - Сверка с валидацией MacroProperty3/4/5 и отчётами. 
+
+## Краткое резюме слоёв RTC (10-08-2025)
+
+- rtc_repair: обрабатывает status_id=4 (ремонт); при переходе 4→5 обнуляет ppr и repair_days; status_change не ставит; доступность этих агентов только с D+1.
+- rtc_ops_check: размечает эксплуатацию (status_id=2) по LL/OH/BR на основе MP5.daily_hours для D и D+1; выставляет status_change ∈ {4,6}; sne/ppr не изменяет; фильтр по group_by (1/2).
+- host_compute_trigger_{mi8,mi17}: trigger_pr_final = target_ops(D, MP4) − current_ops(D, status_id=2 AND status_change=0 AND group_by=1/2); значение пишется в Environment.
+- rtc_balance: 
+  - при trigger<0: из OPS (status_id=2, chg=0, group_by=X) переводит top-|trigger| в status_change=3 по порядку ppr DESC, sne DESC, mfg_date ASC;
+  - при trigger>0: Phase1 5→2, Phase2 3→2, Phase3 1→2 (только если (D − version_date) ≥ repair_time(partno_comp));
+  - если где-то есть status_change=4, дополнительно устанавливает repair_days=1 (предсимуляционная метка).
+- rtc_main: для status_id=2 один раз начисляет sne/ppr на D (MP5.daily_hours), затем применяет переход status_change→status_id; сам status_change пока не сбрасывается.
+- rtc_change: применяет сайд-эффекты переходов (partout/assembly и пр.), после чего сбрасывает status_change=0.
+- rtc_pass_through: обрабатывает «прочие» без изменений; гарантируется, что на входе нет status_id=2/4 (они обработаны ранее) — важно для контроля качества. 
