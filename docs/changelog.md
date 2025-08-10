@@ -1003,3 +1003,7 @@ SELECT dictGet('aircraft_number_dict_flat', 'registration_code', aircraft_number
 
 ### Исправлено
 - Ничего.
+
+### Дополнено (10-08-2025)
+- `code/pre_simulation_status_change.py`: поддержка `--group all|1|2`, генерация SQL-планов и TOP‑N шаблонов для rtc_balance в `temp_data/`, dry‑run по умолчанию.
+- `docs/transform.md`: раздел о заглушках, переходе к реальным тестам и явной фиксации хардкода (group_by-фильтры, правила ops_check/balance).
