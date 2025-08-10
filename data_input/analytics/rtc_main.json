@@ -1,0 +1,37 @@
+{
+  "rtc_function": "rtc_main",
+  "description": "Main layer: add sne/ppr for Ops; apply status_id=status_change for any agent with status_change>0 (without resetting status_change)",
+  "applies_to": {
+    "filters": [
+      {"field": "status_id", "op": "in", "value": [1,2,3,5,6]}
+    ]
+  },
+  "variables": {
+    "input": [
+      {"name": "status_id", "type": "Variable", "source": "agent"},
+      {"name": "status_change", "type": "Variable", "source": "agent"},
+      {"name": "sne", "type": "Variable", "source": "agent"},
+      {"name": "ppr", "type": "Variable", "source": "agent"},
+      {"name": "aircraft_number", "type": "Variable", "source": "agent"}
+    ],
+    "macroproperty_sources": [
+      {"name": "daily_hours", "type": "MacroProperty5", "field_id": 84, "lookup_chain": [
+        {"step": 1, "source": "MacroProperty5", "lookup_conditions": [
+          {"field": "aircraft_number", "value": "agent.aircraft_number"},
+          {"field": "dates", "value": "current_simulation_date"}
+        ], "get_field": "daily_hours"}
+      ]}
+    ]
+  },
+  "algorithm": {
+    "steps": [
+      {"step": 1, "name": "ops_add_hours", "apply_to": {"status_id": 2, "status_change": 0}, "actions": [
+        {"variable": "sne", "action": "increment", "formula": "sne + daily_hours"},
+        {"variable": "ppr", "action": "increment", "formula": "ppr + daily_hours"}
+      ]},
+      {"step": 2, "name": "apply_changes_mark", "apply_to": {"status_change": ">0"}, "actions": [
+        {"variable": "status_id", "action": "set", "value": "status_change"}
+      ]}
+    ]
+  }
+}

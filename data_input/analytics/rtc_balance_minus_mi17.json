@@ -1,0 +1,39 @@
+{
+  "rtc_function": "rtc_balance_minus_mi17",
+  "description": "If agents in Ops exceed MP4.ops_counter_mi17, mark top-N by ppr (then sne, then min mfg_date) with status_change=3 (Ops->Stock)",
+  "ac_type_mask": 64,
+  "applies_to": {
+    "group": {
+      "filter": {"field": "ac_type_mask", "op": "bit_and", "value": 64},
+      "current_ops": {"count_condition": "status_id=2 AND status_change=0"}
+    }
+  },
+  "resolve_ops_counter": {
+    "source": "MacroProperty4",
+    "field": "ops_counter_mi17",
+    "field_id": 75,
+    "lookup": {"date": "current_simulation_date"}
+  },
+  "algorithm": {
+    "compute": {"excess": "current_ops - ops_counter"},
+    "when_excess_gt_zero": {
+      "select": {
+        "from": "agents",
+        "filter": [
+          {"field": "status_id", "op": "=", "value": 2},
+          {"field": "status_change", "op": "=", "value": 0},
+          {"field": "ac_type_mask", "op": "bit_and", "value": 64}
+        ],
+        "order_by": [
+          {"field": "ppr", "dir": "desc"},
+          {"field": "sne", "dir": "desc"},
+          {"field": "mfg_date", "dir": "asc"}
+        ],
+        "limit": "excess"
+      },
+      "set": [{"variable": "status_change", "action": "set", "value": 3}]
+    }
+  },
+  "export_to_macroproperty2": ["status_change", "excess"],
+  "notes": ["balance запускается предпочтительно при trigger_program!=0"]
+}
