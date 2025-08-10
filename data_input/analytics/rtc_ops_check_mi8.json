@@ -1,0 +1,66 @@
+{
+  "rtc_function": "rtc_ops_check_mi8",
+  "description": "Ops check for MI-8: evaluate LL/OH triggers without changing sne/ppr; if remaining resource >= today and < today+next, set status_change (4 or 6)",
+  "ac_type_mask": 32,
+  "applies_to": {
+    "filters": [
+      {"field": "status_id", "op": "=", "value": 2},
+      {"field": "status_change", "op": "=", "value": 0},
+      {"field": "ac_type_mask", "op": "bit_and", "value": 32}
+    ]
+  },
+  "variables": {
+    "input": [
+      {"name": "psn", "type": "Variable", "source": "agent"},
+      {"name": "aircraft_number", "type": "Variable", "source": "agent"},
+      {"name": "sne", "type": "Variable", "source": "agent"},
+      {"name": "ppr", "type": "Variable", "source": "agent"}
+    ],
+    "macroproperty_sources": [
+      {"name": "ll", "type": "MacroProperty3", "field_id": 39, "lookup_key": "psn"},
+      {"name": "oh", "type": "MacroProperty3", "field_id": 40, "lookup_key": "psn"},
+      {"name": "br", "type": "MacroProperty1", "field_id": 51, "lookup_chain": [
+        {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
+        {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "br"}
+      ]},
+      {"name": "daily_today", "type": "MacroProperty5", "field_id": 84, "lookup_chain": [
+        {"step": 1, "source": "MacroProperty5", "lookup_conditions": [
+          {"field": "aircraft_number", "value": "agent.aircraft_number"},
+          {"field": "dates", "value": "current_simulation_date"}
+        ], "get_field": "daily_hours"}
+      ]},
+      {"name": "daily_next", "type": "MacroProperty5", "field_id": 84, "lookup_chain": [
+        {"step": 1, "source": "MacroProperty5", "lookup_conditions": [
+          {"field": "aircraft_number", "value": "agent.aircraft_number"},
+          {"field": "dates", "value": "next_simulation_date"}
+        ], "get_field": "daily_hours"}
+      ]}
+    ]
+  },
+  "algorithm": {
+    "steps": [
+      {"step": 1, "name": "evaluate_triggers_sum_today_next", "triggers": [
+        {
+          "name": "trigger_ll",
+          "priority": 1,
+          "condition": "(ll - sne) >= daily_today AND (ll - sne) < (daily_today + daily_next)",
+          "on_true": [{"variable": "status_change", "action": "set", "value": 6}]
+        },
+        {
+          "name": "trigger_oh_br",
+          "priority": 2,
+          "condition": "(oh - ppr) >= daily_today AND (oh - ppr) < (daily_today + daily_next) AND (sne + daily_today) >= br",
+          "on_true": [{"variable": "status_change", "action": "set", "value": 6}]
+        },
+        {
+          "name": "trigger_oh",
+          "priority": 2,
+          "condition": "(oh - ppr) >= daily_today AND (oh - ppr) < (daily_today + daily_next) AND (sne + daily_today) < br",
+          "on_true": [{"variable": "status_change", "action": "set", "value": 4}]
+        }
+      ]}
+    ]
+  },
+  "export_to_macroproperty2": ["status_change"],
+  "notes": ["sne/ppr не изменяются в этой функции; порог: хватает на сегодня, не хватает на завтра"]
+}

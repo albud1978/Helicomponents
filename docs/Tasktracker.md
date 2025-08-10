@@ -452,3 +452,15 @@ SupersetBI: Direct Join по status_id
 ---
 
 *Последнее обновление: 29-07-2025* 
+
+## Задача: Обогащение MacroProperty3 начальными статусами (pre-simulation)
+- **Статус**: Не начата
+- **Дата создания**: 10-08-2025
+- **Описание**: В этапе Extract дообогатить `MacroProperty3 (heli_pandas)` начальными полями `status_id` и `status_change` для запуска симуляции без дополнительной инициализации. `status_change` может быть не равен 0 на момент старта.
+- **Требования**:
+  - Добавить вычисление стартового `status_id` и `status_change` в `dual_loader.py`/процессорах статусов (или отдельный финальный шаг Extract)
+  - Гарантировать согласованность с логикой RTC: статус меняется ровно 1 раз за цикл, переменная `status_change` служит для маркировки переходов
+  - Обновить экспортер `flame_macroproperty3_loader.py` для включения полей в MacroProperty3
+- **Результат**: MacroProperty3 содержит стартовые `status_id` и `status_change`, совместимые с RTC конвейером
+- **Зависимости**: Логика `overhaul_status_processor.py`, `program_ac_status_processor.py`, расчёт `repair_days`
+- **Методология**: Анализ → Архитектура → Код 

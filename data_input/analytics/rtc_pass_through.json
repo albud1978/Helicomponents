@@ -1,0 +1,11 @@
+{
+  "rtc_function": "rtc_pass_through",
+  "description": "Final pass: for agents with status_id != 2 and status_change=0, copy values without changes (no-op)",
+  "applies_to": {
+    "filters": [
+      {"field": "status_change", "op": "=", "value": 0},
+      {"field": "status_id", "op": "!=", "value": 2}
+    ]
+  },
+  "algorithm": {"steps": [{"step": 1, "name": "noop", "actions": []}]}
+}
