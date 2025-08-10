@@ -1,6 +1,6 @@
 {
   "rtc_function": "rtc_main",
-  "description": "Main layer: add sne/ppr for Ops; apply status_id=status_change for any agent with status_change>0",
+  "description": "Main layer: add sne/ppr for Ops; apply status_id=status_change for any agent with status_change>0 (without resetting status_change)",
   "applies_to": {
     "filters": [
       {"field": "status_id", "op": "in", "value": [1,2,3,5,6]}
@@ -29,9 +29,8 @@
         {"variable": "sne", "action": "increment", "formula": "sne + daily_hours"},
         {"variable": "ppr", "action": "increment", "formula": "ppr + daily_hours"}
       ]},
-      {"step": 2, "name": "apply_changes", "apply_to": {"status_change": ">0"}, "actions": [
-        {"variable": "status_id", "action": "set", "value": "status_change"},
-        {"variable": "status_change", "action": "set", "value": 0}
+      {"step": 2, "name": "apply_changes_mark", "apply_to": {"status_change": ">0"}, "actions": [
+        {"variable": "status_id", "action": "set", "value": "status_change"}
       ]}
     ]
   }
