@@ -991,3 +991,15 @@ SELECT dictGet('aircraft_number_dict_flat', 'registration_code', aircraft_number
 
 ### Исправлено
 - Ничего.
+
+## [10-08-2025] - Каркас FLAME GPU 2 (6 RTC + host) и обновление документации
+
+### Добавлено
+- `code/flame_gpu_helicopter_model.py`: каркас модели с 6 RTC функциями (repair, ops_check, balance, main, change, pass_through) и 2 host-функциями (триггеры для group_by=1/2). Порядок слоёв зафиксирован. Безопасный запуск без pyflamegpu.
+- `docs/transform.md`: раздел о каркасе FLAME GPU, порядок слоёв и поддержка `group_by`/`status_change`.
+
+### Изменено
+- `code/flame_macroproperty3_loader.py`/`exporter.py`/`validator.py`: включены поля `group_by`, `status_change` (ранее добавлено в рамках Extract обновлений).
+
+### Исправлено
+- Ничего.
