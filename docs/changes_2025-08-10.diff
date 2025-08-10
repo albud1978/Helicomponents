@@ -1,0 +1,650 @@
+diff --git a/data_input/analytics/rtc_balance_minus_mi17.json b/data_input/analytics/rtc_balance_minus_mi17.json
+new file mode 100644
+index 00000000..09ac0f53
+--- /dev/null
++++ b/data_input/analytics/rtc_balance_minus_mi17.json
+@@ -0,0 +1,39 @@
++{
++  "rtc_function": "rtc_balance_minus_mi17",
++  "description": "If agents in Ops exceed MP4.ops_counter_mi17, mark top-N by ppr (then sne, then min mfg_date) with status_change=3 (Ops->Stock)",
++  "ac_type_mask": 64,
++  "applies_to": {
++    "group": {
++      "filter": {"field": "ac_type_mask", "op": "bit_and", "value": 64},
++      "current_ops": {"count_condition": "status_id=2 AND status_change=0"}
++    }
++  },
++  "resolve_ops_counter": {
++    "source": "MacroProperty4",
++    "field": "ops_counter_mi17",
++    "field_id": 75,
++    "lookup": {"date": "current_simulation_date"}
++  },
++  "algorithm": {
++    "compute": {"excess": "current_ops - ops_counter"},
++    "when_excess_gt_zero": {
++      "select": {
++        "from": "agents",
++        "filter": [
++          {"field": "status_id", "op": "=", "value": 2},
++          {"field": "status_change", "op": "=", "value": 0},
++          {"field": "ac_type_mask", "op": "bit_and", "value": 64}
++        ],
++        "order_by": [
++          {"field": "ppr", "dir": "desc"},
++          {"field": "sne", "dir": "desc"},
++          {"field": "mfg_date", "dir": "asc"}
++        ],
++        "limit": "excess"
++      },
++      "set": [{"variable": "status_change", "action": "set", "value": 3}]
++    }
++  },
++  "export_to_macroproperty2": ["status_change", "excess"],
++  "notes": ["balance запускается предпочтительно при trigger_program!=0"]
++}
+\ No newline at end of file
+diff --git a/data_input/analytics/rtc_balance_minus_mi8.json b/data_input/analytics/rtc_balance_minus_mi8.json
+new file mode 100644
+index 00000000..54123897
+--- /dev/null
++++ b/data_input/analytics/rtc_balance_minus_mi8.json
+@@ -0,0 +1,80 @@
++{
++  "rtc_function": "rtc_balance_mi8",
++  "description": "Unified balance for MI-8: if trigger_pr_final_mi8 < 0 move top-N from Ops to Stock (status_change=3); if >0 fill Ops from Reserve->Stock->Inactive (status_change=2)",
++  "ac_type_mask": 32,
++  "applies_to": {
++    "filters": [
++      {"field": "ac_type_mask", "op": "bit_and", "value": 32}
++    ]
++  },
++  "environment_sources": [
++    {"name": "trigger_pr_final_mi8", "type": "Environment", "key": "trigger_pr_final_mi8"}
++  ],
++  "algorithm": {
++    "branch": {
++      "condition": "trigger_pr_final_mi8",
++      "when_lt_zero": {
++        "name": "minus_branch",
++        "limit": "abs(trigger_pr_final_mi8)",
++        "select": {
++          "filter": [
++            {"field": "status_id", "op": "=", "value": 2},
++            {"field": "status_change", "op": "=", "value": 0},
++            {"field": "ac_type_mask", "op": "bit_and", "value": 32}
++          ],
++          "order_by": [
++            {"field": "ppr", "dir": "desc"},
++            {"field": "sne", "dir": "desc"},
++            {"field": "mfg_date", "dir": "asc"}
++          ],
++          "limit": "limit"
++        },
++        "set": [{"variable": "status_change", "action": "set", "value": 3}]
++      },
++      "when_gt_zero": {
++        "name": "plus_branch",
++        "limit": "trigger_pr_final_mi8",
++        "phases": [
++          {"phase": 1, "from": "Reserve", "select": {
++            "filter": [
++              {"field": "status_id", "op": "=", "value": 5},
++              {"field": "status_change", "op": "=", "value": 0},
++              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
++            ],
++            "order_by": [
++              {"field": "ppr", "dir": "desc"},
++              {"field": "sne", "dir": "desc"},
++              {"field": "mfg_date", "dir": "asc"}
++            ],
++            "limit": "remaining_limit"
++          }, "set": [{"variable": "status_change", "action": "set", "value": 2}]},
++          {"phase": 2, "from": "Stock", "select": {
++            "filter": [
++              {"field": "status_id", "op": "=", "value": 3},
++              {"field": "status_change", "op": "=", "value": 0},
++              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
++            ],
++            "order_by": [
++              {"field": "ppr", "dir": "desc"},
++              {"field": "sne", "dir": "desc"},
++              {"field": "mfg_date", "dir": "asc"}
++            ],
++            "limit": "remaining_limit"
++          }, "set": [{"variable": "status_change", "action": "set", "value": 2}]},
++          {"phase": 3, "from": "Inactive", "select": {
++            "filter": [
++              {"field": "status_id", "op": "=", "value": 1},
++              {"field": "status_change", "op": "=", "value": 0},
++              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
++            ],
++            "order_by": [
++              {"field": "mfg_date", "dir": "desc"}
++            ],
++            "limit": "remaining_limit"
++          }, "set": [{"variable": "status_change", "action": "set", "value": 2}]}
++        ]
++      }
++    }
++  },
++  "export_to_macroproperty2": ["status_change"]
++}
+\ No newline at end of file
+diff --git a/data_input/analytics/rtc_balance_plus_mi17.json b/data_input/analytics/rtc_balance_plus_mi17.json
+new file mode 100644
+index 00000000..16b88aeb
+--- /dev/null
++++ b/data_input/analytics/rtc_balance_plus_mi17.json
+@@ -0,0 +1,63 @@
++{
++  "rtc_function": "rtc_balance_plus_mi17",
++  "description": "If agents in Ops lack relative to MP4.ops_counter_mi17, move from Reserve->Stock->Inactive to Ops (status_change=2)",
++  "ac_type_mask": 64,
++  "applies_to": {
++    "group": {
++      "filter": {"field": "ac_type_mask", "op": "bit_and", "value": 64},
++      "current_ops": {"count_condition": "status_id=2 AND status_change=0"}
++    }
++  },
++  "resolve_ops_counter": {
++    "source": "MacroProperty4",
++    "field": "ops_counter_mi17",
++    "field_id": 75,
++    "lookup": {"date": "current_simulation_date"}
++  },
++  "algorithm": {
++    "compute": {"lack": "ops_counter - current_ops"},
++    "when_lack_gt_zero": {
++      "phases": [
++        {"phase": 1, "from_layer": "Reserve", "select": {
++          "filter": [
++            {"field": "status_id", "op": "=", "value": 5},
++            {"field": "status_change", "op": "=", "value": 0},
++            {"field": "ac_type_mask", "op": "bit_and", "value": 64}
++          ],
++          "order_by": [
++            {"field": "ppr", "dir": "desc"},
++            {"field": "sne", "dir": "desc"},
++            {"field": "mfg_date", "dir": "asc"}
++          ],
++          "limit": "remaining_lack"
++        }, "set": [{"variable": "status_change", "action": "set", "value": 2}]},
++        {"phase": 2, "from_layer": "Stock", "select": {
++          "filter": [
++            {"field": "status_id", "op": "=", "value": 3},
++            {"field": "status_change", "op": "=", "value": 0},
++            {"field": "ac_type_mask", "op": "bit_and", "value": 64}
++          ],
++          "order_by": [
++            {"field": "ppr", "dir": "desc"},
++            {"field": "sne", "dir": "desc"},
++            {"field": "mfg_date", "dir": "asc"}
++          ],
++          "limit": "remaining_lack"
++        }, "set": [{"variable": "status_change", "action": "set", "value": 2}]},
++        {"phase": 3, "from_layer": "Inactive", "select": {
++          "filter": [
++            {"field": "status_id", "op": "=", "value": 1},
++            {"field": "status_change", "op": "=", "value": 0},
++            {"field": "ac_type_mask", "op": "bit_and", "value": 64}
++          ],
++          "order_by": [
++            {"field": "mfg_date", "dir": "desc"}
++          ],
++          "limit": "remaining_lack"
++        }, "set": [{"variable": "status_change", "action": "set", "value": 2}]}
++      ]
++    }
++  },
++  "export_to_macroproperty2": ["status_change", "lack"],
++  "notes": ["учитывать возможные ограничения lease_restricted/restrictions_mask во внедрении"]
++}
+\ No newline at end of file
+diff --git a/data_input/analytics/rtc_balance_plus_mi8.json b/data_input/analytics/rtc_balance_plus_mi8.json
+new file mode 100644
+index 00000000..d706935e
+--- /dev/null
++++ b/data_input/analytics/rtc_balance_plus_mi8.json
+@@ -0,0 +1,78 @@
++{
++  "rtc_function": "rtc_balance_plus_mi8",
++  "description": "If agents in Ops lack relative to MP4.ops_counter_mi8, move from Reserve->Stock->Inactive to Ops (status_change=2)",
++  "ac_type_mask": 32,
++  "applies_to": {
++    "group": {
++      "filter": {"field": "ac_type_mask", "op": "bit_and", "value": 32},
++      "current_ops": {"count_condition": "status_id=2 AND status_change=0"}
++    }
++  },
++  "resolve_ops_counter": {
++    "source": "MacroProperty4",
++    "field": "ops_counter_mi8",
++    "field_id": 74,
++    "lookup": {"date": "current_simulation_date"}
++  },
++  "algorithm": {
++    "compute": {"lack": "ops_counter - current_ops"},
++    "when_lack_gt_zero": {
++      "phases": [
++        {
++          "phase": 1,
++          "from_layer": "Reserve",
++          "select": {
++            "filter": [
++              {"field": "status_id", "op": "=", "value": 5},
++              {"field": "status_change", "op": "=", "value": 0},
++              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
++            ],
++            "order_by": [
++              {"field": "ppr", "dir": "desc"},
++              {"field": "sne", "dir": "desc"},
++              {"field": "mfg_date", "dir": "asc"}
++            ],
++            "limit": "remaining_lack"
++          },
++          "set": [{"variable": "status_change", "action": "set", "value": 2}]
++        },
++        {
++          "phase": 2,
++          "from_layer": "Stock",
++          "select": {
++            "filter": [
++              {"field": "status_id", "op": "=", "value": 3},
++              {"field": "status_change", "op": "=", "value": 0},
++              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
++            ],
++            "order_by": [
++              {"field": "ppr", "dir": "desc"},
++              {"field": "sne", "dir": "desc"},
++              {"field": "mfg_date", "dir": "asc"}
++            ],
++            "limit": "remaining_lack"
++          },
++          "set": [{"variable": "status_change", "action": "set", "value": 2}]
++        },
++        {
++          "phase": 3,
++          "from_layer": "Inactive",
++          "select": {
++            "filter": [
++              {"field": "status_id", "op": "=", "value": 1},
++              {"field": "status_change", "op": "=", "value": 0},
++              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
++            ],
++            "order_by": [
++              {"field": "mfg_date", "dir": "desc"}
++            ],
++            "limit": "remaining_lack"
++          },
++          "set": [{"variable": "status_change", "action": "set", "value": 2}]
++        }
++      ]
++    }
++  },
++  "export_to_macroproperty2": ["status_change", "lack"],
++  "notes": ["учитывать возможные ограничения lease_restricted/restrictions_mask во внедрении"]
++}
+\ No newline at end of file
+diff --git a/data_input/analytics/rtc_balance_total_96.json b/data_input/analytics/rtc_balance_total_96.json
+new file mode 100644
+index 00000000..ab64062e
+--- /dev/null
++++ b/data_input/analytics/rtc_balance_total_96.json
+@@ -0,0 +1,26 @@
++{
++  "rtc_function": "rtc_balance_total_96",
++  "description": "Diagnostic balance over total fleet (ac_type_mask=96) using ops_counter_total = ops_counter_mi8 + ops_counter_mi17. No status_change applied, only reporting.",
++  "ac_type_mask": 96,
++  "applies_to": {
++    "group": {
++      "filter": {"field": "ac_type_mask", "op": "bit_and", "value": 96},
++      "current_ops": {"count_condition": "status_id=2 AND status_change=0"}
++    }
++  },
++  "resolve_ops_counter": {
++    "source": "MacroProperty4",
++    "fields": [
++      {"name": "ops_counter_mi8", "field_id": 74},
++      {"name": "ops_counter_mi17", "field_id": 75}
++    ],
++    "combine": "sum",
++    "lookup": {"date": "current_simulation_date"}
++  },
++  "algorithm": {
++    "compute": {"excess": "current_ops - (ops_counter_mi8 + ops_counter_mi17)"},
++    "output_only": true
++  },
++  "export_to_macroproperty2": ["excess"],
++  "notes": ["Используется для контроля консистентности. Балансировка выполняется по типам отдельно (32/64)"]
++}
+\ No newline at end of file
+diff --git a/data_input/analytics/rtc_change.json b/data_input/analytics/rtc_change.json
+new file mode 100644
+index 00000000..eaa628f6
+--- /dev/null
++++ b/data_input/analytics/rtc_change.json
+@@ -0,0 +1,49 @@
++{
++  "rtc_function": "rtc_change",
++  "description": "Apply side-effects for non-OPS statuses with status_change>0 (OPS handled in rtc_main).",
++  "applies_to": {
++    "filters": [
++      {"field": "status_change", "op": ">", "value": 0},
++      {"field": "status_id", "op": "!=", "value": 2}
++    ]
++  },
++  "variables": {
++    "input": [
++      {"name": "status_id", "type": "Variable", "source": "agent"},
++      {"name": "status_change", "type": "Variable", "source": "agent"},
++      {"name": "psn", "type": "Variable", "source": "agent"},
++      {"name": "aircraft_number", "type": "Variable", "source": "agent"}
++    ],
++    "macroproperty_sources": [
++      {"name": "partout_time", "type": "MacroProperty1", "field_id": 62, "lookup_chain": [
++        {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
++        {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "partout_time"}
++      ]},
++      {"name": "repair_time", "type": "MacroProperty1", "field_id": 64, "lookup_chain": [
++        {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
++        {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "repair_time"}
++      ]},
++      {"name": "assembly_time", "type": "MacroProperty1", "field_id": 50, "lookup_chain": [
++        {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
++        {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "assembly_time"}
++      ]}
++    ]
++  },
++  "algorithm": {
++    "steps": [
++      {"step": 1, "name": "repair_side_effects", "apply_to": {"status_change": 4}, "actions": [
++        {"variable": "partout_trigger", "action": "set", "value": "current_date + partout_time"},
++        {"variable": "assembly_trigger", "action": "set", "value": "current_date + repair_time - assembly_time"}
++      ]},
++      {"step": 2, "name": "repair_finish_side_effects", "apply_to": {"status_change": 5}, "actions": [
++        {"variable": "ppr", "action": "set", "value": 0},
++        {"variable": "repair_days", "action": "set", "value": 0}
++      ]},
++      {"step": 3, "name": "apply_status", "actions": [
++        {"variable": "status_id", "action": "set", "value": "status_change"},
++        {"variable": "status_change", "action": "set", "value": 0}
++      ]}
++    ]
++  },
++  "export_to_macroproperty2": ["status_id", "status_change", "partout_trigger", "assembly_trigger"]
++}
+\ No newline at end of file
+diff --git a/data_input/analytics/rtc_main.json b/data_input/analytics/rtc_main.json
+new file mode 100644
+index 00000000..9be019c2
+--- /dev/null
++++ b/data_input/analytics/rtc_main.json
+@@ -0,0 +1,37 @@
++{
++  "rtc_function": "rtc_main",
++  "description": "Main layer: add sne/ppr for Ops; apply status_id=status_change for any agent with status_change>0 (without resetting status_change)",
++  "applies_to": {
++    "filters": [
++      {"field": "status_id", "op": "in", "value": [1,2,3,5,6]}
++    ]
++  },
++  "variables": {
++    "input": [
++      {"name": "status_id", "type": "Variable", "source": "agent"},
++      {"name": "status_change", "type": "Variable", "source": "agent"},
++      {"name": "sne", "type": "Variable", "source": "agent"},
++      {"name": "ppr", "type": "Variable", "source": "agent"},
++      {"name": "aircraft_number", "type": "Variable", "source": "agent"}
++    ],
++    "macroproperty_sources": [
++      {"name": "daily_hours", "type": "MacroProperty5", "field_id": 84, "lookup_chain": [
++        {"step": 1, "source": "MacroProperty5", "lookup_conditions": [
++          {"field": "aircraft_number", "value": "agent.aircraft_number"},
++          {"field": "dates", "value": "current_simulation_date"}
++        ], "get_field": "daily_hours"}
++      ]}
++    ]
++  },
++  "algorithm": {
++    "steps": [
++      {"step": 1, "name": "ops_add_hours", "apply_to": {"status_id": 2, "status_change": 0}, "actions": [
++        {"variable": "sne", "action": "increment", "formula": "sne + daily_hours"},
++        {"variable": "ppr", "action": "increment", "formula": "ppr + daily_hours"}
++      ]},
++      {"step": 2, "name": "apply_changes_mark", "apply_to": {"status_change": ">0"}, "actions": [
++        {"variable": "status_id", "action": "set", "value": "status_change"}
++      ]}
++    ]
++  }
++}
+\ No newline at end of file
+diff --git a/data_input/analytics/rtc_ops_check_mi17.json b/data_input/analytics/rtc_ops_check_mi17.json
+new file mode 100644
+index 00000000..7570e948
+--- /dev/null
++++ b/data_input/analytics/rtc_ops_check_mi17.json
+@@ -0,0 +1,61 @@
++{
++  "rtc_function": "rtc_ops_check_mi17",
++  "description": "Ops check for MI-17: increment sne/ppr, evaluate LL/OH triggers, set status_change if needed",
++  "ac_type_mask": 64,
++  "applies_to": {
++    "filters": [
++      {"field": "status_id", "op": "=", "value": 2},
++      {"field": "status_change", "op": "=", "value": 0},
++      {"field": "ac_type_mask", "op": "bit_and", "value": 64}
++    ]
++  },
++  "variables": {
++    "input": [
++      {"name": "status_id", "type": "Variable", "source": "agent"},
++      {"name": "status_change", "type": "Variable", "source": "agent"},
++      {"name": "psn", "type": "Variable", "source": "agent"},
++      {"name": "aircraft_number", "type": "Variable", "source": "agent"},
++      {"name": "sne", "type": "Variable", "source": "agent"},
++      {"name": "ppr", "type": "Variable", "source": "agent"}
++    ],
++    "macroproperty_sources": [
++      {"name": "ll", "type": "MacroProperty3", "field_id": 39, "lookup_key": "psn"},
++      {"name": "oh", "type": "MacroProperty3", "field_id": 40, "lookup_key": "psn"},
++      {"name": "br", "type": "MacroProperty1", "field_id": 51, "lookup_chain": [
++        {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
++        {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "br"}
++      ]},
++      {
++        "name": "daily_hours",
++        "type": "MacroProperty5",
++        "field_id": 84,
++        "lookup_chain": [
++          {
++            "step": 1,
++            "source": "MacroProperty5",
++            "lookup_conditions": [
++              {"field": "aircraft_number", "value": "agent.aircraft_number"},
++              {"field": "dates", "value": "current_simulation_date"}
++            ],
++            "get_field": "daily_hours"
++          }
++        ]
++      }
++    ]
++  },
++  "algorithm": {
++    "steps": [
++      {"step": 1, "name": "increment_ops_counters", "actions": [
++        {"variable": "sne", "action": "increment", "formula": "sne + daily_hours"},
++        {"variable": "ppr", "action": "increment", "formula": "ppr + daily_hours"}
++      ]},
++      {"step": 2, "name": "evaluate_triggers", "triggers": [
++        {"name": "trigger_ll", "priority": 1, "condition": "(ll - sne) < daily_hours", "on_true": [{"variable": "status_change", "action": "set", "value": 6}]},
++        {"name": "trigger_oh_br", "priority": 2, "condition": "(oh - ppr) < daily_hours AND sne >= br", "on_true": [{"variable": "status_change", "action": "set", "value": 6}]},
++        {"name": "trigger_oh", "priority": 2, "condition": "(oh - ppr) < daily_hours AND sne < br", "on_true": [{"variable": "status_change", "action": "set", "value": 4}]}
++      ]}
++    ]
++  },
++  "export_to_macroproperty2": ["status_change"],
++  "notes": ["daily_hours из MacroProperty5 (field_id=84)", "trigger_pr исключен"]
++}
+\ No newline at end of file
+diff --git a/data_input/analytics/rtc_ops_check_mi8.json b/data_input/analytics/rtc_ops_check_mi8.json
+new file mode 100644
+index 00000000..6971816f
+--- /dev/null
++++ b/data_input/analytics/rtc_ops_check_mi8.json
+@@ -0,0 +1,66 @@
++{
++  "rtc_function": "rtc_ops_check_mi8",
++  "description": "Ops check for MI-8: evaluate LL/OH triggers without changing sne/ppr; if remaining resource >= today and < today+next, set status_change (4 or 6)",
++  "ac_type_mask": 32,
++  "applies_to": {
++    "filters": [
++      {"field": "status_id", "op": "=", "value": 2},
++      {"field": "status_change", "op": "=", "value": 0},
++      {"field": "ac_type_mask", "op": "bit_and", "value": 32}
++    ]
++  },
++  "variables": {
++    "input": [
++      {"name": "psn", "type": "Variable", "source": "agent"},
++      {"name": "aircraft_number", "type": "Variable", "source": "agent"},
++      {"name": "sne", "type": "Variable", "source": "agent"},
++      {"name": "ppr", "type": "Variable", "source": "agent"}
++    ],
++    "macroproperty_sources": [
++      {"name": "ll", "type": "MacroProperty3", "field_id": 39, "lookup_key": "psn"},
++      {"name": "oh", "type": "MacroProperty3", "field_id": 40, "lookup_key": "psn"},
++      {"name": "br", "type": "MacroProperty1", "field_id": 51, "lookup_chain": [
++        {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
++        {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "br"}
++      ]},
++      {"name": "daily_today", "type": "MacroProperty5", "field_id": 84, "lookup_chain": [
++        {"step": 1, "source": "MacroProperty5", "lookup_conditions": [
++          {"field": "aircraft_number", "value": "agent.aircraft_number"},
++          {"field": "dates", "value": "current_simulation_date"}
++        ], "get_field": "daily_hours"}
++      ]},
++      {"name": "daily_next", "type": "MacroProperty5", "field_id": 84, "lookup_chain": [
++        {"step": 1, "source": "MacroProperty5", "lookup_conditions": [
++          {"field": "aircraft_number", "value": "agent.aircraft_number"},
++          {"field": "dates", "value": "next_simulation_date"}
++        ], "get_field": "daily_hours"}
++      ]}
++    ]
++  },
++  "algorithm": {
++    "steps": [
++      {"step": 1, "name": "evaluate_triggers_sum_today_next", "triggers": [
++        {
++          "name": "trigger_ll",
++          "priority": 1,
++          "condition": "(ll - sne) >= daily_today AND (ll - sne) < (daily_today + daily_next)",
++          "on_true": [{"variable": "status_change", "action": "set", "value": 6}]
++        },
++        {
++          "name": "trigger_oh_br",
++          "priority": 2,
++          "condition": "(oh - ppr) >= daily_today AND (oh - ppr) < (daily_today + daily_next) AND (sne + daily_today) >= br",
++          "on_true": [{"variable": "status_change", "action": "set", "value": 6}]
++        },
++        {
++          "name": "trigger_oh",
++          "priority": 2,
++          "condition": "(oh - ppr) >= daily_today AND (oh - ppr) < (daily_today + daily_next) AND (sne + daily_today) < br",
++          "on_true": [{"variable": "status_change", "action": "set", "value": 4}]
++        }
++      ]}
++    ]
++  },
++  "export_to_macroproperty2": ["status_change"],
++  "notes": ["sne/ppr не изменяются в этой функции; порог: хватает на сегодня, не хватает на завтра"]
++}
+\ No newline at end of file
+diff --git a/data_input/analytics/rtc_pass_through.json b/data_input/analytics/rtc_pass_through.json
+new file mode 100644
+index 00000000..a818364b
+--- /dev/null
++++ b/data_input/analytics/rtc_pass_through.json
+@@ -0,0 +1,11 @@
++{
++  "rtc_function": "rtc_pass_through",
++  "description": "Final pass: for agents with status_id != 2 and status_change=0, copy values without changes (no-op)",
++  "applies_to": {
++    "filters": [
++      {"field": "status_change", "op": "=", "value": 0},
++      {"field": "status_id", "op": "!=", "value": 2}
++    ]
++  },
++  "algorithm": {"steps": [{"step": 1, "name": "noop", "actions": []}]}
++}
+\ No newline at end of file
+diff --git a/data_input/analytics/rtc_repair_tick.json b/data_input/analytics/rtc_repair_tick.json
+new file mode 100644
+index 00000000..e140f50c
+--- /dev/null
++++ b/data_input/analytics/rtc_repair_tick.json
+@@ -0,0 +1,39 @@
++{
++  "rtc_function": "rtc_repair",
++  "description": "Tick for agents in Repair: increment repair_days and set status_change=5 when finished",
++  "applies_to": {
++    "filters": [
++      {"field": "status_id", "op": "=", "value": 4}
++    ]
++  },
++  "variables": {
++    "input": [
++      {"name": "repair_days", "type": "Variable", "source": "agent"},
++      {"name": "psn", "type": "Variable", "source": "agent"}
++    ],
++    "macroproperty_sources": [
++      {
++        "name": "repair_time",
++        "type": "MacroProperty1",
++        "field_id": 64,
++        "lookup_chain": [
++          {"step": 1, "source": "MacroProperty3", "lookup_key": "psn", "get_field": "partseqno_i"},
++          {"step": 2, "source": "MacroProperty1", "lookup_key": "partno_comp", "lookup_value": "step1_result", "get_field": "repair_time"}
++        ]
++      }
++    ]
++  },
++  "algorithm": {
++    "steps": [
++      {"step": 1, "name": "tick", "actions": [
++        {"variable": "repair_days", "action": "increment", "formula": "repair_days + 1"}
++      ]},
++      {"step": 2, "name": "check_finish", "triggers": [
++        {"name": "trigger_repair_finish", "priority": 1, "condition": "repair_days >= repair_time", "on_true": [
++          {"variable": "status_change", "action": "set", "value": 5}
++        ]}
++      ]}
++    ]
++  },
++  "export_to_macroproperty2": ["status_change"]
++}
+\ No newline at end of file
+diff --git a/docs/Tasktracker.md b/docs/Tasktracker.md
+index 5d9c46e5..c91101ae 100644
+--- a/docs/Tasktracker.md
++++ b/docs/Tasktracker.md
+@@ -451,4 +451,16 @@ SupersetBI: Direct Join по status_id
+ 
+ ---
+ 
+-*Последнее обновление: 29-07-2025* 
+\ No newline at end of file
++*Последнее обновление: 29-07-2025* 
++
++## Задача: Обогащение MacroProperty3 начальными статусами (pre-simulation)
++- **Статус**: Не начата
++- **Дата создания**: 10-08-2025
++- **Описание**: В этапе Extract дообогатить `MacroProperty3 (heli_pandas)` начальными полями `status_id` и `status_change` для запуска симуляции без дополнительной инициализации. `status_change` может быть не равен 0 на момент старта.
++- **Требования**:
++  - Добавить вычисление стартового `status_id` и `status_change` в `dual_loader.py`/процессорах статусов (или отдельный финальный шаг Extract)
++  - Гарантировать согласованность с логикой RTC: статус меняется ровно 1 раз за цикл, переменная `status_change` служит для маркировки переходов
++  - Обновить экспортер `flame_macroproperty3_loader.py` для включения полей в MacroProperty3
++- **Результат**: MacroProperty3 содержит стартовые `status_id` и `status_change`, совместимые с RTC конвейером
++- **Зависимости**: Логика `overhaul_status_processor.py`, `program_ac_status_processor.py`, расчёт `repair_days`
++- **Методология**: Анализ → Архитектура → Код 
+\ No newline at end of file
