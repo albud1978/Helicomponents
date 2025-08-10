@@ -13,7 +13,7 @@ python3 code/utils/auto_config.py
 python3 code/utils/test_db_connection.py
 
 # 3. Запуск ETL в тестовом режиме (полная перезагрузка)
-python3 code/etl_master.py
+python3 code/extract_master.py
 # Выберите: 1 (ТЕСТ)
 ```
 
@@ -21,14 +21,14 @@ python3 code/etl_master.py
 ```bash
 # 1. Обновите Excel файлы в data_input/source_data/
 # 2. Запустите ETL в продуктивном режиме (добавление новых версий):
-python3 code/etl_master.py
+python3 code/extract_master.py
 # Выберите: 2 (ПРОД)
 ```
 
 ### **Для Windows пользователей**
 ```bash
 # Если эмодзи отображаются как квадратики:
-EMOJI_MODE=text python3 code/etl_master.py
+EMOJI_MODE=text python3 code/extract_master.py
 
 # Автоматическая настройка проекта под Windows:
 python3 code/utils/auto_config.py --setup --force
@@ -60,7 +60,7 @@ python3 code/utils/auto_config.py
 # CLICKHOUSE_PASSWORD=your_actual_password
 
 # 4. Первый запуск
-python3 code/etl_master.py  # → выбрать 1 (ТЕСТ)
+python3 code/extract_master.py  # → выбрать 1 (ТЕСТ)
 ```
 
 ### **Отладка проблем**
@@ -73,7 +73,7 @@ python3 code/utils/cleanup_dictionaries.py
 
 # 3. При серьезных проблемах
 python3 code/utils/database_cleanup.py
-python3 code/etl_master.py  # → выбрать 1 (ТЕСТ)
+python3 code/extract_master.py  # → выбрать 1 (ТЕСТ)
 ```
 
 ## ⚡ Environment Variables
@@ -96,13 +96,13 @@ LOG_LEVEL=INFO               # DEBUG/INFO/WARNING
 ### **Переопределение в командной строке**
 ```bash
 # Принудительный текстовый режим
-EMOJI_MODE=text python3 code/etl_master.py
+EMOJI_MODE=text python3 code/extract_master.py
 
 # Показать диагностику при запуске
-SHOW_DISPLAY_INFO=true python3 code/etl_master.py
+SHOW_DISPLAY_INFO=true python3 code/extract_master.py
 
 # Отладочный режим
-LOG_LEVEL=DEBUG python3 code/etl_master.py
+LOG_LEVEL=DEBUG python3 code/extract_master.py
 ```
 
 ## 🎯 Обзор проекта
@@ -182,14 +182,6 @@ LOG_LEVEL=DEBUG python3 code/etl_master.py
 - Обогащение справочными данными
 - Создание и обновление словарей
 
-### Настройка среды разработки
-
-**Автозагрузка переменных:**
-Переменные окружения автоматически загружаются через `~/.bashrc`
-
-**Тестирование подключений:**
-Используйте `test_db_connection.py` для проверки всех типов подключений.
-
 ## 🏗️ Технологический стек
 
 - **Язык:** Python 3.x
@@ -197,8 +189,6 @@ LOG_LEVEL=DEBUG python3 code/etl_master.py
 - **ETL:** Pandas, cudf, clickhouse_driver, clickhouse_connect
 - **Моделирование:** Flame GPU (планируется)
 - **Форматы данных:** Excel → ClickHouse → Flame GPU
-
-
 
 ## 📋 ETL Документация
 
@@ -215,8 +205,14 @@ LOG_LEVEL=DEBUG python3 code/etl_master.py
 - **logs/** - Логи работы системы
 - **archive_vnv_cpu_project/** - Архив CPU версии (НЕ РЕДАКТИРОВАТЬ)
 
+## Намерения по Transform (10-08-2025)
+
+- **Слои RTC**: 6 RTC функций + 1 host-функция, как описано в `docs/transform.md`.
+- **group_by**: использовать `group_by` вместо `ac_type_mask` в фильтрах RTC; для планеров — 1 (МИ‑8Т), 2 (МИ‑17). Две параллельные симуляции по group_by.
+- **Инварианты суток**: начисление SNE/PPR ровно один раз для `status_id=2`; `status_change` применяется в конце `rtc_main`, сбрасывается в `rtc_change`.
+
 ## 🚀 Быстрый старт
 
 1. **Настройка окружения:** Создайте файл `.env` с параметрами подключения
-2. **Загрузка данных:** Запустите `etl_master.py`
+2. **Загрузка данных:** Запустите `extract_master.py`
 3. **Проверка результатов:** Используйте утилиты в `code/utils/`
