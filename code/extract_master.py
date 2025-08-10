@@ -184,6 +184,21 @@ class ExtractMaster:
             'result_table': 'dict_digital_values_flat',
             'critical': False
         },
+        # === ПРЕДСИМУЛЯЦИОННЫЕ ШАГИ (DRY-RUN) ===
+        {
+            'script': 'utils/mp3_group_by_filler.py',
+            'description': 'Pre-sim: заполнение MP3.group_by из MP1 (dry-run по умолчанию)',
+            'dependencies': ['heli_pandas', 'md_components'],
+            'result_table': 'heli_pandas',
+            'critical': False
+        },
+        {
+            'script': 'pre_simulation_status_change.py',
+            'description': 'Pre-sim: расчёт MP3.status_change на D по RTC (dry-run по умолчанию)',
+            'dependencies': ['heli_pandas', 'md_components', 'flight_program_ac', 'flight_program_fl'],
+            'result_table': 'heli_pandas',
+            'critical': False
+        },
         # === ФИНАЛЬНЫЕ РАСЧЕТЫ (после всех словарей и тензоров) ===
         {
             'script': 'repair_days_calculator.py',

@@ -56,8 +56,8 @@ class FlameMacroProperty3Exporter:
             
             # Получаем аналитические поля MacroProperty3
             analytics_fields = [
-                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'status_id',
-                'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
+                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'group_by', 'status_id',
+                'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
             
@@ -167,8 +167,8 @@ class FlameMacroProperty3Exporter:
         try:
             # Получаем аналитические поля MacroProperty3 в правильном порядке
             analytics_fields = [
-                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'status_id',
-                'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
+                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'group_by', 'status_id',
+                'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
             

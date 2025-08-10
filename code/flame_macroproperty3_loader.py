@@ -124,7 +124,9 @@ class FlameMacroProperty3Loader:
                 'psn',             # field_id: 48 - uint32 (agent_id)
                 'address_i',       # field_id: 7  - uint16
                 'lease_restricted', # field_id: 24 - uint8
+                'group_by',        # NEW: группировка взаимозаменяемости
                 'status_id',       # field_id: 61 - uint8
+                'status_change',   # NEW: метка перехода на D
                 'aircraft_number', # field_id: 8  - uint32
                 'ac_type_mask',    # field_id: 4  - multihot[u8]
                 'll',              # field_id: 25 - uint32
