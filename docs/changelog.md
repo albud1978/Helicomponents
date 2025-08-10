@@ -978,3 +978,16 @@ SELECT dictGet('aircraft_number_dict_flat', 'registration_code', aircraft_number
 - **NULL конвертаций**: 0 (отличное качество данных)
 - **Производительность**: ~1 сек для 7K агентов
 - **Готовность к Этапу 2**: Создание агентов и RTC логика
+
+## [10-08-2025] - Документация: намерения по RTC слоям и group_by
+
+### Добавлено
+- **transform.md**: Раздел "Архитектурные намерения для RTC (10-08-2025)" — 6 RTC слоёв + host-функция, инварианты суток, переход на `group_by` в фильтрах вместо `ac_type_mask`, правила для `rtc_repair`, `rtc_ops_check`, `rtc_balance`, `rtc_main`, `rtc_change`, `rtc_pass_through`.
+- **extract.md**: Раздел "Намерения по расширению Extract (10-08-2025)" — обогащение `MacroProperty3` полем `group_by` из `MacroProperty1` по `partseqno_i = partno_comp`, заметка про pre-simulation `status_change` (задача в Tasktracker).
+- **README.md**: Команды запуска обновлены на `extract_master.py`; добавлена секция "Намерения по Transform (10-08-2025)" с кратким резюме о слоях RTC и `group_by`.
+
+### Изменено
+- Ничего.
+
+### Исправлено
+- Ничего.
