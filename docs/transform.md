@@ -278,3 +278,20 @@ Load → MacroProperty2 (объединенные результаты)
 - Порядок вызова закреплён: rtc_repair → rtc_ops_check → host (триггеры) → rtc_balance → rtc_main → rtc_change → rtc_pass_through.
 - Интерфейсы поддерживают `group_by` (1=МИ‑8Т, 2=МИ‑17) и `status_change`.
 - Скрипт безопасен без установленного pyflamegpu (мягкий выход). Реализация логики будет добавлена после завершения Extract-подготовки. 
+
+## Заглушки и переход к реальным тестам (10-08-2025)
+
+- **Заглушки (skeleton):**
+  - `code/flame_gpu_helicopter_model.py` — StepFunction/HostFunction без бизнес-логики; цель — зафиксировать порядок слоёв и интерфейсы (`group_by`, `status_change`).
+  - `code/pre_simulation_status_change.py` — формирует SQL-план (ops_check + balance шаблоны) в dry-run по умолчанию, без изменений данных.
+  - `code/utils/mp3_group_by_filler.py` — заполняет `group_by`, сухой прогон по умолчанию.
+- **Хардкод (документирован):**
+  - Фильтры по `group_by` (1=МИ‑8Т, 2=МИ‑17) вместо `ac_type_mask`.
+  - Правила разметки ops_check: LL/OH/BR по `daily_hours(D|D+1)` — только метки `status_change` (sne/ppr не меняем).
+  - В balance Phase3 (1→2) допускается только при `(D - version_date) >= repair_time(partno_comp)`.
+  - При метке ремонта (`status_change=4`) дополнительно выставляется `repair_days=1` (предсимуляционный маркер).
+- **Переход к реальным тестам:**
+  - Включить `--apply` для утилит предсимуляции и выполнить SQL против тестовой ClickHouse.
+  - Реализовать логику RTC в `flame_gpu_helicopter_model.py` по описанию раздела «Архитектурные намерения для RTC».
+  - Прогнать 1–3 суток симуляции с логированием инвариантов (начисление sne/ppr ровно 1 раз; отсутствие необработанных `status_id=2/4` к `rtc_pass_through`).
+  - Сверка с валидацией MacroProperty3/4/5 и отчётами. 
