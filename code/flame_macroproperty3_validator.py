@@ -75,8 +75,8 @@ class FlameMacroProperty3Validator:
             
             # Создаем DDL только для полей из аналитики MacroProperty3
             analytics_fields = [
-                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'status_id',
-                'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
+                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'group_by', 'status_id',
+                'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
             
@@ -122,8 +122,8 @@ class FlameMacroProperty3Validator:
         try:
             # Поля из аналитики MacroProperty3
             analytics_fields = [
-                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'status_id',
-                'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
+                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'group_by', 'status_id',
+                'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
             
@@ -150,7 +150,7 @@ class FlameMacroProperty3Validator:
                         get_method = 'getEnvironmentPropertyArrayUInt32'
                     elif field_name in ['address_i', 'repair_days', 'mfg_date']:
                         get_method = 'getEnvironmentPropertyArrayUInt16'
-                    elif field_name in ['lease_restricted', 'status_id', 'ac_type_mask']:
+                    elif field_name in ['lease_restricted', 'status_id', 'ac_type_mask', 'group_by', 'status_change']:
                         get_method = 'getEnvironmentPropertyArrayUInt8'
                     else:
                         get_method = 'getEnvironmentPropertyArrayUInt32'  # По умолчанию
@@ -201,8 +201,8 @@ class FlameMacroProperty3Validator:
         try:
             # Поля из аналитики MacroProperty3
             analytics_fields = [
-                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'status_id',
-                'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
+                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'group_by', 'status_id',
+                'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
             
