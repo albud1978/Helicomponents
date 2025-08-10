@@ -1,41 +1,80 @@
 {
-  "rtc_function": "rtc_balance_minus_mi8",
-  "description": "If agents in Ops exceed MP4.ops_counter_mi8, mark top-N by ppr (then sne, then min mfg_date) with status_change=3 (Ops->Stock)",
+  "rtc_function": "rtc_balance_mi8",
+  "description": "Unified balance for MI-8: if trigger_pr_final_mi8 < 0 move top-N from Ops to Stock (status_change=3); if >0 fill Ops from Reserve->Stock->Inactive (status_change=2)",
   "ac_type_mask": 32,
   "applies_to": {
-    "group": {
-      "filter": {"field": "ac_type_mask", "op": "bit_and", "value": 32},
-      "current_ops": {"count_condition": "status_id=2 AND status_change=0"}
-    }
+    "filters": [
+      {"field": "ac_type_mask", "op": "bit_and", "value": 32}
+    ]
   },
-  "resolve_ops_counter": {
-    "source": "MacroProperty4",
-    "field": "ops_counter_mi8",
-    "field_id": 74,
-    "lookup": {"date": "current_simulation_date"}
-  },
+  "environment_sources": [
+    {"name": "trigger_pr_final_mi8", "type": "Environment", "key": "trigger_pr_final_mi8"}
+  ],
   "algorithm": {
-    "compute": {
-      "excess": "current_ops - ops_counter"
-    },
-    "when_excess_gt_zero": {
-      "select": {
-        "from": "agents",
-        "filter": [
-          {"field": "status_id", "op": "=", "value": 2},
-          {"field": "status_change", "op": "=", "value": 0},
-          {"field": "ac_type_mask", "op": "bit_and", "value": 32}
-        ],
-        "order_by": [
-          {"field": "ppr", "dir": "desc"},
-          {"field": "sne", "dir": "desc"},
-          {"field": "mfg_date", "dir": "asc"}
-        ],
-        "limit": "excess"
+    "branch": {
+      "condition": "trigger_pr_final_mi8",
+      "when_lt_zero": {
+        "name": "minus_branch",
+        "limit": "abs(trigger_pr_final_mi8)",
+        "select": {
+          "filter": [
+            {"field": "status_id", "op": "=", "value": 2},
+            {"field": "status_change", "op": "=", "value": 0},
+            {"field": "ac_type_mask", "op": "bit_and", "value": 32}
+          ],
+          "order_by": [
+            {"field": "ppr", "dir": "desc"},
+            {"field": "sne", "dir": "desc"},
+            {"field": "mfg_date", "dir": "asc"}
+          ],
+          "limit": "limit"
+        },
+        "set": [{"variable": "status_change", "action": "set", "value": 3}]
       },
-      "set": [{"variable": "status_change", "action": "set", "value": 3}]
+      "when_gt_zero": {
+        "name": "plus_branch",
+        "limit": "trigger_pr_final_mi8",
+        "phases": [
+          {"phase": 1, "from": "Reserve", "select": {
+            "filter": [
+              {"field": "status_id", "op": "=", "value": 5},
+              {"field": "status_change", "op": "=", "value": 0},
+              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
+            ],
+            "order_by": [
+              {"field": "ppr", "dir": "desc"},
+              {"field": "sne", "dir": "desc"},
+              {"field": "mfg_date", "dir": "asc"}
+            ],
+            "limit": "remaining_limit"
+          }, "set": [{"variable": "status_change", "action": "set", "value": 2}]},
+          {"phase": 2, "from": "Stock", "select": {
+            "filter": [
+              {"field": "status_id", "op": "=", "value": 3},
+              {"field": "status_change", "op": "=", "value": 0},
+              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
+            ],
+            "order_by": [
+              {"field": "ppr", "dir": "desc"},
+              {"field": "sne", "dir": "desc"},
+              {"field": "mfg_date", "dir": "asc"}
+            ],
+            "limit": "remaining_limit"
+          }, "set": [{"variable": "status_change", "action": "set", "value": 2}]},
+          {"phase": 3, "from": "Inactive", "select": {
+            "filter": [
+              {"field": "status_id", "op": "=", "value": 1},
+              {"field": "status_change", "op": "=", "value": 0},
+              {"field": "ac_type_mask", "op": "bit_and", "value": 32}
+            ],
+            "order_by": [
+              {"field": "mfg_date", "dir": "desc"}
+            ],
+            "limit": "remaining_limit"
+          }, "set": [{"variable": "status_change", "action": "set", "value": 2}]}
+        ]
+      }
     }
   },
-  "export_to_macroproperty2": ["status_change", "excess"],
-  "notes": ["balance запускается предпочтительно при trigger_program!=0"]
+  "export_to_macroproperty2": ["status_change"]
 }

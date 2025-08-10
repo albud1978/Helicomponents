@@ -1,5 +1,5 @@
 {
-  "rtc_function": "rtc_repair_tick",
+  "rtc_function": "rtc_repair",
   "description": "Tick for agents in Repair: increment repair_days and set status_change=5 when finished",
   "applies_to": {
     "filters": [
