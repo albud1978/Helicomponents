@@ -11,7 +11,7 @@ RTC функции:
 - rtc_ops_check
 - rtc_balance
 - rtc_main
-- rtc_change
+- rtc_change  (применяет сайд-эффекты переходов; при status_change=4 устанавливает repair_days=1)
 - rtc_pass_through
 
 Host-функции:
