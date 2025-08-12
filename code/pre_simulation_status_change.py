@@ -13,7 +13,6 @@ sne/ppr и без финальных переходов. Поддерживае�
 - rtc_balance: 
   - trigger<0: из OPS→3 (top |trigger| по ppr DESC, sne DESC, mfg_date ASC)
   - trigger>0: 5→2, затем 3→2, затем 1→2 при (D - version_date) >= repair_time(partno_comp)
-  - если размечено 4: дополнительно repair_days=1
 
 Дата: 2025-08-10
 """
@@ -112,8 +111,7 @@ def build_balance_templates_sql(group_by_value: int) -> str:
 --   SELECT coalesce(repair_time, 0) FROM md_components WHERE partno_comp = heli_pandas.partseqno_i
 -- );
 
--- Дополнительно: если размечено status_change=4, установить repair_days=1
--- ALTER TABLE heli_pandas UPDATE repair_days = 1 WHERE status_change=4 AND group_by={group_by_value} SETTINGS allow_experimental_alter_update = 1;
+
 """.strip()
 
 
