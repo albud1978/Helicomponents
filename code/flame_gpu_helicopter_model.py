@@ -160,7 +160,9 @@ class HelicopterFlameModel:
                 # active = текущая дата симуляции - repair_time
                 active_ord = current_day_ord - rt if current_day_ord >= rt else 0
                 agent.setVariableUInt("active_trigger_ord", active_ord)
-                agent.setVariableUInt("assembly_trigger_ord", current_day_ord + at)
+                # assembly = текущая дата симуляции - assembly_time
+                asm_ord = current_day_ord - at if current_day_ord >= at else 0
+                agent.setVariableUInt("assembly_trigger_ord", asm_ord)
             # Сброс метки перехода (для всех ненулевых chg) в конце суток
             if chg != 0:
                 agent.setVariableUInt("status_change", 0)
