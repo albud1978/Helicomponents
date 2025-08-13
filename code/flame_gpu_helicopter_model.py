@@ -2,18 +2,12 @@
 """
 Flame GPU 2 Helicopter Model (Agent-based)
 
-Модель с 6 RTC-слоями (как агент-функции) и 2 host-функциями для триггеров.
+Модель с 6 RTC-слоями (как агент-функции) и host-балансировкой.
 - Агент: component (каждый ряд MP3)
 - Переменные агента покрывают поля MP3 + обогащение из MP1 (br, repair_time) и служебные idx
 - Окружение: скаляры (триггеры), массивы `daily_today`, `daily_next` (size=N_agents)
 
-Слои (порядок выполнения за сутки D):
-1) rtc_repair: status_id=4 → repair_days += 1
-2) rtc_ops_check: по LL/OH/BR с daily_today/daily_next выставляет status_change∈{4,6}
-3) host_compute_trigger_*: вычисление/установка триггеров (значения задаются раннером)
-4) rtc_main: начисляет sne/ppr для status_id=2 и применяет status_change→status_id
-5) rtc_change: сайд‑эффекты; при status_change=4 ставит repair_days=1; затем status_change=0
-6) rtc_pass_through: без изменений (контроль порядка)
+Сутки D: repair → ops_check → host_balance → main → change → pass
 
 Дата: 2025-08-10
 """
@@ -48,6 +42,10 @@ class HelicopterFlameModel:
         env.newPropertyInt("trigger_pr_final_mi8", 0)
         env.newPropertyInt("trigger_pr_final_mi17", 0)
         env.newPropertyInt("current_day_index", 0)
+        env.newPropertyUInt("current_day_ordinal", 0)
+        # Инварианты
+        env.newPropertyInt("ops_check_violation", 0)
+        env.newPropertyInt("pass_through_violation", 0)
         # Массивы с суточным налётом для каждого агента (индексированные по agent.idx)
         env.newPropertyArrayUInt32("daily_today", [0] * self.num_agents)
         env.newPropertyArrayUInt32("daily_next", [0] * self.num_agents)
@@ -83,12 +81,21 @@ class HelicopterFlameModel:
         # === Агент‑функции ===
         def rtc_repair(agent, messages=None, messageOut=None, environment=None):
             if agent.getVariableUInt("status_id") == 4:
-                agent.setVariableUInt("repair_days", agent.getVariableUInt("repair_days") + 1)
+                # Инкремент дня ремонта
+                rd = agent.getVariableUInt("repair_days") + 1
+                agent.setVariableUInt("repair_days", rd)
+                # Завершение ремонта: планируем переход 4→5 через status_change=5
+                rt = agent.getVariableUInt("repair_time")
+                if rd >= rt and agent.getVariableUInt("status_change") == 0:
+                    agent.setVariableUInt("status_change", 5)
 
         def rtc_ops_check(agent, messages=None, messageOut=None, environment=None):
-            if agent.getVariableUInt("status_id") != 2:
-                return
+            # Инвариант: на входе status_change должен быть 0
             if agent.getVariableUInt("status_change") != 0:
+                # фиксируем нарушение инварианта
+                environment.setPropertyInt("ops_check_violation", environment.getPropertyInt("ops_check_violation") + 1)
+                return
+            if agent.getVariableUInt("status_id") != 2:
                 return
             idx = agent.getVariableUInt("idx")
             # Чтение суточных налётов из окружения
@@ -118,23 +125,28 @@ class HelicopterFlameModel:
                 dt = environment.getPropertyArrayUInt32("daily_today")[idx]
                 agent.setVariableUInt("sne", agent.getVariableUInt("sne") + dt)
                 agent.setVariableUInt("ppr", agent.getVariableUInt("ppr") + dt)
-            # Применение перехода
+            # Применение перехода по словарю
             chg = agent.getVariableUInt("status_change")
-            if chg == 3:
-                agent.setVariableUInt("status_id", 3)
-            elif chg == 2:
-                agent.setVariableUInt("status_id", 2)
-            elif chg == 4:
-                agent.setVariableUInt("status_id", 4)
+            if chg:
+                # допускаем коды 1,2,3,4,5,6
+                agent.setVariableUInt("status_id", chg)
 
         def rtc_change(agent, messages=None, messageOut=None, environment=None):
-            # Сайд‑эффекты и сброс метки
-            if agent.getVariableUInt("status_change") == 4:
+            # Сайд‑эффекты переходов
+            chg = agent.getVariableUInt("status_change")
+            if chg == 4:
                 agent.setVariableUInt("repair_days", 1)
+            elif chg == 5:
+                # Завершение ремонта: выход в резерв, обнуляем ppr и счётчик ремонта
+                agent.setVariableUInt("ppr", 0)
+                agent.setVariableUInt("repair_days", 0)
+            # Сброс метки перехода в конце суток
             agent.setVariableUInt("status_change", 0)
 
         def rtc_pass_through(agent, messages=None, messageOut=None, environment=None):
-            return
+            # Инвариант: после rtc_change не должно остаться status_change>0
+            if agent.getVariableUInt("status_change") != 0:
+                environment.setPropertyInt("pass_through_violation", environment.getPropertyInt("pass_through_violation") + 1)
 
         agent.newFunction("rtc_repair", rtc_repair)
         agent.newFunction("rtc_ops_check", rtc_ops_check)
@@ -142,7 +154,7 @@ class HelicopterFlameModel:
         agent.newFunction("rtc_change", rtc_change)
         agent.newFunction("rtc_pass_through", rtc_pass_through)
 
-        # Host‑функции триггеров (реальные значения заполняет раннер)
+        # Host‑функции
         def host_compute_trigger_mi8(sim: "pyflamegpu.CUDASimulation"):
             env = sim.getEnvironment()
             _ = env.getPropertyInt("trigger_pr_final_mi8")
@@ -151,15 +163,73 @@ class HelicopterFlameModel:
             env = sim.getEnvironment()
             _ = env.getPropertyInt("trigger_pr_final_mi17")
 
+        def host_balance(sim: "pyflamegpu.CUDASimulation"):
+            # Балансировка по дефициту/избытку с приоритетами
+            env = sim.getEnvironment()
+            agents = sim.getAgents("component")
+            pop = agents.getPopulationData()
+            # Готовим списки по группам
+            by_group = {1: [], 2: []}
+            for ag in pop:
+                gb = ag.getVariableUInt("group_by")
+                if gb in by_group:
+                    by_group[gb].append(ag)
+            # helper: сортировка для сокращения (ppr DESC, sne DESC, mfg_date ASC)
+            def sort_key_cut(ag):
+                return (-int(ag.getVariableUInt("ppr")), -int(ag.getVariableUInt("sne")), int(ag.getVariableUInt("mfg_date")))
+            # вычисляем current_ops и триггеры на базе target из окружения
+            for grp, env_field in [(1, "trigger_pr_final_mi8"), (2, "trigger_pr_final_mi17")]:
+                group_agents = by_group.get(grp, [])
+                current_ops = sum(1 for ag in group_agents if ag.getVariableUInt("status_id") == 2 and ag.getVariableUInt("status_change") == 0)
+                target_ops = int(env.getPropertyInt(env_field))
+                trigger = target_ops - current_ops
+                if trigger < 0:
+                    # Сокращаем из OPS → 3
+                    candidates = [ag for ag in group_agents if ag.getVariableUInt("status_id") == 2 and ag.getVariableUInt("status_change") == 0]
+                    candidates.sort(key=sort_key_cut)
+                    for ag in candidates[:abs(trigger)]:
+                        ag.setVariableUInt("status_change", 3)
+                elif trigger > 0:
+                    remaining = trigger
+                    # Phase1: 5→2
+                    for ag in group_agents:
+                        if remaining <= 0:
+                            break
+                        if ag.getVariableUInt("status_id") == 5 and ag.getVariableUInt("status_change") == 0:
+                            ag.setVariableUInt("status_change", 2)
+                            remaining -= 1
+                    # Phase2: 3→2
+                    if remaining > 0:
+                        for ag in group_agents:
+                            if remaining <= 0:
+                                break
+                            if ag.getVariableUInt("status_id") == 3 and ag.getVariableUInt("status_change") == 0:
+                                ag.setVariableUInt("status_change", 2)
+                                remaining -= 1
+                    # Phase3: 1→2 при (D - version_date) >= repair_time
+                    if remaining > 0:
+                        current_day_ord = int(env.getPropertyUInt("current_day_ordinal"))
+                        for ag in group_agents:
+                            if remaining <= 0:
+                                break
+                            if ag.getVariableUInt("status_id") == 1 and ag.getVariableUInt("status_change") == 0:
+                                version_date = int(ag.getVariableUInt("version_date"))
+                                repair_time = int(ag.getVariableUInt("repair_time"))
+                                if current_day_ord - version_date >= repair_time:
+                                    ag.setVariableUInt("status_change", 2)
+                                    remaining -= 1
+
         model.addInitFunction(pyflamegpu.HostFunction(host_compute_trigger_mi8))
         model.addInitFunction(pyflamegpu.HostFunction(host_compute_trigger_mi17))
 
-        # Порядок выполнения в сутках: repair → ops_check → (host) → main → change → pass
+        # Порядок выполнения в сутках
         layer = model.newLayer()
         layer.addAgentFunction(agent.getFunction("rtc_repair"))
         layer = model.newLayer()
         layer.addAgentFunction(agent.getFunction("rtc_ops_check"))
-        # host вычисление триггеров происходит в раннере перед step()
+        # Host балансировка
+        model.addStepFunction(pyflamegpu.HostFunction(host_balance))
+        # Основные переходы/эффекты
         layer = model.newLayer()
         layer.addAgentFunction(agent.getFunction("rtc_main"))
         layer = model.newLayer()
