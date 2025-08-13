@@ -36,8 +36,9 @@ class FlameMacroProperty2Exporter:
             daily_flight UInt32,
             trigger_pr_final_mi8 Int32,
             trigger_pr_final_mi17 Int32,
-            partout_trigger Int16,
-            assembly_trigger Int16,
+            partout_trigger Date,
+            assembly_trigger Date,
+            active_trigger Date,
             aircraft_age_years UInt8,
             mfg_date_final Date,
             simulation_metadata String
@@ -53,7 +54,7 @@ class FlameMacroProperty2Exporter:
             return
         fields = [
             'dates','aircraft_number','ac_type_mask','status_id','daily_flight',
-            'trigger_pr_final_mi8','trigger_pr_final_mi17','partout_trigger','assembly_trigger',
+            'trigger_pr_final_mi8','trigger_pr_final_mi17','partout_trigger','assembly_trigger','active_trigger',
             'aircraft_age_years','mfg_date_final','simulation_metadata'
         ]
         data = []
@@ -66,8 +67,9 @@ class FlameMacroProperty2Exporter:
                 int(r.get('daily_flight', 0) or 0),
                 int(r.get('trigger_pr_final_mi8', 0) or 0),
                 int(r.get('trigger_pr_final_mi17', 0) or 0),
-                int(r.get('partout_trigger', 0) or 0),
-                int(r.get('assembly_trigger', 0) or 0),
+                r.get('partout_trigger', date(1970,1,1)),
+                r.get('assembly_trigger', date(1970,1,1)),
+                r.get('active_trigger', date(1970,1,1)),
                 int(r.get('aircraft_age_years', 0) or 0),
                 r.get('mfg_date_final', date(1970,1,1)),
                 str(r.get('simulation_metadata', '')),

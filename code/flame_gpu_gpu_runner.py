@@ -33,9 +33,9 @@ def fetch_versions(client):
     return r[0][0], int(r[0][1])
 
 
-def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int]]:
-    rows = client.execute("SELECT partno_comp, br, repair_time FROM md_components")
-    return {int(p): (int(br or 0), int(rt or 0)) for p, br, rt in rows}
+def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int]]:
+    rows = client.execute("SELECT partno_comp, br, repair_time, partout_time, assembly_time FROM md_components")
+    return {int(p): (int(br or 0), int(rt or 0), int(pt or 0), int(at or 0)) for p, br, rt, pt, at in rows}
 
 
 def fetch_mp3(client, vdate, vid):
@@ -96,9 +96,11 @@ def init_agents(sim: "pyflamegpu.CUDASimulation", model: HelicopterFlameModel, m
         ai.setVariableUInt("mfg_date", int(getattr(r[idx_map['mfg_date']], 'toordinal', lambda: 0)()))
         ai.setVariableUInt("version_date", int(getattr(r[idx_map['version_date']], 'toordinal', lambda: 0)()))
         partseq = int(r[idx_map['partseqno_i']] or 0)
-        br, rt = br_rt_map.get(partseq, (0, 0))
+        br, rt, pt, at = br_rt_map.get(partseq, (0, 0, 0, 0))
         ai.setVariableUInt("br", int(br))
         ai.setVariableUInt("repair_time", int(rt))
+        ai.setVariableUInt("partout_time", int(pt))
+        ai.setVariableUInt("assembly_time", int(at))
 
 
 def fill_daily_arrays(sim: "pyflamegpu.CUDASimulation", daily_today: List[int], daily_next: List[int]):
@@ -155,6 +157,9 @@ def run(days: int | None = None):
         env.setPropertyInt("trigger_pr_final_mi8", int(ops.get('ops_counter_mi8', 0)))
         env.setPropertyInt("trigger_pr_final_mi17", int(ops.get('ops_counter_mi17', 0)))
         env.setPropertyInt("current_day_index", i)
+        # Передаём текущую дату как ordinal для расчёта триггеров (примем base 1970-01-01)
+        base = date(1970,1,1)
+        env.setPropertyUInt("current_day_ordinal", (d - base).days)
 
         # Шаг симуляции (repair → ops_check → main → change → pass)
         sim.step()
@@ -172,10 +177,16 @@ def run(days: int | None = None):
             status_id = ag.getVariableUInt("status_id")
             idx = ag.getVariableUInt("idx")
             daily_flight = int(daily_today[idx]) if idx < len(daily_today) else 0
-            # mfg_date был сохранён как ordinal; логируем исходный CH date приблизительно — можно доработать позже
+            # mfg_date ord → Date
             md_ord = ag.getVariableUInt("mfg_date")
-            base = date(1,1,1)
-            md = base + timedelta(days=int(md_ord)) if md_ord else date(1970,1,1)
+            md = date(1970,1,1) + timedelta(days=int(md_ord)) if md_ord else date(1970,1,1)
+            # триггеры ord → Date
+            part_ord = ag.getVariableUInt("partout_trigger_ord")
+            asm_ord = ag.getVariableUInt("assembly_trigger_ord")
+            act_ord = ag.getVariableUInt("active_trigger_ord")
+            part_date = date(1970,1,1) + timedelta(days=int(part_ord)) if part_ord else date(1970,1,1)
+            asm_date = date(1970,1,1) + timedelta(days=int(asm_ord)) if asm_ord else date(1970,1,1)
+            act_date = date(1970,1,1) + timedelta(days=int(act_ord)) if act_ord else date(1970,1,1)
             log_rows.append({
                 'dates': d,
                 'aircraft_number': int(ac),
@@ -184,8 +195,9 @@ def run(days: int | None = None):
                 'daily_flight': int(daily_flight),
                 'trigger_pr_final_mi8': int(ops.get('ops_counter_mi8', 0)),
                 'trigger_pr_final_mi17': int(ops.get('ops_counter_mi17', 0)),
-                'partout_trigger': 0,
-                'assembly_trigger': 0,
+                'partout_trigger': part_date,
+                'assembly_trigger': asm_date,
+                'active_trigger': act_date,
                 'aircraft_age_years': 0,
                 'mfg_date_final': md,
                 'simulation_metadata': f"v={vdate}/id={vid};D={d}"
