@@ -109,6 +109,12 @@ def fill_daily_arrays(sim: "pyflamegpu.CUDASimulation", daily_today: List[int], 
     env.setPropertyArrayUInt32("daily_next", daily_next)
 
 
+def fill_time_arrays(sim: "pyflamegpu.CUDASimulation", partout: List[int], assembly: List[int]):
+    env = sim.getEnvironment()
+    env.setPropertyArrayUInt32("partout_time_arr", partout)
+    env.setPropertyArrayUInt32("assembly_time_arr", assembly)
+
+
 def run(days: int | None = None):
     if pyflamegpu is None:
         raise RuntimeError("pyflamegpu не установлен")
@@ -144,11 +150,18 @@ def run(days: int | None = None):
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
         daily_today = []
         daily_next = []
+        part_arr = []
+        asm_arr = []
         for r in mp3_rows:
             ac = int(r[idx_map['aircraft_number']] or 0)
             daily_today.append(int(today_map.get(ac, 0)))
             daily_next.append(int(next_map.get(ac, 0)))
+            partseq = int(r[idx_map['partseqno_i']] or 0)
+            _, _, pt, at = br_rt_map.get(partseq, (0,0,0,0))
+            part_arr.append(int(pt))
+            asm_arr.append(int(at))
         fill_daily_arrays(sim, daily_today, daily_next)
+        fill_time_arrays(sim, part_arr, asm_arr)
 
         # Установить триггеры из MP4
         ops = fetch_ops_and_triggers(client, d)

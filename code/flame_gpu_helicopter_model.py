@@ -5,7 +5,7 @@ Flame GPU 2 Helicopter Model (Agent-based)
 Модель с 6 RTC-слоями (как агент-функции) и host-балансировкой.
 - Агент: component (каждый ряд MP3)
 - Переменные агента покрывают поля MP3 + обогащение из MP1 (br, repair_time) и служебные idx
-- Окружение: скаляры (триггеры), массивы `daily_today`, `daily_next` (size=N_agents)
+- Окружение: скаляры (триггеры), массивы `daily_today`, `daily_next`, `partout_time_arr`, `assembly_time_arr` (size=N_agents)
 
 Сутки D: repair → ops_check → host_balance → main → change → pass
 
@@ -46,9 +46,11 @@ class HelicopterFlameModel:
         # Инварианты
         env.newPropertyInt("ops_check_violation", 0)
         env.newPropertyInt("pass_through_violation", 0)
-        # Массивы с суточным налётом для каждого агента (индексированные по agent.idx)
+        # Массивы окружения
         env.newPropertyArrayUInt32("daily_today", [0] * self.num_agents)
         env.newPropertyArrayUInt32("daily_next", [0] * self.num_agents)
+        env.newPropertyArrayUInt32("partout_time_arr", [0] * self.num_agents)
+        env.newPropertyArrayUInt32("assembly_time_arr", [0] * self.num_agents)
 
         # Агент и переменные
         agent = model.newAgent("component")
@@ -77,8 +79,6 @@ class HelicopterFlameModel:
         # Обогащение из MP1
         agent.newVariableUInt("br", 0)
         agent.newVariableUInt("repair_time", 0)      # UInt16 → UInt32
-        agent.newVariableUInt("partout_time", 0)     # UInt8 → UInt32 (апи унификация)
-        agent.newVariableUInt("assembly_time", 0)    # UInt8 → UInt32 (апи унификация)
         # Служебные даты-триггеры (как ordinal)
         agent.newVariableUInt("partout_trigger_ord", 0)
         agent.newVariableUInt("assembly_trigger_ord", 0)
@@ -90,15 +90,14 @@ class HelicopterFlameModel:
                 # Инкремент дня ремонта
                 rd = agent.getVariableUInt("repair_days") + 1
                 agent.setVariableUInt("repair_days", rd)
-                # Завершение ремонта: планируем переход 4→5 через status_change=5
+                # Завершение ремонта: планируем переход 4→5 (проверка status_change не требуется)
                 rt = agent.getVariableUInt("repair_time")
-                if rd >= rt and agent.getVariableUInt("status_change") == 0:
+                if rd >= rt:
                     agent.setVariableUInt("status_change", 5)
 
         def rtc_ops_check(agent, messages=None, messageOut=None, environment=None):
             # Инвариант: на входе status_change должен быть 0
             if agent.getVariableUInt("status_change") != 0:
-                # фиксируем нарушение инварианта
                 environment.setPropertyInt("ops_check_violation", environment.getPropertyInt("ops_check_violation") + 1)
                 return
             if agent.getVariableUInt("status_id") != 2:
@@ -134,16 +133,17 @@ class HelicopterFlameModel:
             # Применение перехода по словарю
             chg = agent.getVariableUInt("status_change")
             if chg:
-                # допускаем коды 1,2,3,4,5,6
                 agent.setVariableUInt("status_id", chg)
 
         def rtc_change(agent, messages=None, messageOut=None, environment=None):
             # Сайд‑эффекты переходов
             chg = agent.getVariableUInt("status_change")
             current_day_ord = int(environment.getPropertyUInt("current_day_ordinal"))
+            idx = agent.getVariableUInt("idx")
             rt = int(agent.getVariableUInt("repair_time"))
-            pt = int(agent.getVariableUInt("partout_time"))
-            at = int(agent.getVariableUInt("assembly_time"))
+            # значения времени из окружения
+            pt = int(environment.getPropertyArrayUInt32("partout_time_arr")[idx])
+            at = int(environment.getPropertyArrayUInt32("assembly_time_arr")[idx])
             prev_status = agent.getVariableUInt("status_id")
             if chg == 4:
                 # Вход в ремонт
@@ -155,15 +155,15 @@ class HelicopterFlameModel:
                 # Окончание ремонта
                 agent.setVariableUInt("ppr", 0)
                 agent.setVariableUInt("repair_days", 0)
-                # assembly триггер не ставим
             elif chg == 2 and prev_status == 1:
                 # Активация из неактивного
                 # active = текущая дата симуляции - repair_time
                 active_ord = current_day_ord - rt if current_day_ord >= rt else 0
                 agent.setVariableUInt("active_trigger_ord", active_ord)
                 agent.setVariableUInt("assembly_trigger_ord", current_day_ord + at)
-            # Сброс метки перехода в конце суток
-            agent.setVariableUInt("status_change", 0)
+            # Сброс метки перехода (для всех ненулевых chg) в конце суток
+            if chg != 0:
+                agent.setVariableUInt("status_change", 0)
 
         def rtc_pass_through(agent, messages=None, messageOut=None, environment=None):
             # Инвариант: после rtc_change не должно остаться status_change>0
