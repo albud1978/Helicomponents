@@ -147,8 +147,9 @@
 - `status_id` - статус планера
 - `trigger_pr_final_mi8` - итоговый хост-триггер балансировки для МИ-8 на дату D
 - `trigger_pr_final_mi17` - итоговый хост-триггер балансировки для МИ-17 на дату D
-- `partout_trigger` - триггер разборки (дни)
-- `assembly_trigger` - триггер сборки (дни)
+- `partout_trigger` - дата триггера разборки (Date)
+- `assembly_trigger` - дата триггера сборки (Date)
+- `active_trigger` - дата активации (Date)
 - `aircraft_age_years` - возраст планера
 - `mfg_date_final` - итоговая дата производства
 - `simulation_metadata` - метаданные симуляции (версия, день D, seed, параметры запуска, целевой hardware)
@@ -255,33 +256,43 @@ Load → MacroProperty2 (объединенные результаты)
 
 ## Архитектурные намерения для RTC (10-08-2025)
 
-- **Слои RTC и одна host-функция**: закрепляем модель из 6 RTC функций плюс один host-расчёт.
-  - **rtc_repair**: обрабатывает слой ремонта (`status_id=4`), при переходе в резерв (`status_id=5`) обнуляет `ppr` и `repair_days`; `status_change` не проставляется повторно (остаётся 0), такие агенты доступны только на D+1.
-  - **rtc_ops_check**: размечает эксплуатацию (`status_id=2`) по ресурсным триггерам LL/OH/BR на основе `daily_hours(D)` и `daily_hours(D+1)` из MP5; сама SNE/PPR не меняет.
-  - **rtc_balance**: доводит разметку эксплуатации согласно host-триггеру; может переводить в `status_id=3` (сокращение), а также возвращать из 5/3/1 в 2. Для активации из `status_id=1` проверяет время: `(D - version_date) >= repair_time(partno_comp)`.
-  - **rtc_main**: начисляет налёт только для `status_id=2` ровно один раз (SNE/PPR += `daily_hours(D)`), затем применяет переход `status_change → status_id` (сам `status_change` пока не сбрасывается).
-  - **rtc_change**: применяет сайд-эффекты переходов (в т.ч. при `status_change=4` устанавливает `repair_days=1`), после чего сбрасывает `status_change := 0` в конце суток.
-  - **rtc_pass_through**: обрабатывает оставшиеся агенты без изменений; на входе не должно оставаться `status_id=2` и `status_id=4` (они полностью обработаны ранее), что важно для контроля качества и логирования.
+- Термины статусов (фиксированные):
+  - 1 — Неактивно; 2 — Эксплуатация; 3 — Исправен; 4 — Ремонт; 5 — Резерв; 6 — Хранение.
 
-- **Host-функция (D)**: `compute_trigger_pr_final_{group}` рассчитывает дефицит/избыток для балансировки:
-  - `current_ops = count(status_id=2 AND status_change=0 AND group_by=...)`
-  - `target_ops = MP4.ops_counter_* (на дату D)`
-  - `trigger_pr_final = target_ops - current_ops` (с опциональным gate по `trigger_program_*`).
-  - Значение публикуется в Environment и читается `rtc_balance`.
+- **Слои RTC и host-балансировка** (на каждый день D): repair → ops_check → host_balance → main → change → pass
 
-- **group_by вместо ac_type_mask**:
-  - Фильтры RTC переводим на `group_by` (планеры: 1 → Ми‑8Т, 2 → Ми‑17). Это устраняет коллизии масок и масштабируется на 20+ групп взаимозаменяемости остальных агрегатов.
-  - Для планеров запускаем две одновременные симуляции (group_by=1 и group_by=2) как корневые ветви multiBOM, к которым привязан второй слой из 20+ групп агрегатов.
+- Инварианты:
+  - В rtc_ops_check на входе `status_change == 0`, иначе счётчик `ops_check_violation` в окружении и выход.
+  - После rtc_change на выходе `status_change == 0`, иначе счётчик `pass_through_violation`.
+  - Начисление SNE/PPR ровно один раз в сутки и только для `status_id=2`.
 
-- **Инварианты суток (D):**
-  - Начисление SNE/PPR выполняется ровно один раз в `rtc_main` и только для `status_id=2`.
-  - `status_id` меняется ровно один раз (после применения `status_change` в `rtc_main`).
-  - Агенты, покидающие эксплуатацию на D, получают последний налёт в D; на D+1 они уже не в `status_id=2`.
+- Окружение (env):
+  - Скаляры: `trigger_pr_final_mi8`, `trigger_pr_final_mi17`, `current_day_index`, `current_day_ordinal`.
+  - Массивы (index=agent.idx): `daily_today`, `daily_next`, `partout_time_arr`, `assembly_time_arr`.
 
-- **Данные для spawn агрегатов:**
-  - Для агрегатов (не планеров) используются `MP1.sne_new` и `MP1.ppr_new` как начальные значения при появлении новых единиц (в т.ч. second-hand). Для планеров существует отдельная логика появления (в т.ч. хардкод по МИ-17), описанная в соответствующих разделах.
-
-- **Диагностика (опционально):** допускается ввод служебного флага `handled_today` (UInt8) для тестовых прогонов, чтобы гарантировать, что каждый слой обрабатывает агента не более одного раза в сутки; в продуктивной документации оставить как опцию контроля качества. 
+- Правила слоёв:
+  - rtc_repair:
+    - Если `status_id=4`: `repair_days += 1`; если `repair_days >= repair_time` → `status_change=5`.
+  - rtc_ops_check (только `status_id=2`):
+    - Обозначим `dt=daily(D)`, `dn=daily(D+1)`.
+    - LL: если `(ll−sne) ∈ [dt, dt+dn)` → `status_change=6` (Хранение).
+    - OH: если `(oh−ppr) ∈ [dt, dt+dn)` → если `(sne+dt) < br` → `status_change=4` (Ремонт), иначе `=6`.
+  - host_balance (по `group_by`=1/2):
+    - `trigger = target_ops(D) − current_ops(D)` (опциональный gate по `trigger_program_*`).
+    - `trigger<0`: top |trigger| из эксплуатации → `status_change=3` (Исправен) по приоритету `ppr DESC, sne DESC, mfg_date ASC`.
+    - `trigger>0`: Phase1 `5→2`, Phase2 `3→2`, Phase3 `1→2` при `(D−version_date) ≥ repair_time` (везде `status_change=2`).
+  - rtc_main: если `status_id=2`: `sne += dt`, `ppr += dt`; затем `status_id = status_change` (если `status_change>0`).
+  - rtc_change (сайд‑эффекты):
+    - Если `status_change=4` (вход в Ремонт):
+      - `repair_days=1`;
+      - `partout_trigger = D + partout_time`;
+      - `assembly_trigger = D + (repair_time − assembly_time)`.
+    - Если `status_change=5` (окончание ремонта): `ppr=0`, `repair_days=0` (без `assembly_trigger`).
+    - Если `status_change=2` и предыдущий статус был 1 (Неактивно→Эксплуатация):
+      - `active_trigger = D − repair_time`;
+      - `assembly_trigger = D − assembly_time`.
+    - Всегда: если `status_change>0` → сброс `status_change := 0`.
+  - rtc_pass_through: контроль инварианта `status_change==0`.
 
 ## Каркас FLAME GPU 2 (10-08-2025)
 
@@ -309,12 +320,9 @@ Load → MacroProperty2 (объединенные результаты)
 
 ## Краткое резюме слоёв RTC (10-08-2025)
 
-- rtc_repair: обрабатывает status_id=4 (ремонт); при переходе 4→5 обнуляет ppr и repair_days; status_change не ставит; доступность этих агентов только с D+1.
-- rtc_ops_check: размечает эксплуатацию (status_id=2) по LL/OH/BR на основе MP5.daily_hours для D и D+1; выставляет status_change ∈ {4,6}; sne/ppr не изменяет; фильтр по group_by (1/2).
-- host_compute_trigger_{mi8,mi17}: trigger_pr_final = target_ops(D, MP4) − current_ops(D, status_id=2 AND status_change=0 AND group_by=1/2); значение пишется в Environment.
-- rtc_balance: 
-  - при trigger<0: из OPS (status_id=2, chg=0, group_by=X) переводит top-|trigger| в status_change=3 по порядку ppr DESC, sne DESC, mfg_date ASC;
-  - при trigger>0: Phase1 5→2, Phase2 3→2, Phase3 1→2 (только если (D − version_date) ≥ repair_time(partno_comp));
-- rtc_main: для status_id=2 один раз начисляет sne/ppr на D (MP5.daily_hours), затем применяет переход status_change→status_id; сам status_change пока не сбрасывается.
-- rtc_change: применяет сайд-эффекты переходов (в т.ч. устанавливает repair_days=1 при status_change=4), после чего сбрасывает status_change=0.
-- rtc_pass_through: обрабатывает «прочие» без изменений; гарантируется, что на входе нет status_id=2/4 (они обработаны ранее) — важно для контроля качества. 
+- repair: инкремент `repair_days`; ставит `status_change=5` при завершении.
+- ops_check: метки `4|6` по LL/OH/BR; входной инвариант `status_change==0`.
+- host_balance: баланс `3` и активации `→2` (в 3 фазах), с проверкой времени для `1→2`.
+- main: начисление sne/ppr и применение `status_change→status_id`.
+- change: сайд‑эффекты триггеров (partout/assembly/active) и сброс `status_change`.
+- pass_through: валидация инварианта конца суток. 
