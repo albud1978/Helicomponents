@@ -43,8 +43,8 @@ def fetch_versions(client) -> Versions:
 
 
 def fetch_mp1_br_repair(client) -> Dict[int, Tuple[int, int]]:
-    rows = client.execute("SELECT partno_comp, br, repair_time FROM md_components")
-    return {int(r[0]): (int(r[1] or 0), int(r[2] or 0)) for r in rows}
+    rows = client.execute("SELECT partno_comp, br, repair_time, partout_time, assembly_time FROM md_components")
+    return {int(r[0]): (int(r[1] or 0), int(r[2] or 0), int(r[3] or 0), int(r[4] or 0)) for r in rows}
 
 
 def fetch_mp3_state(client, versions: Versions):
@@ -196,11 +196,25 @@ def rtc_main_layer(state_rows: List[List], fields: List[str], d: date, daily_map
             r[idx['status_id']] = 4
 
 
-def rtc_change_layer(state_rows: List[List], fields: List[str]):
+def rtc_change_layer(state_rows: List[List], fields: List[str], d: date, br_rt_map: Dict[int, Tuple[int,int,int,int]]):
     idx = {name: i for i, name in enumerate(fields)}
     for r in state_rows:
-        if int(r[idx['status_change']] or 0) == 4:
+        chg = int(r[idx['status_change']] or 0)
+        if chg == 4:
             r[idx['repair_days']] = 1
+            partseq = int(r[idx['partseqno_i']] or 0)
+            _, rt, pt, at = br_rt_map.get(partseq, (0,0,0,0))
+            # триггеры как даты
+            r.append(None)  # placeholder if needed
+        elif chg == 5:
+            r[idx['ppr']] = 0
+            r[idx['repair_days']] = 0
+        elif chg == 2 and int(r[idx['status_id']] or 0) == 1:
+            partseq = int(r[idx['partseqno_i']] or 0)
+            _, rt, pt, at = br_rt_map.get(partseq, (0,0,0,0))
+            # active = D - repair_time (Date)
+            # assembly = D + assembly_time
+            pass
         r[idx['status_change']] = 0
 
 
@@ -232,7 +246,7 @@ def run(days_limit: int | None = None) -> None:
         rtc_ops_check_layer(state_rows, fields, d, daily_today, daily_next, mp1_map)
         rtc_balance_layer(state_rows, fields, d, mp4, mp1_map)
         rtc_main_layer(state_rows, fields, d, daily_today)
-        rtc_change_layer(state_rows, fields)
+        rtc_change_layer(state_rows, fields, d, mp1_map)
 
         # Логирование в MP2 (только планеры group_by 1|2)
         idx = {name: i for i, name in enumerate(fields)}
@@ -256,8 +270,9 @@ def run(days_limit: int | None = None) -> None:
                 'daily_flight': daily_flight,
                 'trigger_pr_final_mi8': int(trg8),
                 'trigger_pr_final_mi17': int(trg17),
-                'partout_trigger': 0,
-                'assembly_trigger': 0,
+                'partout_trigger': date(1970,1,1),
+                'assembly_trigger': date(1970,1,1),
+                'active_trigger': date(1970,1,1),
                 'aircraft_age_years': age_years,
                 'mfg_date_final': md,
                 'simulation_metadata': f"v={versions.version_date}/id={versions.version_id};D={d}"

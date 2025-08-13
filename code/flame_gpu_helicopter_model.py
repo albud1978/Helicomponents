@@ -77,6 +77,12 @@ class HelicopterFlameModel:
         # Обогащение из MP1
         agent.newVariableUInt("br", 0)
         agent.newVariableUInt("repair_time", 0)      # UInt16 → UInt32
+        agent.newVariableUInt("partout_time", 0)     # UInt8 → UInt32 (апи унификация)
+        agent.newVariableUInt("assembly_time", 0)    # UInt8 → UInt32 (апи унификация)
+        # Служебные даты-триггеры (как ordinal)
+        agent.newVariableUInt("partout_trigger_ord", 0)
+        agent.newVariableUInt("assembly_trigger_ord", 0)
+        agent.newVariableUInt("active_trigger_ord", 0)
 
         # === Агент‑функции ===
         def rtc_repair(agent, messages=None, messageOut=None, environment=None):
@@ -134,12 +140,28 @@ class HelicopterFlameModel:
         def rtc_change(agent, messages=None, messageOut=None, environment=None):
             # Сайд‑эффекты переходов
             chg = agent.getVariableUInt("status_change")
+            current_day_ord = int(environment.getPropertyUInt("current_day_ordinal"))
+            rt = int(agent.getVariableUInt("repair_time"))
+            pt = int(agent.getVariableUInt("partout_time"))
+            at = int(agent.getVariableUInt("assembly_time"))
+            prev_status = agent.getVariableUInt("status_id")
             if chg == 4:
+                # Вход в ремонт
                 agent.setVariableUInt("repair_days", 1)
+                # Триггеры как даты (ordinal)
+                agent.setVariableUInt("partout_trigger_ord", current_day_ord + pt)
+                agent.setVariableUInt("assembly_trigger_ord", current_day_ord + max(rt - at, 0))
             elif chg == 5:
-                # Завершение ремонта: выход в резерв, обнуляем ppr и счётчик ремонта
+                # Окончание ремонта
                 agent.setVariableUInt("ppr", 0)
                 agent.setVariableUInt("repair_days", 0)
+                # assembly триггер не ставим
+            elif chg == 2 and prev_status == 1:
+                # Активация из неактивного
+                # active = текущая дата симуляции - repair_time
+                active_ord = current_day_ord - rt if current_day_ord >= rt else 0
+                agent.setVariableUInt("active_trigger_ord", active_ord)
+                agent.setVariableUInt("assembly_trigger_ord", current_day_ord + at)
             # Сброс метки перехода в конце суток
             agent.setVariableUInt("status_change", 0)
 
