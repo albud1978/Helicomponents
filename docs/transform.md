@@ -145,8 +145,9 @@
 - `ac_type_mask` - тип планера (маска)
 - `daily_flight` - ежедневный налет (минуты)
 - `status_id` - статус планера
-- `trigger_pr_final_mi8` - итоговый хост-триггер балансировки для МИ-8 на дату D
-- `trigger_pr_final_mi17` - итоговый хост-триггер балансировки для МИ-17 на дату D
+- `trigger_pr_final_mi8` - целевой объём эксплуатации на D (для справки)
+- `trigger_pr_final_mi17` - целевой объём эксплуатации на D (для справки)
+- `ops_current_mi8` / `ops_current_mi17` - фактическая укомплектованность на D (диагностика)
 - `partout_trigger` - дата триггера разборки (Date)
 - `assembly_trigger` - дата триггера сборки (Date)
 - `active_trigger` - дата активации (Date)
@@ -278,7 +279,7 @@ Load → MacroProperty2 (объединенные результаты)
     - LL: если `(ll−sne) ∈ [dt, dt+dn)` → `status_change=6` (Хранение).
     - OH: если `(oh−ppr) ∈ [dt, dt+dn)` → если `(sne+dt) < br` → `status_change=4` (Ремонт), иначе `=6`.
   - host_balance (по `group_by`=1/2):
-    - `trigger = target_ops(D) − current_ops(D)` (опциональный gate по `trigger_program_*`).
+    - `trigger = trigger_program_{mi8,mi17}(D)` — дневная квота миграций из MP4;
     - `trigger<0`: top |trigger| из эксплуатации → `status_change=3` (Исправен) по приоритету `ppr DESC, sne DESC, mfg_date ASC`.
     - `trigger>0`: Phase1 `5→2`, Phase2 `3→2`, Phase3 `1→2` при `(D−version_date) ≥ repair_time` (везде `status_change=2`).
   - rtc_main: если `status_id=2`: `sne += dt`, `ppr += dt`; затем `status_id = status_change` (если `status_change>0`).
