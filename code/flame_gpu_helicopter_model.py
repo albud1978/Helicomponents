@@ -43,6 +43,8 @@ class HelicopterFlameModel:
         env.newPropertyInt("trigger_pr_final_mi17", 0)
         env.newPropertyInt("current_day_index", 0)
         env.newPropertyUInt("current_day_ordinal", 0)
+        env.newPropertyInt("trigger_program_mi8", 0)
+        env.newPropertyInt("trigger_program_mi17", 0)
         # Инварианты
         env.newPropertyInt("ops_check_violation", 0)
         env.newPropertyInt("pass_through_violation", 0)
@@ -204,9 +206,9 @@ class HelicopterFlameModel:
             # вычисляем current_ops и триггеры на базе target из окружения
             for grp, env_field in [(1, "trigger_pr_final_mi8"), (2, "trigger_pr_final_mi17")]:
                 group_agents = by_group.get(grp, [])
-                current_ops = sum(1 for ag in group_agents if ag.getVariableUInt("status_id") == 2 and ag.getVariableUInt("status_change") == 0)
-                target_ops = int(env.getPropertyInt(env_field))
-                trigger = target_ops - current_ops
+                # Используем программный дневной триггер как прямую квоту перемещения
+                trigger_prog = int(env.getPropertyInt("trigger_program_mi8" if grp == 1 else "trigger_program_mi17"))
+                trigger = trigger_prog
                 if trigger < 0:
                     # Сокращаем из OPS → 3
                     candidates = [ag for ag in group_agents if ag.getVariableUInt("status_id") == 2 and ag.getVariableUInt("status_change") == 0]
