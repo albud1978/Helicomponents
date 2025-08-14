@@ -180,6 +180,15 @@ def run(days: int | None = None):
         # Логирование MP2 для планеров (group_by 1|2)
         a = sim.getAgents("component")
         ag_iter = a.getPopulationData()
+        # Текущее число в эксплуатации по группам
+        ops_cur = {1: 0, 2: 0}
+        for ag in ag_iter:
+            if ag.getVariableUInt("status_id") == 2 and ag.getVariableUInt("status_change") == 0:
+                gb = ag.getVariableUInt("group_by")
+                if gb in ops_cur:
+                    ops_cur[gb] += 1
+        # Повторно обойдём для записи строк
+        ag_iter = a.getPopulationData()
         log_rows = []
         for ag in ag_iter:
             gb = ag.getVariableUInt("group_by")
@@ -208,6 +217,8 @@ def run(days: int | None = None):
                 'daily_flight': int(daily_flight),
                 'trigger_pr_final_mi8': int(ops.get('ops_counter_mi8', 0)),
                 'trigger_pr_final_mi17': int(ops.get('ops_counter_mi17', 0)),
+                'ops_current_mi8': int(ops_cur.get(1, 0)),
+                'ops_current_mi17': int(ops_cur.get(2, 0)),
                 'partout_trigger': part_date,
                 'assembly_trigger': asm_date,
                 'active_trigger': act_date,
