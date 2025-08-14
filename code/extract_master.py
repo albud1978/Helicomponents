@@ -155,6 +155,13 @@ class ExtractMaster:
             'critical': False
         },
         {
+            'script': 'heli_pandas_group_by_enricher.py',
+            'description': 'Обогащение heli_pandas.group_by из md_components.partno_comp (идемпотентно)',
+            'dependencies': ['md_components', 'heli_pandas'],
+            'result_table': 'heli_pandas',
+            'critical': False
+        },
+        {
             'script': 'dictionary_creator.py',
             'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
             'dependencies': ['heli_pandas', 'md_components'],
@@ -182,21 +189,6 @@ class ExtractMaster:
             'description': 'Digital Values Dictionary - аддитивный словарь всех полей для Flame GPU macroproperty',
             'dependencies': ['heli_pandas', 'md_components', 'flight_program_ac', 'flight_program_fl'],
             'result_table': 'dict_digital_values_flat',
-            'critical': False
-        },
-        # === ПРЕДСИМУЛЯЦИОННЫЕ ШАГИ (DRY-RUN) ===
-        {
-            'script': 'utils/mp3_group_by_filler.py',
-            'description': 'Pre-sim: заполнение MP3.group_by из MP1 (dry-run по умолчанию)',
-            'dependencies': ['heli_pandas', 'md_components'],
-            'result_table': 'heli_pandas',
-            'critical': False
-        },
-        {
-            'script': 'pre_simulation_status_change.py',
-            'description': 'Pre-sim: расчёт MP3.status_change на D по RTC (dry-run по умолчанию)',
-            'dependencies': ['heli_pandas', 'md_components', 'flight_program_ac', 'flight_program_fl'],
-            'result_table': 'heli_pandas',
             'critical': False
         },
         # === ФИНАЛЬНЫЕ РАСЧЕТЫ (после всех словарей и тензоров) ===

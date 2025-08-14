@@ -251,8 +251,10 @@ class FlameMacroProperty3Loader:
             }
             
             # Поля из аналитики MacroProperty3 (исключаем текстовые)
+            # Добавлены group_by и status_change для поддержки RTC фильтров и меток переходов
             analytics_fields = [
-                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'status_id',
+                'partseqno_i', 'psn', 'address_i', 'lease_restricted',
+                'group_by', 'status_id', 'status_change',
                 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
@@ -327,8 +329,10 @@ class FlameMacroProperty3Loader:
             }
             
             # Поля из аналитики MacroProperty3 (исключаем текстовые)
+            # Добавлены group_by и status_change для согласованности с Environment
             analytics_fields = [
-                'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'status_id',
+                'partseqno_i', 'psn', 'address_i', 'lease_restricted',
+                'group_by', 'status_id', 'status_change',
                 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
