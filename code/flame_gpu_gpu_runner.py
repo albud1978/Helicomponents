@@ -169,6 +169,8 @@ def run(days: int | None = None):
         # Триггеры балансировки задаём как target (runner может предварительно балансировать, но здесь только запись)
         env.setPropertyInt("trigger_pr_final_mi8", int(ops.get('ops_counter_mi8', 0)))
         env.setPropertyInt("trigger_pr_final_mi17", int(ops.get('ops_counter_mi17', 0)))
+        env.setPropertyInt("trigger_program_mi8", int(ops.get('trigger_program_mi8', 0)))
+        env.setPropertyInt("trigger_program_mi17", int(ops.get('trigger_program_mi17', 0)))
         env.setPropertyInt("current_day_index", i)
         # Передаём текущую дату как ordinal для расчёта триггеров (примем base 1970-01-01)
         base = date(1970,1,1)
