@@ -250,6 +250,13 @@ def run(days_limit: int | None = None) -> None:
 
         # Логирование в MP2 (только планеры group_by 1|2)
         idx = {name: i for i, name in enumerate(fields)}
+        # Текущее число в эксплуатации по группам
+        ops_cur = {1: 0, 2: 0}
+        for r in state_rows:
+            if int(r[idx['status_id']] or 0) == 2 and int(r[idx['status_change']] or 0) == 0:
+                gb = int(r[idx['group_by']] or 0)
+                if gb in ops_cur:
+                    ops_cur[gb] += 1
         log_rows = []
         for r in state_rows:
             if int(r[idx['group_by']] or 0) not in (1, 2):
@@ -270,6 +277,8 @@ def run(days_limit: int | None = None) -> None:
                 'daily_flight': daily_flight,
                 'trigger_pr_final_mi8': int(trg8),
                 'trigger_pr_final_mi17': int(trg17),
+                'ops_current_mi8': int(ops_cur.get(1, 0)),
+                'ops_current_mi17': int(ops_cur.get(2, 0)),
                 'partout_trigger': date(1970,1,1),
                 'assembly_trigger': date(1970,1,1),
                 'active_trigger': date(1970,1,1),
