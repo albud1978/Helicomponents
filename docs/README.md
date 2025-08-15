@@ -141,7 +141,7 @@ LOG_LEVEL=DEBUG python3 code/extract_master.py
 ## 📝 Логирование
 
 ### Расположение логов
-- **Основные логи:** `logs/etl_master.log`
+- **Основные логи:** `logs/extract_master.log`
 - **Логи загрузчиков:** `logs/dual_loader_YYYYMMDD.log`
 - **Логи процессоров:** `logs/processor_name_YYYYMMDD.log`
 
