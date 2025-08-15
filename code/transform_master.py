@@ -33,10 +33,13 @@ def main():
         'daily_flight': 0,
         'trigger_pr_final_mi8': 0,
         'trigger_pr_final_mi17': 0,
-        'partout_trigger': 0,
-        'assembly_trigger': 0,
+        'ops_current_mi8': 0,
+        'ops_current_mi17': 0,
+        'partout_trigger': date(1970, 1, 1),
+        'assembly_trigger': date(1970, 1, 1),
+        'active_trigger': date(1970, 1, 1),
         'aircraft_age_years': 0,
-        'mfg_date_final': date(1970,1,1),
+        'mfg_date_final': date(1970, 1, 1),
         'simulation_metadata': 'demo: no-sim yet'
     }
     exporter.insert_rows([demo_row])

@@ -135,10 +135,26 @@ class FlameMacroProperty1Exporter:
             field_list = ["record_id"]
             for field_name, field_id in sorted(field_mapping.items(), key=lambda x: x[1]):
                 field_list.append(field_name)  # Используем оригинальные имена полей
-            
+
+            # Приведение типов под схему таблицы (особенно String)
+            try:
+                schema = self.client.execute(
+                    f"SELECT name, type FROM system.columns WHERE database = currentDatabase() AND table = '{self.export_table}'"
+                )
+                type_by_name = {name: ctype for name, ctype in schema}
+                string_indices = [i for i, col in enumerate(field_list) if type_by_name.get(col, '').startswith('String')]
+                if string_indices:
+                    for row in export_data:
+                        for idx in string_indices:
+                            # record_id на позиции 0 пропускаем; остальные String приводим к str
+                            if idx < len(row):
+                                row[idx] = '' if row[idx] is None else str(row[idx])
+            except Exception as type_e:
+                self.logger.warning(f"⚠️ Не удалось привести типы по схеме export-таблицы: {type_e}. Пробуем вставку как есть")
+
             # Вставляем данные в ClickHouse
             insert_query = f"INSERT INTO {self.export_table} ({', '.join(field_list)}) VALUES"
-            
+
             self.logger.info(f"💾 Вставляем {len(export_data)} записей в постоянную таблицу...")
             self.client.execute(insert_query, export_data)
             self.logger.info(f"✅ Экспорт завершен: {len(export_data)} записей в таблицу {self.export_table}")
