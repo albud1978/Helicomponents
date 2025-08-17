@@ -10,7 +10,7 @@ import sys
 import os
 import json
 from typing import Dict, List, Tuple, Any
-from datetime import datetime
+from datetime import datetime, timedelta, date
 
 # Добавляем путь к utils
 sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
@@ -130,6 +130,40 @@ class FlameMacroProperty1Validator:
             field_list = ["record_id"]
             for field_id in sorted(field_mapping.values()):
                 field_list.append(f"field_{field_id}")
+            
+            # Приведение типов под схему таблицы (String/Nullable(String), Date/Nullable(Date))
+            try:
+                schema = self.client.execute(
+                    f"SELECT name, type FROM system.columns WHERE database = currentDatabase() AND table = '{self.validation_table}'"
+                )
+                type_by_name = {name: ctype for name, ctype in schema}
+                string_indices = [i for i, col in enumerate(field_list) if 'String' in (type_by_name.get(col, '') or '')]
+                date_indices = [i for i, col in enumerate(field_list) if 'Date' in (type_by_name.get(col, '') or '')]
+                if string_indices or date_indices:
+                    epoch = date(1970, 1, 1)
+                    for row in export_data:
+                        # String: приводим к строкам
+                        for idx in string_indices:
+                            if idx < len(row):
+                                val = row[idx]
+                                row[idx] = '' if val is None else str(val)
+                        # Date: конвертируем из дней с эпохи в date
+                        for idx in date_indices:
+                            if idx < len(row):
+                                val = row[idx]
+                                if val is None:
+                                    row[idx] = None
+                                elif isinstance(val, date):
+                                    row[idx] = val
+                                elif isinstance(val, datetime):
+                                    row[idx] = val.date()
+                                else:
+                                    try:
+                                        row[idx] = epoch + timedelta(days=int(val))
+                                    except Exception:
+                                        row[idx] = None
+            except Exception as type_e:
+                self.logger.warning(f"⚠️ Не удалось привести типы по схеме валидационной таблицы: {type_e}. Пробуем вставку как есть")
             
             # Вставляем данные в ClickHouse
             insert_query = f"INSERT INTO {self.validation_table} ({', '.join(field_list)}) VALUES"

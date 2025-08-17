@@ -171,6 +171,13 @@ class FlameMacroProperty3Exporter:
                 'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
+            # Ограничиваемся только полями, которые реально существуют в heli_pandas
+            try:
+                ch_schema = self.client.execute("DESCRIBE TABLE heli_pandas")
+                existing_fields = {row[0] for row in ch_schema}
+            except Exception:
+                existing_fields = set()
+            available_fields = [f for f in analytics_fields if (f in field_mapping and f in existing_fields)]
             
             # Подготавливаем данные для экспорта по схеме MacroProperty1
             export_data = []
@@ -183,7 +190,7 @@ class FlameMacroProperty3Exporter:
                 row = [record_id]  # record_id
                 
                 # Экспортируем каждое поле в аналитическом порядке
-                for field_name in analytics_fields:
+                for field_name in available_fields:
                     if field_name in field_mapping:
                         field_id = field_mapping[field_name]
                         property_name = f"field_{field_id}"
@@ -221,7 +228,7 @@ class FlameMacroProperty3Exporter:
                 export_data.append(row)
             
             # Подготавливаем список полей для INSERT
-            field_list = ["record_id"] + analytics_fields
+            field_list = ["record_id"] + available_fields
             
             # Вставляем данные в ClickHouse
             insert_query = f"INSERT INTO {self.export_table} ({', '.join(field_list)}) VALUES"
