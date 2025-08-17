@@ -10,7 +10,7 @@ import sys
 import os
 import json
 from typing import Dict, List, Tuple, Any
-from datetime import datetime
+from datetime import datetime, timedelta, date
 
 # Добавляем путь к utils
 sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
@@ -136,19 +136,37 @@ class FlameMacroProperty1Exporter:
             for field_name, field_id in sorted(field_mapping.items(), key=lambda x: x[1]):
                 field_list.append(field_name)  # Используем оригинальные имена полей
 
-            # Приведение типов под схему таблицы (особенно String)
+            # Приведение типов под схему таблицы (String/Nullable(String), Date/Nullable(Date))
             try:
                 schema = self.client.execute(
                     f"SELECT name, type FROM system.columns WHERE database = currentDatabase() AND table = '{self.export_table}'"
                 )
                 type_by_name = {name: ctype for name, ctype in schema}
-                string_indices = [i for i, col in enumerate(field_list) if type_by_name.get(col, '').startswith('String')]
-                if string_indices:
+                string_indices = [i for i, col in enumerate(field_list) if 'String' in (type_by_name.get(col, '') or '')]
+                date_indices = [i for i, col in enumerate(field_list) if 'Date' in (type_by_name.get(col, '') or '')]
+                if string_indices or date_indices:
+                    epoch = date(1970, 1, 1)
                     for row in export_data:
+                        # String: приводим к строкам
                         for idx in string_indices:
-                            # record_id на позиции 0 пропускаем; остальные String приводим к str
                             if idx < len(row):
-                                row[idx] = '' if row[idx] is None else str(row[idx])
+                                val = row[idx]
+                                row[idx] = '' if val is None else str(val)
+                        # Date: конвертируем из дней с эпохи в date
+                        for idx in date_indices:
+                            if idx < len(row):
+                                val = row[idx]
+                                if val is None:
+                                    row[idx] = None
+                                elif isinstance(val, date):
+                                    row[idx] = val
+                                elif isinstance(val, datetime):
+                                    row[idx] = val.date()
+                                else:
+                                    try:
+                                        row[idx] = epoch + timedelta(days=int(val))
+                                    except Exception:
+                                        row[idx] = None
             except Exception as type_e:
                 self.logger.warning(f"⚠️ Не удалось привести типы по схеме export-таблицы: {type_e}. Пробуем вставку как есть")
 

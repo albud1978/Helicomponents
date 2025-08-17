@@ -79,10 +79,17 @@ class FlameMacroProperty3Validator:
                 'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
+            # Ограничиваемся только реально существующими в heli_pandas и имеющимися в маппинге
+            try:
+                ch_schema = self.client.execute("DESCRIBE TABLE heli_pandas")
+                existing_fields = {row[0] for row in ch_schema}
+            except Exception:
+                existing_fields = set()
+            available_fields = [f for f in analytics_fields if (f in field_mapping and f in existing_fields)]
             
             fields_ddl = ["record_id UInt32"]
             
-            for field_name in analytics_fields:
+            for field_name in available_fields:
                 if field_name in field_mapping:
                     field_id = field_mapping[field_name]
                     ch_type = field_types.get(field_name, 'String')
@@ -126,6 +133,13 @@ class FlameMacroProperty3Validator:
                 'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
+            # Ограничиваемся реально доступными полями
+            try:
+                ch_schema = self.client.execute("DESCRIBE TABLE heli_pandas")
+                existing_fields = {row[0] for row in ch_schema}
+            except Exception:
+                existing_fields = set()
+            available_fields = [f for f in analytics_fields if (f in field_mapping and f in existing_fields)]
             
             # Получение методов экспорта
             get_methods = {
@@ -139,7 +153,7 @@ class FlameMacroProperty3Validator:
             # Сбор данных из FLAME GPU Environment
             exported_data = {}
             
-            for field_name in analytics_fields:
+            for field_name in available_fields:
                 if field_name in field_mapping:
                     field_id = field_mapping[field_name]
                     property_name = f"field_{field_id}"
@@ -167,7 +181,7 @@ class FlameMacroProperty3Validator:
             records = []
             for i in range(total_records):
                 record = [i]  # record_id
-                for field_name in analytics_fields:
+                for field_name in available_fields:
                     if field_name in exported_data:
                         value = exported_data[field_name][i] if i < len(exported_data[field_name]) else 0
                         # Все значения из FLAME GPU уже являются числами (UInt16/UInt32)
@@ -177,7 +191,7 @@ class FlameMacroProperty3Validator:
                 records.append(record)
             
             # Вставка в ClickHouse
-            field_names = ['record_id'] + analytics_fields
+            field_names = ['record_id'] + available_fields
             field_list = ", ".join(field_names)
             
             # Отладочная информация для первой записи
@@ -199,12 +213,18 @@ class FlameMacroProperty3Validator:
         self.logger.info("🔍 Сравнение исходной heli_pandas с экспортированной...")
         
         try:
-            # Поля из аналитики MacroProperty3
-            analytics_fields = [
+            # Поля из аналитики MacroProperty3 (ограничиваемся реально доступными)
+            analytics_fields_all = [
                 'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'group_by', 'status_id',
                 'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
+            try:
+                ch_schema = self.client.execute("DESCRIBE TABLE heli_pandas")
+                existing_fields = {row[0] for row in ch_schema}
+            except Exception:
+                existing_fields = set()
+            analytics_fields = [f for f in analytics_fields_all if (f in field_mapping and f in existing_fields)]
             
             # Загрузка исходных данных (последняя версия)
             original_select = ", ".join(analytics_fields)
