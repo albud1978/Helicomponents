@@ -34,8 +34,8 @@ class FlameMacroProperty2Exporter:
             ac_type_mask UInt8,
             status_id UInt8,
             daily_flight UInt32,
-            ops_counter_mi8 Int32,
-            ops_counter_mi17 Int32,
+            ops_counter_mi8 UInt16,
+            ops_counter_mi17 UInt16,
             ops_current_mi8 UInt16,
             ops_current_mi17 UInt16,
             partout_trigger Date,
@@ -49,6 +49,37 @@ class FlameMacroProperty2Exporter:
         COMMENT 'LoggingLayer Planes (MP2) из FLAME GPU'
         """
         self.client.execute(ddl)
+        self._migrate_schema_if_needed()
+
+    def _migrate_schema_if_needed(self) -> None:
+        """Проверяет типы колонок и при необходимости мигрирует их к актуальным.
+
+        Правило: ops_counter_mi8/ops_counter_mi17 → UInt16 (были Int32 в ранних версиях).
+        """
+        try:
+            cols = self.client.execute(
+                """
+                SELECT name, type
+                FROM system.columns
+                WHERE database = currentDatabase() AND table = %(t)s
+                """,
+                {"t": self.table_name},
+            )
+        except Exception:
+            # Если по какой-то причине нет доступа к system.columns — пропускаем авто-миграцию
+            return
+
+        type_by_name = {name: col_type for name, col_type in cols}
+
+        alters = []
+        if type_by_name.get("ops_counter_mi8") == "Int32":
+            alters.append("MODIFY COLUMN ops_counter_mi8 UInt16")
+        if type_by_name.get("ops_counter_mi17") == "Int32":
+            alters.append("MODIFY COLUMN ops_counter_mi17 UInt16")
+
+        if alters:
+            alter_sql = f"ALTER TABLE {self.table_name} " + ", ".join(alters)
+            self.client.execute(alter_sql)
 
     def insert_rows(self, rows: List[Dict[str, Any]]) -> None:
         """Вставка пачки строк. Поля должны соответствовать схеме ensure_table()."""
