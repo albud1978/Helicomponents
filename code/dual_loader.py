@@ -377,6 +377,7 @@ def create_tables(client):
             
             -- Обогащенные поля (добавляются dual_loader.py и enrich_heli_pandas.py)
             `status_id` UInt8 DEFAULT 0,            -- Статус компонента (через status_processor.py)
+            `status_change` UInt8 DEFAULT 0,        -- Метка перехода статуса на D0 для Transform (pre-simulation)
             `repair_days` Nullable(UInt16),         -- Остаток дней до окончания ремонта (было Int16 → uint16, без минусов)
             `aircraft_number` UInt32 DEFAULT 0,     -- Номер ВС из RA-XXXXX (расширен для самолетов)
             `ac_type_mask` UInt8 DEFAULT 0          -- Битовая маска типа ВС для multihot (через enrich_heli_pandas.py)
@@ -646,6 +647,11 @@ def main(version_date=None, version_id=None):
             pandas_df['status_id'] = 0  # По умолчанию 0 (не определен)
             print(f"   ➕ Создано поле status_id: 0 (обновится процессорами)")
         
+        # Поле status_change - метка перехода на D0 для Transform (pre-simulation)
+        if 'status_change' not in pandas_df.columns:
+            pandas_df['status_change'] = 0
+            print(f"   ➕ Создано поле status_change: 0 (pre-simulation)")
+        
         print(f"✅ [ЭТАП 8.2a] Поля инициализированы за {time.time() - init_start:.2f}с")
         
         # Добавляем поле aircraft_number через извлечение из location
@@ -706,7 +712,7 @@ def main(version_date=None, version_id=None):
             'condition', 'owner', 'lease_restricted',
             'oh', 'oh_threshold', 'll', 'sne', 'ppr',
             'version_date', 'version_id', 'partseqno_i', 'psn', 'address_i', 'ac_type_i',
-            'status_id', 'repair_days', 'aircraft_number', 'ac_type_mask'
+            'status_id', 'status_change', 'repair_days', 'aircraft_number', 'ac_type_mask'
         ]
         
         # Проверяем наличие всех колонок
@@ -723,6 +729,9 @@ def main(version_date=None, version_id=None):
                 elif col == 'repair_days':
                     pandas_df[col] = None  # Nullable Int16 поле
                     print(f"   ➕ Добавлена колонка {col}: None")
+                elif col == 'status_change':
+                    pandas_df[col] = 0
+                    print(f"   ➕ Добавлена колонка {col}: 0")
                 elif col in ['partseqno_i', 'psn', 'address_i', 'ac_type_i']:
                     pandas_df[col] = None  # Nullable UInt полея
                     print(f"   ➕ Добавлена колонка {col}: None")

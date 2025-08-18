@@ -9,176 +9,183 @@ sne/ppr и без финальных переходов. Поддерживае�
 Правила (кратко):
 - Фильтры по group_by (1=МИ-8Т, 2=МИ-17)
 - rtc_ops_check (LL/OH/BR с daily_today/daily_next): выставляет status_change in (4,6)
-- host trigger: trigger_pr_final_{grp} = target_ops(D) - current_ops(D)
-- rtc_balance: 
-  - trigger<0: из OPS→3 (top |trigger| по ppr DESC, sne DESC, mfg_date ASC)
-  - trigger>0: 5→2, затем 3→2, затем 1→2 при (D - version_date) >= repair_time(partno_comp)
+- host trigger: trigger_pr_final_{grp} = target_ops(D) - current_ops(D) [диагностика]
 
 Дата: 2025-08-10
 """
 
 import argparse
 import sys
-from typing import List
-from datetime import datetime
+from typing import List, Dict, Tuple
+from datetime import datetime, date, timedelta
 from pathlib import Path
 
 sys.path.append(str(__file__).rsplit('/code/', 1)[0] + '/code/utils')
 from config_loader import get_clickhouse_client
 
 
-def _current_version_subq() -> str:
-    return (
-        "SELECT version_date, version_id FROM heli_pandas "
-        "ORDER BY version_date DESC, version_id DESC LIMIT 1"
+def fetch_current_version(client) -> Tuple[date, int]:
+    row = client.execute(
+        "SELECT version_date, version_id FROM heli_pandas ORDER BY version_date DESC, version_id DESC LIMIT 1"
+    )[0]
+    return row[0], int(row[1])
+
+
+def fetch_d0_date(client, vdate: date, vid: int) -> date:
+    row = client.execute(
+        "SELECT min(dates) FROM flight_program_fl WHERE (version_date, version_id) = (%(vd)s, %(vid)s)",
+        {"vd": vdate, "vid": vid},
+    )[0]
+    return row[0]
+
+
+def fetch_daily_maps(client, d0: date) -> Tuple[Dict[int, int], Dict[int, int]]:
+    rows_today = client.execute(
+        "SELECT aircraft_number, daily_hours FROM flight_program_fl WHERE dates = %(d)s",
+        {"d": d0},
+    )
+    rows_next = client.execute(
+        "SELECT aircraft_number, daily_hours FROM flight_program_fl WHERE dates = %(d)s",
+        {"d": d0 + timedelta(days=1)},
+    )
+    today_map = {int(ac): int(h or 0) for ac, h in rows_today}
+    next_map = {int(ac): int(h or 0) for ac, h in rows_next}
+    return today_map, next_map
+
+
+def fetch_br_map(client) -> Dict[int, int]:
+    rows = client.execute("SELECT partno_comp, br FROM md_components")
+    return {int(p): int(b or 0) for p, b in rows}
+
+
+def fetch_mp3_rows(client, vdate: date, vid: int) -> Tuple[List[Tuple], List[str]]:
+    fields = [
+        'partseqno_i','psn','aircraft_number','group_by','status_id','status_change',
+        'll','oh','oh_threshold','sne','ppr','mfg_date','version_date'
+    ]
+    sql = f"""
+        SELECT {', '.join(fields)}
+        FROM heli_pandas
+        WHERE version_date = %(vd)s AND version_id = %(vid)s
+    """
+    rows = client.execute(sql, {"vd": vdate, "vid": vid})
+    return rows, fields
+
+
+def ensure_status_change_column(client) -> None:
+    # Добавим колонку при отсутствии
+    client.execute("""
+        ALTER TABLE heli_pandas
+        ADD COLUMN IF NOT EXISTS status_change UInt8 DEFAULT 0
+    """)
+
+
+def reset_status_change(client, vdate: date, vid: int) -> None:
+    client.execute(
+        """
+        ALTER TABLE heli_pandas
+        UPDATE status_change = 0
+        WHERE status_change != 0 AND version_date = %(vd)s AND version_id = %(vid)s
+        """,
+        {"vd": vdate, "vid": vid},
     )
 
 
-def build_ops_check_sql(group_by_value: int) -> str:
-    return f"""
--- rtc_ops_check для group_by={group_by_value}
-WITH 
-  D AS (
-    SELECT min(dates) FROM flight_program_fl 
-    WHERE (version_date, version_id) = (
-      SELECT version_date, version_id FROM heli_pandas ORDER BY version_date DESC, version_id DESC LIMIT 1
-    )
-  ),
-  daily_today AS (
-    SELECT aircraft_number, daily_hours 
-    FROM flight_program_fl WHERE dates = (SELECT D) 
-  ),
-  daily_next AS (
-    SELECT aircraft_number, daily_hours 
-    FROM flight_program_fl WHERE dates = addDays((SELECT D), 1)
-  ),
-  mp1 AS (
-    SELECT partno_comp, br, repair_time FROM md_components
-  )
-ALTER TABLE heli_pandas
-UPDATE status_change = multiIf(
-    -- LL: хватит на сегодня, не хватит на завтра → 6
-    (ll - sne) >= dt.daily_hours AND (ll - sne) < (dt.daily_hours + coalesce(dn.daily_hours, 0)), 6,
-    -- OH+BR: хватит на сегодня, не хватит на завтра и неремонтопригоден → 6
-    (oh - ppr) >= dt.daily_hours AND (oh - ppr) < (dt.daily_hours + coalesce(dn.daily_hours, 0)) AND (sne + dt.daily_hours) >= coalesce(m1.br, 4294967295), 6,
-    -- OH: хватит на сегодня, не хватит на завтра и ремонтопригоден → 4
-    (oh - ppr) >= dt.daily_hours AND (oh - ppr) < (dt.daily_hours + coalesce(dn.daily_hours, 0)) AND (sne + dt.daily_hours) < coalesce(m1.br, 4294967295), 4,
-    0
-)
-WHERE status_id = 2 AND status_change = 0 AND group_by = {group_by_value}
-  AND aircraft_number IN (SELECT aircraft_number FROM flight_program_fl)
-  SETTINGS allow_experimental_alter_update = 1
-AS hp
-JOIN daily_today dt ON hp.aircraft_number = dt.aircraft_number
-LEFT JOIN daily_next dn ON hp.aircraft_number = dn.aircraft_number
-LEFT JOIN mp1 m1 ON m1.partno_comp = hp.partseqno_i
-""".strip()
+def compute_status_change_sets(rows: List[Tuple], fields: List[str], today_map: Dict[int,int], next_map: Dict[int,int], br_map: Dict[int,int], group_filter: List[int]) -> Tuple[List[int], List[int]]:
+    idx = {name: i for i, name in enumerate(fields)}
+    to_4: List[int] = []
+    to_6: List[int] = []
+    for r in rows:
+        gb = int(r[idx['group_by']] or 0)
+        if gb not in group_filter:
+            continue
+        status_id = int(r[idx['status_id']] or 0)
+        if status_id != 2:
+            continue
+        if int(r[idx['status_change']] or 0) != 0:
+            continue
+        ac = int(r[idx['aircraft_number']] or 0)
+        dt = int(today_map.get(ac, 0))
+        dn = int(next_map.get(ac, 0))
+        partseq = int(r[idx['partseqno_i']] or 0)
+        br = int(br_map.get(partseq, 4294967295))
+        ll = int(r[idx['ll']] or 0)
+        oh = int(r[idx['oh']] or 0)
+        sne = int(r[idx['sne']] or 0)
+        ppr = int(r[idx['ppr']] or 0)
+        # Логика rtc_ops_check
+        # В ветках используем строго те же условия, что в каркасе CPU раннера
+        ll_edge = (ll - sne)
+        oh_edge = (oh - ppr)
+        # 4: ремонтопригодный OH переход через границу сегодня→завтра
+        cond_oh_cross = (oh_edge >= dt) and (oh_edge < (dt + dn))
+        cond_ll_cross = (ll_edge >= dt) and (ll_edge < (dt + dn))
+        if cond_oh_cross and (sne + dt) < br:
+            to_4.append(int(r[idx['psn']] or 0))
+            continue
+        # 6: либо LL пересечение, либо OH пересечение и неремонтопригодность
+        if cond_ll_cross or (cond_oh_cross and (sne + dt) >= br):
+            to_6.append(int(r[idx['psn']] or 0))
+            continue
+    # Убираем нули и дубликаты
+    to_4 = [psn for psn in set(to_4) if psn]
+    to_6 = [psn for psn in set(to_6) if psn and psn not in to_4]
+    return to_4, to_6
 
 
-def build_host_diag_sql(group_by_value: int) -> str:
-    field = 'ops_counter_mi8' if group_by_value == 1 else 'ops_counter_mi17'
-    return f"""
--- Диагностика host-триггера для group_by={group_by_value}
-WITH 
-  D AS (
-    SELECT min(dates) FROM flight_program_fl 
-    WHERE (version_date, version_id) = (
-      SELECT version_date, version_id FROM heli_pandas ORDER BY version_date DESC, version_id DESC LIMIT 1
-    )
-  )
-SELECT
-  (SELECT count() FROM heli_pandas WHERE status_id=2 AND status_change=0 AND group_by={group_by_value}) AS current_ops,
-  (SELECT sum({field}) FROM flight_program_ac WHERE dates=(SELECT D)) AS target_ops,
-  (target_ops - current_ops) AS trigger_pr_final;
-""".strip()
+def chunked(lst: List[int], size: int = 1000) -> List[List[int]]:
+    return [lst[i:i+size] for i in range(0, len(lst), size)]
 
 
-def build_balance_templates_sql(group_by_value: int) -> str:
-    return f"""
--- Шаблон UPDATE для rtc_balance, trigger<0 (сокращение):
--- ALTER TABLE heli_pandas UPDATE status_change = 3
--- WHERE status_id=2 AND status_change=0 AND group_by={group_by_value}
--- ORDER BY ppr DESC, sne DESC, mfg_date ASC
--- LIMIT abs(:trigger_pr_final)
--- SETTINGS allow_experimental_alter_update = 1;
-
--- Шаблон UPDATE для rtc_balance, trigger>0 (дефицит):
--- Этап1: 5→2; Этап2: 3→2; Этап3: 1→2 (при (D-version_date) >= repair_time)
--- ALTER TABLE heli_pandas UPDATE status_change = 2 WHERE status_id=5 AND status_change=0 AND group_by={group_by_value};
--- ALTER TABLE heli_pandas UPDATE status_change = 2 WHERE status_id=3 AND status_change=0 AND group_by={group_by_value};
--- ALTER TABLE heli_pandas UPDATE status_change = 2 
--- WHERE status_id=1 AND status_change=0 AND group_by={group_by_value} AND dateDiff('day', version_date, (SELECT min(dates) FROM flight_program_fl)) >= (
---   SELECT coalesce(repair_time, 0) FROM md_components WHERE partno_comp = heli_pandas.partseqno_i
--- );
-
-
-""".strip()
-
-
-def write_plan_files(plan_lines: List[str], balance_tpl_lines: List[str]) -> None:
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    out_dir = Path('temp_data')
-    out_dir.mkdir(exist_ok=True)
-    plan_file = out_dir / f'status_change_plan_{timestamp}.sql'
-    with plan_file.open('w', encoding='utf-8') as f:
-        f.write("\n\n".join(plan_lines) + "\n")
-    balance_file = out_dir / f'status_change_balance_templates_{timestamp}.sql'
-    with balance_file.open('w', encoding='utf-8') as f:
-        f.write("\n\n".join(balance_tpl_lines) + "\n")
-    print(f"📝 Сохранены файлы плана: {plan_file}, {balance_file}")
+def apply_updates(client, vdate: date, vid: int, psn_list: List[int], new_val: int) -> None:
+    if not psn_list:
+        return
+    for chunk in chunked(psn_list, 1000):
+        sql = """
+        ALTER TABLE heli_pandas
+        UPDATE status_change = %(val)s
+        WHERE version_date = %(vd)s AND version_id = %(vid)s AND psn IN ({ids})
+        """.replace("{ids}", ",".join(str(x) for x in chunk))
+        client.execute(sql, {"val": int(new_val), "vd": vdate, "vid": vid})
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Расчет MP3.status_change на D по правилам RTC (ops_check + balance)')
-    parser.add_argument('--apply', action='store_true', help='Выполнить SQL (по умолчанию только печать)')
-    parser.add_argument('--group', choices=['all', '1', '2'], default='all', help='Ограничить расчёт конкретной группой (1=МИ‑8Т, 2=МИ‑17)')
+    parser = argparse.ArgumentParser(description='Расчет MP3.status_change на D по правилам RTC (ops_check)')
+    parser.add_argument('--apply', action='store_true', help='Выполнить UPDATE (по умолчанию только печать)')
+    parser.add_argument('--group', choices=['all', '1', '2'], default='all', help='Ограничить расчёт группой (1=МИ‑8Т, 2=МИ‑17)')
     args = parser.parse_args()
 
+    client = get_clickhouse_client()
+
+    # Гарантируем колонку
+    ensure_status_change_column(client)
+
+    vdate, vid = fetch_current_version(client)
+    d0 = fetch_d0_date(client, vdate, vid)
+    today_map, next_map = fetch_daily_maps(client, d0)
+    br_map = fetch_br_map(client)
+    rows, fields = fetch_mp3_rows(client, vdate, vid)
+
     groups = [1, 2] if args.group == 'all' else [int(args.group)]
+    to_4, to_6 = compute_status_change_sets(rows, fields, today_map, next_map, br_map, groups)
 
-    plan_sqls: List[str] = []
-    balance_tpl_sqls: List[str] = []
-
-    # 0) Безопасно добавить колонку status_change и очистить предыдущую разметку
-    plan_sqls.append("""
-ALTER TABLE heli_pandas
-ADD COLUMN IF NOT EXISTS status_change UInt8 DEFAULT 0
-""".strip())
-    plan_sqls.append("""
-ALTER TABLE heli_pandas
-UPDATE status_change = 0
-WHERE status_change != 0
-SETTINGS allow_experimental_alter_update = 1
-""".strip())
-
-    # 1) Для каждой группы формируем ops_check и диагностику host, плюс шаблоны balance
-    for g in groups:
-        plan_sqls.append(build_ops_check_sql(g))
-        plan_sqls.append(build_host_diag_sql(g))
-        balance_tpl_sqls.append(build_balance_templates_sql(g))
+    print(f"📅 Версия: {vdate} v{vid} | D0={d0}")
+    print(f"🧮 Вычислено: to_4={len(to_4)}, to_6={len(to_6)}")
 
     if not args.apply:
-        # DRY RUN: печать и выгрузка в файлы
-        print("\n=== DRY RUN: Планируемые SQL (короткий вывод) ===")
-        for i, sql in enumerate(plan_sqls, 1):
-            head = sql.splitlines()[:5]
-            print(f"-- SQL #{i} (первые строки):\n" + "\n".join(head) + "\n...")
-        write_plan_files(plan_sqls, balance_tpl_sqls)
+        # DRY RUN — печать первых 10
+        print(f"🔎 Примеры to_4 (первые 10): {to_4[:10]}")
+        print(f"🔎 Примеры to_6 (первые 10): {to_6[:10]}")
         return 0
 
-    # APPLY: выполнить безопасные шаги + диагностические SELECT
-    client = get_clickhouse_client()
-    for sql in plan_sqls:
-        upper = sql.strip().upper()
-        if upper.startswith('ALTER TABLE') or upper.startswith('UPDATE'):
-            client.execute(sql)
-        else:
-            try:
-                rows = client.execute(sql)
-                print(rows)
-            except Exception:
-                pass
-    print("✅ MP3.status_change рассчитан (см. также сгенерированные SQL-шаблоны balance)")
+    # Сброс прошлой разметки для текущей версии
+    reset_status_change(client, vdate, vid)
+
+    # Применяем изменения
+    apply_updates(client, vdate, vid, to_4, 4)
+    apply_updates(client, vdate, vid, to_6, 6)
+
+    print("✅ MP3.status_change рассчитан и применён")
     return 0
 
 

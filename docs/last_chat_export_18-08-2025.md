@@ -1,30 +1,30 @@
 # Экспорт чата от 18-08-2025
 
 ## Основные темы чата
-- Переключение Git на GitHub HTTPS/PAT
-- Жёсткая очистка словарей ClickHouse
-- Extract (тест) и Transform прогон
-- Инициализация и согласование MP2
+- Доведение `status_change` до MP3 и словаря
+- Обновление типов MP2 и авто‑миграция
+- Перезапуск загрузки MP (loader→exporter→validator)
+- Автоматическая уборка по правилам
 
 ## Решенные задачи
-- Очистили словари, пересоздали ETL
-- Добавили метрику времени в Transform
-- Создали MP2 и синхронизировали её поля
+- `heli_pandas.status_change` добавлен в словарь и MacroProperty3; валидатор подтвердил 7113/7113 без расхождений
+- MP2: `ops_counter_mi8/mi17` переведены на `UInt16` с авто‑миграцией
+- Оркестратор Extract: добавлен шаг `pre_simulation_status_change.py` (pre‑simulation разметка D0)
 
 ## Проблемы и их решения
-- Несогласованность полей MP2 → выравнивание имен
+- `status_change` отсутствовал в словаре → переработана логика словаря на устойчивый ключ `(primary_table, field_name)` и аддитивную дозагрузку
+- ALTER UPDATE с экспериментальными SETTINGS в ClickHouse → реализован безопасный расчёт D0 на Python и пакетные UPDATE по `psn`
 
 ## Изменения в коде
-- code/utils/cleanup_dictionaries.py
-- code/transform_master.py
-- code/flame_macroproperty2_exporter.py
-- code/flame_gpu_transform_runner.py
-- code/flame_gpu_gpu_runner.py
-- code/digital_values_dictionary_creator.py
+- `code/digital_values_dictionary_creator.py` — устойчивые ключи и добавлен `status_change`
+- `code/flame_macroproperty2_exporter.py` — UInt16 для `ops_counter_*`, авто‑миграция
+- `code/dual_loader.py` — добавлен `status_change` в DDL/инициализацию/порядок колонок
+- `code/extract_master.py` — добавлен шаг `pre_simulation_status_change.py`
+- `code/pre_simulation_status_change.py` — расчёт D0 (ops_check) и пакетные UPDATE
 
 ## Обновления документации
-- Чат-экспорт создан
+- `docs/changelog.md` — запись от 18-08-2025 о статусе MP3/MP2, словаря и уборке
 
 ## Следующие шаги
-- Короткий CPU-прогон 1 день → MP2 заполнение
-- Уточнение полного состава MP2 для BI
+- Суточный CPU‑прогон MP2 (1 день) и проверка схем/метрик завтра
+- Согласование и доработка balance/RTC логики с последующими тестами

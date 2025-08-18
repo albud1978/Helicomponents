@@ -198,6 +198,14 @@ class ExtractMaster:
             'dependencies': ['md_components', 'heli_pandas', 'status_overhaul', 'dict_digital_values_flat'],
             'result_table': 'heli_pandas',
             'critical': True
+        },
+        # === PRE-SIMULATION РАЗМЕТКА (инициализация status_change на D0) ===
+        {
+            'script': 'pre_simulation_status_change.py',
+            'description': 'Инициализация heli_pandas.status_change по RTC правилам (D0)',
+            'dependencies': ['heli_pandas', 'md_components', 'flight_program_ac', 'flight_program_fl'],
+            'result_table': 'heli_pandas',
+            'critical': False
         }
     ]
     

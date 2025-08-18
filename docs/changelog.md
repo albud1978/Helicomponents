@@ -1,3 +1,18 @@
+## [18-08-2025] - MP3.status_change, словарь по ключу, UInt16 в MP2, уборка
+
+### Добавлено
+- Поле `status_change` в `heli_pandas` доведено до MP3: включено в маппинг и загрузку MacroProperty3; подтверждено валидатором 7113/7113.
+- Экспорт последнего чата: `docs/last_chat_export_18-08-2025.md` (текущая сессия).
+
+### Изменено
+- `code/digital_values_dictionary_creator.py`: логика словаря стала устойчивой по ключу `(primary_table, field_name)` с сохранением `field_id` и аддитивной дозагрузкой.
+- `code/extract_master.py`: добавлен шаг `pre_simulation_status_change.py` (pre‑simulation разметка D0 для MP3).
+- `code/flame_macroproperty2_exporter.py`: `ops_counter_mi8/ops_counter_mi17` → `UInt16` + авто‑миграция.
+
+### Исправлено
+- Отсутствие `heli_pandas.status_change` в `dict_digital_values_flat` — словарь пересобран, поле присутствует.
+- Валидация MP3 (loader→exporter→validator) проходит без расхождений, включая `status_change`.
+
 ## [18-08-2025] - Согласование MP2, метрика Transform, жёсткая очистка словарей
 ### Добавлено
 - Метрика общего времени в `code/transform_master.py` (финальный вывод ⏱️).

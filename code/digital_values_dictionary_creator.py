@@ -59,6 +59,7 @@ class DigitalValuesDictionaryCreator:
             'address_i': ('Nullable(UInt16)', 'ID владельца из Excel'),
             'ac_type_i': ('Nullable(UInt16)', 'ID типа ВС из Excel'),
             'status_id': ('UInt8', 'ID статуса компонента'),
+            'status_change': ('UInt8', 'Метка перехода статуса на D0 (pre-simulation)'),
             'repair_days': ('Nullable(UInt16)', 'Дней до окончания ремонта (оптимизировано: Int16→UInt16)'),
             'aircraft_number': ('UInt32', 'Номер ВС (расширен для самолетов)'),
             'ac_type_mask': ('UInt8', 'Битовая маска типа ВС')
@@ -307,8 +308,8 @@ class DigitalValuesDictionaryCreator:
             ('flame_macroproperty2_export','ac_type_mask','Тип ВС (маска)','UInt8',0),
             ('flame_macroproperty2_export','status_id','Статус планера','UInt8',0),
             ('flame_macroproperty2_export','daily_flight','Суточный налет','UInt32',0),
-            ('flame_macroproperty2_export','ops_counter_mi8','Целевая укомплектованность МИ-8 на D','Int32',0),
-            ('flame_macroproperty2_export','ops_counter_mi17','Целевая укомплектованность МИ-17 на D','Int32',0),
+            ('flame_macroproperty2_export','ops_counter_mi8','Целевая укомплектованность МИ-8 на D','UInt16',0),
+            ('flame_macroproperty2_export','ops_counter_mi17','Целевая укомплектованность МИ-17 на D','UInt16',0),
             ('flame_macroproperty2_export','ops_current_mi8','Фактическая укомплектованность МИ-8 на D','UInt16',0),
             ('flame_macroproperty2_export','ops_current_mi17','Фактическая укомплектованность МИ-17 на D','UInt16',0),
             ('flame_macroproperty2_export','partout_trigger','Дата триггера разборки','Date',0),
@@ -356,49 +357,89 @@ class DigitalValuesDictionaryCreator:
             return False
     
     def populate_dictionary_table(self, fields_data: List[Tuple]) -> bool:
-        """Заполнение словарной таблицы данными (аддитивно)"""
+        """Заполнение словарной таблицы данными (аддитивно) с устойчивыми ключами.
+
+        Ключ поля = (primary_table, field_name).
+        - Если ключ существует для текущей версии → пропускаем
+        - Если ключ встречался ранее → используем тот же field_id
+        - Иначе → назначаем новый field_id = MAX(field_id)+1
+        """
         try:
             self.logger.info("💾 Аддитивная загрузка данных в dict_digital_values_flat...")
-            
-            # Получаем актуальные версионные параметры из heli_pandas
+
+            # Актуальные версионные параметры
             version_date, version_id = self.get_version_from_heli_pandas()
             if version_date is None or version_id is None:
                 self.logger.error("❌ Не удалось получить версионные параметры из heli_pandas")
                 return False
-            
-            # Получаем уже существующие field_id для данной версии
-            existing_query = """
-                SELECT DISTINCT field_id 
-                FROM dict_digital_values_flat 
+
+            # Существующие ключи для текущей версии (primary_table, field_name)
+            existing_keys_rows = self.client.execute(
+                """
+                SELECT primary_table, field_name
+                FROM dict_digital_values_flat
                 WHERE version_date = %(version_date)s AND version_id = %(version_id)s
-            """
-            existing_result = self.client.execute(existing_query, {'version_date': version_date, 'version_id': version_id})
-            existing_ids = {row[0] for row in existing_result}
-            
-            # Фильтруем только новые поля для данной версии
-            new_fields = []
+                """,
+                {"version_date": version_date, "version_id": version_id},
+            )
+            existing_keys = {(r[0], r[1]) for r in existing_keys_rows}
+
+            # Историческая мапа ключа на устойчивый field_id (берем MIN для стабильности)
+            historic_rows = self.client.execute(
+                """
+                SELECT primary_table, field_name, MIN(field_id) AS field_id
+                FROM dict_digital_values_flat
+                GROUP BY primary_table, field_name
+                """
+            )
+            key_to_field_id = {(r[0], r[1]): int(r[2]) for r in historic_rows}
+
+            # Текущий максимум field_id
+            max_id_rows = self.client.execute("SELECT max(field_id) FROM dict_digital_values_flat")
+            max_field_id = int(max_id_rows[0][0] or 0)
+
+            # Сформируем вставки только для новых ключей текущей версии
+            new_rows = []
             for field_data in fields_data:
-                field_id = field_data[0]
-                if field_id not in existing_ids:
-                    # Добавляем версионные параметры к данным поля
-                    field_with_version = field_data + (version_date, version_id)
-                    new_fields.append(field_with_version)
-            
-            if not new_fields:
+                # fields_data формат: (tmp_id, primary_table, field_name, description, data_type, is_nullable)
+                _, primary_table, field_name, field_description, data_type, is_nullable = field_data
+                key = (primary_table, field_name)
+
+                if key in existing_keys:
+                    continue  # уже есть для текущей версии
+
+                # Определим field_id: исторический или новый
+                if key in key_to_field_id:
+                    field_id = key_to_field_id[key]
+                else:
+                    max_field_id += 1
+                    field_id = max_field_id
+                    key_to_field_id[key] = field_id
+
+                new_rows.append([
+                    field_id,
+                    primary_table,
+                    field_name,
+                    field_description,
+                    data_type,
+                    int(is_nullable),
+                    version_date,
+                    version_id,
+                ])
+
+            if not new_rows:
                 self.logger.info(f"ℹ️ Все поля уже существуют в словаре для версии {version_date} v{version_id}")
                 return True
-            
-            # Вставляем новые поля с версионными параметрами
-            insert_query = """
-            INSERT INTO dict_digital_values_flat 
-                (field_id, primary_table, field_name, field_description, data_type, is_nullable, version_date, version_id) 
-            VALUES
-            """
-            self.client.execute(insert_query, new_fields)
-            
-            self.logger.info(f"✅ Добавлено {len(new_fields)} новых полей в словарь (версия {version_date} v{version_id})")
+
+            insert_query = (
+                "INSERT INTO dict_digital_values_flat "
+                "(field_id, primary_table, field_name, field_description, data_type, is_nullable, version_date, version_id) VALUES"
+            )
+            self.client.execute(insert_query, new_rows)
+
+            self.logger.info(f"✅ Добавлено {len(new_rows)} новых полей в словарь (версия {version_date} v{version_id})")
             return True
-            
+
         except Exception as e:
             self.logger.error(f"❌ Ошибка заполнения таблицы: {e}")
             return False
