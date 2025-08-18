@@ -217,15 +217,15 @@ def run(days: int | None = None):
                 'ac_type_mask': int(ac_type_mask),
                 'status_id': int(status_id),
                 'daily_flight': int(daily_flight),
-                'trigger_pr_final_mi8': int(ops.get('ops_counter_mi8', 0)),
-                'trigger_pr_final_mi17': int(ops.get('ops_counter_mi17', 0)),
+                'ops_counter_mi8': int(ops.get('ops_counter_mi8', 0)),
+                'ops_counter_mi17': int(ops.get('ops_counter_mi17', 0)),
                 'ops_current_mi8': int(ops_cur.get(1, 0)),
                 'ops_current_mi17': int(ops_cur.get(2, 0)),
                 'partout_trigger': part_date,
                 'assembly_trigger': asm_date,
                 'active_trigger': act_date,
                 'aircraft_age_years': 0,
-                'mfg_date_final': md,
+                'mfg_date': md,
                 'simulation_metadata': f"v={vdate}/id={vid};D={d}"
             })
         if log_rows:

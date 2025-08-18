@@ -299,6 +299,30 @@ class DigitalValuesDictionaryCreator:
             ))
         
         self.logger.info(f"✅ Найдено {len(result)} уникальных полей из {len(etl_tables)} таблиц с РЕАЛЬНЫМИ типами")
+
+        # ДОБАВЛЯЕМ ПОЛЯ MP2 (хардкод), даже если таблицы еще нет
+        mp2_fields = [
+            ('flame_macroproperty2_export','dates','Дата симуляции','Date',0),
+            ('flame_macroproperty2_export','aircraft_number','Номер ВС','UInt32',0),
+            ('flame_macroproperty2_export','ac_type_mask','Тип ВС (маска)','UInt8',0),
+            ('flame_macroproperty2_export','status_id','Статус планера','UInt8',0),
+            ('flame_macroproperty2_export','daily_flight','Суточный налет','UInt32',0),
+            ('flame_macroproperty2_export','ops_counter_mi8','Целевая укомплектованность МИ-8 на D','Int32',0),
+            ('flame_macroproperty2_export','ops_counter_mi17','Целевая укомплектованность МИ-17 на D','Int32',0),
+            ('flame_macroproperty2_export','ops_current_mi8','Фактическая укомплектованность МИ-8 на D','UInt16',0),
+            ('flame_macroproperty2_export','ops_current_mi17','Фактическая укомплектованность МИ-17 на D','UInt16',0),
+            ('flame_macroproperty2_export','partout_trigger','Дата триггера разборки','Date',0),
+            ('flame_macroproperty2_export','assembly_trigger','Дата триггера сборки','Date',0),
+            ('flame_macroproperty2_export','active_trigger','Дата активации','Date',0),
+            ('flame_macroproperty2_export','aircraft_age_years','Возраст планера, лет','UInt8',0),
+            ('flame_macroproperty2_export','mfg_date','Дата производства','Date',0),
+            ('flame_macroproperty2_export','simulation_metadata','Метаданные симуляции','String',0),
+        ]
+        base_id = len(result) + 1
+        for idx, (tbl, fname, descr, dtype, isnull) in enumerate(mp2_fields, start=0):
+            result.append((base_id + idx, tbl, fname, descr + f" (таблицы: {tbl})", dtype, isnull))
+
+        self.logger.info(f"➕ Добавлено полей MP2 (хардкод): {len(mp2_fields)}")
         return result
     
     def create_dictionary_table(self) -> bool:

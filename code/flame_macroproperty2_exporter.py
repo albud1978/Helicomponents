@@ -34,15 +34,15 @@ class FlameMacroProperty2Exporter:
             ac_type_mask UInt8,
             status_id UInt8,
             daily_flight UInt32,
-            trigger_pr_final_mi8 Int32,
-            trigger_pr_final_mi17 Int32,
+            ops_counter_mi8 Int32,
+            ops_counter_mi17 Int32,
             ops_current_mi8 UInt16,
             ops_current_mi17 UInt16,
             partout_trigger Date,
             assembly_trigger Date,
             active_trigger Date,
             aircraft_age_years UInt8,
-            mfg_date_final Date,
+            mfg_date Date,
             simulation_metadata String
         ) ENGINE = MergeTree()
         ORDER BY (dates, aircraft_number)
@@ -56,9 +56,9 @@ class FlameMacroProperty2Exporter:
             return
         fields = [
             'dates','aircraft_number','ac_type_mask','status_id','daily_flight',
-            'trigger_pr_final_mi8','trigger_pr_final_mi17','ops_current_mi8','ops_current_mi17',
+            'ops_counter_mi8','ops_counter_mi17','ops_current_mi8','ops_current_mi17',
             'partout_trigger','assembly_trigger','active_trigger',
-            'aircraft_age_years','mfg_date_final','simulation_metadata'
+            'aircraft_age_years','mfg_date','simulation_metadata'
         ]
         data = []
         for r in rows:
@@ -68,15 +68,15 @@ class FlameMacroProperty2Exporter:
                 int(r.get('ac_type_mask', 0) or 0),
                 int(r.get('status_id', 0) or 0),
                 int(r.get('daily_flight', 0) or 0),
-                int(r.get('trigger_pr_final_mi8', 0) or 0),
-                int(r.get('trigger_pr_final_mi17', 0) or 0),
+                int(r.get('ops_counter_mi8', 0) or 0),
+                int(r.get('ops_counter_mi17', 0) or 0),
                 int(r.get('ops_current_mi8', 0) or 0),
                 int(r.get('ops_current_mi17', 0) or 0),
                 r.get('partout_trigger', date(1970,1,1)),
                 r.get('assembly_trigger', date(1970,1,1)),
                 r.get('active_trigger', date(1970,1,1)),
                 int(r.get('aircraft_age_years', 0) or 0),
-                r.get('mfg_date_final', date(1970,1,1)),
+                r.get('mfg_date', date(1970,1,1)),
                 str(r.get('simulation_metadata', '')),
             ])
         insert_sql = f"INSERT INTO {self.table_name} ({', '.join(fields)}) VALUES"

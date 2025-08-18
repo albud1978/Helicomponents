@@ -42,7 +42,9 @@ class DictionaryCleanup:
             'partno_dict_flat',
             'serialno_dict_flat',
             'owner_dict_flat',
-            'ac_type_dict_flat'
+            'ac_type_dict_flat',
+            # Добавлено: объект словаря цифровых значений полей
+            'digital_values_dict_flat'
         ]
         
         self.dictionary_tables = [
@@ -51,7 +53,9 @@ class DictionaryCleanup:
             'dict_partno_flat', 
             'dict_serialno_flat',
             'dict_owner_flat',
-            'dict_ac_type_flat'
+            'dict_ac_type_flat',
+            # Добавлено: таблица аддитивного словаря цифровых значений
+            'dict_digital_values_flat'
         ]
     
     def _setup_logging(self) -> logging.Logger:

@@ -11,6 +11,7 @@ Transform Master — оркестратор загрузки MacroProperty (MP1,
 import sys
 import argparse
 import subprocess
+import time
 
 
 def run(cmd: list[str]) -> int:
@@ -65,6 +66,7 @@ def main():
     property_step = [sys.executable, 'code/flame_property_loader.py', *v_args]
 
     all_ok = True
+    start_time = time.time()
     step_index = 0
     for chain in chains:
         step_index += 1
@@ -82,6 +84,8 @@ def main():
         print(f"❌ Ошибка этапа: {' '.join(property_step)} (rc={rc})")
         all_ok = False
 
+    total_time = time.time() - start_time
+    print(f"\n⏱️ Общее время выполнения: {total_time:.1f} секунд")
     print("\n" + ("✅ Завершено" if all_ok else "⚠️ Завершено с ошибками"))
 
 

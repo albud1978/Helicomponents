@@ -1,3 +1,24 @@
+## [18-08-2025] - Согласование MP2, метрика Transform, жёсткая очистка словарей
+### Добавлено
+- Метрика общего времени в `code/transform_master.py` (финальный вывод ⏱️).
+- Поля MP2 добавлены в генератор словаря `code/digital_values_dictionary_creator.py` (хардкод) для прямых join в BI.
+- Экспорт чата: `docs/last_chat_export_18-08-2025.md` (ключевые решения и список изменений).
+
+### Изменено
+- Схема MP2 унифицирована по именам источников: 
+  - `trigger_pr_final_mi8/mi17` → `ops_counter_mi8/ops_counter_mi17` (соответствие MP4),
+  - `mfg_date_final` → `mfg_date` (соответствие MP3).
+- Обновлены раннеры записи в MP2: `code/flame_gpu_transform_runner.py`, `code/flame_gpu_gpu_runner.py` (ключи вставки приведены к новой схеме).
+- Документация `docs/transform.md`: раздел MacroProperty2 переписан — сохранение имён полей из MP1/3/4/5, пометка новых производных метрик.
+
+### Исправлено
+- Жёсткая очистка словарей ClickHouse: в `code/utils/cleanup_dictionaries.py` добавлено удаление `digital_values_dict_flat` (Dictionary) и `dict_digital_values_flat` (таблица) для «чистой» перезагрузки.
+- Таблица MP2 пересоздана с новой схемой; очистка (TRUNCATE) выполнена перед следующими тестами.
+
+### Ссылки
+- Экспорт чата: docs/last_chat_export_18-08-2025.md
+- Важные файлы: `code/flame_macroproperty2_exporter.py`, `code/flame_gpu_transform_runner.py`, `code/flame_gpu_gpu_runner.py`, `code/digital_values_dictionary_creator.py`, `code/utils/cleanup_dictionaries.py`, `code/transform_master.py`
+
 # Changelog - История изменений проекта
 **Последнее обновление:** 14-08-2025
 
