@@ -199,6 +199,11 @@ def run(days: int | None = None):
     mp4_by_day = preload_mp4_by_day(client)
     mp5_maps = preload_mp5_maps(client)
 
+    # Сводные метрики таймингов
+    total_step_s = 0.0
+    total_export_s = 0.0
+    total_rows = 0
+
     for i, d in enumerate(days_list):
         # Подготовка окружения на сутки D
         today_map = mp5_maps.get(d, {})
@@ -234,7 +239,10 @@ def run(days: int | None = None):
         sim.setEnvironmentPropertyUInt("current_day_ordinal", (d - base).days)
 
         # Шаг симуляции (repair → ops_check → main → change → pass)
+        t_step_start = time.time()
         sim.step()
+        step_s = time.time() - t_step_start
+        total_step_s += step_s
 
         # Логирование MP2 для планеров (group_by 1|2)
         a = sim.getAgents("component")
@@ -293,7 +301,16 @@ def run(days: int | None = None):
                 'simulation_metadata': f"v={vdate}/id={vid};D={d}"
             })
         if log_rows:
+            t_exp_start = time.time()
             exporter.insert_rows(log_rows)
+            exp_s = time.time() - t_exp_start
+            total_export_s += exp_s
+            total_rows += len(log_rows)
+            # Диагностический лог по дню
+            try:
+                print(f"GPU day={d} step_ms={step_s*1000:.1f} export_ms={exp_s*1000:.1f} rows={len(log_rows)} ops_cur={ops_cur.get(1,0)}/{ops_cur.get(2,0)} ops_tgt={ops.get('ops_counter_mi8',0)}/{ops.get('ops_counter_mi17',0)}")
+            except Exception:
+                pass
 
 
 def main():
@@ -305,6 +322,7 @@ def main():
     run(days=args.days)
     total_time = time.time() - start_time
     print(f"\n⏱️ Общее время выполнения GPU-runner: {total_time:.1f} секунд")
+    # Печать сводной статистики, если она собиралась внутри run (через замыкание не доступна)
 
 
 if __name__ == '__main__':
