@@ -1,7 +1,7 @@
 # Transform - Преобразование данных для Flame GPU
 
 **Дата создания:** 23-07-2025  
-**Последнее обновление:** 10-08-2025
+**Последнее обновление:** 19-08-2025
 
 > Статус реализации (10-08-2025): логика RTC, триггеры и GPU-пайплайн реализованы в коде, но ещё не проходили тестирование в целевой среде (ClickHouse/GPU). Требуется прогон и верификация.
 
@@ -321,6 +321,34 @@ Load → MacroProperty2 (объединенные результаты)
   - Прогнать 1–3 суток симуляции с логированием инвариантов (начисление sne/ppr ровно 1 раз; отсутствие необработанных `status_id=2/4` к `rtc_pass_through`).
   - Сверка с валидацией MacroProperty3/4/5 и отчётами. 
 
-## Краткое резюме слоёв RTC (10-08-2025)
+## FLAME GPU RTC на сообщениях (19-08-2025)
+
+### Типы агентов и сообщений
+- Агент `component` (по данным MP3/MP1): `psn`, `partseqno_i`, `aircraft_number`, `group_by`, `ac_type_mask`, `status_id`, `sne`, `ppr`, `repair_days`, `mfg_date_ord`, `version_date_ord`, `br`, `repair_time`, `partout_time`, `assembly_time`, `daily_hours_by_day[]`.
+- Агент `controller` (singleton): `day_index`, массивы MP4 по дням `target_mi8_by_day[]`, `target_mi17_by_day[]`, `trigger_program_mi8_by_day[]`, `trigger_program_mi17_by_day[]`.
+- Сообщения:
+  - `ops_persist_msg{psn, group_by}` — действующие `status_id=2` без ресурсных выходов.
+  - `add_candidate_msg_phase1|2|3{psn, group_by[, can_activate]}` — кандидаты 5→2, 3→2, 1→2.
+  - `cut_candidate_msg{psn, group_by, score}` — кандидаты на сокращение (score = ppr DESC, sne DESC, mfg_date ASC).
+  - `assignment_msg{psn, new_status_id}` — решения контроллера (2/3) на сутки D.
+
+### Порядок слоёв на сутки D
+1) `repair_calendar` — если `status_id=4`: `repair_days+=1`; при `repair_days>=repair_time` → завершение ремонта (эквивалент старого `status_change=5`).
+2) `resource_exits` — для `status_id=2` проверка LL/OH окон с учётом `br` и `daily_hours(D|D+1)`: ставим жёсткие выходы (эквивалент `status_change` 4/6).
+3) `publish_ops_persist` — действующие 2 без жёстких выходов публикуют `ops_persist_msg`.
+4) `publish_add_candidates` — три фазовых слоя 5→2, 3→2, 1→2 (с проверкой времени) публикуют соответствующие сообщения.
+5) `publish_cut_candidates` — все действующие 2 публикуют `cut_candidate_msg` со score.
+6) `controller_balance` — контроллер читает сообщения, считает `current_ops` по группам, вычисляет `need_add`/`need_cut` из MP4 (на день D), формирует `assignment_msg`:
+   - добор: в приоритетах фаз 1→2→3, ровно `need_add` первых;
+   - сокращение: top‑K=`need_cut` по score.
+7) `apply_assignments` — компонент применяет решения контроллера (2/3), но жёсткие 4/6 имеют приоритет и не перекрываются.
+8) `main` — если агент начал день в 2: `sne+=daily_today`, `ppr+=daily_today`; затем применяется итоговый переход.
+9) `change` — побочные эффекты (4/5/2), установка триггеров по `current_day_ordinal`, затем сброс внутренних меток.
+10) `pass_through` — контроль инвариантов.
+
+### Загрузка MP и экспорт MP2
+- MP1/MP3/MP4/MP5 загружаются один раз в память на старте; controller/agents получают массивы по дням (lookup по индексу дня). Повторных запросов к БД нет.
+- По окончании каждого дня выполняется одна пакетная вставка в `MP2` (строки на агента `group_by∈{1,2}`): 
+  `dates, psn, partseqno_i, aircraft_number, group_by, ac_type_mask, status_id, daily_flight, ops_counter_mi8/mi17, ops_current_mi8/mi17, partout/assembly/active, aircraft_age_years, mfg_date, sne, ppr, repair_days, simulation_metadata`.
 
 - repair: инкремент `repair_days`; ставит `status_change=5`

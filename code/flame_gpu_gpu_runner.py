@@ -12,6 +12,7 @@ FLAME GPU GPU Runner
 from __future__ import annotations
 from typing import Dict, List, Tuple
 from datetime import date, timedelta
+import time
 
 import sys
 import os
@@ -19,6 +20,10 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 from config_loader import get_clickhouse_client
 from flame_macroproperty2_exporter import FlameMacroProperty2Exporter
+try:
+    import pyflamegpu
+except Exception:
+    pyflamegpu = None
 
 from flame_gpu_helicopter_model import HelicopterFlameModel
 
@@ -29,8 +34,11 @@ except Exception as e:
 
 
 def fetch_versions(client):
-    r = client.execute("SELECT version_date, any(version_id) FROM heli_pandas ORDER BY version_date DESC LIMIT 1")
-    return r[0][0], int(r[0][1])
+    rows = client.execute(
+        "SELECT version_date, version_id FROM heli_pandas ORDER BY version_date DESC, version_id DESC LIMIT 1"
+    )
+    vd, vid = rows[0]
+    return vd, int(vid)
 
 
 def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int]]:
@@ -54,12 +62,48 @@ def fetch_mp3(client, vdate, vid):
 
 
 def fetch_dates(client) -> List[date]:
-    return [r[0] for r in client.execute("SELECT dates FROM flight_program_ac ORDER BY dates")] 
+    return [r[0] for r in client.execute("SELECT dates FROM flight_program_ac ORDER BY dates")]
 
 
 def fetch_daily_map(client, d: date) -> Dict[int,int]:
     rows = client.execute("SELECT aircraft_number, daily_hours FROM flight_program_fl WHERE dates = %(d)s", {"d": d})
     return {int(ac): int(h or 0) for ac, h in rows}
+
+
+def preload_mp4_by_day(client) -> Dict[date, Dict[str,int]]:
+    """Загружает все записи MP4 в память: на дату → ops_counter/trigger значения."""
+    rows = client.execute(
+        """
+        SELECT dates, ops_counter_mi8, ops_counter_mi17, trigger_program_mi8, trigger_program_mi17
+        FROM flight_program_ac
+        ORDER BY dates
+        """
+    )
+    result: Dict[date, Dict[str,int]] = {}
+    for d, mi8, mi17, t8, t17 in rows:
+        result[d] = {
+            "ops_counter_mi8": int(mi8 or 0),
+            "ops_counter_mi17": int(mi17 or 0),
+            "trigger_program_mi8": int(t8 or 0),
+            "trigger_program_mi17": int(t17 or 0),
+        }
+    return result
+
+
+def preload_mp5_maps(client) -> Dict[date, Dict[int,int]]:
+    """Загружает все суточные налёты в память: на дату → {aircraft_number: daily_hours}."""
+    rows = client.execute(
+        """
+        SELECT dates, aircraft_number, daily_hours
+        FROM flight_program_fl
+        ORDER BY dates, aircraft_number
+        """
+    )
+    result: Dict[date, Dict[int,int]] = {}
+    for d, ac, h in rows:
+        m = result.setdefault(d, {})
+        m[int(ac)] = int(h or 0)
+    return result
 
 
 def fetch_ops_and_triggers(client, d: date) -> Dict[str,int]:
@@ -74,10 +118,12 @@ def fetch_ops_and_triggers(client, d: date) -> Dict[str,int]:
 
 
 def init_agents(sim: "pyflamegpu.CUDASimulation", model: HelicopterFlameModel, mp3_rows, mp3_fields, br_rt_map):
-    a = sim.getAgent("component")
+    assert pyflamegpu is not None
+    comp_desc = model.model.getAgent("component")
+    av = pyflamegpu.AgentVector(comp_desc, len(mp3_rows))
     idx_map = {name: i for i, name in enumerate(mp3_fields)}
     for i, r in enumerate(mp3_rows):
-        ai = a.newAgent()
+        ai = av[i]
         ai.setVariableUInt("idx", i)
         ai.setVariableUInt("partseqno_i", int(r[idx_map['partseqno_i']] or 0))
         ai.setVariableUInt("psn", int(r[idx_map['psn']] or 0))
@@ -92,7 +138,6 @@ def init_agents(sim: "pyflamegpu.CUDASimulation", model: HelicopterFlameModel, m
         ai.setVariableUInt("sne", int(r[idx_map['sne']] or 0))
         ai.setVariableUInt("ppr", int(r[idx_map['ppr']] or 0))
         ai.setVariableUInt("repair_days", int(r[idx_map['repair_days']] or 0))
-        # mfg_date/version_date как дни (UInt16) преобразованы в UInt32 совместимую форму на загрузке в CH
         ai.setVariableUInt("mfg_date", int(getattr(r[idx_map['mfg_date']], 'toordinal', lambda: 0)()))
         ai.setVariableUInt("version_date", int(getattr(r[idx_map['version_date']], 'toordinal', lambda: 0)()))
         partseq = int(r[idx_map['partseqno_i']] or 0)
@@ -101,18 +146,18 @@ def init_agents(sim: "pyflamegpu.CUDASimulation", model: HelicopterFlameModel, m
         ai.setVariableUInt("repair_time", int(rt))
         ai.setVariableUInt("partout_time", int(pt))
         ai.setVariableUInt("assembly_time", int(at))
+    # Загрузка популяции в симуляцию
+    sim.setPopulationData(av)
 
 
 def fill_daily_arrays(sim: "pyflamegpu.CUDASimulation", daily_today: List[int], daily_next: List[int]):
-    env = sim.getEnvironment()
-    env.setPropertyArrayUInt32("daily_today", daily_today)
-    env.setPropertyArrayUInt32("daily_next", daily_next)
+    sim.setEnvironmentPropertyArrayUInt32("daily_today", daily_today)
+    sim.setEnvironmentPropertyArrayUInt32("daily_next", daily_next)
 
 
 def fill_time_arrays(sim: "pyflamegpu.CUDASimulation", partout: List[int], assembly: List[int]):
-    env = sim.getEnvironment()
-    env.setPropertyArrayUInt32("partout_time_arr", partout)
-    env.setPropertyArrayUInt32("assembly_time_arr", assembly)
+    sim.setEnvironmentPropertyArrayUInt32("partout_time_arr", partout)
+    sim.setEnvironmentPropertyArrayUInt32("assembly_time_arr", assembly)
 
 
 def run(days: int | None = None):
@@ -132,6 +177,15 @@ def run(days: int | None = None):
     # Создать популяцию агентов
     init_agents(sim, model, mp3_rows, mp3_fields, br_rt_map)
 
+    # Создать singleton-контроллер (для будущей GPU-балансировки на сообщениях)
+    try:
+        ctrl_desc = model.model.getAgent("controller")
+        cv = pyflamegpu.AgentVector(ctrl_desc, 1)
+        cv[0].setVariableUInt("day_index", 0)
+        sim.setPopulationData(cv)
+    except Exception:
+        pass
+
     # Экспортер MP2
     exporter = FlameMacroProperty2Exporter(client=client)
     exporter.ensure_table()
@@ -141,10 +195,14 @@ def run(days: int | None = None):
     if days:
         days_list = days_list[:days]
 
+    # Однократная загрузка MP4/MP5 в память
+    mp4_by_day = preload_mp4_by_day(client)
+    mp5_maps = preload_mp5_maps(client)
+
     for i, d in enumerate(days_list):
         # Подготовка окружения на сутки D
-        today_map = fetch_daily_map(client, d)
-        next_map = fetch_daily_map(client, d + timedelta(days=1))
+        today_map = mp5_maps.get(d, {})
+        next_map = mp5_maps.get(d + timedelta(days=1), {})
         # Сформировать массивы по индексу агента (по idx)
         # Для планеров берем daily по их aircraft_number; прочие агрегаты получают 0
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
@@ -164,17 +222,16 @@ def run(days: int | None = None):
         fill_time_arrays(sim, part_arr, asm_arr)
 
         # Установить триггеры из MP4
-        ops = fetch_ops_and_triggers(client, d)
-        env = sim.getEnvironment()
+        ops = mp4_by_day.get(d, {"ops_counter_mi8":0, "ops_counter_mi17":0, "trigger_program_mi8":0, "trigger_program_mi17":0})
         # Триггеры балансировки задаём как target (runner может предварительно балансировать, но здесь только запись)
-        env.setPropertyInt("trigger_pr_final_mi8", int(ops.get('ops_counter_mi8', 0)))
-        env.setPropertyInt("trigger_pr_final_mi17", int(ops.get('ops_counter_mi17', 0)))
-        env.setPropertyInt("trigger_program_mi8", int(ops.get('trigger_program_mi8', 0)))
-        env.setPropertyInt("trigger_program_mi17", int(ops.get('trigger_program_mi17', 0)))
-        env.setPropertyInt("current_day_index", i)
+        sim.setEnvironmentPropertyInt("trigger_pr_final_mi8", int(ops.get('ops_counter_mi8', 0)))
+        sim.setEnvironmentPropertyInt("trigger_pr_final_mi17", int(ops.get('ops_counter_mi17', 0)))
+        sim.setEnvironmentPropertyInt("trigger_program_mi8", int(ops.get('trigger_program_mi8', 0)))
+        sim.setEnvironmentPropertyInt("trigger_program_mi17", int(ops.get('trigger_program_mi17', 0)))
+        sim.setEnvironmentPropertyInt("current_day_index", i)
         # Передаём текущую дату как ordinal для расчёта триггеров (примем base 1970-01-01)
         base = date(1970,1,1)
-        env.setPropertyUInt("current_day_ordinal", (d - base).days)
+        sim.setEnvironmentPropertyUInt("current_day_ordinal", (d - base).days)
 
         # Шаг симуляции (repair → ops_check → main → change → pass)
         sim.step()
@@ -244,7 +301,10 @@ def main():
     parser = argparse.ArgumentParser(description='FLAME GPU GPU Runner')
     parser.add_argument('--days', type=int, default=None, help='Сколько дней симулировать')
     args = parser.parse_args()
+    start_time = time.time()
     run(days=args.days)
+    total_time = time.time() - start_time
+    print(f"\n⏱️ Общее время выполнения GPU-runner: {total_time:.1f} секунд")
 
 
 if __name__ == '__main__':
