@@ -237,8 +237,23 @@ def run(days_limit: int | None = None) -> None:
     except Exception:
         pass
 
-    # Список дат из MP4
-    all_dates = [r[0] for r in client.execute("SELECT dates FROM flight_program_ac ORDER BY dates")]
+    # Список дат из MP4: только для актуальной версии heli_pandas
+    all_dates = [
+        r[0]
+        for r in client.execute(
+            """
+            SELECT dates
+            FROM flight_program_ac
+            WHERE (version_date, version_id) = (
+                SELECT version_date, version_id
+                FROM heli_pandas
+                ORDER BY version_date DESC, version_id DESC
+                LIMIT 1
+            )
+            ORDER BY dates
+            """
+        )
+    ]
     if days_limit:
         all_dates = all_dates[:days_limit]
 
@@ -267,6 +282,8 @@ def run(days_limit: int | None = None) -> None:
             if int(r[idx['group_by']] or 0) not in (1, 2):
                 continue
             ac = int(r[idx['aircraft_number']] or 0)
+            psn = int(r[idx['psn']] or 0)
+            partseqno_i = int(r[idx['partseqno_i']] or 0)
             daily_flight = int(daily_today.get(ac, 0))
             ac_type_mask = int(r[idx['ac_type_mask']] or 0)
             status_id = int(r[idx['status_id']] or 0)
@@ -276,6 +293,8 @@ def run(days_limit: int | None = None) -> None:
             trg17 = mp4.get('ops_counter_mi17', 0)
             log_rows.append({
                 'dates': d,
+                'psn': psn,
+                'partseqno_i': partseqno_i,
                 'aircraft_number': ac,
                 'ac_type_mask': ac_type_mask,
                 'status_id': status_id,
@@ -289,10 +308,18 @@ def run(days_limit: int | None = None) -> None:
                 'active_trigger': None,
                 'aircraft_age_years': age_years,
                 'mfg_date': md,
+                'sne': int(r[idx['sne']] or 0),
+                'ppr': int(r[idx['ppr']] or 0),
+                'repair_days': int(r[idx['repair_days']] or 0),
                 'simulation_metadata': f"v={versions.version_date}/id={versions.version_id};D={d}"
             })
         if log_rows:
             exporter.insert_rows(log_rows)
+            # Диагностика: фиксируем факт вставки на дату
+            try:
+                print(f"MP2: inserted {len(log_rows)} rows for {d}")
+            except Exception:
+                pass
 
 
 def main():

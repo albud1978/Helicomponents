@@ -197,6 +197,8 @@ def run(days: int | None = None):
             if gb not in (1, 2):
                 continue
             ac = ag.getVariableUInt("aircraft_number")
+            psn = ag.getVariableUInt("psn")
+            partseqno_i = ag.getVariableUInt("partseqno_i")
             ac_type_mask = ag.getVariableUInt("ac_type_mask")
             status_id = ag.getVariableUInt("status_id")
             idx = ag.getVariableUInt("idx")
@@ -213,6 +215,8 @@ def run(days: int | None = None):
             act_date = date(1970,1,1) + timedelta(days=int(act_ord)) if act_ord else date(1970,1,1)
             log_rows.append({
                 'dates': d,
+                'psn': int(psn),
+                'partseqno_i': int(partseqno_i),
                 'aircraft_number': int(ac),
                 'ac_type_mask': int(ac_type_mask),
                 'status_id': int(status_id),
@@ -226,6 +230,9 @@ def run(days: int | None = None):
                 'active_trigger': None,
                 'aircraft_age_years': 0,
                 'mfg_date': md,
+                'sne': int(ag.getVariableUInt('sne')),
+                'ppr': int(ag.getVariableUInt('ppr')),
+                'repair_days': int(ag.getVariableUInt('repair_days')),
                 'simulation_metadata': f"v={vdate}/id={vid};D={d}"
             })
         if log_rows:
