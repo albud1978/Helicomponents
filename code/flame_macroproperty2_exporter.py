@@ -38,9 +38,9 @@ class FlameMacroProperty2Exporter:
             ops_counter_mi17 UInt16,
             ops_current_mi8 UInt16,
             ops_current_mi17 UInt16,
-            partout_trigger Date,
-            assembly_trigger Date,
-            active_trigger Date,
+            partout_trigger Nullable(Date),
+            assembly_trigger Nullable(Date),
+            active_trigger Nullable(Date),
             aircraft_age_years UInt8,
             mfg_date Date,
             simulation_metadata String
@@ -54,7 +54,9 @@ class FlameMacroProperty2Exporter:
     def _migrate_schema_if_needed(self) -> None:
         """Проверяет типы колонок и при необходимости мигрирует их к актуальным.
 
-        Правило: ops_counter_mi8/ops_counter_mi17 → UInt16 (были Int32 в ранних версиях).
+        Правила миграции:
+        - ops_counter_mi8/ops_counter_mi17 → UInt16 (были Int32).
+        - partout_trigger/assembly_trigger/active_trigger → Nullable(Date) (были Date).
         """
         try:
             cols = self.client.execute(
@@ -76,6 +78,13 @@ class FlameMacroProperty2Exporter:
             alters.append("MODIFY COLUMN ops_counter_mi8 UInt16")
         if type_by_name.get("ops_counter_mi17") == "Int32":
             alters.append("MODIFY COLUMN ops_counter_mi17 UInt16")
+        # Триггеры должны быть Nullable(Date)
+        if type_by_name.get("partout_trigger") == "Date":
+            alters.append("MODIFY COLUMN partout_trigger Nullable(Date)")
+        if type_by_name.get("assembly_trigger") == "Date":
+            alters.append("MODIFY COLUMN assembly_trigger Nullable(Date)")
+        if type_by_name.get("active_trigger") == "Date":
+            alters.append("MODIFY COLUMN active_trigger Nullable(Date)")
 
         if alters:
             alter_sql = f"ALTER TABLE {self.table_name} " + ", ".join(alters)
@@ -103,9 +112,9 @@ class FlameMacroProperty2Exporter:
                 int(r.get('ops_counter_mi17', 0) or 0),
                 int(r.get('ops_current_mi8', 0) or 0),
                 int(r.get('ops_current_mi17', 0) or 0),
-                r.get('partout_trigger', date(1970,1,1)),
-                r.get('assembly_trigger', date(1970,1,1)),
-                r.get('active_trigger', date(1970,1,1)),
+                r.get('partout_trigger', None),
+                r.get('assembly_trigger', None),
+                r.get('active_trigger', None),
                 int(r.get('aircraft_age_years', 0) or 0),
                 r.get('mfg_date', date(1970,1,1)),
                 str(r.get('simulation_metadata', '')),
