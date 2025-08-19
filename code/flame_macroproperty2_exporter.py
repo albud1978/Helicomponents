@@ -30,6 +30,8 @@ class FlameMacroProperty2Exporter:
         ddl = f"""
         CREATE TABLE IF NOT EXISTS {self.table_name} (
             dates Date,
+            psn UInt32,
+            partseqno_i UInt32,
             aircraft_number UInt32,
             ac_type_mask UInt8,
             status_id UInt8,
@@ -43,9 +45,12 @@ class FlameMacroProperty2Exporter:
             active_trigger Nullable(Date),
             aircraft_age_years UInt8,
             mfg_date Date,
+            sne UInt32,
+            ppr UInt32,
+            repair_days UInt16,
             simulation_metadata String
         ) ENGINE = MergeTree()
-        ORDER BY (dates, aircraft_number)
+        ORDER BY (dates, psn, aircraft_number)
         COMMENT 'LoggingLayer Planes (MP2) из FLAME GPU'
         """
         self.client.execute(ddl)
@@ -85,6 +90,18 @@ class FlameMacroProperty2Exporter:
             alters.append("MODIFY COLUMN assembly_trigger Nullable(Date)")
         if type_by_name.get("active_trigger") == "Date":
             alters.append("MODIFY COLUMN active_trigger Nullable(Date)")
+        # Новые колонки агрегатов агентов
+        if "sne" not in type_by_name:
+            alters.append("ADD COLUMN IF NOT EXISTS sne UInt32")
+        if "ppr" not in type_by_name:
+            alters.append("ADD COLUMN IF NOT EXISTS ppr UInt32")
+        if "repair_days" not in type_by_name:
+            alters.append("ADD COLUMN IF NOT EXISTS repair_days UInt16")
+        # Идентификаторы агента
+        if "psn" not in type_by_name:
+            alters.append("ADD COLUMN IF NOT EXISTS psn UInt32")
+        if "partseqno_i" not in type_by_name:
+            alters.append("ADD COLUMN IF NOT EXISTS partseqno_i UInt32")
 
         if alters:
             alter_sql = f"ALTER TABLE {self.table_name} " + ", ".join(alters)
@@ -95,15 +112,19 @@ class FlameMacroProperty2Exporter:
         if not rows:
             return
         fields = [
-            'dates','aircraft_number','ac_type_mask','status_id','daily_flight',
+            'dates','psn','partseqno_i','aircraft_number','ac_type_mask','status_id','daily_flight',
             'ops_counter_mi8','ops_counter_mi17','ops_current_mi8','ops_current_mi17',
             'partout_trigger','assembly_trigger','active_trigger',
-            'aircraft_age_years','mfg_date','simulation_metadata'
+            'aircraft_age_years','mfg_date',
+            'sne','ppr','repair_days',
+            'simulation_metadata'
         ]
         data = []
         for r in rows:
             data.append([
                 r.get('dates'),
+                int(r.get('psn', 0) or 0),
+                int(r.get('partseqno_i', 0) or 0),
                 int(r.get('aircraft_number', 0) or 0),
                 int(r.get('ac_type_mask', 0) or 0),
                 int(r.get('status_id', 0) or 0),
@@ -117,6 +138,9 @@ class FlameMacroProperty2Exporter:
                 r.get('active_trigger', None),
                 int(r.get('aircraft_age_years', 0) or 0),
                 r.get('mfg_date', date(1970,1,1)),
+                int(r.get('sne', 0) or 0),
+                int(r.get('ppr', 0) or 0),
+                int(r.get('repair_days', 0) or 0),
                 str(r.get('simulation_metadata', '')),
             ])
         insert_sql = f"INSERT INTO {self.table_name} ({', '.join(fields)}) VALUES"
