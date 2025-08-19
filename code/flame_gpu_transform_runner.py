@@ -314,10 +314,13 @@ def run(days_limit: int | None = None) -> None:
                 'simulation_metadata': f"v={versions.version_date}/id={versions.version_id};D={d}"
             })
         if log_rows:
+            from time import time as _t
+            _t0 = _t()
             exporter.insert_rows(log_rows)
-            # Диагностика: фиксируем факт вставки на дату
+            _export_ms = (_t() - _t0) * 1000.0
+            # Диагностика: фиксируем факт вставки на дату и тайминг
             try:
-                print(f"MP2: inserted {len(log_rows)} rows for {d}")
+                print(f"CPU day={d} export_ms={_export_ms:.1f} rows={len(log_rows)}")
             except Exception:
                 pass
 

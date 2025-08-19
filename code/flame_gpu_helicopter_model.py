@@ -13,6 +13,8 @@ Flame GPU 2 Helicopter Model (Agent-based)
 """
 
 from typing import Optional
+import os
+import os
 
 try:
     import pyflamegpu
@@ -266,16 +268,28 @@ class HelicopterFlameModel:
         """
         rtc_pass_src = r"""
         FLAMEGPU_AGENT_FUNCTION(rtc_pass_through, flamegpu::MessageNone, flamegpu::MessageNone) {
-            // инвариант-проход
+            // pass-through invariant
             return flamegpu::ALIVE;
         }
         """
-
-        agent.newRTCFunction("rtc_repair", rtc_repair_src)
-        agent.newRTCFunction("rtc_ops_check", rtc_ops_check_src)
-        agent.newRTCFunction("rtc_main", rtc_main_src)
-        agent.newRTCFunction("rtc_change", rtc_change_src)
-        agent.newRTCFunction("rtc_pass_through", rtc_pass_src)
+        probe = os.getenv("FLAMEGPU_PROBE", "").strip().lower()
+        if probe:
+            if probe == "repair":
+                agent.newRTCFunction("rtc_repair", rtc_repair_src)
+            elif probe == "ops_check":
+                agent.newRTCFunction("rtc_ops_check", rtc_ops_check_src)
+            elif probe == "main":
+                agent.newRTCFunction("rtc_main", rtc_main_src)
+            elif probe == "change":
+                agent.newRTCFunction("rtc_change", rtc_change_src)
+            elif probe == "pass":
+                agent.newRTCFunction("rtc_pass_through", rtc_pass_src)
+        else:
+            agent.newRTCFunction("rtc_repair", rtc_repair_src)
+            agent.newRTCFunction("rtc_ops_check", rtc_ops_check_src)
+            agent.newRTCFunction("rtc_main", rtc_main_src)
+            agent.newRTCFunction("rtc_change", rtc_change_src)
+            agent.newRTCFunction("rtc_pass_through", rtc_pass_src)
 
         # Host‑функции
         class HostInitMi8(pyflamegpu.HostFunction):
@@ -348,25 +362,18 @@ class HelicopterFlameModel:
         model.addInitFunction(HostInitMi8())
         model.addInitFunction(HostInitMi17())
 
-        # Порядок выполнения в сутках
-        # Порядок выполнения в сутках (RTC на GPU)
-        layer = model.newLayer()
-        layer.addAgentFunction(agent.getFunction("rtc_repair"))
-        layer = model.newLayer()
-        layer.addAgentFunction(agent.getFunction("rtc_ops_check"))
-        # (баланс будет перенесён позже через сообщения)
-        layer = model.newLayer()
-        layer.addAgentFunction(agent.getFunction("rtc_main"))
-        layer = model.newLayer()
-        layer.addAgentFunction(agent.getFunction("rtc_change"))
-        layer = model.newLayer()
-        layer.addAgentFunction(agent.getFunction("rtc_pass_through"))
-
         # === Каркас сообщений и контроллера для полной GPU логики ===
         # Контроллер (singleton) для балансировки на сообщениях
         controller = model.newAgent("controller")
         # Индекс текущего дня
         controller.newVariableUInt("day_index", 0)
+        # Переменные контроллера для балансировки
+        controller.newVariableInt("cur_ops_mi8", 0)
+        controller.newVariableInt("cur_ops_mi17", 0)
+        controller.newVariableInt("need_add_mi8", 0)
+        controller.newVariableInt("need_add_mi17", 0)
+        controller.newVariableInt("need_cut_mi8", 0)
+        controller.newVariableInt("need_cut_mi17", 0)
         # Контроллер без массивов: дневные цели/налёты подставляются в env на хосте перед сутками
 
         # Сообщения (BruteForce) — минимальные поля без лишних имён
@@ -387,12 +394,334 @@ class HelicopterFlameModel:
         msg_cut = model.newMessageBruteForce("cut_candidate")
         msg_cut.newVariableUInt("psn")
         msg_cut.newVariableUInt8("group_by")
-        msg_cut.newVariableUInt64("score")
+        # Разделённый score: ppr как старшее слово, sne<<16|inv_mfg16 как младшее
+        msg_cut.newVariableUInt("score_hi")
+        msg_cut.newVariableUInt("score_lo")
 
         # 4) Решения контроллера на сутки (назначение статуса 2/3)
         msg_assign = model.newMessageBruteForce("assignment")
         msg_assign.newVariableUInt("psn")
         msg_assign.newVariableUInt8("new_status_id")
+
+        # === RTC функции публикации сообщений компонентом ===
+        rtc_pub_ops_persist_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_publish_ops_persist, flamegpu::MessageNone, flamegpu::MessageBruteForce) {
+            if (FLAMEGPU->getVariable<unsigned int>("status_id") == 2u && FLAMEGPU->getVariable<unsigned int>("status_change") == 0u) {
+                flamegpu::MessageBruteForce::Out msg = FLAMEGPU->message_out;
+                msg.setVariable<unsigned int>("psn", FLAMEGPU->getVariable<unsigned int>("psn"));
+                msg.setVariable<unsigned char>("group_by", (unsigned char)FLAMEGPU->getVariable<unsigned int>("group_by"));
+            }
+            return flamegpu::ALIVE;
+        }
+        """
+
+        rtc_pub_add_p1_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_publish_add_candidates_p1, flamegpu::MessageNone, flamegpu::MessageBruteForce) {
+            if (FLAMEGPU->getVariable<unsigned int>("status_id") == 5u && FLAMEGPU->getVariable<unsigned int>("status_change") == 0u) {
+                auto msg = FLAMEGPU->message_out;
+                msg.setVariable<unsigned int>("psn", FLAMEGPU->getVariable<unsigned int>("psn"));
+                msg.setVariable<unsigned char>("group_by", (unsigned char)FLAMEGPU->getVariable<unsigned int>("group_by"));
+            }
+            return flamegpu::ALIVE;
+        }
+        """
+
+        rtc_pub_add_p2_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_publish_add_candidates_p2, flamegpu::MessageNone, flamegpu::MessageBruteForce) {
+            if (FLAMEGPU->getVariable<unsigned int>("status_id") == 3u && FLAMEGPU->getVariable<unsigned int>("status_change") == 0u) {
+                auto msg = FLAMEGPU->message_out;
+                msg.setVariable<unsigned int>("psn", FLAMEGPU->getVariable<unsigned int>("psn"));
+                msg.setVariable<unsigned char>("group_by", (unsigned char)FLAMEGPU->getVariable<unsigned int>("group_by"));
+            }
+            return flamegpu::ALIVE;
+        }
+        """
+
+        rtc_pub_add_p3_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_publish_add_candidates_p3, flamegpu::MessageNone, flamegpu::MessageBruteForce) {
+            if (FLAMEGPU->getVariable<unsigned int>("status_id") == 1u && FLAMEGPU->getVariable<unsigned int>("status_change") == 0u) {
+                unsigned int current_day_ord = FLAMEGPU->environment.getProperty<unsigned int>("current_day_ordinal");
+                unsigned int version_date = FLAMEGPU->getVariable<unsigned int>("version_date");
+                unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
+                if (current_day_ord >= version_date && (current_day_ord - version_date) >= repair_time) {
+                    auto msg = FLAMEGPU->message_out;
+                    msg.setVariable<unsigned int>("psn", FLAMEGPU->getVariable<unsigned int>("psn"));
+                    msg.setVariable<unsigned char>("group_by", (unsigned char)FLAMEGPU->getVariable<unsigned int>("group_by"));
+                    msg.setVariable<unsigned char>("can_activate", (unsigned char)1);
+                }
+            }
+            return flamegpu::ALIVE;
+        }
+        """
+
+        rtc_pub_cut_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_publish_cut_candidates, flamegpu::MessageNone, flamegpu::MessageBruteForce) {
+            if (FLAMEGPU->getVariable<unsigned int>("status_id") == 2u && FLAMEGPU->getVariable<unsigned int>("status_change") == 0u) {
+                unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+                unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+                unsigned int mfg = FLAMEGPU->getVariable<unsigned int>("mfg_date");
+                unsigned int mfg16 = mfg & 0xFFFFu;
+                unsigned int inv_mfg16 = 0xFFFFu - mfg16;
+                unsigned int lo = (sne << 16) | (inv_mfg16 & 0xFFFFu);
+                auto msg = FLAMEGPU->message_out;
+                msg.setVariable<unsigned int>("psn", FLAMEGPU->getVariable<unsigned int>("psn"));
+                msg.setVariable<unsigned char>("group_by", (unsigned char)FLAMEGPU->getVariable<unsigned int>("group_by"));
+                msg.setVariable<unsigned int>("score_hi", ppr);
+                msg.setVariable<unsigned int>("score_lo", lo);
+            }
+            return flamegpu::ALIVE;
+        }
+        """
+
+        rtc_apply_assign_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_apply_assignments, flamegpu::MessageBruteForce, flamegpu::MessageNone) {
+            if (FLAMEGPU->getVariable<unsigned int>("status_change") != 0u) return flamegpu::ALIVE;
+            unsigned int self_psn = FLAMEGPU->getVariable<unsigned int>("psn");
+            for (const auto &msg : FLAMEGPU->message_in) {
+                unsigned int psn = msg.getVariable<unsigned int>("psn");
+                if (psn == self_psn) {
+                    unsigned int ns = (unsigned int)msg.getVariable<unsigned char>("new_status_id");
+                    if (ns == 2u || ns == 3u) {
+                        FLAMEGPU->setVariable<unsigned int>("status_change", ns);
+                    }
+                    break;
+                }
+            }
+            return flamegpu::ALIVE;
+        }
+        """
+
+        if probe:
+            if probe == "pub_ops":
+                f = agent.newRTCFunction("rtc_publish_ops_persist", rtc_pub_ops_persist_src); f.setMessageOutput("ops_persist")
+            elif probe == "pub_p1":
+                f = agent.newRTCFunction("rtc_publish_add_candidates_p1", rtc_pub_add_p1_src); f.setMessageOutput("add_candidate_p1")
+            elif probe == "pub_p2":
+                f = agent.newRTCFunction("rtc_publish_add_candidates_p2", rtc_pub_add_p2_src); f.setMessageOutput("add_candidate_p2")
+            elif probe == "pub_p3":
+                f = agent.newRTCFunction("rtc_publish_add_candidates_p3", rtc_pub_add_p3_src); f.setMessageOutput("add_candidate_p3")
+            elif probe == "pub_cut":
+                f = agent.newRTCFunction("rtc_publish_cut_candidates", rtc_pub_cut_src); f.setMessageOutput("cut_candidate")
+            elif probe == "apply":
+                f = agent.newRTCFunction("rtc_apply_assignments", rtc_apply_assign_src); f.setMessageInput("assignment")
+        else:
+            f = agent.newRTCFunction("rtc_publish_ops_persist", rtc_pub_ops_persist_src); f.setMessageOutput("ops_persist")
+            f = agent.newRTCFunction("rtc_publish_add_candidates_p1", rtc_pub_add_p1_src); f.setMessageOutput("add_candidate_p1")
+            f = agent.newRTCFunction("rtc_publish_add_candidates_p2", rtc_pub_add_p2_src); f.setMessageOutput("add_candidate_p2")
+            f = agent.newRTCFunction("rtc_publish_add_candidates_p3", rtc_pub_add_p3_src); f.setMessageOutput("add_candidate_p3")
+            f = agent.newRTCFunction("rtc_publish_cut_candidates", rtc_pub_cut_src); f.setMessageOutput("cut_candidate")
+            f = agent.newRTCFunction("rtc_apply_assignments", rtc_apply_assign_src); f.setMessageInput("assignment")
+
+        # === RTC функции контроллера (один агент) ===
+        ctrl_count_ops_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(ctrl_count_ops, flamegpu::MessageBruteForce, flamegpu::MessageNone) {
+            // Count OPS per group
+            int cur8 = 0, cur17 = 0;
+            for (const auto &msg : FLAMEGPU->message_in) {
+                unsigned char gb = msg.getVariable<unsigned char>("group_by");
+                if (gb == 1u) cur8++;
+                else if (gb == 2u) cur17++;
+            }
+            FLAMEGPU->setVariable<int>("cur_ops_mi8", cur8);
+            FLAMEGPU->setVariable<int>("cur_ops_mi17", cur17);
+            int tgt8 = FLAMEGPU->environment.getProperty<int>("trigger_pr_final_mi8");
+            int tgt17 = FLAMEGPU->environment.getProperty<int>("trigger_pr_final_mi17");
+            int need_add8 = tgt8 - cur8; if (need_add8 < 0) need_add8 = 0;
+            int need_add17 = tgt17 - cur17; if (need_add17 < 0) need_add17 = 0;
+            int need_cut8 = cur8 - tgt8; if (need_cut8 < 0) need_cut8 = 0;
+            int need_cut17 = cur17 - tgt17; if (need_cut17 < 0) need_cut17 = 0;
+            FLAMEGPU->setVariable<int>("need_add_mi8", need_add8);
+            FLAMEGPU->setVariable<int>("need_add_mi17", need_add17);
+            FLAMEGPU->setVariable<int>("need_cut_mi8", need_cut8);
+            FLAMEGPU->setVariable<int>("need_cut_mi17", need_cut17);
+            return flamegpu::ALIVE;
+        }
+        """
+
+        ctrl_pick_add_p1_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(ctrl_pick_add_p1, flamegpu::MessageBruteForce, flamegpu::MessageBruteForce) {
+            int need8 = FLAMEGPU->getVariable<int>("need_add_mi8");
+            int need17 = FLAMEGPU->getVariable<int>("need_add_mi17");
+            if (need8 == 0 && need17 == 0) return flamegpu::ALIVE;
+            for (const auto &msg : FLAMEGPU->message_in) {
+                unsigned char gb = msg.getVariable<unsigned char>("group_by");
+                if (gb == 1u && need8 > 0) {
+                    auto out = FLAMEGPU->message_out;
+                    out.setVariable<unsigned int>("psn", msg.getVariable<unsigned int>("psn"));
+                    out.setVariable<unsigned char>("new_status_id", (unsigned char)2);
+                    need8--; FLAMEGPU->setVariable<int>("need_add_mi8", need8);
+                    if (need8 == 0 && need17 == 0) break;
+                } else if (gb == 2u && need17 > 0) {
+                    auto out = FLAMEGPU->message_out;
+                    out.setVariable<unsigned int>("psn", msg.getVariable<unsigned int>("psn"));
+                    out.setVariable<unsigned char>("new_status_id", (unsigned char)2);
+                    need17--; FLAMEGPU->setVariable<int>("need_add_mi17", need17);
+                    if (need8 == 0 && need17 == 0) break;
+                }
+            }
+            return flamegpu::ALIVE;
+        }
+        """
+
+        ctrl_pick_add_p2_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(ctrl_pick_add_p2, flamegpu::MessageBruteForce, flamegpu::MessageBruteForce) {
+            int need8 = FLAMEGPU->getVariable<int>("need_add_mi8");
+            int need17 = FLAMEGPU->getVariable<int>("need_add_mi17");
+            if (need8 == 0 && need17 == 0) return flamegpu::ALIVE;
+            for (const auto &msg : FLAMEGPU->message_in) {
+                unsigned char gb = msg.getVariable<unsigned char>("group_by");
+                if (gb == 1u && need8 > 0) {
+                    auto out = FLAMEGPU->message_out;
+                    out.setVariable<unsigned int>("psn", msg.getVariable<unsigned int>("psn"));
+                    out.setVariable<unsigned char>("new_status_id", (unsigned char)2);
+                    need8--; FLAMEGPU->setVariable<int>("need_add_mi8", need8);
+                    if (need8 == 0 && need17 == 0) break;
+                } else if (gb == 2u && need17 > 0) {
+                    auto out = FLAMEGPU->message_out;
+                    out.setVariable<unsigned int>("psn", msg.getVariable<unsigned int>("psn"));
+                    out.setVariable<unsigned char>("new_status_id", (unsigned char)2);
+                    need17--; FLAMEGPU->setVariable<int>("need_add_mi17", need17);
+                    if (need8 == 0 && need17 == 0) break;
+                }
+            }
+            return flamegpu::ALIVE;
+        }
+        """
+
+        ctrl_pick_add_p3_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(ctrl_pick_add_p3, flamegpu::MessageBruteForce, flamegpu::MessageBruteForce) {
+            int need8 = FLAMEGPU->getVariable<int>("need_add_mi8");
+            int need17 = FLAMEGPU->getVariable<int>("need_add_mi17");
+            if (need8 == 0 && need17 == 0) return flamegpu::ALIVE;
+            for (const auto &msg : FLAMEGPU->message_in) {
+                unsigned char can = msg.getVariable<unsigned char>("can_activate");
+                if (!can) continue;
+                unsigned char gb = msg.getVariable<unsigned char>("group_by");
+                if (gb == 1u && need8 > 0) {
+                    auto out = FLAMEGPU->message_out;
+                    out.setVariable<unsigned int>("psn", msg.getVariable<unsigned int>("psn"));
+                    out.setVariable<unsigned char>("new_status_id", (unsigned char)2);
+                    need8--; FLAMEGPU->setVariable<int>("need_add_mi8", need8);
+                    if (need8 == 0 && need17 == 0) break;
+                } else if (gb == 2u && need17 > 0) {
+                    auto out = FLAMEGPU->message_out;
+                    out.setVariable<unsigned int>("psn", msg.getVariable<unsigned int>("psn"));
+                    out.setVariable<unsigned char>("new_status_id", (unsigned char)2);
+                    need17--; FLAMEGPU->setVariable<int>("need_add_mi17", need17);
+                    if (need8 == 0 && need17 == 0) break;
+                }
+            }
+            return flamegpu::ALIVE;
+        }
+        """
+
+        ctrl_pick_cut_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(ctrl_pick_cut, flamegpu::MessageBruteForce, flamegpu::MessageBruteForce) {
+            int need8 = FLAMEGPU->getVariable<int>("need_cut_mi8");
+            int need17 = FLAMEGPU->getVariable<int>("need_cut_mi17");
+            if (need8 == 0 && need17 == 0) return flamegpu::ALIVE;
+            const int K8 = need8; const int K17 = need17;
+            const int MAXK = 4096; // ограничение сверху
+            unsigned int hi8[4096]; unsigned int lo8[4096]; unsigned int psn8[4096]; int len8 = 0;
+            unsigned int hi17[4096]; unsigned int lo17[4096]; unsigned int psn17[4096]; int len17 = 0;
+            for (const auto &msg : FLAMEGPU->message_in) {
+                unsigned char gb = msg.getVariable<unsigned char>("group_by");
+                unsigned int shi = msg.getVariable<unsigned int>("score_hi");
+                unsigned int slo = msg.getVariable<unsigned int>("score_lo");
+                unsigned int p = msg.getVariable<unsigned int>("psn");
+                if (gb == 1u && K8 > 0) {
+                    if (len8 < K8 && len8 < MAXK) { hi8[len8] = shi; lo8[len8] = slo; psn8[len8] = p; len8++; }
+                    else {
+                        int imin = 0; for (int i=1;i<len8;i++) {
+                            if (hi8[i] < hi8[imin] || (hi8[i] == hi8[imin] && lo8[i] <= lo8[imin])) imin = i;
+                        }
+                        if (len8>0 && (shi > hi8[imin] || (shi == hi8[imin] && slo > lo8[imin]))) { hi8[imin] = shi; lo8[imin] = slo; psn8[imin] = p; }
+                    }
+                } else if (gb == 2u && K17 > 0) {
+                    if (len17 < K17 && len17 < MAXK) { hi17[len17] = shi; lo17[len17] = slo; psn17[len17] = p; len17++; }
+                    else {
+                        int imin = 0; for (int i=1;i<len17;i++) {
+                            if (hi17[i] < hi17[imin] || (hi17[i] == hi17[imin] && lo17[i] <= lo17[imin])) imin = i;
+                        }
+                        if (len17>0 && (shi > hi17[imin] || (shi == hi17[imin] && slo > lo17[imin]))) { hi17[imin] = shi; lo17[imin] = slo; psn17[imin] = p; }
+                    }
+                }
+            }
+            // Публикация назначений 3
+            for (int i=0;i<len8;i++) { auto out = FLAMEGPU->message_out; out.setVariable<unsigned int>("psn", psn8[i]); out.setVariable<unsigned char>("new_status_id", (unsigned char)3); }
+            for (int i=0;i<len17;i++) { auto out = FLAMEGPU->message_out; out.setVariable<unsigned int>("psn", psn17[i]); out.setVariable<unsigned char>("new_status_id", (unsigned char)3); }
+            return flamegpu::ALIVE;
+        }
+        """
+
+        if probe:
+            if probe == "ctrl_count":
+                f = controller.newRTCFunction("ctrl_count_ops", ctrl_count_ops_src); f.setMessageInput("ops_persist")
+            elif probe == "ctrl_add_p1":
+                f = controller.newRTCFunction("ctrl_pick_add_p1", ctrl_pick_add_p1_src); f.setMessageInput("add_candidate_p1"); f.setMessageOutput("assignment")
+            elif probe == "ctrl_add_p2":
+                f = controller.newRTCFunction("ctrl_pick_add_p2", ctrl_pick_add_p2_src); f.setMessageInput("add_candidate_p2"); f.setMessageOutput("assignment")
+            elif probe == "ctrl_add_p3":
+                f = controller.newRTCFunction("ctrl_pick_add_p3", ctrl_pick_add_p3_src); f.setMessageInput("add_candidate_p3"); f.setMessageOutput("assignment")
+            elif probe == "ctrl_cut":
+                f = controller.newRTCFunction("ctrl_pick_cut", ctrl_pick_cut_src); f.setMessageInput("cut_candidate"); f.setMessageOutput("assignment")
+        else:
+            f = controller.newRTCFunction("ctrl_count_ops", ctrl_count_ops_src); f.setMessageInput("ops_persist")
+            f = controller.newRTCFunction("ctrl_pick_add_p1", ctrl_pick_add_p1_src); f.setMessageInput("add_candidate_p1"); f.setMessageOutput("assignment")
+            f = controller.newRTCFunction("ctrl_pick_add_p2", ctrl_pick_add_p2_src); f.setMessageInput("add_candidate_p2"); f.setMessageOutput("assignment")
+            f = controller.newRTCFunction("ctrl_pick_add_p3", ctrl_pick_add_p3_src); f.setMessageInput("add_candidate_p3"); f.setMessageOutput("assignment")
+            f = controller.newRTCFunction("ctrl_pick_cut", ctrl_pick_cut_src); f.setMessageInput("cut_candidate"); f.setMessageOutput("assignment")
+
+        # Порядок выполнения в сутках (RTC на GPU) — после регистрации всех функций
+        probe = os.getenv("FLAMEGPU_PROBE", "").strip().lower()
+        def add(fn_name: str, from_agent: bool = True):
+            lyr = model.newLayer()
+            if from_agent:
+                lyr.addAgentFunction(agent.getFunction(fn_name))
+            else:
+                lyr.addAgentFunction(controller.getFunction(fn_name))
+        if probe:
+            # Режим отладки: выполняем только указанную функцию
+            mapping = {
+                "repair": ("rtc_repair", True),
+                "ops_check": ("rtc_ops_check", True),
+                "pub_ops": ("rtc_publish_ops_persist", True),
+                "pub_p1": ("rtc_publish_add_candidates_p1", True),
+                "pub_p2": ("rtc_publish_add_candidates_p2", True),
+                "pub_p3": ("rtc_publish_add_candidates_p3", True),
+                "pub_cut": ("rtc_publish_cut_candidates", True),
+                "ctrl_count": ("ctrl_count_ops", False),
+                "ctrl_add_p1": ("ctrl_pick_add_p1", False),
+                "ctrl_add_p2": ("ctrl_pick_add_p2", False),
+                "ctrl_add_p3": ("ctrl_pick_add_p3", False),
+                "ctrl_cut": ("ctrl_pick_cut", False),
+                "apply": ("rtc_apply_assignments", True),
+                "main": ("rtc_main", True),
+                "change": ("rtc_change", True),
+                "pass": ("rtc_pass_through", True),
+            }
+            if probe in mapping:
+                fn, is_agent = mapping[probe]
+                add(fn, is_agent)
+            else:
+                add("rtc_pass_through", True)
+        else:
+            add("rtc_repair", True)
+            add("rtc_ops_check", True)
+            add("rtc_publish_ops_persist", True)
+            add("rtc_publish_add_candidates_p1", True)
+            add("rtc_publish_add_candidates_p2", True)
+            add("rtc_publish_add_candidates_p3", True)
+            add("rtc_publish_cut_candidates", True)
+            add("ctrl_count_ops", False)
+            add("ctrl_pick_add_p1", False)
+            add("ctrl_pick_add_p2", False)
+            add("ctrl_pick_add_p3", False)
+            add("ctrl_pick_cut", False)
+            add("rtc_apply_assignments", True)
+            add("rtc_main", True)
+            add("rtc_change", True)
+            add("rtc_pass_through", True)
 
         self.model = model
         return model
