@@ -231,6 +231,11 @@ def run(days_limit: int | None = None) -> None:
 
     exporter = FlameMacroProperty2Exporter(client=client)
     exporter.ensure_table()
+    # Отладка: очищаем MP2 перед новым прогоном, чтобы не накапливать записи
+    try:
+        client.execute("TRUNCATE TABLE flame_macroproperty2_export")
+    except Exception:
+        pass
 
     # Список дат из MP4
     all_dates = [r[0] for r in client.execute("SELECT dates FROM flight_program_ac ORDER BY dates")]
@@ -279,9 +284,9 @@ def run(days_limit: int | None = None) -> None:
                 'ops_counter_mi17': int(trg17),
                 'ops_current_mi8': int(ops_cur.get(1, 0)),
                 'ops_current_mi17': int(ops_cur.get(2, 0)),
-                'partout_trigger': date(1970,1,1),
-                'assembly_trigger': date(1970,1,1),
-                'active_trigger': date(1970,1,1),
+                'partout_trigger': None,
+                'assembly_trigger': None,
+                'active_trigger': None,
                 'aircraft_age_years': age_years,
                 'mfg_date': md,
                 'simulation_metadata': f"v={versions.version_date}/id={versions.version_id};D={d}"
