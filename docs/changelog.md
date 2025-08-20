@@ -1,3 +1,22 @@
+## [20-08-2025] - GPU publish*/controller, тайминги, CPU-прогон 7 дней, уборка
+### Добавлено
+- RTC публикации: `rtc_publish_ops_persist`, `rtc_publish_add_candidates_p1/p2/p3`, `rtc_publish_cut_candidates` (score_hi/score_lo)
+- RTC контроллер: `ctrl_count_ops`, `ctrl_pick_add_p1/p2/p3`, `ctrl_pick_cut`
+- Тайминги в `code/flame_gpu_gpu_runner.py`: per‑day `step_ms` и `export_ms`
+- Вспомогательные тесты: `code/utils/rtc_smoketest.py`, `code/utils/gpu_repair_minimal.py`, `code/utils/gpu_repair_probe_model.py`
+
+### Изменено
+- `code/flame_gpu_helicopter_model.py`: введён режим `FLAMEGPU_PROBE` для пофункциональной отладки NVRTC; score на UInt32+UInt32
+- `code/flame_gpu_transform_runner.py`: печать таймингов вставки в БД
+
+### Исправлено
+- Удалены артефакты: логи старше 7 дней в `code/logs/`, каталоги `__pycache__`
+
+### Примечания
+- CPU‑fallback прогон 7 дней выполнен, MP2 заполнен, сводки получены
+- NVRTC/Jitify: в полной модели требуется поэтапная отладка регистрации RTC; `rtc_repair` компилируется изолированно
+- Экспорт чата: `docs/last_chat_export_20-08-2025.md`
+
 ## [19-08-2025] - Статус FLAME GPU и уборка рабочего стола
 ### Добавлено
 - Экспорт статуса: `docs/last_chat_export_19-08-2025.md` (логика RTC, прогресс переноса баланса на контроллер, следующий план).
