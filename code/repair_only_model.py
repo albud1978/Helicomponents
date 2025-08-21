@@ -30,6 +30,11 @@ class RepairOnlyModel:
         self.num_agents = int(num_agents)
         model = pyflamegpu.ModelDescription("RepairOnly_ABM")
 
+        # Окружение для ops_check
+        env = model.Environment()
+        env.newPropertyArrayUInt32("daily_today", [0] * self.num_agents)
+        env.newPropertyArrayUInt32("daily_next", [0] * self.num_agents)
+
         # Агент и переменные
         agent = model.newAgent("component")
         self.agent = agent
@@ -44,6 +49,14 @@ class RepairOnlyModel:
         agent.newVariableUInt("repair_days", 0)
         agent.newVariableUInt("repair_time", 0)
         agent.newVariableUInt("ppr", 0)
+        # Для ops_check
+        agent.newVariableUInt("sne", 0)
+        agent.newVariableUInt("ll", 0)
+        agent.newVariableUInt("oh", 0)
+        agent.newVariableUInt("br", 0)
+        # Для подстановки суточных часов из раннера
+        agent.newVariableUInt("daily_today_u32", 0)
+        agent.newVariableUInt("daily_next_u32", 0)
 
         # RTC: ремонт
         rtc_repair_src = r"""
@@ -63,8 +76,56 @@ class RepairOnlyModel:
         }
         """
         agent.newRTCFunction("rtc_repair", rtc_repair_src)
-        lyr = model.newLayer()
-        lyr.addAgentFunction(agent.getFunction("rtc_repair"))
+
+        # RTC: ops_check
+        rtc_ops_check_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_ops_check, flamegpu::MessageNone, flamegpu::MessageNone) {
+            if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
+            unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
+            unsigned int dn = FLAMEGPU->getVariable<unsigned int>("daily_next_u32");
+            unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+            unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+            unsigned int ll  = FLAMEGPU->getVariable<unsigned int>("ll");
+            unsigned int oh  = FLAMEGPU->getVariable<unsigned int>("oh");
+            unsigned int br  = FLAMEGPU->getVariable<unsigned int>("br");
+            unsigned int sne_p = sne + dt;
+            unsigned int ppr_p = ppr + dt;
+            unsigned int rem_ll = (ll >= sne_p ? (ll - sne_p) : 0u);
+            if (rem_ll < dn) {
+                FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
+                return flamegpu::ALIVE;
+            }
+            unsigned int rem_oh = (oh >= ppr_p ? (oh - ppr_p) : 0u);
+            if (rem_oh < dn) {
+                if (sne_p + dn < br) FLAMEGPU->setVariable<unsigned int>("status_id", 4u);
+                else FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
+            }
+            return flamegpu::ALIVE;
+        }
+        """
+        agent.newRTCFunction("rtc_ops_check", rtc_ops_check_src)
+
+        # RTC: main — начисление налёта/порогов
+        rtc_main_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_main, flamegpu::MessageNone, flamegpu::MessageNone) {
+            if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
+            unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
+            unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+            unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+            FLAMEGPU->setVariable<unsigned int>("sne", sne + dt);
+            FLAMEGPU->setVariable<unsigned int>("ppr", ppr + dt);
+            return flamegpu::ALIVE;
+        }
+        """
+        agent.newRTCFunction("rtc_main", rtc_main_src)
+
+        # Слои: repair → ops_check → main
+        lyr1 = model.newLayer()
+        lyr1.addAgentFunction(agent.getFunction("rtc_repair"))
+        lyr2 = model.newLayer()
+        lyr2.addAgentFunction(agent.getFunction("rtc_ops_check"))
+        lyr3 = model.newLayer()
+        lyr3.addAgentFunction(agent.getFunction("rtc_main"))
 
         self.model = model
         return model
