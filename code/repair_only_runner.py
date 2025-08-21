@@ -19,7 +19,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 from config_loader import get_clickhouse_client
 from flame_macroproperty2_exporter import FlameMacroProperty2Exporter
 from sim_env_setup import (
-    fetch_versions, fetch_mp1_br_rt, fetch_mp3, preload_mp4_by_day
+    fetch_versions, fetch_mp1_br_rt, fetch_mp3, preload_mp4_by_day, preload_mp5_maps, build_daily_arrays
 )
 
 from repair_only_model import RepairOnlyModel
@@ -96,7 +96,11 @@ def main():
         partseq = int(r[idx['partseqno_i']] or 0)
         br, rt, pt, at = mp1_map.get(partseq, (0, 0, 0, 0))
         ai.setVariableUInt("repair_time", int(rt))
-        ai.setVariableUInt("ppr", 0)
+        ai.setVariableUInt("ppr", int(r[idx.get('ppr', -1)] or 0))
+        ai.setVariableUInt("sne", int(r[idx.get('sne', -1)] or 0))
+        ai.setVariableUInt("ll", int(r[idx.get('ll', -1)] or 0))
+        ai.setVariableUInt("oh", int(r[idx.get('oh', -1)] or 0))
+        ai.setVariableUInt("br", int(br))
     sim.setPopulationData(av)
 
     # Опциональная верификация агентных переменных
@@ -126,6 +130,7 @@ def main():
         client.execute(f"TRUNCATE TABLE {exporter.table_name}")
 
     mp4 = preload_mp4_by_day(client)
+    mp5_maps = preload_mp5_maps(client)
     all_days = sorted(mp4.keys())
     if not all_days:
         raise RuntimeError("Нет дат в MP4")
@@ -136,7 +141,18 @@ def main():
     all_rows: List[Dict] = []
     for D in days_list:
         t0 = time.perf_counter()
-        # Шаг симуляции (ремонт на сутки)
+        # Перед шагом заполняем массивы суточных часов для ops_check
+        today_map = mp5_maps.get(D, {})
+        next_map = mp5_maps.get(D + timedelta(days=1), {})
+        daily_today, daily_next, _, _ = build_daily_arrays(mp3_rows, mp3_fields, mp1_map, today_map, next_map)
+        # Запишем суточные часы прямо в агентные переменные для RTC совместимости
+        pop_buf = pyflamegpu.AgentVector(agent_desc)
+        sim.getPopulationData(pop_buf)
+        for i, ag in enumerate(pop_buf):
+            ag.setVariableUInt('daily_today_u32', int(daily_today[i] if i < len(daily_today) else 0))
+            ag.setVariableUInt('daily_next_u32', int(daily_next[i] if i < len(daily_next) else 0))
+        sim.setPopulationData(pop_buf)
+        # Шаг суток
         sim.step()
         t1 = time.perf_counter()
 
@@ -157,14 +173,23 @@ def main():
                 continue
             # Точная дата из MP3 по PSN; если нет — NULL
             mfg_date = psn_to_mfg.get(int(ag.getVariableUInt('psn')), None)
+            sid = int(ag.getVariableUInt('status_id'))
+            daily_f = int(ag.getVariableUInt('daily_today_u32')) if sid == 2 else 0
+            # Возраст воздушного судна в полных годах (округление вниз)
+            age_years = 0
+            if mfg_date is not None:
+                years = D.year - mfg_date.year
+                if (D.month, D.day) < (mfg_date.month, mfg_date.day):
+                    years -= 1
+                age_years = max(0, min(255, years))
             rows.append({
                 'dates': D,
                 'psn': int(ag.getVariableUInt('psn')),
                 'partseqno_i': int(ag.getVariableUInt('partseqno_i')),
                 'aircraft_number': int(ag.getVariableUInt('aircraft_number')),
                 'ac_type_mask': int(ag.getVariableUInt('ac_type_mask')),
-                'status_id': int(ag.getVariableUInt('status_id')),
-                'daily_flight': 0,
+                'status_id': sid,
+                'daily_flight': daily_f,
                 'ops_counter_mi8': int(ops_targets.get('ops_counter_mi8', 0)),
                 'ops_counter_mi17': int(ops_targets.get('ops_counter_mi17', 0)),
                 'ops_current_mi8': int(ops_current.get(1, 0)),
@@ -172,9 +197,9 @@ def main():
                 'partout_trigger': None,
                 'assembly_trigger': None,
                 'active_trigger': None,
-                'aircraft_age_years': 0,
+                'aircraft_age_years': int(age_years),
                 'mfg_date': mfg_date,
-                'sne': 0,
+                'sne': int(ag.getVariableUInt('sne')),
                 'ppr': int(ag.getVariableUInt('ppr')),
                 'repair_days': int(ag.getVariableUInt('repair_days')),
                 'simulation_metadata': f"v={vdate}/id={vid};D={D};mode=repair_only"
