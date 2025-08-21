@@ -31,7 +31,7 @@ def export_day(sim, agent_desc, d: date, daily_today: List[int], ops_targets: Di
     sim.getPopulationData(pop)
     ops_current = {1: 0, 2: 0}
     for ag in pop:
-        if ag.getVariableUInt("status_id") == 2 and ag.getVariableUInt("status_change") == 0:
+        if ag.getVariableUInt("status_id") == 2:
             gb = ag.getVariableUInt("group_by")
             if gb in ops_current:
                 ops_current[gb] += 1
@@ -47,7 +47,7 @@ def export_day(sim, agent_desc, d: date, daily_today: List[int], ops_targets: Di
             continue
         idx = ag.getVariableUInt("idx")
         md_ord = ag.getVariableUInt("mfg_date")
-        md = epoch + timedelta(days=int(md_ord)) if md_ord else epoch
+        md = epoch + timedelta(days=int(md_ord)) if md_ord else None
         part_ord = ag.getVariableUInt("partout_trigger_ord")
         asm_ord = ag.getVariableUInt("assembly_trigger_ord")
         act_ord = ag.getVariableUInt("active_trigger_ord")

@@ -44,7 +44,7 @@ class FlameMacroProperty2Exporter:
             assembly_trigger Nullable(Date),
             active_trigger Nullable(Date),
             aircraft_age_years UInt8,
-            mfg_date Date,
+            mfg_date Nullable(Date),
             sne UInt32,
             ppr UInt32,
             repair_days UInt16,
@@ -83,13 +83,15 @@ class FlameMacroProperty2Exporter:
             alters.append("MODIFY COLUMN ops_counter_mi8 UInt16")
         if type_by_name.get("ops_counter_mi17") == "Int32":
             alters.append("MODIFY COLUMN ops_counter_mi17 UInt16")
-        # Триггеры должны быть Nullable(Date)
+        # Триггеры и mfg_date должны быть Nullable(Date)
         if type_by_name.get("partout_trigger") == "Date":
             alters.append("MODIFY COLUMN partout_trigger Nullable(Date)")
         if type_by_name.get("assembly_trigger") == "Date":
             alters.append("MODIFY COLUMN assembly_trigger Nullable(Date)")
         if type_by_name.get("active_trigger") == "Date":
             alters.append("MODIFY COLUMN active_trigger Nullable(Date)")
+        if type_by_name.get("mfg_date") == "Date":
+            alters.append("MODIFY COLUMN mfg_date Nullable(Date)")
         # Новые колонки агрегатов агентов
         if "sne" not in type_by_name:
             alters.append("ADD COLUMN IF NOT EXISTS sne UInt32")

@@ -79,13 +79,21 @@ def run(days: int = 1, host_only: bool = False, probe: str | None = None):
     # Агенты: probe-режим минимальный, иначе полный
     if probe:
         agent_desc = model.model.getAgent("component")
-        # Сформируем небольшую популяцию из текущих 2-3 записей с статусом 4
-        av = pyflamegpu.AgentVector(agent_desc, 3)
-        for i in range(3):
+        # Мини‑популяция для RTC‑проб
+        n_probe = 3
+        av = pyflamegpu.AgentVector(agent_desc, n_probe)
+        for i in range(n_probe):
+            av[i].setVariableUInt('idx', i)
+            # Базовые статус/ремонт
             av[i].setVariableUInt('status_id', 4)
             av[i].setVariableUInt('repair_days', 0)
             av[i].setVariableUInt('repair_time', 1)
             av[i].setVariableUInt('ppr', 0)
+            # Ресурсы для ops_check (нулевые допустимы для компиляции/шага)
+            av[i].setVariableUInt('sne', 0)
+            av[i].setVariableUInt('ll', 0)
+            av[i].setVariableUInt('oh', 0)
+            av[i].setVariableUInt('br', 0)
         sim.setPopulationData(av)
     else:
         build_agents(sim, model, mp3_rows, mp3_fields, mp1)
@@ -112,6 +120,14 @@ def run(days: int = 1, host_only: bool = False, probe: str | None = None):
             sim.setEnvironmentPropertyArrayUInt32("daily_next", daily_next)
             sim.setEnvironmentPropertyArrayUInt32("partout_time_arr", partout_arr)
             sim.setEnvironmentPropertyArrayUInt32("assembly_time_arr", asm_arr)
+            sim.setEnvironmentPropertyUInt("current_day_ordinal", (D - epoch).days)
+        else:
+            # Для probe‑режимов RTC (например, ops_check) заполняем окружение минимальными массивами
+            n_probe = 3
+            sim.setEnvironmentPropertyArrayUInt32("daily_today", [0] * n_probe)
+            sim.setEnvironmentPropertyArrayUInt32("daily_next", [0] * n_probe)
+            sim.setEnvironmentPropertyArrayUInt32("partout_time_arr", [0] * n_probe)
+            sim.setEnvironmentPropertyArrayUInt32("assembly_time_arr", [0] * n_probe)
             sim.setEnvironmentPropertyUInt("current_day_ordinal", (D - epoch).days)
 
         # Выполнить слои (первый инкремент — используем уже зарегистрированные rtc функции)
