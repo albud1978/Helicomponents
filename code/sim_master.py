@@ -152,19 +152,25 @@ def main():
             ag.setVariableUInt('daily_today_u32', int(daily_today[i] if i < len(daily_today) else 0))
             ag.setVariableUInt('daily_next_u32', int(daily_next[i] if i < len(daily_next) else 0))
         sim.setPopulationData(pop_buf)
+        # Инициализация квоты D+1 из MP4 (используем счётчики следующего дня)
+        ops_targets = mp4.get(D + timedelta(days=1), {"ops_counter_mi8": 0, "ops_counter_mi17": 0})
+        sim.setEnvironmentPropertyUInt32("quota_next_mi8", int(ops_targets.get('ops_counter_mi8', 0)))
+        sim.setEnvironmentPropertyUInt32("quota_next_mi17", int(ops_targets.get('ops_counter_mi17', 0)))
         # Шаг суток
         sim.step()
         t1 = time.perf_counter()
 
         # Экспорт строк за день D
-        ops_targets = mp4.get(D, {"ops_counter_mi8": 0, "ops_counter_mi17": 0})
         pop = pyflamegpu.AgentVector(agent_desc)
         sim.getPopulationData(pop)
         ops_current = {1: 0, 2: 0}
+        quota_claimed = {1: 0, 2: 0}
         for ag in pop:
             gb = int(ag.getVariableUInt('group_by'))
             if ag.getVariableUInt("status_id") == 2 and gb in (1,2):
                 ops_current[gb] += 1
+            if gb in (1,2) and int(ag.getVariableUInt('ops_ticket')) == 1:
+                quota_claimed[gb] += 1
         epoch = date(1970,1,1)
         rows: List[Dict] = []
         for ag in pop:
@@ -202,7 +208,13 @@ def main():
                 'sne': int(ag.getVariableUInt('sne')),
                 'ppr': int(ag.getVariableUInt('ppr')),
                 'repair_days': int(ag.getVariableUInt('repair_days')),
-                'simulation_metadata': f"v={vdate}/id={vid};D={D};mode=repair_only"
+                'simulation_metadata': (
+                    f"v={vdate}/id={vid};D={D};mode=repair_only;"
+                    f"quota_seed_mi8={int(ops_targets.get('ops_counter_mi8', 0))},"
+                    f"quota_seed_mi17={int(ops_targets.get('ops_counter_mi17', 0))},"
+                    f"quota_claimed_mi8={int(quota_claimed.get(1,0))},"
+                    f"quota_claimed_mi17={int(quota_claimed.get(2,0))}"
+                )
             })
         # Копим строки, вставим одним батчем после цикла
         all_rows.extend(rows)

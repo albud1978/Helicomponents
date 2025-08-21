@@ -97,7 +97,24 @@
 - Важные файлы: `code/flame_macroproperty2_exporter.py`, `code/flame_gpu_transform_runner.py`, `code/flame_gpu_gpu_runner.py`, `code/digital_values_dictionary_creator.py`, `code/utils/cleanup_dictionaries.py`, `code/transform_master.py`
 
 # Changelog - История изменений проекта
-**Последнее обновление:** 14-08-2025
+**Последнее обновление:** 21-08-2025
+## [21-08-2025] - Инкрементная отладка RTC и атомарная квота (шаг 1)
+### Добавлено
+- Минимальная модель `repair_only_model.py`: `rtc_repair`, `rtc_ops_check`, `rtc_main`, `rtc_quota_init`.
+- Центральный раннер `sim_master.py` (бывш. `repair_only_runner.py`).
+- Расчёт `aircraft_age_years` (целые годы, округление вниз) при экспорте MP2.
+- Логирование квоты в `simulation_metadata`: `quota_seed_*`, `quota_claimed_*`.
+
+### Изменено
+- Начисления `sne/ppr` теперь зависят от квоты (билет допуска `ops_ticket`).
+- `daily_flight` берётся из агентной переменной `daily_today_u32` для `status_id=2`.
+
+### Исправлено
+- Нули в `daily_flight` и `sne` для `status_id=2` устранены; проверка агрегатами в CH пройдена.
+
+### Тайминги
+- 7 суток: step≈118–175 ms, export≈282–334 ms, 1,953 строк/период.
+
 
 ## [14-08-2025] - Обогащение MP3.group_by и уборка аналитики
 
