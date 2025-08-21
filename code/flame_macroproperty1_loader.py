@@ -141,7 +141,10 @@ class FlameMacroProperty1Loader:
             'trigger_interval',   # field_id: 64 - нужен для restrictions_mask
             'ac_type_mask',       # field_id: 4  - нужен для симуляции МИ-8/МИ-17
             'sne_new',            # field_id: 93 - оптимизированное поле
-            'ppr_new'             # field_id: 88 - оптимизированное поле
+            'ppr_new',            # field_id: 88 - оптимизированное поле
+            # Версионные поля для согласованности с MP и Property
+            'version_date',       # Date → UInt16 (days since epoch)
+            'version_id'          # UInt8
         ]
         
         # Исключаем лишние поля

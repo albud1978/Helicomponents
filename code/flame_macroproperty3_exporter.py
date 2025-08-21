@@ -58,7 +58,8 @@ class FlameMacroProperty3Exporter:
             analytics_fields = [
                 'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'group_by', 'status_id',
                 'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
-                'sne', 'ppr', 'repair_days', 'mfg_date'
+                'sne', 'ppr', 'repair_days', 'mfg_date',
+                'version_date', 'version_id'
             ]
             
             # Создаем DDL с field_id комментариями
@@ -73,9 +74,7 @@ class FlameMacroProperty3Exporter:
                     if 'Nullable(' in ch_type:
                         ch_type = ch_type.replace('Nullable(', '').replace(')', '')
                     
-                    # Преобразуем Date в UInt16 для FLAME GPU совместимости
-                    if ch_type == 'Date':
-                        ch_type = 'UInt16'
+                    # Даты оставляем типом Date в ClickHouse (конвертация выполняется при вставке)
                     
                     field_ddl = f"{field_name} {ch_type} COMMENT 'field_id: {field_id}'"
                     fields_ddl.append(field_ddl)
@@ -169,7 +168,8 @@ class FlameMacroProperty3Exporter:
             analytics_fields = [
                 'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'group_by', 'status_id',
                 'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
-                'sne', 'ppr', 'repair_days', 'mfg_date'
+                'sne', 'ppr', 'repair_days', 'mfg_date',
+                'version_date', 'version_id'
             ]
             # Ограничиваемся только полями, которые реально существуют в heli_pandas
             try:
@@ -234,6 +234,28 @@ class FlameMacroProperty3Exporter:
             insert_query = f"INSERT INTO {self.export_table} ({', '.join(field_list)}) VALUES"
             
             self.logger.info(f"💾 Вставляем {len(export_data)} записей в постоянную таблицу...")
+            # Конвертируем UInt16 days → Date для полей типа Date
+            try:
+                ch_schema = self.client.execute(
+                    f"SELECT name, type FROM system.columns WHERE database = currentDatabase() AND table = '{self.export_table}'"
+                )
+                type_by_name = {name: ctype for name, ctype in ch_schema}
+                date_indices = [i for i, col in enumerate(field_list) if 'Date' in (type_by_name.get(col, '') or '')]
+            except Exception:
+                date_indices = []
+
+            if date_indices:
+                from datetime import date, timedelta
+                epoch = date(1970,1,1)
+                for row in export_data:
+                    for idx in date_indices:
+                        if idx < len(row):
+                            val = row[idx]
+                            try:
+                                row[idx] = epoch + timedelta(days=int(val)) if val is not None else None
+                            except Exception:
+                                row[idx] = None
+
             self.client.execute(insert_query, export_data)
             self.logger.info(f"✅ Экспорт завершен: {len(export_data)} записей в таблицу {self.export_table}")
             

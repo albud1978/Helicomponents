@@ -74,6 +74,31 @@ class FlameMacroProperty3Loader:
             self.logger.error(f"❌ Ошибка подключения к ClickHouse: {e}")
             raise
 
+    def fetch_version_meta(self) -> Tuple[int, int]:
+        """Получить (version_date_ord, version_id) для текущей версии heli_pandas."""
+        try:
+            rows = self.client.execute(
+                """
+                SELECT version_date, version_id
+                FROM heli_pandas
+                ORDER BY version_date DESC, version_id DESC
+                LIMIT 1
+                """
+            )
+            if not rows:
+                return 0, 0
+            vdate, vid = rows[0]
+            try:
+                from datetime import date
+                epoch = date(1970, 1, 1)
+                vord = (vdate if hasattr(vdate, 'toordinal') else vdate.date()).toordinal() - epoch.toordinal()
+                vord = max(0, int(vord))
+            except Exception:
+                vord = 0
+            return vord, int(vid or 0)
+        except Exception:
+            return 0, 0
+
     def get_field_mapping_from_clickhouse(self) -> Dict[str, int]:
         """Получение field_id маппинга из dict_digital_values_flat"""
         self.logger.info("🔍 Получение field_id маппинга для heli_pandas...")
@@ -135,7 +160,10 @@ class FlameMacroProperty3Loader:
                 'sne',             # field_id: 59 - uint32
                 'ppr',             # field_id: 47 - uint32
                 'repair_days',     # field_id: 52 - uint16
-                'mfg_date'         # field_id: 30 - Date
+                'mfg_date',        # field_id: 30 - Date
+                # Версионные поля для согласованности с MP и Property
+                'version_date',    # Date → UInt16 (days since epoch)
+                'version_id'       # UInt8
             ]
             
             # Фильтруем только те поля, которые есть в field_mapping и в аналитике
@@ -246,8 +274,9 @@ class FlameMacroProperty3Loader:
                 'UInt8': 'newPropertyArrayUInt8',
                 'Float32': 'newPropertyArrayFloat',
                 'Float64': 'newPropertyArrayDouble',
-                'Date': 'newPropertyArrayUInt16',  # Date как UInt16
-                'String': 'newPropertyArrayUInt32'  # String как UInt32 (если это ID)
+                'Date': 'newPropertyArrayUInt16',              # Date как UInt16
+                'Nullable(Date)': 'newPropertyArrayUInt16',    # Nullable(Date) тоже как UInt16
+                'String': 'newPropertyArrayUInt32'             # String как UInt32 (если это ID)
             }
             
             # Поля из аналитики MacroProperty3 (исключаем текстовые)
@@ -256,7 +285,8 @@ class FlameMacroProperty3Loader:
                 'partseqno_i', 'psn', 'address_i', 'lease_restricted',
                 'group_by', 'status_id', 'status_change',
                 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
-                'sne', 'ppr', 'repair_days', 'mfg_date'
+                'sne', 'ppr', 'repair_days', 'mfg_date',
+                'version_date', 'version_id'
             ]
             
             created_properties = 0
@@ -324,8 +354,9 @@ class FlameMacroProperty3Loader:
                 'UInt8': 'setEnvironmentPropertyArrayUInt8', 
                 'Float32': 'setEnvironmentPropertyArrayFloat',
                 'Float64': 'setEnvironmentPropertyArrayDouble',
-                'Date': 'setEnvironmentPropertyArrayUInt16',  # Date как UInt16
-                'String': 'setEnvironmentPropertyArrayUInt32'  # String как UInt32 (если это ID)
+                'Date': 'setEnvironmentPropertyArrayUInt16',           # Date как UInt16
+                'Nullable(Date)': 'setEnvironmentPropertyArrayUInt16',  # Nullable(Date) как UInt16
+                'String': 'setEnvironmentPropertyArrayUInt32'           # String как UInt32 (если это ID)
             }
             
             # Поля из аналитики MacroProperty3 (исключаем текстовые)
@@ -334,7 +365,8 @@ class FlameMacroProperty3Loader:
                 'partseqno_i', 'psn', 'address_i', 'lease_restricted',
                 'group_by', 'status_id', 'status_change',
                 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
-                'sne', 'ppr', 'repair_days', 'mfg_date'
+                'sne', 'ppr', 'repair_days', 'mfg_date',
+                'version_date', 'version_id'
             ]
             
             loaded_properties = 0
@@ -347,6 +379,9 @@ class FlameMacroProperty3Loader:
                 self.logger.info(f"🔍 partseqno_i индекс в field_order: {idx}")
             
             # Загружаем данные для каждого поля - ТОЧНО КАК В MACROPROPERTY1
+            # Получим константы версии для fallback
+            vdate_ord_const, vid_const = self.fetch_version_meta()
+
             for field_name in field_order:
                 # Фильтруем только аналитические поля
                 if field_name not in analytics_fields:
@@ -385,6 +420,18 @@ class FlameMacroProperty3Loader:
                     
                     # Заменяем None на дефолтные значения - ТОЧНАЯ КОПИЯ
                     column_data = [default_val if val is None else val for val in raw_column_data]
+
+                    # Fallback для версионных полей: используем константы Property, если исходные пустые/нулевые
+                    if field_name == 'version_date':
+                        # Если массив пуст/нулевой, заполняем константой vdate_ord_const
+                        if vdate_ord_const > 0:
+                            # Если обнаружены нули/None, перезаписываем полностью константой
+                            if all((val is None or val == 0) for val in column_data):
+                                column_data = [vdate_ord_const] * self.agent_count
+                    if field_name == 'version_id':
+                        if vid_const > 0:
+                            if all((val is None or int(val) == 0) for val in column_data):
+                                column_data = [vid_const] * self.agent_count
                     
                     # СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ DATE ПОЛЕЙ - КАК В MACROPROPERTY1
                     if 'Date' in ch_type:
