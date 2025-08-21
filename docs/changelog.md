@@ -7,6 +7,16 @@
 - В `docs/flame_gpu_architecture.md` оформлен модульный план реализации атомарной архитектуры (без дублирования MP): `sim_env_setup.py`, `sim_agent_factory.py`, `sim_layers_mi8.py`, `sim_logging_mp2.py`, `sim_runner.py`.
 - В `docs/transform.md` добавлен раздел «Архитектура модулей симуляции»: источники MP, новые Environment/agent поля, правила дневного цикла и недублирования.
 
+### Реализация (код)
+- Добавлены файлы симуляции: `code/sim_env_setup.py`, `code/sim_agent_factory.py`, `code/sim_layers_mi8.py`, `code/sim_logging_mp2.py`, `code/sim_runner.py` (инкремент 1: слои 4/6 и единый экспорт MP2 за D0).
+- Обновлён `code/transform_master.py`: после загрузки MP/Property запускается `sim_runner.py` на 1 сутки (для проверки сквозного цикла).
+
+### Отладка NVRTC/Jitify
+- Добавлен системный fallback `CUDA_PATH` в автозагрузку `.env` (поиск `/usr/local/cuda*`), исключены ручные `export`.
+- Введены режимы отладки: `HOST_ONLY_SIM`, `FLAMEGPU_PROBE`, `LAYER_MODE=repair_only` — для поэтапной активации RTC.
+- Удалён `status_change` из `rtc_repair`: завершение ремонта 4→5 выполняется напрямую (сброс `ppr`, `repair_days`).
+- Подтверждён минимальный прогон RTC в полной модели; дальнейшая интеграция слоёв — по одному.
+
 ## [21-08-2025] - Корректировка порядка фаз add_candidate
 ### Изменено
 - В `docs/transform.md` обновлён порядок фаз для добавления кандидатов: Phase1 3→2, Phase2 5→2, Phase3 1→2 (ранее: 5→2, 3→2, 1→2).
