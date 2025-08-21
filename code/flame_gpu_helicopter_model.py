@@ -42,7 +42,7 @@ class HelicopterFlameModel:
         # Минимальный RTC-пробник: если задан FLAMEGPU_PROBE, строим изолированную модель
         probe_name = os.getenv("FLAMEGPU_PROBE", "").strip().lower()
         rtc_minimal = os.getenv("RTC_MINIMAL", "").strip().lower() in ("1", "true", "yes")
-        if rtc_minimal or probe_name:
+        if rtc_minimal:
             agent = model.newAgent("component")
             agent.newVariableUInt("status_id", 0)
             agent.newVariableUInt("repair_days", 0)
@@ -94,9 +94,8 @@ class HelicopterFlameModel:
         agent.newVariableUInt("aircraft_number", 0)
         agent.newVariableUInt("group_by", 0)       # 1|2|...
         agent.newVariableUInt("ac_type_mask", 0)
-        # Статусы/переходы
+        # Статусы
         agent.newVariableUInt("status_id", 0)
-        agent.newVariableUInt("status_change", 0)
         # Ресурсы
         agent.newVariableUInt("ll", 0)
         agent.newVariableUInt("oh", 0)
@@ -260,7 +259,6 @@ class HelicopterFlameModel:
         rtc_ops_check_src = r"""
         FLAMEGPU_AGENT_FUNCTION(rtc_ops_check, flamegpu::MessageNone, flamegpu::MessageNone) {
             if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
-            if (FLAMEGPU->getVariable<unsigned int>("status_change") != 0u) return flamegpu::ALIVE;
             unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
             unsigned int dt = FLAMEGPU->environment.getPropertyArray<unsigned int>("daily_today", idx);
             unsigned int dn = FLAMEGPU->environment.getPropertyArray<unsigned int>("daily_next", idx);
@@ -269,14 +267,28 @@ class HelicopterFlameModel:
             unsigned int ll  = FLAMEGPU->getVariable<unsigned int>("ll");
             unsigned int oh  = FLAMEGPU->getVariable<unsigned int>("oh");
             unsigned int br  = FLAMEGPU->getVariable<unsigned int>("br");
-            if ((ll >= sne ? (ll - sne) : 0u) >= dt && (ll >= sne ? (ll - sne) : 0u) < (dt + dn)) {
-                FLAMEGPU->setVariable<unsigned int>("status_change", 6u);
+            unsigned int rt  = FLAMEGPU->getVariable<unsigned int>("repair_time");
+            unsigned int rem_ll = (ll >= sne ? (ll - sne) : 0u);
+            if (rem_ll >= dt && rem_ll < (dt + dn)) {
+                // Завтра попадём в окно LL → на D+1 хранение
+                FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
                 return flamegpu::ALIVE;
             }
-            unsigned int rem = (oh >= ppr ? (oh - ppr) : 0u);
-            if (rem >= dt && rem < (dt + dn)) {
-                if ((sne + dt) < br) FLAMEGPU->setVariable<unsigned int>("status_change", 4u);
-                else FLAMEGPU->setVariable<unsigned int>("status_change", 6u);
+            unsigned int rem_oh = (oh >= ppr ? (oh - ppr) : 0u);
+            if (rem_oh >= dt && rem_oh < (dt + dn)) {
+                if ((sne + dt) < br) {
+                    // Завтра ремонт → выставляем статус и сайд‑эффекты сразу
+                    FLAMEGPU->setVariable<unsigned int>("status_id", 4u);
+                    FLAMEGPU->setVariable<unsigned int>("repair_days", 1u);
+                    unsigned int current_day_ord = FLAMEGPU->environment.getProperty<unsigned int>("current_day_ordinal");
+                    unsigned int pt = FLAMEGPU->environment.getPropertyArray<unsigned int>("partout_time_arr", idx);
+                    unsigned int at = FLAMEGPU->environment.getPropertyArray<unsigned int>("assembly_time_arr", idx);
+                    unsigned int asm_days = (rt > at ? (rt - at) : 0u);
+                    FLAMEGPU->setVariable<unsigned int>("partout_trigger_ord", current_day_ord + pt);
+                    FLAMEGPU->setVariable<unsigned int>("assembly_trigger_ord", current_day_ord + asm_days);
+                } else {
+                    FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
+                }
             }
             return flamegpu::ALIVE;
         }
@@ -289,35 +301,12 @@ class HelicopterFlameModel:
                 FLAMEGPU->setVariable<unsigned int>("sne", FLAMEGPU->getVariable<unsigned int>("sne") + dt);
                 FLAMEGPU->setVariable<unsigned int>("ppr", FLAMEGPU->getVariable<unsigned int>("ppr") + dt);
             }
-            unsigned int chg = FLAMEGPU->getVariable<unsigned int>("status_change");
-            if (chg != 0u) FLAMEGPU->setVariable<unsigned int>("status_id", chg);
             return flamegpu::ALIVE;
         }
         """
         rtc_change_src = r"""
         FLAMEGPU_AGENT_FUNCTION(rtc_change, flamegpu::MessageNone, flamegpu::MessageNone) {
-            unsigned int chg = FLAMEGPU->getVariable<unsigned int>("status_change");
-            unsigned int prev = FLAMEGPU->getVariable<unsigned int>("status_id");
-            unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-            unsigned int current_day_ord = FLAMEGPU->environment.getProperty<unsigned int>("current_day_ordinal");
-            unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
-            unsigned int pt = FLAMEGPU->environment.getPropertyArray<unsigned int>("partout_time_arr", idx);
-            unsigned int at = FLAMEGPU->environment.getPropertyArray<unsigned int>("assembly_time_arr", idx);
-            if (chg == 4u) {
-                FLAMEGPU->setVariable<unsigned int>("repair_days", 1u);
-                FLAMEGPU->setVariable<unsigned int>("partout_trigger_ord", current_day_ord + pt);
-                unsigned int asm_days = (rt > at ? (rt - at) : 0u);
-                FLAMEGPU->setVariable<unsigned int>("assembly_trigger_ord", current_day_ord + asm_days);
-            } else if (chg == 5u) {
-                FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
-                FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
-            } else if (chg == 2u && prev == 1u) {
-                unsigned int active_ord = (current_day_ord >= rt ? (current_day_ord - rt) : 0u);
-                FLAMEGPU->setVariable<unsigned int>("active_trigger_ord", active_ord);
-                unsigned int asm_ord = (current_day_ord >= at ? (current_day_ord - at) : 0u);
-                FLAMEGPU->setVariable<unsigned int>("assembly_trigger_ord", asm_ord);
-            }
-            if (chg != 0u) FLAMEGPU->setVariable<unsigned int>("status_change", 0u);
+            // Без отложенных переходов: слой не используется
             return flamegpu::ALIVE;
         }
         """
@@ -330,14 +319,22 @@ class HelicopterFlameModel:
         probe = os.getenv("FLAMEGPU_PROBE", "").strip().lower()
         if probe:
             if probe == "repair":
+                # Минимальная агентная спецификация для rtc_repair
+                agent = self.agent
+                # Гарантируем, что базовые переменные есть
+                # (в основной модели уже объявлены)
                 agent.newRTCFunction("rtc_repair", rtc_repair_src)
             elif probe == "ops_check":
+                agent = self.agent
                 agent.newRTCFunction("rtc_ops_check", rtc_ops_check_src)
             elif probe == "main":
+                agent = self.agent
                 agent.newRTCFunction("rtc_main", rtc_main_src)
             elif probe == "change":
+                agent = self.agent
                 agent.newRTCFunction("rtc_change", rtc_change_src)
             elif probe == "pass":
+                agent = self.agent
                 agent.newRTCFunction("rtc_pass_through", rtc_pass_src)
         else:
             agent.newRTCFunction("rtc_repair", rtc_repair_src)
@@ -767,6 +764,10 @@ class HelicopterFlameModel:
             layer_mode = os.getenv("LAYER_MODE", "full").strip().lower()
             if layer_mode == "repair_only":
                 add("rtc_repair", True)
+            elif layer_mode in ("repair_ops", "repair_ops_only"):
+                # Минимальный набор: ремонт + проверка OPS без мейн/чейндж
+                add("rtc_repair", True)
+                add("rtc_ops_check", True)
             else:
                 add("rtc_repair", True)
                 add("rtc_ops_check", True)
