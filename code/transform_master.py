@@ -34,32 +34,12 @@ def main():
     if args.version_id:
         v_args += ['--version-id', args.version_id]
 
-    # Цепочки по MP: loader → exporter → validator
+    # Цепочки по MP: только loader
     chains = [
-        # MP1
-        [
-            [sys.executable, 'code/flame_macroproperty1_loader.py', *v_args],
-            [sys.executable, 'code/flame_macroproperty1_exporter.py', *v_args],
-            [sys.executable, 'code/flame_macroproperty1_validator.py', *v_args],
-        ],
-        # MP3
-        [
-            [sys.executable, 'code/flame_macroproperty3_loader.py', *v_args],
-            [sys.executable, 'code/flame_macroproperty3_exporter.py', *v_args],
-            [sys.executable, 'code/flame_macroproperty3_validator.py', *v_args],
-        ],
-        # MP4
-        [
-            [sys.executable, 'code/flame_macroproperty4_loader.py', *v_args],
-            [sys.executable, 'code/flame_macroproperty4_exporter.py', *v_args],
-            [sys.executable, 'code/flame_macroproperty4_validator.py', *v_args],
-        ],
-        # MP5
-        [
-            [sys.executable, 'code/flame_macroproperty5_loader.py', *v_args],
-            [sys.executable, 'code/flame_macroproperty5_exporter.py', *v_args],
-            [sys.executable, 'code/flame_macroproperty5_validator.py', *v_args],
-        ],
+        [[sys.executable, 'code/flame_macroproperty1_loader.py', *v_args]],
+        [[sys.executable, 'code/flame_macroproperty3_loader.py', *v_args]],
+        [[sys.executable, 'code/flame_macroproperty4_loader.py', *v_args]],
+        [[sys.executable, 'code/flame_macroproperty5_loader.py', *v_args]],
     ]
 
     # Property — только loader (версионные скаляры)
@@ -87,6 +67,16 @@ def main():
     total_time = time.time() - start_time
     print(f"\n⏱️ Общее время выполнения: {total_time:.1f} секунд")
     print("\n" + ("✅ Завершено" if all_ok else "⚠️ Завершено с ошибками"))
+
+    # После успешной загрузки MP/Property запускаем первый инкремент симуляции (1 сутки)
+    try:
+        if all_ok:
+            print("\n===== Simulation (increment 1 day) =====")
+            rc = run([sys.executable, 'code/sim_runner.py', '--days', '1'])
+            if rc != 0:
+                print(f"⚠️ Симуляция завершилась с ошибкой (rc={rc})")
+    except Exception as e:
+        print(f"⚠️ Ошибка запуска симуляции: {e}")
 
 
 if __name__ == '__main__':

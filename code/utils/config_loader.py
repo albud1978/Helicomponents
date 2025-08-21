@@ -59,6 +59,12 @@ def auto_load_env_file():
                         value = value.strip('"\'')
                         os.environ[key.strip()] = value
             
+            # Глобальный CUDA fallback для NVRTC в WSL/Linux
+            if 'CUDA_PATH' not in os.environ:
+                for p in ['/usr/local/cuda','/usr/local/cuda-12.9','/usr/local/cuda-12.4','/usr/local/cuda-12.3','/usr/local/cuda-12.2','/usr/local/cuda-12.1','/usr/local/cuda-12.0']:
+                    if (Path(p)/'include'/'cuda_runtime.h').exists():
+                        os.environ['CUDA_PATH'] = p
+                        break
             print(f"✅ Environment variables автоматически загружены из {env_file}")
             return True
         else:

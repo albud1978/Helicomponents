@@ -39,6 +39,33 @@ class HelicopterFlameModel:
         self.num_agents = int(num_agents)
         model = pyflamegpu.ModelDescription("Helicopter_ABM")
 
+        # Минимальный RTC-пробник: если задан FLAMEGPU_PROBE, строим изолированную модель
+        probe_name = os.getenv("FLAMEGPU_PROBE", "").strip().lower()
+        rtc_minimal = os.getenv("RTC_MINIMAL", "").strip().lower() in ("1", "true", "yes")
+        if rtc_minimal or probe_name:
+            agent = model.newAgent("component")
+            agent.newVariableUInt("status_id", 0)
+            agent.newVariableUInt("repair_days", 0)
+            agent.newVariableUInt("repair_time", 0)
+            agent.newVariableUInt("ppr", 0)
+            rtc_repair_src = r"""
+            FLAMEGPU_AGENT_FUNCTION(rtc_repair, flamegpu::MessageNone, flamegpu::MessageNone) {
+                unsigned int status_id = FLAMEGPU->getVariable<unsigned int>("status_id");
+                if (status_id == 4u) {
+                    unsigned int rd = FLAMEGPU->getVariable<unsigned int>("repair_days") + 1u;
+                    FLAMEGPU->setVariable<unsigned int>("repair_days", rd);
+                    unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
+                    if (rd >= rt) { FLAMEGPU->setVariable<unsigned int>("status_id", 5u); FLAMEGPU->setVariable<unsigned int>("repair_days", 0u); FLAMEGPU->setVariable<unsigned int>("ppr", 0u); }
+                }
+                return flamegpu::ALIVE;
+            }
+            """
+            agent.newRTCFunction("rtc_repair", rtc_repair_src)
+            lyr = model.newLayer()
+            lyr.addAgentFunction(agent.getFunction("rtc_repair"))
+            self.model = model
+            return model
+
         # Окружение
         env = model.Environment()
         env.newPropertyInt("trigger_pr_final_mi8", 0)
@@ -187,6 +214,31 @@ class HelicopterFlameModel:
                     if ag.getVariableUInt("status_change") != 0:
                         env.setPropertyInt("pass_through_violation", env.getPropertyInt("pass_through_violation") + 1)
 
+        # Режим быстрого подтверждения пайплайна без RTC (Host-only)
+        host_only = os.getenv("HOST_ONLY_SIM", "").strip().lower() in ("1", "true", "yes")
+
+        if host_only and pyflamegpu is not None:
+            class HostLayerRepairStore(pyflamegpu.HostFunction):
+                def run(self, FLAMEGPU):
+                    agent = FLAMEGPU.agent("component")
+                    pop = agent.getPopulationData()
+                    for ag in pop:
+                        status = ag.getVariableUInt("status_id")
+                        if status == 4:
+                            rd = ag.getVariableUInt("repair_days") + 1
+                            ag.setVariableUInt("repair_days", rd)
+                            if rd >= ag.getVariableUInt("repair_time"):
+                                ag.setVariableUInt("status_id", 5)
+                                ag.setVariableUInt("ppr", 0)
+                                ag.setVariableUInt("repair_days", 0)
+                        elif status == 6:
+                            # Ничего не делаем
+                            pass
+            # Регистрируем только Host-слой без RTC
+            model.addStepFunction(HostLayerRepairStore())
+            self.model = model
+            return model
+
         # === RTC (CUDA) функции агентов ===
         rtc_repair_src = r"""
         FLAMEGPU_AGENT_FUNCTION(rtc_repair, flamegpu::MessageNone, flamegpu::MessageNone) {
@@ -196,7 +248,10 @@ class HelicopterFlameModel:
                 FLAMEGPU->setVariable<unsigned int>("repair_days", rd);
                 unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
                 if (rd >= rt) {
-                    FLAMEGPU->setVariable<unsigned int>("status_change", 5u);
+                    // Завершение ремонта: немедленно 4->5 без status_change
+                    FLAMEGPU->setVariable<unsigned int>("status_id", 5u);
+                    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+                    FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
                 }
             }
             return flamegpu::ALIVE;
@@ -491,6 +546,7 @@ class HelicopterFlameModel:
         }
         """
 
+        layer_mode = os.getenv("LAYER_MODE", "full").strip().lower()
         if probe:
             if probe == "pub_ops":
                 f = agent.newRTCFunction("rtc_publish_ops_persist", rtc_pub_ops_persist_src); f.setMessageOutput("ops_persist")
@@ -505,12 +561,13 @@ class HelicopterFlameModel:
             elif probe == "apply":
                 f = agent.newRTCFunction("rtc_apply_assignments", rtc_apply_assign_src); f.setMessageInput("assignment")
         else:
-            f = agent.newRTCFunction("rtc_publish_ops_persist", rtc_pub_ops_persist_src); f.setMessageOutput("ops_persist")
-            f = agent.newRTCFunction("rtc_publish_add_candidates_p1", rtc_pub_add_p1_src); f.setMessageOutput("add_candidate_p1")
-            f = agent.newRTCFunction("rtc_publish_add_candidates_p2", rtc_pub_add_p2_src); f.setMessageOutput("add_candidate_p2")
-            f = agent.newRTCFunction("rtc_publish_add_candidates_p3", rtc_pub_add_p3_src); f.setMessageOutput("add_candidate_p3")
-            f = agent.newRTCFunction("rtc_publish_cut_candidates", rtc_pub_cut_src); f.setMessageOutput("cut_candidate")
-            f = agent.newRTCFunction("rtc_apply_assignments", rtc_apply_assign_src); f.setMessageInput("assignment")
+            if layer_mode != "repair_only":
+                f = agent.newRTCFunction("rtc_publish_ops_persist", rtc_pub_ops_persist_src); f.setMessageOutput("ops_persist")
+                f = agent.newRTCFunction("rtc_publish_add_candidates_p1", rtc_pub_add_p1_src); f.setMessageOutput("add_candidate_p1")
+                f = agent.newRTCFunction("rtc_publish_add_candidates_p2", rtc_pub_add_p2_src); f.setMessageOutput("add_candidate_p2")
+                f = agent.newRTCFunction("rtc_publish_add_candidates_p3", rtc_pub_add_p3_src); f.setMessageOutput("add_candidate_p3")
+                f = agent.newRTCFunction("rtc_publish_cut_candidates", rtc_pub_cut_src); f.setMessageOutput("cut_candidate")
+                f = agent.newRTCFunction("rtc_apply_assignments", rtc_apply_assign_src); f.setMessageInput("assignment")
 
         # === RTC функции контроллера (один агент) ===
         ctrl_count_ops_src = r"""
@@ -666,11 +723,12 @@ class HelicopterFlameModel:
             elif probe == "ctrl_cut":
                 f = controller.newRTCFunction("ctrl_pick_cut", ctrl_pick_cut_src); f.setMessageInput("cut_candidate"); f.setMessageOutput("assignment")
         else:
-            f = controller.newRTCFunction("ctrl_count_ops", ctrl_count_ops_src); f.setMessageInput("ops_persist")
-            f = controller.newRTCFunction("ctrl_pick_add_p1", ctrl_pick_add_p1_src); f.setMessageInput("add_candidate_p1"); f.setMessageOutput("assignment")
-            f = controller.newRTCFunction("ctrl_pick_add_p2", ctrl_pick_add_p2_src); f.setMessageInput("add_candidate_p2"); f.setMessageOutput("assignment")
-            f = controller.newRTCFunction("ctrl_pick_add_p3", ctrl_pick_add_p3_src); f.setMessageInput("add_candidate_p3"); f.setMessageOutput("assignment")
-            f = controller.newRTCFunction("ctrl_pick_cut", ctrl_pick_cut_src); f.setMessageInput("cut_candidate"); f.setMessageOutput("assignment")
+            if layer_mode != "repair_only":
+                f = controller.newRTCFunction("ctrl_count_ops", ctrl_count_ops_src); f.setMessageInput("ops_persist")
+                f = controller.newRTCFunction("ctrl_pick_add_p1", ctrl_pick_add_p1_src); f.setMessageInput("add_candidate_p1"); f.setMessageOutput("assignment")
+                f = controller.newRTCFunction("ctrl_pick_add_p2", ctrl_pick_add_p2_src); f.setMessageInput("add_candidate_p2"); f.setMessageOutput("assignment")
+                f = controller.newRTCFunction("ctrl_pick_add_p3", ctrl_pick_add_p3_src); f.setMessageInput("add_candidate_p3"); f.setMessageOutput("assignment")
+                f = controller.newRTCFunction("ctrl_pick_cut", ctrl_pick_cut_src); f.setMessageInput("cut_candidate"); f.setMessageOutput("assignment")
 
         # Порядок выполнения в сутках (RTC на GPU) — после регистрации всех функций
         probe = os.getenv("FLAMEGPU_PROBE", "").strip().lower()
@@ -706,22 +764,26 @@ class HelicopterFlameModel:
             else:
                 add("rtc_pass_through", True)
         else:
-            add("rtc_repair", True)
-            add("rtc_ops_check", True)
-            add("rtc_publish_ops_persist", True)
-            add("rtc_publish_add_candidates_p1", True)
-            add("rtc_publish_add_candidates_p2", True)
-            add("rtc_publish_add_candidates_p3", True)
-            add("rtc_publish_cut_candidates", True)
-            add("ctrl_count_ops", False)
-            add("ctrl_pick_add_p1", False)
-            add("ctrl_pick_add_p2", False)
-            add("ctrl_pick_add_p3", False)
-            add("ctrl_pick_cut", False)
-            add("rtc_apply_assignments", True)
-            add("rtc_main", True)
-            add("rtc_change", True)
-            add("rtc_pass_through", True)
+            layer_mode = os.getenv("LAYER_MODE", "full").strip().lower()
+            if layer_mode == "repair_only":
+                add("rtc_repair", True)
+            else:
+                add("rtc_repair", True)
+                add("rtc_ops_check", True)
+                add("rtc_publish_ops_persist", True)
+                add("rtc_publish_add_candidates_p1", True)
+                add("rtc_publish_add_candidates_p2", True)
+                add("rtc_publish_add_candidates_p3", True)
+                add("rtc_publish_cut_candidates", True)
+                add("ctrl_count_ops", False)
+                add("ctrl_pick_add_p1", False)
+                add("ctrl_pick_add_p2", False)
+                add("ctrl_pick_add_p3", False)
+                add("ctrl_pick_cut", False)
+                add("rtc_apply_assignments", True)
+                add("rtc_main", True)
+                add("rtc_change", True)
+                add("rtc_pass_through", True)
 
         self.model = model
         return model
