@@ -97,7 +97,23 @@
 - Важные файлы: `code/flame_macroproperty2_exporter.py`, `code/flame_gpu_transform_runner.py`, `code/flame_gpu_gpu_runner.py`, `code/digital_values_dictionary_creator.py`, `code/utils/cleanup_dictionaries.py`, `code/transform_master.py`
 
 # Changelog - История изменений проекта
-**Последнее обновление:** 21-08-2025
+**Последнее обновление:** 24-08-2025
+## [24-08-2025] - Консолидация Transform и удаление flame_gpu_architecture.md
+### Изменено
+- В `docs/transform.md` удалён раздел и ссылка на `docs/flame_gpu_architecture.md`; документ `transform.md` остаётся единой точкой правды по логике суток на GPU.
+
+### Удалено
+- `docs/flame_gpu_architecture.md` как отдельный справочный документ (уникальные для Transform элементы уже отражены в `docs/transform.md`).
+## [24-08-2025] - Унификация логики Transform (GPU) и единая точка правды
+### Изменено
+- `docs/transform.md`: установлена как единый источник правды по логике суток на GPU — порядок слоёв 6→4→2→3→5→1, начисление налёта за D перед проверками D+1, атомарные квоты D+1, фиксация статуса на конец D, экспорт MP2 после Commit.
+- Устаревшие ссылки на `status_change` заменены на внутренний `next_status` (применение в конце D).
+
+### Добавлено
+- `docs/flame_gpu_architecture.md`: пометка, что при расхождениях приоритет у `docs/transform.md`.
+
+### Примечание
+- Логика, реализуемая в коде, должна соответствовать `docs/transform.md`. При доработках сначала обновлять документацию, затем код и тесты.
 ## [21-08-2025] - Инкрементная отладка RTC и атомарная квота (шаг 1)
 ### Добавлено
 - Минимальная модель `repair_only_model.py`: `rtc_repair`, `rtc_ops_check`, `rtc_main`, `rtc_quota_init`.
