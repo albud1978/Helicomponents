@@ -53,14 +53,15 @@ def fetch_daily_maps(client, d0: date) -> Tuple[Dict[int, int], Dict[int, int]]:
     return today_map, next_map
 
 
-def fetch_br_map(client) -> Dict[int, int]:
-    rows = client.execute("SELECT partno_comp, br FROM md_components")
-    return {int(p): int(b or 0) for p, b in rows}
+def fetch_br_map(client) -> Dict[int, Tuple[int, int]]:
+    # Возвращает карту partno_comp → (br_mi8, br_mi17) в минутах
+    rows = client.execute("SELECT partno_comp, br_mi8, br_mi17 FROM md_components")
+    return {int(p or 0): (int(b8 or 0), int(b17 or 0)) for p, b8, b17 in rows}
 
 
 def fetch_mp3_rows(client, vdate: date, vid: int) -> Tuple[List[Tuple], List[str]]:
     fields = [
-        'partseqno_i','psn','aircraft_number','group_by','status_id','status_change',
+        'partseqno_i','psn','aircraft_number','group_by','ac_type_mask','status_id','status_change',
         'll','oh','oh_threshold','sne','ppr','mfg_date','version_date'
     ]
     sql = f"""
@@ -91,7 +92,7 @@ def reset_status_change(client, vdate: date, vid: int) -> None:
     )
 
 
-def compute_status_change_sets(rows: List[Tuple], fields: List[str], today_map: Dict[int,int], next_map: Dict[int,int], br_map: Dict[int,int], group_filter: List[int]) -> Tuple[List[int], List[int]]:
+def compute_status_change_sets(rows: List[Tuple], fields: List[str], today_map: Dict[int,int], next_map: Dict[int,int], br_map: Dict[int,Tuple[int,int]], group_filter: List[int]) -> Tuple[List[int], List[int]]:
     idx = {name: i for i, name in enumerate(fields)}
     to_4: List[int] = []
     to_6: List[int] = []
@@ -108,13 +109,22 @@ def compute_status_change_sets(rows: List[Tuple], fields: List[str], today_map: 
         dt = int(today_map.get(ac, 0))
         dn = int(next_map.get(ac, 0))
         partseq = int(r[idx['partseqno_i']] or 0)
-        br = int(br_map.get(partseq, 4294967295))
         ll = int(r[idx['ll']] or 0)
         oh = int(r[idx['oh']] or 0)
         sne = int(r[idx['sne']] or 0)
         ppr = int(r[idx['ppr']] or 0)
+        # Выбор BR по маске типов (минуты)
+        mask = int(r[idx['ac_type_mask']] or 0)
+        br_mi8, br_mi17 = br_map.get(partseq, (0, 0))
+        br = 0
+        if mask & 32:
+            br = br_mi8
+        elif mask & 64:
+            br = br_mi17
+        else:
+            # fallback: если нет маски, используем максимальный из доступных
+            br = max(br_mi8, br_mi17)
         # Логика rtc_ops_check
-        # В ветках используем строго те же условия, что в каркасе CPU раннера
         ll_edge = (ll - sne)
         oh_edge = (oh - ppr)
         # 4: ремонтопригодный OH переход через границу сегодня→завтра

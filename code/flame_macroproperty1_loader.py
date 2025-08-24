@@ -132,7 +132,8 @@ class FlameMacroProperty1Loader:
             'repair_time',        # field_id: 54
             'partout_time',       # field_id: 45
             'assembly_time',      # field_id: 9
-            'br',                 # field_id: 10
+            'br_mi8',             # новый BR для МИ-8
+            'br_mi17',            # новый BR для МИ-17
             'restrictions_mask',  # field_id: 55
             
             # Дополнительные поля для симуляции (6 полей)

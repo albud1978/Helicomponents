@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Расчет поля Beyond Repair (br) в таблице md_components
-Вычисляет экономический порог списания для каждого партномера
+Расчет полей Beyond Repair по типам в таблице md_components: br_mi8, br_mi17
+Поле br (единое) более не используется и не заполняется.
 """
 
 import sys
@@ -39,264 +39,152 @@ class BeyondRepairCalculator:
         except Exception as e:
             self.logger.error(f"❌ Ошибка подключения: {e}")
             return False
-    
-    def add_br_column(self) -> bool:
-        """Добавление колонки br в md_components"""
-        self.logger.info("🔧 Добавление колонки br в md_components...")
-        
+
+    def add_br_columns(self) -> bool:
+        """Добавление колонок br_mi8 и br_mi17 в md_components"""
+        self.logger.info("🔧 Добавление колонок br_mi8/br_mi17 в md_components...")
         try:
-            # Добавляем колонку если её нет
-            alter_query = "ALTER TABLE md_components ADD COLUMN IF NOT EXISTS br Nullable(UInt16) DEFAULT NULL"
-            self.client.execute(alter_query)
-            
-            self.logger.info("✅ Колонка br (UInt16) добавлена в md_components")
+            self.client.execute("ALTER TABLE md_components ADD COLUMN IF NOT EXISTS br_mi8 Nullable(UInt32) DEFAULT NULL")
+            self.client.execute("ALTER TABLE md_components ADD COLUMN IF NOT EXISTS br_mi17 Nullable(UInt32) DEFAULT NULL")
+            self.logger.info("✅ Колонки br_mi8/br_mi17 добавлены в md_components")
             return True
-            
         except Exception as e:
-            self.logger.error(f"❌ Ошибка добавления колонки: {e}")
+            self.logger.error(f"❌ Ошибка добавления колонок: {e}")
             return False
-    
-    def analyze_components_data(self) -> Dict[str, Dict]:
-        """Анализ данных компонентов для расчета BR"""
-        self.logger.info("📊 Анализ данных компонентов...")
-        
+
+    def update_br_in_database(self) -> bool:
+        """Массовое обновление полей br_mi8/br_mi17 в md_components"""
+        self.logger.info("💾 Массовое обновление br_mi8/br_mi17 в md_components...")
         try:
-            # Получаем компоненты с полными данными для расчета BR
-            components_result = self.client.execute("""
-                SELECT 
-                    partno,
-                    ll_mi8, ll_mi17,
-                    oh_threshold_mi8, oh_mi17,
-                    repair_price,
-                    purchase_price,
-                    ac_type_mask
-                FROM md_components 
-                WHERE purchase_price > 0 
-                  AND repair_price > 0 
-                  AND (ll_mi8 > 0 OR ll_mi17 > 0)
-                  AND (oh_threshold_mi8 > 0 OR oh_mi17 > 0)
-                ORDER BY partno
-            """)
-            
-            components_data = {}
-            for row in components_result:
-                partno, ll_mi8, ll_mi17, oh_mi8, oh_mi17, repair_price, purchase_price, ac_type_mask = row
-                
-                components_data[partno] = {
-                    'll_mi8': ll_mi8 or 0,
-                    'll_mi17': ll_mi17 or 0,
-                    'oh_threshold_mi8': oh_mi8 or 0,
-                    'oh_threshold_mi17': oh_mi17 or 0,
-                    'repair_price': repair_price,
-                    'purchase_price': purchase_price,
-                    'ac_type_mask': ac_type_mask
-                }
-            
-            self.logger.info(f"📋 Найдено {len(components_data)} компонентов с полными данными")
-            
-            # Показываем примеры
-            self.logger.info("📋 Примеры компонентов для расчета:")
-            for i, (partno, data) in enumerate(list(components_data.items())[:3]):
-                self.logger.info(f"   {partno}: repair={data['repair_price']:,.0f}, purchase={data['purchase_price']:,.0f}")
-            
-            return components_data
-            
-        except Exception as e:
-            self.logger.error(f"❌ Ошибка анализа данных: {e}")
-            return {}
-    
-    def calculate_beyond_repair(self, nr: float, mrr: float, repair_price: float, purchase_price: float) -> float:
-        """
-        Расчет Beyond Repair по формуле из архива
-        
-        BR = NR - (RepairPrice / ((PurchasePrice - RepairPrice) / NR + RepairPrice / MRR))
-        
-        Args:
-            nr: Назначенный ресурс (ll)
-            mrr: Межремонтный ресурс (oh_threshold) 
-            repair_price: Стоимость ремонта
-            purchase_price: Стоимость покупки
-            
-        Returns:
-            int: Пороговая наработка Beyond Repair (округленная до целых)
-        """
-        try:
-            if nr <= 0 or mrr <= 0 or purchase_price <= 0 or repair_price <= 0:
-                return None
-            
-            # Проверяем что ремонт дешевле покупки
-            if repair_price >= purchase_price:
-                return 0  # Ремонт дороже покупки - сразу Beyond Repair
-            
-            # Формула из архива
-            denominator = (purchase_price - repair_price) / nr + repair_price / mrr
-            
-            if denominator <= 0:
-                return None
-                
-            equivalent_resource = repair_price / denominator
-            br = nr - equivalent_resource
-            
-            # BR не может быть отрицательным или больше NR
-            br_final = max(0, min(br, nr))
-            # Округляем до целых для UInt16
-            return round(br_final)
-            
-        except (ZeroDivisionError, TypeError):
-            return None
-    
-    def calculate_br_for_components(self, components_data: Dict[str, Dict]) -> Dict[str, int]:
-        """Расчет BR для всех компонентов"""
-        self.logger.info("🧮 Расчет Beyond Repair для компонентов...")
-        
-        br_results = {}
-        calculated_count = 0
-        
-        for partno, data in components_data.items():
-            # Определяем какие данные использовать (Ми-8 или Ми-17)
-            # Используем данные для Ми-8 как базовые, если есть
-            if data['ll_mi8'] > 0 and data['oh_threshold_mi8'] > 0:
-                nr = data['ll_mi8']
-                mrr = data['oh_threshold_mi8']
-                ac_type = 'Ми-8'
-            elif data['ll_mi17'] > 0 and data['oh_threshold_mi17'] > 0:
-                nr = data['ll_mi17'] 
-                mrr = data['oh_threshold_mi17']
-                ac_type = 'Ми-17'
-            else:
-                continue
-            
-            # Рассчитываем BR
-            br_value = self.calculate_beyond_repair(
-                nr, mrr, data['repair_price'], data['purchase_price']
-            )
-            
-            if br_value is not None:
-                br_results[partno] = br_value
-                calculated_count += 1
-                
-                # Логируем первые несколько примеров
-                if calculated_count <= 5:
-                    repair_pct = data['repair_price'] / data['purchase_price'] * 100
-                    self.logger.info(f"   {partno} ({ac_type}): NR={nr:.0f}h, MRR={mrr:.0f}h, " +
-                                   f"ремонт={repair_pct:.1f}% → BR={br_value:.0f}h")
-        
-        self.logger.info(f"✅ Рассчитано BR для {calculated_count} компонентов")
-        return br_results
-    
-    def update_br_in_database(self, br_results: Dict[str, int]) -> bool:
-        """Обновление поля br в md_components"""
-        self.logger.info("💾 Обновление поля br в md_components...")
-        
-        try:
-            # Сначала очищаем поле
-            self.client.execute("ALTER TABLE md_components UPDATE br = NULL WHERE 1=1")
-            
-            # Обновляем значения BR
-            updated_count = 0
-            for partno, br_value in br_results.items():
-                update_query = f"""
-                ALTER TABLE md_components 
-                UPDATE br = {br_value}
-                WHERE partno = '{partno}'
+            # Ми-8 → минуты (строго в Float64, затем приведение к UInt32)
+            self.client.execute(
                 """
-                self.client.execute(update_query)
-                updated_count += 1
-            
-            self.logger.info(f"✅ Обновлено {updated_count} записей с BR")
+                ALTER TABLE md_components UPDATE
+                  br_mi8 = if(
+                    ll_mi8 > 0 AND oh_mi8 > 0 AND purchase_price > 0 AND repair_price > 0,
+                    toUInt32(
+                      round(
+                        greatest(
+                          0.0,
+                          least(
+                            60.0 * ( toFloat64(ll_mi8) - (
+                              toFloat64(repair_price) / greatest(
+                                ((toFloat64(purchase_price) - toFloat64(repair_price)) / toFloat64(ll_mi8))
+                                + (toFloat64(repair_price) / toFloat64(oh_mi8)),
+                                1e-6
+                              )
+                            ) ),
+                            60.0 * toFloat64(ll_mi8)
+                          )
+                        )
+                      )
+                    ),
+                    NULL
+                  )
+                WHERE 1
+                """
+            )
+
+            # Ми-17 → минуты (строго в Float64, затем приведение к UInt32)
+            self.client.execute(
+                """
+                ALTER TABLE md_components UPDATE
+                  br_mi17 = if(
+                    ll_mi17 > 0 AND oh_mi17 > 0 AND purchase_price > 0 AND repair_price > 0,
+                    toUInt32(
+                      round(
+                        greatest(
+                          0.0,
+                          least(
+                            60.0 * ( toFloat64(ll_mi17) - (
+                              toFloat64(repair_price) / greatest(
+                                ((toFloat64(purchase_price) - toFloat64(repair_price)) / toFloat64(ll_mi17))
+                                + (toFloat64(repair_price) / toFloat64(oh_mi17)),
+                                1e-6
+                              )
+                            ) ),
+                            60.0 * toFloat64(ll_mi17)
+                          )
+                        )
+                      )
+                    ),
+                    NULL
+                  )
+                WHERE 1
+                """
+            )
+
+            # Невыгодный ремонт → 0
+            self.client.execute(
+                """
+                ALTER TABLE md_components UPDATE
+                  br_mi8  = if(repair_price >= purchase_price AND ll_mi8  > 0 AND oh_mi8  > 0, toUInt32(0), br_mi8),
+                  br_mi17 = if(repair_price >= purchase_price AND ll_mi17 > 0 AND oh_mi17 > 0, toUInt32(0), br_mi17)
+                WHERE 1
+                """
+            )
+
+            self.logger.info("✅ Массовое обновление br_mi8/br_mi17 выполнено (единицы: минуты)")
             return True
-            
         except Exception as e:
             self.logger.error(f"❌ Ошибка обновления: {e}")
             return False
-    
+
     def verify_br_calculation(self) -> bool:
-        """Проверка качества расчета BR"""
-        self.logger.info("🔍 Проверка качества расчета BR...")
-        
+        """Проверка качества расчёта BR по типам"""
+        self.logger.info("🔍 Проверка качества расчёта BR (br_mi8/br_mi17)...")
         try:
-            # Статистика BR
-            stats_result = self.client.execute("""
+            stats_result = self.client.execute(
+                """
                 SELECT 
                     COUNT(*) as total_components,
-                    countIf(br IS NOT NULL) as with_br,
-                    AVG(br) as avg_br,
-                    MIN(br) as min_br,
-                    MAX(br) as max_br
+                    countIf(br_mi8 IS NOT NULL)  as with_br_mi8,
+                    countIf(br_mi17 IS NOT NULL) as with_br_mi17,
+                    MIN(br_mi8)  as mi8_min,
+                    MAX(br_mi8)  as mi8_max,
+                    MIN(br_mi17) as mi17_min,
+                    MAX(br_mi17) as mi17_max
                 FROM md_components 
-                WHERE purchase_price > 0 AND repair_price > 0
-            """)
-            
-            total, with_br, avg_br, min_br, max_br = stats_result[0]
-            coverage = (with_br / total) * 100 if total > 0 else 0
-            
-            self.logger.info(f"📊 Статистика BR:")
-            self.logger.info(f"   Всего компонентов с ценами: {total}")
-            self.logger.info(f"   С рассчитанным BR: {with_br} ({coverage:.1f}%)")
-            if avg_br is not None:
-                self.logger.info(f"   Средний BR: {avg_br:.0f} часов")
-                self.logger.info(f"   Диапазон BR: {min_br:.0f} - {max_br:.0f} часов")
-            
-            # Примеры с BR
-            examples_result = self.client.execute("""
-                SELECT partno, purchase_price, repair_price, br,
-                       (repair_price / purchase_price * 100) as repair_pct
-                FROM md_components 
-                WHERE br IS NOT NULL
-                ORDER BY br DESC
-                LIMIT 5
-            """)
-            
-            self.logger.info("📋 Примеры рассчитанных BR:")
-            for row in examples_result:
-                partno, purchase, repair, br, repair_pct = row
-                self.logger.info(f"   {partno}: BR={br:.0f}h (ремонт {repair_pct:.1f}%)")
-            
+                """
+            )
+
+            total, with_mi8, with_mi17, mi8_min, mi8_max, mi17_min, mi17_max = stats_result[0]
+            self.logger.info(f"📊 Статистика BR (в минутах):")
+            self.logger.info(f"   Всего компонентов: {total}")
+            self.logger.info(f"   br_mi8: рассчитано {with_mi8}, диапазон [{mi8_min}, {mi8_max}]")
+            self.logger.info(f"   br_mi17: рассчитано {with_mi17}, диапазон [{mi17_min}, {mi17_max}]")
+
+            # Проверка инвариантов br <= 60*ll
+            inv = self.client.execute(
+                """
+                SELECT 
+                  sum(br_mi8  > 60 * ll_mi8)  as mi8_viol,
+                  sum(br_mi17 > 60 * ll_mi17) as mi17_viol
+                FROM md_components
+                """
+            )[0]
+            self.logger.info(f"   Инварианты: mi8_viol={inv[0]}, mi17_viol={inv[1]}")
             return True
-            
         except Exception as e:
             self.logger.error(f"❌ Ошибка проверки: {e}")
             return False
-    
+
     def run_calculation(self) -> bool:
         """Запуск полного расчета Beyond Repair"""
-        self.logger.info("🚀 Запуск расчета Beyond Repair для md_components")
-        
+        self.logger.info("🚀 Запуск расчёта BR по типам для md_components")
         try:
-            # 1. Подключение
             if not self.connect_to_database():
                 return False
-            
-            # 2. Добавление колонки br
-            if not self.add_br_column():
+            if not self.add_br_columns():
                 return False
-            
-            # 3. Анализ данных компонентов
-            components_data = self.analyze_components_data()
-            if not components_data:
-                self.logger.error("❌ Нет данных для расчета BR")
+            if not self.update_br_in_database():
                 return False
-            
-            # 4. Расчет BR
-            br_results = self.calculate_br_for_components(components_data)
-            if not br_results:
-                self.logger.error("❌ Не удалось рассчитать BR")
-                return False
-            
-            # 5. Обновление базы данных
-            if not self.update_br_in_database(br_results):
-                return False
-            
-            # 6. Проверка качества
             if not self.verify_br_calculation():
                 return False
-            
-            self.logger.info("🎯 РАСЧЕТ BEYOND REPAIR ЗАВЕРШЕН!")
-            self.logger.info("📊 Поле br добавлено в md_components")
-            self.logger.info("🚀 Master data готова для Flame GPU environment")
-            
+            self.logger.info("🎯 Расчёт BR по типам завершён!")
+            self.logger.info("📊 Поля br_mi8/br_mi17 (в минутах) заполнены в md_components")
+            self.logger.info("🚀 Master data готова для MacroProperty1 (без поля br)")
             return True
-            
         except Exception as e:
             self.logger.error(f"❌ Ошибка расчета: {e}")
             return False
