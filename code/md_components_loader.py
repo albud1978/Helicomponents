@@ -136,10 +136,14 @@ def prepare_md_data(df, version_date, version_id=1):
                 print(f"   🔧 {col}: UInt32 (оптимизировано Float64→UInt32)")
 
         # Добавляем дополнительные поля для совместимости с полной схемой таблицы
-        if 'br' not in df.columns:
-            df['br'] = None  # Beyond Repair будет вычислен позже
-            print("➕ Добавлено поле br = None (будет вычислено позже)")
-            
+        if 'br_mi8' not in df.columns:
+            df['br_mi8'] = None  # BR для МИ-8 будет вычислен позже
+            print("➕ Добавлено поле br_mi8 = None (будет вычислено позже)")
+
+        if 'br_mi17' not in df.columns:
+            df['br_mi17'] = None  # BR для МИ-17 будет вычислен позже
+            print("➕ Добавлено поле br_mi17 = None (будет вычислено позже)")
+
         if 'partno_comp' not in df.columns:
             df['partno_comp'] = None  # Компонентные ID будут добавлены позже
             print("➕ Добавлено поле partno_comp = None (будет вычислено позже)")
@@ -161,7 +165,34 @@ def prepare_md_data(df, version_date, version_id=1):
             unique_masks = sorted(df['restrictions_mask'].unique())
             print(f"   📊 restrictions_mask: диапазон {mask_min}-{mask_max}, уникальные: {unique_masks}")
 
-        print(f"📊 Подготовлено {len(df):,} записей с {len(df.columns)} колонками")
+        # Приводим порядок колонок к порядку DDL ClickHouse
+        column_order = [
+            'partno',
+            'comp_number', 'group_by', 'ac_type_mask',
+            'type_restricted', 'common_restricted1', 'common_restricted2',
+            'trigger_interval', 'partout_time', 'assembly_time', 'repair_time',
+            'll_mi8', 'oh_mi8', 'oh_threshold_mi8',
+            'll_mi17', 'oh_mi17',
+            'repair_price', 'purchase_price',
+            'sne_new', 'ppr_new',
+            'version_date', 'version_id',
+            'br_mi8', 'br_mi17',
+            'partno_comp', 'restrictions_mask'
+        ]
+
+        # Гарантируем наличие всех колонок
+        for col in column_order:
+            if col not in df.columns:
+                df[col] = None
+
+        # Установим 0 для non-nullable с DEFAULT 0, если вдруг отсутствуют
+        if 'restrictions_mask' in df.columns:
+            df['restrictions_mask'] = df['restrictions_mask'].fillna(0).astype('int64')
+
+        # Переупорядочим
+        df = df[column_order]
+
+        print(f"📊 Подготовлено {len(df):,} записей с {len(df.columns)} колонками (выравнено под DDL)")
         return df
         
     except Exception as e:
@@ -216,7 +247,8 @@ def create_md_table(client):
             `version_id` UInt8 DEFAULT 1,           -- ID версии
             
             -- Дополнительные поля (обогащенные с GPU-оптимизацией)
-            `br` Nullable(UInt32) DEFAULT NULL,    -- Beyond Repair (было UInt16 → uint32)
+            `br_mi8` Nullable(UInt32) DEFAULT NULL,     -- Beyond Repair для МИ-8 (UInt32)
+            `br_mi17` Nullable(UInt32) DEFAULT NULL,    -- Beyond Repair для МИ-17 (UInt32)
             `partno_comp` Nullable(UInt32) DEFAULT NULL,  -- Component ID (md_components_enricher.py)
             `restrictions_mask` UInt8 DEFAULT 0     -- Битовая маска всех ограничений (multihot[u8])
             

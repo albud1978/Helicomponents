@@ -98,6 +98,20 @@
 
 # Changelog - История изменений проекта
 **Последнее обновление:** 24-08-2025
+## [24-08-2025] - BR по типам в минутах и обновления Extract/Transform
+### Добавлено
+- В `md_components`: поля `br_mi8` и `br_mi17` (Nullable(UInt32)), единицы: минуты; расчёт массовыми UPDATE.
+- В `digital_values_dictionary_creator.py`: описания `br_mi8/br_mi17`; `br` помечен как DEPRECATED.
+- В `pre_simulation_status_change.py`: выбор BR по `ac_type_mask` (32→mi8, 64→mi17), единицы: минуты.
+
+### Изменено
+- `md_components_loader.py`: подготовка данных и порядок колонок выровнены под DDL (`br` исключён, добавлены `br_mi8/br_mi17`).
+- `flame_macroproperty1_loader.py`: `br` заменён на `br_mi8/br_mi17` в `analytics_fields`.
+- `docs/extract.md`: обновлены разделы BR (по типам, минуты, формула и ограничения).
+- `docs/transform.md`: добавлено примечание о выборе BR по маске типов и единицах измерения.
+
+### Исправлено
+- Ошибка прежней часовой шкалы BR, вызывавшая преждевременный переход в хранение на GPU; теперь BR в минутах.
 ## [24-08-2025] - Консолидация Transform и удаление flame_gpu_architecture.md
 ### Изменено
 - В `docs/transform.md` удалён раздел и ссылка на `docs/flame_gpu_architecture.md`; документ `transform.md` остаётся единой точкой правды по логике суток на GPU.
