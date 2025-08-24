@@ -540,7 +540,7 @@ SupersetBI: Direct Join по status_id
 
 ---
 
-*Последнее обновление: 29-07-2025* 
+*Последнее обновление: 24-08-2025* 
 
 ## Задача: Обогащение MacroProperty3 начальными статусами (pre-simulation)
 - **Статус**: Не начата
@@ -552,4 +552,3 @@ SupersetBI: Direct Join по status_id
   - Обновить экспортер `flame_macroproperty3_loader.py` для включения полей в MacroProperty3
 - **Результат**: MacroProperty3 содержит стартовые `status_id` и `status_change`, совместимые с RTC конвейером
 - **Зависимости**: Логика `overhaul_status_processor.py`, `program_ac_status_processor.py`, расчёт `repair_days`
-- **Методология**: Анализ → Архитектура → Код 
