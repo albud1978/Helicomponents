@@ -175,8 +175,10 @@ class FlameMacroProperty3Exporter:
             try:
                 ch_schema = self.client.execute("DESCRIBE TABLE heli_pandas")
                 existing_fields = {row[0] for row in ch_schema}
+                type_by_name_heli = {row[0]: row[1] for row in ch_schema}
             except Exception:
                 existing_fields = set()
+                type_by_name_heli = {}
             available_fields = [f for f in analytics_fields if (f in field_mapping and f in existing_fields)]
             
             # Подготавливаем данные для экспорта по схеме MacroProperty1
@@ -194,33 +196,30 @@ class FlameMacroProperty3Exporter:
                     if field_name in field_mapping:
                         field_id = field_mapping[field_name]
                         property_name = f"field_{field_id}"
-                        
+                        ch_type = type_by_name_heli.get(field_name, '')
+
+                        # Выбор точного getter-а по типу исходного поля (как в MP1/Validator)
+                        if 'UInt32' in ch_type:
+                            method_name = 'getEnvironmentPropertyArrayUInt32'
+                        elif ('UInt16' in ch_type) or ('Date' in ch_type):
+                            method_name = 'getEnvironmentPropertyArrayUInt16'
+                        elif 'UInt8' in ch_type:
+                            method_name = 'getEnvironmentPropertyArrayUInt8'
+                        elif 'Float64' in ch_type:
+                            method_name = 'getEnvironmentPropertyArrayDouble'
+                        elif 'Float32' in ch_type:
+                            method_name = 'getEnvironmentPropertyArrayFloat'
+                        else:
+                            method_name = 'getEnvironmentPropertyArrayUInt32'
+
                         try:
-                            # Сначала пробуем UInt32 - основной тип
-                            property_array = sim.getEnvironmentPropertyArrayUInt32(property_name)
+                            getter = getattr(sim, method_name)
+                            property_array = getter(property_name)
                             value = property_array[record_id] if record_id < len(property_array) else 0
                             row.append(value)
-                            
                         except Exception as prop_e:
-                            # Пробуем другие типы данных по схеме MacroProperty1
-                            try:
-                                property_array = sim.getEnvironmentPropertyArrayUInt16(property_name)
-                                value = property_array[record_id] if record_id < len(property_array) else 0
-                                row.append(value)
-                            except:
-                                try:
-                                    property_array = sim.getEnvironmentPropertyArrayUInt8(property_name)
-                                    value = property_array[record_id] if record_id < len(property_array) else 0
-                                    row.append(value)
-                                except:
-                                    try:
-                                        property_array = sim.getEnvironmentPropertyArrayFloat(property_name)
-                                        value = property_array[record_id] if record_id < len(property_array) else 0.0
-                                        row.append(value)
-                                    except:
-                                        # Если не удалось получить, ставим 0
-                                        self.logger.warning(f"⚠️ Не удалось получить {property_name} для {field_name}: {prop_e}")
-                                        row.append(0)
+                            self.logger.warning(f"⚠️ Не удалось получить {property_name} методом {method_name} для {field_name} (type={ch_type}): {prop_e}")
+                            row.append(0)
                     else:
                         # Поле не найдено в маппинге
                         row.append(0)

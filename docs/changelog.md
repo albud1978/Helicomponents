@@ -98,6 +98,14 @@
 
 # Changelog - История изменений проекта
 **Последнее обновление:** 24-08-2025
+## [25-08-2025] - Фикс MP3 экспортера и успешный прогон MP2
+### Исправлено
+- `flame_macroproperty3_exporter.py`: каскадный getter заменён на точный по типу (`DESCRIBE heli_pandas` → выбор `getEnvironmentPropertyArray*`).
+- В результате в `flame_macroproperty3_export` корректно выгружается `group_by` (12 значений 0..11), расхождения с `heli_pandas` отсутствуют.
+
+### Добавлено
+- Полная валидация MP3 через `flame_macroproperty3_validator.py`: 7113/7113 совпадений по всем аналитическим полям, отчёт сохранён в `temp_data/flame_macroproperty3_validation_report_YYYYMMDD_HHMMSS.txt`.
+- Тестовый прогон `sim_master.py --days 7` с очисткой MP2: экспортировано 1953 строки за 7 суток.
 ## [24-08-2025] - BR по типам в минутах и обновления Extract/Transform
 ### Добавлено
 - В `md_components`: поля `br_mi8` и `br_mi17` (Nullable(UInt32)), единицы: минуты; расчёт массовыми UPDATE.
