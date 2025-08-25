@@ -149,9 +149,8 @@ class FlameMacroProperty3Loader:
                 'psn',             # field_id: 48 - uint32 (agent_id)
                 'address_i',       # field_id: 7  - uint16
                 'lease_restricted', # field_id: 24 - uint8
-                'group_by',        # NEW: группировка взаимозаменяемости
+                'group_by',        # группировка взаимозаменяемости
                 'status_id',       # field_id: 61 - uint8
-                'status_change',   # NEW: метка перехода на D
                 'aircraft_number', # field_id: 8  - uint32
                 'ac_type_mask',    # field_id: 4  - multihot[u8]
                 'll',              # field_id: 25 - uint32
@@ -283,7 +282,7 @@ class FlameMacroProperty3Loader:
             # Добавлены group_by и status_change для поддержки RTC фильтров и меток переходов
             analytics_fields = [
                 'partseqno_i', 'psn', 'address_i', 'lease_restricted',
-                'group_by', 'status_id', 'status_change',
+                'group_by', 'status_id',
                 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date',
                 'version_date', 'version_id'
@@ -363,7 +362,7 @@ class FlameMacroProperty3Loader:
             # Добавлены group_by и status_change для согласованности с Environment
             analytics_fields = [
                 'partseqno_i', 'psn', 'address_i', 'lease_restricted',
-                'group_by', 'status_id', 'status_change',
+                'group_by', 'status_id',
                 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date',
                 'version_date', 'version_id'

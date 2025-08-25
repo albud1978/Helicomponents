@@ -26,6 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description='Оркестратор загрузки MacroProperty')
     parser.add_argument('--version-date', type=str, default=None)
     parser.add_argument('--version-id', type=str, default=None)
+    parser.add_argument('--run-sim', action='store_true', help='Запустить симуляцию на 1 сутки после загрузки')
     args = parser.parse_args()
 
     v_args = []
@@ -68,15 +69,15 @@ def main():
     print(f"\n⏱️ Общее время выполнения: {total_time:.1f} секунд")
     print("\n" + ("✅ Завершено" if all_ok else "⚠️ Завершено с ошибками"))
 
-    # После успешной загрузки MP/Property запускаем первый инкремент симуляции (1 сутки)
-    try:
-        if all_ok:
+    # Опциональный авто‑запуск симуляции только по флагу
+    if args.run_sim and all_ok:
+        try:
             print("\n===== Simulation (increment 1 day) =====")
             rc = run([sys.executable, 'code/sim_runner.py', '--days', '1'])
             if rc != 0:
                 print(f"⚠️ Симуляция завершилась с ошибкой (rc={rc})")
-    except Exception as e:
-        print(f"⚠️ Ошибка запуска симуляции: {e}")
+        except Exception as e:
+            print(f"⚠️ Ошибка запуска симуляции: {e}")
 
 
 if __name__ == '__main__':
