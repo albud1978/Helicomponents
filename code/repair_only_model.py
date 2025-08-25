@@ -96,8 +96,9 @@ class RepairOnlyModel:
             unsigned int ll  = FLAMEGPU->getVariable<unsigned int>("ll");
             unsigned int oh  = FLAMEGPU->getVariable<unsigned int>("oh");
             unsigned int br  = FLAMEGPU->getVariable<unsigned int>("br");
-            unsigned int sne_p = sne + dt;
-            unsigned int ppr_p = ppr + dt;
+            // main уже выполнил инкремент на dt, поэтому используем текущие значения
+            unsigned int sne_p = sne;
+            unsigned int ppr_p = ppr;
             unsigned int rem_ll = (ll >= sne_p ? (ll - sne_p) : 0u);
             if (rem_ll < dn) {
                 FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
@@ -133,10 +134,9 @@ class RepairOnlyModel:
             unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
             unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
             unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-            if (FLAMEGPU->getVariable<unsigned int>("ops_ticket") == 1u) {
-                FLAMEGPU->setVariable<unsigned int>("sne", sne + dt);
-                FLAMEGPU->setVariable<unsigned int>("ppr", ppr + dt);
-            }
+            // Инкремент всегда на D, т.к. используем статус начала дня
+            FLAMEGPU->setVariable<unsigned int>("sne", sne + dt);
+            FLAMEGPU->setVariable<unsigned int>("ppr", ppr + dt);
             return flamegpu::ALIVE;
         }
         """
@@ -161,15 +161,15 @@ class RepairOnlyModel:
         """
         agent.newRTCFunction("rtc_quota_init", rtc_quota_init_src)
 
-        # Слои: repair → quota_init → ops_check → main
+        # Слои: repair → quota_init → main → ops_check (решение на D+1 после инкремента)
         lyr1 = model.newLayer()
         lyr1.addAgentFunction(agent.getFunction("rtc_repair"))
         lyr2 = model.newLayer()
         lyr2.addAgentFunction(agent.getFunction("rtc_quota_init"))
         lyr3 = model.newLayer()
-        lyr3.addAgentFunction(agent.getFunction("rtc_ops_check"))
+        lyr3.addAgentFunction(agent.getFunction("rtc_main"))
         lyr4 = model.newLayer()
-        lyr4.addAgentFunction(agent.getFunction("rtc_main"))
+        lyr4.addAgentFunction(agent.getFunction("rtc_ops_check"))
 
         self.model = model
         return model

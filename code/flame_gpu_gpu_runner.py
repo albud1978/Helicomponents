@@ -41,9 +41,9 @@ def fetch_versions(client):
     return vd, int(vid)
 
 
-def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int]]:
-    rows = client.execute("SELECT partno_comp, br, repair_time, partout_time, assembly_time FROM md_components")
-    return {int(p): (int(br or 0), int(rt or 0), int(pt or 0), int(at or 0)) for p, br, rt, pt, at in rows}
+def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int]]:
+    rows = client.execute("SELECT partno_comp, br_mi8, br_mi17, repair_time, partout_time, assembly_time FROM md_components")
+    return {int(p): (int(b8 or 0), int(b17 or 0), int(rt or 0), int(pt or 0), int(at or 0)) for p, b8, b17, rt, pt, at in rows}
 
 
 def fetch_mp3(client, vdate, vid):

@@ -19,7 +19,7 @@ except Exception:
 sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 
 
-def build_agents(sim, model, mp3_rows: List[Tuple], mp3_fields: List[str], mp1_br_rt_map: Dict[int, Tuple[int,int,int,int]]):
+def build_agents(sim, model, mp3_rows: List[Tuple], mp3_fields: List[str], mp1_br_rt_map: Dict[int, Tuple[int,int,int,int,int]]):
     assert pyflamegpu is not None
     comp_desc = model.model.getAgent("component")
     av = pyflamegpu.AgentVector(comp_desc, len(mp3_rows))
@@ -57,8 +57,17 @@ def build_agents(sim, model, mp3_rows: List[Tuple], mp3_fields: List[str], mp1_b
         ai.setVariableUInt("mfg_date", int(max(0, mfg_ord)))
         ai.setVariableUInt("version_date", int(max(0, vdt_ord)))
         partseq = int(r[idx['partseqno_i']] or 0)
-        br, rt, pt, at = mp1_br_rt_map.get(partseq, (0, 0, 0, 0))
-        ai.setVariableUInt("br", int(br))
+        b8, b17, rt, pt, at = mp1_br_rt_map.get(partseq, (0, 0, 0, 0, 0))
+        mask = int(r[idx['ac_type_mask']] or 0)
+        br_val = 0
+        if mask & 32:
+            br_val = int(b8)
+        elif mask & 64:
+            br_val = int(b17)
+        else:
+            # Если маска не задана: считаем неремонтопригодным
+            br_val = 0
+        ai.setVariableUInt("br", int(br_val))
         ai.setVariableUInt("repair_time", int(rt))
         ai.setVariableUInt("partout_time", int(pt))
         ai.setVariableUInt("assembly_time", int(at))
