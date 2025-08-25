@@ -144,7 +144,9 @@ def main():
     all_days = sorted(mp4.keys())
     if not all_days:
         raise RuntimeError("Нет дат в MP4")
-    days_list = all_days[: a.days] if a.days else all_days[:1]
+    # Смещение старта на D+1: пропускаем первый день (D0)
+    start_idx = 1 if len(all_days) > 1 else 0
+    days_list = all_days[start_idx : start_idx + (a.days if a.days else 1)]
 
     total_step_s = 0.0
     total_export_s = 0.0
