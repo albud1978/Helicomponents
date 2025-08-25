@@ -144,6 +144,13 @@
 - **ВАЖНО**: ❌ flight_program_fl_loader.py НЕ интегрирован в Extract пайплайн extract_master.py - требуется интеграция для автоматического создания тензора при каждом Extract цикле
 - **Зависимости**: Требовало словарь aircraft_number и таблицу flight_program с данными daily_flight
 
+## Задача: Загрузка br_mi8/br_mi17 в MacroProperty1 (MP1)
+- **Статус**: Завершена
+- **Дата завершения**: 25-08-2025
+- **Описание**: Поля `br_mi8` и `br_mi17` из `md_components` загружены в MacroProperty1; подтверждено roundtrip‑валидацией FLAME GPU.
+- **Результат**: `br_mi8/br_mi17` корректно присутствуют в MP1 (единицы: минуты). Расхождения по `partno/purchase_price/repair_price` ожидаемы, т.к. эти поля исключены из загрузки MP1 и остаются нулями в Environment.
+- **Файлы**: `code/flame_macroproperty1_loader.py`, `code/flame_macroproperty1_validator.py`, `code/flame_macroproperty1_exporter.py`
+
 ---
 
 ## ЭТАП EXTRACT (ЗАВЕРШЕНИЕ)
@@ -324,8 +331,9 @@ SupersetBI: Direct Join по status_id
 - **Методология**: Анализ → Код
 
 ## Задача: Добавить br_mи8 и br_mи17 в md_components (P1)
-- **Статус**: Не начата
+- **Статус**: Завершена
 - **Дата создания**: 24-08-2025
+- **Дата завершения**: 24-08-2025
 - **Описание**: В этапе Extract доработать расчёт Beyond Repair для раздельного учёта по типам ВС. В таблице `md_components` хранить два поля: `br_mi8 Nullable(UInt32)` и `br_mi17 Nullable(UInt32)`. Пересчитать значения по формуле для каждой пары ресурсов.
 - **Формула расчёта (для каждого типа отдельно)**:
   - Обозначения: `NR` = LL, `MRR` = OH, `RepairPrice` = стоимость ремонта, `PurchasePrice` = стоимость покупки
@@ -337,6 +345,8 @@ SupersetBI: Direct Join по status_id
   3. Обновление ClickHouse: добавить колонки при отсутствии; выполнять `ALTER TABLE ... UPDATE` атомарно
 - **Результат**: `md_components` содержит раздельные пороги BR по Ми‑8 и Ми‑17, исключая неоднозначность выбора и обеспечивая корректную поддержку в симуляции
 - **Зависимости**: `md_components_loader.py` (схема таблицы), `calculate_beyond_repair.py` (разделение на два поля), `transform.md`/`extract.md` (обновление документации)
+
+> Дополнительно: Поля `br_mi8/br_mi17` рассчитываются в минутах; загрузчик MacroProperty1 (MP1) включает эти поля в экспорт.
 
 ## Задача: Исправление формулы счетчика repair_days
 - **Статус**: Завершена
@@ -540,7 +550,7 @@ SupersetBI: Direct Join по status_id
 
 ---
 
-*Последнее обновление: 24-08-2025* 
+*Последнее обновление: 25-08-2025* 
 
 ## Задача: Обогащение MacroProperty3 начальными статусами (pre-simulation)
 - **Статус**: Не начата

@@ -56,11 +56,12 @@ def main():
 
     client = get_clickhouse_client()
     vdate, vid = fetch_versions(client)
-    mp1_map = fetch_mp1_br_rt(client)  # partseqno_i -> (br, repair_time, partout_time, assembly_time)
+    mp1_map = fetch_mp1_br_rt(client)  # partseqno_i -> (br_mi8, br_mi17, repair_time, partout_time, assembly_time)
     mp3_rows, mp3_fields = fetch_mp3(client, vdate, vid)
     n = len(mp3_rows)
 
     model = RepairOnlyModel()
+    mp4 = preload_mp4_by_day(client)
     model.build_model(num_agents=n)
     sim = model.build_simulation()
     agent_desc = model.model.getAgent("component")
@@ -94,13 +95,23 @@ def main():
         ai.setVariableUInt("status_id", int(r[idx['status_id']] or 0))
         ai.setVariableUInt("repair_days", int(r[idx['repair_days']] or 0))
         partseq = int(r[idx['partseqno_i']] or 0)
-        br, rt, pt, at = mp1_map.get(partseq, (0, 0, 0, 0))
+        b8, b17, rt, pt, at = mp1_map.get(partseq, (0, 0, 0, 0, 0))
+        # Выбор BR по маске типа планера (у планера всегда один бит). br=0 => неремонтопригоден.
+        mask = int(r[idx.get('ac_type_mask', -1)] or 0)
+        br_val = 0
+        if mask & 32:
+            br_val = int(b8)
+        elif mask & 64:
+            br_val = int(b17)
+        else:
+            # Если маска не задана или не планер — порог остаётся 0 (неремонтопригоден)
+            br_val = 0
         ai.setVariableUInt("repair_time", int(rt))
         ai.setVariableUInt("ppr", int(r[idx.get('ppr', -1)] or 0))
         ai.setVariableUInt("sne", int(r[idx.get('sne', -1)] or 0))
         ai.setVariableUInt("ll", int(r[idx.get('ll', -1)] or 0))
         ai.setVariableUInt("oh", int(r[idx.get('oh', -1)] or 0))
-        ai.setVariableUInt("br", int(br))
+        ai.setVariableUInt("br", int(br_val))
     sim.setPopulationData(av)
 
     # Опциональная верификация агентных переменных
@@ -129,7 +140,6 @@ def main():
     if a.clean_mp2:
         client.execute(f"TRUNCATE TABLE {exporter.table_name}")
 
-    mp4 = preload_mp4_by_day(client)
     mp5_maps = preload_mp5_maps(client)
     all_days = sorted(mp4.keys())
     if not all_days:
@@ -139,7 +149,7 @@ def main():
     total_step_s = 0.0
     total_export_s = 0.0
     all_rows: List[Dict] = []
-    for D in days_list:
+    for day_idx, D in enumerate(days_list):
         t0 = time.perf_counter()
         # Перед шагом заполняем массивы суточных часов для ops_check
         today_map = mp5_maps.get(D, {})
@@ -152,7 +162,7 @@ def main():
             ag.setVariableUInt('daily_today_u32', int(daily_today[i] if i < len(daily_today) else 0))
             ag.setVariableUInt('daily_next_u32', int(daily_next[i] if i < len(daily_next) else 0))
         sim.setPopulationData(pop_buf)
-        # Инициализация квоты D+1 из MP4 (используем счётчики следующего дня)
+        # Fallback: прокидываем квоты на D+1 с host (до фикса NVRTC)
         ops_targets = mp4.get(D + timedelta(days=1), {"ops_counter_mi8": 0, "ops_counter_mi17": 0})
         sim.setEnvironmentPropertyUInt32("quota_next_mi8", int(ops_targets.get('ops_counter_mi8', 0)))
         sim.setEnvironmentPropertyUInt32("quota_next_mi17", int(ops_targets.get('ops_counter_mi17', 0)))

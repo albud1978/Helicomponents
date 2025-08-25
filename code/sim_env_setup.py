@@ -27,9 +27,10 @@ def fetch_versions(client) -> Tuple[date, int]:
     return vd, int(vid)
 
 
-def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int]]:
-    rows = client.execute("SELECT partno_comp, br, repair_time, partout_time, assembly_time FROM md_components")
-    return {int(p): (int(br or 0), int(rt or 0), int(pt or 0), int(at or 0)) for p, br, rt, pt, at in rows}
+def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int]]:
+    """Возвращает карту partno_comp → (br_mi8, br_mi17, repair_time, partout_time, assembly_time). BR в минутах."""
+    rows = client.execute("SELECT partno_comp, br_mi8, br_mi17, repair_time, partout_time, assembly_time FROM md_components")
+    return {int(p): (int(b8 or 0), int(b17 or 0), int(rt or 0), int(pt or 0), int(at or 0)) for p, b8, b17, rt, pt, at in rows}
 
 
 def fetch_mp3(client, vdate: date, vid: int):
@@ -81,7 +82,7 @@ def preload_mp5_maps(client) -> Dict[date, Dict[int,int]]:
     return result
 
 
-def build_daily_arrays(mp3_rows, mp3_fields: List[str], mp1_br_rt_map: Dict[int, Tuple[int,int,int,int]], daily_today_map: Dict[int,int], daily_next_map: Dict[int,int]) -> Tuple[List[int], List[int], List[int], List[int]]:
+def build_daily_arrays(mp3_rows, mp3_fields: List[str], mp1_br_rt_map: Dict[int, Tuple[int,int,int,int,int]], daily_today_map: Dict[int,int], daily_next_map: Dict[int,int]) -> Tuple[List[int], List[int], List[int], List[int]]:
     idx = {name: i for i, name in enumerate(mp3_fields)}
     daily_today: List[int] = []
     daily_next: List[int] = []
@@ -92,7 +93,8 @@ def build_daily_arrays(mp3_rows, mp3_fields: List[str], mp1_br_rt_map: Dict[int,
         daily_today.append(int(daily_today_map.get(ac, 0)))
         daily_next.append(int(daily_next_map.get(ac, 0)))
         partseq = int(r[idx['partseqno_i']] or 0)
-        _, _, pt, at = mp1_br_rt_map.get(partseq, (0,0,0,0))
+        # карта теперь (br_mi8, br_mi17, repair_time, partout_time, assembly_time)
+        _, _, _, pt, at = mp1_br_rt_map.get(partseq, (0,0,0,0,0))
         partout_arr.append(int(pt))
         assembly_arr.append(int(at))
     return daily_today, daily_next, partout_arr, assembly_arr
