@@ -35,7 +35,7 @@ def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int]]:
 
 def fetch_mp3(client, vdate: date, vid: int):
     fields = [
-        'partseqno_i','psn','aircraft_number','ac_type_mask','group_by','status_id','status_change',
+        'partseqno_i','psn','aircraft_number','ac_type_mask','group_by','status_id',
         'll','oh','oh_threshold','sne','ppr','repair_days','mfg_date','version_date'
     ]
     sql = f"""

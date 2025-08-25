@@ -377,10 +377,10 @@ def create_tables(client):
             
             -- Обогащенные поля (добавляются dual_loader.py и enrich_heli_pandas.py)
             `status_id` UInt8 DEFAULT 0,            -- Статус компонента (через status_processor.py)
-            `status_change` UInt8 DEFAULT 0,        -- Метка перехода статуса на D0 для Transform (pre-simulation)
             `repair_days` Nullable(UInt16),         -- Остаток дней до окончания ремонта (было Int16 → uint16, без минусов)
             `aircraft_number` UInt32 DEFAULT 0,     -- Номер ВС из RA-XXXXX (расширен для самолетов)
-            `ac_type_mask` UInt8 DEFAULT 0          -- Битовая маска типа ВС для multihot (через enrich_heli_pandas.py)
+            `ac_type_mask` UInt8 DEFAULT 0,         -- Битовая маска типа ВС для multihot (через enrich_heli_pandas.py)
+            `group_by` UInt8 DEFAULT 0              -- Группировка взаимозаменяемости (из md_components)
             
         ) ENGINE = MergeTree()
         ORDER BY (version_date, version_id)
@@ -390,6 +390,11 @@ def create_tables(client):
         
         client.execute(create_raw_sql)
         client.execute(create_pandas_sql)
+        # Гарантируем наличие колонки group_by (для существующих таблиц)
+        try:
+            client.execute("ALTER TABLE heli_pandas ADD COLUMN IF NOT EXISTS group_by UInt8 DEFAULT 0")
+        except Exception as e:
+            print(f"⚠️ ALTER ADD COLUMN group_by пропущен: {e}")
         print("✅ Таблицы heli_raw и heli_pandas готовы")
         
     except Exception as e:
@@ -647,10 +652,7 @@ def main(version_date=None, version_id=None):
             pandas_df['status_id'] = 0  # По умолчанию 0 (не определен)
             print(f"   ➕ Создано поле status_id: 0 (обновится процессорами)")
         
-        # Поле status_change - метка перехода на D0 для Transform (pre-simulation)
-        if 'status_change' not in pandas_df.columns:
-            pandas_df['status_change'] = 0
-            print(f"   ➕ Создано поле status_change: 0 (pre-simulation)")
+        # Поле status_change больше не используется
         
         print(f"✅ [ЭТАП 8.2a] Поля инициализированы за {time.time() - init_start:.2f}с")
         
@@ -686,6 +688,13 @@ def main(version_date=None, version_id=None):
             print(f"🔧 Этап 2: Статусы эксплуатации...")
             from program_ac_status_processor import process_program_ac_status_field
             pandas_df = process_program_ac_status_field(pandas_df, client)
+            # ЭТАП 2b: Precheck D1 для записей со статусом 2 (исключить овершут на первый день)
+            print(f"🔧 Этап 2b: Пред‑проверка D1 (LL/OH/BR) для status_id=2...")
+            try:
+                from program_ac_precheck_next_day import process_program_ac_precheck_d1
+                pandas_df = process_program_ac_precheck_d1(pandas_df, client)
+            except Exception as e:
+                print(f"⚠️ Ошибка precheck D1: {e}")
             
             # ЭТАП 3: Обработка статусов неактивности планеров (МИ-8Т, МИ-8П и т.д.)
             print(f"🔧 Этап 3: Статусы неактивности планеров...")
@@ -698,6 +707,8 @@ def main(version_date=None, version_id=None):
         except Exception as e:
             print(f"❌ Ошибка обработки статусов: {e}")
         
+        # 8.2c Удалено: заполнение group_by выполняется отдельным шагом энричера
+
         # 8.3 Записываем финальную heli_pandas с полной структурой
         print(f"\n💾 [ЭТАП 8.3] Финальная загрузка heli_pandas...")
         final_start = time.time()
@@ -705,14 +716,14 @@ def main(version_date=None, version_id=None):
         print(f"🔧 [ЭТАП 8.3a] Выравнивание порядка колонок...")
         column_start = time.time()
         
-        # Правильный порядок согласно схеме heli_pandas (25 полей: dual_loader создает 24 + enrich_heli_pandas заполняет ac_type_mask)
+        # Правильный порядок согласно схеме heli_pandas (добавлен group_by, убран status_change)
         correct_column_order = [
             'partno', 'serialno', 'ac_typ', 'location',
             'mfg_date', 'removal_date', 'target_date',
             'condition', 'owner', 'lease_restricted',
             'oh', 'oh_threshold', 'll', 'sne', 'ppr',
             'version_date', 'version_id', 'partseqno_i', 'psn', 'address_i', 'ac_type_i',
-            'status_id', 'status_change', 'repair_days', 'aircraft_number', 'ac_type_mask'
+            'status_id', 'repair_days', 'aircraft_number', 'ac_type_mask', 'group_by'
         ]
         
         # Проверяем наличие всех колонок

@@ -700,7 +700,45 @@ class DictionaryCreator:
             
             result = self.client.query(aircraft_query)
             if not result.result_rows:
-                self.logger.warning("⚠️ Нет данных о номерах ВС в heli_pandas")
+                self.logger.warning("⚠️ Нет данных о номерах ВС в heli_pandas — создаём пустую таблицу и Dictionary")
+                # Создаём таблицу, если её нет
+                aircraft_table_sql = """
+                CREATE TABLE IF NOT EXISTS dict_aircraft_number_flat (
+                    aircraft_number UInt32,
+                    formatted_number String,
+                    registration_code String,
+                    is_leading_zero UInt8 DEFAULT 0,
+                    ac_type_mask UInt8 DEFAULT 0,
+                    version_date Date DEFAULT today(),
+                    version_id UInt8 DEFAULT 1,
+                    load_timestamp DateTime DEFAULT now()
+                ) ENGINE = MergeTree()
+                ORDER BY (aircraft_number, version_date, version_id, load_timestamp)
+                PARTITION BY toYYYYMM(version_date)
+                SETTINGS index_granularity = 8192
+                """
+                self.client.query(aircraft_table_sql)
+                # Создаём/обновляем Dictionary объект
+                aircraft_dict_ddl = f"""
+                CREATE OR REPLACE DICTIONARY aircraft_number_dict_flat (
+                    aircraft_number UInt32,
+                    formatted_number String,
+                    registration_code String,
+                    is_leading_zero UInt8,
+                    ac_type_mask UInt8
+                )
+                PRIMARY KEY aircraft_number
+                SOURCE(CLICKHOUSE(
+                    HOST '{self.config['host']}'
+                    PORT {self.config['port']}
+                    TABLE 'dict_aircraft_number_flat'
+                    DB '{self.config['database']}'
+                ))
+                LAYOUT(FLAT())
+                LIFETIME(MIN 0 MAX 3600)
+                """
+                self.client.query(aircraft_dict_ddl)
+                self.logger.info("✅ Пустая dict_aircraft_number_flat создана и Dictionary определён")
                 return True
             
             # Создаем словарь aircraft_number -> ac_type_mask

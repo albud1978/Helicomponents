@@ -76,7 +76,7 @@ class FlameMacroProperty3Validator:
             # Создаем DDL только для полей из аналитики MacroProperty3
             analytics_fields = [
                 'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'group_by', 'status_id',
-                'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
+                'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
             # Ограничиваемся только реально существующими в heli_pandas и имеющимися в маппинге
@@ -130,7 +130,7 @@ class FlameMacroProperty3Validator:
             # Поля из аналитики MacroProperty3
             analytics_fields = [
                 'partseqno_i', 'psn', 'address_i', 'lease_restricted', 'group_by', 'status_id',
-                'status_change', 'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
+                'aircraft_number', 'ac_type_mask', 'll', 'oh', 'oh_threshold',
                 'sne', 'ppr', 'repair_days', 'mfg_date'
             ]
             # Ограничиваемся реально доступными полями
@@ -164,7 +164,7 @@ class FlameMacroProperty3Validator:
                         get_method = 'getEnvironmentPropertyArrayUInt32'
                     elif field_name in ['address_i', 'repair_days', 'mfg_date']:
                         get_method = 'getEnvironmentPropertyArrayUInt16'
-                    elif field_name in ['lease_restricted', 'status_id', 'ac_type_mask', 'group_by', 'status_change']:
+                    elif field_name in ['lease_restricted', 'status_id', 'ac_type_mask', 'group_by']:
                         get_method = 'getEnvironmentPropertyArrayUInt8'
                     else:
                         get_method = 'getEnvironmentPropertyArrayUInt32'  # По умолчанию

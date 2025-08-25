@@ -283,6 +283,13 @@ SupersetBI: Direct Join по status_id
 
 ## ЭТАП EXTRACT (ДОРАБОТКИ)
 
+## Задача: Исправить маппинг field_id для heli_pandas.group_by (P1)
+- **Статус**: Не начата
+- **Дата создания**: 25-08-2025
+- **Описание**: В `dict_digital_values_flat` зафиксировать уникальный `field_id` для поля `heli_pandas.group_by` (не совпадающий с `status_id`), перегенерировать словарь и убедиться, что MacroProperty3 корректно считывает `group_by`. Симптом: в `flame_macroproperty3_export` значения `group_by` обрезаются до диапазона 0..5 (как у `status_id`), тогда как в `heli_pandas` и `md_components` диапазон 0..11.
+- **Результат**: После перегенерации словаря и повторной загрузки MP3 — в `flame_macroproperty3_export` `group_by` имеет корректный диапазон 0..11; проверки агрегатов по `partseqno_i` подтверждают перенос значений без искажений.
+- **Зависимости**: `digital_values_dictionary_creator.py`, `flame_macroproperty3_loader.py`, `flame_macroproperty3_exporter.py`
+
 ## Задача: Оптимизация полей MacroProperty1 для аналитики
 - **Статус**: Завершена
 - **Дата завершения**: 28-07-2025

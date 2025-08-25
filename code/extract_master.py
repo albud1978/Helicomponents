@@ -155,13 +155,6 @@ class ExtractMaster:
             'critical': False
         },
         {
-            'script': 'heli_pandas_group_by_enricher.py',
-            'description': 'Обогащение heli_pandas.group_by из md_components.partno_comp (идемпотентно)',
-            'dependencies': ['md_components', 'heli_pandas'],
-            'result_table': 'heli_pandas',
-            'critical': False
-        },
-        {
             'script': 'dictionary_creator.py',
             'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
             'dependencies': ['heli_pandas', 'md_components'],
@@ -183,6 +176,14 @@ class ExtractMaster:
             'result_table': 'flight_program_ac',
             'critical': False
         },
+        {
+            'script': 'heli_pandas_group_by_enricher.py',
+            'description': 'Обогащение heli_pandas.group_by из md_components.partno_comp (идемпотентно)',
+            'dependencies': ['md_components', 'heli_pandas'],
+            'result_table': 'heli_pandas',
+            'critical': False,
+            'args': ['--apply']
+        },
         # === МЕТА-СЛОВАРЬ (финальный этап после всех таблиц) ===
         {
             'script': 'digital_values_dictionary_creator.py',
@@ -200,13 +201,7 @@ class ExtractMaster:
             'critical': True
         },
         # === PRE-SIMULATION РАЗМЕТКА (инициализация status_change на D0) ===
-        {
-            'script': 'pre_simulation_status_change.py',
-            'description': 'Инициализация heli_pandas.status_change по RTC правилам (D0)',
-            'dependencies': ['heli_pandas', 'md_components', 'flight_program_ac', 'flight_program_fl'],
-            'result_table': 'heli_pandas',
-            'critical': False
-        }
+        # Удалено: pre_simulation_status_change (status_change более не используется)
     ]
     
     def __init__(self):
@@ -411,11 +406,13 @@ class ExtractMaster:
         try:
             start_time = time.time()
             
-            # Формируем команду с параметрами версионирования
+            # Формируем команду с параметрами версионирования и доп. аргументами шага (если есть)
+            extra_args = step.get('args', [])
             cmd_with_params = [
                 sys.executable, str(script_path),
                 '--version-date', str(self.version_date),
-                '--version-id', str(self.version_id)
+                '--version-id', str(self.version_id),
+                *extra_args
             ]
             
             # Сначала пробуем с параметрами версионирования
@@ -431,7 +428,7 @@ class ExtractMaster:
             if result.returncode != 0 and ("unrecognized arguments" in result.stderr or "unknown option" in result.stderr):
                 logger.warning(f"⚠️ Скрипт {script_name} не поддерживает версионирование, запускаем без параметров")
                 
-                cmd_without_params = [sys.executable, str(script_path)]
+                cmd_without_params = [sys.executable, str(script_path), *extra_args]
                 
                 result = subprocess.run(
                     cmd_without_params,
