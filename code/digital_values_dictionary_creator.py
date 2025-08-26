@@ -87,8 +87,6 @@ class DigitalValuesDictionaryCreator:
             'ppr_new': ('Nullable(UInt32)', 'PPR (переименовано из ppr, оптимизировано Float64→UInt32)'),
             'version_date': ('Date', 'Дата версии данных'),
             'version_id': ('UInt8', 'ID версии данных'),
-            # br устарело, не используется в новых циклах Extract/MP; оставляем описание для обратной совместимости
-            'br': ('Nullable(UInt32)', 'DEPRECATED: Beyond Repair (заменено на br_mi8/br_mi17)'),
             'br_mi8': ('Nullable(UInt32)', 'Beyond Repair для МИ-8'),
             'br_mi17': ('Nullable(UInt32)', 'Beyond Repair для МИ-17'),
             'partno_comp': ('Nullable(UInt32)', 'Component ID'),

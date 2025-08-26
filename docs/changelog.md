@@ -99,6 +99,13 @@
 # Changelog - История изменений проекта
 **Последнее обновление:** 24-08-2025
 ## [25-08-2025] - Фикс MP3 экспортера и успешный прогон MP2
+## [26-08-2025] - Extract: отдельный шаг обогащения group_by и BR по типам
+### Изменено
+- `docs/extract.md`: добавлен отдельный этап `heli_pandas_group_by_enricher.py` после `program_ac_direct_loader.py` и перед `digital_values_dictionary_creator.py`, пометка про запуск с `--apply`.
+- `docs/transform.md`: поле `br` помечено как DEPRECATED; вместо него зафиксированы `br_mi8` и `br_mi17` (единицы: минуты) в таблице MacroProperty1.
+
+### Примечание
+- В `flame_macroproperty3_export` поле `group_by` уже присутствует; документация уточнена без изменения структуры MP3.
 ### Исправлено
 - `flame_macroproperty3_exporter.py`: каскадный getter заменён на точный по типу (`DESCRIBE heli_pandas` → выбор `getEnvironmentPropertyArray*`).
 - В результате в `flame_macroproperty3_export` корректно выгружается `group_by` (12 значений 0..11), расхождения с `heli_pandas` отсутствуют.
