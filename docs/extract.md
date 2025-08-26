@@ -65,7 +65,8 @@
 |-------|-----------|----------------|------------------|
 | **9** | `program_fl_direct_loader.py` | Прямой тензор программ полетов на 4000 дней | ✅ CLI параметры Extract |
 | **10** | `program_ac_direct_loader.py` | Прямой тензор операций ВС с постпроцессингом | ✅ CLI параметры Extract |
-| **11** | `digital_values_dictionary_creator.py` | Аддитивный словарь всех полей для Flame GPU - **ИСПРАВЛЕН** | ✅ Получает из heli_pandas |
+| **11** | `heli_pandas_group_by_enricher.py` | Обогащение `heli_pandas.group_by` по `md_components.partno_comp` (идемпотентно, запускается с `--apply`) | ✅ Наследует от heli_pandas/md_components |
+| **12** | `digital_values_dictionary_creator.py` | Аддитивный словарь всех полей для Flame GPU - **ИСПРАВЛЕН** | ✅ Получает из heli_pandas |
 
 ### Финальные расчеты (критичные зависимости)
 
@@ -205,14 +206,15 @@ python3 code/utils/database_cleanup.py
 | `program_ac_status_processor.py` | `heli_pandas.status_id` | Обработка статусов эксплуатации |
 | `inactive_planery_processor.py` | `heli_pandas.status_id` | Обработка неактивных планеров |
 
-### Этап 9-12: Тензоры для Flame GPU + финальные расчеты
+### Этап 9-13: Тензоры для Flame GPU + финальные расчеты
 
 | **Этап** | **Скрипт** | **Таблица СУБД** | **Источник версии** |
 |----------|-----------|------------------|-------------------|
 | **9** | `program_fl_direct_loader.py` | `flight_program_fl` | ✅ CLI параметры Extract |
 | **10** | `program_ac_direct_loader.py` | `flight_program_ac` | ✅ CLI параметры Extract |
-| **11** | `digital_values_dictionary_creator.py` | `dict_digital_values_flat` | ✅ Получает из heli_pandas |
-| **12** | `repair_days_calculator.py` | `heli_pandas.repair_days` | ✅ Наследует от heli_pandas |
+| **11** | `heli_pandas_group_by_enricher.py` | `heli_pandas` | ✅ Наследует от heli_pandas/md_components |
+| **12** | `digital_values_dictionary_creator.py` | `dict_digital_values_flat` | ✅ Получает из heli_pandas |
+| **13** | `repair_days_calculator.py` | `heli_pandas.repair_days` | ✅ Наследует от heli_pandas |
 
 ## 📊 Основные таблицы после Extract
 

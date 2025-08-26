@@ -142,7 +142,7 @@ class ExtractMaster:
         },
         {
             'script': 'calculate_beyond_repair.py',
-            'description': 'Расчет Beyond Repair (br)',
+            'description': 'Расчет Beyond Repair (br_mi8/br_mi17)',
             'dependencies': ['md_components'],
             'result_table': 'md_components', 
             'critical': False

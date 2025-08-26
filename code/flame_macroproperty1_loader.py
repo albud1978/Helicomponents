@@ -76,8 +76,13 @@ class FlameMacroProperty1Loader:
             
             result = self.client.execute(query)
             
+            # Исключаем устаревшие/неиспользуемые поля из MP1 (deprecated)
+            deprecated_fields = {"br"}
             field_mapping = {}
             for field_name, field_id in result:
+                if field_name in deprecated_fields:
+                    self.logger.info(f"   ⏭️ Пропуск deprecated поля: {field_name}")
+                    continue
                 field_mapping[field_name] = field_id
                 self.logger.info(f"   📋 {field_name} -> field_id: {field_id}")
             
@@ -188,6 +193,8 @@ class FlameMacroProperty1Loader:
             
             self.component_count = len(result)
             self.stats['total_records'] = len(result)
+            # Сохраняем список используемых полей для фильтрации при создании Environment
+            self.allowed_fields = set(analytics_fields)
             
             self.logger.info(f"✅ Загружено {len(result)} записей md_components")
             self.logger.info(f"📋 Порядок полей: {field_order}")
@@ -238,8 +245,12 @@ class FlameMacroProperty1Loader:
             
             created_properties = 0
             
-            # Создаем Property Array для каждого поля
+            # Создаем Property Array только для используемых полей аналитики
+            allowed_fields = getattr(self, 'allowed_fields', set())
             for field_name, field_id in sorted(field_mapping.items(), key=lambda x: x[1]):
+                if allowed_fields and field_name not in allowed_fields:
+                    self.logger.debug(f"   ⏭️ Пропуск неаналитического поля: {field_name}")
+                    continue
                 if field_name in field_types:
                     ch_type = field_types[field_name]
                     
