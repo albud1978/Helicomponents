@@ -18,6 +18,75 @@
 
 ---
 
+## [P1] Full-GPU модель планеров — Чек-лист реализации (FLAME GPU 2 / pyflamegpu)
+
+### Этап 0. Подготовка окружения и загрузка данных
+- [ ] Настроить загрузчики MP1/MP4/MP5 из ClickHouse → Property Arrays (RO).
+- [ ] Создать MacroProperty Arrays MP6 (квоты Mi‑8/Mi‑17 по дням, UInt16).
+- [ ] Завести `Property UInt16 version_date` (D0 из СУБД).
+- [ ] Построить `aircraft_number → idx` (плотный индекс) и рассчитать `frames_total` в коде.
+- [ ] Smoke‑тест: прочитать выборочные значения MP1/MP4/MP5 на GPU.
+
+### Этап 1. Инициализация агентов
+- [ ] Объявить agent variables: `status_id, sne(UInt32), ppr(UInt32), repair_days, active_trigger, partout_trigger, assembly_trigger, ops_ticket, ll, oh, ac_type_mask, idx, psn, aircraft_number`.
+- [ ] Создать популяцию из MP3; заполнить переменные.
+- [ ] В init сбросить `ops_ticket := 0`.
+- [ ] Проверить соответствие MP3 → agent variables.
+
+### Этап 2. Первый RTC‑слой (status_id=4: ремонт)
+- [ ] Реализовать `rtc_status_4` (инкремент `repair_days`, проверка `repair_time` из MP1, переход в 5 с `ppr:=0`, `repair_days:=0`).
+- [ ] Прогонить 1 день, затем 7 дней; сверить MP2‑лог с CPU‑референсом.
+
+### Этап 3. Добавить status_id=6 (хранение)
+- [ ] Реализовать `rtc_status_6` как pass‑through.
+- [ ] Проверить распределение в MP2.
+
+### Этап 4. Эксплуатация (status_id=2)
+- [ ] Реализовать `rtc_status_2`:
+  - [ ] Чтение MP5 (`dt`,`dn`) по формуле `base = day * frames_total + idx`.
+  - [ ] Инкременты `sne/ppr` (UInt32).
+  - [ ] Проверки LL/OH → переходы 2→6 или 2→4 (с установкой триггеров и `repair_days:=1`).
+  - [ ] Попытка квоты D+1 через `old = atomicSub(mp6_quota_[day+1], 1)`; если `old>0` → `ops_ticket=1`, иначе целевой 3.
+- [ ] Прогон 1–7 суток; сверка LL/OH и квот.
+
+### Этап 5. Последовательное добавление статусов
+- [ ] Реализовать `rtc_status_3`: попытка 3→2 по квоте (`old = atomicSub(...,1)`; `old>0`).
+- [ ] Реализовать `rtc_status_5`: попытка 5→2 по квоте.
+- [ ] Реализовать `rtc_status_1`: условия допуска + 1→2 при квоте; задать `active_trigger = D − repair_time`, `assembly_trigger = D − assembly_time`.
+- [ ] Для каждого статуса — прогон 1 и 7 суток, проверка MP2.
+
+### Этап 6. Инварианты и commit‑семантика
+- [ ] `status_id` меняется ≤ 1 раза за сутки.
+- [ ] Порядок потребления квот: L1(остаются в 2) → L2(3→2) → L3(5→2) → L4(1→2); при нулевой квоте `status_id=2` уходит в 3.
+- [ ] Валидация: суммы `quota_claimed_*` ≤ MP6[D+1]; `sne/ppr` не убывают.
+- [ ] `dt==0` → `ops_ticket=0`; `dn` используется только для «завтрашних» LL/OH.
+
+### Этап 7. Логирование (MP2, SoA)
+- [ ] Добавить `rtc_log_day`: запись в MacroProperty2 (SoA‑колонки: даты, psn, aircraft_number, status_id, sne, ppr, daily_flight, квоты, триггеры).
+- [ ] Индекс строки: `row = day * frames_total + idx`.
+- [ ] Сравнить MP2 (SoA‑экспорт) с CPU‑версией.
+
+### Этап 8. Расширение горизонта
+- [ ] Прогоны на 30, 365, 1825, 3650 суток; оценка памяти/времени.
+- [ ] Nsight Systems: `sim.step()` доминирует над host; отсутствие чатов `get/setPopulationData` между шагами.
+- [ ] Проверить `t_host_fill_env`, `t_sim_step`, `t_export`.
+
+### Этап 9. Экспорт
+- [ ] Батч‑экспорт MP2 в ClickHouse после завершения цикла.
+- [ ] Проверить консистентность дат, квот, статусов.
+
+---
+
+### Ключевые правила
+- [ ] Использовать step (номер шага) как счётчик дня; `current_date = version_date + step`.
+- [ ] Паддинг MP5 на 1 день вперёд для `dn`.
+- [ ] MP6 — массивы по дням (UInt16), атомики по `day+1` с проверкой `old>0`.
+- [ ] Константы MP1 (`br`, `repair_time`) — читать на лету; в агенте храним `ll/oh` (ежедневно используются).
+- [ ] Лог MP2 — колоночный (SoA), индекс `row = day * frames_total + idx`.
+- [ ] Dev: включить seatbelts (валидации/инварианты/логи), Prod: отключить.
+
+---
+
 ## ЗАВЕРШЕННЫЕ ЗАДАЧИ
 
 ## Задача: Консолидация документации Transform (удаление flame_gpu_architecture.md)
