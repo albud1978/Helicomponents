@@ -99,6 +99,13 @@
 # Changelog - История изменений проекта
 **Последнее обновление:** 24-08-2025
 ## [25-08-2025] - Фикс MP3 экспортера и успешный прогон MP2
+## [27-08-2025] - Экспорт последнего чата и обновления BR/group_by
+### Добавлено
+- Экспорт чата: docs/last_chat_export_27-08-2025.md
+
+### Изменено
+- Документация обновлена под раздельные br_mi8/br_mi17 в MP1; старое `br` исключено
+- В extract.md уточнен шаг heli_pandas_group_by_enricher.py (перед словарём, с --apply)
 ## [26-08-2025] - Extract: отдельный шаг обогащения group_by и BR по типам
 ### Изменено
 - `docs/extract.md`: добавлен отдельный этап `heli_pandas_group_by_enricher.py` после `program_ac_direct_loader.py` и перед `digital_values_dictionary_creator.py`, пометка про запуск с `--apply`.
