@@ -258,5 +258,84 @@
 - Квоты: единый атомарный вызов `old = atomicSub(mp6_quota_type[day+1], 1)` с проверкой `old>0`, без дополнительных ветвлений.
 - Декомпозировать сложные расчёты на короткие RTC, связанных слоёв, чтобы ускорить NVRTC/JIT и улучшить читабельность.
 
+## Мини‑паттерны RTC (эталоны для реализации)
+
+- Чтение MP5 и начисление (rtc_status_2):
+```cpp
+const uint32_t day = FLAMEGPU->getStepCounter();
+const uint16_t N   = FLAMEGPU->environment.getProperty<uint16_t>("frames_total");
+const uint16_t i   = FLAMEGPU->getVariable<uint16_t>("idx");
+
+const uint32_t linT = static_cast<uint32_t>(day) * N + i;               // D
+const uint32_t linN = static_cast<uint32_t>(day + 1u) * N + i;          // D+1 (MP5 паддинг DAYS+1)
+
+const uint16_t dt = FLAMEGPU->environment.getProperty<uint16_t>("mp5_daily_hours", linT);
+const uint16_t dn = FLAMEGPU->environment.getProperty<uint16_t>("mp5_daily_hours", linN);
+
+if (dt) {
+  FLAMEGPU->setVariable<uint32_t>("sne", FLAMEGPU->getVariable<uint32_t>("sne") + dt);
+  FLAMEGPU->setVariable<uint32_t>("ppr", FLAMEGPU->getVariable<uint32_t>("ppr") + dt);
+}
+```
+
+- Пороговые проверки LL/OH на завтра (rtc_status_2):
+```cpp
+const uint32_t ll  = FLAMEGPU->getVariable<uint32_t>("ll");
+const uint32_t oh  = FLAMEGPU->getVariable<uint32_t>("oh");
+const uint32_t br  = /* получить br по ac_type_mask: br_mi8/br_mi17 из MP1 */ 0u; // читается из MP1 при необходимости
+const uint32_t sne = FLAMEGPU->getVariable<uint32_t>("sne");
+const uint32_t ppr = FLAMEGPU->getVariable<uint32_t>("ppr");
+
+bool to_6 = false, to_4 = false;
+if (dn) {
+  if (sne >= ll || (ll - sne) < dn) {
+    to_6 = true;
+  } else if (ppr >= oh || (oh - ppr) < dn) {
+    to_4 = ((sne + dn) < br);
+    if (!to_4) to_6 = true;
+  }
+}
+```
+
+- Квота на D+1 (аккуратный атомик):
+```cpp
+const bool is_mi8  = (FLAMEGPU->getVariable<uint32_t>("ac_type_mask") & 32u) != 0u;
+const uint32_t dayp1 = FLAMEGPU->getStepCounter() + 1u;
+
+uint32_t old = is_mi8
+  ? FLAMEGPU->environment.getMacroProperty<uint32_t>("mp6_quota_mi8", dayp1).atomicSub(1)
+  : FLAMEGPU->environment.getMacroProperty<uint32_t>("mp6_quota_mi17", dayp1).atomicSub(1);
+
+if (old > 0u) {
+  FLAMEGPU->setVariable<uint32_t>("ops_ticket", 1u); // остаётся 2
+} else {
+  FLAMEGPU->setVariable<uint32_t>("ops_ticket", 0u); // уйдёт в 3 по логике переходов
+}
+```
+
+- Ремонт (rtc_status_4):
+```cpp
+uint32_t d = FLAMEGPU->getVariable<uint32_t>("repair_days") + 1u;
+FLAMEGPU->setVariable<uint32_t>("repair_days", d);
+const uint32_t repair_time = /* прочитать repair_time из MP1 при необходимости */ 0u;
+if (d >= repair_time) {
+  FLAMEGPU->setVariable<uint32_t>("status_id", 5u);
+  FLAMEGPU->setVariable<uint32_t>("ppr", 0u);
+  FLAMEGPU->setVariable<uint32_t>("repair_days", 0u);
+}
+```
+
+- Индексация MP2 (SoA‑лог):
+```cpp
+const uint32_t day = FLAMEGPU->getStepCounter();
+const uint16_t N   = FLAMEGPU->environment.getProperty<uint16_t>("frames_total");
+const uint16_t i   = FLAMEGPU->getVariable<uint16_t>("idx");
+const uint32_t row = static_cast<uint32_t>(day) * N + i;
+
+FLAMEGPU->environment.getMacroProperty<uint16_t>("mp2_daily_flight", row).exchange(dt);
+FLAMEGPU->environment.getMacroProperty<uint32_t>("mp2_status",       row).exchange(FLAMEGPU->getVariable<uint32_t>("status_id"));
+// ... другие колонки MP2 по необходимости
+```
+
 ## Примечания
 - Валидация и бизнес‑экспорт не входят в эту спецификацию — они уже проверены в проекте; документ описывает только архитектуру GPU‑симуляции
