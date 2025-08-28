@@ -20,12 +20,21 @@
 
 ## [P1] Full-GPU модель планеров — Чек-лист реализации (FLAME GPU 2 / pyflamegpu)
 
+### Приоритетные доработки (28-08-2025)
+- [ ] MP6: объявить `mp6_quota_mi8/mp6_quota_mi17` как MacroPropertyArray<uint32> по `days_total`; использовать атомики `atomicSub/atomicAdd` в RTC на `uint32_t`.
+- [ ] Типы шага: хранить `step`/`days_total`/`version_date_days` как `UInt32` (во избежание переполнений горизонта).
+- [ ] NVRTC-лог: фиксировать ошибки компиляции через `2>&1 | tee nvrtc.log`; упрощать RTC до no-op при поиске источника.
+- [ ] Вернуть `rtc_probe_mp5` (поэтапно): сначала чтение `dt/dn` из MP5, затем интеграция в `rtc_status_2`.
+- [ ] Подготовить `rtc_status_2` к работе с MP6 массивами (индекс `day+1`, выбор массива по `ac_type_mask`).
+
 ### Этап 0. Подготовка окружения и загрузка данных
 - [ ] Настроить загрузчики MP1/MP4/MP5 из ClickHouse → Property Arrays (RO).
 - [ ] Создать MacroProperty Arrays MP6 (квоты Mi‑8/Mi‑17 по дням, UInt16).
 - [ ] Завести `Property UInt16 version_date` (D0 из СУБД).
 - [ ] Построить `aircraft_number → idx` (плотный индекс) и рассчитать `frames_total` в коде.
 - [ ] Smoke‑тест: прочитать выборочные значения MP1/MP4/MP5 на GPU.
+
+Примечание 28-08-2025: выполнен откат раннера к env-only (sim_master.py: загрузка Env + диагностика). Возврат RTC будет выполняться по одному ядру за раз (сначала rtc_probe_mp5, далее квоты и статусы).
 
 ### Этап 1. Инициализация агентов
 - [ ] Объявить agent variables: `status_id, sne(UInt32), ppr(UInt32), repair_days, active_trigger, partout_trigger, assembly_trigger, ops_ticket, ll, oh, ac_type_mask, idx, psn, aircraft_number`.
@@ -633,7 +642,7 @@ SupersetBI: Direct Join по status_id
 
 ---
 
-*Последнее обновление: 25-08-2025* 
+*Последнее обновление: 28-08-2025* 
 
 ## Задача: Обогащение MacroProperty3 начальными статусами (pre-simulation)
 - **Статус**: Не начата
