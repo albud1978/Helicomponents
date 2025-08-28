@@ -10,7 +10,7 @@
 | Источник | Тип в GPU | Ключевые поля | Назначение/использование | Мутируемость |
 | --- | --- | --- | --- | --- |
 | MP1 (нормативы) | Property Arrays (RO) | partseqno_i, br_mi8, br_mi17, repair_time, partout_time, assembly_time | Ежедневные расчёты порогов и триггеров (читаем на лету в RTC) | Только чтение |
-| MP3 (агенты) | — (формирует агентные переменные) | psn, aircraft_number, ac_type_mask, status_id, sne, ppr, repair_days, ll, oh | Создание популяции (init) и заполнение агентных переменных | — |
+| MP3 (агенты) | Property Arrays (RO) | psn, aircraft_number, ac_type_mask, status_id, sne, ppr, repair_days, ll, oh, mfg_date_days | Источник инициализации агентов и при необходимости прямого чтения RTC | Только чтение |
 | MP4 (квоты) | Property Arrays (RO) | dates, ops_counter_mi8, ops_counter_mi17 | Источник значений квот; на основе MP4 создаётся MP6 | Только чтение |
 | MP5 (налёт) | Property Arrays (RO) | dates, aircraft_number, daily_hours | Прямое индексирование налёта: base = day * frames_total + idx → dt, dn | Только чтение |
 | MP6 (квоты по датам) | MacroProperty Arrays UInt16 | mp6_quota_mi8[], mp6_quota_mi17[] | Атомарные счётчики квот по типам; на каждый день свой элемент; в RTC: old = atomicSub(mp6_quota_type[D+1], 1) и проверка old>0 | Атомарные (RW) |
