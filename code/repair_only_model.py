@@ -23,15 +23,20 @@ class RepairOnlyModel:
         self.agent = None
         self.num_agents: int = 0
 
-    def build_model(self, num_agents: int) -> Optional["pyflamegpu.ModelDescription"]:
+    def build_model(self, num_agents: int, env_sizes: Optional[Dict[str, int]] = None) -> Optional["pyflamegpu.ModelDescription"]:
         if pyflamegpu is None:
             print("⚠️ pyflamegpu не установлен. Пропуск сборки модели.")
             return None
         self.num_agents = int(num_agents)
-        model = pyflamegpu.ModelDescription("RepairOnly_ABM")
+        model = pyflamegpu.ModelDescription("HeliSim")
 
-        # Окружение для ops_check
+        # Окружение (Env / MacroProperty)
         env = model.Environment()
+        days_total = int((env_sizes or {}).get('days_total', 1))
+        frames_total = int((env_sizes or {}).get('frames_total', 1))
+        mp1_len = int((env_sizes or {}).get('mp1_len', 1))
+        mp3_count = int((env_sizes or {}).get('mp3_count', self.num_agents))
+        # Старые массивы (совместимость раннера; будут удалены после миграции на MP5):
         env.newPropertyArrayUInt32("daily_today", [0] * self.num_agents)
         env.newPropertyArrayUInt32("daily_next", [0] * self.num_agents)
         # Квота на D+1 по группам (инициализируется перед шагом через RTC quota_init)
@@ -40,6 +45,39 @@ class RepairOnlyModel:
         # Хост пишет эти значения перед каждым шагом суток
         env.newPropertyUInt("quota_next_mi8", 0)
         env.newPropertyUInt("quota_next_mi17", 0)
+        # Новые скаляры окружения
+        env.newPropertyUInt("version_date", 0)
+        env.newPropertyUInt("frames_total", 0)
+        env.newPropertyUInt("days_total", 0)
+        # MP4 как RO Property Arrays (заполняются один раз на старте)
+        env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * max(1, days_total))
+        env.newPropertyArrayUInt32("mp4_ops_counter_mi17", [0] * max(1, days_total))
+        # MP5 как RO Property Array (линейная раскладка (DAYS+1)*frames_total)
+        env.newPropertyArrayUInt32("mp5_daily_hours", [0] * max(1, (days_total + 1) * frames_total))
+        # MP1 как RO Property Arrays (SoA по partseqno_i индексу)
+        env.newPropertyArrayUInt32("mp1_br_mi8", [0] * max(1, mp1_len))
+        env.newPropertyArrayUInt32("mp1_br_mi17", [0] * max(1, mp1_len))
+        env.newPropertyArrayUInt32("mp1_repair_time", [0] * max(1, mp1_len))
+        env.newPropertyArrayUInt32("mp1_partout_time", [0] * max(1, mp1_len))
+        env.newPropertyArrayUInt32("mp1_assembly_time", [0] * max(1, mp1_len))
+        # MP3 как RO Property Arrays (SoA по строкам heli_pandas)
+        env.newPropertyArrayUInt32("mp3_psn", [0] * max(1, mp3_count))
+        env.newPropertyArrayUInt32("mp3_aircraft_number", [0] * max(1, mp3_count))
+        env.newPropertyArrayUInt32("mp3_ac_type_mask", [0] * max(1, mp3_count))
+        env.newPropertyArrayUInt32("mp3_status_id", [0] * max(1, mp3_count))
+        env.newPropertyArrayUInt32("mp3_sne", [0] * max(1, mp3_count))
+        env.newPropertyArrayUInt32("mp3_ppr", [0] * max(1, mp3_count))
+        env.newPropertyArrayUInt32("mp3_repair_days", [0] * max(1, mp3_count))
+        env.newPropertyArrayUInt32("mp3_ll", [0] * max(1, mp3_count))
+        env.newPropertyArrayUInt32("mp3_oh", [0] * max(1, mp3_count))
+        env.newPropertyArrayUInt32("mp3_mfg_date_days", [0] * max(1, mp3_count))
+        # MP6 как MacroProperty Arrays (атомики квот по дням, заполняются из MP4)
+        try:
+            env.newMacroPropertyArrayUInt32("mp6_quota_mi8", 1)
+            env.newMacroPropertyArrayUInt32("mp6_quota_mi17", 1)
+        except Exception:
+            # В старых версиях pyflamegpu MacroProperty Array может отсутствовать; оставляем для будущей миграции
+            pass
 
         # Агент и переменные
         agent = model.newAgent("component")
@@ -66,62 +104,31 @@ class RepairOnlyModel:
         # Токен допуска (будет использоваться при квотировании)
         agent.newVariableUInt("ops_ticket", 0)
 
-        # RTC: ремонт
-        rtc_repair_src = r"""
-        FLAMEGPU_AGENT_FUNCTION(rtc_repair, flamegpu::MessageNone, flamegpu::MessageNone) {
-            unsigned int status_id = FLAMEGPU->getVariable<unsigned int>("status_id");
-            if (status_id == 4u) {
-                unsigned int rd = FLAMEGPU->getVariable<unsigned int>("repair_days") + 1u;
-                FLAMEGPU->setVariable<unsigned int>("repair_days", rd);
-                unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
-                if (rd >= rt) {
-                    FLAMEGPU->setVariable<unsigned int>("status_id", 5u);
-                    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
-                    FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
-                }
-            }
-            return flamegpu::ALIVE;
-        }
-        """
-        agent.newRTCFunction("rtc_repair", rtc_repair_src)
+        # RTC: ремонт (временно отключён в smoke)
+        # rtc_repair_src = r"""
+        # FLAMEGPU_AGENT_FUNCTION(rtc_repair, flamegpu::MessageNone, flamegpu::MessageNone) {
+        #     unsigned int status_id = FLAMEGPU->getVariable<unsigned int>("status_id");
+        #     if (status_id == 4u) {
+        #         unsigned int rd = FLAMEGPU->getVariable<unsigned int>("repair_days") + 1u;
+        #         FLAMEGPU->setVariable<unsigned int>("repair_days", rd);
+        #         unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
+        #         if (rd >= rt) {
+        #             FLAMEGPU->setVariable<unsigned int>("status_id", 5u);
+        #             FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+        #             FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
+        #         }
+        #     }
+        #     return flamegpu::ALIVE;
+        # }
+        # """
+        # agent.newRTCFunction("rtc_repair", rtc_repair_src)
 
-        # RTC: ops_check
+        # RTC: ops_check (минимальная заглушка для smoke, без Env и атомиков)
         rtc_ops_check_src = r"""
         FLAMEGPU_AGENT_FUNCTION(rtc_ops_check, flamegpu::MessageNone, flamegpu::MessageNone) {
             if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
-            unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
-            unsigned int dn = FLAMEGPU->getVariable<unsigned int>("daily_next_u32");
-            unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
-            unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-            unsigned int ll  = FLAMEGPU->getVariable<unsigned int>("ll");
-            unsigned int oh  = FLAMEGPU->getVariable<unsigned int>("oh");
-            unsigned int br  = FLAMEGPU->getVariable<unsigned int>("br");
-            // main уже выполнил инкремент на dt, поэтому используем текущие значения
-            unsigned int sne_p = sne;
-            unsigned int ppr_p = ppr;
-            unsigned int rem_ll = (ll >= sne_p ? (ll - sne_p) : 0u);
-            if (rem_ll < dn) {
-                FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
-                return flamegpu::ALIVE;
-            }
-            unsigned int rem_oh = (oh >= ppr_p ? (oh - ppr_p) : 0u);
-            if (rem_oh < dn) {
-                if (sne_p + dn < br) FLAMEGPU->setVariable<unsigned int>("status_id", 4u);
-                else FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
-            }
-            // Квотирование D+1: если есть налёт сегодня, пробуем занять слот на завтра
-            if (dt > 0u) {
-                unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
-                if (gb == 1u) {
-                    auto q = FLAMEGPU->environment.getMacroProperty<unsigned int>("remaining_ops_next_mi8");
-                    unsigned int old = q--; // старое значение до декремента
-                    if (old > 0u) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
-                } else if (gb == 2u) {
-                    auto q = FLAMEGPU->environment.getMacroProperty<unsigned int>("remaining_ops_next_mi17");
-                    unsigned int old = q--;
-                    if (old > 0u) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
-                }
-            }
+            // Временно не используем Env/атомики, только сброс ops_ticket
+            FLAMEGPU->setVariable<unsigned int>("ops_ticket", 0u);
             return flamegpu::ALIVE;
         }
         """
@@ -142,34 +149,63 @@ class RepairOnlyModel:
         """
         agent.newRTCFunction("rtc_main", rtc_main_src)
 
-        # RTC: quota_init — инициализация квоты из host env и сброс ops_ticket
+        # RTC: quota_init — сброс ops_ticket и инициализация скалярных макро‑квот на D+1 из MP4
         rtc_quota_init_src = r"""
         FLAMEGPU_AGENT_FUNCTION(rtc_quota_init, flamegpu::MessageNone, flamegpu::MessageNone) {
             // Сбрасываем билет допуска на сутки
             FLAMEGPU->setVariable<unsigned int>("ops_ticket", 0u);
-            // Один агент (idx==0) инициализирует квотные macro properties из скалярных env
+            // Один агент (idx==0) инициализирует квоты MP6[D+1] из MP4
             if (FLAMEGPU->getVariable<unsigned int>("idx") == 0u) {
-                unsigned int seed8 = FLAMEGPU->environment.getProperty<unsigned int>("quota_next_mi8");
-                auto q8 = FLAMEGPU->environment.getMacroProperty<unsigned int>("remaining_ops_next_mi8");
-                q8.exchange(seed8);
-                unsigned int seed17 = FLAMEGPU->environment.getProperty<unsigned int>("quota_next_mi17");
-                auto q17 = FLAMEGPU->environment.getMacroProperty<unsigned int>("remaining_ops_next_mi17");
-                q17.exchange(seed17);
+                unsigned int day = FLAMEGPU->getStepCounter();
+                unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+                unsigned int dayp1 = (day + 1u < days_total ? day + 1u : day);
+                unsigned int seed8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
+                unsigned int seed17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
+                // Инициализируем одиночные макро‑квоты для текущих суток (совместимый путь)
+                {
+                    auto q8s  = FLAMEGPU->environment.getMacroProperty<unsigned int>("remaining_ops_next_mi8");
+                    auto q17s = FLAMEGPU->environment.getMacroProperty<unsigned int>("remaining_ops_next_mi17");
+                    q8s.exchange(seed8);
+                    q17s.exchange(seed17);
+                }
             }
             return flamegpu::ALIVE;
         }
         """
         agent.newRTCFunction("rtc_quota_init", rtc_quota_init_src)
 
+        # RTC: probe чтение MP5 -> при необходимости заполнить daily_* (smoke-test; не меняет значения, если уже заданы)
+        rtc_probe_mp5_src = r"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_probe_mp5, flamegpu::MessageNone, flamegpu::MessageNone) {
+            unsigned int day = FLAMEGPU->getStepCounter();
+            unsigned int N   = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+            unsigned int i   = FLAMEGPU->getVariable<unsigned int>("idx");
+            unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+            unsigned int dayp1 = (day + 1u < days_total ? day + 1u : day);
+            unsigned int linT = day * N + i;
+            unsigned int linN = dayp1 * N + i;
+            unsigned int dt = FLAMEGPU->environment.getProperty<unsigned int>("mp5_daily_hours", linT);
+            unsigned int dn = FLAMEGPU->environment.getProperty<unsigned int>("mp5_daily_hours", linN);
+            // Не затирать значения, если они уже установлены хостом
+            if (FLAMEGPU->getVariable<unsigned int>("daily_today_u32") == 0u)
+                FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
+            if (FLAMEGPU->getVariable<unsigned int>("daily_next_u32") == 0u)
+                FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
+            return flamegpu::ALIVE;
+        }
+        """
+        agent.newRTCFunction("rtc_probe_mp5", rtc_probe_mp5_src)
+
         # Слои: repair → quota_init → main → ops_check (решение на D+1 после инкремента)
-        lyr1 = model.newLayer()
-        lyr1.addAgentFunction(agent.getFunction("rtc_repair"))
+        # Слои (без rtc_repair)
         lyr2 = model.newLayer()
         lyr2.addAgentFunction(agent.getFunction("rtc_quota_init"))
         lyr3 = model.newLayer()
-        lyr3.addAgentFunction(agent.getFunction("rtc_main"))
+        lyr3.addAgentFunction(agent.getFunction("rtc_probe_mp5"))
         lyr4 = model.newLayer()
-        lyr4.addAgentFunction(agent.getFunction("rtc_ops_check"))
+        lyr4.addAgentFunction(agent.getFunction("rtc_main"))
+        lyr5 = model.newLayer()
+        lyr5.addAgentFunction(agent.getFunction("rtc_ops_check"))
 
         self.model = model
         return model

@@ -19,10 +19,17 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 from config_loader import get_clickhouse_client
 from flame_macroproperty2_exporter import FlameMacroProperty2Exporter
 from sim_env_setup import (
-    fetch_versions, fetch_mp1_br_rt, fetch_mp3, preload_mp4_by_day, preload_mp5_maps, build_daily_arrays
+    fetch_versions,
+    fetch_mp1_br_rt,
+    fetch_mp3,
+    preload_mp4_by_day,
+    preload_mp5_maps,
+    build_daily_arrays,
+    prepare_env_arrays,
+    apply_env_to_sim,
 )
 
-from repair_only_model import RepairOnlyModel
+from model_build import HeliSimModel
 
 try:
     import pyflamegpu
@@ -39,6 +46,8 @@ def main():
     p.add_argument('--days', type=int, default=1, help='Сколько суток прогонять (начиная с D0)')
     p.add_argument('--clean-mp2', action='store_true', help='TRUNCATE flame_macroproperty2_export перед вставкой')
     p.add_argument('--verify-agents', action='store_true', help='Проверить, что agent.mfg_date заполнен (ordinal)')
+    # Отключено для отката к последней рабочей версии (env-only)
+    p.add_argument('--rtc-smoke', action='store_true', help='[disabled] RTC smoke (ignored)')
     a = p.parse_args()
     # CUDA_PATH fallback
     if not os.environ.get('CUDA_PATH'):
@@ -60,20 +69,54 @@ def main():
     mp3_rows, mp3_fields = fetch_mp3(client, vdate, vid)
     n = len(mp3_rows)
 
-    model = RepairOnlyModel()
+    model = HeliSimModel()
     mp4 = preload_mp4_by_day(client)
-    model.build_model(num_agents=n)
+    # Подготовка Env Property/MacroProperty (MP1/MP3/MP4/MP5, скаляры)
+    env_data = prepare_env_arrays(client)
+    # Сборка модели (env-only): агентов не создаём
+    model.build_model(num_agents=0, env_sizes={
+        'days_total': int(env_data['days_total_u16']),
+        'frames_total': int(env_data['frames_total_u16']),
+        'mp1_len': len(env_data.get('mp1_br_mi8', [])),
+        'mp3_count': int(env_data.get('mp3_count', 0)),
+    })
     sim = model.build_simulation()
-    agent_desc = model.model.getAgent("component")
+    # Применение Env к симуляции
+    apply_env_to_sim(sim, env_data)
+    # Env-only diagnostics
+    try:
+        vd = sim.getEnvironmentPropertyUInt("version_date")
+        ft = sim.getEnvironmentPropertyUInt("frames_total")
+        dtot = sim.getEnvironmentPropertyUInt("days_total")
+        arr_mi8 = sim.getEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8")
+        arr_mi17 = sim.getEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17")
+        arr_mp5 = sim.getEnvironmentPropertyArrayUInt32("mp5_daily_hours")
+        d0 = 0
+        d1 = 1 if dtot > 1 else 0
+        idx0 = 0
+        base0 = d0 * ft + idx0
+        base1 = d1 * ft + idx0
+        print(f"EnvOnly sim_master: version_date={vd}, days_total={dtot}, frames_total={ft}, "
+              f"mp4_mi8_D0={arr_mi8[d0]}, mp4_mi17_D1={arr_mi17[d1]}, "
+              f"mp5_dt0={arr_mp5[base0]}, mp5_dn1={arr_mp5[base1]}")
+        # Env-only режим: на этом завершаем
+        return
+    except Exception:
+        pass
+    return
 
     # Создаём популяцию
     idx = {name: i for i, name in enumerate(mp3_fields)}
     # Маппинг точной даты производства по PSN из MP3
     psn_to_mfg: Dict[int, date] = {}
     av = pyflamegpu.AgentVector(agent_desc, n)
+    # Плотный индекс борта по aircraft_number для соответствия линейной индексации MP5
+    frames_index = env_data.get('frames_index', {})
     for i, r in enumerate(mp3_rows):
         ai = av[i]
-        ai.setVariableUInt("idx", i)
+        ac_num_for_idx = int(r[idx.get('aircraft_number', -1)] or 0)
+        frame_idx = int(frames_index.get(ac_num_for_idx, 0)) if ac_num_for_idx else 0
+        ai.setVariableUInt("idx", frame_idx)
         ai.setVariableUInt("psn", int(r[idx['psn']] or 0))
         ai.setVariableUInt("partseqno_i", int(r[idx['partseqno_i']] or 0))
         ai.setVariableUInt("group_by", int(r[idx.get('group_by', -1)] or 0))

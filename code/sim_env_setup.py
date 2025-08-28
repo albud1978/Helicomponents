@@ -100,3 +100,198 @@ def build_daily_arrays(mp3_rows, mp3_fields: List[str], mp1_br_rt_map: Dict[int,
     return daily_today, daily_next, partout_arr, assembly_arr
 
 
+# === Full‑GPU подготовка окружения (Этап 0) ===
+
+def build_frames_index(mp3_rows, mp3_fields: List[str]) -> Tuple[Dict[int, int], int]:
+    idx = {name: i for i, name in enumerate(mp3_fields)}
+    ac_set = set()
+    for r in mp3_rows:
+        # Отбираем только планеры: group_by ∈ {1,2} ИЛИ маска типа с битами 32/64
+        ac = int(r[idx['aircraft_number']] or 0)
+        if ac <= 0:
+            continue
+        is_plane = False
+        if 'group_by' in idx:
+            gb = int(r[idx['group_by']] or 0)
+            is_plane = gb in (1, 2)
+        elif 'ac_type_mask' in idx:
+            m = int(r[idx['ac_type_mask']] or 0)
+            is_plane = (m & (32 | 64)) != 0
+        else:
+            # Если нет признаков — консервативно исключаем
+            is_plane = False
+        if is_plane:
+            ac_set.add(ac)
+    # 0 как «нет борта» исключаем
+    ac_list = sorted([ac for ac in ac_set if ac > 0])
+    frames_index = {ac: i for i, ac in enumerate(ac_list)}
+    return frames_index, len(ac_list)
+
+
+def get_days_sorted(mp4_by_day: Dict[date, Dict[str, int]]) -> List[date]:
+    return sorted(mp4_by_day.keys())
+
+
+def build_mp5_linear(mp5_by_day: Dict[date, Dict[int, int]], days_sorted: List[date], frames_index: Dict[int, int], frames_total: int) -> List[int]:
+    days_total = len(days_sorted)
+    # Паддинг D+1 в конце
+    size = (days_total + 1) * frames_total
+    arr = [0] * size
+    for d_idx, D in enumerate(days_sorted):
+        by_ac = mp5_by_day.get(D, {})
+        base = d_idx * frames_total
+        for ac, hours in by_ac.items():
+            fi = frames_index.get(int(ac), -1)
+            if fi >= 0:
+                arr[base + fi] = int(hours or 0)
+    # Последний день (паддинг) оставляем нулями
+    return arr
+
+
+def build_mp1_arrays(mp1_map: Dict[int, Tuple[int, int, int, int, int]]) -> Tuple[List[int], List[int], List[int], List[int], List[int], Dict[int,int]]:
+    """Строит SoA массивы MP1 и индекс partseqno_i->idx."""
+    keys = sorted(mp1_map.keys())
+    idx_map: Dict[int,int] = {k: i for i, k in enumerate(keys)}
+    br8: List[int] = []
+    br17: List[int] = []
+    rt: List[int] = []
+    pt: List[int] = []
+    at: List[int] = []
+    for k in keys:
+        b8, b17, rti, pti, ati = mp1_map.get(k, (0,0,0,0,0))
+        br8.append(int(b8 or 0))
+        br17.append(int(b17 or 0))
+        rt.append(int(rti or 0))
+        pt.append(int(pti or 0))
+        at.append(int(ati or 0))
+    return br8, br17, rt, pt, at, idx_map
+
+
+def build_mp3_arrays(mp3_rows, mp3_fields: List[str]) -> Dict[str, List[int]]:
+    idx = {name: i for i, name in enumerate(mp3_fields)}
+    to_u32 = lambda v: int(v or 0)
+    to_u16 = lambda v: int(v or 0)
+    arr: Dict[str, List[int]] = {
+        'mp3_psn': [],
+        'mp3_aircraft_number': [],
+        'mp3_ac_type_mask': [],
+        'mp3_status_id': [],
+        'mp3_sne': [],
+        'mp3_ppr': [],
+        'mp3_repair_days': [],
+        'mp3_ll': [],
+        'mp3_oh': [],
+        'mp3_mfg_date_days': [],
+    }
+    from datetime import date as _date
+    epoch = _date(1970,1,1)
+    for r in mp3_rows:
+        arr['mp3_psn'].append(to_u32(r[idx['psn']]))
+        arr['mp3_aircraft_number'].append(to_u32(r[idx['aircraft_number']]))
+        arr['mp3_ac_type_mask'].append(to_u16(r[idx['ac_type_mask']]))
+        arr['mp3_status_id'].append(to_u16(r[idx['status_id']]))
+        arr['mp3_sne'].append(to_u32(r[idx['sne']]))
+        arr['mp3_ppr'].append(to_u32(r[idx['ppr']]))
+        arr['mp3_repair_days'].append(to_u16(r[idx['repair_days']]))
+        arr['mp3_ll'].append(to_u32(r[idx['ll']]))
+        arr['mp3_oh'].append(to_u32(r[idx['oh']]))
+        md = r[idx.get('mfg_date', -1)] if 'mfg_date' in idx else None
+        ord_days = 0
+        if md:
+            try:
+                ord_days = max(0, int((md - epoch).days))
+            except Exception:
+                ord_days = 0
+        arr['mp3_mfg_date_days'].append(to_u16(ord_days))
+    return arr
+
+
+def build_mp4_arrays(mp4_by_day: Dict[date, Dict[str, int]], days_sorted: List[date]) -> Tuple[List[int], List[int]]:
+    ops8: List[int] = []
+    ops17: List[int] = []
+    for D in days_sorted:
+        m = mp4_by_day.get(D, {})
+        ops8.append(int(m.get('ops_counter_mi8', 0)))
+        ops17.append(int(m.get('ops_counter_mi17', 0)))
+    return ops8, ops17
+
+
+def days_to_epoch_u16(d: date) -> int:
+    # ClickHouse Date совместимо: дни от 1970‑01‑01
+    from datetime import date as _date
+    epoch = _date(1970, 1, 1)
+    diff = (d - epoch).days
+    return max(0, int(diff))
+
+
+def prepare_env_arrays(client) -> Dict[str, object]:
+    """Формирует все Env массивы/скаляры для full‑GPU окружения (без применения к модели)."""
+    vdate, vid = fetch_versions(client)
+    mp3_rows, mp3_fields = fetch_mp3(client, vdate, vid)
+    mp1_map = fetch_mp1_br_rt(client)
+    mp4_by_day = preload_mp4_by_day(client)
+    mp5_by_day = preload_mp5_maps(client)
+
+    days_sorted = get_days_sorted(mp4_by_day)
+    frames_index, frames_total = build_frames_index(mp3_rows, mp3_fields)
+    mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
+    mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
+    mp1_br8, mp1_br17, mp1_rt, mp1_pt, mp1_at, mp1_index = build_mp1_arrays(mp1_map)
+    mp3_arrays = build_mp3_arrays(mp3_rows, mp3_fields)
+
+    env_data = {
+        'version_date_u16': days_to_epoch_u16(vdate),
+        'frames_total_u16': int(frames_total),
+        'days_total_u16': int(len(days_sorted)),
+        'days_sorted': days_sorted,
+        'frames_index': frames_index,
+        'mp4_ops_counter_mi8': mp4_ops8,
+        'mp4_ops_counter_mi17': mp4_ops17,
+        'mp5_daily_hours_linear': mp5_linear,
+        'mp1_br_mi8': mp1_br8,
+        'mp1_br_mi17': mp1_br17,
+        'mp1_repair_time': mp1_rt,
+        'mp1_partout_time': mp1_pt,
+        'mp1_assembly_time': mp1_at,
+        'mp1_index': mp1_index,
+        'mp3_arrays': mp3_arrays,
+        'mp3_count': len(mp3_rows),
+    }
+    return env_data
+
+
+def apply_env_to_sim(sim, env_data: Dict[str, object]):
+    """Применяет подготовленные массивы к Env pyflamegpu модели (скаляры и Property Arrays)."""
+    # Скаляры
+    sim.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+    sim.setEnvironmentPropertyUInt("frames_total", int(env_data['frames_total_u16']))
+    sim.setEnvironmentPropertyUInt("days_total", int(env_data['days_total_u16']))
+    # MP4
+    sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8']))
+    sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
+    # MP5 (линейный массив с паддингом)
+    sim.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", list(env_data['mp5_daily_hours_linear']))
+    # MP1 (SoA)
+    if 'mp1_br_mi8' in env_data:
+        sim.setEnvironmentPropertyArrayUInt32("mp1_br_mi8", list(env_data['mp1_br_mi8']))
+        sim.setEnvironmentPropertyArrayUInt32("mp1_br_mi17", list(env_data['mp1_br_mi17']))
+        sim.setEnvironmentPropertyArrayUInt32("mp1_repair_time", list(env_data['mp1_repair_time']))
+        sim.setEnvironmentPropertyArrayUInt32("mp1_partout_time", list(env_data['mp1_partout_time']))
+        sim.setEnvironmentPropertyArrayUInt32("mp1_assembly_time", list(env_data['mp1_assembly_time']))
+    # MP3 (SoA)
+    if 'mp3_arrays' in env_data:
+        a = env_data['mp3_arrays']
+        sim.setEnvironmentPropertyArrayUInt32("mp3_psn", list(a['mp3_psn']))
+        sim.setEnvironmentPropertyArrayUInt32("mp3_aircraft_number", list(a['mp3_aircraft_number']))
+        sim.setEnvironmentPropertyArrayUInt32("mp3_ac_type_mask", list(a['mp3_ac_type_mask']))
+        sim.setEnvironmentPropertyArrayUInt32("mp3_status_id", list(a['mp3_status_id']))
+        sim.setEnvironmentPropertyArrayUInt32("mp3_sne", list(a['mp3_sne']))
+        sim.setEnvironmentPropertyArrayUInt32("mp3_ppr", list(a['mp3_ppr']))
+        sim.setEnvironmentPropertyArrayUInt32("mp3_repair_days", list(a['mp3_repair_days']))
+        sim.setEnvironmentPropertyArrayUInt32("mp3_ll", list(a['mp3_ll']))
+        sim.setEnvironmentPropertyArrayUInt32("mp3_oh", list(a['mp3_oh']))
+        sim.setEnvironmentPropertyArrayUInt32("mp3_mfg_date_days", list(a['mp3_mfg_date_days']))
+    # MP6 будет инициализироваться на GPU из MP4 в отдельном шаге (rtc_quota_init или отдельный init)
+    return None
+
+
