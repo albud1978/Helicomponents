@@ -1,3 +1,19 @@
+## [28-08-2025] - Уборка code/, фиксация опыта FLAME GPU и env‑only откат
+### Добавлено
+- Раздел в `.cursorrules`: специфика FLAME GPU/pyflamegpu (ограничения MacroPropertyArray, NVRTC/Jitify отладка, индексация MP5, типы и порядок слоёв, MP2 SoA, seatbelts, инкрементальная JIT‑отладка).
+
+### Изменено
+- Перенесены legacy GPU файлы в `code/archive/legacy_gpu/`: `flame_gpu_helicopter_model.py`, `flame_gpu_gpu_runner.py`, `flame_gpu_transform_runner.py`, `sim_runner.py`, `utils/gpu_repair_probe_model.py` — рабочие ETL/загрузчики не затронуты.
+- `sim_master.py` — откат к env‑only (загрузка Env + диагностика), дальнейшие изменения RTC — строго по одному шагу.
+
+### Исправлено
+- Очищены логи старше 7 дней в `code/logs/`.
+
+### Опыт и навыки FLAME GPU (сводка)
+- MacroPropertyArray недоступен в текущем pyflamegpu: квоты временно как скаляры или host‑seed; MP5 — линейный массив с паддингом D+1; индексация `base = day * frames_total + idx`.
+- NVRTC: печатать compile log; упрощать RTC до no‑op при сбое и наращивать; соблюдать типы (UInt16/UInt32).
+- Слои: {6,4,2} → 3 → 5 → 1; квота до сайд‑эффектов; `status_id` ≤ 1 смена/сутки. MP2 — SoA, запись батчем.
+
 ## [27-08-2025] - Архитектура full‑GPU для планеров (GPU.md)
 ### Добавлено
 - Создан документ `docs/GPU.md` с целевой архитектурой full‑GPU: `rtc_quota_init` → L1(`rtc_status_6/4/2`) → L2(`rtc_status_3`) → L3(`rtc_status_5`) → L4(`rtc_status_1`) → эпилог `rtc_log_day (MP2)`.

@@ -325,3 +325,13 @@ Always respond in Russian
 - Обновить `docs/migration.md` при существенных изменениях архитектуры
 - Добавить ссылки на экспорт чата в changelog.md
 - НЕ дублировать информацию - только ссылки и краткие описания 
+
+## Специфика FLAME GPU / pyflamegpu (добавлено 28-08-2025)
+- MacroProperty и MacroPropertyArray доступны в PyFLAMEGPU. Квоты (MP6) держать в MacroPropertyArray<uint32> по дням с индексом `day+1`; атомики (`atomicSub/atomicAdd/exchange`) вызывать над `uint32_t`.
+- NVRTC/Jitify: при ошибках печатать compile log; минимизировать шаблоны/сложные ветвления; строго соблюдать типы и индексацию массивов (`base = day * frames_total + idx`). Для надёжного лога использовать перенаправление `2>&1 | tee nvrtc.log` и искать `error:`.
+- MP5 (daily_hours): хранить линейно размером `(days_total+1) * frames_total` с паддингом D+1 для безопасного доступа `day+1`.
+- Типы: `frames_total` ≤ 300 — UInt16; сумматоры `sne/ppr` — UInt32; счётчик шага/дней (`step`, `days_total`) и «дни от эпохи» — предпочтительно UInt32 (UInt16 допустим только при горизонте < 65535).
+- Порядок слоёв RTC: {6,4,2} → 3 → 5 → 1; квоту проверять до побочных эффектов; `status_id` менять не более 1 раза за сутки.
+- MP2 (GPU‑логер, SoA): индекс строки `row = day * frames_total + idx`, запись батчем; чтение колонками.
+- Seatbelts: dev=ON, prod=OFF; профилирование Nsight Systems — `sim.step()` должен доминировать над host.
+- Инкрементальная отладка JIT: включать ровно одно RTC‑ядро за раз; при сбоях упрощать до no‑op и наращивать.
