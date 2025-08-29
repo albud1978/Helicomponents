@@ -9,6 +9,7 @@ HeliSim: минимальная сборка модели по GPU.md для Э�
 
 from __future__ import annotations
 from typing import Optional, Dict
+import os
 
 try:
     import pyflamegpu
@@ -22,6 +23,7 @@ class HeliSimModel:
         self.sim: Optional["pyflamegpu.CUDASimulation"] = None
         self.agent = None
         self.num_agents: int = 0
+        self.rtc_sources: Dict[str, str] = {}
 
     def build_model(self, num_agents: int, env_sizes: Optional[Dict[str, int]] = None) -> Optional["pyflamegpu.ModelDescription"]:
         if pyflamegpu is None:
@@ -39,19 +41,14 @@ class HeliSimModel:
         env.newPropertyUInt("version_date", 0)
         env.newPropertyUInt("frames_total", 0)
         env.newPropertyUInt("days_total", 0)
-        # Host fallback quotas (D+1)
-        env.newPropertyUInt("quota_next_mi8", 0)
-        env.newPropertyUInt("quota_next_mi17", 0)
-        # Scalar MacroProperty (fallback for quotas)
-        env.newMacroPropertyUInt32("remaining_ops_next_mi8", 1)
-        env.newMacroPropertyUInt32("remaining_ops_next_mi17", 1)
-        # MP6 MacroProperty Arrays (квоты по дням; атомики в RTC)
-        try:
-            env.newMacroPropertyArrayUInt32("mp6_quota_mi8", 1)
-            env.newMacroPropertyArrayUInt32("mp6_quota_mi17", 1)
-        except Exception:
-            # В старых сборках pyflamegpu MacroPropertyArray может отсутствовать
-            pass
+        # MacroProperty 1D квоты по дням (инициализируются из MP4)
+        env.newMacroPropertyUInt("mp4_quota_mi8", max(1, days_total))
+        env.newMacroPropertyUInt("mp4_quota_mi17", max(1, days_total))
+        # MacroProperty (FRAMES) для детерминированного менеджера квот (UInt32)
+        env.newMacroPropertyUInt32("mi8_intent", max(1, frames_total))
+        env.newMacroPropertyUInt32("mi17_intent", max(1, frames_total))
+        env.newMacroPropertyUInt32("mi8_approve", max(1, frames_total))
+        env.newMacroPropertyUInt32("mi17_approve", max(1, frames_total))
 
         # MP4 arrays
         env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * max(1, days_total))
@@ -87,41 +84,163 @@ class HeliSimModel:
         for name in [
             "idx","psn","partseqno_i","group_by","aircraft_number","ac_type_mask",
             "mfg_date","status_id","repair_days","repair_time","ppr","sne",
-            "ll","oh","br","daily_today_u32","daily_next_u32","ops_ticket"
+            "ll","oh","br","daily_today_u32","daily_next_u32","ops_ticket","quota_left"
         ]:
             agent.newVariableUInt(name, 0)
 
-        # RTC: probe_mp5 — чтение dt/dn из MP5 (Property Array) в агентные переменные
-        rtc_probe_mp5_src = r"""
-        FLAMEGPU_AGENT_FUNCTION(rtc_probe_mp5, flamegpu::MessageNone, flamegpu::MessageNone) {
-            unsigned int day = FLAMEGPU->getStepCounter();
-            unsigned int N   = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
-            unsigned int i   = FLAMEGPU->getVariable<unsigned int>("idx");
-            unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-            unsigned int dayp1 = (day + 1u < days_total ? day + 1u : day);
-            unsigned int linT = day * N + i;
-            unsigned int linN = dayp1 * N + i;
-            unsigned int dt = FLAMEGPU->environment.getProperty<unsigned int>("mp5_daily_hours", linT);
-            unsigned int dn = FLAMEGPU->environment.getProperty<unsigned int>("mp5_daily_hours", linN);
-            if (FLAMEGPU->getVariable<unsigned int>("daily_today_u32") == 0u)
-                FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
-            if (FLAMEGPU->getVariable<unsigned int>("daily_next_u32") == 0u)
-                FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
+        # RTC: инициализация квот: копирование MP4[день] → MacroProperty массивы квот
+        from string import Template
+        def _safe_add_rtc_function(agent_local, name: str, src: str) -> None:
+            try:
+                agent_local.newRTCFunction(name, src)
+            except Exception as e:
+                try:
+                    print(f"\n===== NVRTC ERROR in {name} =====\n{e}\n----- SOURCE BEGIN -----\n{src}\n----- SOURCE END -----\n")
+                except Exception:
+                    pass
+                raise
+        _seed_tpl = Template(
+            """
+        FLAMEGPU_AGENT_FUNCTION(rtc_seed_mp4_quota, flamegpu::MessageNone, flamegpu::MessageNone) {
+            // Выполняет только один агент (idx==0) для избежания гонок при инициализации
+            if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
+            static const unsigned int DAYS = ${DAYS}u;
+            auto q8  = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("mp4_quota_mi8");
+            auto q17 = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("mp4_quota_mi17");
+            // Для smoke: инициализируем только D+1 (при day=0 → индекс 1, иначе 0)
+            const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+            const unsigned int d1 = (days_total > 1u ? 1u : 0u);
+            const unsigned int s8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", d1);
+            const unsigned int s17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", d1);
+            q8[d1].exchange(s8);
+            q17[d1].exchange(s17);
             return flamegpu::ALIVE;
         }
-        """
-        agent.newRTCFunction("rtc_probe_mp5", rtc_probe_mp5_src)
+            """
+        )
+        rtc_seed_mp4_quota_src = _seed_tpl.substitute(DAYS=str(max(1, days_total)))
+        # Примечание: seed-функция не регистрируется, т.к. квоты читаются из MP4 напрямую в менеджере
 
-        # RTC: smoke no-op
-        rtc_smoke_src = r"""
-        FLAMEGPU_AGENT_FUNCTION(rtc_smoke, flamegpu::MessageNone, flamegpu::MessageNone) {
+        # RTC: probe_mp5 — временно отключено в smoke (починим отдельно с NVRTC-логом)
+
+        # RTC: smoke no-op — временно отключено
+
+        # RTC: Lq1 — intent (агенты помечают желание квоты)
+        _intent_tpl = Template(
+            """
+        FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent, flamegpu::MessageNone, flamegpu::MessageNone) {
+            static const unsigned int FRAMES = ${FRAMES}u;
+            const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+            const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+            if (idx >= FRAMES) return flamegpu::ALIVE;
+            if (gb == 1u) { auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }
+            else if (gb == 2u) { auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }
             return flamegpu::ALIVE;
         }
-        """
-        agent.newRTCFunction("rtc_smoke", rtc_smoke_src)
+            """
+        )
+        rtc_quota_intent_src = _intent_tpl.substitute(FRAMES=str(max(1, frames_total)))
+        self.rtc_sources["rtc_quota_intent"] = rtc_quota_intent_src
+        rtc_mode = os.environ.get("HL_RTC_MODE", "full").lower()
+        enable_intent = True
+        enable_approve = rtc_mode in ("full", "approve_only")
+        enable_apply = rtc_mode in ("full",)
 
-        # Layers: только rtc_probe_mp5 (smoke)
-        lyr3 = model.newLayer(); lyr3.addAgentFunction(agent.getFunction("rtc_probe_mp5"))
+        _safe_add_rtc_function(agent, "rtc_quota_intent", rtc_quota_intent_src)
+
+        # RTC: Lq2 — approve (один менеджер idx==0 распределяет квоты по intent)
+        _approve_tpl = Template(
+            """
+        FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager, flamegpu::MessageNone, flamegpu::MessageNone) {
+            static const unsigned int FRAMES = ${FRAMES}u;
+            if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
+            const unsigned int day = FLAMEGPU->getStepCounter();
+            const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+            const unsigned int last = (days_total > 0u ? days_total - 1u : 0u);
+            const unsigned int dayp1 = (day < last ? day + 1u : last);
+            auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
+            auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
+            auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
+            auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
+            for (unsigned int k=0u;k<FRAMES;++k) { a8[k].exchange(0u); a17[k].exchange(0u); }
+            unsigned int left8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
+            unsigned int left17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
+            for (unsigned int k=0u;k<FRAMES && left8>0u;++k) { if (i8[k]) { a8[k].exchange(1u); --left8; } }
+            for (unsigned int k=0u;k<FRAMES && left17>0u;++k) { if (i17[k]) { a17[k].exchange(1u); --left17; } }
+            return flamegpu::ALIVE;
+        }
+            """
+        )
+        rtc_quota_approve_manager_src = _approve_tpl.substitute(FRAMES=str(max(1, frames_total)))
+        self.rtc_sources["rtc_quota_approve_manager"] = rtc_quota_approve_manager_src
+        if enable_approve:
+            _safe_add_rtc_function(agent, "rtc_quota_approve_manager", rtc_quota_approve_manager_src)
+
+        # RTC: Lq3 — apply (агенты принимают решение по approve)
+        _apply_tpl = Template(
+            """
+        FLAMEGPU_AGENT_FUNCTION(rtc_quota_apply, flamegpu::MessageNone, flamegpu::MessageNone) {
+            static const unsigned int FRAMES = ${FRAMES}u;
+            const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+            const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+            if (idx >= FRAMES) return flamegpu::ALIVE;
+            if (gb == 1u) { auto a8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve"); if (a8[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }
+            else if (gb == 2u) { auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve"); if (a17[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }
+            return flamegpu::ALIVE;
+        }
+            """
+        )
+        rtc_quota_apply_src = _apply_tpl.substitute(FRAMES=str(max(1, frames_total)))
+        self.rtc_sources["rtc_quota_apply"] = rtc_quota_apply_src
+        if enable_apply:
+            _safe_add_rtc_function(agent, "rtc_quota_apply", rtc_quota_apply_src)
+
+        # RTC: простой smoke — выдача квоты по правилу idx < seed (без intent/approve)
+        _apply_simple_tpl = Template(
+            """
+        FLAMEGPU_AGENT_FUNCTION(rtc_quota_apply_simple, flamegpu::MessageNone, flamegpu::MessageNone) {
+            static const unsigned int DAYS = ${DAYS}u;
+            const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+            if (gb != 1u && gb != 2u) return flamegpu::ALIVE;
+            const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+            const unsigned int day = FLAMEGPU->getStepCounter();
+            const unsigned int dayp1 = (day + 1u < DAYS ? day + 1u : day);
+            unsigned int seed8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
+            unsigned int seed17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
+            if ((gb == 1u && idx < seed8) || (gb == 2u && idx < seed17)) {
+                FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
+            }
+            return flamegpu::ALIVE;
+        }
+            """
+        )
+        rtc_quota_apply_simple_src = _apply_simple_tpl.substitute(DAYS=str(max(1, days_total)))
+
+        # RTC: пост-слой чтения остатка квоты (для валидации)
+        _readleft_tpl = Template(
+            """
+        FLAMEGPU_AGENT_FUNCTION(rtc_read_quota_left, flamegpu::MessageNone, flamegpu::MessageNone) {
+            if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
+            static const unsigned int DAYS = ${DAYS}u;
+            const unsigned int day = FLAMEGPU->getStepCounter();
+            const unsigned int dayp1 = (day + 1u < DAYS ? day + 1u : day);
+            auto q8  = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("mp4_quota_mi8");
+            unsigned int left = q8[dayp1];
+            FLAMEGPU->setVariable<unsigned int>("quota_left", left);
+            return flamegpu::ALIVE;
+        }
+            """
+        )
+        rtc_read_quota_left_src = _readleft_tpl.substitute(DAYS=str(max(1, days_total)))
+        # Отключено: диагностика остатка квоты не используется в слоях и тянет DAYS
+        # agent.newRTCFunction("rtc_read_quota_left", rtc_read_quota_left_src)
+
+        # Layers: менеджер квот — intent → approve → apply
+        lyr1 = model.newLayer(); lyr1.addAgentFunction(agent.getFunction("rtc_quota_intent"))
+        if enable_approve:
+            lyr2 = model.newLayer(); lyr2.addAgentFunction(agent.getFunction("rtc_quota_approve_manager"))
+        if enable_apply:
+            lyr3 = model.newLayer(); lyr3.addAgentFunction(agent.getFunction("rtc_quota_apply"))
 
         self.model = model
         return model

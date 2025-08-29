@@ -21,13 +21,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_check, flamegpu::MessageNone, flamegpu::MessageN
     }
     if (dt > 0u) {
         unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+        const unsigned int dayp1 = FLAMEGPU->getStepCounter() + 1u;
         if (gb == 1u) {
-            auto q = FLAMEGPU->environment.getMacroProperty<unsigned int>("mp6_quota_mi8", FLAMEGPU->getStepCounter()+1u);
-            unsigned int old = q--;
+            unsigned int old = FLAMEGPU->environment.getMacroProperty<unsigned int>("mp4_quota_mi8")[dayp1]--;
             if (old > 0u) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
         } else if (gb == 2u) {
-            auto q = FLAMEGPU->environment.getMacroProperty<unsigned int>("mp6_quota_mi17", FLAMEGPU->getStepCounter()+1u);
-            unsigned int old = q--;
+            unsigned int old = FLAMEGPU->environment.getMacroProperty<unsigned int>("mp4_quota_mi17")[dayp1]--;
             if (old > 0u) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
         }
     }
