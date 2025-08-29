@@ -11,10 +11,17 @@
 | --- | --- | --- | --- | --- |
 | MP1 (нормативы) | Property Arrays (RO) | partseqno_i, br_mi8, br_mi17, repair_time, partout_time, assembly_time | Ежедневные расчёты порогов и триггеров (читаем на лету в RTC) | Только чтение |
 | MP3 (агенты) | Property Arrays (RO) | psn, aircraft_number, ac_type_mask, status_id, sne, ppr, repair_days, ll, oh, mfg_date_days | Источник инициализации агентов и при необходимости прямого чтения RTC | Только чтение |
-| MP4 (квоты) | Property Arrays (RO) | dates, ops_counter_mi8, ops_counter_mi17 | Источник значений квот; на основе MP4 создаётся MP6 | Только чтение |
+| MP4 (квоты) | Property Arrays (RO) | dates, ops_counter_mi8, ops_counter_mi17 | Источник значений квот; из MP4 инициализируются MacroProperty‑массивы квот | Только чтение |
 | MP5 (налёт) | Property Arrays (RO) | dates, aircraft_number, daily_hours | Прямое индексирование налёта: base = day * frames_total + idx → dt, dn | Только чтение |
-| MP6 (квоты по датам) | MacroProperty UInt32 с размерами (days_total) | mp6_quota_mi8[days], mp6_quota_mi17[days] | Атомарные счётчики квот по типам; на каждый день свой элемент; в RTC: old = atomicSub(mp6_quota_type[D+1], 1) и проверка old>0 | Атомарные (RW) |
+| MP4_quota (квоты по датам) | MacroProperty UInt32 (1D, days_total) | mp4_quota_mi8[days], mp4_quota_mi17[days] | Менеджер квот без атомик: в слое approve один агент распределяет N квот по intent, проходя idx 0…N−1; обращение по индексу дня D+1 | RW (управляемо) |
 | Env: version_date | Property UInt16 | — | Начальная дата симуляции D0 (из СУБД); current_date = version_date + day | RO |
+
+### Примечание об обновлении (29-08-2025)
+- Вместо MP6/atomicSub используется MP4_quota (MacroProperty 1D) и детерминированный менеджер квот без атомик.
+- Все упоминания `mp6_quota_*` трактовать как `mp4_quota_*`; попытка квоты выполняется в слое approve менеджером.
+- Внутренний smoke в `sim_master.py --gpu-quota-smoke` выполнен через минимальный билдер RTC (как во внешнем раннере): подтверждено `claimed == seed` по MI‑8/MI‑17.
+- В RTC менеджера квот используется безопасный расчёт индекса дня: `last = max(days_total-1, 0)`, `dayp1 = (day < last ? day+1 : last)`.
+- Временная диагностика `rtc_read_quota_left` отключена из регистрации RTC (слоями не используется), чтобы исключить лишние зависимости от `DAYS`.
 
 ## Переменные
 - Агент (минимально необходимый состав):

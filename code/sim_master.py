@@ -48,6 +48,8 @@ def main():
     p.add_argument('--verify-agents', action='store_true', help='Проверить, что agent.mfg_date заполнен (ordinal)')
     # Отключено для отката к последней рабочей версии (env-only)
     p.add_argument('--rtc-smoke', action='store_true', help='[disabled] RTC smoke (ignored)')
+    p.add_argument('--gpu-quota-smoke', action='store_true', help='GPU квоты: один шаг с intent/approve/apply без экспорта')
+    p.add_argument('--gpu-quota-smoke-external', action='store_true', help='Запустить внешний стабильный smoke раннер (gpu_quota_smoke_from_env.py)')
     a = p.parse_args()
     # CUDA_PATH fallback
     if not os.environ.get('CUDA_PATH'):
@@ -69,6 +71,12 @@ def main():
     mp3_rows, mp3_fields = fetch_mp3(client, vdate, vid)
     n = len(mp3_rows)
 
+    # Внешний стабильный smoke (не использует HeliSimModel)
+    if a.gpu_quota_smoke_external:
+        from gpu_quota_smoke_from_env import main as quota_smoke_main
+        quota_smoke_main()
+        return
+
     model = HeliSimModel()
     mp4 = preload_mp4_by_day(client)
     # Подготовка Env Property/MacroProperty (MP1/MP3/MP4/MP5, скаляры)
@@ -81,10 +89,10 @@ def main():
         'mp3_count': int(env_data.get('mp3_count', 0)),
     })
     sim = model.build_simulation()
-    # Применение Env к симуляции
-    apply_env_to_sim(sim, env_data)
-    # Env-only diagnostics
-    try:
+    # Ветвление режимов до применения Env
+    if not a.gpu_quota_smoke:
+        # Env-only: применяем Env и печатаем диагностические значения
+        apply_env_to_sim(sim, env_data)
         vd = sim.getEnvironmentPropertyUInt("version_date")
         ft = sim.getEnvironmentPropertyUInt("frames_total")
         dtot = sim.getEnvironmentPropertyUInt("days_total")
@@ -99,11 +107,125 @@ def main():
         print(f"EnvOnly sim_master: version_date={vd}, days_total={dtot}, frames_total={ft}, "
               f"mp4_mi8_D0={arr_mi8[d0]}, mp4_mi17_D1={arr_mi17[d1]}, "
               f"mp5_dt0={arr_mp5[base0]}, mp5_dn1={arr_mp5[base1]}")
-        # Env-only режим: на этом завершаем
         return
-    except Exception:
-        pass
-    return
+
+    # === GPU quota smoke: минимальный билдер модели (как внешний раннер), без HeliSimModel ===
+    if a.gpu_quota_smoke:
+        FRAMES = int(env_data['frames_total_u16'])
+        DAYS = int(env_data['days_total_u16'])
+        mp4_ops8 = list(env_data['mp4_ops_counter_mi8'])
+        mp4_ops17 = list(env_data['mp4_ops_counter_mi17'])
+
+        model2 = pyflamegpu.ModelDescription("GPUQuotaInternal")
+        e = model2.Environment()
+        e.newPropertyUInt("version_date", 0)
+        e.newPropertyUInt("frames_total", 0)
+        e.newPropertyUInt("days_total", 0)
+        e.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * DAYS)
+        e.newPropertyArrayUInt32("mp4_ops_counter_mi17", [0] * DAYS)
+        e.newMacroPropertyUInt32("mi8_intent", FRAMES)
+        e.newMacroPropertyUInt32("mi17_intent", FRAMES)
+        e.newMacroPropertyUInt32("mi8_approve", FRAMES)
+        e.newMacroPropertyUInt32("mi17_approve", FRAMES)
+
+        a_desc = model2.newAgent("component")
+        for var in ("idx","group_by","ops_ticket"):
+            a_desc.newVariableUInt(var, 0)
+
+        rtc_intent = f"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            static const unsigned int FRAMES = {FRAMES}u;
+            const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+            const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+            if (idx >= FRAMES) return flamegpu::ALIVE;
+            if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }}
+            else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }}
+            return flamegpu::ALIVE;
+        }}
+        """
+        a_desc.newRTCFunction("rtc_quota_intent", rtc_intent)
+
+        rtc_approve = f"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            static const unsigned int FRAMES = {FRAMES}u;
+            if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
+            const unsigned int day = FLAMEGPU->getStepCounter();
+            const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+            const unsigned int last = (days_total > 0u ? days_total - 1u : 0u);
+            const unsigned int dayp1 = (day < last ? day + 1u : last);
+            auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
+            auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
+            auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
+            auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
+            for (unsigned int k=0u;k<FRAMES;++k) {{ a8[k].exchange(0u); a17[k].exchange(0u); }}
+            unsigned int left8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
+            unsigned int left17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
+            for (unsigned int k=0u;k<FRAMES && left8>0u;++k) {{ if (i8[k]) {{ a8[k].exchange(1u); --left8; }} }}
+            for (unsigned int k=0u;k<FRAMES && left17>0u;++k) {{ if (i17[k]) {{ a17[k].exchange(1u); --left17; }} }}
+            return flamegpu::ALIVE;
+        }}
+        """
+        a_desc.newRTCFunction("rtc_quota_approve_manager", rtc_approve)
+
+        rtc_apply = f"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_quota_apply, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            static const unsigned int FRAMES = {FRAMES}u;
+            const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+            const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+            if (idx >= FRAMES) return flamegpu::ALIVE;
+            if (gb == 1u) {{ auto a8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve"); if (a8[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }}
+            else if (gb == 2u) {{ auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve"); if (a17[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }}
+            return flamegpu::ALIVE;
+        }}
+        """
+        a_desc.newRTCFunction("rtc_quota_apply", rtc_apply)
+
+        l1 = model2.newLayer(); l1.addAgentFunction(a_desc.getFunction("rtc_quota_intent"))
+        l2 = model2.newLayer(); l2.addAgentFunction(a_desc.getFunction("rtc_quota_approve_manager"))
+        l3 = model2.newLayer(); l3.addAgentFunction(a_desc.getFunction("rtc_quota_apply"))
+
+        sim2 = pyflamegpu.CUDASimulation(model2)
+        sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+        sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
+        sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", mp4_ops8)
+        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", mp4_ops17)
+
+        # Построим карту group_by по frames_index
+        frame_gb = [0] * FRAMES
+        ac_nums = env_data['mp3_arrays'].get('mp3_aircraft_number', [])
+        gbs = env_data['mp3_arrays'].get('mp3_group_by', [1] * len(ac_nums))
+        frames_index = env_data.get('frames_index', {})
+        for i in range(min(len(ac_nums), len(gbs))):
+            ac = int(ac_nums[i] or 0)
+            gb = int(gbs[i] or 0)
+            fi = int(frames_index.get(ac, -1)) if ac else -1
+            if 0 <= fi < FRAMES and frame_gb[fi] == 0 and gb in (1, 2):
+                frame_gb[fi] = gb
+        frame_gb = [gb if gb in (1, 2) else 1 for gb in frame_gb]
+
+        av2 = pyflamegpu.AgentVector(a_desc, FRAMES)
+        for i in range(FRAMES):
+            av2[i].setVariableUInt("idx", i)
+            av2[i].setVariableUInt("group_by", int(frame_gb[i]))
+            av2[i].setVariableUInt("ops_ticket", 0)
+        sim2.setPopulationData(av2)
+
+        sim2.step()
+
+        out = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(out)
+        claimed8 = claimed17 = 0
+        for ag in out:
+            if int(ag.getVariableUInt("ops_ticket")) == 1:
+                gb = int(ag.getVariableUInt("group_by"))
+                if gb == 1:
+                    claimed8 += 1
+                elif gb == 2:
+                    claimed17 += 1
+        d1 = 1 if DAYS > 1 else 0
+        print(f"GPU quota (internal): seed8[D1]={mp4_ops8[d1]}, claimed8={claimed8}; seed17[D1]={mp4_ops17[d1]}, claimed17={claimed17}")
+        return
 
     # Создаём популяцию
     idx = {name: i for i, name in enumerate(mp3_fields)}
