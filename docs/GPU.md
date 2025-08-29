@@ -13,7 +13,7 @@
 | MP3 (агенты) | Property Arrays (RO) | psn, aircraft_number, ac_type_mask, status_id, sne, ppr, repair_days, ll, oh, mfg_date_days | Источник инициализации агентов и при необходимости прямого чтения RTC | Только чтение |
 | MP4 (квоты) | Property Arrays (RO) | dates, ops_counter_mi8, ops_counter_mi17 | Источник значений квот; на основе MP4 создаётся MP6 | Только чтение |
 | MP5 (налёт) | Property Arrays (RO) | dates, aircraft_number, daily_hours | Прямое индексирование налёта: base = day * frames_total + idx → dt, dn | Только чтение |
-| MP6 (квоты по датам) | MacroProperty Arrays UInt32 | mp6_quota_mi8[], mp6_quota_mi17[] | Атомарные счётчики квот по типам; на каждый день свой элемент; в RTC: old = atomicSub(mp6_quota_type[D+1], 1) и проверка old>0 | Атомарные (RW) |
+| MP6 (квоты по датам) | MacroProperty UInt32 с размерами (days_total) | mp6_quota_mi8[days], mp6_quota_mi17[days] | Атомарные счётчики квот по типам; на каждый день свой элемент; в RTC: old = atomicSub(mp6_quota_type[D+1], 1) и проверка old>0 | Атомарные (RW) |
 | Env: version_date | Property UInt16 | — | Начальная дата симуляции D0 (из СУБД); current_date = version_date + day | RO |
 
 ## Переменные
@@ -26,8 +26,6 @@
   1) Переменные, которые изменяются внутри агента хотя бы в одном слое (например, `status_id`, `sne`, `ppr`, `repair_days`, триггеры, `ops_ticket`).
   2) Константы, которые участвуют в вычислениях ежедневно хотя бы в одном слое (например, `ll`, `oh`).
   Остальные константы/справочники читаются на лету из MP‑массивов (MP1/MP4/MP5) без хранения в агенте.
-
-<!-- Раздел «Окружение» и перечисления массивов перенесены в таблицу выше для устранения дублирования. -->
 
 ### Назначение переменных агента (краткая таблица)
 
@@ -47,7 +45,7 @@
 | `partout_trigger` | UInt32 | RTC | Дата предполагаемого снятия (0 либо дни от 1970‑01‑01); задаётся при выборе 2→4 |
 | `assembly_trigger` | UInt32 | RTC | Дата сборки (0 либо дни от 1970‑01‑01); задаётся при 2→4 или выходе из ремонта |
 
-В `rtc_status_2` значения `dt` (за D) и `dn` (за D+1) берутся напрямую из MP5 через поиск по `aircraft_number` в срезе дня: используем `mp5_day_offset[D]..+mp5_day_count[D]` и бинарный поиск по отсортированному `aircraft_number`; для D+1 — срез следующего дня. Константы `ll`, `oh`, `br`, `repair_time`, а также `mfg_date` не храним в агенте: читаем из окружения при необходимости (см. ниже).
+В `rtc_status_2` значения `dt` (за D) и `dn` (за D+1) берутся напрямую из MP5 по линейной индексации: `base = day * frames_total + idx`, `dt = MP5[base]`, `dn = MP5[base + frames_total]` (MP5 имеет паддинг DAYS+1). Константы `ll`, `oh`, `br`, `repair_time`, а также `mfg_date` не храним в агенте: читаем из окружения при необходимости.
 
 ### Список переменных агента и источники заполнения (init из MP3)
 
@@ -119,41 +117,34 @@
 | 1 (init) | agent_init + init_quota | MP3 (агенты); MP6 (квоты) | Создание популяции; `ops_ticket := 0`; квоты берутся из MP6[D+1] при обращении | Статус из MP3 |
 | 2 (L1, status_id=6) | `rtc_status_6` | — | Пасс‑тру; без начислений | Остаётся 6; без сайд‑эффектов |
 | 2 (L1, status_id=4) | `rtc_status_4` | MP1: `repair_time` | `repair_days := repair_days + 1`; если `repair_days >= repair_time` → `status_id := 5; ppr := 0; repair_days := 0` | Либо остаётся 4, либо 4→5 |
-| 2 (L1, status_id=2) | `rtc_status_2` | MP5: `daily_hours` → `dt, dn` (по `aircraft_number` в срезе дня); MP3/MP1: `ll, oh, br, partout_time, assembly_time, repair_time`; Env: MP6 (`mp6_quota_mi8/mi17`) | `sne += dt; ppr += dt`; если `max(ll−sne,0) < dn` → 6; иначе если `max(oh−ppr,0) < dn` → (если `sne+dn < br` → 4; иначе 6); иначе если `dt>0` и квота доступна: по `ac_type_mask` выбрать массив (`mi8` при маске 32, `mi17` при 64), выполнить `old = atomicSub(mp6_quota_type[D+1], 1)` и при `old>0` → `ops_ticket:=1` (остаться 2), иначе целевой 3; при 2→4: `repair_days:=1; partout_trigger:=D+partout_time; assembly_trigger:=D+(repair_time−assembly_time)` | Остаётся 2 (при квоте) или 2→4/6; триггеры при 2→4 |
-| 3 (L2, status_id=3) | `rtc_status_3` | Env: MP6 (`mp6_quota_mi8/mi17`) | По `ac_type_mask` выбрать тип; `old = atomicSub(mp6_quota_type[D+1], 1)`; если `old>0` → 3→2, иначе остаётся 3 | Без изменений триггеров |
-| 4 (L3, status_id=5) | `rtc_status_5` | Env: MP6 (`mp6_quota_mi8/mi17`) | Аналогично статусу 3: по типу; `old = atomicSub(mp6_quota_type[D+1], 1)`; если `old>0` → 5→2; иначе 5 | Без изменений триггеров |
-| 5 (L4, status_id=1) | `rtc_status_1` | Env: MP6 (`mp6_quota_mi8/mi17`); MP1: `repair_time`, `assembly_time` | Формула допуска: по `ac_type_mask` выбрать тип; `old = atomicSub(mp6_quota_type[D+1], 1)`; если `old>0` → 1→2; дополнительно выставить `active_trigger := D − repair_time`, `assembly_trigger := D − assembly_time`; иначе остаётся 1 | 1→2 с установкой `active_trigger` и `assembly_trigger` |
-| 6 | `rtc_log_day` | Агент/Env/MP: `current_date`, `psn`, `aircraft_number`, `status_id`, `daily_flight`, `ops_counter_mi8/mi17` (MP4[D]), `ops_current_mi8/mi17`, `quota_claimed_mi8/mi17`, `sne`, `ppr`, `repair_days`, `active/partout/assembly`, `mfg_date`, `aircraft_age_years` | Запись в SoA‑колонки MacroProperty2 по индексу `row = day * frames_total + idx` | Агент без изменений; MacroProperty2 пополняется |
+| 2 (L1, status_id=2) | `rtc_status_2` | MP5: `daily_hours` → `dt, dn` по линейной индексации; MP3/MP1: `ll, oh, br, partout_time, assembly_time, repair_time`; Env: MP6 (`mp6_quota_mi8/mi17`) | `sne += dt; ppr += dt`; LL/OH на D+1; при `dt>0` — попытка квоты D+1 по типу через `old = atomicSub(mp6_quota_type[D+1], 1)` | Остаётся 2 или 2→4/6/3; триггеры при 2→4 |
+| 3 (L2, status_id=3) | `rtc_status_3` | Env: MP6 (`mp6_quota_mi8/mi17`) | По `ac_type_mask` выбрать тип; `old = atomicSub(mp6_quota_type[D+1], 1)`; если `old>0` → 3→2 | Без изменений триггеров |
+| 4 (L3, status_id=5) | `rtc_status_5` | Env: MP6 (`mp6_quota_mi8/mi17`) | Аналогично статусу 3 | Без изменений триггеров |
+| 5 (L4, status_id=1) | `rtc_status_1` | Env: MP6 (`mp6_quota_mi8/mi17`); MP1: `repair_time`, `assembly_time` | Формула допуска и 1→2 при квоте; `active_trigger := D − repair_time`, `assembly_trigger := D − assembly_time` | 1→2 |
+| 6 | `rtc_log_day` | Агент/Env/MP: данные суток | Запись в SoA‑колонки MacroProperty2 по индексу `row = day * frames_total + idx` | Агент без изменений |
 | 7 | `increment_day` | Env: `current_day` | `current_day := current_day + 1` | Агент без изменений |
-| 8 (host) | export_mp2 | MacroProperty2/популяция | Одно батч‑вставка MP2 в ClickHouse по завершении всех циклов | — |
+| 8 (host) | export_mp2 | MacroProperty2/популяция | Одно батч‑вставка MP2 в ClickHouse | — |
 
-### Жизненный цикл исполнения
-- Build (host): создать модель, объявить переменные, слои, скомпоновать RTC (JIT)
-- Load (host): шаг 0 — загрузить MP1/MP4/MP5 в Env
-- Init (host/device): шаг 1 — создать агентов из MP3; выполнить init_quota
-- Run (device): шаги 2–7 — слои RTC на каждый день
-- Export (host): шаг 8 — батч‑экспорт MP2
+## Жизненный цикл исполнения
+- Build (host) → Load (host) → Init (host/device) → Run (device) → Export (host)
 
 ## Правила атомика (MP6)
-- Два массива квот: `mp6_quota_mi8[]`, `mp6_quota_mi17[]` (UInt16, MacroProperty Arrays)
+- Два массива квот: `mp6_quota_mi8[days]`, `mp6_quota_mi17[days]` (UInt32)
 - Порядок потребления квоты за день D+1: L1 (остаются в 2) → L2 (3→2) → L3 (5→2) → L4 (1→2)
 - При достижении 0 последующие попытки квоты в текущие сутки становятся пасс‑тру (как статус 6), кроме `status_id=2` (уходит в 3)
 
 ## Инварианты и валидация
-- Квоты (по дню и типу): `sum(quota_claimed_mi8, D) ≤ mp6_quota_mi8[D+1]` и `sum(quota_claimed_mi17, D) ≤ mp6_quota_mi17[D+1]`.
-- Ограничение смены статуса: `status_id` изменяется не более одного раза за сутки.
-- Монотонность счётчиков: `sne` и `ppr` не убывают; инкремент `sne := sne + dt`, `ppr := ppr + dt` выполняется ровно один раз за сутки.
-- Ремонт: при входе 2→4 — `repair_days := 1`; при выходе 4→5 — `repair_days := 0`, `ppr := 0`.
-- Билеты и налёт: если `dt == 0` → `ops_ticket := 0` (квоту не запрашиваем; запрос квоты выполняется только при `dt > 0`).
-- Использование `dn`: применяется только для «завтрашних» проверок LL/OH; не участвует в начислении `sne/ppr` за текущий день.
+- Квоты: `sum(quota_claimed_mi8, D) ≤ mp6_quota_mi8[D+1]` и аналогично для Ми‑17
+- Ограничение смены статуса: ≤ 1 раза/сутки
+- Монотонность: `sne/ppr` не убывают; `repair_days` сбрасывается при выходе из ремонта
+- `dt==0` → `ops_ticket=0`; `dn` используется только для «завтрашних» LL/OH
 
 ## Типы и ограничения
  - daily_hours (MP5) — UInt16 (минуты); паддинг DAYS+1
  - sne/ppr (агент) — UInt32 (сумматоры)
- - mp6_quota_* (MP6) — UInt16 (атомарные счётчики)
+ - mp6_quota_* (MP6) — UInt32 (атомарные счётчики)
  - frames_total — UInt16 (≤ 300)
  - Без Float64; даты как «дни от 1970‑01‑01» (UInt16/UInt32 при необходимости)
-
 
 ## Этапы реализации (пошагово, на реальных данных)
 
@@ -338,4 +329,4 @@ FLAMEGPU->environment.getMacroProperty<uint32_t>("mp2_status",       row).exchan
 ```
 
 ## Примечания
-- Валидация и бизнес‑экспорт не входят в эту спецификацию — они уже проверены в проекте; документ описывает только архитектуру GPU‑симуляции
+- Валидация и бизнес‑экспорт вне объёма документа; документ описывает архитектуру GPU‑симуляции.

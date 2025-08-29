@@ -21,7 +21,7 @@
 ## [P1] Full-GPU модель планеров — Чек-лист реализации (FLAME GPU 2 / pyflamegpu)
 
 ### Приоритетные доработки (28-08-2025)
-- [ ] MP6: объявить `mp6_quota_mi8/mp6_quota_mi17` как MacroPropertyArray<uint32> по `days_total`; использовать атомики `atomicSub/atomicAdd` в RTC на `uint32_t`.
+- [ ] MP6: объявить `mp6_quota_mi8/mp6_quota_mi17` как MacroProperty UInt32 с размерами `(days_total)`; использовать атомики `atomicSub/atomicAdd` в RTC на `uint32_t` (индекс `day+1`).
 - [ ] Типы шага: хранить `step`/`days_total`/`version_date_days` как `UInt32` (во избежание переполнений горизонта).
 - [ ] NVRTC-лог: фиксировать ошибки компиляции через `2>&1 | tee nvrtc.log`; упрощать RTC до no-op при поиске источника.
 - [ ] Вернуть `rtc_probe_mp5` (поэтапно): сначала чтение `dt/dn` из MP5, затем интеграция в `rtc_status_2`.
@@ -29,7 +29,7 @@
 
 ### Этап 0. Подготовка окружения и загрузка данных
 - [ ] Настроить загрузчики MP1/MP4/MP5 из ClickHouse → Property Arrays (RO).
-- [ ] Создать MacroProperty Arrays MP6 (квоты Mi‑8/Mi‑17 по дням, UInt16).
+- [ ] Создать MacroProperty MP6 (квоты Mi‑8/Mi‑17 по дням, UInt32) с размером `(days_total)` и инициализацией из MP4.
 - [ ] Завести `Property UInt16 version_date` (D0 из СУБД).
 - [ ] Построить `aircraft_number → idx` (плотный индекс) и рассчитать `frames_total` в коде.
 - [ ] Smoke‑тест: прочитать выборочные значения MP1/MP4/MP5 на GPU.

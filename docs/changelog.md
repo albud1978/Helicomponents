@@ -14,6 +14,18 @@
 - NVRTC: печатать compile log; упрощать RTC до no‑op при сбое и наращивать; соблюдать типы (UInt16/UInt32).
 - Слои: {6,4,2} → 3 → 5 → 1; квота до сайд‑эффектов; `status_id` ≤ 1 смена/сутки. MP2 — SoA, запись батчем.
 
+## [29-08-2025] - Уточнение MacroProperty массивов и планы MP6
+### Добавлено
+- Экспорт чата: docs/last_chat_export_29-08-2025.md
+
+### Изменено
+- `docs/GPU.md`: уточнено объявление MacroProperty массивов в Python (`newMacroProperty<Type>(name, dims...)`) и доступ в RTC (`getMacroProperty<Type, DIMS>(name)[i]`); MP5 приведён к линейной индексации; MP6 типизирован как UInt32.
+- `docs/Tasktracker.md`: P1 обновлён под MP6 MacroProperty UInt32 (массивы по дням, атомики по `day+1`).
+- `docs/migration.md`: добавлены ссылки на разделы офдоков FLAME GPU по MacroProperty и доступу из RTC.
+
+### Исправлено
+- Несогласованные формулировки по MP5/MP6 в документации.
+
 ## [27-08-2025] - Архитектура full‑GPU для планеров (GPU.md)
 ### Добавлено
 - Создан документ `docs/GPU.md` с целевой архитектурой full‑GPU: `rtc_quota_init` → L1(`rtc_status_6/4/2`) → L2(`rtc_status_3`) → L3(`rtc_status_5`) → L4(`rtc_status_1`) → эпилог `rtc_log_day (MP2)`.
