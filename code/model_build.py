@@ -254,3 +254,126 @@ class HeliSimModel:
         self.sim = sim
         return sim
 
+
+# === Фабрики сборки моделей (центр, используемый оркестратором) ===
+
+def build_model_for_quota_smoke(frames_total: int, days_total: int):
+    """Минимальная модель для smoke intent→approve→apply без лишних зависимостей.
+    Возвращает кортеж (model, agent_desc).
+    """
+    try:
+        import pyflamegpu as fg
+    except Exception as e:
+        raise RuntimeError(f"pyflamegpu не установлен: {e}")
+
+    FRAMES = max(1, int(frames_total))
+    DAYS = max(1, int(days_total))
+
+    model = fg.ModelDescription("GPUQuotaFactory")
+    env = model.Environment()
+    # Скаляры и PropertyArrays (источник квот — MP4[D+1])
+    env.newPropertyUInt("version_date", 0)
+    env.newPropertyUInt("frames_total", 0)
+    env.newPropertyUInt("days_total", 0)
+    env.newPropertyUInt("approve_policy", 0)  # 0 = по idx (детерминизм)
+    env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * DAYS)
+    env.newPropertyArrayUInt32("mp4_ops_counter_mi17", [0] * DAYS)
+    # Буферы менеджера квот (по кадрам)
+    env.newMacroPropertyUInt32("mi8_intent", FRAMES)
+    env.newMacroPropertyUInt32("mi17_intent", FRAMES)
+    env.newMacroPropertyUInt32("mi8_approve", FRAMES)
+    env.newMacroPropertyUInt32("mi17_approve", FRAMES)
+
+    # Агент и минимальные переменные
+    agent = model.newAgent("component")
+    agent.newVariableUInt("idx", 0)
+    agent.newVariableUInt("group_by", 0)
+    agent.newVariableUInt("ops_ticket", 0)
+
+    # RTC: intent
+    rtc_intent = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int FRAMES = {FRAMES}u;
+        const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+        if (idx >= FRAMES) return flamegpu::ALIVE;
+        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }}
+        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }}
+        return flamegpu::ALIVE;
+    }}
+    """
+    agent.newRTCFunction("rtc_quota_intent", rtc_intent)
+
+    # RTC: approve (менеджер idx==0). Политика выбирается по env.approve_policy (0=по idx)
+    rtc_approve = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int DAYS = {DAYS}u;
+        static const unsigned int FRAMES = {FRAMES}u;
+        if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
+        const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int dayp1 = (day + 1u < DAYS ? day + 1u : day);
+        const unsigned int policy = FLAMEGPU->environment.getProperty<unsigned int>("approve_policy");
+        auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
+        auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
+        auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
+        auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
+        for (unsigned int k=0u;k<FRAMES;++k) {{ a8[k].exchange(0u); a17[k].exchange(0u); }}
+        unsigned int left8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
+        unsigned int left17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
+        // policy 0: скан по idx (детерминированно)
+        if (policy == 0u) {{
+            for (unsigned int k=0u;k<FRAMES && left8>0u;++k) {{ if (i8[k]) {{ a8[k].exchange(1u); --left8; }} }}
+            for (unsigned int k=0u;k<FRAMES && left17>0u;++k) {{ if (i17[k]) {{ a17[k].exchange(1u); --left17; }} }}
+        }} else {{
+            // Резерв под будущие политики (sne/ppr/seed)
+            for (unsigned int k=0u;k<FRAMES && left8>0u;++k) {{ if (i8[k]) {{ a8[k].exchange(1u); --left8; }} }}
+            for (unsigned int k=0u;k<FRAMES && left17>0u;++k) {{ if (i17[k]) {{ a17[k].exchange(1u); --left17; }} }}
+        }}
+        return flamegpu::ALIVE;
+    }}
+    """
+    agent.newRTCFunction("rtc_quota_approve_manager", rtc_approve)
+
+    # RTC: apply
+    rtc_apply = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_apply, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int FRAMES = {FRAMES}u;
+        const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+        if (idx >= FRAMES) return flamegpu::ALIVE;
+        if (gb == 1u) {{ auto a8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve"); if (a8[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }}
+        else if (gb == 2u) {{ auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve"); if (a17[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }}
+        return flamegpu::ALIVE;
+    }}
+    """
+    agent.newRTCFunction("rtc_quota_apply", rtc_apply)
+
+    # Слои: intent → approve → apply
+    l1 = model.newLayer(); l1.addAgentFunction(agent.getFunction("rtc_quota_intent"))
+    l2 = model.newLayer(); l2.addAgentFunction(agent.getFunction("rtc_quota_approve_manager"))
+    l3 = model.newLayer(); l3.addAgentFunction(agent.getFunction("rtc_quota_apply"))
+
+    return model, agent
+
+
+def build_model_full(frames_total: int, days_total: int, with_logging_layer: bool = True):
+    """Обёртка над HeliSimModel для полного пайпа; возвращает (model, agent, sim_builder).
+    sim_builder = функция, которая создаёт CUDASimulation поверх собранной модели.
+    """
+    try:
+        import pyflamegpu  # noqa:F401
+    except Exception as e:
+        raise RuntimeError(f"pyflamegpu не установлен: {e}")
+
+    hm = HeliSimModel()
+    hm.build_model(num_agents=max(1, int(frames_total)), env_sizes={
+        'days_total': int(days_total),
+        'frames_total': int(frames_total),
+        'mp1_len': 1,
+        'mp3_count': max(1, int(frames_total)),
+    })
+
+    def _mk_sim():
+        return hm.build_simulation()
+
+    return hm.model, hm.agent, _mk_sim
