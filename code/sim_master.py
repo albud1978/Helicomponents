@@ -469,19 +469,79 @@ def main():
         cnt4_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 4)
         cnt6_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 6)
         steps = max(1, int(a.status246_days))
+        # Посуточные метрики
+        per_day_dt_totals: List[int] = []
+        per_day_trans_24: List[int] = []
+        per_day_trans_45: List[int] = []
+        per_day_trans_26: List[int] = []
+        per_day_sne_from_s2: List[int] = []
+        per_day_ppr_from_s2: List[int] = []
+        per_day_ppr_reset_45: List[int] = []
+        # Зафиксируем базовый набор idx из статуса 2 на D0 для dt сумм
+        selected_idx: List[int] = []
+        for i in range(K):
+            if int(before[i].getVariableUInt('status_id')) == 2:
+                selected_idx.append(int(before[i].getVariableUInt('idx')))
         for d in range(steps):
-            pop = pyflamegpu.AgentVector(a_desc)
-            sim2.getPopulationData(pop)
-            for i, ag in enumerate(pop):
-                if int(ag.getVariableUInt('status_id')) == 2:
+            # Снимем состояние ДО шага
+            pop_before = pyflamegpu.AgentVector(a_desc)
+            sim2.getPopulationData(pop_before)
+            status_before = [int(pop_before[i].getVariableUInt('status_id')) for i in range(K)]
+            sne_before = [int(pop_before[i].getVariableUInt('sne')) for i in range(K)]
+            ppr_before = [int(pop_before[i].getVariableUInt('ppr')) for i in range(K)]
+            # Подготовка dt/dn только для агентов в статусе 2 на текущем d
+            for i in range(K):
+                if status_before[i] == 2:
+                    ag = pop_before[i]
                     fi = int(ag.getVariableUInt('idx'))
                     base = d * FRAMES + (fi if fi < FRAMES else 0)
                     dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
                     dn = int(env_data['mp5_daily_hours_linear'][base + FRAMES]) if (base + FRAMES) < len(env_data['mp5_daily_hours_linear']) else 0
                     ag.setVariableUInt('daily_today_u32', dt)
                     ag.setVariableUInt('daily_next_u32', dn)
-            sim2.setPopulationData(pop)
+            # Посуточная сумма dt по зафиксированным idx
+            tot_dt = 0
+            base_day = d * FRAMES
+            for fi in selected_idx:
+                pos = base_day + (fi if fi < FRAMES else 0)
+                if 0 <= pos < len(env_data['mp5_daily_hours_linear']):
+                    tot_dt += int(env_data['mp5_daily_hours_linear'][pos])
+            per_day_dt_totals.append(tot_dt)
+            # Шаг симуляции
+            sim2.setPopulationData(pop_before)
             sim2.step()
+            # Состояние ПОСЛЕ шага
+            pop_after = pyflamegpu.AgentVector(a_desc)
+            sim2.getPopulationData(pop_after)
+            status_after = [int(pop_after[i].getVariableUInt('status_id')) for i in range(K)]
+            sne_after = [int(pop_after[i].getVariableUInt('sne')) for i in range(K)]
+            ppr_after = [int(pop_after[i].getVariableUInt('ppr')) for i in range(K)]
+            # Транзакции статусов
+            t_24 = 0
+            t_45 = 0
+            t_26 = 0
+            sne_s2 = 0
+            ppr_s2 = 0
+            ppr_reset_45 = 0
+            for i in range(K):
+                sb = status_before[i]
+                sa = status_after[i]
+                if sb == 2 and sa == 4:
+                    t_24 += 1
+                if sb == 2 and sa == 6:
+                    t_26 += 1
+                if sb == 4 and sa == 5:
+                    t_45 += 1
+                    ppr_reset_45 += (ppr_after[i] - ppr_before[i])
+                if sb == 2:
+                    sne_s2 += (sne_after[i] - sne_before[i])
+                    ppr_s2 += (ppr_after[i] - ppr_before[i])
+            per_day_trans_24.append(t_24)
+            per_day_trans_45.append(t_45)
+            per_day_trans_26.append(t_26)
+            per_day_sne_from_s2.append(sne_s2)
+            per_day_ppr_from_s2.append(ppr_s2)
+            per_day_ppr_reset_45.append(ppr_reset_45)
         after = pyflamegpu.AgentVector(a_desc)
         sim2.getPopulationData(after)
         cnt2_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 2)
@@ -491,6 +551,12 @@ def main():
         sne_inc = sum(int(ag.getVariableUInt('sne')) for ag in after) - sum(int(ag.getVariableUInt('sne')) for ag in before)
         ppr_inc = sum(int(ag.getVariableUInt('ppr')) for ag in after) - sum(int(ag.getVariableUInt('ppr')) for ag in before)
         print(f"status246_smoke_real: steps={steps}, cnt2 {cnt2_b}->{cnt2_a}, cnt4 {cnt4_b}->{cnt4_a}, cnt5={cnt5_a}, cnt6 {cnt6_b}->{cnt6_a}, sne_inc={sne_inc}, ppr_inc={ppr_inc}")
+        # Диагностика по суткам
+        print(f"  per_day_dt_totals: {per_day_dt_totals}")
+        print(f"  per_day_transitions: 2->4={per_day_trans_24}, 4->5={per_day_trans_45}, 2->6={per_day_trans_26}")
+        print(f"  per_day_sne_inc_from_s2: {per_day_sne_from_s2}")
+        print(f"  per_day_ppr_inc_from_s2: {per_day_ppr_from_s2}")
+        print(f"  per_day_ppr_reset_from_4to5: {per_day_ppr_reset_45}")
         return
 
     # === Целевой кейс status_2 для одного aircraft_number: дневная траектория ===
