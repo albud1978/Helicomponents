@@ -423,6 +423,12 @@ def main():
         os.environ['HL_STATUS246_SMOKE'] = '1'
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
+        # Таймеры стадий
+        t_load_s = 0.0
+        t_gpu_s = 0.0
+        t_cpu_s = 0.0
+        import time as _t
+        t0 = _t.perf_counter()
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
         sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim2.setEnvironmentPropertyUInt("days_total", DAYS)
@@ -430,6 +436,48 @@ def main():
         frames_index = env_data.get('frames_index', {})
         # Берём всех агентов с статусами 2,4,6
         rows = [r for r in mp3_rows if int(r[idx_map['status_id']] or 0) in (2,4,6)]
+        # Диагностика BR (минуты) по реальным данным: отдельно MI-8 и MI-17
+        br8_vals: List[int] = []
+        br17_vals: List[int] = []
+        for r in rows:
+            partseq = int(r[idx_map.get('partseqno_i', -1)] or 0)
+            mask = int(r[idx_map.get('ac_type_mask', -1)] or 0)
+            br_val = 0
+            if mask & 32:
+                br_val = int(mp1_map.get(partseq, (0,0,0,0,0))[0])
+                br8_vals.append(br_val)
+            elif mask & 64:
+                br_val = int(mp1_map.get(partseq, (0,0,0,0,0))[1])
+                br17_vals.append(br_val)
+        # Примеры пар (aircraft_number, partseqno_i, br)
+        samples8: List[Tuple[int,int,int]] = []
+        samples17: List[Tuple[int,int,int]] = []
+        for r in rows:
+            partseq = int(r[idx_map.get('partseqno_i', -1)] or 0)
+            acn = int(r[idx_map.get('aircraft_number', -1)] or 0)
+            mask = int(r[idx_map.get('ac_type_mask', -1)] or 0)
+            if mask & 32 and len(samples8) < 5:
+                br_val = int(mp1_map.get(partseq, (0,0,0,0,0))[0])
+                samples8.append((acn, partseq, br_val))
+            elif mask & 64 and len(samples17) < 5:
+                br_val = int(mp1_map.get(partseq, (0,0,0,0,0))[1])
+                samples17.append((acn, partseq, br_val))
+        if br8_vals:
+            print(f"BR[MI-8] minutes: count={len(br8_vals)}, min={min(br8_vals)}, max={max(br8_vals)}")
+        else:
+            print("BR[MI-8] minutes: count=0")
+        if br17_vals:
+            print(f"BR[MI-17] minutes: count={len(br17_vals)}, min={min(br17_vals)}, max={max(br17_vals)}")
+        else:
+            print("BR[MI-17] minutes: count=0")
+        if samples8:
+            print("BR[MI-8] sample pairs (acn, partseq, br):")
+            for acn, psn, brv in samples8:
+                print(f"  ({acn}, {psn}, {brv})")
+        if samples17:
+            print("BR[MI-17] sample pairs (acn, partseq, br):")
+            for acn, psn, brv in samples17:
+                print(f"  ({acn}, {psn}, {brv})")
         K = len(rows)
         av = pyflamegpu.AgentVector(a_desc, K)
         for i, r in enumerate(rows):
@@ -439,6 +487,7 @@ def main():
             av[i].setVariableUInt("idx", fi)
             av[i].setVariableUInt("group_by", 1)
             av[i].setVariableUInt("status_id", sid)
+            av[i].setVariableUInt("aircraft_number", ac)
             av[i].setVariableUInt("repair_days", int(r[idx_map.get('repair_days', -1)] or 0))
             partseq = int(r[idx_map.get('partseqno_i', -1)] or 0)
             rt = 0
@@ -447,10 +496,25 @@ def main():
             av[i].setVariableUInt("repair_time", int(rt))
             av[i].setVariableUInt("sne", int(r[idx_map.get('sne', -1)] or 0))
             av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
+            # ll берём из MP3 (как есть)
             av[i].setVariableUInt("ll", int(r[idx_map.get('ll', -1)] or 0))
-            av[i].setVariableUInt("oh", int(r[idx_map.get('oh', -1)] or 0))
-            # br по типу планера: br_mi8/br_mi17
+            # oh берём из MP1 по типу ВС (минуты)
             mask = int(r[idx_map.get('ac_type_mask', -1)] or 0)
+            # Для group_by 1/2 (МИ-8/МИ-17) определяем индекс MP1 для partseq
+            mp1_idx_map = env_data.get('mp1_index', {})
+            pidx = int(mp1_idx_map.get(partseq, -1))
+            oh_val = 0
+            if pidx >= 0:
+                if mask & 32:
+                    oh_arr = env_data.get('mp1_oh_mi8', [])
+                    if pidx < len(oh_arr):
+                        oh_val = int(oh_arr[pidx] or 0)
+                elif mask & 64:
+                    oh_arr = env_data.get('mp1_oh_mi17', [])
+                    if pidx < len(oh_arr):
+                        oh_val = int(oh_arr[pidx] or 0)
+            av[i].setVariableUInt("oh", oh_val)
+            # br по типу планера: br_mi8/br_mi17
             br = 0
             if mask & 32:
                 br = int(mp1_map.get(partseq, (0,0,0,0,0))[0])
@@ -463,8 +527,11 @@ def main():
             av[i].setVariableUInt("daily_today_u32", dt)
             av[i].setVariableUInt("daily_next_u32", 0)
         sim2.setPopulationData(av)
+        t_load_s += (_t.perf_counter() - t0)
         before = pyflamegpu.AgentVector(a_desc)
+        t1 = _t.perf_counter()
         sim2.getPopulationData(before)
+        t_cpu_s += (_t.perf_counter() - t1)
         cnt2_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 2)
         cnt4_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 4)
         cnt6_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 6)
@@ -482,13 +549,21 @@ def main():
         for i in range(K):
             if int(before[i].getVariableUInt('status_id')) == 2:
                 selected_idx.append(int(before[i].getVariableUInt('idx')))
+        # Логи переходов по дням с датами и aircraft_number
+        trans24_log: List[Tuple[str,int]] = []
+        trans26_log: List[Tuple[str,int]] = []
+        # Расширенный лог: day, ac, sne, ppr, ll, oh, br на момент выхода (после dt)
+        trans24_info: List[Tuple[str,int,int,int,int,int,int]] = []
+        trans26_info: List[Tuple[str,int,int,int,int,int,int]] = []
         for d in range(steps):
             # Снимем состояние ДО шага
             pop_before = pyflamegpu.AgentVector(a_desc)
+            t_bcpu0 = _t.perf_counter()
             sim2.getPopulationData(pop_before)
             status_before = [int(pop_before[i].getVariableUInt('status_id')) for i in range(K)]
             sne_before = [int(pop_before[i].getVariableUInt('sne')) for i in range(K)]
             ppr_before = [int(pop_before[i].getVariableUInt('ppr')) for i in range(K)]
+            ac_before = [int(pop_before[i].getVariableUInt('aircraft_number')) for i in range(K)]
             # Подготовка dt/dn только для агентов в статусе 2 на текущем d
             for i in range(K):
                 if status_before[i] == 2:
@@ -509,13 +584,18 @@ def main():
             per_day_dt_totals.append(tot_dt)
             # Шаг симуляции
             sim2.setPopulationData(pop_before)
+            t_cpu_s += (_t.perf_counter() - t_bcpu0)
+            t_g0 = _t.perf_counter()
             sim2.step()
+            t_gpu_s += (_t.perf_counter() - t_g0)
             # Состояние ПОСЛЕ шага
             pop_after = pyflamegpu.AgentVector(a_desc)
+            t_acpu0 = _t.perf_counter()
             sim2.getPopulationData(pop_after)
             status_after = [int(pop_after[i].getVariableUInt('status_id')) for i in range(K)]
             sne_after = [int(pop_after[i].getVariableUInt('sne')) for i in range(K)]
             ppr_after = [int(pop_after[i].getVariableUInt('ppr')) for i in range(K)]
+            t_cpu_s += (_t.perf_counter() - t_acpu0)
             # Транзакции статусов
             t_24 = 0
             t_45 = 0
@@ -528,8 +608,25 @@ def main():
                 sa = status_after[i]
                 if sb == 2 and sa == 4:
                     t_24 += 1
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans24_log.append((day_str, ac_before[i]))
+                    # значения после шага (после начисления dt)
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans24_info.append((day_str, ac_before[i], sne_v, ppr_v, ll_v, oh_v, br_v))
                 if sb == 2 and sa == 6:
                     t_26 += 1
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans26_log.append((day_str, ac_before[i]))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans26_info.append((day_str, ac_before[i], sne_v, ppr_v, ll_v, oh_v, br_v))
                 if sb == 4 and sa == 5:
                     t_45 += 1
                     ppr_reset_45 += (ppr_after[i] - ppr_before[i])
@@ -543,7 +640,9 @@ def main():
             per_day_ppr_from_s2.append(ppr_s2)
             per_day_ppr_reset_45.append(ppr_reset_45)
         after = pyflamegpu.AgentVector(a_desc)
+        t_endcpu0 = _t.perf_counter()
         sim2.getPopulationData(after)
+        t_cpu_s += (_t.perf_counter() - t_endcpu0)
         cnt2_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 2)
         cnt4_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 4)
         cnt5_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 5)
@@ -557,6 +656,30 @@ def main():
         print(f"  per_day_sne_inc_from_s2: {per_day_sne_from_s2}")
         print(f"  per_day_ppr_inc_from_s2: {per_day_ppr_from_s2}")
         print(f"  per_day_ppr_reset_from_4to5: {per_day_ppr_reset_45}")
+        # Полные логи переходов 2->4 и 2->6 с датами и AC
+        if trans24_log:
+            print("  transitions_2to4:")
+            for dstr, acn in trans24_log:
+                print(f"    {dstr}: ac={acn}")
+        if trans26_log:
+            print("  transitions_2to6:")
+            for dstr, acn in trans26_log:
+                print(f"    {dstr}: ac={acn}")
+        # Детальные значения на момент выхода
+        if trans24_info:
+            print("  details_2to4 (day, ac, sne, ppr, ll, oh, br):")
+            for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans24_info:
+                print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        if trans26_info:
+            print("  details_2to6 (day, ac, sne, ppr, ll, oh, br):")
+            for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans26_info:
+                print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        # Итоги только по статусу 2
+        sne_inc_s2_total = sum(per_day_sne_from_s2)
+        ppr_inc_s2_total = sum(per_day_ppr_from_s2)
+        print(f"  totals_s2_only: sne_inc_s2={sne_inc_s2_total}, ppr_inc_s2={ppr_inc_s2_total}")
+        # Сводка таймингов
+        print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}")
         return
 
     # === Целевой кейс status_2 для одного aircraft_number: дневная траектория ===
@@ -566,6 +689,12 @@ def main():
         os.environ['HL_STATUS246_SMOKE'] = '1'
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
+        # Таймеры стадий
+        t_load_s = 0.0
+        t_gpu_s = 0.0
+        t_cpu_s = 0.0
+        import time as _t
+        t0 = _t.perf_counter()
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
         sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim2.setEnvironmentPropertyUInt("days_total", DAYS)
@@ -608,10 +737,12 @@ def main():
             av[i].setVariableUInt("daily_today_u32", dt0)
             av[i].setVariableUInt("daily_next_u32", dn0)
         sim2.setPopulationData(av)
+        t_load_s += (_t.perf_counter() - t0)
         steps = max(1, int(a.status2_case_days))
         print(f"status2_case: aircraft_number={ac_target}, agents={K}, days={steps}")
         for d in range(steps):
             pop = pyflamegpu.AgentVector(a_desc)
+            t_cpu_pre = _t.perf_counter()
             sim2.getPopulationData(pop)
             # Печатаем состояние до шага
             for i in range(min(K, 5)):
@@ -629,12 +760,18 @@ def main():
                 pop[i].setVariableUInt('daily_today_u32', dt)
                 pop[i].setVariableUInt('daily_next_u32', dn)
             sim2.setPopulationData(pop)
+            t_cpu_s += (_t.perf_counter() - t_cpu_pre)
+            t_g0 = _t.perf_counter()
             sim2.step()
+            t_gpu_s += (_t.perf_counter() - t_g0)
         # Итог
         out = pyflamegpu.AgentVector(a_desc)
+        t_cpu_post = _t.perf_counter()
         sim2.getPopulationData(out)
+        t_cpu_s += (_t.perf_counter() - t_cpu_post)
         trans = [int(out[i].getVariableUInt('status_id')) for i in range(K)]
         print(f"status2_case_result: final_statuses={trans}")
+        print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}")
         return
 
     # Сборка модели (env-only): агентов не создаём

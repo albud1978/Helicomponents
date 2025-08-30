@@ -56,7 +56,7 @@ class BeyondRepairCalculator:
         """Массовое обновление полей br_mi8/br_mi17 в md_components"""
         self.logger.info("💾 Массовое обновление br_mi8/br_mi17 в md_components...")
         try:
-            # Ми-8 → минуты (строго в Float64, затем приведение к UInt32)
+            # Ми-8 → минуты (ll/oh уже в минутах; считаем BR в минутах без доп. умножения)
             self.client.execute(
                 """
                 ALTER TABLE md_components UPDATE
@@ -67,14 +67,14 @@ class BeyondRepairCalculator:
                         greatest(
                           0.0,
                           least(
-                            60.0 * ( toFloat64(ll_mi8) - (
+                            ( toFloat64(ll_mi8) - (
                               toFloat64(repair_price) / greatest(
                                 ((toFloat64(purchase_price) - toFloat64(repair_price)) / toFloat64(ll_mi8))
                                 + (toFloat64(repair_price) / toFloat64(oh_mi8)),
                                 1e-6
                               )
                             ) ),
-                            60.0 * toFloat64(ll_mi8)
+                            toFloat64(ll_mi8)
                           )
                         )
                       )
@@ -85,7 +85,7 @@ class BeyondRepairCalculator:
                 """
             )
 
-            # Ми-17 → минуты (строго в Float64, затем приведение к UInt32)
+            # Ми-17 → минуты (ll/oh уже в минутах)
             self.client.execute(
                 """
                 ALTER TABLE md_components UPDATE
@@ -96,14 +96,14 @@ class BeyondRepairCalculator:
                         greatest(
                           0.0,
                           least(
-                            60.0 * ( toFloat64(ll_mi17) - (
+                            ( toFloat64(ll_mi17) - (
                               toFloat64(repair_price) / greatest(
                                 ((toFloat64(purchase_price) - toFloat64(repair_price)) / toFloat64(ll_mi17))
                                 + (toFloat64(repair_price) / toFloat64(oh_mi17)),
                                 1e-6
                               )
                             ) ),
-                            60.0 * toFloat64(ll_mi17)
+                            toFloat64(ll_mi17)
                           )
                         )
                       )
@@ -154,12 +154,12 @@ class BeyondRepairCalculator:
             self.logger.info(f"   br_mi8: рассчитано {with_mi8}, диапазон [{mi8_min}, {mi8_max}]")
             self.logger.info(f"   br_mi17: рассчитано {with_mi17}, диапазон [{mi17_min}, {mi17_max}]")
 
-            # Проверка инвариантов br <= 60*ll
+            # Проверка инвариантов br <= ll (все в минутах)
             inv = self.client.execute(
                 """
                 SELECT 
-                  sum(br_mi8  > 60 * ll_mi8)  as mi8_viol,
-                  sum(br_mi17 > 60 * ll_mi17) as mi17_viol
+                  sum(br_mi8  > ll_mi8)  as mi8_viol,
+                  sum(br_mi17 > ll_mi17) as mi17_viol
                 FROM md_components
                 """
             )[0]
