@@ -315,6 +315,9 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("repair_time", 0)
     agent.newVariableUInt("sne", 0)
     agent.newVariableUInt("ppr", 0)
+    agent.newVariableUInt("ll", 0)
+    agent.newVariableUInt("oh", 0)
+    agent.newVariableUInt("br", 0)
 
     # RTC: intent
     rtc_intent = f"""
@@ -428,11 +431,35 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     FLAMEGPU_AGENT_FUNCTION(rtc_status_2, flamegpu::MessageNone, flamegpu::MessageNone) {
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
         const unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
+        const unsigned int dn = FLAMEGPU->getVariable<unsigned int>("daily_next_u32");
+        unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+        unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
         if (dt) {
-            const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
-            const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-            FLAMEGPU->setVariable<unsigned int>("sne", sne + dt);
-            FLAMEGPU->setVariable<unsigned int>("ppr", ppr + dt);
+            sne += dt;
+            ppr += dt;
+            FLAMEGPU->setVariable<unsigned int>("sne", sne);
+            FLAMEGPU->setVariable<unsigned int>("ppr", ppr);
+        }
+        // Проверки на D+1 (без квоты): LL/OH и BR
+        if (dn) {
+            const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
+            const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+            const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
+            bool to6 = false;
+            bool to4 = false;
+            if (sne >= ll || (ll > sne && (ll - sne) < dn)) {
+                to6 = true;
+            } else if (ppr >= oh || (oh > ppr && (oh - ppr) < dn)) {
+                // Если после завтрашнего налёта остаёмся ремонтопригодны → 4, иначе 6
+                to4 = ((sne + dn) < br);
+                if (!to4) to6 = true;
+            }
+            if (to4) {
+                FLAMEGPU->setVariable<unsigned int>("status_id", 4u);
+                FLAMEGPU->setVariable<unsigned int>("repair_days", 1u);
+            } else if (to6) {
+                FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
+            }
         }
         return flamegpu::ALIVE;
     }
