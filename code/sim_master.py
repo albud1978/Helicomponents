@@ -65,6 +65,8 @@ def main():
     p.add_argument('--status2-days', type=int, default=7, help='Сколько суток шагать в status2-smoke-real (по умолчанию 7)')
     p.add_argument('--status246-smoke-real', action='store_true', help='Совместный слой 2/4/6: реальный smoke, шаги N, метрики')
     p.add_argument('--status246-days', type=int, default=7, help='Сколько суток шагать в status246-smoke-real (по умолчанию 7)')
+    p.add_argument('--status2-case-ac', type=int, default=0, help='Целевой aircraft_number для статус-2 кейса (диагностика LL/OH/BR)')
+    p.add_argument('--status2-case-days', type=int, default=7, help='Сколько суток шагать в статус-2 кейсе (по умолчанию 7)')
     a = p.parse_args()
     # CUDA_PATH fallback
     if not os.environ.get('CUDA_PATH'):
@@ -445,6 +447,16 @@ def main():
             av[i].setVariableUInt("repair_time", int(rt))
             av[i].setVariableUInt("sne", int(r[idx_map.get('sne', -1)] or 0))
             av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
+            av[i].setVariableUInt("ll", int(r[idx_map.get('ll', -1)] or 0))
+            av[i].setVariableUInt("oh", int(r[idx_map.get('oh', -1)] or 0))
+            # br по типу планера: br_mi8/br_mi17
+            mask = int(r[idx_map.get('ac_type_mask', -1)] or 0)
+            br = 0
+            if mask & 32:
+                br = int(mp1_map.get(partseq, (0,0,0,0,0))[0])
+            elif mask & 64:
+                br = int(mp1_map.get(partseq, (0,0,0,0,0))[1])
+            av[i].setVariableUInt("br", br)
             # dt на D0
             base = 0 * FRAMES + (fi if fi < FRAMES else 0)
             dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
@@ -465,7 +477,9 @@ def main():
                     fi = int(ag.getVariableUInt('idx'))
                     base = d * FRAMES + (fi if fi < FRAMES else 0)
                     dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+                    dn = int(env_data['mp5_daily_hours_linear'][base + FRAMES]) if (base + FRAMES) < len(env_data['mp5_daily_hours_linear']) else 0
                     ag.setVariableUInt('daily_today_u32', dt)
+                    ag.setVariableUInt('daily_next_u32', dn)
             sim2.setPopulationData(pop)
             sim2.step()
         after = pyflamegpu.AgentVector(a_desc)
@@ -477,6 +491,84 @@ def main():
         sne_inc = sum(int(ag.getVariableUInt('sne')) for ag in after) - sum(int(ag.getVariableUInt('sne')) for ag in before)
         ppr_inc = sum(int(ag.getVariableUInt('ppr')) for ag in after) - sum(int(ag.getVariableUInt('ppr')) for ag in before)
         print(f"status246_smoke_real: steps={steps}, cnt2 {cnt2_b}->{cnt2_a}, cnt4 {cnt4_b}->{cnt4_a}, cnt5={cnt5_a}, cnt6 {cnt6_b}->{cnt6_a}, sne_inc={sne_inc}, ppr_inc={ppr_inc}")
+        return
+
+    # === Целевой кейс status_2 для одного aircraft_number: дневная траектория ===
+    if int(getattr(a, 'status2_case_ac', 0)) > 0:
+        FRAMES = int(env_data['frames_total_u16'])
+        DAYS = int(env_data['days_total_u16'])
+        os.environ['HL_STATUS246_SMOKE'] = '1'
+        model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
+        sim2 = pyflamegpu.CUDASimulation(model2)
+        sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+        sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
+        sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        idx_map = {name: i for i, name in enumerate(mp3_fields)}
+        frames_index = env_data.get('frames_index', {})
+        ac_target = int(a.status2_case_ac)
+        rows = [r for r in mp3_rows if int(r[idx_map['aircraft_number']] or 0) == ac_target and int(r[idx_map['status_id']] or 0) == 2]
+        if not rows:
+            print(f"status2_case: aircraft_number={ac_target} не найден(ы) в status_id=2")
+            return
+        K = len(rows)
+        av = pyflamegpu.AgentVector(a_desc, K)
+        for i, r in enumerate(rows):
+            sid = int(r[idx_map['status_id']] or 0)
+            ac = int(r[idx_map['aircraft_number']] or 0)
+            fi = int(frames_index.get(ac, i % max(1, FRAMES)))
+            av[i].setVariableUInt("idx", fi)
+            av[i].setVariableUInt("group_by", 1)
+            av[i].setVariableUInt("status_id", sid)
+            av[i].setVariableUInt("repair_days", int(r[idx_map.get('repair_days', -1)] or 0))
+            partseq = int(r[idx_map.get('partseqno_i', -1)] or 0)
+            rt = mp1_map.get(partseq, (0,0,0,0,0))[2]
+            av[i].setVariableUInt("repair_time", int(rt))
+            av[i].setVariableUInt("sne", int(r[idx_map.get('sne', -1)] or 0))
+            av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
+            av[i].setVariableUInt("ll", int(r[idx_map.get('ll', -1)] or 0))
+            av[i].setVariableUInt("oh", int(r[idx_map.get('oh', -1)] or 0))
+            # br по типу планера
+            mask = int(r[idx_map.get('ac_type_mask', -1)] or 0)
+            br = 0
+            if mask & 32:
+                br = int(mp1_map.get(partseq, (0,0,0,0,0))[0])
+            elif mask & 64:
+                br = int(mp1_map.get(partseq, (0,0,0,0,0))[1])
+            av[i].setVariableUInt("br", br)
+            # D0 dt/dn
+            base = 0 * FRAMES + (fi if fi < FRAMES else 0)
+            dt0 = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+            dn0 = int(env_data['mp5_daily_hours_linear'][base + FRAMES]) if (base + FRAMES) < len(env_data['mp5_daily_hours_linear']) else 0
+            av[i].setVariableUInt("daily_today_u32", dt0)
+            av[i].setVariableUInt("daily_next_u32", dn0)
+        sim2.setPopulationData(av)
+        steps = max(1, int(a.status2_case_days))
+        print(f"status2_case: aircraft_number={ac_target}, agents={K}, days={steps}")
+        for d in range(steps):
+            pop = pyflamegpu.AgentVector(a_desc)
+            sim2.getPopulationData(pop)
+            # Печатаем состояние до шага
+            for i in range(min(K, 5)):
+                fi = int(pop[i].getVariableUInt('idx'))
+                base = d * FRAMES + (fi if fi < FRAMES else 0)
+                dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+                dn = int(env_data['mp5_daily_hours_linear'][base + FRAMES]) if (base + FRAMES) < len(env_data['mp5_daily_hours_linear']) else 0
+                sid = int(pop[i].getVariableUInt('status_id'))
+                sne = int(pop[i].getVariableUInt('sne'))
+                ppr = int(pop[i].getVariableUInt('ppr'))
+                llv = int(pop[i].getVariableUInt('ll'))
+                ohv = int(pop[i].getVariableUInt('oh'))
+                brv = int(pop[i].getVariableUInt('br'))
+                print(f"D{d}: idx={fi}, sid={sid}, dt={dt}, dn={dn}, sne={sne}, ppr={ppr}, ll={llv}, oh={ohv}, br={brv}")
+                pop[i].setVariableUInt('daily_today_u32', dt)
+                pop[i].setVariableUInt('daily_next_u32', dn)
+            sim2.setPopulationData(pop)
+            sim2.step()
+        # Итог
+        out = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(out)
+        trans = [int(out[i].getVariableUInt('status_id')) for i in range(K)]
+        print(f"status2_case_result: final_statuses={trans}")
         return
 
     # Сборка модели (env-only): агентов не создаём
