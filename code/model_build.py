@@ -68,6 +68,9 @@ class HeliSimModel:
             env.newPropertyArrayUInt32("mp1_repair_time", [0] * max(1, mp1_len))
             env.newPropertyArrayUInt32("mp1_partout_time", [0] * max(1, mp1_len))
             env.newPropertyArrayUInt32("mp1_assembly_time", [0] * max(1, mp1_len))
+            # Новые массивы OH по типам (минуты)
+            env.newPropertyArrayUInt32("mp1_oh_mi8", [0] * max(1, mp1_len))
+            env.newPropertyArrayUInt32("mp1_oh_mi17", [0] * max(1, mp1_len))
         if not minimal_env or enable_mp3:
             # MP3 SoA
             env.newPropertyArrayUInt32("mp3_psn", [0] * max(1, mp3_count))
@@ -229,7 +232,7 @@ class HeliSimModel:
             }
             return flamegpu::ALIVE;
         }
-            """
+        """
         )
         rtc_quota_apply_simple_src = _apply_simple_tpl.substitute(DAYS=str(max(1, days_total)))
 
@@ -246,7 +249,7 @@ class HeliSimModel:
             FLAMEGPU->setVariable<unsigned int>("quota_left", left);
             return flamegpu::ALIVE;
         }
-            """
+        """
         )
         rtc_read_quota_left_src = _readleft_tpl.substitute(DAYS=str(max(1, days_total)))
         # Отключено: диагностика остатка квоты не используется в слоях и тянет DAYS
@@ -319,6 +322,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("ll", 0)
     agent.newVariableUInt("oh", 0)
     agent.newVariableUInt("br", 0)
+    # Диагностика переходов: aircraft_number
+    agent.newVariableUInt("aircraft_number", 0)
 
     # RTC: intent
     rtc_intent = f"""
@@ -427,17 +432,43 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     }
     """
     agent.newRTCFunction("rtc_status_6", rtc_status6_src)
-    # Опциональный слой status_2 smoke (инкремент sne/ppr от daily_today_u32)
+    # Опциональный слой status_2: начисление dt и проверки LL/OH с BR-веткой (без квот)
     rtc_status2_src = """
     FLAMEGPU_AGENT_FUNCTION(rtc_status_2, flamegpu::MessageNone, flamegpu::MessageNone) {
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
+        // 1) Начисление dt
         const unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
+        const unsigned int dn = FLAMEGPU->getVariable<unsigned int>("daily_next_u32");
+        unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+        unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
         if (dt) {
-            const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
-            const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-            FLAMEGPU->setVariable<unsigned int>("sne", sne + dt);
-            FLAMEGPU->setVariable<unsigned int>("ppr", ppr + dt);
+            sne = sne + dt;
+            ppr = ppr + dt;
+            FLAMEGPU->setVariable<unsigned int>("sne", sne);
+            FLAMEGPU->setVariable<unsigned int>("ppr", ppr);
         }
+        // 2) Прогноз на завтра
+        const unsigned int s_next = sne + dn;
+        const unsigned int p_next = ppr + dn;
+        const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
+        const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+        const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
+        // 3) LL-порог: если sne+dn >= ll -> немедленно 2->6
+        if (s_next >= ll) {
+            FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
+            return flamegpu::ALIVE;
+        }
+        // 4) OH-порог: если ppr+dn >= oh, уточняем по BR
+        if (p_next >= oh) {
+            if (s_next < br) {
+                FLAMEGPU->setVariable<unsigned int>("status_id", 4u);
+                FLAMEGPU->setVariable<unsigned int>("repair_days", 1u);
+            } else {
+                FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
+            }
+            return flamegpu::ALIVE;
+        }
+        // Иначе остаёмся в 2
         return flamegpu::ALIVE;
     }
     """

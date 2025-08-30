@@ -112,6 +112,16 @@ def prepare_md_data(df, version_date, version_id=1):
                 df[col] = df[col].fillna(0).astype('int64')  # Стандартный паттерн как в dual_loader.py
                 print(f"   🔧 {col}: UInt16 (0-65535)")
         
+        # Конвертация часов → минут для ресурсных полей (требование проекта)
+        # Поля источника в часах: ll_mi8, ll_mi17, oh_mi8, oh_mi17 → в Env храним в минутах
+        hours_to_minutes_cols = ['ll_mi8', 'll_mi17', 'oh_mi8', 'oh_mi17']
+        for col in hours_to_minutes_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                # Перевод часов в минуты с округлением до целого и безопасной заменой NaN→0
+                df[col] = (df[col] * 60).round().fillna(0).astype('int64')
+                print(f"   ⏱ {col}: конвертировано часы→минуты")
+
         # Обработка UInt32 полей
         for col in uint32_columns:
             if col in df.columns:

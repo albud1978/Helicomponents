@@ -235,7 +235,8 @@ python3 code/utils/database_cleanup.py
 - **comp_number** Nullable(UInt8) - количество на ВС
 - **group_by** Nullable(UInt8) - группировка (1-МИ8, 2-МИ17)
 - **repair_time** Nullable(UInt16) - время ремонта в днях
-- **br_mi8** Nullable(UInt32), **br_mi17** Nullable(UInt32) — Beyond Repair (экономический порог списания), ЕДИНИЦЫ: МИНУТЫ
+- **ll_mi8**, **ll_mi17**, **oh_mi8**, **oh_mi17** — ресурсы из Excel конвертируются из часов в МИНУТЫ при загрузке (`md_components_loader.py`).
+- **br_mi8** Nullable(UInt32), **br_mi17** Nullable(UInt32) — Beyond Repair (экономический порог списания), ЕДИНИЦЫ: МИНУТЫ; расчёт в `calculate_beyond_repair.py` выполняется в минутах (без дополнительного ×60), инвариант: `br <= ll`.
 - **partno_comp** Nullable(UInt32) - component ID для связи с heli_pandas
 
 ### Справочные таблицы

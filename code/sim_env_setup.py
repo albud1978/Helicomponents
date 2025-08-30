@@ -33,6 +33,12 @@ def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int]]:
     return {int(p): (int(b8 or 0), int(b17 or 0), int(rt or 0), int(pt or 0), int(at or 0)) for p, b8, b17, rt, pt, at in rows}
 
 
+def fetch_mp1_oh(client) -> Dict[int, Tuple[int, int]]:
+    """Возвращает карту partno_comp → (oh_mi8, oh_mi17). Единицы ожидаются в минутах."""
+    rows = client.execute("SELECT partno_comp, oh_mi8, oh_mi17 FROM md_components")
+    return {int(p): (int(oh8 or 0), int(oh17 or 0)) for p, oh8, oh17 in rows}
+
+
 def fetch_mp3(client, vdate: date, vid: int):
     fields = [
         'partseqno_i','psn','aircraft_number','ac_type_mask','group_by','status_id',
@@ -231,6 +237,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     vdate, vid = fetch_versions(client)
     mp3_rows, mp3_fields = fetch_mp3(client, vdate, vid)
     mp1_map = fetch_mp1_br_rt(client)
+    mp1_oh_map = fetch_mp1_oh(client)
     mp4_by_day = preload_mp4_by_day(client)
     mp5_by_day = preload_mp5_maps(client)
 
@@ -239,6 +246,14 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
     mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
     mp1_br8, mp1_br17, mp1_rt, mp1_pt, mp1_at, mp1_index = build_mp1_arrays(mp1_map)
+    # Соберём массивы OH по индексу MP1
+    keys_sorted = sorted(mp1_index.keys(), key=lambda k: mp1_index[k])
+    mp1_oh8_arr: List[int] = []
+    mp1_oh17_arr: List[int] = []
+    for k in keys_sorted:
+        oh8, oh17 = mp1_oh_map.get(k, (0, 0))
+        mp1_oh8_arr.append(int(oh8 or 0))
+        mp1_oh17_arr.append(int(oh17 or 0))
     mp3_arrays = build_mp3_arrays(mp3_rows, mp3_fields)
 
     env_data = {
@@ -255,6 +270,8 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mp1_repair_time': mp1_rt,
         'mp1_partout_time': mp1_pt,
         'mp1_assembly_time': mp1_at,
+        'mp1_oh_mi8': mp1_oh8_arr,
+        'mp1_oh_mi17': mp1_oh17_arr,
         'mp1_index': mp1_index,
         'mp3_arrays': mp3_arrays,
         'mp3_count': len(mp3_rows),
@@ -291,6 +308,10 @@ def apply_env_to_sim(sim, env_data: Dict[str, object]):
         sim.setEnvironmentPropertyArrayUInt32("mp1_repair_time", list(env_data['mp1_repair_time']))
         sim.setEnvironmentPropertyArrayUInt32("mp1_partout_time", list(env_data['mp1_partout_time']))
         sim.setEnvironmentPropertyArrayUInt32("mp1_assembly_time", list(env_data['mp1_assembly_time']))
+        if 'mp1_oh_mi8' in env_data:
+            sim.setEnvironmentPropertyArrayUInt32("mp1_oh_mi8", list(env_data['mp1_oh_mi8']))
+        if 'mp1_oh_mi17' in env_data:
+            sim.setEnvironmentPropertyArrayUInt32("mp1_oh_mi17", list(env_data['mp1_oh_mi17']))
     # MP3 (SoA)
     if 'mp3_arrays' in env_data:
         a = env_data['mp3_arrays']
