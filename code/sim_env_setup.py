@@ -175,6 +175,7 @@ def build_mp3_arrays(mp3_rows, mp3_fields: List[str]) -> Dict[str, List[int]]:
         'mp3_psn': [],
         'mp3_aircraft_number': [],
         'mp3_ac_type_mask': [],
+        'mp3_group_by': [],
         'mp3_status_id': [],
         'mp3_sne': [],
         'mp3_ppr': [],
@@ -189,6 +190,7 @@ def build_mp3_arrays(mp3_rows, mp3_fields: List[str]) -> Dict[str, List[int]]:
         arr['mp3_psn'].append(to_u32(r[idx['psn']]))
         arr['mp3_aircraft_number'].append(to_u32(r[idx['aircraft_number']]))
         arr['mp3_ac_type_mask'].append(to_u16(r[idx['ac_type_mask']]))
+        arr['mp3_group_by'].append(to_u16(r[idx.get('group_by', -1)] if 'group_by' in idx else 0))
         arr['mp3_status_id'].append(to_u16(r[idx['status_id']]))
         arr['mp3_sne'].append(to_u32(r[idx['sne']]))
         arr['mp3_ppr'].append(to_u32(r[idx['ppr']]))
@@ -257,6 +259,17 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mp3_arrays': mp3_arrays,
         'mp3_count': len(mp3_rows),
     }
+    # Валидации форм и размеров (жёсткие assert'ы для раннего обнаружения ошибок)
+    dt = int(env_data['days_total_u16'])
+    ft = int(env_data['frames_total_u16'])
+    assert len(env_data['mp4_ops_counter_mi8']) == dt, "MP4_mi8 размер не равен days_total"
+    assert len(env_data['mp4_ops_counter_mi17']) == dt, "MP4_mi17 размер не равен days_total"
+    assert len(env_data['mp5_daily_hours_linear']) == (dt + 1) * ft, "MP5_linear размер != (days_total+1)*frames_total"
+    # mp3_arrays длины согласованы
+    a = env_data['mp3_arrays']
+    n3 = int(env_data['mp3_count'])
+    for k in ('mp3_psn','mp3_aircraft_number','mp3_ac_type_mask','mp3_group_by','mp3_status_id','mp3_sne','mp3_ppr','mp3_repair_days','mp3_ll','mp3_oh','mp3_mfg_date_days'):
+        assert len(a.get(k, [])) == n3, f"MP3 SoA поле {k} имеет несогласованную длину"
     return env_data
 
 

@@ -42,6 +42,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument('--days', type=int, default=2)
     ap.add_argument('--frames', type=int, default=3)
+    ap.add_argument('--emit-code', action='store_true', help='Сохранить RTC-источники HeliSimModel в файл')
+    ap.add_argument('--emit-path', type=str, default='rtc_dump.cu', help='Путь для сохранения RTC (если включен emit-code)')
     args = ap.parse_args()
 
     DAYS = max(1, int(args.days))
@@ -56,6 +58,17 @@ def main() -> None:
         'mp3_count': FRAMES,
     })
     sim = m.build_simulation()
+
+    # опциональная выгрузка RTC-источников (если доступны)
+    if getattr(m, 'rtc_sources', None) and args.emit_code:
+        try:
+            with open(args.emit_path, 'w', encoding='utf-8') as f:
+                for k, v in m.rtc_sources.items():
+                    f.write(f"\n// ===== {k} =====\n")
+                    f.write(v)
+            print(f'RTC источники сохранены в {args.emit_path}')
+        except Exception as e:
+            print('Не удалось сохранить RTC источники:', e)
 
     # Минимальный набор Env свойств
     sim.setEnvironmentPropertyUInt('version_date', 0)

@@ -1,3 +1,17 @@
+## [30-08-2025] - Централизация билдера GPU и фикс group_by
+### Добавлено
+- Фабрики сборки модели в `code/model_build.py`: `build_model_for_quota_smoke(frames_total, days_total)` и `build_model_full(...)`.
+- Флаги оркестратора: `--jit-log`, `--seatbelts {on,off}` в `code/sim_master.py`.
+- Валидации форм и типов в `code/sim_env_setup.py` (assert размеров MP4/MP5 и согласованности MP3 SoA, включая `mp3_group_by`).
+- Опция `--emit-code` в `code/model_nvrtc_probe.py` для сохранения RTC источников.
+
+### Изменено
+- Путь `--gpu-quota-smoke` в `sim_master.py` переведён на фабрику; устранено дублирование RTC‑кода.
+- `gpu_quota_smoke` теперь использует `mp3_group_by` для корректного формирования `frame_gb`.
+
+### Исправлено
+- Проблема: `claimed17=0` при ненулевом `seed17` из‑за отсутствия `mp3_group_by` в Env → добавлено поле и валидация; теперь `claimed` ровно равен `seed` для обеих групп.
+
 ## [29-08-2025] - Обновление GPU-квотирования (вариант A)
 ### Добавлено
 - Документация: MP4_quota (MacroProperty 1D), менеджер квот без атомик (intent/approve/apply) за один sim.step.
