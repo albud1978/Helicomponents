@@ -61,6 +61,10 @@ def main():
     p.add_argument('--status6-days', type=int, default=7, help='Сколько суток шагать в status6-smoke-real (по умолчанию 7)')
     p.add_argument('--status46-smoke-real', action='store_true', help='Совместный smoke status_4 + status_6 на реальных данных')
     p.add_argument('--status46-days', type=int, default=30, help='Сколько суток шагать в status46-smoke-real (по умолчанию 30)')
+    p.add_argument('--status2-smoke-real', action='store_true', help='Smoke status_2 на реальных MP3/MP5: инкремент sne/ppr за N суток')
+    p.add_argument('--status2-days', type=int, default=7, help='Сколько суток шагать в status2-smoke-real (по умолчанию 7)')
+    p.add_argument('--status246-smoke-real', action='store_true', help='Совместный слой 2/4/6: реальный smoke, шаги N, метрики')
+    p.add_argument('--status246-days', type=int, default=7, help='Сколько суток шагать в status246-smoke-real (по умолчанию 7)')
     a = p.parse_args()
     # CUDA_PATH fallback
     if not os.environ.get('CUDA_PATH'):
@@ -335,6 +339,144 @@ def main():
         for k, v in sorted(trans_hist.items()):
             bar = '#'*min(v, 60)
             print(f"  {k:>5}: {bar} ({v})")
+        return
+
+    # === Status_2 smoke (REAL data): sne/ppr инкремент от MP5 ===
+    if a.status2_smoke_real:
+        FRAMES = int(env_data['frames_total_u16'])
+        DAYS = int(env_data['days_total_u16'])
+        os.environ['HL_STATUS2_SMOKE'] = '1'
+        model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
+        sim2 = pyflamegpu.CUDASimulation(model2)
+        sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+        sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
+        sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        # Заполним MP5 на host: day 0 dt, day 1 dn и так далее не требуются в статус2 smoke
+        # Популяция: все агенты из MP3 со status_id=2
+        idx_map = {name: i for i, name in enumerate(mp3_fields)}
+        s2_rows = [r for r in mp3_rows if int(r[idx_map['status_id']] or 0) == 2]
+        K = len(s2_rows)
+        days_sorted = env_data['days_sorted']
+        av = pyflamegpu.AgentVector(a_desc, K)
+        frames_index = env_data.get('frames_index', {})
+        for i, r in enumerate(s2_rows):
+            ac = int(r[idx_map['aircraft_number']] or 0)
+            fi = int(frames_index.get(ac, i % max(1, FRAMES)))
+            av[i].setVariableUInt("idx", fi)
+            av[i].setVariableUInt("group_by", 1)
+            av[i].setVariableUInt("status_id", 2)
+            av[i].setVariableUInt("sne", int(r[idx_map.get('sne', -1)] or 0))
+            av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
+            # Для smoke берём dt из MP5 линейного массива D0
+            base = 0 * FRAMES + (fi if fi < FRAMES else 0)
+            dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+            av[i].setVariableUInt("daily_today_u32", dt)
+            av[i].setVariableUInt("daily_next_u32", 0)
+        sim2.setPopulationData(av)
+        before = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(before)
+        sne_b = sum(int(ag.getVariableUInt('sne')) for ag in before)
+        ppr_b = sum(int(ag.getVariableUInt('ppr')) for ag in before)
+        steps = max(1, int(a.status2_days))
+        # Диагностика по дням (итог по dt на D0..Dsteps-1 для выбранных idx)
+        per_day_totals: List[int] = []
+        selected_idx = [int(before[i].getVariableUInt('idx')) for i in range(K)]
+        for d in range(steps):
+            tot = 0
+            base = d * FRAMES
+            for fi in selected_idx:
+                pos = base + (fi if fi < FRAMES else 0)
+                if 0 <= pos < len(env_data['mp5_daily_hours_linear']):
+                    tot += int(env_data['mp5_daily_hours_linear'][pos])
+            per_day_totals.append(tot)
+        for _ in range(steps):
+            # На каждом шаге перекладываем dt следующего дня в daily_today_u32
+            pop = pyflamegpu.AgentVector(a_desc)
+            sim2.getPopulationData(pop)
+            for i, ag in enumerate(pop):
+                fi = int(ag.getVariableUInt('idx'))
+                base = _ * FRAMES + (fi if fi < FRAMES else 0)
+                dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+                ag.setVariableUInt('daily_today_u32', dt)
+            sim2.setPopulationData(pop)
+            sim2.step()
+        after = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(after)
+        sne_a = sum(int(ag.getVariableUInt('sne')) for ag in after)
+        ppr_a = sum(int(ag.getVariableUInt('ppr')) for ag in after)
+        # Статусы (в этом smoke остаются 2)
+        s2_after_cnt = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 2)
+        # Печать диапазона дат и статистики
+        date_from = days_sorted[0] if len(days_sorted) > 0 else None
+        date_to = days_sorted[steps-1] if len(days_sorted) > steps-1 else None
+        print(f"status2_smoke_real: steps={steps}, dates=[{date_from}..{date_to}], agents_in_s2={K}")
+        print(f"  per_day_dt_totals: {per_day_totals}")
+        print(f"  sne_inc={sne_a - sne_b}, ppr_inc={ppr_a - ppr_b}, s2_after={s2_after_cnt}")
+        return
+
+    # === Совместный слой 2/4/6 (REAL) ===
+    if a.status246_smoke_real:
+        FRAMES = int(env_data['frames_total_u16'])
+        DAYS = int(env_data['days_total_u16'])
+        os.environ['HL_STATUS246_SMOKE'] = '1'
+        model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
+        sim2 = pyflamegpu.CUDASimulation(model2)
+        sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+        sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
+        sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        idx_map = {name: i for i, name in enumerate(mp3_fields)}
+        frames_index = env_data.get('frames_index', {})
+        # Берём всех агентов с статусами 2,4,6
+        rows = [r for r in mp3_rows if int(r[idx_map['status_id']] or 0) in (2,4,6)]
+        K = len(rows)
+        av = pyflamegpu.AgentVector(a_desc, K)
+        for i, r in enumerate(rows):
+            sid = int(r[idx_map['status_id']] or 0)
+            ac = int(r[idx_map['aircraft_number']] or 0)
+            fi = int(frames_index.get(ac, i % max(1, FRAMES)))
+            av[i].setVariableUInt("idx", fi)
+            av[i].setVariableUInt("group_by", 1)
+            av[i].setVariableUInt("status_id", sid)
+            av[i].setVariableUInt("repair_days", int(r[idx_map.get('repair_days', -1)] or 0))
+            partseq = int(r[idx_map.get('partseqno_i', -1)] or 0)
+            rt = 0
+            if sid == 4:
+                rt = mp1_map.get(partseq, (0,0,0,0,0))[2]
+            av[i].setVariableUInt("repair_time", int(rt))
+            av[i].setVariableUInt("sne", int(r[idx_map.get('sne', -1)] or 0))
+            av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
+            # dt на D0
+            base = 0 * FRAMES + (fi if fi < FRAMES else 0)
+            dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+            av[i].setVariableUInt("daily_today_u32", dt)
+            av[i].setVariableUInt("daily_next_u32", 0)
+        sim2.setPopulationData(av)
+        before = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(before)
+        cnt2_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 2)
+        cnt4_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 4)
+        cnt6_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 6)
+        steps = max(1, int(a.status246_days))
+        for d in range(steps):
+            pop = pyflamegpu.AgentVector(a_desc)
+            sim2.getPopulationData(pop)
+            for i, ag in enumerate(pop):
+                if int(ag.getVariableUInt('status_id')) == 2:
+                    fi = int(ag.getVariableUInt('idx'))
+                    base = d * FRAMES + (fi if fi < FRAMES else 0)
+                    dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+                    ag.setVariableUInt('daily_today_u32', dt)
+            sim2.setPopulationData(pop)
+            sim2.step()
+        after = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(after)
+        cnt2_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 2)
+        cnt4_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 4)
+        cnt5_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 5)
+        cnt6_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 6)
+        sne_inc = sum(int(ag.getVariableUInt('sne')) for ag in after) - sum(int(ag.getVariableUInt('sne')) for ag in before)
+        ppr_inc = sum(int(ag.getVariableUInt('ppr')) for ag in after) - sum(int(ag.getVariableUInt('ppr')) for ag in before)
+        print(f"status246_smoke_real: steps={steps}, cnt2 {cnt2_b}->{cnt2_a}, cnt4 {cnt4_b}->{cnt4_a}, cnt5={cnt5_a}, cnt6 {cnt6_b}->{cnt6_a}, sne_inc={sne_inc}, ppr_inc={ppr_inc}")
         return
 
     # Сборка модели (env-only): агентов не создаём

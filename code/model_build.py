@@ -313,6 +313,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("status_id", 0)
     agent.newVariableUInt("repair_days", 0)
     agent.newVariableUInt("repair_time", 0)
+    agent.newVariableUInt("sne", 0)
     agent.newVariableUInt("ppr", 0)
 
     # RTC: intent
@@ -414,8 +415,6 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     }}
     """
     agent.newRTCFunction("rtc_status_4", rtc_status4_src)
-    if _os.environ.get("HL_STATUS4_SMOKE", "0") == "1":
-        ls4 = model.newLayer(); ls4.addAgentFunction(agent.getFunction("rtc_status_4"))
     # Опциональный слой status_6 smoke (пасс-тру)
     rtc_status6_src = """
     FLAMEGPU_AGENT_FUNCTION(rtc_status_6, flamegpu::MessageNone, flamegpu::MessageNone) {
@@ -424,8 +423,37 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     }
     """
     agent.newRTCFunction("rtc_status_6", rtc_status6_src)
-    if _os.environ.get("HL_STATUS6_SMOKE", "0") == "1":
-        ls6 = model.newLayer(); ls6.addAgentFunction(agent.getFunction("rtc_status_6"))
+    # Опциональный слой status_2 smoke (инкремент sne/ppr от daily_today_u32)
+    rtc_status2_src = """
+    FLAMEGPU_AGENT_FUNCTION(rtc_status_2, flamegpu::MessageNone, flamegpu::MessageNone) {
+        if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
+        const unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
+        if (dt) {
+            const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+            const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+            FLAMEGPU->setVariable<unsigned int>("sne", sne + dt);
+            FLAMEGPU->setVariable<unsigned int>("ppr", ppr + dt);
+        }
+        return flamegpu::ALIVE;
+    }
+    """
+    agent.newRTCFunction("rtc_status_2", rtc_status2_src)
+
+    # Комбинированный порядок для 2/4/6 (как единый блок за один step)
+    combined_246 = _os.environ.get("HL_STATUS246_SMOKE", "0") == "1"
+    if combined_246:
+        # FLAME GPU не позволяет несколько функций с одним и тем же state в одном Layer,
+        # поэтому оформляем как три последовательных слоя в одном блоке шага.
+        l_246a = model.newLayer(); l_246a.addAgentFunction(agent.getFunction("rtc_status_6"))
+        l_246b = model.newLayer(); l_246b.addAgentFunction(agent.getFunction("rtc_status_4"))
+        l_246c = model.newLayer(); l_246c.addAgentFunction(agent.getFunction("rtc_status_2"))
+    else:
+        if _os.environ.get("HL_STATUS4_SMOKE", "0") == "1":
+            ls4 = model.newLayer(); ls4.addAgentFunction(agent.getFunction("rtc_status_4"))
+        if _os.environ.get("HL_STATUS6_SMOKE", "0") == "1":
+            ls6 = model.newLayer(); ls6.addAgentFunction(agent.getFunction("rtc_status_6"))
+        if _os.environ.get("HL_STATUS2_SMOKE", "0") == "1":
+            ls2 = model.newLayer(); ls2.addAgentFunction(agent.getFunction("rtc_status_2"))
     l1 = model.newLayer(); l1.addAgentFunction(agent.getFunction("rtc_quota_intent"))
     l2 = model.newLayer(); l2.addAgentFunction(agent.getFunction("rtc_quota_approve_manager"))
     l3 = model.newLayer(); l3.addAgentFunction(agent.getFunction("rtc_quota_apply"))
