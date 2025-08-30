@@ -51,12 +51,20 @@ def main():
     p.add_argument('--rtc-smoke', action='store_true', help='[disabled] RTC smoke (ignored)')
     p.add_argument('--gpu-quota-smoke', action='store_true', help='GPU квоты: один шаг с intent/approve/apply без экспорта')
     p.add_argument('--gpu-quota-smoke-external', action='store_true', help='Запустить внешний стабильный smoke раннер (gpu_quota_smoke_from_env.py)')
+    p.add_argument('--mp5-probe', action='store_true', help='Пробный запуск чтения MP5 (dt/dn) в агентные переменные')
     p.add_argument('--jit-log', action='store_true', help='Включить подробный вывод NVRTC/JIT (stdout on error)')
     p.add_argument('--seatbelts', choices=['on', 'off'], default='on', help='Включить/выключить FLAMEGPU seatbelts')
+    p.add_argument('--status4-smoke', action='store_true', help='Smoke status_4: инкремент repair_days и переход в 5 при достижении repair_time')
+    p.add_argument('--status4-smoke-real', action='store_true', help='Smoke status_4 на реальных MP3/MP1: N шагов, переходы 4→5')
+    p.add_argument('--status4-days', type=int, default=3, help='Сколько суток шагать в status4-smoke-real (по умолчанию 3)')
+    p.add_argument('--status6-smoke-real', action='store_true', help='Smoke status_6 на реальных MP3: N шагов, отсутствие изменений')
+    p.add_argument('--status6-days', type=int, default=7, help='Сколько суток шагать в status6-smoke-real (по умолчанию 7)')
+    p.add_argument('--status46-smoke-real', action='store_true', help='Совместный smoke status_4 + status_6 на реальных данных')
+    p.add_argument('--status46-days', type=int, default=30, help='Сколько суток шагать в status46-smoke-real (по умолчанию 30)')
     a = p.parse_args()
     # CUDA_PATH fallback
     if not os.environ.get('CUDA_PATH'):
-        for p in [
+        for pth in [
             "/usr/local/cuda",
             "/usr/local/cuda-12.4",
             "/usr/local/cuda-12.3",
@@ -64,8 +72,8 @@ def main():
             "/usr/local/cuda-12.1",
             "/usr/local/cuda-12.0",
         ]:
-            if os.path.isdir(p) and os.path.isdir(os.path.join(p, 'include')):
-                os.environ['CUDA_PATH'] = p
+            if os.path.isdir(pth) and os.path.isdir(os.path.join(pth, 'include')):
+                os.environ['CUDA_PATH'] = pth
                 break
 
     # Seatbelts & JIT log env flags (до создания симуляции)
@@ -92,6 +100,243 @@ def main():
     mp4 = preload_mp4_by_day(client)
     # Подготовка Env Property/MacroProperty (MP1/MP3/MP4/MP5, скаляры)
     env_data = prepare_env_arrays(client)
+
+    # === Status_4 smoke через фабрику ===
+    if a.status4_smoke:
+        FRAMES = int(env_data['frames_total_u16'])
+        DAYS = int(env_data['days_total_u16'])
+        os.environ['HL_STATUS4_SMOKE'] = '1'
+        model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
+        sim2 = pyflamegpu.CUDASimulation(model2)
+        sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+        sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
+        sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        # Построим популяцию: возьмем K=8 агентов в статусе 4 с repair_time=3
+        K = min(8, FRAMES)
+        av = pyflamegpu.AgentVector(a_desc, K)
+        for i in range(K):
+            av[i].setVariableUInt("idx", i)
+            av[i].setVariableUInt("group_by", 1)
+            av[i].setVariableUInt("status_id", 4)
+            av[i].setVariableUInt("repair_days", 0)
+            av[i].setVariableUInt("repair_time", 3)
+            av[i].setVariableUInt("ppr", 123)
+        sim2.setPopulationData(av)
+        # До шага: счётчики
+        before = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(before)
+        s4 = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 4)
+        rd = [int(ag.getVariableUInt('repair_days')) for ag in before]
+        sim2.step()
+        after = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(after)
+        s4_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 4)
+        s5_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 5)
+        rd_a = [int(ag.getVariableUInt('repair_days')) for ag in after]
+        print(f"status4_smoke: before s4={s4}, repair_days={rd}; after s4={s4_a}, s5={s5_a}, repair_days={rd_a}")
+        return
+
+    # === Status_4 smoke (REAL data) через фабрику ===
+    if a.status4_smoke_real:
+        FRAMES = int(env_data['frames_total_u16'])
+        DAYS = int(env_data['days_total_u16'])
+        os.environ['HL_STATUS4_SMOKE'] = '1'
+        model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
+        sim2 = pyflamegpu.CUDASimulation(model2)
+        sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+        sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
+        sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        # Популяция: все агенты из MP3 со status_id=4
+        idx_map = {name: i for i, name in enumerate(mp3_fields)}
+        s4_rows = [r for r in mp3_rows if int(r[idx_map['status_id']] or 0) == 4]
+        K = len(s4_rows)
+        av = pyflamegpu.AgentVector(a_desc, K)
+        for i, r in enumerate(s4_rows):
+            av[i].setVariableUInt("idx", int(i % max(1, FRAMES)))
+            av[i].setVariableUInt("group_by", 1)
+            av[i].setVariableUInt("status_id", 4)
+            av[i].setVariableUInt("repair_days", int(r[idx_map['repair_days']] or 0))
+            partseq = int(r[idx_map['partseqno_i']] or 0) if 'partseqno_i' in idx_map else 0
+            rt = mp1_map.get(partseq, (0,0,0,0,0))[2]
+            av[i].setVariableUInt("repair_time", int(rt or 0))
+            av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
+        sim2.setPopulationData(av)
+        # Before
+        before = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(before)
+        s4_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 4)
+        # Подготовим гистограмму repair_time
+        rt_hist: Dict[int,int] = {}
+        for ag in before:
+            rt = int(ag.getVariableUInt('repair_time'))
+            rt_hist[rt] = rt_hist.get(rt, 0) + 1
+        # N шагов
+        steps = max(1, int(a.status4_days))
+        K = len(s4_rows)
+        transitioned = [0] * K  # день перехода 4->5 (1..steps), 0 если не перешёл
+        for day in range(1, steps + 1):
+            sim2.step()
+            snap = pyflamegpu.AgentVector(a_desc)
+            sim2.getPopulationData(snap)
+            for i in range(K):
+                if transitioned[i] == 0:
+                    if int(snap[i].getVariableUInt('status_id')) == 5:
+                        transitioned[i] = day
+        # Итоговые метрики
+        after = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(after)
+        s4_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 4)
+        s5_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 5)
+        # Инварианты на перешедших
+        ppr_ok = True
+        for i, ag in enumerate(after):
+            if int(ag.getVariableUInt('status_id')) == 5:
+                if int(ag.getVariableUInt('ppr')) != 0 or int(ag.getVariableUInt('repair_days')) != 0:
+                    ppr_ok = False
+                    break
+        # Гистограмма переходов
+        trans_hist: Dict[int,int] = {}
+        for d in transitioned:
+            if d > 0:
+                trans_hist[d] = trans_hist.get(d, 0) + 1
+        # Печать
+        rt_items = sorted(rt_hist.items())
+        th_items = sorted(trans_hist.items())
+        print(f"status4_smoke_real: steps={steps}, before s4={s4_b}, after s4={s4_a}, s5={s5_a}, inv(ppr=0,repair_days=0 on 5)={ppr_ok}")
+        # ASCII-гистограммы
+        print("repair_time_hist:")
+        for k, v in rt_items:
+            bar = '#'*min(v, 60)
+            print(f"  {k:>5}: {bar} ({v})")
+        print("transition_day_hist:")
+        for k, v in th_items:
+            bar = '#'*min(v, 60)
+            print(f"  {k:>5}: {bar} ({v})")
+        return
+
+    # === Status_6 smoke (REAL data): пасс-тру, инварианты ===
+    if a.status6_smoke_real:
+        FRAMES = int(env_data['frames_total_u16'])
+        DAYS = int(env_data['days_total_u16'])
+        os.environ['HL_STATUS6_SMOKE'] = '1'
+        model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
+        sim2 = pyflamegpu.CUDASimulation(model2)
+        sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+        sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
+        sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        idx_map = {name: i for i, name in enumerate(mp3_fields)}
+        s6_rows = [r for r in mp3_rows if int(r[idx_map['status_id']] or 0) == 6]
+        K = len(s6_rows)
+        av = pyflamegpu.AgentVector(a_desc, K)
+        for i, r in enumerate(s6_rows):
+            av[i].setVariableUInt("idx", int(i % max(1, FRAMES)))
+            av[i].setVariableUInt("group_by", 1)
+            av[i].setVariableUInt("status_id", 6)
+            av[i].setVariableUInt("repair_days", int(r[idx_map['repair_days']] or 0))
+            av[i].setVariableUInt("repair_time", 0)
+            av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
+            av[i].setVariableUInt("daily_today_u32", 0)
+            av[i].setVariableUInt("daily_next_u32", 0)
+        sim2.setPopulationData(av)
+        before = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(before)
+        s6_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 6)
+        sne_b = [int(ag.getVariableUInt('sne')) if 'sne' in dir(ag) else 0 for ag in before]
+        ppr_b = [int(ag.getVariableUInt('ppr')) for ag in before]
+        rd_b = [int(ag.getVariableUInt('repair_days')) for ag in before]
+        steps = max(1, int(a.status6_days))
+        for _ in range(steps):
+            sim2.step()
+        after = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(after)
+        s6_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 6)
+        sne_a = [int(ag.getVariableUInt('sne')) if 'sne' in dir(ag) else 0 for ag in after]
+        ppr_a = [int(ag.getVariableUInt('ppr')) for ag in after]
+        rd_a = [int(ag.getVariableUInt('repair_days')) for ag in after]
+        invariants = (s6_b == s6_a) and (sne_b == sne_a) and (ppr_b == ppr_a) and (rd_b == rd_a)
+        print(f"status6_smoke_real: steps={steps}, s6_before={s6_b}, s6_after={s6_a}, invariants={invariants}")
+        return
+
+    # === Совместный статус 4+6 (REAL) ===
+    if a.status46_smoke_real:
+        FRAMES = int(env_data['frames_total_u16'])
+        DAYS = int(env_data['days_total_u16'])
+        os.environ['HL_STATUS4_SMOKE'] = '1'
+        os.environ['HL_STATUS6_SMOKE'] = '1'
+        model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
+        sim2 = pyflamegpu.CUDASimulation(model2)
+        sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+        sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
+        sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        idx_map = {name: i for i, name in enumerate(mp3_fields)}
+        s4_rows = [r for r in mp3_rows if int(r[idx_map['status_id']] or 0) == 4]
+        s6_rows = [r for r in mp3_rows if int(r[idx_map['status_id']] or 0) == 6]
+        K4 = len(s4_rows)
+        K6 = len(s6_rows)
+        K = K4 + K6
+        av = pyflamegpu.AgentVector(a_desc, K)
+        # Заполняем сначала статус 4, затем 6
+        for i, r in enumerate(s4_rows):
+            av[i].setVariableUInt("idx", int(i % max(1, FRAMES)))
+            av[i].setVariableUInt("group_by", 1)
+            av[i].setVariableUInt("status_id", 4)
+            av[i].setVariableUInt("repair_days", int(r[idx_map['repair_days']] or 0))
+            partseq = int(r[idx_map['partseqno_i']] or 0) if 'partseqno_i' in idx_map else 0
+            rt = mp1_map.get(partseq, (0,0,0,0,0))[2]
+            av[i].setVariableUInt("repair_time", int(rt or 0))
+            av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
+        for j, r in enumerate(s6_rows):
+            i = K4 + j
+            av[i].setVariableUInt("idx", int(i % max(1, FRAMES)))
+            av[i].setVariableUInt("group_by", 1)
+            av[i].setVariableUInt("status_id", 6)
+            av[i].setVariableUInt("repair_days", int(r[idx_map['repair_days']] or 0))
+            av[i].setVariableUInt("repair_time", 0)
+            av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
+        sim2.setPopulationData(av)
+        # Гистограмма repair_time по 4 и инварианты для 6
+        before = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(before)
+        rt_hist: Dict[int,int] = {}
+        for i in range(K4):
+            rt = int(before[i].getVariableUInt('repair_time'))
+            rt_hist[rt] = rt_hist.get(rt, 0) + 1
+        s6_b = sum(1 for i in range(K4, K) if int(before[i].getVariableUInt('status_id')) == 6)
+        steps = max(1, int(a.status46_days))
+        transitioned = [0] * K4
+        for day in range(1, steps + 1):
+            sim2.step()
+            snap = pyflamegpu.AgentVector(a_desc)
+            sim2.getPopulationData(snap)
+            for i in range(K4):
+                if transitioned[i] == 0 and int(snap[i].getVariableUInt('status_id')) == 5:
+                    transitioned[i] = day
+        after = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(after)
+        s4_to5 = sum(1 for i in range(K4) if int(after[i].getVariableUInt('status_id')) == 5)
+        # Инварианты для 6
+        s6_a = sum(1 for i in range(K4, K) if int(after[i].getVariableUInt('status_id')) == 6)
+        inv6 = True
+        for i in range(K4, K):
+            if int(after[i].getVariableUInt('status_id')) != 6:
+                inv6 = False
+                break
+        trans_hist: Dict[int,int] = {}
+        for d in transitioned:
+            if d > 0:
+                trans_hist[d] = trans_hist.get(d, 0) + 1
+        print(f"status46_smoke_real: steps={steps}, s4_to5={s4_to5}/{K4}, s6_before={s6_b}, s6_after={s6_a}, inv6={inv6}")
+        # ASCII-гистограммы
+        print("repair_time_hist:")
+        for k, v in sorted(rt_hist.items()):
+            bar = '#'*min(v, 60)
+            print(f"  {k:>5}: {bar} ({v})")
+        print("transition_day_hist:")
+        for k, v in sorted(trans_hist.items()):
+            bar = '#'*min(v, 60)
+            print(f"  {k:>5}: {bar} ({v})")
+        return
+
     # Сборка модели (env-only): агентов не создаём
     model.build_model(num_agents=0, env_sizes={
         'days_total': int(env_data['days_total_u16']),
@@ -101,7 +346,7 @@ def main():
     })
     sim = model.build_simulation()
     # Ветвление режимов до применения Env
-    if not a.gpu_quota_smoke:
+    if not a.gpu_quota_smoke and not a.mp5_probe:
         # Env-only: применяем Env и печатаем диагностические значения
         apply_env_to_sim(sim, env_data)
         vd = sim.getEnvironmentPropertyUInt("version_date")
@@ -121,11 +366,13 @@ def main():
         return
 
     # === GPU quota smoke: минимальный билдер модели через фабрику build_model_for_quota_smoke ===
-    if a.gpu_quota_smoke:
+    if a.gpu_quota_smoke or a.mp5_probe:
         FRAMES = int(env_data['frames_total_u16'])
         DAYS = int(env_data['days_total_u16'])
         mp4_ops8 = list(env_data['mp4_ops_counter_mi8'])
         mp4_ops17 = list(env_data['mp4_ops_counter_mi17'])
+        if a.mp5_probe:
+            os.environ['HL_MP5_PROBE'] = '1'
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
@@ -134,7 +381,6 @@ def main():
         sim2.setEnvironmentPropertyUInt("approve_policy", 0)
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", mp4_ops8)
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", mp4_ops17)
-
         # Построим карту group_by по frames_index
         frame_gb = [0] * FRAMES
         ac_nums = env_data['mp3_arrays'].get('mp3_aircraft_number', [])
@@ -147,28 +393,39 @@ def main():
             if 0 <= fi < FRAMES and frame_gb[fi] == 0 and gb in (1, 2):
                 frame_gb[fi] = gb
         frame_gb = [gb if gb in (1, 2) else 1 for gb in frame_gb]
-
         av2 = pyflamegpu.AgentVector(a_desc, FRAMES)
         for i in range(FRAMES):
             av2[i].setVariableUInt("idx", i)
             av2[i].setVariableUInt("group_by", int(frame_gb[i]))
             av2[i].setVariableUInt("ops_ticket", 0)
+            # status4 smoke не активен здесь
         sim2.setPopulationData(av2)
-
         sim2.step()
-
-        out = pyflamegpu.AgentVector(a_desc)
-        sim2.getPopulationData(out)
-        claimed8 = claimed17 = 0
-        for ag in out:
-            if int(ag.getVariableUInt("ops_ticket")) == 1:
-                gb = int(ag.getVariableUInt("group_by"))
-                if gb == 1:
-                    claimed8 += 1
-                elif gb == 2:
-                    claimed17 += 1
-        d1 = 1 if DAYS > 1 else 0
-        print(f"GPU quota (internal): seed8[D1]={mp4_ops8[d1]}, claimed8={claimed8}; seed17[D1]={mp4_ops17[d1]}, claimed17={claimed17}")
+        if a.mp5_probe:
+            out_probe = pyflamegpu.AgentVector(a_desc)
+            sim2.getPopulationData(out_probe)
+            for i in range(min(3, FRAMES)):
+                ag = out_probe[i]
+                day = 0
+                base = day * FRAMES + i
+                dt_h = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+                dn_h = int(env_data['mp5_daily_hours_linear'][base + FRAMES]) if (base + FRAMES) < len(env_data['mp5_daily_hours_linear']) else 0
+                dt_g = int(ag.getVariableUInt('daily_today_u32'))
+                dn_g = int(ag.getVariableUInt('daily_next_u32'))
+                print(f"MP5 probe idx={i}: host(dt,dn)=({dt_h},{dn_h}), gpu(dt,dn)=({dt_g},{dn_g})")
+        else:
+            out = pyflamegpu.AgentVector(a_desc)
+            sim2.getPopulationData(out)
+            claimed8 = claimed17 = 0
+            for ag in out:
+                if int(ag.getVariableUInt("ops_ticket")) == 1:
+                    gb = int(ag.getVariableUInt("group_by"))
+                    if gb == 1:
+                        claimed8 += 1
+                    elif gb == 2:
+                        claimed17 += 1
+            d1 = 1 if DAYS > 1 else 0
+            print(f"GPU quota (internal): seed8[D1]={mp4_ops8[d1]}, claimed8={claimed8}; seed17[D1]={mp4_ops17[d1]}, claimed17={claimed17}")
         return
 
     # Создаём популяцию
