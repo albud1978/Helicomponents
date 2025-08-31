@@ -858,6 +858,25 @@ def main():
             print("BR[MI-17] minutes: count=0")
         K = len(rows)
         av = pyflamegpu.AgentVector(a_desc, K)
+        # Подготовка массива mfg_date_days по кадрам (FRAMES), заполняем по индексу кадра fi
+        mfg_by_frame = [0] * max(1, FRAMES)
+        for i, r in enumerate(rows):
+            ac = int(r[idx_map['aircraft_number']] or 0)
+            fi = int(frames_index.get(ac, i % max(1, FRAMES)))
+            # mfg_date -> ordinal days (уже подготовлено в env_data['mp3_arrays'] как mp3_mfg_date_days? при отсутствии — пересчёт)
+            ord_val = 0
+            try:
+                from datetime import date as _date
+                mfg_str = str(r[idx_map.get('mfg_date', -1)] or '')
+                if mfg_str:
+                    y, m, d = [int(x) for x in mfg_str.split('-')]
+                    ord_val = _date(y, m, d).toordinal()
+            except Exception:
+                ord_val = 0
+            if 0 <= fi < FRAMES:
+                if ord_val > mfg_by_frame[fi]:
+                    mfg_by_frame[fi] = ord_val
+        sim2.setEnvironmentPropertyArrayUInt32("mp3_mfg_date_days", mfg_by_frame)
         for i, r in enumerate(rows):
             sid = int(r[idx_map['status_id']] or 0)
             ac = int(r[idx_map['aircraft_number']] or 0)
