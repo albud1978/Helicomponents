@@ -95,7 +95,7 @@ class HeliSimModel:
         for name in [
             "idx","psn","partseqno_i","group_by","aircraft_number","ac_type_mask",
             "mfg_date","status_id","repair_days","repair_time","ppr","sne",
-            "ll","oh","br","daily_today_u32","daily_next_u32","ops_ticket","quota_left"
+            "ll","oh","br","daily_today_u32","daily_next_u32","ops_ticket","quota_left","intent_flag"
         ]:
             agent.newVariableUInt(name, 0)
 
@@ -324,16 +324,19 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("br", 0)
     # Диагностика переходов: aircraft_number
     agent.newVariableUInt("aircraft_number", 0)
+    agent.newVariableUInt("intent_flag", 0)
 
     # RTC: intent
     rtc_intent = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent, flamegpu::MessageNone, flamegpu::MessageNone) {{
         static const unsigned int FRAMES = {FRAMES}u;
+        if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
         const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
         if (idx >= FRAMES) return flamegpu::ALIVE;
         if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }}
         else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }}
+        FLAMEGPU->setVariable<unsigned int>("intent_flag", 1u);
         return flamegpu::ALIVE;
     }}
     """
@@ -433,20 +436,21 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     """
     agent.newRTCFunction("rtc_status_6", rtc_status6_src)
     # Опциональный слой status_2: начисление dt и проверки LL/OH с BR-веткой (без квот)
-    rtc_status2_src = """
-    FLAMEGPU_AGENT_FUNCTION(rtc_status_2, flamegpu::MessageNone, flamegpu::MessageNone) {
+    rtc_status2_src = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_status_2, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
         // 1) Начисление dt
         const unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
         const unsigned int dn = FLAMEGPU->getVariable<unsigned int>("daily_next_u32");
         unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
         unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-        if (dt) {
+        if (dt) {{
             sne = sne + dt;
             ppr = ppr + dt;
             FLAMEGPU->setVariable<unsigned int>("sne", sne);
             FLAMEGPU->setVariable<unsigned int>("ppr", ppr);
-        }
+        }}
         // 2) Прогноз на завтра
         const unsigned int s_next = sne + dn;
         const unsigned int p_next = ppr + dn;
@@ -454,23 +458,24 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
         const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
         // 3) LL-порог: если sne+dn >= ll -> немедленно 2->6
-        if (s_next >= ll) {
+        if (s_next >= ll) {{
             FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
             return flamegpu::ALIVE;
-        }
+        }}
         // 4) OH-порог: если ppr+dn >= oh, уточняем по BR
-        if (p_next >= oh) {
-            if (s_next < br) {
+        if (p_next >= oh) {{
+            if (s_next < br) {{
                 FLAMEGPU->setVariable<unsigned int>("status_id", 4u);
                 FLAMEGPU->setVariable<unsigned int>("repair_days", 1u);
-            } else {
+            }} else {{
                 FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
-            }
+            }}
             return flamegpu::ALIVE;
-        }
+        }}
+        // 5) Квота: intent выставляется отдельным слоем rtc_quota_intent только для status_id=2
         // Иначе остаёмся в 2
         return flamegpu::ALIVE;
-    }
+    }}
     """
     agent.newRTCFunction("rtc_status_2", rtc_status2_src)
 
@@ -489,9 +494,48 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
             ls6 = model.newLayer(); ls6.addAgentFunction(agent.getFunction("rtc_status_6"))
         if _os.environ.get("HL_STATUS2_SMOKE", "0") == "1":
             ls2 = model.newLayer(); ls2.addAgentFunction(agent.getFunction("rtc_status_2"))
+    # Сброс билета и флага intents в начале каждого дня (до intent)
+    rtc_begin_day = """
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_begin_day, flamegpu::MessageNone, flamegpu::MessageNone) {
+        // Сбрасываем билет допуска на новый цикл и флаг intent диагностики
+        FLAMEGPU->setVariable<unsigned int>("ops_ticket", 0u);
+        FLAMEGPU->setVariable<unsigned int>("intent_flag", 0u);
+        return flamegpu::ALIVE;
+    }
+    """
+    agent.newRTCFunction("rtc_quota_begin_day", rtc_begin_day)
+    l0b = model.newLayer(); l0b.addAgentFunction(agent.getFunction("rtc_quota_begin_day"))
     l1 = model.newLayer(); l1.addAgentFunction(agent.getFunction("rtc_quota_intent"))
     l2 = model.newLayer(); l2.addAgentFunction(agent.getFunction("rtc_quota_approve_manager"))
     l3 = model.newLayer(); l3.addAgentFunction(agent.getFunction("rtc_quota_apply"))
+    # Очистка intent: отдельный слой после apply (без чтения intent в этом слое)
+    rtc_intent_clear = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent_clear, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int FRAMES = {FRAMES}u;
+        if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
+        auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
+        auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
+        for (unsigned int k=0u;k<FRAMES;++k) {{ i8[k].exchange(0u); }}
+        for (unsigned int k=0u;k<FRAMES;++k) {{ i17[k].exchange(0u); }}
+        return flamegpu::ALIVE;
+    }}
+    """
+    agent.newRTCFunction("rtc_quota_intent_clear", rtc_intent_clear)
+    l3b = model.newLayer(); l3b.addAgentFunction(agent.getFunction("rtc_quota_intent_clear"))
+    # Post-quota: 2→3 если билет не получен
+    rtc_status2_post = """
+    FLAMEGPU_AGENT_FUNCTION(rtc_status_2_post_quota, flamegpu::MessageNone, flamegpu::MessageNone) {
+        if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
+        if (FLAMEGPU->getVariable<unsigned int>("ops_ticket") == 0u) {
+            FLAMEGPU->setVariable<unsigned int>("status_id", 3u);
+        }
+        return flamegpu::ALIVE;
+    }
+    """
+    agent.newRTCFunction("rtc_status_2_post_quota", rtc_status2_post);
+    l4 = model.newLayer(); l4.addAgentFunction(agent.getFunction("rtc_status_2_post_quota"))
+
+    
 
     return model, agent
 
