@@ -415,7 +415,7 @@ def main():
         date_from = days_sorted[0] if len(days_sorted) > 0 else None
         date_to = days_sorted[steps-1] if len(days_sorted) > steps-1 else None
         print(f"status2_smoke_real: steps={steps}, dates=[{date_from}..{date_to}], agents_in_s2={K}")
-        print(f"  per_day_dt_totals: {per_day_totals}")
+        # per_day-* печать убрана как неинформативная
         print(f"  sne_inc={sne_a - sne_b}, ppr_inc={ppr_a - ppr_b}, s2_after={s2_after_cnt}")
         return
 
@@ -553,6 +553,8 @@ def main():
         per_day_trans_24: List[int] = []
         per_day_trans_45: List[int] = []
         per_day_trans_26: List[int] = []
+        per_day_trans_32: List[int] = []
+        per_day_trans_23: List[int] = []
         per_day_sne_from_s2: List[int] = []
         per_day_ppr_from_s2: List[int] = []
         per_day_ppr_reset_45: List[int] = []
@@ -564,9 +566,11 @@ def main():
         # Логи переходов по дням с датами и aircraft_number
         trans24_log: List[Tuple[str,int]] = []
         trans26_log: List[Tuple[str,int]] = []
+        trans32_log: List[Tuple[str,int]] = []
         # Расширенный лог: day, ac, sne, ppr, ll, oh, br на момент выхода (после dt)
         trans24_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans26_info: List[Tuple[str,int,int,int,int,int,int]] = []
+        trans32_info: List[Tuple[str,int,int,int,int,int,int]] = []
         for d in range(steps):
             # Снимем состояние ДО шага
             pop_before = pyflamegpu.AgentVector(a_desc)
@@ -615,6 +619,7 @@ def main():
             t_45 = 0
             t_26 = 0
             t_23 = 0
+            t_32 = 0
             sne_s2 = 0
             ppr_s2 = 0
             ppr_reset_45 = 0
@@ -644,6 +649,16 @@ def main():
                     oh_v = int(pop_after[i].getVariableUInt('oh'))
                     br_v = int(pop_after[i].getVariableUInt('br'))
                     trans26_info.append((day_str, ac_before[i], sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 3 and sa == 2:
+                    t_32 += 1
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans32_log.append((day_str, ac_before[i]))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans32_info.append((day_str, ac_before[i], sne_v, ppr_v, ll_v, oh_v, br_v))
                 if sb == 4 and sa == 5:
                     t_45 += 1
                     ppr_reset_45 += (ppr_after[i] - ppr_before[i])
@@ -662,16 +677,17 @@ def main():
             per_day_trans_24.append(t_24)
             per_day_trans_45.append(t_45)
             per_day_trans_26.append(t_26)
+            per_day_trans_23.append(t_23)
             per_day_sne_from_s2.append(sne_s2)
             per_day_ppr_from_s2.append(ppr_s2)
             per_day_ppr_reset_45.append(ppr_reset_45)
-            # Диагностика квоты на D+1: семена (для допуска на завтра), выдано сегодня и остаток
+            per_day_trans_32.append(t_32)
+            # Диагностика квоты на D+1 (пер-дневный вывод отключён как неинформативный)
             d1 = d + 1
             seed8 = int(env_data['mp4_ops_counter_mi8'][d1]) if d1 < len(env_data['mp4_ops_counter_mi8']) else int(env_data['mp4_ops_counter_mi8'][-1])
             seed17 = int(env_data['mp4_ops_counter_mi17'][d1]) if d1 < len(env_data['mp4_ops_counter_mi17']) else int(env_data['mp4_ops_counter_mi17'][-1])
             left8 = max(0, seed8 - approved8_today)
             left17 = max(0, seed17 - approved17_today)
-            print(f"  quota_day{d}: seed8={seed8}, seed17={seed17}, approved8={approved8_today}, approved17={approved17_today}, left8={left8}, left17={left17}, prof_2to3={t_23}")
         after = pyflamegpu.AgentVector(a_desc)
         t_endcpu0 = _t.perf_counter()
         sim2.getPopulationData(after)
@@ -685,9 +701,24 @@ def main():
         ppr_inc = sum(int(ag.getVariableUInt('ppr')) for ag in after) - sum(int(ag.getVariableUInt('ppr')) for ag in before)
         print(f"status246_smoke_real: steps={steps}, cnt2 {cnt2_b}->{cnt2_a}, cnt3 {cnt3_b}->{cnt3_a}, cnt4 {cnt4_b}->{cnt4_a}, cnt5={cnt5_a}, cnt6 {cnt6_b}->{cnt6_a}, sne_inc={sne_inc}, ppr_inc={ppr_inc}")
         # Диагностика по суткам
-        print(f"  per_day_dt_totals: {per_day_dt_totals}")
-        print(f"  per_day_sne_inc_from_s2: {per_day_sne_from_s2}")
-        print(f"  per_day_ppr_inc_from_s2: {per_day_ppr_from_s2}")
+        # Уникализация логов 3→2 на случай двойной фиксации одного события
+        if trans32_log:
+            _seen = set()
+            _uniq_log = []
+            for itm in trans32_log:
+                if itm not in _seen:
+                    _seen.add(itm)
+                    _uniq_log.append(itm)
+            trans32_log = _uniq_log
+        if trans32_info:
+            _seen_i = set()
+            _uniq_info = []
+            for itm in trans32_info:
+                if itm not in _seen_i:
+                    _seen_i.add(itm)
+                    _uniq_info.append(itm)
+            trans32_info = _uniq_info
+        # per_day-* печать убрана как неинформативная
         # Полные логи переходов 2->4 и 2->6 с датами и AC
         if trans24_log:
             print("  transitions_2to4:")
@@ -696,6 +727,10 @@ def main():
         if trans26_log:
             print("  transitions_2to6:")
             for dstr, acn in trans26_log:
+                print(f"    {dstr}: ac={acn}")
+        if trans32_log:
+            print("  transitions_3to2:")
+            for dstr, acn in trans32_log:
                 print(f"    {dstr}: ac={acn}")
         # Детальные значения на момент выхода
         if trans24_info:
@@ -706,10 +741,18 @@ def main():
             print("  details_2to6 (day, ac, sne, ppr, ll, oh, br):")
             for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans26_info:
                 print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        if trans32_info:
+            print("  details_3to2 (day, ac, sne, ppr, ll, oh, br):")
+            for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans32_info:
+                print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
         # Итоги только по статусу 2
         sne_inc_s2_total = sum(per_day_sne_from_s2)
         ppr_inc_s2_total = sum(per_day_ppr_from_s2)
         print(f"  totals_s2_only: sne_inc_s2={sne_inc_s2_total}, ppr_inc_s2={ppr_inc_s2_total}")
+        # Итоги по переходам между 2 и 3
+        total_2to3 = sum(per_day_trans_23)
+        total_3to2 = sum(per_day_trans_32)
+        print(f"  totals_transitions: 2to3={total_2to3}, 3to2={total_3to2}")
         # Сводка таймингов
         print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}")
         return

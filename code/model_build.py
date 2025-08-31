@@ -297,6 +297,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     env.newPropertyUInt("frames_total", 0)
     env.newPropertyUInt("days_total", 0)
     env.newPropertyUInt("approve_policy", 0)  # 0 = по idx (детерминизм)
+    # Буферы остатка квоты не требуются: остаток вычисляется во второй фазе как seed - used
     env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * DAYS)
     env.newPropertyArrayUInt32("mp4_ops_counter_mi17", [0] * DAYS)
     # Буферы менеджера квот (по кадрам)
@@ -304,6 +305,9 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     env.newMacroPropertyUInt32("mi17_intent", FRAMES)
     env.newMacroPropertyUInt32("mi8_approve", FRAMES)
     env.newMacroPropertyUInt32("mi17_approve", FRAMES)
+    # Вторая фаза approve для статуса 3
+    env.newMacroPropertyUInt32("mi8_approve_s3", FRAMES)
+    env.newMacroPropertyUInt32("mi17_approve_s3", FRAMES)
 
     # Агент и минимальные переменные
     agent = model.newAgent("component")
@@ -372,19 +376,73 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     """
     agent.newRTCFunction("rtc_quota_approve_manager", rtc_approve)
 
-    # RTC: apply
+    # RTC: apply — учитывает approve из обеих фаз (status 2 и status 3)
     rtc_apply = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_apply, flamegpu::MessageNone, flamegpu::MessageNone) {{
         static const unsigned int FRAMES = {FRAMES}u;
         const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
         if (idx >= FRAMES) return flamegpu::ALIVE;
-        if (gb == 1u) {{ auto a8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve"); if (a8[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }}
-        else if (gb == 2u) {{ auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve"); if (a17[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }}
+        if (gb == 1u) {{
+            auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
+            auto a8b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s3");
+            if (a8[idx] || a8b[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
+        }} else if (gb == 2u) {{
+            auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
+            auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s3");
+            if (a17[idx] || a17b[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
+        }}
         return flamegpu::ALIVE;
     }}
     """
     agent.newRTCFunction("rtc_quota_apply", rtc_apply)
+
+    # RTC: intent для статуса 3 (используется во второй фазе квотирования)
+    rtc_intent_s3 = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent_s3, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int FRAMES = {FRAMES}u;
+        if (FLAMEGPU->getVariable<unsigned int>("status_id") != 3u) return flamegpu::ALIVE;
+        const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+        if (idx >= FRAMES) return flamegpu::ALIVE;
+        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }}
+        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }}
+        FLAMEGPU->setVariable<unsigned int>("intent_flag", 1u);
+        return flamegpu::ALIVE;
+    }}
+    """
+    agent.newRTCFunction("rtc_quota_intent_s3", rtc_intent_s3)
+
+    # RTC: approve для статуса 3 - использует остаток квоты от первой фазы
+    rtc_approve_s3 = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager_s3, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int DAYS = {DAYS}u;
+        static const unsigned int FRAMES = {FRAMES}u;
+        if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
+        auto i8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
+        auto i17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
+        auto a8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
+        auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
+        auto a8b  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s3");
+        auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s3");
+        // Считаем сколько уже было одобрено в фазе статуса 2
+        unsigned int used8 = 0u; unsigned int used17 = 0u;
+        for (unsigned int k=0u;k<FRAMES;++k) {{ used8 += (a8[k] ? 1u : 0u); used17 += (a17[k] ? 1u : 0u); }}
+        // Инициализируем семена на D+1 и вычисляем остаток
+        const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int dayp1 = (day + 1u < DAYS ? day + 1u : day);
+        unsigned int seed8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
+        unsigned int seed17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
+        unsigned int left8 = (seed8 > used8 ? (seed8 - used8) : 0u);
+        unsigned int left17 = (seed17 > used17 ? (seed17 - used17) : 0u);
+        // Очистим approve-буферы второй фазы и распределим остаток по intent статуса 3
+        for (unsigned int k=0u;k<FRAMES;++k) {{ a8b[k].exchange(0u); a17b[k].exchange(0u); }}
+        for (unsigned int k=0u;k<FRAMES && left8>0u;++k) {{ if (i8[k]) {{ a8b[k].exchange(1u); --left8; }} }}
+        for (unsigned int k=0u;k<FRAMES && left17>0u;++k) {{ if (i17[k]) {{ a17b[k].exchange(1u); --left17; }} }}
+        return flamegpu::ALIVE;
+    }}
+    """
+    agent.newRTCFunction("rtc_quota_approve_manager_s3", rtc_approve_s3)
 
     # RTC: probe MP5 (опционально) — пишет dt/dn в агентные переменные
     rtc_probe_mp5 = f"""
@@ -438,7 +496,6 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Опциональный слой status_2: начисление dt и проверки LL/OH с BR-веткой (без квот)
     rtc_status2_src = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_status_2, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
         // 1) Начисление dt
         const unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
@@ -522,7 +579,27 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     """
     agent.newRTCFunction("rtc_quota_intent_clear", rtc_intent_clear)
     l3b = model.newLayer(); l3b.addAgentFunction(agent.getFunction("rtc_quota_intent_clear"))
-    # Post-quota: 2→3 если билет не получен
+
+    # Вторая фаза квотирования: статус 3 на остатке квоты после фазы статуса 2
+    l3c = model.newLayer(); l3c.addAgentFunction(agent.getFunction("rtc_quota_intent_s3"))
+    l3d = model.newLayer(); l3d.addAgentFunction(agent.getFunction("rtc_quota_approve_manager_s3"))
+    l3e = model.newLayer(); l3e.addAgentFunction(agent.getFunction("rtc_quota_apply"))
+    l3f = model.newLayer(); l3f.addAgentFunction(agent.getFunction("rtc_quota_intent_clear"))
+
+    # Post-quota: 3→2 если получен билет
+    rtc_status3_post = """
+    FLAMEGPU_AGENT_FUNCTION(rtc_status_3_post_quota, flamegpu::MessageNone, flamegpu::MessageNone) {
+        if (FLAMEGPU->getVariable<unsigned int>("status_id") != 3u) return flamegpu::ALIVE;
+        if (FLAMEGPU->getVariable<unsigned int>("ops_ticket") == 1u) {
+            FLAMEGPU->setVariable<unsigned int>("status_id", 2u);
+        }
+        return flamegpu::ALIVE;
+    }
+    """
+    agent.newRTCFunction("rtc_status_3_post_quota", rtc_status3_post);
+    l3g = model.newLayer(); l3g.addAgentFunction(agent.getFunction("rtc_status_3_post_quota"))
+
+    # Post-quota: 2→3 если билет не получен (ставим после цикла статуса 3, чтобы не было двух переходов в сутки)
     rtc_status2_post = """
     FLAMEGPU_AGENT_FUNCTION(rtc_status_2_post_quota, flamegpu::MessageNone, flamegpu::MessageNone) {
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
