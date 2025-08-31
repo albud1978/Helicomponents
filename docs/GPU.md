@@ -152,8 +152,8 @@
    - Аналогично статусу 3: предварительный чек атомика; попытка 5→2; при нуле — пасс‑тру 5
 
 5) L4: `rtc_status_1` (Неактивно)
-   - Быстрый чек атомика; затем условия допуска (по правилам проекта)
-   - При выполнении условий и наличии квоты — 1→2 через `atomicDec`, иначе пасс‑тру 1
+   - Быстрый чек атомика; условие допуска: квотируем только если (D+1) − version_date ≥ repair_time
+   - При выдаче билета: `active_trigger := (D+1) − repair_time`, `assembly_trigger := (D+1) − assembly_time` (UInt16, дни от 1970‑01‑01); иначе пасс‑тру 1
 
 6) Эпилог (опционально в проде, обязателен в отладке)
    - `rtc_log_day (MP2)`: агрегированная запись показателей суток в MacroProperty2 (кол‑ва по статусам, ops_current, quota_claimed, завершённые ремонты)
@@ -181,7 +181,7 @@
 | 2d (post-quota) | `rtc_status_2_post_quota` | — | Если агент остался в 2 и `ops_ticket==0` → 2→3 | 2→3 |
 | 3 (L2, status_id=3) | `rtc_status_3` | Env: MP6 (`mp6_quota_mi8/mi17`) | По `ac_type_mask` выбрать тип; `old = atomicSub(mp6_quota_type[D+1], 1)`; если `old>0` → 3→2 | Без изменений триггеров |
 | 4 (L3, status_id=5) | `rtc_status_5` | Env: MP6 (`mp6_quota_mi8/mi17`) | Аналогично статусу 3 | Без изменений триггеров |
-| 5 (L4, status_id=1) | `rtc_status_1` | Env: MP6 (`mp6_quota_mi8/mi17`); MP1: `repair_time`, `assembly_time` | Формула допуска и 1→2 при квоте; `active_trigger := D − repair_time`, `assembly_trigger := D − assembly_time` | 1→2 |
+| 5 (L4, status_id=1) | `rtc_status_1` | Env: MP6 (`mp6_quota_mi8/mi17`); MP1: `repair_time`, `assembly_time` | Допуск, если `(D+1) − version_date ≥ repair_time`; при билете: `active_trigger := (D+1) − repair_time`, `assembly_trigger := (D+1) − assembly_time` | 1→2 |
 | 6 | `rtc_log_day` | Агент/Env/MP: данные суток | Запись в SoA‑колонки MacroProperty2 по индексу `row = day * frames_total + idx` | Агент без изменений |
 | 7 | `increment_day` | Env: `current_day` | `current_day := current_day + 1` | Агент без изменений |
 | 8 (host) | export_mp2 | MacroProperty2/популяция | Одно батч‑вставка MP2 в ClickHouse | — |

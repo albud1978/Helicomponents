@@ -94,8 +94,9 @@ class HeliSimModel:
         self.agent = agent
         for name in [
             "idx","psn","partseqno_i","group_by","aircraft_number","ac_type_mask",
-            "mfg_date","status_id","repair_days","repair_time","ppr","sne",
-            "ll","oh","br","daily_today_u32","daily_next_u32","ops_ticket","quota_left","intent_flag"
+            "mfg_date","status_id","repair_days","repair_time","assembly_time","ppr","sne",
+            "ll","oh","br","daily_today_u32","daily_next_u32","ops_ticket","quota_left","intent_flag",
+            "active_trigger","assembly_trigger"
         ]:
             agent.newVariableUInt(name, 0)
 
@@ -308,6 +309,12 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Вторая фаза approve для статуса 3
     env.newMacroPropertyUInt32("mi8_approve_s3", FRAMES)
     env.newMacroPropertyUInt32("mi17_approve_s3", FRAMES)
+    # Третья фаза approve для статуса 5
+    env.newMacroPropertyUInt32("mi8_approve_s5", FRAMES)
+    env.newMacroPropertyUInt32("mi17_approve_s5", FRAMES)
+    # Четвёртая фаза approve для статуса 1
+    env.newMacroPropertyUInt32("mi8_approve_s1", FRAMES)
+    env.newMacroPropertyUInt32("mi17_approve_s1", FRAMES)
 
     # Агент и минимальные переменные
     agent = model.newAgent("component")
@@ -320,6 +327,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("status_id", 0)
     agent.newVariableUInt("repair_days", 0)
     agent.newVariableUInt("repair_time", 0)
+    agent.newVariableUInt("assembly_time", 0)
     agent.newVariableUInt("sne", 0)
     agent.newVariableUInt("ppr", 0)
     # Для status_2 логики (LL/OH/BR пороги)
@@ -329,6 +337,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Диагностика переходов: aircraft_number
     agent.newVariableUInt("aircraft_number", 0)
     agent.newVariableUInt("intent_flag", 0)
+    agent.newVariableUInt("active_trigger", 0)
+    agent.newVariableUInt("assembly_trigger", 0)
 
     # RTC: intent
     rtc_intent = f"""
@@ -376,7 +386,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     """
     agent.newRTCFunction("rtc_quota_approve_manager", rtc_approve)
 
-    # RTC: apply — учитывает approve из обеих фаз (status 2 и status 3)
+    # RTC: apply — учитывает approve из четырёх фаз (status 2, 3, 5 и 1)
     rtc_apply = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_apply, flamegpu::MessageNone, flamegpu::MessageNone) {{
         static const unsigned int FRAMES = {FRAMES}u;
@@ -386,11 +396,15 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         if (gb == 1u) {{
             auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
             auto a8b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s3");
-            if (a8[idx] || a8b[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
+            auto a8c = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s5");
+            auto a8d = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s1");
+            if (a8[idx] || a8b[idx] || a8c[idx] || a8d[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
         }} else if (gb == 2u) {{
             auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
             auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s3");
-            if (a17[idx] || a17b[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
+            auto a17c = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s5");
+            auto a17d = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s1");
+            if (a17[idx] || a17b[idx] || a17c[idx] || a17d[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
         }}
         return flamegpu::ALIVE;
     }}
@@ -443,6 +457,56 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     }}
     """
     agent.newRTCFunction("rtc_quota_approve_manager_s3", rtc_approve_s3)
+
+    # RTC: intent для статуса 5 (третья фаза квотирования)
+    rtc_intent_s5 = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent_s5, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int FRAMES = {FRAMES}u;
+        if (FLAMEGPU->getVariable<unsigned int>("status_id") != 5u) return flamegpu::ALIVE;
+        const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+        if (idx >= FRAMES) return flamegpu::ALIVE;
+        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }}
+        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }}
+        FLAMEGPU->setVariable<unsigned int>("intent_flag", 1u);
+        return flamegpu::ALIVE;
+    }}
+    """
+    agent.newRTCFunction("rtc_quota_intent_s5", rtc_intent_s5)
+
+    # RTC: approve для статуса 5 — остаток после фаз 2 и 3
+    rtc_approve_s5 = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager_s5, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int DAYS = {DAYS}u;
+        static const unsigned int FRAMES = {FRAMES}u;
+        if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
+        auto i8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
+        auto i17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
+        auto a8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
+        auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
+        auto a8b  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s3");
+        auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s3");
+        auto a8c  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s5");
+        auto a17c = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s5");
+        // Считаем сколько уже было одобрено в фазах 2 и 3
+        unsigned int used8 = 0u; unsigned int used17 = 0u;
+        for (unsigned int k=0u;k<FRAMES;++k) {{ used8 += (a8[k] ? 1u : 0u); used17 += (a17[k] ? 1u : 0u); }}
+        for (unsigned int k=0u;k<FRAMES;++k) {{ used8 += (a8b[k] ? 1u : 0u); used17 += (a17b[k] ? 1u : 0u); }}
+        // Остаток на D+1
+        const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int dayp1 = (day + 1u < DAYS ? day + 1u : day);
+        unsigned int seed8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
+        unsigned int seed17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
+        unsigned int left8 = (seed8 > used8 ? (seed8 - used8) : 0u);
+        unsigned int left17 = (seed17 > used17 ? (seed17 - used17) : 0u);
+        // Очистим approve-буферы третьей фазы и распределим остаток по intent статуса 5
+        for (unsigned int k=0u;k<FRAMES;++k) {{ a8c[k].exchange(0u); a17c[k].exchange(0u); }}
+        for (unsigned int k=0u;k<FRAMES && left8>0u;++k) {{ if (i8[k]) {{ a8c[k].exchange(1u); --left8; }} }}
+        for (unsigned int k=0u;k<FRAMES && left17>0u;++k) {{ if (i17[k]) {{ a17c[k].exchange(1u); --left17; }} }}
+        return flamegpu::ALIVE;
+    }}
+    """
+    agent.newRTCFunction("rtc_quota_approve_manager_s5", rtc_approve_s5)
 
     # RTC: probe MP5 (опционально) — пишет dt/dn в агентные переменные
     rtc_probe_mp5 = f"""
@@ -598,6 +662,110 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     """
     agent.newRTCFunction("rtc_status_3_post_quota", rtc_status3_post);
     l3g = model.newLayer(); l3g.addAgentFunction(agent.getFunction("rtc_status_3_post_quota"))
+
+    # Третья фаза квотирования: статус 5 на остатке после фаз 2 и 3
+    l5a = model.newLayer(); l5a.addAgentFunction(agent.getFunction("rtc_quota_intent_s5"))
+    l5b = model.newLayer(); l5b.addAgentFunction(agent.getFunction("rtc_quota_approve_manager_s5"))
+    l5c = model.newLayer(); l5c.addAgentFunction(agent.getFunction("rtc_quota_apply"))
+    l5d = model.newLayer(); l5d.addAgentFunction(agent.getFunction("rtc_quota_intent_clear"))
+
+    # Четвёртая фаза квотирования: статус 1 на остатке после фаз 2,3 и 5
+    rtc_intent_s1 = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent_s1, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int FRAMES = {FRAMES}u;
+        if (FLAMEGPU->getVariable<unsigned int>("status_id") != 1u) return flamegpu::ALIVE;
+        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+        if (idx >= FRAMES) return flamegpu::ALIVE;
+        // Гейт по сроку ремонта: квотируем только если (D+1) - version_date >= repair_time
+        const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int vdate = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
+        const unsigned int dayp1_abs = vdate + (day + 1u);
+        const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
+        if ((dayp1_abs - vdate) < repair_time) return flamegpu::ALIVE;
+        const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }}
+        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }}
+        FLAMEGPU->setVariable<unsigned int>("intent_flag", 1u);
+        return flamegpu::ALIVE;
+    }}
+    """
+    agent.newRTCFunction("rtc_quota_intent_s1", rtc_intent_s1)
+
+    rtc_approve_s1 = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager_s1, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int DAYS = {DAYS}u;
+        static const unsigned int FRAMES = {FRAMES}u;
+        if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
+        const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int last = (DAYS > 0u ? DAYS - 1u : 0u);
+        const unsigned int dayp1 = (day < last ? day + 1u : last);
+        auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
+        auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
+        auto a8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
+        auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
+        auto a8b  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s3");
+        auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s3");
+        auto a8c  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s5");
+        auto a17c = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s5");
+        auto a8d  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s1");
+        auto a17d = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s1");
+        // Очистим буферы фазу S1
+        for (unsigned int k=0u;k<FRAMES;++k) {{ a8d[k].exchange(0u); a17d[k].exchange(0u); }}
+        // Остаток от семени после фаз 2,3,5
+        unsigned int seed8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
+        unsigned int seed17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
+        unsigned int used8 = 0u, used17 = 0u;
+        for (unsigned int k=0u;k<FRAMES;++k) {{ if (a8[k] || a8b[k] || a8c[k]) ++used8; if (a17[k] || a17b[k] || a17c[k]) ++used17; }}
+        unsigned int left8 = (seed8 > used8 ? (seed8 - used8) : 0u);
+        unsigned int left17 = (seed17 > used17 ? (seed17 - used17) : 0u);
+        for (unsigned int k=0u;k<FRAMES && left8>0u;++k) {{ if (i8[k]) {{ a8d[k].exchange(1u); --left8; }} }}
+        for (unsigned int k=0u;k<FRAMES && left17>0u;++k) {{ if (i17[k]) {{ a17d[k].exchange(1u); --left17; }} }}
+        return flamegpu::ALIVE;
+    }}
+    """
+    agent.newRTCFunction("rtc_quota_approve_manager_s1", rtc_approve_s1)
+
+    # Слои для статуса 1
+    l1a = model.newLayer(); l1a.addAgentFunction(agent.getFunction("rtc_quota_intent_s1"))
+    l1b = model.newLayer(); l1b.addAgentFunction(agent.getFunction("rtc_quota_approve_manager_s1"))
+    l1c = model.newLayer(); l1c.addAgentFunction(agent.getFunction("rtc_quota_apply"))
+    l1d = model.newLayer(); l1d.addAgentFunction(agent.getFunction("rtc_quota_intent_clear"))
+
+    rtc_status1_post = """
+    FLAMEGPU_AGENT_FUNCTION(rtc_status_1_post_quota, flamegpu::MessageNone, flamegpu::MessageNone) {
+        if (FLAMEGPU->getVariable<unsigned int>("status_id") != 1u) return flamegpu::ALIVE;
+        if (FLAMEGPU->getVariable<unsigned int>("ops_ticket") == 1u) {
+            const unsigned int day = FLAMEGPU->getStepCounter();
+            const unsigned int vdate = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
+            const unsigned int dayp1_abs = vdate + (day + 1u);
+            const unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
+            const unsigned int at = FLAMEGPU->getVariable<unsigned int>("assembly_time");
+            unsigned int act = (dayp1_abs > rt ? (dayp1_abs - rt) : 0u);
+            unsigned int asm_tr = (dayp1_abs > at ? (dayp1_abs - at) : 0u);
+            if (act > 65535u) act = 65535u;
+            if (asm_tr > 65535u) asm_tr = 65535u;
+            FLAMEGPU->setVariable<unsigned int>("active_trigger", act);
+            FLAMEGPU->setVariable<unsigned int>("assembly_trigger", asm_tr);
+            FLAMEGPU->setVariable<unsigned int>("status_id", 2u);
+        }
+        return flamegpu::ALIVE;
+    }
+    """
+    agent.newRTCFunction("rtc_status_1_post_quota", rtc_status1_post)
+    l1e = model.newLayer(); l1e.addAgentFunction(agent.getFunction("rtc_status_1_post_quota"))
+
+    # Post-quota: 5→2 если получен билет
+    rtc_status5_post = """
+    FLAMEGPU_AGENT_FUNCTION(rtc_status_5_post_quota, flamegpu::MessageNone, flamegpu::MessageNone) {
+        if (FLAMEGPU->getVariable<unsigned int>("status_id") != 5u) return flamegpu::ALIVE;
+        if (FLAMEGPU->getVariable<unsigned int>("ops_ticket") == 1u) {
+            FLAMEGPU->setVariable<unsigned int>("status_id", 2u);
+        }
+        return flamegpu::ALIVE;
+    }
+    """
+    agent.newRTCFunction("rtc_status_5_post_quota", rtc_status5_post);
+    l5e = model.newLayer(); l5e.addAgentFunction(agent.getFunction("rtc_status_5_post_quota"))
 
     # Post-quota: 2→3 если билет не получен (ставим после цикла статуса 3, чтобы не было двух переходов в сутки)
     rtc_status2_post = """

@@ -65,6 +65,9 @@ def main():
     p.add_argument('--status2-days', type=int, default=7, help='Сколько суток шагать в status2-smoke-real (по умолчанию 7)')
     p.add_argument('--status246-smoke-real', action='store_true', help='Совместный слой 2/4/6: реальный smoke, шаги N, метрики')
     p.add_argument('--status246-days', type=int, default=7, help='Сколько суток шагать в status246-smoke-real (по умолчанию 7)')
+    # Расширенный режим: 1/2/4/5/6 с полным квотированием (включая статус 1)
+    p.add_argument('--status12456-smoke-real', action='store_true', help='Совместный слой 1/2/4/5/6: реальный smoke с квотами 2,3,5,1')
+    p.add_argument('--status12456-days', type=int, default=7, help='Сколько суток шагать в status12456-smoke-real (по умолчанию 7)')
     # Алиасы для сценария с явной фиксацией квотирования в статусе 2
     p.add_argument('--status246q-smoke-real', action='store_true', help='Алиас status246-smoke-real с квотированием в статусе 2 (intent→approve→apply)')
     p.add_argument('--status246q-days', type=int, default=None, help='Сутки для status246q-smoke-real (если не указано, используется --status246-days)')
@@ -567,10 +570,13 @@ def main():
         trans24_log: List[Tuple[str,int]] = []
         trans26_log: List[Tuple[str,int]] = []
         trans32_log: List[Tuple[str,int]] = []
+        trans52_log: List[Tuple[str,int]] = []
         # Расширенный лог: day, ac, sne, ppr, ll, oh, br на момент выхода (после dt)
         trans24_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans26_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans32_info: List[Tuple[str,int,int,int,int,int,int]] = []
+        trans52_info: List[Tuple[str,int,int,int,int,int,int]] = []
+        total_5to2 = 0
         for d in range(steps):
             # Снимем состояние ДО шага
             pop_before = pyflamegpu.AgentVector(a_desc)
@@ -620,6 +626,7 @@ def main():
             t_26 = 0
             t_23 = 0
             t_32 = 0
+            t_52 = 0
             sne_s2 = 0
             ppr_s2 = 0
             ppr_reset_45 = 0
@@ -659,6 +666,16 @@ def main():
                     oh_v = int(pop_after[i].getVariableUInt('oh'))
                     br_v = int(pop_after[i].getVariableUInt('br'))
                     trans32_info.append((day_str, ac_before[i], sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 5 and sa == 2:
+                    t_52 += 1
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans52_log.append((day_str, ac_before[i]))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans52_info.append((day_str, ac_before[i], sne_v, ppr_v, ll_v, oh_v, br_v))
                 if sb == 4 and sa == 5:
                     t_45 += 1
                     ppr_reset_45 += (ppr_after[i] - ppr_before[i])
@@ -682,6 +699,7 @@ def main():
             per_day_ppr_from_s2.append(ppr_s2)
             per_day_ppr_reset_45.append(ppr_reset_45)
             per_day_trans_32.append(t_32)
+            total_5to2 += t_52
             # Диагностика квоты на D+1 (пер-дневный вывод отключён как неинформативный)
             d1 = d + 1
             seed8 = int(env_data['mp4_ops_counter_mi8'][d1]) if d1 < len(env_data['mp4_ops_counter_mi8']) else int(env_data['mp4_ops_counter_mi8'][-1])
@@ -718,6 +736,22 @@ def main():
                     _seen_i.add(itm)
                     _uniq_info.append(itm)
             trans32_info = _uniq_info
+        if trans52_log:
+            _seen5 = set()
+            _uniq5 = []
+            for itm in trans52_log:
+                if itm not in _seen5:
+                    _seen5.add(itm)
+                    _uniq5.append(itm)
+            trans52_log = _uniq5
+        if trans52_info:
+            _seen5i = set()
+            _uniq5i = []
+            for itm in trans52_info:
+                if itm not in _seen5i:
+                    _seen5i.add(itm)
+                    _uniq5i.append(itm)
+            trans52_info = _uniq5i
         # per_day-* печать убрана как неинформативная
         # Полные логи переходов 2->4 и 2->6 с датами и AC
         if trans24_log:
@@ -732,6 +766,10 @@ def main():
             print("  transitions_3to2:")
             for dstr, acn in trans32_log:
                 print(f"    {dstr}: ac={acn}")
+        if trans52_log:
+            print("  transitions_5to2:")
+            for dstr, acn in trans52_log:
+                print(f"    {dstr}: ac={acn}")
         # Детальные значения на момент выхода
         if trans24_info:
             print("  details_2to4 (day, ac, sne, ppr, ll, oh, br):")
@@ -745,6 +783,10 @@ def main():
             print("  details_3to2 (day, ac, sne, ppr, ll, oh, br):")
             for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans32_info:
                 print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        if trans52_info:
+            print("  details_5to2 (day, ac, sne, ppr, ll, oh, br):")
+            for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans52_info:
+                print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
         # Итоги только по статусу 2
         sne_inc_s2_total = sum(per_day_sne_from_s2)
         ppr_inc_s2_total = sum(per_day_ppr_from_s2)
@@ -752,8 +794,229 @@ def main():
         # Итоги по переходам между 2 и 3
         total_2to3 = sum(per_day_trans_23)
         total_3to2 = sum(per_day_trans_32)
-        print(f"  totals_transitions: 2to3={total_2to3}, 3to2={total_3to2}")
+        print(f"  totals_transitions: 2to3={total_2to3}, 3to2={total_3to2}, 5to2={total_5to2}")
         # Сводка таймингов
+        print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}")
+        return
+
+    # === Совместный слой 1/2/4/5/6 (REAL) ===
+    if getattr(a, 'status12456_smoke_real', False):
+        FRAMES = int(env_data['frames_total_u16'])
+        DAYS = int(env_data['days_total_u16'])
+        os.environ['HL_STATUS246_SMOKE'] = '1'
+        model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
+        sim2 = pyflamegpu.CUDASimulation(model2)
+        # Таймеры
+        t_load_s = t_gpu_s = t_cpu_s = 0.0
+        import time as _t
+        t0 = _t.perf_counter()
+        sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+        sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
+        sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        # MP4 квоты
+        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8']))
+        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
+        idx_map = {name: i for i, name in enumerate(mp3_fields)}
+        frames_index = env_data.get('frames_index', {})
+        # Берём статусы 1,2,4,5,6
+        rows = [r for r in mp3_rows if int(r[idx_map['status_id']] or 0) in (1,2,4,5,6)]
+        # BR статистика (как выше)
+        br8_vals: List[int] = []
+        br17_vals: List[int] = []
+        for r in rows:
+            partseq = int(r[idx_map.get('partseqno_i', -1)] or 0)
+            mask = int(r[idx_map.get('ac_type_mask', -1)] or 0)
+            if mask & 32:
+                br8_vals.append(int(mp1_map.get(partseq, (0,0,0,0,0))[0]))
+            elif mask & 64:
+                br17_vals.append(int(mp1_map.get(partseq, (0,0,0,0,0))[1]))
+        if br8_vals:
+            print(f"BR[MI-8] minutes: count={len(br8_vals)}, min={min(br8_vals)}, max={max(br8_vals)}")
+        else:
+            print("BR[MI-8] minutes: count=0")
+        if br17_vals:
+            print(f"BR[MI-17] minutes: count={len(br17_vals)}, min={min(br17_vals)}, max={max(br17_vals)}")
+        else:
+            print("BR[MI-17] minutes: count=0")
+        K = len(rows)
+        av = pyflamegpu.AgentVector(a_desc, K)
+        for i, r in enumerate(rows):
+            sid = int(r[idx_map['status_id']] or 0)
+            ac = int(r[idx_map['aircraft_number']] or 0)
+            fi = int(frames_index.get(ac, i % max(1, FRAMES)))
+            av[i].setVariableUInt("idx", fi)
+            gb = int(r[idx_map.get('group_by', -1)] or 0) if 'group_by' in idx_map else 0
+            if gb not in (1,2):
+                mask = int(r[idx_map.get('ac_type_mask', -1)] or 0)
+                gb = 1 if (mask & 32) else (2 if (mask & 64) else 0)
+            av[i].setVariableUInt("group_by", gb if gb in (1,2) else 1)
+            av[i].setVariableUInt("status_id", sid)
+            av[i].setVariableUInt("aircraft_number", ac)
+            av[i].setVariableUInt("repair_days", int(r[idx_map.get('repair_days', -1)] or 0))
+            partseq = int(r[idx_map.get('partseqno_i', -1)] or 0)
+            # repair_time / assembly_time из MP1 для всех (требуется для статуса 1)
+            rt = mp1_map.get(partseq, (0,0,0,0,0))[2]
+            at = mp1_map.get(partseq, (0,0,0,0,0))[4]
+            av[i].setVariableUInt("repair_time", int(rt or 0))
+            av[i].setVariableUInt("assembly_time", int(at or 0))
+            av[i].setVariableUInt("sne", int(r[idx_map.get('sne', -1)] or 0))
+            av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
+            av[i].setVariableUInt("ll", int(r[idx_map.get('ll', -1)] or 0))
+            # oh по типу из MP1
+            mask = int(r[idx_map.get('ac_type_mask', -1)] or 0)
+            mp1_idx_map = env_data.get('mp1_index', {})
+            pidx = int(mp1_idx_map.get(partseq, -1))
+            oh_val = 0
+            if pidx >= 0:
+                if mask & 32:
+                    oh_arr = env_data.get('mp1_oh_mi8', [])
+                    if pidx < len(oh_arr):
+                        oh_val = int(oh_arr[pidx] or 0)
+                elif mask & 64:
+                    oh_arr = env_data.get('mp1_oh_mi17', [])
+                    if pidx < len(oh_arr):
+                        oh_val = int(oh_arr[pidx] or 0)
+            av[i].setVariableUInt("oh", oh_val)
+            # br по типу
+            br = 0
+            if mask & 32:
+                br = int(mp1_map.get(partseq, (0,0,0,0,0))[0])
+            elif mask & 64:
+                br = int(mp1_map.get(partseq, (0,0,0,0,0))[1])
+            av[i].setVariableUInt("br", br)
+            # dt D0
+            base = 0 * FRAMES + (fi if fi < FRAMES else 0)
+            dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+            av[i].setVariableUInt("daily_today_u32", dt)
+            av[i].setVariableUInt("daily_next_u32", 0)
+        sim2.setPopulationData(av)
+        t_load_s += (_t.perf_counter() - t0)
+        before = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(before)
+        cnt1_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 1)
+        cnt2_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 2)
+        cnt3_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 3)
+        cnt4_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 4)
+        cnt5_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 5)
+        cnt6_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 6)
+        steps = max(1, int(getattr(a, 'status12456_days', 7)))
+        trans12_log: List[Tuple[str,int]] = []
+        trans12_info: List[Tuple[str,int,int,int,int,int,int]] = []
+        trans23_log: List[Tuple[str,int]] = []
+        trans32_log: List[Tuple[str,int]] = []
+        trans52_log: List[Tuple[str,int]] = []
+        trans23_info: List[Tuple[str,int,int,int,int,int,int]] = []
+        trans32_info: List[Tuple[str,int,int,int,int,int,int]] = []
+        trans52_info: List[Tuple[str,int,int,int,int,int,int]] = []
+        total_5to2 = 0
+        for d in range(steps):
+            pop_before = pyflamegpu.AgentVector(a_desc)
+            t_bcpu0 = _t.perf_counter()
+            sim2.getPopulationData(pop_before)
+            status_before = [int(pop_before[i].getVariableUInt('status_id')) for i in range(K)]
+            t_cpu_s += (_t.perf_counter() - t_bcpu0)
+            # Подготовка dt/dn для s2
+            for i in range(K):
+                if status_before[i] == 2:
+                    ag = pop_before[i]
+                    fi = int(ag.getVariableUInt('idx'))
+                    base = d * FRAMES + (fi if fi < FRAMES else 0)
+                    dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+                    dn = int(env_data['mp5_daily_hours_linear'][base + FRAMES]) if (base + FRAMES) < len(env_data['mp5_daily_hours_linear']) else 0
+                    ag.setVariableUInt('daily_today_u32', dt)
+                    ag.setVariableUInt('daily_next_u32', dn)
+            sim2.setPopulationData(pop_before)
+            t_g0 = _t.perf_counter()
+            sim2.step()
+            t_gpu_s += (_t.perf_counter() - t_g0)
+            pop_after = pyflamegpu.AgentVector(a_desc)
+            t_acpu0 = _t.perf_counter()
+            sim2.getPopulationData(pop_after)
+            t_cpu_s += (_t.perf_counter() - t_acpu0)
+            for i in range(K):
+                sb = status_before[i]
+                sa = int(pop_after[i].getVariableUInt('status_id'))
+                if sb == 1 and sa == 2:
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans12_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans12_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 2 and sa == 3:
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans23_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans23_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 3 and sa == 2:
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans32_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans32_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 5 and sa == 2:
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans52_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans52_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
+                    total_5to2 += 1
+        after = pyflamegpu.AgentVector(a_desc)
+        sim2.getPopulationData(after)
+        cnt1_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 1)
+        cnt2_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 2)
+        cnt3_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 3)
+        cnt4_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 4)
+        cnt5_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 5)
+        cnt6_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 6)
+        print(f"status12456_smoke_real: steps={steps}, cnt1 {cnt1_b}->{cnt1_a}, cnt2 {cnt2_b}->{cnt2_a}, cnt3 {cnt3_b}->{cnt3_a}, cnt4 {cnt4_b}->{cnt4_a}, cnt5 {cnt5_b}->{cnt5_a}, cnt6 {cnt6_b}->{cnt6_a}")
+        if trans12_log:
+            print("  transitions_1to2:")
+            for dstr, acn in trans12_log:
+                print(f"    {dstr}: ac={acn}")
+        if trans12_info:
+            print("  details_1to2 (day, ac, sne, ppr, ll, oh, br):")
+            for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans12_info:
+                print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        if trans23_log:
+            print("  transitions_2to3:")
+            for dstr, acn in trans23_log:
+                print(f"    {dstr}: ac={acn}")
+        if trans23_info:
+            print("  details_2to3 (day, ac, sne, ppr, ll, oh, br):")
+            for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans23_info:
+                print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        if trans32_log:
+            print("  transitions_3to2:")
+            for dstr, acn in trans32_log:
+                print(f"    {dstr}: ac={acn}")
+        if trans32_info:
+            print("  details_3to2 (day, ac, sne, ppr, ll, oh, br):")
+            for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans32_info:
+                print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        if trans52_log:
+            print("  transitions_5to2:")
+            for dstr, acn in trans52_log:
+                print(f"    {dstr}: ac={acn}")
+        if trans52_info:
+            print("  details_5to2 (day, ac, sne, ppr, ll, oh, br):")
+            for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans52_info:
+                print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        total_2to3 = len(trans23_log)
+        total_3to2 = len(trans32_log)
+        print(f"  totals_transitions: 2to3={total_2to3}, 3to2={total_3to2}, 5to2={total_5to2}")
         print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}")
         return
 
