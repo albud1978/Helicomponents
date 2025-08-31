@@ -432,6 +432,9 @@ def main():
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
         sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        # MP4 квоты для менеджера intent→approve→apply
+        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8']))
+        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
         frames_index = env_data.get('frames_index', {})
         # Берём всех агентов с статусами 2,4,6
@@ -470,14 +473,7 @@ def main():
             print(f"BR[MI-17] minutes: count={len(br17_vals)}, min={min(br17_vals)}, max={max(br17_vals)}")
         else:
             print("BR[MI-17] minutes: count=0")
-        if samples8:
-            print("BR[MI-8] sample pairs (acn, partseq, br):")
-            for acn, psn, brv in samples8:
-                print(f"  ({acn}, {psn}, {brv})")
-        if samples17:
-            print("BR[MI-17] sample pairs (acn, partseq, br):")
-            for acn, psn, brv in samples17:
-                print(f"  ({acn}, {psn}, {brv})")
+        # Sample pairs скрыты для компактности вывода
         K = len(rows)
         av = pyflamegpu.AgentVector(a_desc, K)
         for i, r in enumerate(rows):
@@ -485,7 +481,12 @@ def main():
             ac = int(r[idx_map['aircraft_number']] or 0)
             fi = int(frames_index.get(ac, i % max(1, FRAMES)))
             av[i].setVariableUInt("idx", fi)
-            av[i].setVariableUInt("group_by", 1)
+            # Корректный group_by: сначала из MP3, иначе по ac_type_mask
+            gb = int(r[idx_map.get('group_by', -1)] or 0) if 'group_by' in idx_map else 0
+            if gb not in (1, 2):
+                mask = int(r[idx_map.get('ac_type_mask', -1)] or 0)
+                gb = 1 if (mask & 32) else (2 if (mask & 64) else 0)
+            av[i].setVariableUInt("group_by", gb if gb in (1, 2) else 1)
             av[i].setVariableUInt("status_id", sid)
             av[i].setVariableUInt("aircraft_number", ac)
             av[i].setVariableUInt("repair_days", int(r[idx_map.get('repair_days', -1)] or 0))
@@ -533,6 +534,7 @@ def main():
         sim2.getPopulationData(before)
         t_cpu_s += (_t.perf_counter() - t1)
         cnt2_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 2)
+        cnt3_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 3)
         cnt4_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 4)
         cnt6_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 6)
         steps = max(1, int(a.status246_days))
@@ -563,6 +565,7 @@ def main():
             status_before = [int(pop_before[i].getVariableUInt('status_id')) for i in range(K)]
             sne_before = [int(pop_before[i].getVariableUInt('sne')) for i in range(K)]
             ppr_before = [int(pop_before[i].getVariableUInt('ppr')) for i in range(K)]
+            ops_before = [int(pop_before[i].getVariableUInt('ops_ticket')) for i in range(K)]
             ac_before = [int(pop_before[i].getVariableUInt('aircraft_number')) for i in range(K)]
             # Подготовка dt/dn только для агентов в статусе 2 на текущем d
             for i in range(K):
@@ -595,14 +598,18 @@ def main():
             status_after = [int(pop_after[i].getVariableUInt('status_id')) for i in range(K)]
             sne_after = [int(pop_after[i].getVariableUInt('sne')) for i in range(K)]
             ppr_after = [int(pop_after[i].getVariableUInt('ppr')) for i in range(K)]
+            ops_after = [int(pop_after[i].getVariableUInt('ops_ticket')) for i in range(K)]
             t_cpu_s += (_t.perf_counter() - t_acpu0)
             # Транзакции статусов
             t_24 = 0
             t_45 = 0
             t_26 = 0
+            t_23 = 0
             sne_s2 = 0
             ppr_s2 = 0
             ppr_reset_45 = 0
+            approved8_today = 0
+            approved17_today = 0
             for i in range(K):
                 sb = status_before[i]
                 sa = status_after[i]
@@ -633,29 +640,44 @@ def main():
                 if sb == 2:
                     sne_s2 += (sne_after[i] - sne_before[i])
                     ppr_s2 += (ppr_after[i] - ppr_before[i])
+                if sb == 2 and sa == 3:
+                    t_23 += 1
+                # Дневная выдача билетов: ops_after==1 и intent_flag==1 в текущем дне
+                if ops_after[i] == 1 and int(pop_after[i].getVariableUInt('intent_flag')) == 1:
+                    gbv = int(pop_after[i].getVariableUInt('group_by'))
+                    if gbv == 1:
+                        approved8_today += 1
+                    elif gbv == 2:
+                        approved17_today += 1
             per_day_trans_24.append(t_24)
             per_day_trans_45.append(t_45)
             per_day_trans_26.append(t_26)
             per_day_sne_from_s2.append(sne_s2)
             per_day_ppr_from_s2.append(ppr_s2)
             per_day_ppr_reset_45.append(ppr_reset_45)
+            # Диагностика квоты на D+1: семена (для допуска на завтра), выдано сегодня и остаток
+            d1 = d + 1
+            seed8 = int(env_data['mp4_ops_counter_mi8'][d1]) if d1 < len(env_data['mp4_ops_counter_mi8']) else int(env_data['mp4_ops_counter_mi8'][-1])
+            seed17 = int(env_data['mp4_ops_counter_mi17'][d1]) if d1 < len(env_data['mp4_ops_counter_mi17']) else int(env_data['mp4_ops_counter_mi17'][-1])
+            left8 = max(0, seed8 - approved8_today)
+            left17 = max(0, seed17 - approved17_today)
+            print(f"  quota_day{d}: seed8={seed8}, seed17={seed17}, approved8={approved8_today}, approved17={approved17_today}, left8={left8}, left17={left17}, prof_2to3={t_23}")
         after = pyflamegpu.AgentVector(a_desc)
         t_endcpu0 = _t.perf_counter()
         sim2.getPopulationData(after)
         t_cpu_s += (_t.perf_counter() - t_endcpu0)
         cnt2_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 2)
+        cnt3_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 3)
         cnt4_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 4)
         cnt5_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 5)
         cnt6_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 6)
         sne_inc = sum(int(ag.getVariableUInt('sne')) for ag in after) - sum(int(ag.getVariableUInt('sne')) for ag in before)
         ppr_inc = sum(int(ag.getVariableUInt('ppr')) for ag in after) - sum(int(ag.getVariableUInt('ppr')) for ag in before)
-        print(f"status246_smoke_real: steps={steps}, cnt2 {cnt2_b}->{cnt2_a}, cnt4 {cnt4_b}->{cnt4_a}, cnt5={cnt5_a}, cnt6 {cnt6_b}->{cnt6_a}, sne_inc={sne_inc}, ppr_inc={ppr_inc}")
+        print(f"status246_smoke_real: steps={steps}, cnt2 {cnt2_b}->{cnt2_a}, cnt3 {cnt3_b}->{cnt3_a}, cnt4 {cnt4_b}->{cnt4_a}, cnt5={cnt5_a}, cnt6 {cnt6_b}->{cnt6_a}, sne_inc={sne_inc}, ppr_inc={ppr_inc}")
         # Диагностика по суткам
         print(f"  per_day_dt_totals: {per_day_dt_totals}")
-        print(f"  per_day_transitions: 2->4={per_day_trans_24}, 4->5={per_day_trans_45}, 2->6={per_day_trans_26}")
         print(f"  per_day_sne_inc_from_s2: {per_day_sne_from_s2}")
         print(f"  per_day_ppr_inc_from_s2: {per_day_ppr_from_s2}")
-        print(f"  per_day_ppr_reset_from_4to5: {per_day_ppr_reset_45}")
         # Полные логи переходов 2->4 и 2->6 с датами и AC
         if trans24_log:
             print("  transitions_2to4:")
