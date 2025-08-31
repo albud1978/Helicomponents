@@ -39,6 +39,18 @@
 - Прогон 185 суток (`--status246-smoke-real --status246-days 185`):
   - Суточные семена MP4 выдержаны; дефицит зафиксирован на D=180 (`prof_2to3=11`), остальные дни без дефицита при данных семенах.
   - Сводка: `cnt2 154->135, cnt3 0->11, cnt4 7->0, cnt5=14, cnt6 0->1`, `timing_ms: load_gpu≈323 ms, sim_gpu≈342 ms, cpu_log≈534 ms`.
+
+## [31-08-2025] - Вторая фаза квотирования для статуса 3 и метрики 3→2
+### Добавлено
+- В `model_build.py`: отдельные буферы `mi8_approve_s3/mi17_approve_s3` и слой `rtc_quota_approve_manager_s3` для распределения остатка квоты после статуса 2.
+- В `sim_master.py`: посуточная метрика `per_day_trans_3to2`, логи `transitions_3to2` и `details_3to2 (day, ac, sne, ppr, ll, oh, br)`.
+
+### Изменено
+- `rtc_quota_apply` учитывает оба источника одобрений (фаза 2 и фаза 3).
+- Удалён неиспользуемый `FRAMES` из `rtc_status_2` (устранён NVRTC warning).
+
+### Результаты
+- Прогон 185 суток: `timing_ms: load_gpu≈7996 ms, sim_gpu≈1122 ms, cpu_log≈680 ms`; суточные `prof_2to3` и переходы 3→2 логируются.
 ## [30-08-2025] - Централизация билдера GPU и фикс group_by
 ### Добавлено
 - Фабрики сборки модели в `code/model_build.py`: `build_model_for_quota_smoke(frames_total, days_total)` и `build_model_full(...)`.
