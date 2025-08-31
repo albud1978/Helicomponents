@@ -149,6 +149,14 @@ def main():
           active_trigger   UInt16,
           assembly_trigger UInt16,
           partout_trigger  UInt8
+        ,  orig_status_id UInt8,
+           orig_repair_days UInt16,
+           orig_partout_trigger UInt8,
+           orig_assembly_trigger UInt16,
+           s4_derived_status_id UInt8,
+           s4_derived_repair_days UInt16,
+           partout_trigger_mark UInt8,
+           assembly_trigger_mark UInt8
         )
         ENGINE = MergeTree
         PARTITION BY version_date
@@ -163,6 +171,22 @@ def main():
                 alters.append(f"ADD COLUMN version_date_date Date AFTER version_id")
             if 'day_date' not in cols:
                 alters.append(f"ADD COLUMN day_date Date AFTER day_abs")
+            if 'orig_status_id' not in cols:
+                alters.append(f"ADD COLUMN orig_status_id UInt8 AFTER partout_trigger")
+            if 'orig_repair_days' not in cols:
+                alters.append(f"ADD COLUMN orig_repair_days UInt16 AFTER orig_status_id")
+            if 'orig_partout_trigger' not in cols:
+                alters.append(f"ADD COLUMN orig_partout_trigger UInt8 AFTER orig_repair_days")
+            if 'orig_assembly_trigger' not in cols:
+                alters.append(f"ADD COLUMN orig_assembly_trigger UInt16 AFTER orig_partout_trigger")
+            if 's4_derived_status_id' not in cols:
+                alters.append(f"ADD COLUMN s4_derived_status_id UInt8 AFTER orig_assembly_trigger")
+            if 's4_derived_repair_days' not in cols:
+                alters.append(f"ADD COLUMN s4_derived_repair_days UInt16 AFTER s4_derived_status_id")
+            if 'partout_trigger_mark' not in cols:
+                alters.append(f"ADD COLUMN partout_trigger_mark UInt8 AFTER s4_derived_repair_days")
+            if 'assembly_trigger_mark' not in cols:
+                alters.append(f"ADD COLUMN assembly_trigger_mark UInt8 AFTER partout_trigger_mark")
             for stmt in alters:
                 _client.execute(f"ALTER TABLE {table_name} {stmt}")
         except Exception as _e:
@@ -201,8 +225,8 @@ def main():
             aircraft_v = int(ag.getVariableUInt('aircraft_number')) if 'aircraft_number' in dir(ag) else int(rows_src[i][idx_map_local.get('aircraft_number', -1)] or 0)
             partseq_v = partseq_list[i]
             group_v = int(ag.getVariableUInt('group_by'))
-            status_v = int(ag.getVariableUInt('status_id'))
-            repair_days_v = int(ag.getVariableUInt('repair_days'))
+            orig_status_v = int(ag.getVariableUInt('status_id'))
+            orig_repair_days_v = int(ag.getVariableUInt('repair_days'))
             try:
                 repair_time_v = int(ag.getVariableUInt('repair_time'))
             except Exception:
@@ -220,19 +244,70 @@ def main():
             ll_v = int(ag.getVariableUInt('ll'))
             oh_v = int(ag.getVariableUInt('oh'))
             br_v = int(ag.getVariableUInt('br'))
-            dt_v = int(ag.getVariableUInt('daily_today_u32')) if 'daily_today_u32' in dir(ag) else 0
-            dn_v = int(ag.getVariableUInt('daily_next_u32')) if 'daily_next_u32' in dir(ag) else 0
-            ticket_v = int(ag.getVariableUInt('ops_ticket')) if 'ops_ticket' in dir(ag) else 0
-            intent_v = int(ag.getVariableUInt('intent_flag')) if 'intent_flag' in dir(ag) else 0
-            act_v = int(ag.getVariableUInt('active_trigger')) if 'active_trigger' in dir(ag) else 0
-            asm_v = int(ag.getVariableUInt('assembly_trigger')) if 'assembly_trigger' in dir(ag) else 0
-            part_tr_v = int(ag.getVariableUInt('partout_trigger')) if 'partout_trigger' in dir(ag) else 0
+            try:
+                dt_v = int(ag.getVariableUInt('daily_today_u32'))
+            except Exception:
+                dt_v = 0
+            try:
+                dn_v = int(ag.getVariableUInt('daily_next_u32'))
+            except Exception:
+                dn_v = 0
+            try:
+                ticket_v = int(ag.getVariableUInt('ops_ticket'))
+            except Exception:
+                ticket_v = 0
+            try:
+                intent_v = int(ag.getVariableUInt('intent_flag'))
+            except Exception:
+                intent_v = 0
+            try:
+                act_v = int(ag.getVariableUInt('active_trigger'))
+            except Exception:
+                act_v = 0
+            try:
+                asm_v = int(ag.getVariableUInt('assembly_trigger'))
+            except Exception:
+                asm_v = 0
+            try:
+                part_tr_v = int(ag.getVariableUInt('partout_trigger'))
+            except Exception:
+                part_tr_v = 0
+            # Постпроцессинг
+            s4_der_status = 0
+            s4_der_rd = 0
+            if act_v > 1 and repair_time_v > 0:
+                start = int(act_v)
+                end_inclusive = start + int(repair_time_v) - 1
+                if start <= day_abs <= end_inclusive:
+                    s4_der_status = 4
+                    s4_der_rd = (day_abs - start) + 1
+            # Вычисляем даты триггеров из active_trigger и констант MP1:
+            part_mark = 0
+            asm_mark = 0
+            if act_v > 1 and repair_time_v > 0:
+                if partout_time_v > 0:
+                    if day_abs == (int(act_v) + int(partout_time_v) - 1):
+                        part_mark = 1
+                if assembly_time_v > 0:
+                    # день для assembly: start + (repair_time - assembly_time) - 1
+                    asm_day = int(act_v) + int(repair_time_v) - int(assembly_time_v) - 1
+                    if day_abs == asm_day:
+                        asm_mark = 1
+            exp_status_v = orig_status_v
+            exp_repair_days_v = orig_repair_days_v
+            if s4_der_status == 4:
+                exp_status_v = 4
+                exp_repair_days_v = int(s4_der_rd)
+            exp_part_tr_v = 1 if part_mark == 1 else 0
+            exp_asm_v = 1 if asm_mark == 1 else 0
             batch_buf.append((
                 int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
-                int(idx_v), int(aircraft_v), int(partseq_v), int(group_v), int(status_v),
-                int(repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
+                int(idx_v), int(aircraft_v), int(partseq_v), int(group_v), int(exp_status_v),
+                int(exp_repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
                 int(sne_v), int(ppr_v), int(ll_v), int(oh_v), int(br_v), int(dt_v), int(dn_v),
-                int(ticket_v), int(intent_v), int(act_v), int(asm_v), int(part_tr_v)
+                int(ticket_v), int(intent_v), int(act_v), int(exp_asm_v), int(exp_part_tr_v),
+                int(orig_status_v), int(orig_repair_days_v), int(part_tr_v), int(asm_v),
+                int(s4_der_status), int(s4_der_rd), int(part_mark), int(asm_mark)
             ))
         # Вставляем при переполнении буфера — делается снаружи
         return
@@ -243,7 +318,9 @@ def main():
         cols = (
             "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,partseqno_i,group_by,status_id,"
             "repair_days,repair_time,assembly_time,partout_time,sne,ppr,ll,oh,br,daily_today_u32,daily_next_u32,"
-            "ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger"
+            "ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger,"
+            "orig_status_id,orig_repair_days,orig_partout_trigger,orig_assembly_trigger,"
+            "s4_derived_status_id,s4_derived_repair_days,partout_trigger_mark,assembly_trigger_mark"
         )
         query = f"INSERT INTO {table_name} ({cols}) VALUES"
         import time as _t

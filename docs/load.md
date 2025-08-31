@@ -46,13 +46,79 @@
 
 ## 📋 Планируемые таблицы (требует согласования архитектуры)
 
-### 1. Таблица прогнозов отказов
-**Планируемое имя:** требует согласования
-**Поля:** требует согласования архитектуры
+### 1. Таблица результатов симуляции: sim_results (реализовано)
 
-### 2. Таблица результатов симуляций  
-**Планируемое имя:** требует согласования
-**Поля:** требует согласования архитектуры
+#### Назначение
+Ежедневный экспорт состояния всех агентов для BI‑аналитики и проверок инвариантов.
+
+#### DDL (минимальная схема; эволюция через ALTER при отсутствии колонок)
+```
+CREATE TABLE IF NOT EXISTS sim_results (
+  version_date       UInt32,
+  version_id         UInt32,
+  version_date_date  Date,
+  day_u16            UInt16,
+  day_abs            UInt32,
+  day_date           Date,
+  idx                UInt16,
+  aircraft_number    UInt32,
+  partseqno_i        UInt32,
+  group_by           UInt8,
+  status_id          UInt8,
+  repair_days        UInt16,
+  repair_time        UInt16,
+  assembly_time      UInt16,
+  partout_time       UInt16,
+  sne                UInt32,
+  ppr                UInt32,
+  ll                 UInt32,
+  oh                 UInt32,
+  br                 UInt32,
+  daily_today_u32    UInt32,
+  daily_next_u32     UInt32,
+  ops_ticket         UInt8,
+  intent_flag        UInt8,
+  active_trigger     UInt16,
+  assembly_trigger   UInt16,
+  partout_trigger    UInt8,
+  orig_status_id     UInt8,
+  orig_repair_days   UInt16,
+  orig_partout_trigger UInt8,
+  orig_assembly_trigger UInt16,
+  s4_derived_status_id  UInt8,
+  s4_derived_repair_days UInt16,
+  partout_trigger_mark   UInt8,
+  assembly_trigger_mark  UInt8
+)
+ENGINE = MergeTree
+PARTITION BY version_date
+ORDER BY (version_date, day_u16, aircraft_number, idx)
+```
+
+#### Постпроцессинг при экспорте
+- Производные статус/счётчик ремонта: если `active_trigger > 1` и `repair_time > 0`, то на диапазоне
+  `[start=active_trigger .. start+repair_time-1]` выставляется `s4_derived_status_id=4` и
+  `s4_derived_repair_days = (day_abs - start) + 1`. Поля `status_id`/`repair_days` в выдаче подменяются этими значениями,
+  а оригиналы сохраняются в `orig_status_id`/`orig_repair_days`.
+- Метки триггеров: `partout_trigger_mark = 1` ровно в день `active_trigger + partout_time - 1`;
+  `assembly_trigger_mark = 1` ровно в день `active_trigger + repair_time - assembly_time - 1`.
+- Поля `partout_trigger`/`assembly_trigger` в выдаче дублируют соответствующие метки (0/1) для удобства BI.
+
+#### CLI‑флаги экспорта (sim_master.py)
+- `--export-sim {on|off}`: включить/выключить экспорт (по умолчанию off)
+- `--export-sim-table=sim_results`: имя таблицы
+- `--export-batch=250000`: размер батча вставки
+- `--export-truncate`: TRUNCATE перед вставкой (для тестов)
+
+#### Производительность
+- Печатается время вставки `db_insert` (мс) наряду с `load_gpu`, `sim_gpu`, `cpu_log`.
+
+#### Известные ограничения (P1 на исправление)
+- В 10‑летнем прогоне выявлены нули в колонках `partout_time`, `assembly_trigger`, `partout_trigger`, `orig_partout_trigger`,
+  `s4_derived_status_id`, `s4_derived_repair_days`, `partout_trigger_mark`, `assembly_trigger_mark`. Заведена задача P1 в Tasktracker.
+
+### 2. Таблица прогнозов отказов
+— требует согласования архитектуры
 
 ## 🔄 Планируемый процесс Load (требует разработки)
 

@@ -85,6 +85,18 @@
 - [ ] Батч‑экспорт MP2 в ClickHouse после завершения цикла.
 - [ ] Проверить консистентность дат, квот, статусов.
 
+### P1 — Экспорт sim_results: нули в триггерных/derived полях (31-08-2025)
+- **Статус**: В процессе
+- **Описание**: В 10‑летнем прогоне в `sim_results` нулевые значения в: `partout_time`, `assembly_trigger`, `partout_trigger`, `orig_partout_trigger`, `s4_derived_status_id`, `s4_derived_repair_days`, `partout_trigger_mark`, `assembly_trigger_mark`.
+- **Гипотезы**:
+  1) Агентные переменные (`active_trigger`, `partout_time`) не заполнены для части агентов/дней → требуется fallback к MP1 и расчёт от `active_trigger`.
+  2) Ошибка off‑by‑one в вычислении дат (`day_abs` vs `D+1`) → перепроверить формулы интервалов и меток.
+  3) Очерёдность чтения `pop_after` перед экспортом и установка триггеров в RTC‑слоях.
+- **План проверки**:
+  - Выборочный экспорт 30‑дней с трассировкой `active_trigger/repair_time/partout_time/assembly_time` для агентов с `status_id∈{1,2,4}`.
+  - Сверка derived формул на 3 кейсах с известными датами.
+  - Повторный 10‑летний экспорт после фикса.
+
 ---
 
 ### Ключевые правила
