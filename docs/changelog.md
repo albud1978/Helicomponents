@@ -51,6 +51,21 @@
 
 ### Результаты
 - Прогон 185 суток: `timing_ms: load_gpu≈7996 ms, sim_gpu≈1122 ms, cpu_log≈680 ms`; суточные `prof_2to3` и переходы 3→2 логируются.
+
+## [31-08-2025] - Статус 1: квоты и триггеры; расширенные логи; прогоны 365/3650
+### Добавлено
+- В `model_build.py`: четвёртая фаза квотирования для статуса 1 (intent→approve→apply), буферы `mi8_approve_s1/mi17_approve_s1`.
+- Гейт допуска для статуса 1: участвует в квоте, если `(D+1) − version_date ≥ repair_time`.
+- Пост‑слой `rtc_status_1_post_quota`: при билете 1→2 с установкой `active_trigger := (D+1) − repair_time`, `assembly_trigger := (D+1) − assembly_time` (UInt16, дни от эпохи).
+- В `sim_master.py`: режим `--status12456-smoke-real` с расширенными логами переходов 1→2, 2→3, 3→2, 5→2 и таймингами.
+
+### Изменено
+- `rtc_quota_apply` учитывает approvals всех фаз (2, 3, 5, 1).
+- Документация `docs/GPU.md`: уточнены правила допуска и триггеры для статуса 1.
+
+### Результаты
+- 365 суток (`--status12456-smoke-real`): `cnt1 118→89, cnt2 154→164, cnt3 0→3, cnt4 7→17, cnt5 0→5, cnt6 0→1`; `totals_transitions: 2to3=25, 3to2=22, 5to2=7`; `timing_ms: load_gpu=346.24, sim_gpu=1913.35, cpu_log=427.69`.
+- 3650 суток (10 лет): `totals_transitions: 2to3=236, 3to2=234, 5to2=103`; `timing_ms: load_gpu=337.31, sim_gpu=21871.85, cpu_log=4869.53`.
 ## [30-08-2025] - Централизация билдера GPU и фикс group_by
 ### Добавлено
 - Фабрики сборки модели в `code/model_build.py`: `build_model_for_quota_smoke(frames_total, days_total)` и `build_model_full(...)`.
