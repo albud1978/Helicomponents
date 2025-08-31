@@ -73,6 +73,11 @@ def main():
     p.add_argument('--status246q-days', type=int, default=None, help='Сутки для status246q-smoke-real (если не указано, используется --status246-days)')
     p.add_argument('--status2-case-ac', type=int, default=0, help='Целевой aircraft_number для статус-2 кейса (диагностика LL/OH/BR)')
     p.add_argument('--status2-case-days', type=int, default=7, help='Сколько суток шагать в статус-2 кейсе (по умолчанию 7)')
+    # Экспорт результатов симуляции в ClickHouse
+    p.add_argument('--export-sim', choices=['on', 'off'], default='off', help='Экспортировать результаты симуляции в ClickHouse (по умолчанию off)')
+    p.add_argument('--export-sim-table', type=str, default='sim_results', help='Имя таблицы ClickHouse для экспорта (по умолчанию sim_results)')
+    p.add_argument('--export-batch', type=int, default=250000, help='Размер батча вставки (по умолчанию 250000)')
+    p.add_argument('--export-truncate', action='store_true', help='TRUNCATE таблицу перед экспортом (только для тестов)')
     a = p.parse_args()
     # CUDA_PATH fallback
     if not os.environ.get('CUDA_PATH'):
@@ -112,6 +117,140 @@ def main():
     mp4 = preload_mp4_by_day(client)
     # Подготовка Env Property/MacroProperty (MP1/MP3/MP4/MP5, скаляры)
     env_data = prepare_env_arrays(client)
+
+    # === Экспорт симуляции: подготовка DDL ===
+    def ensure_sim_results_table(_client, table_name: str) -> None:
+        ddl = f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+          version_date     UInt32,
+          version_id       UInt32,
+          version_date_date Date,
+          day_u16          UInt16,
+          day_abs          UInt32,
+          day_date         Date,
+          idx              UInt16,
+          aircraft_number  UInt32,
+          partseqno_i      UInt32,
+          group_by         UInt8,
+          status_id        UInt8,
+          repair_days      UInt16,
+          repair_time      UInt16,
+          assembly_time    UInt16,
+          partout_time     UInt16,
+          sne              UInt32,
+          ppr              UInt32,
+          ll               UInt32,
+          oh               UInt32,
+          br               UInt32,
+          daily_today_u32  UInt32,
+          daily_next_u32   UInt32,
+          ops_ticket       UInt8,
+          intent_flag      UInt8,
+          active_trigger   UInt16,
+          assembly_trigger UInt16,
+          partout_trigger  UInt8
+        )
+        ENGINE = MergeTree
+        PARTITION BY version_date
+        ORDER BY (version_date, day_u16, aircraft_number, idx)
+        """
+        _client.execute(ddl)
+        # Эволюция схемы: добавим недостающие столбцы, если таблица уже была создана раньше
+        try:
+            cols = {row[0] for row in _client.execute(f"DESCRIBE TABLE {table_name}")}
+            alters = []
+            if 'version_date_date' not in cols:
+                alters.append(f"ADD COLUMN version_date_date Date AFTER version_id")
+            if 'day_date' not in cols:
+                alters.append(f"ADD COLUMN day_date Date AFTER day_abs")
+            for stmt in alters:
+                _client.execute(f"ALTER TABLE {table_name} {stmt}")
+        except Exception as _e:
+            print(f"⚠️ Не удалось выполнить DESCRIBE/ALTER {table_name}: {_e}")
+
+    def export_day_snapshot(_client, table_name: str, version_date_u32: int, version_id_u32: int,
+                             day_idx: int, rows_src, pop_after, frames_total: int,
+                             idx_map_local, mp1_map_local, batch_buf: list) -> None:
+        day_u16 = int(day_idx)
+        if day_u16 < 0:
+            day_u16 = 0
+        if day_u16 > 65535:
+            day_u16 = 65535
+        day_abs = int(version_date_u32 + (day_idx + 1))
+        # Даты ClickHouse (Date) считаем от эпохи 1970-01-01
+        from datetime import date as _date, timedelta as _td
+        base_epoch = _date(1970, 1, 1)
+        version_date_date = base_epoch + _td(days=int(version_date_u32))
+        day_date = base_epoch + _td(days=int(day_abs))
+        K_loc = len(rows_src)
+        # Предзагружаем partout_time из MP1 по partseq
+        partseq_list = [int(rows_src[i][idx_map_local.get('partseqno_i', -1)] or 0) for i in range(K_loc)]
+        rt_cache = [0] * K_loc
+        pt_cache = [0] * K_loc
+        at_cache = [0] * K_loc
+        for i in range(K_loc):
+            ps = partseq_list[i]
+            tpl = mp1_map_local.get(ps, (0,0,0,0,0))
+            rt_cache[i] = int(tpl[2] or 0)
+            pt_cache[i] = int(tpl[3] or 0)
+            at_cache[i] = int(tpl[4] or 0)
+        # Собираем строки
+        for i in range(K_loc):
+            ag = pop_after[i]
+            idx_v = int(ag.getVariableUInt('idx'))
+            aircraft_v = int(ag.getVariableUInt('aircraft_number')) if 'aircraft_number' in dir(ag) else int(rows_src[i][idx_map_local.get('aircraft_number', -1)] or 0)
+            partseq_v = partseq_list[i]
+            group_v = int(ag.getVariableUInt('group_by'))
+            status_v = int(ag.getVariableUInt('status_id'))
+            repair_days_v = int(ag.getVariableUInt('repair_days'))
+            try:
+                repair_time_v = int(ag.getVariableUInt('repair_time'))
+            except Exception:
+                repair_time_v = rt_cache[i]
+            try:
+                assembly_time_v = int(ag.getVariableUInt('assembly_time'))
+            except Exception:
+                assembly_time_v = at_cache[i]
+            try:
+                partout_time_v = int(ag.getVariableUInt('partout_time'))
+            except Exception:
+                partout_time_v = pt_cache[i]
+            sne_v = int(ag.getVariableUInt('sne'))
+            ppr_v = int(ag.getVariableUInt('ppr'))
+            ll_v = int(ag.getVariableUInt('ll'))
+            oh_v = int(ag.getVariableUInt('oh'))
+            br_v = int(ag.getVariableUInt('br'))
+            dt_v = int(ag.getVariableUInt('daily_today_u32')) if 'daily_today_u32' in dir(ag) else 0
+            dn_v = int(ag.getVariableUInt('daily_next_u32')) if 'daily_next_u32' in dir(ag) else 0
+            ticket_v = int(ag.getVariableUInt('ops_ticket')) if 'ops_ticket' in dir(ag) else 0
+            intent_v = int(ag.getVariableUInt('intent_flag')) if 'intent_flag' in dir(ag) else 0
+            act_v = int(ag.getVariableUInt('active_trigger')) if 'active_trigger' in dir(ag) else 0
+            asm_v = int(ag.getVariableUInt('assembly_trigger')) if 'assembly_trigger' in dir(ag) else 0
+            part_tr_v = int(ag.getVariableUInt('partout_trigger')) if 'partout_trigger' in dir(ag) else 0
+            batch_buf.append((
+                int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
+                int(idx_v), int(aircraft_v), int(partseq_v), int(group_v), int(status_v),
+                int(repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
+                int(sne_v), int(ppr_v), int(ll_v), int(oh_v), int(br_v), int(dt_v), int(dn_v),
+                int(ticket_v), int(intent_v), int(act_v), int(asm_v), int(part_tr_v)
+            ))
+        # Вставляем при переполнении буфера — делается снаружи
+        return
+
+    def flush_export_buffer(_client, table_name: str, buf: list) -> float:
+        if not buf:
+            return 0.0
+        cols = (
+            "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,partseqno_i,group_by,status_id,"
+            "repair_days,repair_time,assembly_time,partout_time,sne,ppr,ll,oh,br,daily_today_u32,daily_next_u32,"
+            "ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger"
+        )
+        query = f"INSERT INTO {table_name} ({cols}) VALUES"
+        import time as _t
+        _t0 = _t.perf_counter()
+        _client.execute(query, buf)
+        buf.clear()
+        return (_t.perf_counter() - _t0)
 
     # === Status_4 smoke через фабрику ===
     if a.status4_smoke:
@@ -825,7 +964,7 @@ def main():
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         # Таймеры
-        t_load_s = t_gpu_s = t_cpu_s = 0.0
+        t_load_s = t_gpu_s = t_cpu_s = t_db_s = 0.0
         import time as _t
         t0 = _t.perf_counter()
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
@@ -937,6 +1076,19 @@ def main():
         cnt5_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 5)
         cnt6_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 6)
         steps = max(1, int(getattr(a, 'status12456_days', 7)))
+        # Экспорт симуляции
+        export_on = (getattr(a, 'export_sim', 'off') == 'on') if hasattr(a, 'export_sim') else False
+        export_table = getattr(a, 'export_sim_table', 'sim_results') if hasattr(a, 'export_sim_table') else 'sim_results'
+        export_batch = int(getattr(a, 'export_batch', 250000)) if hasattr(a, 'export_batch') else 250000
+        export_truncate = bool(getattr(a, 'export_truncate', False)) if hasattr(a, 'export_truncate') else False
+        export_buf: list = []
+        if export_on:
+            ensure_sim_results_table(client, export_table)
+            if export_truncate:
+                try:
+                    client.execute(f"TRUNCATE TABLE {export_table}")
+                except Exception as _e:
+                    print(f"⚠️ TRUNCATE {export_table} пропущен: {_e}")
         trans12_log: List[Tuple[str,int]] = []
         trans12_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans23_log: List[Tuple[str,int]] = []
@@ -970,6 +1122,10 @@ def main():
             t_acpu0 = _t.perf_counter()
             sim2.getPopulationData(pop_after)
             t_cpu_s += (_t.perf_counter() - t_acpu0)
+            if export_on:
+                export_day_snapshot(client, export_table, int(env_data['version_date_u16']), int(vid), d, rows, pop_after, FRAMES, idx_map, mp1_map, export_buf)
+                if len(export_buf) >= export_batch:
+                    t_db_s += flush_export_buffer(client, export_table, export_buf)
             for i in range(K):
                 sb = status_before[i]
                 sa = int(pop_after[i].getVariableUInt('status_id'))
@@ -1010,6 +1166,8 @@ def main():
                     br_v = int(pop_after[i].getVariableUInt('br'))
                     trans52_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
                     total_5to2 += 1
+        if export_on and export_buf:
+            t_db_s += flush_export_buffer(client, export_table, export_buf)
         after = pyflamegpu.AgentVector(a_desc)
         sim2.getPopulationData(after)
         cnt1_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 1)
@@ -1054,7 +1212,10 @@ def main():
         total_2to3 = len(trans23_log)
         total_3to2 = len(trans32_log)
         print(f"  totals_transitions: 2to3={total_2to3}, 3to2={total_3to2}, 5to2={total_5to2}")
-        print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}")
+        if export_on:
+            print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}, db_insert={t_db_s*1000:.2f}")
+        else:
+            print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}")
         return
 
     # === Целевой кейс status_2 для одного aircraft_number: дневная траектория ===
