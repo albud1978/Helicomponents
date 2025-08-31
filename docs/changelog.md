@@ -22,6 +22,23 @@
 - Вся популяция, 180 суток: `load_gpu≈301.55 ms, sim_gpu≈176.95 ms, cpu_log≈410.13 ms`.
 - Вся популяция, 365 суток: `load_gpu≈269.05 ms, sim_gpu≈350.27 ms, cpu_log≈796.78 ms`.
 - Кейс 22579, 30 суток: статус остаётся 2; `ppr` < `oh=213000`, `sne` < `ll=1080000`; при достижении OH с учётом `br=973750` ожидается 2→6.
+
+## [31-08-2025] - Квотирование в статусе 2: intent→approve→apply и пост‑квота 2→3
+### Добавлено
+- Интеграция квотирования в обработку `status_2` в `code/model_build.py`: намерение выставляется после проверок LL/OH/BR; добавлены `ops_ticket` и `intent_flag`.
+- Новый слой `rtc_status_2_post_quota`: перевод 2→3 для не получивших билет.
+- Очистка намерений вынесена в отдельный слой `rtc_quota_intent_clear` (исправление seatbelts «read + atomic write»).
+- Расширен вывод в `--status246-smoke-real`: дневная диагностика `quota_day{d}` c `seed8/seed17/approved8/approved17/left8/left17/prof_2to3`.
+- Добавлены CLI алиасы в `code/sim_master.py`: `--status246q-smoke-real`, `--status246q-days`.
+
+### Изменено
+- `sim_master.py`: вычисление `approved*` после шага по признакам `ops_ticket==1 && intent_flag==1` (корректное посуточное потребление квоты).
+- `group_by` в популяции строится из `mp3_group_by` или `ac_type_mask` (32→1, 64→2).
+
+### Результаты
+- Прогон 185 суток (`--status246-smoke-real --status246-days 185`):
+  - Суточные семена MP4 выдержаны; дефицит зафиксирован на D=180 (`prof_2to3=11`), остальные дни без дефицита при данных семенах.
+  - Сводка: `cnt2 154->135, cnt3 0->11, cnt4 7->0, cnt5=14, cnt6 0->1`, `timing_ms: load_gpu≈323 ms, sim_gpu≈342 ms, cpu_log≈534 ms`.
 ## [30-08-2025] - Централизация билдера GPU и фикс group_by
 ### Добавлено
 - Фабрики сборки модели в `code/model_build.py`: `build_model_for_quota_smoke(frames_total, days_total)` и `build_model_full(...)`.

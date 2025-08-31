@@ -65,6 +65,9 @@ def main():
     p.add_argument('--status2-days', type=int, default=7, help='Сколько суток шагать в status2-smoke-real (по умолчанию 7)')
     p.add_argument('--status246-smoke-real', action='store_true', help='Совместный слой 2/4/6: реальный smoke, шаги N, метрики')
     p.add_argument('--status246-days', type=int, default=7, help='Сколько суток шагать в status246-smoke-real (по умолчанию 7)')
+    # Алиасы для сценария с явной фиксацией квотирования в статусе 2
+    p.add_argument('--status246q-smoke-real', action='store_true', help='Алиас status246-smoke-real с квотированием в статусе 2 (intent→approve→apply)')
+    p.add_argument('--status246q-days', type=int, default=None, help='Сутки для status246q-smoke-real (если не указано, используется --status246-days)')
     p.add_argument('--status2-case-ac', type=int, default=0, help='Целевой aircraft_number для статус-2 кейса (диагностика LL/OH/BR)')
     p.add_argument('--status2-case-days', type=int, default=7, help='Сколько суток шагать в статус-2 кейсе (по умолчанию 7)')
     a = p.parse_args()
@@ -417,7 +420,7 @@ def main():
         return
 
     # === Совместный слой 2/4/6 (REAL) ===
-    if a.status246_smoke_real:
+    if a.status246_smoke_real or getattr(a, 'status246q_smoke_real', False):
         FRAMES = int(env_data['frames_total_u16'])
         DAYS = int(env_data['days_total_u16'])
         os.environ['HL_STATUS246_SMOKE'] = '1'
@@ -537,7 +540,14 @@ def main():
         cnt3_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 3)
         cnt4_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 4)
         cnt6_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 6)
-        steps = max(1, int(a.status246_days))
+        # Поддержка алиаса --status246q-* с отдельным параметром дней
+        steps_cfg = int(a.status246_days)
+        if getattr(a, 'status246q_smoke_real', False) and getattr(a, 'status246q_days', None):
+            try:
+                steps_cfg = int(a.status246q_days)
+            except Exception:
+                steps_cfg = int(a.status246_days)
+        steps = max(1, steps_cfg)
         # Посуточные метрики
         per_day_dt_totals: List[int] = []
         per_day_trans_24: List[int] = []

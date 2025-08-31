@@ -40,6 +40,19 @@
   - 180 суток: `load_gpu≈301.6 ms, sim_gpu≈177.0 ms, cpu_log≈410.1 ms`.
   - 365 суток: `load_gpu≈269.1 ms, sim_gpu≈350.3 ms, cpu_log≈796.8 ms`.
 - Кейс `22579` (30 суток): статус остаётся 2; `ppr` < `oh`, `sne` < `ll`; при достижении OH с учётом `br` ожидается ветка 2→6 (неремонтопригоден).
+- Зафиксирована интеграция квотирования в статус 2 по детерминированному паттерну intent → approve → apply без атомик и пост‑квотный шаг 2→3:
+  - В `rtc_status_2` намерение (`intent`) выставляется только для агентов со `status_id=2` и только ПОСЛЕ проверок LL/OH/BR.
+  - `rtc_quota_approve_manager` (менеджер, `idx==0`) в отдельном слое назначает approvals по `mp4_ops_counter_*[D+1]`.
+  - `rtc_quota_apply` применяет approvals в агенте через `ops_ticket=1`.
+  - `rtc_quota_intent_clear` в отдельном слое обнуляет `mi8_intent/mi17_intent` для исключения смешанных read/atomic write в одном слое (требование seatbelts).
+  - `rtc_status_2_post_quota` переводит 2→3 агентов без полученного `ops_ticket`.
+  - Подтверждён дневной характер квоты: `approved` считается ПОСЛЕ шага по признакам `ops_ticket==1 && intent_flag==1` в текущие сутки; остаток выводится как `left8/left17`.
+  - Итоговый прогон 185 суток: пик дефицита зафиксирован на D=180 (`prof_2to3=11`), на остальном горизонте дефицит/излишек соответствует семенам MP4.
+
+#### CLI алиасы
+- В `code/sim_master.py` добавлены алиасы для запуска сценария совместного слоя с квотированием в статусе 2:
+  - `--status246q-smoke-real` — алиас `--status246-smoke-real`.
+  - `--status246q-days N` — количество суток (если не задан, используется `--status246-days`).
 
 ## Переменные
 - Агент (минимально необходимый состав):
@@ -150,7 +163,11 @@
 | 1 (init) | agent_init + init_quota | MP3 (агенты); MP6 (квоты) | Создание популяции; `ops_ticket := 0`; квоты берутся из MP6[D+1] при обращении | Статус из MP3 |
 | 2 (L1, status_id=6) | `rtc_status_6` | — | Пасс‑тру; без начислений | Остаётся 6; без сайд‑эффектов |
 | 2 (L1, status_id=4) | `rtc_status_4` | MP1: `repair_time` | `repair_days := repair_days + 1`; если `repair_days >= repair_time` → `status_id := 5; ppr := 0; repair_days := 0` | Либо остаётся 4, либо 4→5 |
-| 2 (L1, status_id=2) | `rtc_status_2` | MP5: `daily_hours` → `dt, dn` по линейной индексации; MP3/MP1: `ll, oh, br, partout_time, assembly_time, repair_time`; Env: MP6 (`mp6_quota_mi8/mi17`) | `sne += dt; ppr += dt`; LL/OH на D+1; при `dt>0` — попытка квоты D+1 по типу через `old = atomicSub(mp6_quota_type[D+1], 1)` | Остаётся 2 или 2→4/6/3; триггеры при 2→4 |
+| 2 (L1, status_id=2) | `rtc_status_2` | MP5: `daily_hours` → `dt, dn` по линейной индексации; MP3/MP1: `ll, oh, br`; Env: MP4 (`ops_counter_*`) | `sne += dt; ppr += dt`; СНАЧАЛА LL/OH с учётом BR; иначе — фиксируется `intent[type][idx] = 1` и `intent_flag=1` | Остаётся 2 или 2→4/6 |
+| 2a | `rtc_quota_approve_manager` | MP4: `ops_counter_*[D+1]`; MacroProperty `mi8_intent/mi17_intent` | Менеджер (`idx==0`) присваивает approvals первым N по idx согласно семенам | — |
+| 2b | `rtc_quota_apply` | MacroProperty `mi8_approve/mi17_approve` | Агенты применяют разрешение: `ops_ticket=1` | — |
+| 2c | `rtc_quota_intent_clear` | MacroProperty `mi8_intent/mi17_intent` | Очистка intent после apply в отдельном слое (seatbelts) | — |
+| 2d (post-quota) | `rtc_status_2_post_quota` | — | Если агент остался в 2 и `ops_ticket==0` → 2→3 | 2→3 |
 | 3 (L2, status_id=3) | `rtc_status_3` | Env: MP6 (`mp6_quota_mi8/mi17`) | По `ac_type_mask` выбрать тип; `old = atomicSub(mp6_quota_type[D+1], 1)`; если `old>0` → 3→2 | Без изменений триггеров |
 | 4 (L3, status_id=5) | `rtc_status_5` | Env: MP6 (`mp6_quota_mi8/mi17`) | Аналогично статусу 3 | Без изменений триггеров |
 | 5 (L4, status_id=1) | `rtc_status_1` | Env: MP6 (`mp6_quota_mi8/mi17`); MP1: `repair_time`, `assembly_time` | Формула допуска и 1→2 при квоте; `active_trigger := D − repair_time`, `assembly_trigger := D − assembly_time` | 1→2 |
