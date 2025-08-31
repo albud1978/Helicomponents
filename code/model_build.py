@@ -94,9 +94,9 @@ class HeliSimModel:
         self.agent = agent
         for name in [
             "idx","psn","partseqno_i","group_by","aircraft_number","ac_type_mask",
-            "mfg_date","status_id","repair_days","repair_time","assembly_time","ppr","sne",
+            "mfg_date","status_id","repair_days","repair_time","assembly_time","partout_time","ppr","sne",
             "ll","oh","br","daily_today_u32","daily_next_u32","ops_ticket","quota_left","intent_flag",
-            "active_trigger","assembly_trigger"
+            "active_trigger","assembly_trigger","partout_trigger"
         ]:
             agent.newVariableUInt(name, 0)
 
@@ -328,6 +328,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("repair_days", 0)
     agent.newVariableUInt("repair_time", 0)
     agent.newVariableUInt("assembly_time", 0)
+    agent.newVariableUInt("partout_time", 0)
     agent.newVariableUInt("sne", 0)
     agent.newVariableUInt("ppr", 0)
     # Для status_2 логики (LL/OH/BR пороги)
@@ -339,6 +340,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("intent_flag", 0)
     agent.newVariableUInt("active_trigger", 0)
     agent.newVariableUInt("assembly_trigger", 0)
+    agent.newVariableUInt("partout_trigger", 0)
 
     # RTC: intent
     rtc_intent = f"""
@@ -540,6 +542,16 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         unsigned int d = FLAMEGPU->getVariable<unsigned int>("repair_days") + 1u;
         FLAMEGPU->setVariable<unsigned int>("repair_days", d);
         const unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
+        const unsigned int pt = FLAMEGPU->getVariable<unsigned int>("partout_time");
+        const unsigned int at = FLAMEGPU->getVariable<unsigned int>("assembly_time");
+        // Триггеры: флаги 0/1
+        if (d == pt) {{
+            FLAMEGPU->setVariable<unsigned int>("partout_trigger", 1u);
+        }}
+        if ((rt > d ? (rt - d) : 0u) == at) {{
+            FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 1u);
+        }}
+        // Завершение ремонта: 4 -> 5
         if (d >= rt) {{
             FLAMEGPU->setVariable<unsigned int>("status_id", 5u);
             FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
