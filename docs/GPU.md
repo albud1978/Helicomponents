@@ -49,6 +49,14 @@
   - Подтверждён дневной характер квоты: `approved` считается ПОСЛЕ шага по признакам `ops_ticket==1 && intent_flag==1` в текущие сутки; остаток выводится как `left8/left17`.
   - Итоговый прогон 185 суток: пик дефицита зафиксирован на D=180 (`prof_2to3=11`), на остальном горизонте дефицит/излишек соответствует семенам MP4.
 
+### Примечание об обновлении (31-08-2025) — экспорт в ClickHouse (sim_results)
+- Экспорт ежедневных снимков в таблицу `sim_results` выполняется на host с постпроцессингом для аналитики (без влияния на состояние GPU):
+  - Производные поля статуса ремонта: `s4_derived_status_id=4` и `s4_derived_repair_days = (day_abs − active_trigger) + 1` на интервале `[active_trigger .. active_trigger + repair_time − 1]` при `active_trigger>1`.
+  - Метки триггеров: `partout_trigger_mark=1` в день `active_trigger + partout_time − 1`; `assembly_trigger_mark=1` в день `active_trigger + repair_time − assembly_time − 1`.
+  - Для удобства BI в экспортируемых данных поля `status_id`/`repair_days` заменяются производными значениями на этом интервале; исходные сохраняются в `orig_status_id`/`orig_repair_days`. Аналогично `partout_trigger`/`assembly_trigger` в экспорте соответствуют меткам (0/1), а исходные — в `orig_partout_trigger`/`orig_assembly_trigger`.
+  - Типы дат: в экспорт добавлены `Date`‑колонки `version_date_date` и `day_date` для фильтрации.
+- Известная проблема (P1): в 10‑летнем прогоне часть триггерных/derived полей (`partout_time`, `assembly_trigger`, `partout_trigger`, `orig_partout_trigger`, `s4_derived_*`, `*_mark`) заполняется нулями; заведена задача на расследование и исправление.
+
 ### Примечание об обновлении (31-08-2025) — вторая фаза квот для статуса 3
 - Добавлена последовательная обработка статуса 3 на остатке квоты после статуса 2 (во втором блоке intent→approve→apply):
   - Порядок слоёв в сутках: {6→4→2} → intent/approve/apply(2) → intent/approve/apply(3) → пост‑слои 3→2, затем 2→3.

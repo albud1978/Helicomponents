@@ -66,6 +66,25 @@
 ### Результаты
 - 365 суток (`--status12456-smoke-real`): `cnt1 118→89, cnt2 154→164, cnt3 0→3, cnt4 7→17, cnt5 0→5, cnt6 0→1`; `totals_transitions: 2to3=25, 3to2=22, 5to2=7`; `timing_ms: load_gpu=346.24, sim_gpu=1913.35, cpu_log=427.69`.
 - 3650 суток (10 лет): `totals_transitions: 2to3=236, 3to2=234, 5to2=103`; `timing_ms: load_gpu=337.31, sim_gpu=21871.85, cpu_log=4869.53`.
+
+## [31-08-2025] - Экспорт симуляции в ClickHouse: sim_results, постпроцессинг и тайминги
+### Добавлено
+- Экспорт дневных снимков состояния агентов в таблицу ClickHouse `sim_results` с бакетизацией вставок (по умолчанию `--export-batch 250000`).
+- Поля дат `version_date_date` и `day_date` типа `Date` для удобной фильтрации по датам.
+- Постпроцессинг при экспорте: вывод производных полей `s4_derived_status_id`, `s4_derived_repair_days`, а также меток `partout_trigger_mark`, `assembly_trigger_mark` по формулам из `active_trigger`, `repair_time`, `partout_time`, `assembly_time`.
+- Сохранение оригинальных значений полей в `orig_*` колонках: `orig_status_id`, `orig_repair_days`, `orig_partout_trigger`, `orig_assembly_trigger`.
+- CLI-флаги в `code/sim_master.py` для управления экспортом: `--export-sim {on|off}`, `--export-sim-table`, `--export-batch`, `--export-truncate` (очистка таблицы для тестов).
+- Тайминг вставки в БД: метрика `db_insert` (мс) в итоговом выводе.
+
+### Изменено
+- DDL `sim_results` эволюционирует автоматически: при отсутствии новых полей выполняется `ALTER TABLE ... ADD COLUMN` перед вставками.
+- В экспортируемых строках модифицируются поля `status_id`, `repair_days`, `partout_trigger`, `assembly_trigger` по производной логике статуса 4 (не влияя на состояние GPU): оригинальные значения сохраняются в `orig_*`.
+
+### Исправлено
+- Консистентное заполнение `repair_time` в экспортируемых данных: берётся из переменной агента; при отсутствии — из MP1.
+
+### Известные проблемы
+- В выгрузке обнаружены нули для части колонок (`partout_time`, `assembly_trigger`, `partout_trigger`, `orig_partout_trigger`, `s4_derived_status_id`, `s4_derived_repair_days`, `partout_trigger_mark`, `assembly_trigger_mark`) на 10‑летнем прогоне; заведена P1‑задача в Tasktracker на расследование и исправление.
 ## [30-08-2025] - Централизация билдера GPU и фикс group_by
 ### Добавлено
 - Фабрики сборки модели в `code/model_build.py`: `build_model_for_quota_smoke(frames_total, days_total)` и `build_model_full(...)`.
