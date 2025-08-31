@@ -301,6 +301,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Буферы остатка квоты не требуются: остаток вычисляется во второй фазе как seed - used
     env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * DAYS)
     env.newPropertyArrayUInt32("mp4_ops_counter_mi17", [0] * DAYS)
+    # MP3 производственные даты (ord days) по кадрам для приоритизации 1→2
+    env.newPropertyArrayUInt32("mp3_mfg_date_days", [0] * FRAMES)
     # Буферы менеджера квот (по кадрам)
     env.newMacroPropertyUInt32("mi8_intent", FRAMES)
     env.newMacroPropertyUInt32("mi17_intent", FRAMES)
@@ -730,8 +732,42 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         for (unsigned int k=0u;k<FRAMES;++k) {{ if (a8[k] || a8b[k] || a8c[k]) ++used8; if (a17[k] || a17b[k] || a17c[k]) ++used17; }}
         unsigned int left8 = (seed8 > used8 ? (seed8 - used8) : 0u);
         unsigned int left17 = (seed17 > used17 ? (seed17 - used17) : 0u);
-        for (unsigned int k=0u;k<FRAMES && left8>0u;++k) {{ if (i8[k]) {{ a8d[k].exchange(1u); --left8; }} }}
-        for (unsigned int k=0u;k<FRAMES && left17>0u;++k) {{ if (i17[k]) {{ a17d[k].exchange(1u); --left17; }} }}
+        // Приоритет: самые молодые по mfg_date (больший ordinal день)
+        if (left8 > 0u) {{
+            // Локальная отметка выбранных индексов, чтобы не читать/писать approve повторно
+            bool picked8[FRAMES];
+            for (unsigned int k=0u;k<FRAMES;++k) picked8[k] = false;
+            while (left8 > 0u) {{
+                unsigned int best_idx = FRAMES;
+                unsigned int best_mfg = 0u;
+                for (unsigned int k=0u;k<FRAMES;++k) {{
+                    if (picked8[k]) continue;
+                    if (i8[k]) {{
+                        const unsigned int mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", k);
+                        if (mfg >= best_mfg) {{ best_mfg = mfg; best_idx = k; }}
+                    }}
+                }}
+                if (best_idx < FRAMES) {{ a8d[best_idx].exchange(1u); picked8[best_idx] = true; --left8; }}
+                else break;
+            }}
+        }}
+        if (left17 > 0u) {{
+            bool picked17[FRAMES];
+            for (unsigned int k=0u;k<FRAMES;++k) picked17[k] = false;
+            while (left17 > 0u) {{
+                unsigned int best_idx = FRAMES;
+                unsigned int best_mfg = 0u;
+                for (unsigned int k=0u;k<FRAMES;++k) {{
+                    if (picked17[k]) continue;
+                    if (i17[k]) {{
+                        const unsigned int mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", k);
+                        if (mfg >= best_mfg) {{ best_mfg = mfg; best_idx = k; }}
+                    }}
+                }}
+                if (best_idx < FRAMES) {{ a17d[best_idx].exchange(1u); picked17[best_idx] = true; --left17; }}
+                else break;
+            }}
+        }}
         return flamegpu::ALIVE;
     }}
     """
