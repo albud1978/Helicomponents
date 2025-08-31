@@ -171,6 +171,12 @@ def main():
             partseq = int(r[idx_map['partseqno_i']] or 0) if 'partseqno_i' in idx_map else 0
             rt = mp1_map.get(partseq, (0,0,0,0,0))[2]
             av[i].setVariableUInt("repair_time", int(rt or 0))
+            pt = mp1_map.get(partseq, (0,0,0,0,0))[3]
+            at = mp1_map.get(partseq, (0,0,0,0,0))[4]
+            av[i].setVariableUInt("partout_time", int(pt or 0))
+            av[i].setVariableUInt("assembly_time", int(at or 0))
+            av[i].setVariableUInt("partout_trigger", 0)
+            av[i].setVariableUInt("assembly_trigger", 0)
             av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
         sim2.setPopulationData(av)
         # Before
@@ -246,9 +252,11 @@ def main():
             av[i].setVariableUInt("status_id", 6)
             av[i].setVariableUInt("repair_days", int(r[idx_map['repair_days']] or 0))
             av[i].setVariableUInt("repair_time", 0)
+            av[i].setVariableUInt("partout_time", 0)
+            av[i].setVariableUInt("assembly_time", 0)
+            av[i].setVariableUInt("partout_trigger", 0)
+            av[i].setVariableUInt("assembly_trigger", 0)
             av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
-            av[i].setVariableUInt("daily_today_u32", 0)
-            av[i].setVariableUInt("daily_next_u32", 0)
         sim2.setPopulationData(av)
         before = pyflamegpu.AgentVector(a_desc)
         sim2.getPopulationData(before)
@@ -296,6 +304,12 @@ def main():
             partseq = int(r[idx_map['partseqno_i']] or 0) if 'partseqno_i' in idx_map else 0
             rt = mp1_map.get(partseq, (0,0,0,0,0))[2]
             av[i].setVariableUInt("repair_time", int(rt or 0))
+            pt = mp1_map.get(partseq, (0,0,0,0,0))[3]
+            at = mp1_map.get(partseq, (0,0,0,0,0))[4]
+            av[i].setVariableUInt("partout_time", int(pt or 0))
+            av[i].setVariableUInt("assembly_time", int(at or 0))
+            av[i].setVariableUInt("partout_trigger", 0)
+            av[i].setVariableUInt("assembly_trigger", 0)
             av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
         for j, r in enumerate(s6_rows):
             i = K4 + j
@@ -304,6 +318,10 @@ def main():
             av[i].setVariableUInt("status_id", 6)
             av[i].setVariableUInt("repair_days", int(r[idx_map['repair_days']] or 0))
             av[i].setVariableUInt("repair_time", 0)
+            av[i].setVariableUInt("partout_time", 0)
+            av[i].setVariableUInt("assembly_time", 0)
+            av[i].setVariableUInt("partout_trigger", 0)
+            av[i].setVariableUInt("assembly_trigger", 0)
             av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
         sim2.setPopulationData(av)
         # Гистограмма repair_time по 4 и инварианты для 6
