@@ -96,7 +96,9 @@ class HeliSimModel:
             "idx","psn","partseqno_i","group_by","aircraft_number","ac_type_mask",
             "mfg_date","status_id","repair_days","repair_time","assembly_time","partout_time","ppr","sne",
             "ll","oh","br","daily_today_u32","daily_next_u32","ops_ticket","quota_left","intent_flag",
-            "active_trigger","assembly_trigger","partout_trigger"
+            "active_trigger","assembly_trigger","partout_trigger",
+            # Однодневные маркеры событий (0/1)
+            "active_trigger_mark","assembly_trigger_mark","partout_trigger_mark"
         ]:
             agent.newVariableUInt(name, 0)
 
@@ -343,6 +345,10 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("active_trigger", 0)
     agent.newVariableUInt("assembly_trigger", 0)
     agent.newVariableUInt("partout_trigger", 0)
+    # Однодневные маркеры событий
+    agent.newVariableUInt("active_trigger_mark", 0)
+    agent.newVariableUInt("assembly_trigger_mark", 0)
+    agent.newVariableUInt("partout_trigger_mark", 0)
 
     # RTC: intent
     rtc_intent = f"""
@@ -546,12 +552,24 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         const unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
         const unsigned int pt = FLAMEGPU->getVariable<unsigned int>("partout_time");
         const unsigned int at = FLAMEGPU->getVariable<unsigned int>("assembly_time");
-        // Триггеры: флаги 0/1
+        // Абсолютная дата дня
+        const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int vdate = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
+        const unsigned int day_abs = vdate + (day + 1u);
+        // Однократные события: флаг выставляется только в день события, дата записывается один раз
         if (d == pt) {{
-            FLAMEGPU->setVariable<unsigned int>("partout_trigger", 1u);
+            if (FLAMEGPU->getVariable<unsigned int>("partout_trigger") == 0u) {{
+                FLAMEGPU->setVariable<unsigned int>("partout_trigger", 1u);
+            }}
+            FLAMEGPU->setVariable<unsigned int>("partout_trigger_mark", 1u);
         }}
         if ((rt > d ? (rt - d) : 0u) == at) {{
-            FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 1u);
+            if (FLAMEGPU->getVariable<unsigned int>("assembly_trigger") == 0u) {{
+                unsigned int asm_date = day_abs;
+                if (asm_date > 65535u) asm_date = 65535u;
+                FLAMEGPU->setVariable<unsigned int>("assembly_trigger", asm_date);
+            }}
+            FLAMEGPU->setVariable<unsigned int>("assembly_trigger_mark", 1u);
         }}
         // Завершение ремонта: 4 -> 5
         if (d >= rt) {{
@@ -635,6 +653,14 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         // Сбрасываем билет допуска на новый цикл и флаг intent диагностики
         FLAMEGPU->setVariable<unsigned int>("ops_ticket", 0u);
         FLAMEGPU->setVariable<unsigned int>("intent_flag", 0u);
+        // Сброс суточных маркеров событий
+        FLAMEGPU->setVariable<unsigned int>("active_trigger_mark", 0u);
+        FLAMEGPU->setVariable<unsigned int>("assembly_trigger_mark", 0u);
+        FLAMEGPU->setVariable<unsigned int>("partout_trigger_mark", 0u);
+        // Однодневные значения событий — обнуляем на начало суток
+        FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
+        FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 0u);
+        FLAMEGPU->setVariable<unsigned int>("partout_trigger", 0u);
         return flamegpu::ALIVE;
     }
     """
@@ -787,13 +813,12 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
             const unsigned int vdate = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
             const unsigned int dayp1_abs = vdate + (day + 1u);
             const unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
-            const unsigned int at = FLAMEGPU->getVariable<unsigned int>("assembly_time");
             unsigned int act = (dayp1_abs > rt ? (dayp1_abs - rt) : 0u);
-            unsigned int asm_tr = (dayp1_abs > at ? (dayp1_abs - at) : 0u);
             if (act > 65535u) act = 65535u;
-            if (asm_tr > 65535u) asm_tr = 65535u;
-            FLAMEGPU->setVariable<unsigned int>("active_trigger", act);
-            FLAMEGPU->setVariable<unsigned int>("assembly_trigger", asm_tr);
+            if (FLAMEGPU->getVariable<unsigned int>("active_trigger") == 0u && act > 0u) {
+                FLAMEGPU->setVariable<unsigned int>("active_trigger", act);
+                FLAMEGPU->setVariable<unsigned int>("active_trigger_mark", 1u);
+            }
             FLAMEGPU->setVariable<unsigned int>("status_id", 2u);
         }
         return flamegpu::ALIVE;

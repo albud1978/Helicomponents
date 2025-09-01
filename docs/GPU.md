@@ -57,6 +57,22 @@
   - Типы дат: в экспорт добавлены `Date`‑колонки `version_date_date` и `day_date` для фильтрации.
 - Известная проблема (P1): в 10‑летнем прогоне часть триггерных/derived полей (`partout_time`, `assembly_trigger`, `partout_trigger`, `orig_partout_trigger`, `s4_derived_*`, `*_mark`) заполняется нулями; заведена задача на расследование и исправление.
 
+### Примечание об обновлении (01-09-2025) — триггеры «один день» и минимальный экспорт
+- Однодневность триггеров обеспечивается двумя правилами на GPU:
+  1) На начале каждого дня обнуляются `active_trigger_mark/assembly_trigger_mark/partout_trigger_mark` и значения `active_trigger/assembly_trigger/partout_trigger` (RTC `rtc_quota_begin_day`).
+  2) Установка дат выполняется ровно в день события и только при нуле текущего значения (guard `==0`):
+     - `active_trigger` — в пост‑слое статуса 1 при 1→2: `active_trigger := (D+1) − repair_time`; метка `active_trigger_mark := 1`.
+     - `assembly_trigger` — в `rtc_status_4` в день сборки: дата текущего дня, метка `assembly_trigger_mark := 1`.
+     - `partout_trigger` — в `rtc_status_4` в день снятия: значение 1 (флаг), метка `partout_trigger_mark := 1`.
+- В `sim_master.py` добавлен режим экспорта `--export-triggers-only`: вставляются только ключи даты/идентификации и триггеры; derived/метки не считаются на host. Используется для отладки триггеров и подготовки к переносу постпроцессинга на GPU.
+
+### План переноса постпроцессинга на GPU
+- Добавить RTC‑ядро `rtc_export_gather` после завершения всех слоёв суток:
+  - На вход: `active_trigger`, `repair_time`, `partout_time`, `assembly_time`, `status_id`, `repair_days`.
+  - Вычислить: `s4_derived_status_id`, `s4_derived_repair_days`, `partout_trigger_mark`, `assembly_trigger_mark` по текущим формулам.
+  - Записать результаты в SoA‑структуру (MP2) с индексом `row = day * frames_total + idx`.
+- Экспорт на host сводится к чтению MP2 и батч‑вставке — без вычислений.
+
 ### Примечание об обновлении (31-08-2025) — вторая фаза квот для статуса 3
 - Добавлена последовательная обработка статуса 3 на остатке квоты после статуса 2 (во втором блоке intent→approve→apply):
   - Порядок слоёв в сутках: {6→4→2} → intent/approve/apply(2) → intent/approve/apply(3) → пост‑слои 3→2, затем 2→3.

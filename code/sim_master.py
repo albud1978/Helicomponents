@@ -78,6 +78,7 @@ def main():
     p.add_argument('--export-sim-table', type=str, default='sim_results', help='Имя таблицы ClickHouse для экспорта (по умолчанию sim_results)')
     p.add_argument('--export-batch', type=int, default=250000, help='Размер батча вставки (по умолчанию 250000)')
     p.add_argument('--export-truncate', action='store_true', help='TRUNCATE таблицу перед экспортом (только для тестов)')
+    p.add_argument('--export-triggers-only', action='store_true', help='Экспортировать только триггеры (active/assembly/partout) и ключи даты/идентификации')
     a = p.parse_args()
     # CUDA_PATH fallback
     if not os.environ.get('CUDA_PATH'):
@@ -194,7 +195,7 @@ def main():
 
     def export_day_snapshot(_client, table_name: str, version_date_u32: int, version_id_u32: int,
                              day_idx: int, rows_src, pop_after, frames_total: int,
-                             idx_map_local, mp1_map_local, batch_buf: list) -> None:
+                             idx_map_local, mp1_map_local, batch_buf: list, triggers_only: bool=False) -> None:
         day_u16 = int(day_idx)
         if day_u16 < 0:
             day_u16 = 0
@@ -300,28 +301,38 @@ def main():
                 exp_repair_days_v = int(s4_der_rd)
             exp_part_tr_v = 1 if part_mark == 1 else 0
             exp_asm_v = 1 if asm_mark == 1 else 0
-            batch_buf.append((
-                int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
-                int(idx_v), int(aircraft_v), int(partseq_v), int(group_v), int(exp_status_v),
-                int(exp_repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
-                int(sne_v), int(ppr_v), int(ll_v), int(oh_v), int(br_v), int(dt_v), int(dn_v),
-                int(ticket_v), int(intent_v), int(act_v), int(exp_asm_v), int(exp_part_tr_v),
-                int(orig_status_v), int(orig_repair_days_v), int(part_tr_v), int(asm_v),
-                int(s4_der_status), int(s4_der_rd), int(part_mark), int(asm_mark)
-            ))
+            if triggers_only:
+                # Минимальный набор колонок: ключи + триггеры, остальное по умолчанию
+                batch_buf.append((
+                    int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
+                    int(idx_v), int(aircraft_v), int(act_v), int(asm_v), int(part_tr_v)
+                ))
+            else:
+                batch_buf.append((
+                    int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
+                    int(idx_v), int(aircraft_v), int(partseq_v), int(group_v), int(exp_status_v),
+                    int(exp_repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
+                    int(sne_v), int(ppr_v), int(ll_v), int(oh_v), int(br_v), int(dt_v), int(dn_v),
+                    int(ticket_v), int(intent_v), int(act_v), int(exp_asm_v), int(exp_part_tr_v),
+                    int(orig_status_v), int(orig_repair_days_v), int(part_tr_v), int(asm_v),
+                    int(s4_der_status), int(s4_der_rd), int(part_mark), int(asm_mark)
+                ))
         # Вставляем при переполнении буфера — делается снаружи
         return
 
-    def flush_export_buffer(_client, table_name: str, buf: list) -> float:
+    def flush_export_buffer(_client, table_name: str, buf: list, columns_override: str | None = None) -> float:
         if not buf:
             return 0.0
-        cols = (
-            "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,partseqno_i,group_by,status_id,"
-            "repair_days,repair_time,assembly_time,partout_time,sne,ppr,ll,oh,br,daily_today_u32,daily_next_u32,"
-            "ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger,"
-            "orig_status_id,orig_repair_days,orig_partout_trigger,orig_assembly_trigger,"
-            "s4_derived_status_id,s4_derived_repair_days,partout_trigger_mark,assembly_trigger_mark"
-        )
+        if columns_override is not None:
+            cols = columns_override
+        else:
+            cols = (
+                "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,partseqno_i,group_by,status_id,"
+                "repair_days,repair_time,assembly_time,partout_time,sne,ppr,ll,oh,br,daily_today_u32,daily_next_u32,"
+                "ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger,"
+                "orig_status_id,orig_repair_days,orig_partout_trigger,orig_assembly_trigger,"
+                "s4_derived_status_id,s4_derived_repair_days,partout_trigger_mark,assembly_trigger_mark"
+            )
         query = f"INSERT INTO {table_name} ({cols}) VALUES"
         import time as _t
         _t0 = _t.perf_counter()
@@ -1158,6 +1169,7 @@ def main():
         export_table = getattr(a, 'export_sim_table', 'sim_results') if hasattr(a, 'export_sim_table') else 'sim_results'
         export_batch = int(getattr(a, 'export_batch', 250000)) if hasattr(a, 'export_batch') else 250000
         export_truncate = bool(getattr(a, 'export_truncate', False)) if hasattr(a, 'export_truncate') else False
+        export_triggers_only = bool(getattr(a, 'export_triggers_only', False)) if hasattr(a, 'export_triggers_only') else False
         export_buf: list = []
         if export_on:
             ensure_sim_results_table(client, export_table)
@@ -1200,9 +1212,17 @@ def main():
             sim2.getPopulationData(pop_after)
             t_cpu_s += (_t.perf_counter() - t_acpu0)
             if export_on:
-                export_day_snapshot(client, export_table, int(env_data['version_date_u16']), int(vid), d, rows, pop_after, FRAMES, idx_map, mp1_map, export_buf)
+                export_day_snapshot(
+                    client, export_table, int(env_data['version_date_u16']), int(vid), d,
+                    rows, pop_after, FRAMES, idx_map, mp1_map, export_buf,
+                    triggers_only=export_triggers_only
+                )
                 if len(export_buf) >= export_batch:
-                    t_db_s += flush_export_buffer(client, export_table, export_buf)
+                    if export_triggers_only:
+                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                        t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                    else:
+                        t_db_s += flush_export_buffer(client, export_table, export_buf)
             for i in range(K):
                 sb = status_before[i]
                 sa = int(pop_after[i].getVariableUInt('status_id'))
@@ -1244,7 +1264,11 @@ def main():
                     trans52_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
                     total_5to2 += 1
         if export_on and export_buf:
-            t_db_s += flush_export_buffer(client, export_table, export_buf)
+            if export_triggers_only:
+                cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+            else:
+                t_db_s += flush_export_buffer(client, export_table, export_buf)
         after = pyflamegpu.AgentVector(a_desc)
         sim2.getPopulationData(after)
         cnt1_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 1)
