@@ -96,7 +96,7 @@ class HeliSimModel:
             "idx","psn","partseqno_i","group_by","aircraft_number","ac_type_mask",
             "mfg_date","status_id","repair_days","repair_time","assembly_time","partout_time","ppr","sne",
             "ll","oh","br","daily_today_u32","daily_next_u32","ops_ticket","quota_left","intent_flag",
-            "active_trigger","assembly_trigger","partout_trigger"
+            "active_trigger","assembly_trigger","partout_trigger","s6_days","s6_started"
         ]:
             agent.newVariableUInt(name, 0)
 
@@ -331,6 +331,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("repair_time", 0)
     agent.newVariableUInt("assembly_time", 0)
     agent.newVariableUInt("partout_time", 0)
+    agent.newVariableUInt("s6_days", 0)
+    agent.newVariableUInt("s6_started", 0)
     agent.newVariableUInt("sne", 0)
     agent.newVariableUInt("ppr", 0)
     # Для status_2 логики (LL/OH/BR пороги)
@@ -588,10 +590,25 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     }}
     """
     agent.newRTCFunction("rtc_status_4", rtc_status4_src)
-    # Опциональный слой status_6 smoke (пасс-тру)
+    # Опциональный слой status_6: счётчик дней и флаг partout
     rtc_status6_src = """
     FLAMEGPU_AGENT_FUNCTION(rtc_status_6, flamegpu::MessageNone, flamegpu::MessageNone) {
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 6u) return flamegpu::ALIVE;
+        // Не начинать счётчик и триггеры, если агент стартовал в 6 (нет факта перехода 2→6)
+        if (FLAMEGPU->getVariable<unsigned int>("s6_started") == 0u) return flamegpu::ALIVE;
+        unsigned int d6 = FLAMEGPU->getVariable<unsigned int>("s6_days");
+        const unsigned int pt = FLAMEGPU->getVariable<unsigned int>("partout_time");
+        // Инкремент только пока не достигли pt и при pt>0
+        if (pt > 0u && d6 < pt) {
+            unsigned int nd6 = (d6 < 65535u ? d6 + 1u : d6);
+            FLAMEGPU->setVariable<unsigned int>("s6_days", nd6);
+            if (nd6 == pt) {
+                if (FLAMEGPU->getVariable<unsigned int>("partout_trigger") == 0u) {
+                    FLAMEGPU->setVariable<unsigned int>("partout_trigger", 1u);
+                }
+            }
+        }
+        // После достижения pt счётчик не растёт, повторной простановки не будет
         return flamegpu::ALIVE;
     }
     """
@@ -620,6 +637,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         // 3) LL-порог: если sne+dn >= ll -> немедленно 2->6
         if (s_next >= ll) {{
             FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
+            FLAMEGPU->setVariable<unsigned int>("s6_days", 0u);
+            FLAMEGPU->setVariable<unsigned int>("s6_started", 1u);
             return flamegpu::ALIVE;
         }}
         // 4) OH-порог: если ppr+dn >= oh, уточняем по BR
@@ -629,6 +648,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
                 FLAMEGPU->setVariable<unsigned int>("repair_days", 1u);
             }} else {{
                 FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
+                FLAMEGPU->setVariable<unsigned int>("s6_days", 0u);
+                FLAMEGPU->setVariable<unsigned int>("s6_started", 1u);
             }}
             return flamegpu::ALIVE;
         }}
