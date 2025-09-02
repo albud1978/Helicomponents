@@ -564,18 +564,16 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         FLAMEGPU->setVariable<unsigned int>("repair_days", d);
         const unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
         const unsigned int pt = FLAMEGPU->getVariable<unsigned int>("partout_time");
-        // Абсолютная дата дня
-        const unsigned int day = FLAMEGPU->getStepCounter();
-        const unsigned int vdate = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
-        const unsigned int day_abs = vdate + (day + 1u);
+        const unsigned int at = FLAMEGPU->getVariable<unsigned int>("assembly_time");
+        // Абсолютная дата дня больше не требуется — значения триггеров однодневные (0/1)
         // Однократные события в оригинальные поля (без mark)
         if (d == pt) {{
             if (FLAMEGPU->getVariable<unsigned int>("partout_trigger") == 0u) {{
                 FLAMEGPU->setVariable<unsigned int>("partout_trigger", 1u);
             }}
         }}
-        // Assembly: единица за 30 дней до конца ремонта (флаг 0/1 на один день)
-        if ((rt > d ? (rt - d) : 0u) == 30u) {{
+        // Assembly: единица за assembly_time дней до конца ремонта (флаг 0/1 на один день)
+        if ((rt > d ? (rt - d) : 0u) == at) {{
             if (FLAMEGPU->getVariable<unsigned int>("assembly_trigger") == 0u) {{
                 FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 1u);
             }}

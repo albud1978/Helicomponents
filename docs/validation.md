@@ -72,6 +72,43 @@ WHERE p.status_id = 1 AND s.status_id = 2
   - Метки `assembly_trigger_mark/partout_trigger_mark` = 1 строго в день события.
 - Статус 365 суток: событий `assembly/partout` на тестовом горизонте не зафиксировано (суммы = 0). На 3650 — ожидаются единичные события.
 
+### Методика проверки vs переходы 2→4 (учтены стартовые S4 и off‑by‑one)
+- Базовая логика перехода: переход 2→4 происходит на дне `day_2to4`. Ожидаемые даты триггеров:
+  - Ожидаемый день снятия: `expected_partout_day = day_2to4 + (partout_time − 1)`.
+  - Ожидаемый день сборки: `expected_assembly_day = day_2to4 + (repair_time − assembly_time − 1)`.
+  - Если борт уже в `status_id=4` на первую дату горизонта (D0):
+    - Пусть `d0 = repair_days(D0)`, тогда
+      - `expected_partout_day = day_first + max(0, partout_time − d0)` (если `d0 ≤ partout_time`).
+      - `expected_assembly_day = day_first + max(0, (repair_time − assembly_time) − d0)` (если `d0 ≤ repair_time − assembly_time`).
+- Сопоставление делаем только если ожидаемая дата попадает ВНУТРИ горизонта симуляции `[min(day_abs) .. max(day_abs)]`.
+- Если ожидаемая дата лежит ПОСЛЕ горизонта, расхождение считается объяснимым (нет данных).
+
+### SQL‑эскиз
+```
+WITH transitions AS (
+  -- day_2to4 и нормативы на этот период
+), actual AS (
+  -- фактические однодневные срабатывания
+)
+SELECT
+  count() AS transitions_2to4,
+  sumIf(1, (day_2to4 + partout_time) <= horizon_last_day)          AS expected_partout_within,
+  sumIf(has(jours_partout, day_2to4 + partout_time), (day_2to4 + partout_time) <= horizon_last_day) AS matched_partout,
+  sumIf(1, (day_2to4 + (repair_time - assembly_time)) <= horizon_last_day) AS expected_assembly_within,
+  sumIf(has(jours_assembly, day_2to4 + (repair_time - assembly_time)), (day_2to4 + (repair_time - assembly_time)) <= horizon_last_day) AS matched_assembly
+FROM transitions t
+LEFT JOIN actual a USING (aircraft_number);
+```
+
+### Скрипт
+- `code/utils/validate_triggers_vs_2to4.py`: выполняет сопоставление, выводит JSON‑резюме с totals и per_aircraft (усечённо).
+
+### Итоги последнего 10‑летнего прогона (с экспортом D0)
+- Переходы 2→4: 199
+- Partout: expected_within=199, matched=199 (100%)
+- Assembly: expected_within=200, matched=200 (100%)
+- D0 в `sim_results`: присутствует (`day_u16=0`, `day_abs=version_date`), помогает валидации стартовых S4.
+
 ## Экспортные режимы (для валидаторов)
 - `legacy` (по умолчанию): полный экспорт, включая производные поля и метки (CPU‑постпроцессинг).
 - `triggers-only`: минимальный экспорт без производных полей (для отладки триггеров и подготовки GPU‑постпроцессинга).

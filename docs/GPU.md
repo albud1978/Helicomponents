@@ -66,6 +66,25 @@
      - `partout_trigger` — в `rtc_status_4` в день снятия: значение 1 (флаг), метка `partout_trigger_mark := 1`.
 - В `sim_master.py` добавлен режим экспорта `--export-triggers-only`: вставляются только ключи даты/идентификации и триггеры; derived/метки не считаются на host. Используется для отладки триггеров и подготовки к переносу постпроцессинга на GPU.
 
+### Каноническая команда запуска (10 лет, с экспортом D0 в sim_results)
+
+```bash
+PYTHONUNBUFFERED=1 python3 -u code/sim_master.py \
+  --status12456-smoke-real \
+  --status12456-days 3650 \
+  --seatbelts off \
+  --export-sim on \
+  --export-truncate \
+  --export-batch 250000 \
+  --export-sim-table sim_results \
+  --export-d0 on
+```
+
+Пояснения:
+- `--export-d0 on` — добавляет D0-снимок (day_u16=0, day_abs=version_date) перед первым шагом; удобно для стартовых `status_id=4`.
+- `--export-truncate` — очищает таблицу перед прогоном (только для тестов).
+- Для фокусной отладки триггеров используйте `--export-triggers-only` (минимальный экспорт без derived).
+
 ### План переноса постпроцессинга на GPU
 - Добавить RTC‑ядро `rtc_export_gather` после завершения всех слоёв суток:
   - На вход: `active_trigger`, `repair_time`, `partout_time`, `assembly_time`, `status_id`, `repair_days`.
