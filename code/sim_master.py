@@ -742,10 +742,11 @@ def main():
             av[i].setVariableUInt("aircraft_number", ac)
             av[i].setVariableUInt("repair_days", int(r[idx_map.get('repair_days', -1)] or 0))
             partseq = int(r[idx_map.get('partseqno_i', -1)] or 0)
-            rt = 0
-            if sid == 4:
-                rt = mp1_map.get(partseq, (0,0,0,0,0))[2]
-            av[i].setVariableUInt("repair_time", int(rt))
+            # repair_time / partout_time / assembly_time для всех статусов (нужно для последующих 2->4)
+            _tup = mp1_map.get(partseq, (0,0,0,0,0))
+            av[i].setVariableUInt("repair_time", int(_tup[2] or 0))
+            av[i].setVariableUInt("partout_time", int(_tup[3] or 0))
+            av[i].setVariableUInt("assembly_time", int(_tup[4] or 0))
             av[i].setVariableUInt("sne", int(r[idx_map.get('sne', -1)] or 0))
             av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))
             # ll берём из MP3 (как есть)
@@ -822,6 +823,8 @@ def main():
         trans32_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans52_info: List[Tuple[str,int,int,int,int,int,int]] = []
         total_5to2 = 0
+        # Для вычисления day_abs и плановых дат триггеров
+        vd_u32 = int(env_data['version_date_u16'])
         for d in range(steps):
             # Снимем состояние ДО шага
             pop_before = pyflamegpu.AgentVector(a_desc)
@@ -891,6 +894,13 @@ def main():
                     oh_v = int(pop_after[i].getVariableUInt('oh'))
                     br_v = int(pop_after[i].getVariableUInt('br'))
                     trans24_info.append((day_str, ac_before[i], sne_v, ppr_v, ll_v, oh_v, br_v))
+                    # Плановые даты триггеров (ord days): partout d==pt; assembly флаг за 30 до конца rt
+                    day_abs = vd_u32 + (d + 1)
+                    rt_v = int(pop_after[i].getVariableUInt('repair_time'))
+                    pt_v = int(pop_after[i].getVariableUInt('partout_time'))
+                    part_day = (day_abs + (pt_v - 1)) if pt_v > 0 else 0
+                    asm_day = (day_abs + (rt_v - 30 - 1)) if rt_v > 30 else 0
+                    print(f"    planned_triggers: ac={ac_before[i]}, part_day={part_day}, asm_flag_day={asm_day}")
                 if sb == 2 and sa == 6:
                     t_26 += 1
                     day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
@@ -1118,10 +1128,13 @@ def main():
             av[i].setVariableUInt("aircraft_number", ac)
             av[i].setVariableUInt("repair_days", int(r[idx_map.get('repair_days', -1)] or 0))
             partseq = int(r[idx_map.get('partseqno_i', -1)] or 0)
-            # repair_time / assembly_time из MP1 для всех (требуется для статуса 1)
-            rt = mp1_map.get(partseq, (0,0,0,0,0))[2]
-            at = mp1_map.get(partseq, (0,0,0,0,0))[4]
+            # repair_time / partout_time / assembly_time из MP1 для всех (требуется для статуса 1 и 4)
+            mp1_tuple = mp1_map.get(partseq, (0,0,0,0,0))
+            rt = mp1_tuple[2]
+            pt = mp1_tuple[3]
+            at = mp1_tuple[4]
             av[i].setVariableUInt("repair_time", int(rt or 0))
+            av[i].setVariableUInt("partout_time", int(pt or 0))
             av[i].setVariableUInt("assembly_time", int(at or 0))
             av[i].setVariableUInt("sne", int(r[idx_map.get('sne', -1)] or 0))
             av[i].setVariableUInt("ppr", int(r[idx_map.get('ppr', -1)] or 0))

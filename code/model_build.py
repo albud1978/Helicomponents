@@ -96,9 +96,7 @@ class HeliSimModel:
             "idx","psn","partseqno_i","group_by","aircraft_number","ac_type_mask",
             "mfg_date","status_id","repair_days","repair_time","assembly_time","partout_time","ppr","sne",
             "ll","oh","br","daily_today_u32","daily_next_u32","ops_ticket","quota_left","intent_flag",
-            "active_trigger","assembly_trigger","partout_trigger",
-            # Однодневные маркеры событий (0/1)
-            "active_trigger_mark","assembly_trigger_mark","partout_trigger_mark"
+            "active_trigger","assembly_trigger","partout_trigger"
         ]:
             agent.newVariableUInt(name, 0)
 
@@ -542,6 +540,21 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     import os as _os
     if _os.environ.get("HL_MP5_PROBE", "0") == "1":
         l0 = model.newLayer(); l0.addAgentFunction(agent.getFunction("rtc_probe_mp5"))
+    # Сброс в начале суток — определить функцию и гарантировать её первым слоем
+    rtc_begin_day = """
+    FLAMEGPU_AGENT_FUNCTION(rtc_quota_begin_day, flamegpu::MessageNone, flamegpu::MessageNone) {
+        // Сбрасываем билет допуска на новый цикл и флаг intent диагностики
+        FLAMEGPU->setVariable<unsigned int>("ops_ticket", 0u);
+        FLAMEGPU->setVariable<unsigned int>("intent_flag", 0u);
+        // Однодневные значения событий — обнуляем на начало суток
+        FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
+        FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 0u);
+        FLAMEGPU->setVariable<unsigned int>("partout_trigger", 0u);
+        return flamegpu::ALIVE;
+    }
+    """
+    agent.newRTCFunction("rtc_quota_begin_day", rtc_begin_day)
+    l0b = model.newLayer(); l0b.addAgentFunction(agent.getFunction("rtc_quota_begin_day"))
     # Опциональный слой status_4 smoke
     rtc_status4_src = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_status_4, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -551,25 +564,21 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         FLAMEGPU->setVariable<unsigned int>("repair_days", d);
         const unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
         const unsigned int pt = FLAMEGPU->getVariable<unsigned int>("partout_time");
-        const unsigned int at = FLAMEGPU->getVariable<unsigned int>("assembly_time");
         // Абсолютная дата дня
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int vdate = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
         const unsigned int day_abs = vdate + (day + 1u);
-        // Однократные события: флаг выставляется только в день события, дата записывается один раз
+        // Однократные события в оригинальные поля (без mark)
         if (d == pt) {{
             if (FLAMEGPU->getVariable<unsigned int>("partout_trigger") == 0u) {{
                 FLAMEGPU->setVariable<unsigned int>("partout_trigger", 1u);
             }}
-            FLAMEGPU->setVariable<unsigned int>("partout_trigger_mark", 1u);
         }}
-        if ((rt > d ? (rt - d) : 0u) == at) {{
+        // Assembly: единица за 30 дней до конца ремонта (флаг 0/1 на один день)
+        if ((rt > d ? (rt - d) : 0u) == 30u) {{
             if (FLAMEGPU->getVariable<unsigned int>("assembly_trigger") == 0u) {{
-                unsigned int asm_date = day_abs;
-                if (asm_date > 65535u) asm_date = 65535u;
-                FLAMEGPU->setVariable<unsigned int>("assembly_trigger", asm_date);
+                FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 1u);
             }}
-            FLAMEGPU->setVariable<unsigned int>("assembly_trigger_mark", 1u);
         }}
         // Завершение ремонта: 4 -> 5
         if (d >= rt) {{
@@ -647,25 +656,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
             ls6 = model.newLayer(); ls6.addAgentFunction(agent.getFunction("rtc_status_6"))
         if _os.environ.get("HL_STATUS2_SMOKE", "0") == "1":
             ls2 = model.newLayer(); ls2.addAgentFunction(agent.getFunction("rtc_status_2"))
-    # Сброс билета и флага intents в начале каждого дня (до intent)
-    rtc_begin_day = """
-    FLAMEGPU_AGENT_FUNCTION(rtc_quota_begin_day, flamegpu::MessageNone, flamegpu::MessageNone) {
-        // Сбрасываем билет допуска на новый цикл и флаг intent диагностики
-        FLAMEGPU->setVariable<unsigned int>("ops_ticket", 0u);
-        FLAMEGPU->setVariable<unsigned int>("intent_flag", 0u);
-        // Сброс суточных маркеров событий
-        FLAMEGPU->setVariable<unsigned int>("active_trigger_mark", 0u);
-        FLAMEGPU->setVariable<unsigned int>("assembly_trigger_mark", 0u);
-        FLAMEGPU->setVariable<unsigned int>("partout_trigger_mark", 0u);
-        // Однодневные значения событий — обнуляем на начало суток
-        FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
-        FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 0u);
-        FLAMEGPU->setVariable<unsigned int>("partout_trigger", 0u);
-        return flamegpu::ALIVE;
-    }
-    """
-    agent.newRTCFunction("rtc_quota_begin_day", rtc_begin_day)
-    l0b = model.newLayer(); l0b.addAgentFunction(agent.getFunction("rtc_quota_begin_day"))
+    # begin_day уже добавлен как первый слой выше
     l1 = model.newLayer(); l1.addAgentFunction(agent.getFunction("rtc_quota_intent"))
     l2 = model.newLayer(); l2.addAgentFunction(agent.getFunction("rtc_quota_approve_manager"))
     l3 = model.newLayer(); l3.addAgentFunction(agent.getFunction("rtc_quota_apply"))
@@ -817,7 +808,6 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
             if (act > 65535u) act = 65535u;
             if (FLAMEGPU->getVariable<unsigned int>("active_trigger") == 0u && act > 0u) {
                 FLAMEGPU->setVariable<unsigned int>("active_trigger", act);
-                FLAMEGPU->setVariable<unsigned int>("active_trigger_mark", 1u);
             }
             FLAMEGPU->setVariable<unsigned int>("status_id", 2u);
         }
