@@ -79,6 +79,7 @@ def main():
     p.add_argument('--export-batch', type=int, default=250000, help='Размер батча вставки (по умолчанию 250000)')
     p.add_argument('--export-truncate', action='store_true', help='TRUNCATE таблицу перед экспортом (только для тестов)')
     p.add_argument('--export-triggers-only', action='store_true', help='Экспортировать только триггеры (active/assembly/partout) и ключи даты/идентификации')
+    p.add_argument('--export-d0', choices=['on', 'off'], default='on', help='Экспортировать D0-снимок (day_u16=0) до первого шага')
     a = p.parse_args()
     # CUDA_PATH fallback
     if not os.environ.get('CUDA_PATH'):
@@ -150,14 +151,6 @@ def main():
           active_trigger   UInt16,
           assembly_trigger UInt16,
           partout_trigger  UInt8
-        ,  orig_status_id UInt8,
-           orig_repair_days UInt16,
-           orig_partout_trigger UInt8,
-           orig_assembly_trigger UInt16,
-           s4_derived_status_id UInt8,
-           s4_derived_repair_days UInt16,
-           partout_trigger_mark UInt8,
-           assembly_trigger_mark UInt8
         )
         ENGINE = MergeTree
         PARTITION BY version_date
@@ -172,22 +165,6 @@ def main():
                 alters.append(f"ADD COLUMN version_date_date Date AFTER version_id")
             if 'day_date' not in cols:
                 alters.append(f"ADD COLUMN day_date Date AFTER day_abs")
-            if 'orig_status_id' not in cols:
-                alters.append(f"ADD COLUMN orig_status_id UInt8 AFTER partout_trigger")
-            if 'orig_repair_days' not in cols:
-                alters.append(f"ADD COLUMN orig_repair_days UInt16 AFTER orig_status_id")
-            if 'orig_partout_trigger' not in cols:
-                alters.append(f"ADD COLUMN orig_partout_trigger UInt8 AFTER orig_repair_days")
-            if 'orig_assembly_trigger' not in cols:
-                alters.append(f"ADD COLUMN orig_assembly_trigger UInt16 AFTER orig_partout_trigger")
-            if 's4_derived_status_id' not in cols:
-                alters.append(f"ADD COLUMN s4_derived_status_id UInt8 AFTER orig_assembly_trigger")
-            if 's4_derived_repair_days' not in cols:
-                alters.append(f"ADD COLUMN s4_derived_repair_days UInt16 AFTER s4_derived_status_id")
-            if 'partout_trigger_mark' not in cols:
-                alters.append(f"ADD COLUMN partout_trigger_mark UInt8 AFTER s4_derived_repair_days")
-            if 'assembly_trigger_mark' not in cols:
-                alters.append(f"ADD COLUMN assembly_trigger_mark UInt8 AFTER partout_trigger_mark")
             for stmt in alters:
                 _client.execute(f"ALTER TABLE {table_name} {stmt}")
         except Exception as _e:
@@ -273,34 +250,6 @@ def main():
                 part_tr_v = int(ag.getVariableUInt('partout_trigger'))
             except Exception:
                 part_tr_v = 0
-            # Постпроцессинг
-            s4_der_status = 0
-            s4_der_rd = 0
-            if act_v > 1 and repair_time_v > 0:
-                start = int(act_v)
-                end_inclusive = start + int(repair_time_v) - 1
-                if start <= day_abs <= end_inclusive:
-                    s4_der_status = 4
-                    s4_der_rd = (day_abs - start) + 1
-            # Вычисляем даты триггеров из active_trigger и констант MP1:
-            part_mark = 0
-            asm_mark = 0
-            if act_v > 1 and repair_time_v > 0:
-                if partout_time_v > 0:
-                    if day_abs == (int(act_v) + int(partout_time_v) - 1):
-                        part_mark = 1
-                if assembly_time_v > 0:
-                    # день для assembly: start + (repair_time - assembly_time) - 1
-                    asm_day = int(act_v) + int(repair_time_v) - int(assembly_time_v) - 1
-                    if day_abs == asm_day:
-                        asm_mark = 1
-            exp_status_v = orig_status_v
-            exp_repair_days_v = orig_repair_days_v
-            if s4_der_status == 4:
-                exp_status_v = 4
-                exp_repair_days_v = int(s4_der_rd)
-            exp_part_tr_v = 1 if part_mark == 1 else 0
-            exp_asm_v = 1 if asm_mark == 1 else 0
             if triggers_only:
                 # Минимальный набор колонок: ключи + триггеры, остальное по умолчанию
                 batch_buf.append((
@@ -310,12 +259,10 @@ def main():
             else:
                 batch_buf.append((
                     int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
-                    int(idx_v), int(aircraft_v), int(partseq_v), int(group_v), int(exp_status_v),
-                    int(exp_repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
+                    int(idx_v), int(aircraft_v), int(partseq_v), int(group_v), int(orig_status_v),
+                    int(orig_repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
                     int(sne_v), int(ppr_v), int(ll_v), int(oh_v), int(br_v), int(dt_v), int(dn_v),
-                    int(ticket_v), int(intent_v), int(act_v), int(exp_asm_v), int(exp_part_tr_v),
-                    int(orig_status_v), int(orig_repair_days_v), int(part_tr_v), int(asm_v),
-                    int(s4_der_status), int(s4_der_rd), int(part_mark), int(asm_mark)
+                    int(ticket_v), int(intent_v), int(act_v), int(asm_v), int(part_tr_v)
                 ))
         # Вставляем при переполнении буфера — делается снаружи
         return
@@ -329,9 +276,7 @@ def main():
             cols = (
                 "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,partseqno_i,group_by,status_id,"
                 "repair_days,repair_time,assembly_time,partout_time,sne,ppr,ll,oh,br,daily_today_u32,daily_next_u32,"
-                "ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger,"
-                "orig_status_id,orig_repair_days,orig_partout_trigger,orig_assembly_trigger,"
-                "s4_derived_status_id,s4_derived_repair_days,partout_trigger_mark,assembly_trigger_mark"
+                "ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger"
             )
         query = f"INSERT INTO {table_name} ({cols}) VALUES"
         import time as _t
@@ -1191,6 +1136,28 @@ def main():
                     client.execute(f"TRUNCATE TABLE {export_table}")
                 except Exception as _e:
                     print(f"⚠️ TRUNCATE {export_table} пропущен: {_e}")
+            # Экспортируем D0-снимок (до первого шага), если включено
+            if getattr(a, 'export_d0', 'on') == 'on':
+                should_export_d0 = True
+                if not export_truncate:
+                    try:
+                        cnt = client.execute(
+                            f"SELECT count() FROM {export_table} WHERE version_date = toUInt32({int(env_data['version_date_u16'])}) AND version_id = {int(vid)} AND day_u16 = 0 LIMIT 1"
+                        )[0][0]
+                        should_export_d0 = (cnt == 0)
+                    except Exception as _e:
+                        print(f"⚠️ Проверка наличия D0 пропущена: {_e}")
+                if should_export_d0:
+                    export_day_snapshot(
+                        client, export_table, int(env_data['version_date_u16']), int(vid), -1,
+                        rows, before, FRAMES, idx_map, mp1_map, export_buf,
+                        triggers_only=export_triggers_only
+                    )
+                    if export_triggers_only:
+                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                        t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                    else:
+                        t_db_s += flush_export_buffer(client, export_table, export_buf)
         trans12_log: List[Tuple[str,int]] = []
         trans12_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans23_log: List[Tuple[str,int]] = []

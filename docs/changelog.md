@@ -257,7 +257,21 @@
 - Важные файлы: `code/flame_macroproperty2_exporter.py`, `code/flame_gpu_transform_runner.py`, `code/flame_gpu_gpu_runner.py`, `code/digital_values_dictionary_creator.py`, `code/utils/cleanup_dictionaries.py`, `code/transform_master.py`
 
 # Changelog - История изменений проекта
-**Последнее обновление:** 24-08-2025
+**Последнее обновление:** 02-09-2025
+## [02-09-2025] - Экспорт D0 в sim_results и полная валидация триггеров
+### Добавлено
+- В `code/sim_master.py` добавлен флаг `--export-d0 {on|off}` (по умолчанию on) и экспорт D0‑снимка (day_u16=0, day_abs=version_date) перед первым шагом в режиме `--status12456-smoke-real`.
+- В `docs/GPU.md` добавлена каноническая команда запуска 10‑летнего прогона с D0 и пояснения по флагам.
+
+### Изменено
+- Экспорт в `sim_results` упрощён: убраны служебные/derived поля; сохраняются только поля симуляции и триггеры, а также `daily_today_u32/daily_next_u32`, `ops_ticket/intent_flag`.
+- Валидатор `validate_triggers_vs_2to4.py` расширен: учитываются борта, начавшие горизонт в `status_id=4` (первая дата), и офф‑бай‑уан сдвиги для `partout/assembly`.
+
+### Результаты
+- 10‑летний прогон с D0: границы таблицы `sim_results` — `day_u16∈[0..3649]`, `day_date∈[2025‑07‑04..2035‑07‑02]`, строк=1,018,629.
+- Валидатор триггеров (учтены стартовые S4 и off‑by‑one):
+  - Partout: expected_within=199, matched=199 (100%).
+  - Assembly: expected_within=200, matched=200 (100%).
 ## [01-09-2025] - Триггеры на GPU, режим экспорта «только триггеры», подготовка к full‑GPU постпроцессингу
 ### Добавлено
 - В `code/sim_master.py` добавлен флаг CLI `--export-triggers-only`: экспортирует только ключи даты/идентификаторы и триггеры `active_trigger`, `assembly_trigger`, `partout_trigger` (без derived/marks). Используется для отладки триггеров и минимизации нагрузки.
