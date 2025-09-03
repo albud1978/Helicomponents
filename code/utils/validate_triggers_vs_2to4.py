@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Валидация триггеров partout_trigger и assembly_trigger относительно переходов 2→4
-Дата: 2025-09-01
+Валидация триггеров partout_trigger и assembly_trigger относительно переходов 2→4 и 2→6
+Дата: 2025-09-02
 
 Назначение:
 - Сопоставить фактические срабатывания `partout_trigger` и `assembly_trigger` с ожиданиями
-  от дня перехода 2→4 с учётом сдвигов по нормативам:
-  - expected_partout_day = day_2to4 + partout_time
-  - expected_assembly_day = day_2to4 + (repair_time - assembly_time)
+  от дня перехода 2→4/2→6 с учётом сдвигов по нормативам:
+  - Для 2→4: expected_partout_day = day_2to4 + (partout_time - 1)
+  - Для 2→6: expected_partout_day = day_2to6 + (partout_time)
+  - Для 2→4: expected_assembly_day = day_2to4 + (repair_time - assembly_time - 1)
 
 Особенности:
 - Период расчёта может закончиться раньше ожидаемой даты события → допустимы расхождения
@@ -71,6 +72,32 @@ def build_queries(sim_table: str, version_date: str, version_id: int, ac_sample:
           {filter_ac}
     """
 
+    # 1b) Переходы 2→6 (день D: 6, день D-1: 2) — для partout
+    #    Особенность: в симуляции s6_days начинает инкремент на следующий день, поэтому ожидание = day_2to6 + partout_time
+    q_transitions_26 = f"""
+        WITH
+          max_day AS (
+            SELECT max(day_abs) AS md
+            FROM {sim_table}
+            WHERE version_date = toUInt32(toDate('{version_date}')) AND version_id = {version_id}
+          )
+        SELECT
+          s.aircraft_number,
+          s.day_abs            AS day_2to6,
+          s.partout_time       AS partout_time,
+          (SELECT md FROM max_day)  AS horizon_last_day
+        FROM {sim_table} s
+        INNER JOIN {sim_table} p
+          ON s.version_date = p.version_date
+         AND s.version_id   = p.version_id
+         AND s.aircraft_number = p.aircraft_number
+         AND s.day_abs = p.day_abs + 1
+        WHERE s.version_date = toUInt32(toDate('{version_date}'))
+          AND s.version_id   = {version_id}
+          AND p.status_id = 2 AND s.status_id = 6
+          {filter_ac}
+    """
+
     # 2) Фактические срабатывания (однодневные): берём дни, где триггер > 0
     q_actual = f"""
         SELECT
@@ -122,9 +149,31 @@ def build_queries(sim_table: str, version_date: str, version_id: int, ac_sample:
               AND p.status_id = 2 AND s.status_id = 4
               {filter_ac}
           ),
+          transitions_26 AS (
+            SELECT
+              s.aircraft_number,
+              s.day_abs            AS day_2to6,
+              s.partout_time       AS partout_time,
+              (SELECT md FROM max_day)  AS horizon_last_day
+            FROM {sim_table} s
+            INNER JOIN {sim_table} p
+              ON s.version_date = p.version_date
+             AND s.version_id   = p.version_id
+             AND s.aircraft_number = p.aircraft_number
+             AND s.day_abs = p.day_abs + 1
+            WHERE s.version_date = toUInt32(toDate('{version_date}'))
+              AND s.version_id   = {version_id}
+              AND p.status_id = 2 AND s.status_id = 6
+              {filter_ac}
+          ),
           transitions_cnt AS (
             SELECT aircraft_number, count() AS transitions_2to4
             FROM transitions
+            GROUP BY aircraft_number
+          ),
+          transitions_cnt26 AS (
+            SELECT aircraft_number, count() AS transitions_2to6
+            FROM transitions_26
             GROUP BY aircraft_number
           ),
           initial_s4 AS (
@@ -147,17 +196,24 @@ def build_queries(sim_table: str, version_date: str, version_id: int, ac_sample:
             -- Из переходов 2→4
             SELECT
               aircraft_number,
-              if((day_2to4 + (partout_time - 1)) <= horizon_last_day, day_2to4 + (partout_time - 1), NULL) AS exp_partout_day,
-              if((day_2to4 + (repair_time - assembly_time - 1)) <= horizon_last_day, day_2to4 + (repair_time - assembly_time - 1), NULL) AS exp_assembly_day
+              CAST(if((day_2to4 + (partout_time - 1)) <= horizon_last_day, toUInt32(day_2to4 + (partout_time - 1)), NULL) AS Nullable(UInt32)) AS exp_partout_day,
+              CAST(if((day_2to4 + (repair_time - assembly_time - 1)) <= horizon_last_day, toUInt32(day_2to4 + (repair_time - assembly_time - 1)), NULL) AS Nullable(UInt32)) AS exp_assembly_day
             FROM transitions
+            UNION ALL
+            -- Из переходов 2→6 — только partout, сборки нет
+            SELECT
+              aircraft_number,
+              CAST(if((day_2to6 + (partout_time)) <= horizon_last_day, toUInt32(day_2to6 + (partout_time)), NULL) AS Nullable(UInt32)) AS exp_partout_day,
+              CAST(NULL AS Nullable(UInt32)) AS exp_assembly_day
+            FROM transitions_26
             UNION ALL
             -- Из стартов горизонта в статусе 4
             SELECT
               aircraft_number,
-              if(partout_time >= d0 AND (day_first + (partout_time - d0)) <= horizon_last_day,
-                 day_first + (partout_time - d0), NULL) AS exp_partout_day,
-              if((repair_time - assembly_time) >= d0 AND (day_first + (repair_time - assembly_time - d0)) <= horizon_last_day,
-                 day_first + (repair_time - assembly_time - d0), NULL) AS exp_assembly_day
+              CAST(if(partout_time >= d0 AND (day_first + (partout_time - d0)) <= horizon_last_day,
+                 toUInt32(day_first + (partout_time - d0)), NULL) AS Nullable(UInt32)) AS exp_partout_day,
+              CAST(if((repair_time - assembly_time) >= d0 AND (day_first + (repair_time - assembly_time - d0)) <= horizon_last_day,
+                 toUInt32(day_first + (repair_time - assembly_time - d0)), NULL) AS Nullable(UInt32)) AS exp_assembly_day
             FROM initial_s4
           ),
           actual AS (
@@ -166,12 +222,15 @@ def build_queries(sim_table: str, version_date: str, version_id: int, ac_sample:
         SELECT
           e.aircraft_number,
           ifNull(max(tc.transitions_2to4), 0) AS transitions_2to4,
+          ifNull(max(tc26.transitions_2to6), 0) AS transitions_2to6,
+          -- Считаем отдельно ожидания от 2→4 и 2→6 для диагностики
           countIf(e.exp_partout_day IS NOT NULL) AS expected_partout_within,
           sumIf(arrayExists(x -> x = e.exp_partout_day, a.jours_partout), e.exp_partout_day IS NOT NULL) AS matched_partout,
           countIf(e.exp_assembly_day IS NOT NULL) AS expected_assembly_within,
           sumIf(arrayExists(x -> x = e.exp_assembly_day, a.jours_assembly), e.exp_assembly_day IS NOT NULL) AS matched_assembly
         FROM expected e
         LEFT JOIN transitions_cnt tc USING (aircraft_number)
+        LEFT JOIN transitions_cnt26 tc26 USING (aircraft_number)
         LEFT JOIN actual a USING (aircraft_number)
         GROUP BY e.aircraft_number
         ORDER BY e.aircraft_number
@@ -194,14 +253,16 @@ def run_validation() -> Dict[str, Any]:
     rows = client.execute(q_eval)
     total = {
         "transitions_2to4": 0,
+        "transitions_2to6": 0,
         "expected_partout_within": 0,
         "matched_partout": 0,
         "expected_assembly_within": 0,
         "matched_assembly": 0,
     }
     per_ac = []
-    for ac, tr, exp_p, mat_p, exp_a, mat_a in rows:
+    for ac, tr, tr26, exp_p, mat_p, exp_a, mat_a in rows:
         total["transitions_2to4"] += tr
+        total["transitions_2to6"] += tr26
         total["expected_partout_within"] += exp_p
         total["matched_partout"] += mat_p
         total["expected_assembly_within"] += exp_a
@@ -209,6 +270,7 @@ def run_validation() -> Dict[str, Any]:
         per_ac.append({
             "aircraft_number": ac,
             "transitions_2to4": tr,
+            "transitions_2to6": tr26,
             "expected_partout_within": exp_p,
             "matched_partout": mat_p,
             "expected_assembly_within": exp_a,

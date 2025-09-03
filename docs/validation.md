@@ -1,6 +1,6 @@
 # Валидация симуляции и экспорта (sim_results)
 
-Дата: 2025-09-01
+Дата: 2025-09-02
 
 ## Active Trigger (1→2)
 
@@ -62,20 +62,21 @@ WHERE p.status_id = 1 AND s.status_id = 2
 
 Примечание: в режиме `--export-triggers-only` не выгружается `repair_time`, поэтому формальная проверка равенства выполняется по данным полного экспорта. В триггер‑only режиме валидируем инвариант «по одному дню на борт».
 
-## Assembly/Partout Trigger (статус 4)
+## Assembly/Partout Trigger (статусы 4 и 6)
 
 - Определения:
-  - `assembly_trigger` — дата сборки (дни от эпохи), выставляется в день события на статусе 4; в другие дни = 0.
-  - `partout_trigger` — флаг снятия (0/1) на день события статуса 4; в другие дни = 0.
+  - `assembly_trigger` — дата сборки (дни от эпохи, UInt16), выставляется в день события на статусе 4; в другие дни = 0.
+  - `partout_trigger` — флаг снятия (0/1) на день события статуса 4 и 6; в другие дни = 0.
 - Инварианты:
   - Однократно на борт: сумма по дням `assembly_trigger>0` ∈ {0,1}; сумма `partout_trigger=1` ∈ {0,1}.
   - Метки `assembly_trigger_mark/partout_trigger_mark` = 1 строго в день события.
 - Статус 365 суток: событий `assembly/partout` на тестовом горизонте не зафиксировано (суммы = 0). На 3650 — ожидаются единичные события.
 
-### Методика проверки vs переходы 2→4 (учтены стартовые S4 и off‑by‑one)
+### Методика проверки vs переходы 2→4/2→6 (учтены стартовые S4 и off‑by‑one)
 - Базовая логика перехода: переход 2→4 происходит на дне `day_2to4`. Ожидаемые даты триггеров:
-  - Ожидаемый день снятия: `expected_partout_day = day_2to4 + (partout_time − 1)`.
-  - Ожидаемый день сборки: `expected_assembly_day = day_2to4 + (repair_time − assembly_time − 1)`.
+  - Ожидаемый день снятия (2→4): `expected_partout_day = day_2to4 + (partout_time − 1)`.
+  - Ожидаемый день сборки (2→4): `expected_assembly_day = day_2to4 + (repair_time − assembly_time − 1)`.
+  - Ожидаемый день снятия (2→6): `expected_partout_day = day_2to6 + partout_time` (счётчик `s6_days` стартует на следующий день).
   - Если борт уже в `status_id=4` на первую дату горизонта (D0):
     - Пусть `d0 = repair_days(D0)`, тогда
       - `expected_partout_day = day_first + max(0, partout_time − d0)` (если `d0 ≤ partout_time`).
@@ -101,12 +102,13 @@ LEFT JOIN actual a USING (aircraft_number);
 ```
 
 ### Скрипт
-- `code/utils/validate_triggers_vs_2to4.py`: выполняет сопоставление, выводит JSON‑резюме с totals и per_aircraft (усечённо).
+- `code/utils/validate_triggers_vs_2to4.py`: выполняет сопоставление (2→4 и 2→6 для partout), выводит JSON‑резюме с totals и per_aircraft (усечённо). Сверка выполняется по `day_u16` (UInt16).
 
 ### Итоги последнего 10‑летнего прогона (с экспортом D0)
 - Переходы 2→4: 199
-- Partout: expected_within=199, matched=199 (100%)
-- Assembly: expected_within=200, matched=200 (100%)
+- Переходы 2→6: 38
+- Partout (2→4 + 2→6 + стартовые S4 в горизонте): expected_within=237, matched=237 (100%)
+- Assembly (только 2→4 + стартовые S4): expected_within=200, matched=200 (100%)
 - D0 в `sim_results`: присутствует (`day_u16=0`, `day_abs=version_date`), помогает валидации стартовых S4.
 
 ## Экспортные режимы (для валидаторов)
