@@ -739,7 +739,12 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
             if (act_abs > 0u) {{
                 if (d_set == 0u) continue;   // e = d_set-1 невозможен
                 // s = value(active_trigger) как абсолютный день → относительный индекс суток
-                unsigned int s_rel = (act_abs > vdate ? (act_abs - vdate) : 0u);
+                // day_abs = vdate + (day_idx + 1) ⇒ s_rel = act_abs - vdate - 1
+                unsigned int s_rel = 0u;
+                if (act_abs > vdate) {{
+                    unsigned int tmp = act_abs - vdate; // >=1 при act_abs>vdate
+                    s_rel = (tmp > 0u ? tmp - 1u : 0u);
+                }}
                 if (s_rel >= DAYS) continue; // вне горизонта
                 unsigned int e = d_set - 1u; // правый конец окна (день до d_set)
                 if (s_rel > e) continue;     // пустое/некорректное окно
