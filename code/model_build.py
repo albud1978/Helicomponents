@@ -141,6 +141,8 @@ class HeliSimModel:
         _intent_tpl = Template(
             """
         FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent, flamegpu::MessageNone, flamegpu::MessageNone) {
+            const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+            if (phase != 0u) return flamegpu::ALIVE;
             static const unsigned int FRAMES = ${FRAMES}u;
             const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
             const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
@@ -173,6 +175,8 @@ class HeliSimModel:
         _approve_tpl = Template(
             """
         FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager, flamegpu::MessageNone, flamegpu::MessageNone) {
+            const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+            if (phase != 0u) return flamegpu::ALIVE;
             static const unsigned int FRAMES = ${FRAMES}u;
             if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
             const unsigned int day = FLAMEGPU->getStepCounter();
@@ -201,6 +205,8 @@ class HeliSimModel:
         _apply_tpl = Template(
             """
         FLAMEGPU_AGENT_FUNCTION(rtc_quota_apply, flamegpu::MessageNone, flamegpu::MessageNone) {
+            const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+            if (phase != 0u) return flamegpu::ALIVE;
             static const unsigned int FRAMES = ${FRAMES}u;
             const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
             const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
@@ -297,6 +303,10 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     env.newPropertyUInt("version_date", 0)
     env.newPropertyUInt("frames_total", 0)
     env.newPropertyUInt("days_total", 0)
+    env.newPropertyUInt("export_phase", 0)  # 0=sim, 1=copyout MP2, 2=postprocess MP2
+    env.newPropertyUInt("export_day", 0)
+    enable_mp2 = os.environ.get("HL_ENABLE_MP2", "0") == "1"
+    enable_mp2_post = os.environ.get("HL_ENABLE_MP2_POST", "0") == "1"
     env.newPropertyUInt("approve_policy", 0)  # 0 = по idx (детерминизм)
     # Буферы остатка квоты не требуются: остаток вычисляется во второй фазе как seed - used
     env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * DAYS)
@@ -350,6 +360,13 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("assembly_trigger_mark", 0)
     agent.newVariableUInt("partout_trigger_mark", 0)
 
+    # MP2 SoA (1D линейные массивы длиной DAYS*FRAMES)
+    if enable_mp2:
+        env.newMacroPropertyUInt32("mp2_status", FRAMES * DAYS)
+        env.newMacroPropertyUInt32("mp2_repair_days", FRAMES * DAYS)
+        env.newMacroPropertyUInt32("mp2_active_trigger", FRAMES * DAYS)
+        env.newMacroPropertyUInt32("mp2_assembly_trigger", FRAMES * DAYS)
+
     # RTC: intent
     rtc_intent = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -369,11 +386,12 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: approve (менеджер idx==0). Политика выбирается по env.approve_policy (0=по idx)
     rtc_approve = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int DAYS = {DAYS}u;
         static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
         const unsigned int day = FLAMEGPU->getStepCounter();
-        const unsigned int dayp1 = (day + 1u < DAYS ? day + 1u : day);
+        const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+        const unsigned int last = (days_total > 0u ? days_total - 1u : 0u);
+        const unsigned int dayp1 = (day < last ? day + 1u : last);
         const unsigned int policy = FLAMEGPU->environment.getProperty<unsigned int>("approve_policy");
         auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
         auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
@@ -440,7 +458,6 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: approve для статуса 3 - использует остаток квоты от первой фазы
     rtc_approve_s3 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager_s3, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int DAYS = {DAYS}u;
         static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
         auto i8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
@@ -454,7 +471,9 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         for (unsigned int k=0u;k<FRAMES;++k) {{ used8 += (a8[k] ? 1u : 0u); used17 += (a17[k] ? 1u : 0u); }}
         // Инициализируем семена на D+1 и вычисляем остаток
         const unsigned int day = FLAMEGPU->getStepCounter();
-        const unsigned int dayp1 = (day + 1u < DAYS ? day + 1u : day);
+        const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+        const unsigned int last = (days_total > 0u ? days_total - 1u : 0u);
+        const unsigned int dayp1 = (day < last ? day + 1u : last);
         unsigned int seed8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
         unsigned int seed17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
         unsigned int left8 = (seed8 > used8 ? (seed8 - used8) : 0u);
@@ -487,7 +506,6 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: approve для статуса 5 — остаток после фаз 2 и 3
     rtc_approve_s5 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager_s5, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int DAYS = {DAYS}u;
         static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
         auto i8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
@@ -504,7 +522,9 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         for (unsigned int k=0u;k<FRAMES;++k) {{ used8 += (a8b[k] ? 1u : 0u); used17 += (a17b[k] ? 1u : 0u); }}
         // Остаток на D+1
         const unsigned int day = FLAMEGPU->getStepCounter();
-        const unsigned int dayp1 = (day + 1u < DAYS ? day + 1u : day);
+        const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+        const unsigned int last = (days_total > 0u ? days_total - 1u : 0u);
+        const unsigned int dayp1 = (day < last ? day + 1u : last);
         unsigned int seed8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
         unsigned int seed17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
         unsigned int left8 = (seed8 > used8 ? (seed8 - used8) : 0u);
@@ -545,6 +565,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Сброс в начале суток — определить функцию и гарантировать её первым слоем
     rtc_begin_day = """
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_begin_day, flamegpu::MessageNone, flamegpu::MessageNone) {
+        const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+        if (phase != 0u) return flamegpu::ALIVE;
         // Сбрасываем билет допуска на новый цикл и флаг intent диагностики
         FLAMEGPU->setVariable<unsigned int>("ops_ticket", 0u);
         FLAMEGPU->setVariable<unsigned int>("intent_flag", 0u);
@@ -560,6 +582,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Опциональный слой status_4 smoke
     rtc_status4_src = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_status_4, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+        if (phase != 0u) return flamegpu::ALIVE;
         // Быстрый предикат
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 4u) return flamegpu::ALIVE;
         unsigned int d = FLAMEGPU->getVariable<unsigned int>("repair_days") + 1u;
@@ -593,6 +617,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Опциональный слой status_6: счётчик дней и флаг partout
     rtc_status6_src = """
     FLAMEGPU_AGENT_FUNCTION(rtc_status_6, flamegpu::MessageNone, flamegpu::MessageNone) {
+        const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+        if (phase != 0u) return flamegpu::ALIVE;
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 6u) return flamegpu::ALIVE;
         // Не начинать счётчик и триггеры, если агент стартовал в 6 (нет факта перехода 2→6)
         if (FLAMEGPU->getVariable<unsigned int>("s6_started") == 0u) return flamegpu::ALIVE;
@@ -616,6 +642,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Опциональный слой status_2: начисление dt и проверки LL/OH с BR-веткой (без квот)
     rtc_status2_src = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_status_2, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+        if (phase != 0u) return flamegpu::ALIVE;
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
         // 1) Начисление dt
         const unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
@@ -659,6 +687,110 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     }}
     """
     agent.newRTCFunction("rtc_status_2", rtc_status2_src)
+
+    # RTC: логгер суток в MP2 (в конце шага)
+    rtc_log_day_src = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_log_day, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+        if (phase != 0u) return flamegpu::ALIVE;
+        static const unsigned int FRAMES = {FRAMES}u;
+        static const unsigned int DAYS   = {DAYS}u;
+        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+        if (idx >= FRAMES) return flamegpu::ALIVE;
+        const unsigned int day = FLAMEGPU->getStepCounter();
+        if (day >= DAYS) return flamegpu::ALIVE;
+        const unsigned int row = day * FRAMES + idx;
+        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_status");
+        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_repair_days");
+        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_active_trigger");
+        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_assembly_trigger");
+        a_stat[row].exchange(FLAMEGPU->getVariable<unsigned int>("status_id"));
+        a_rd[row].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+        a_act[row].exchange(FLAMEGPU->getVariable<unsigned int>("active_trigger"));
+        a_asm[row].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_trigger"));
+        return flamegpu::ALIVE;
+    }}
+    """
+    if enable_mp2:
+        agent.newRTCFunction("rtc_log_day", rtc_log_day_src)
+
+    # RTC: постпроцессинг MP2 в фазе export_phase=2 (per-agent, один проход по дням)
+    rtc_mp2_post_src = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int FRAMES = {FRAMES}u;
+        static const unsigned int DAYS   = {DAYS}u;
+        // Выполнять только в фазе export_phase=2
+        const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+        if (phase != 2u) return flamegpu::ALIVE;
+        const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
+        if (i >= FRAMES) return flamegpu::ALIVE;
+        const unsigned int vdate = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
+        const unsigned int R = FLAMEGPU->getVariable<unsigned int>("repair_time");
+        const unsigned int A = FLAMEGPU->getVariable<unsigned int>("assembly_time");
+        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_status");
+        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_repair_days");
+        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_active_trigger");
+        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_assembly_trigger");
+
+        for (unsigned int d_set = 0u; d_set < DAYS; ++d_set) {{
+            const unsigned int row_set = d_set * FRAMES + i;
+            // Учитываем любое событие active_trigger>0 в день d_set; день d_set не модифицируем
+            const unsigned int act_abs = a_act[row_set];
+            if (act_abs > 0u) {{
+                if (d_set == 0u) continue;   // e = d_set-1 невозможен
+                // s = value(active_trigger) как абсолютный день → относительный индекс суток
+                unsigned int s_rel = (act_abs > vdate ? (act_abs - vdate) : 0u);
+                if (s_rel >= DAYS) continue; // вне горизонта
+                unsigned int e = d_set - 1u; // правый конец окна (день до d_set)
+                if (s_rel > e) continue;     // пустое/некорректное окно
+                // Проставляем окно [s..e]: status_id=4, repair_days=1..R (обрезка по горизонту)
+                for (unsigned int d = s_rel; d <= e && d < DAYS; ++d) {{
+                    const unsigned int row = d * FRAMES + i;
+                    a_stat[row].exchange(4u);
+                    const unsigned int rdv = (d - s_rel + 1u);
+                    a_rd[row].exchange(rdv);
+                }}
+                // assembly_trigger в день (e - A), если попадает внутрь окна
+                if (A <= (e - s_rel)) {{
+                    const unsigned int asm_day = e - A;
+                    if (asm_day < DAYS) {{
+                        const unsigned int row_asm = asm_day * FRAMES + i;
+                        a_asm[row_asm].exchange(1u);
+                    }}
+                }}
+            }}
+        }}
+        return flamegpu::ALIVE;
+    }}
+    """
+    if enable_mp2_post:
+        agent.newRTCFunction("rtc_mp2_postprocess", rtc_mp2_post_src)
+
+    # RTC: copyout из MP2 в агентные переменные для конкретного дня (export_phase=1)
+    rtc_mp2_copyout_src = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_mp2_copyout, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int FRAMES = {FRAMES}u;
+        static const unsigned int DAYS   = {DAYS}u;
+        const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+        if (phase != 1u) return flamegpu::ALIVE;
+        const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
+        if (i >= FRAMES) return flamegpu::ALIVE;
+        unsigned int d = FLAMEGPU->environment.getProperty<unsigned int>("export_day");
+        if (d >= DAYS) return flamegpu::ALIVE;
+        const unsigned int row = d * FRAMES + i;
+        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_status");
+        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_repair_days");
+        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_active_trigger");
+        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_assembly_trigger");
+        FLAMEGPU->setVariable<unsigned int>("status_id", a_stat[row]);
+        FLAMEGPU->setVariable<unsigned int>("repair_days", a_rd[row]);
+        FLAMEGPU->setVariable<unsigned int>("active_trigger", a_act[row]);
+        FLAMEGPU->setVariable<unsigned int>("assembly_trigger", a_asm[row]);
+        return flamegpu::ALIVE;
+    }}
+    """
+    if enable_mp2_post:
+        agent.newRTCFunction("rtc_mp2_copyout", rtc_mp2_copyout_src)
 
     # Комбинированный порядок для 2/4/6 (как единый блок за один step)
     combined_246 = _os.environ.get("HL_STATUS246_SMOKE", "0") == "1"
@@ -861,6 +993,18 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     """
     agent.newRTCFunction("rtc_status_2_post_quota", rtc_status2_post);
     l4 = model.newLayer(); l4.addAgentFunction(agent.getFunction("rtc_status_2_post_quota"))
+
+    # Логгер суток MP2 в самом конце шага
+    if enable_mp2:
+        l_log = model.newLayer(); l_log.addAgentFunction(agent.getFunction("rtc_log_day"))
+
+    # Слой постпроцессинга MP2 (выполнится только при export_phase=2)
+    if enable_mp2_post:
+        l_pp = model.newLayer(); l_pp.addAgentFunction(agent.getFunction("rtc_mp2_postprocess"))
+
+    # Слой copyout MP2 (выполнится только при export_phase=1)
+    if enable_mp2_post:
+        l_co = model.newLayer(); l_co.addAgentFunction(agent.getFunction("rtc_mp2_copyout"))
 
     
 
