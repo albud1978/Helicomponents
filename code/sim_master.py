@@ -80,6 +80,7 @@ def main():
     p.add_argument('--export-truncate', action='store_true', help='TRUNCATE таблицу перед экспортом (только для тестов)')
     p.add_argument('--export-triggers-only', action='store_true', help='Экспортировать только триггеры (active/assembly/partout) и ключи даты/идентификации')
     p.add_argument('--export-d0', choices=['on', 'off'], default='on', help='Экспортировать D0-снимок (day_u16=0) до первого шага')
+    p.add_argument('--export-postprocess', choices=['on','off'], default='on', help='Выполнить GPU-постпроцессинг MP2 (export_phase=2) перед экспортом')
     a = p.parse_args()
     # CUDA_PATH fallback
     if not os.environ.get('CUDA_PATH'):
@@ -318,6 +319,42 @@ def main():
         s5_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 5)
         rd_a = [int(ag.getVariableUInt('repair_days')) for ag in after]
         print(f"status4_smoke: before s4={s4}, repair_days={rd}; after s4={s4_a}, s5={s5_a}, repair_days={rd_a}")
+        # === GPU-постпроцессинг MP2 и экспорт после симуляции ===
+        if export_on and getattr(a, 'export_postprocess', 'on') == 'on':
+            # Постпроцессинг: export_phase=2, один шаг
+            sim2.setEnvironmentPropertyUInt("export_phase", 2)
+            t_gpp0 = _t.perf_counter()
+            sim2.step()
+            t_gpu_s += (_t.perf_counter() - t_gpp0)
+            # Экспорт по дням через copyout (export_phase=1)
+            sim2.setEnvironmentPropertyUInt("export_phase", 1)
+            export_buf.clear()
+            for d_exp in range(steps):
+                sim2.setEnvironmentPropertyUInt("export_day", int(d_exp))
+                t_gco0 = _t.perf_counter()
+                sim2.step()
+                t_gpu_s += (_t.perf_counter() - t_gco0)
+                pop_day = pyflamegpu.AgentVector(a_desc)
+                sim2.getPopulationData(pop_day)
+                export_day_snapshot(
+                    client, export_table, int(env_data['version_date_u16']), int(vid), d_exp,
+                    rows, pop_day, FRAMES, idx_map, mp1_map, export_buf,
+                    triggers_only=export_triggers_only
+                )
+                if len(export_buf) >= export_batch:
+                    if export_triggers_only:
+                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                        t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                    else:
+                        t_db_s += flush_export_buffer(client, export_table, export_buf)
+            if export_buf:
+                if export_triggers_only:
+                    cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                    t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                else:
+                    t_db_s += flush_export_buffer(client, export_table, export_buf)
+            # Сброс в симуляционную фазу
+            sim2.setEnvironmentPropertyUInt("export_phase", 0)
         return
 
     # === Status_4 smoke (REAL data) через фабрику ===
@@ -762,11 +799,15 @@ def main():
         trans26_log: List[Tuple[str,int]] = []
         trans32_log: List[Tuple[str,int]] = []
         trans52_log: List[Tuple[str,int]] = []
+        trans42_log: List[Tuple[str,int]] = []
+        trans45_log: List[Tuple[str,int]] = []
         # Расширенный лог: day, ac, sne, ppr, ll, oh, br на момент выхода (после dt)
         trans24_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans26_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans32_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans52_info: List[Tuple[str,int,int,int,int,int,int]] = []
+        trans42_info: List[Tuple[str,int,int,int,int,int,int]] = []
+        trans45_info: List[Tuple[str,int,int,int,int,int,int]] = []
         total_5to2 = 0
         # Для вычисления day_abs и плановых дат триггеров
         vd_u32 = int(env_data['version_date_u16'])
@@ -879,6 +920,23 @@ def main():
                 if sb == 4 and sa == 5:
                     t_45 += 1
                     ppr_reset_45 += (ppr_after[i] - ppr_before[i])
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans45_log.append((day_str, ac_before[i]))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans45_info.append((day_str, ac_before[i], sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 4 and sa == 2:
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans42_log.append((day_str, ac_before[i]))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans42_info.append((day_str, ac_before[i], sne_v, ppr_v, ll_v, oh_v, br_v))
                 if sb == 2:
                     sne_s2 += (sne_after[i] - sne_before[i])
                     ppr_s2 += (ppr_after[i] - ppr_before[i])
@@ -970,6 +1028,14 @@ def main():
             print("  transitions_5to2:")
             for dstr, acn in trans52_log:
                 print(f"    {dstr}: ac={acn}")
+        if trans42_log:
+            print("  transitions_4to2:")
+            for dstr, acn in trans42_log:
+                print(f"    {dstr}: ac={acn}")
+        if trans45_log:
+            print("  transitions_4to5:")
+            for dstr, acn in trans45_log:
+                print(f"    {dstr}: ac={acn}")
         # Детальные значения на момент выхода
         if trans24_info:
             print("  details_2to4 (day, ac, sne, ppr, ll, oh, br):")
@@ -987,14 +1053,31 @@ def main():
             print("  details_5to2 (day, ac, sne, ppr, ll, oh, br):")
             for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans52_info:
                 print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        if trans42_info:
+            print("  details_4to2 (day, ac, sne, ppr, ll, oh, br):")
+            for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans42_info:
+                print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        if trans45_info:
+            print("  details_4to5 (day, ac, sne, ppr, ll, oh, br):")
+            for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans45_info:
+                print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
         # Итоги только по статусу 2
         sne_inc_s2_total = sum(per_day_sne_from_s2)
         ppr_inc_s2_total = sum(per_day_ppr_from_s2)
         print(f"  totals_s2_only: sne_inc_s2={sne_inc_s2_total}, ppr_inc_s2={ppr_inc_s2_total}")
-        # Итоги по переходам между 2 и 3
+        # Итоги по переходам
         total_2to3 = sum(per_day_trans_23)
         total_3to2 = sum(per_day_trans_32)
-        print(f"  totals_transitions: 2to3={total_2to3}, 3to2={total_3to2}, 5to2={total_5to2}")
+        total_2to4 = len(trans24_log)
+        total_2to6 = len(trans26_log)
+        total_4to2 = len(trans42_log)
+        total_4to5 = len(trans45_log)
+        total_5to2_all = len(trans52_log)
+        print(
+            "  totals_transitions: "
+            f"2to4={total_2to4}, 2to6={total_2to6}, 2to3={total_2to3}, 3to2={total_3to2}, "
+            f"4to2={total_4to2}, 4to5={total_4to5}, 5to2={total_5to2_all}"
+        )
         # Сводка таймингов
         print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}")
         return
@@ -1163,6 +1246,12 @@ def main():
         trans23_log: List[Tuple[str,int]] = []
         trans32_log: List[Tuple[str,int]] = []
         trans52_log: List[Tuple[str,int]] = []
+        # Дополнительные переходы для полной сводки
+        trans24_log: List[Tuple[str,int]] = []
+        trans26_log: List[Tuple[str,int]] = []
+        trans42_log: List[Tuple[str,int]] = []
+        trans45_log: List[Tuple[str,int]] = []
+        trans14_log: List[Tuple[str,int]] = []
         trans23_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans32_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans52_info: List[Tuple[str,int,int,int,int,int,int]] = []
@@ -1191,7 +1280,8 @@ def main():
             t_acpu0 = _t.perf_counter()
             sim2.getPopulationData(pop_after)
             t_cpu_s += (_t.perf_counter() - t_acpu0)
-            if export_on:
+            # Экспорт в режиме без постпроцессинга: напрямую из agent vars после шага
+            if export_on and getattr(a, 'export_postprocess', 'on') == 'off':
                 export_day_snapshot(
                     client, export_table, int(env_data['version_date_u16']), int(vid), d,
                     rows, pop_after, FRAMES, idx_map, mp1_map, export_buf,
@@ -1215,6 +1305,9 @@ def main():
                     oh_v = int(pop_after[i].getVariableUInt('oh'))
                     br_v = int(pop_after[i].getVariableUInt('br'))
                     trans12_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 1 and sa == 4:
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans14_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
                 if sb == 2 and sa == 3:
                     day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
                     trans23_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
@@ -1224,6 +1317,12 @@ def main():
                     oh_v = int(pop_after[i].getVariableUInt('oh'))
                     br_v = int(pop_after[i].getVariableUInt('br'))
                     trans23_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 2 and sa == 4:
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans24_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                if sb == 2 and sa == 6:
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans26_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
                 if sb == 3 and sa == 2:
                     day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
                     trans32_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
@@ -1243,12 +1342,52 @@ def main():
                     br_v = int(pop_after[i].getVariableUInt('br'))
                     trans52_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
                     total_5to2 += 1
-        if export_on and export_buf:
-            if export_triggers_only:
-                cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
-                t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
-            else:
-                t_db_s += flush_export_buffer(client, export_table, export_buf)
+                if sb == 4 and sa == 2:
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans42_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                if sb == 4 and sa == 5:
+                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+                    trans45_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+        # Экспорт в режиме с постпроцессингом MP2: один проход после симуляции
+        if export_on and getattr(a, 'export_postprocess', 'on') == 'on':
+            # 1) Постпроцессинг MP2 in-place по всему горизонту
+            try:
+                sim2.setEnvironmentPropertyUInt("export_phase", 2)
+                import time as _t
+                t_gpp0 = _t.perf_counter()
+                sim2.step()
+                t_gpu_s += (_t.perf_counter() - t_gpp0)
+            except Exception as _e:
+                print(f"⚠️ rtc_mp2_postprocess пропущен: {_e}")
+            # 2) Copyout и экспорт по дням из MP2
+            sim2.setEnvironmentPropertyUInt("export_phase", 1)
+            export_buf.clear()
+            for d_exp in range(steps):
+                sim2.setEnvironmentPropertyUInt("export_day", int(d_exp))
+                t_gco0 = _t.perf_counter()
+                sim2.step()
+                t_gpu_s += (_t.perf_counter() - t_gco0)
+                pop_day = pyflamegpu.AgentVector(a_desc)
+                sim2.getPopulationData(pop_day)
+                export_day_snapshot(
+                    client, export_table, int(env_data['version_date_u16']), int(vid), d_exp,
+                    rows, pop_day, FRAMES, idx_map, mp1_map, export_buf,
+                    triggers_only=export_triggers_only
+                )
+                if len(export_buf) >= export_batch:
+                    if export_triggers_only:
+                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                        t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                    else:
+                        t_db_s += flush_export_buffer(client, export_table, export_buf)
+            if export_buf:
+                if export_triggers_only:
+                    cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                    t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                else:
+                    t_db_s += flush_export_buffer(client, export_table, export_buf)
+            # Вернуть фазу симуляции
+            sim2.setEnvironmentPropertyUInt("export_phase", 0)
         after = pyflamegpu.AgentVector(a_desc)
         sim2.getPopulationData(after)
         cnt1_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 1)
@@ -1290,9 +1429,19 @@ def main():
             print("  details_5to2 (day, ac, sne, ppr, ll, oh, br):")
             for dstr, acn, sne_v, ppr_v, ll_v, oh_v, br_v in trans52_info:
                 print(f"    {dstr}: ac={acn}, sne={sne_v}, ppr={ppr_v}, ll={ll_v}, oh={oh_v}, br={br_v}")
+        total_1to2 = len(trans12_log)
+        total_1to4 = len(trans14_log)
         total_2to3 = len(trans23_log)
         total_3to2 = len(trans32_log)
-        print(f"  totals_transitions: 2to3={total_2to3}, 3to2={total_3to2}, 5to2={total_5to2}")
+        total_2to4 = len(trans24_log)
+        total_2to6 = len(trans26_log)
+        total_4to2 = len(trans42_log)
+        total_4to5 = len(trans45_log)
+        print(
+            "  totals_transitions: "
+            f"1to2={total_1to2}, 1to4={total_1to4}, 2to4={total_2to4}, 2to6={total_2to6}, "
+            f"2to3={total_2to3}, 3to2={total_3to2}, 4to2={total_4to2}, 4to5={total_4to5}, 5to2={total_5to2}"
+        )
         if export_on:
             print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}, db_insert={t_db_s*1000:.2f}")
         else:
