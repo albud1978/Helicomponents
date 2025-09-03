@@ -18,6 +18,29 @@
 
 ---
 
+## [P1] Bulk‑экспорт MP2 без copyout (03-09-2025)
+
+- Статус: Не начата
+- Описание: Устранить узкое место экспорта результатов симуляции — 3650 шагов copyout (GPU→CPU «по дням»). Перейти на одноразовый bulk‑экспорт после GPU‑постпроцессинга MP2: копировать линейные массивы MP2 в Env и считывать их на хост единым блоком; сформировать батч‑вставки в ClickHouse. Сохранить текущий по‑дневный путь как fallback.
+- Требования/объём работ:
+  1) Расширить MP2 (SoA, UInt32, длина = FRAMES×DAYS): добавить поля `mp2_sne`, `mp2_ppr`, `mp2_partout_trigger`, `mp2_daily_today`, `mp2_daily_next`, `mp2_ops_ticket`, `mp2_intent_flag` (в дополнение к уже существующим `mp2_status`, `mp2_repair_days`, `mp2_active_trigger`, `mp2_assembly_trigger`).
+  2) Обновить `rtc_log_day` (export_phase=0): записывать перечисленные поля в MP2 на каждом шаге.
+  3) Добавить Env‑массивы для bulk‑чтения (UInt32, длина = FRAMES×DAYS): `mp2e_status`, `mp2e_repair_days`, `mp2e_active_trigger`, `mp2e_assembly_trigger`, `mp2e_partout_trigger`, `mp2e_sne`, `mp2e_ppr`, `mp2e_daily_today`, `mp2e_daily_next`, `mp2e_ops_ticket`, `mp2e_intent_flag`.
+  4) Реализовать RTC‑ядро `rtc_mp2_pack_to_env` (export_phase=3): за один шаг скопировать данные из MP2 в перечисленные Env‑массивы (линейная адресация `row = day * frames_total + idx`).
+  5) Оркестрация в `sim_master.py`: после `export_phase=2` (GPU‑постпроцессинг) выполнить `export_phase=3` (pack), затем считать Env‑массивы через `getEnvironmentPropertyArrayUInt32(...)` и сформировать колоннарные батчи для ClickHouse (рекомендация: `--export-batch 1000000`). Добавить флаг `--export-bulk {on,off}` (по умолчанию on). Fallback: текущий copyout‑цикл при `--export-bulk off`.
+- Валидация и приёмка:
+  - Инварианты MP2 после постпроцессинга: в окне ремонта `[s..e]` `status_id=4`, `repair_days` монотонно 1..R; `assembly_trigger=1` ровно один день `e−A`; день `d_set` не модифицируется.
+  - Равенство результата bulk‑экспорта и текущего по‑дневного экспорта на 365/3650 суток (сравнение агрегатов и выборочных строк в ClickHouse).
+  - Тайминги: снижение компоненты GPU‑экспорта минимум на 35–45 сек (10 лет, 279 кадров), `db_insert` остаётся ≈6–8 сек.
+- Риски и меры:
+  - NVRTC/JIT: соблюдать стабильные RTC‑строки (размеры брать из Env, избегать шаблонных параметров размеров); оставить флаги `HL_ENABLE_MP2/HL_ENABLE_MP2_POST`.
+  - Память: суммарный объём Env‑массивов ≈ 11 × (FRAMES×DAYS×4 байта) — оценить перед запуском; при необходимости читать по группам полей.
+  - Типы данных: строго UInt32/UInt16/UInt8 по действующим правилам; Float64 не использовать.
+
+— Зависимости: реализованный `rtc_mp2_postprocess` (export_phase=2); действующий MP2‑лог на каждом шаге; ClickHouse `sim_results` без доп. DDL.
+
+— Результат: Экспорт из MP2 в ClickHouse выполняется без 3650 copyout‑шагов; данные идентичны текущему пайплайну; общее время GPU‑части экспорта заметно снижено.
+
 ## [P1] Full-GPU модель планеров — Чек-лист реализации (FLAME GPU 2 / pyflamegpu)
 
 ### Приоритетные доработки (28-08-2025)
