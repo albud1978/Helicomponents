@@ -732,7 +732,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_active_trigger");
         auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_assembly_trigger");
 
-        for (unsigned int d_set = 0u; d_set < DAYS; ++d_set) {{
+        bool processed = false;
+        for (unsigned int d_set = 0u; d_set < DAYS && !processed; ++d_set) {{
             const unsigned int row_set = d_set * FRAMES + i;
             // Учитываем любое событие active_trigger>0 в день d_set; день d_set не модифицируем
             const unsigned int act_abs = a_act[row_set];
@@ -755,14 +756,15 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
                     const unsigned int rdv = (d - s_rel + 1u);
                     a_rd[row].exchange(rdv);
                 }}
-                // assembly_trigger в день (e - A), если попадает внутрь окна
-                if (A <= (e - s_rel)) {{
-                    const unsigned int asm_day = e - A;
+                // assembly_trigger = 1 в день (d_set - A)
+                if (d_set >= A) {{
+                    const unsigned int asm_day = d_set - A;
                     if (asm_day < DAYS) {{
                         const unsigned int row_asm = asm_day * FRAMES + i;
                         a_asm[row_asm].exchange(1u);
                     }}
                 }}
+                processed = true;
             }}
         }}
         return flamegpu::ALIVE;

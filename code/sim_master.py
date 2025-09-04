@@ -1087,6 +1087,9 @@ def main():
         FRAMES = int(env_data['frames_total_u16'])
         DAYS = int(env_data['days_total_u16'])
         os.environ['HL_STATUS246_SMOKE'] = '1'
+        # Включаем MP2-лог и MP2-постпроцессинг в модели
+        os.environ['HL_ENABLE_MP2'] = '1'
+        os.environ['HL_ENABLE_MP2_POST'] = '1'
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         # Таймеры
