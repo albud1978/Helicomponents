@@ -571,7 +571,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         FLAMEGPU->setVariable<unsigned int>("ops_ticket", 0u);
         FLAMEGPU->setVariable<unsigned int>("intent_flag", 0u);
         // Однодневные значения событий — обнуляем на начало суток
-        FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
+        // Не трогаем active_trigger на начало суток, он живёт до конца суток перехода
         FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 0u);
         FLAMEGPU->setVariable<unsigned int>("partout_trigger", 0u);
         return flamegpu::ALIVE;
@@ -800,7 +800,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         agent.newRTCFunction("rtc_mp2_copyout", rtc_mp2_copyout_src)
 
     # Комбинированный порядок для 2/4/6 (как единый блок за один step)
-    combined_246 = _os.environ.get("HL_STATUS246_SMOKE", "0") == "1"
+    combined_246 = _os.environ.get("HL_STATUS246_SMOKE", "1") == "1"
     if combined_246:
         # FLAME GPU не позволяет несколько функций с одним и тем же state в одном Layer,
         # поэтому оформляем как три последовательных слоя в одном блоке шага.
@@ -967,6 +967,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
             if (FLAMEGPU->getVariable<unsigned int>("active_trigger") == 0u && act > 0u) {
                 FLAMEGPU->setVariable<unsigned int>("active_trigger", act);
             }
+            // Сброс PPR при переходе 1 -> 2
+            FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
             FLAMEGPU->setVariable<unsigned int>("status_id", 2u);
         }
         return flamegpu::ALIVE;

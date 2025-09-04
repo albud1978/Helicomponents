@@ -77,7 +77,7 @@ def main():
     p.add_argument('--export-sim', choices=['on', 'off'], default='off', help='Экспортировать результаты симуляции в ClickHouse (по умолчанию off)')
     p.add_argument('--export-sim-table', type=str, default='sim_results', help='Имя таблицы ClickHouse для экспорта (по умолчанию sim_results)')
     p.add_argument('--export-batch', type=int, default=250000, help='Размер батча вставки (по умолчанию 250000)')
-    p.add_argument('--export-truncate', action='store_true', help='TRUNCATE таблицу перед экспортом (только для тестов)')
+    p.add_argument('--export-truncate', action='store_true', default=True, help='TRUNCATE таблицу перед экспортом (по умолчанию on)')
     p.add_argument('--export-triggers-only', action='store_true', help='Экспортировать только триггеры (active/assembly/partout) и ключи даты/идентификации')
     p.add_argument('--export-d0', choices=['on', 'off'], default='on', help='Экспортировать D0-снимок (day_u16=0) до первого шага')
     p.add_argument('--export-postprocess', choices=['on','off'], default='on', help='Выполнить GPU-постпроцессинг MP2 (export_phase=2) перед экспортом')
@@ -179,7 +179,8 @@ def main():
             day_u16 = 0
         if day_u16 > 65535:
             day_u16 = 65535
-        day_abs = int(version_date_u32 + (day_idx + 1))
+        # Дата абсолютная должна соответствовать day_u16: D0 = version_date, D1 = version_date+1, ...
+        day_abs = int(version_date_u32 + day_u16)
         # Даты ClickHouse (Date) считаем от эпохи 1970-01-01
         from datetime import date as _date, timedelta as _td
         base_epoch = _date(1970, 1, 1)
@@ -329,6 +330,7 @@ def main():
             # Экспорт по дням через copyout (export_phase=1)
             sim2.setEnvironmentPropertyUInt("export_phase", 1)
             export_buf.clear()
+            # Copyout: публикуем D1..Dsteps как day_u16=1..steps, D0 уже выгружен отдельно
             for d_exp in range(steps):
                 sim2.setEnvironmentPropertyUInt("export_day", int(d_exp))
                 t_gco0 = _t.perf_counter()
@@ -1223,7 +1225,9 @@ def main():
                 except Exception as _e:
                     print(f"⚠️ TRUNCATE {export_table} пропущен: {_e}")
             # Экспортируем D0-снимок (до первого шага), если включено
-            if getattr(a, 'export_d0', 'on') == 'on':
+            # Примечание: при export_postprocess=on D0 экспорт пропускается,
+            # чтобы не дублировать день 0 (copyout покроет D0).
+            if getattr(a, 'export_d0', 'off') == 'on' and getattr(a, 'export_postprocess', 'on') == 'off':
                 should_export_d0 = True
                 if not export_truncate:
                     try:
@@ -1296,6 +1300,13 @@ def main():
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
                     else:
                         t_db_s += flush_export_buffer(client, export_table, export_buf)
+        # Финальный сброс буфера для режима без постпроцессинга
+        if export_on and getattr(a, 'export_postprocess', 'on') == 'off' and export_buf:
+            if export_triggers_only:
+                cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+            else:
+                t_db_s += flush_export_buffer(client, export_table, export_buf)
             for i in range(K):
                 sb = status_before[i]
                 sa = int(pop_after[i].getVariableUInt('status_id'))
