@@ -206,15 +206,89 @@ python3 code/utils/database_cleanup.py
 | `program_ac_status_processor.py` | `heli_pandas.status_id` | Обработка статусов эксплуатации |
 | `inactive_planery_processor.py` | `heli_pandas.status_id` | Обработка неактивных планеров |
 
-### Этап 9-13: Тензоры для Flame GPU + финальные расчеты
+### Этап 9-14: Тензоры для Flame GPU + precheck + финальные расчеты
 
 | **Этап** | **Скрипт** | **Таблица СУБД** | **Источник версии** |
 |----------|-----------|------------------|-------------------|
 | **9** | `program_fl_direct_loader.py` | `flight_program_fl` | ✅ CLI параметры Extract |
 | **10** | `program_ac_direct_loader.py` | `flight_program_ac` | ✅ CLI параметры Extract |
 | **11** | `heli_pandas_group_by_enricher.py` | `heli_pandas` | ✅ Наследует от heli_pandas/md_components |
-| **12** | `digital_values_dictionary_creator.py` | `dict_digital_values_flat` | ✅ Получает из heli_pandas |
-| **13** | `repair_days_calculator.py` | `heli_pandas.repair_days` | ✅ Наследует от heli_pandas |
+| **12** | `program_ac_precheck_runner.py` | `heli_pandas` | ✅ Наследует от heli_pandas/md_components/flight_program_fl |
+| **13** | `digital_values_dictionary_creator.py` | `dict_digital_values_flat` | ✅ Получает из heli_pandas |
+| **14** | `repair_days_calculator.py` | `heli_pandas.repair_days` | ✅ Наследует от heli_pandas |
+## 📚 Матрица чтение/запись по этапам Extract (актуально на 04-09-2025)
+
+Ниже указано для каждого этапа: какие таблицы/поля читаются, какие пишутся/обновляются, и инварианты порядка (почему этап на своём месте).
+
+1) md_components_loader.py (Этап 1)
+- Читает: Excel MD_Components (листы, сырьё)
+- Пишет: `md_components` поля: partno, comp_number, group_by, ac_type_mask, type/common_restricted*, trigger_interval, partout_time, assembly_time, repair_time, ll_mi8/mi17, oh_mi8/ми17, repair_price, purchase_price, version_date, version_id
+- Инварианты: корневой справочник для фильтрации в dual_loader; нужен до любых обогащений
+
+2) status_overhaul_loader.py (Этап 2)
+- Читает: Excel Status_Overhaul
+- Пишет: `status_overhaul` поля: ac_registr, wpno, status, sched_*/act_* даты, owner/operator, version_date, version_id
+- Инварианты: источник статусов ремонта для process_status_field
+
+3) program_ac_loader.py (Этап 3)
+- Читает: Excel Program_AC
+- Пишет: `program_ac` поля: ac_registr, ac_typ, owner/operator, homebase*, directorate, version_date, version_id
+- Инварианты: источник статусов эксплуатации
+
+4) dual_loader.py (Этап 4)
+- Читает: Excel Status_Components; `md_components.partno`, `status_overhaul`, `program_ac`
+- Пишет: `heli_raw` базовые поля; `heli_pandas` базовые + обогащённые: status_id (через процессоры), repair_days (init/коррекции), aircraft_number, ac_type_mask(позже), group_by(колонка, значение позже)
+- Инварианты: центральная таблица; требует готового `md_components`
+
+5) enrich_heli_pandas.py (Этап 5)
+- Читает: `heli_pandas`, при необходимости словари типов
+- Пишет: `heli_pandas.ac_type_mask`
+- Инварианты: маска типов нужна до словарей и тензоров
+
+6) calculate_beyond_repair.py (Этап 6)
+- Читает: `md_components` поля цен и ресурсов, `ac_type_mask`
+- Пишет: `md_components.br_mi8/br_mi17`
+- Инварианты: BR используется precheck/аналитикой; безопасно до словарей
+
+7) md_components_enricher.py (Этап 7)
+- Читает: `dict_partno_flat` (если существует) или исходники; `md_components.partno`
+- Пишет: `md_components.partno_comp`
+- Инварианты: связывает MD с MP3; нужен до final расчётов/тензоров
+
+8) dictionary_creator.py (Этап 8)
+- Читает: `heli_pandas` (distinct partseqno_i/psn/address_i/ac_typ/aircraft_number), `md_components`
+- Пишет: `dict_partno_flat`, `dict_serialno_flat`, `dict_owner_flat`, `dict_ac_type_flat`, `dict_status_flat`, `dict_aircraft_number_flat` (+ Dictionary объекты)
+- Инварианты: словари требуются тензорам и мета‑словарю
+
+9) program_fl_direct_loader.py (Этап 9)
+- Читает: Excel Program.xlsx, `dict_aircraft_number_flat`
+- Пишет: `flight_program_fl` (dates, aircraft_number, daily_hours, ac_type_mask, version_date, version_id)
+- Инварианты: FL нужен для D1 precheck
+
+10) program_ac_direct_loader.py (Этап 10)
+- Читает: Excel Program_heli.xlsx; `heli_pandas`, `md_components`
+- Пишет: `flight_program_ac`
+- Инварианты: используется мета‑словарём; независим от precheck
+
+11) heli_pandas_group_by_enricher.py (Этап 11)
+- Читает: `md_components.partno_comp`, `heli_pandas.partseqno_i`
+- Пишет: `heli_pandas.group_by`
+- Инварианты: group_by требуется precheck (фильтр 1/2)
+
+12) program_ac_precheck_runner.py (Этап 12)
+- Читает: `heli_pandas` (status_id, ll/oh/sne/ppr, partseqno_i, ac_typ, aircraft_number, group_by), `md_components.br_mi8/br_mi17`, `flight_program_fl` (D1 daily_hours)
+- Пишет: `heli_pandas.status_id` (точечные UPDATE по serialno)
+- Инварианты: запускается только после FL и group_by; при отсутствии зависимостей — пропуск шага
+
+13) digital_values_dictionary_creator.py (Этап 13)
+- Читает: `DESCRIBE` всех таблиц Extract, включая `flight_program_*`
+- Пишет: `dict_digital_values_flat` + Dictionary `digital_values_dict_flat`
+- Инварианты: выполняется после формирования всех таблиц
+
+14) repair_days_calculator.py (Этап 14)
+- Читает: `md_components.repair_time`, `heli_pandas` (status_id=4, target_date), `status_overhaul`
+- Пишет: `heli_pandas.repair_days`
+- Инварианты: финальный расчёт после всех обогащений
 
 ## 📊 Основные таблицы после Extract
 
@@ -943,6 +1017,28 @@ repair_days = repair_time - (sched_end_date - version_date)
 
 ---
 
+### СКРИПТ: `program_ac_precheck_runner.py` (добавлено 04-09-2025)
+
+| **Характеристика** | **Значение** |
+|-------------------|--------------|
+| **Порядок** | 12 (после FL и group_by) |
+| **Таблица в СУБД** | ❌ Не создает (обновляет `heli_pandas.status_id`) |
+| **DataFrame** | ✅ Загружает `heli_pandas` в память |
+| **Зависимости** | `heli_pandas`, `md_components`, `flight_program_fl` |
+| **Назначение** | Безопасный D1 precheck для записей `status_id=2` |
+
+#### Логика
+
+- Читает D1 `daily_hours` из `flight_program_fl` по `aircraft_number`.
+- Для `group_by∈{1,2}` и `status_id=2` рассчитывает остатки `ll/oh` на вечер D0.
+- Если остаток < D1, корректирует `status_id` на 6 (хранение) или 4 (ремонт) с учетом BR (`br_mi8/br_mi17`).
+- При отсутствии зависимостей шаг пропускается, обеспечивая устойчивость первичной загрузки.
+
+#### Результат
+
+- Точечные `ALTER ... UPDATE` по `serialno` в `heli_pandas`.
+- Разрывает цикл ожидания FL на ранних этапах: precheck выполняется после формирования FL.
+
 ### СКРИПТ 12: `digital_values_dictionary_creator.py` (исправлено 28-07-2025)
 
 | **Характеристика** | **Значение** |
@@ -984,6 +1080,24 @@ repair_days = repair_time - (sched_end_date - version_date)
 - **Direct join:** прямое соединение по `field_id`
 
 ---
+
+## Краткая матрица чтение/запись по этапам Extract (таблица, 04-09-2025)
+| Этап | Скрипт | Читает | Пишет | Примечание |
+|-----:|--------|--------|-------|-----------|
+| 1 | `md_components_loader.py` | Excel MD_Components | `md_components` (база, ресурсы, цены, version_*) | База для фильтрации в Этапе 4 |
+| 2 | `status_overhaul_loader.py` | Excel Status_Overhaul | `status_overhaul` | Источник ремонтов |
+| 3 | `program_ac_loader.py` | Excel Program_AC | `program_ac` | Источник эксплуатации |
+| 4 | `dual_loader.py` | Excel Status_Components; `md_components`; `status_overhaul`; `program_ac` | `heli_raw`; `heli_pandas` (status_id, repair_days init, aircraft_number, …) | Центральная таблица |
+| 5 | `enrich_heli_pandas.py` | `heli_pandas` | `heli_pandas.ac_type_mask` | До словарей/тензоров |
+| 6 | `calculate_beyond_repair.py` | `md_components` | `md_components.br_mi8/br_mi17` | BR в минутах |
+| 7 | `md_components_enricher.py` | `dict_partno_flat`; `md_components` | `md_components.partno_comp` | Связь MP1↔MP3 |
+| 8 | `dictionary_creator.py` | `heli_pandas`; `md_components` | `dict_*` таблицы | Словари для join/dictGet |
+| 9 | `program_fl_direct_loader.py` | `dict_aircraft_number_flat`; Excel Program.xlsx | `flight_program_fl` | Нужен для precheck |
+| 10 | `program_ac_direct_loader.py` | `heli_pandas`; `md_components`; Excel Program_heli.xlsx | `flight_program_ac` | Независим от precheck |
+| 11 | `heli_pandas_group_by_enricher.py` | `md_components`; `heli_pandas` | `heli_pandas.group_by` | Требуется precheck |
+| 12 | `program_ac_precheck_runner.py` | `heli_pandas`; `md_components.br*`; `flight_program_fl` | `heli_pandas.status_id` (UPDATE) | Пропуск при отсутствии зависимостей |
+| 13 | `digital_values_dictionary_creator.py` | DESCRIBE всех таблиц Extract | `dict_digital_values_flat` (+Dictionary) | После всех таблиц |
+| 14 | `repair_days_calculator.py` | `md_components.repair_time`; `heli_pandas`; `status_overhaul` | `heli_pandas.repair_days` | Финальный расчёт |
 
 ## СВОДКА ВЕРСИОННОСТИ ТАБЛИЦ СУБД
 

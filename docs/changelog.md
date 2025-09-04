@@ -257,7 +257,17 @@
 - Важные файлы: `code/flame_macroproperty2_exporter.py`, `code/flame_gpu_transform_runner.py`, `code/flame_gpu_gpu_runner.py`, `code/digital_values_dictionary_creator.py`, `code/utils/cleanup_dictionaries.py`, `code/transform_master.py`
 
 # Changelog - История изменений проекта
-**Последнее обновление:** 02-09-2025
+**Последнее обновление:** 04-09-2025
+## [04-09-2025] - Разрыв цикла Extract: D1 precheck после FL и утилита очистки
+### Добавлено
+- Новый микрошаг Extract: `code/program_ac_precheck_runner.py` — безопасный D1 precheck после формирования `flight_program_fl`; при отсутствии зависимостей шаг пропускается.
+- Утилита целевой очистки Extract объектов: `code/utils/drop_extract_objects.py` — удаляет только таблицы/Dictionary текущего Extract.
+
+### Изменено
+- `docs/extract.md`: обновлён порядок этапов (добавлен шаг precheck как Этап 12); описана логика и зависимости.
+
+### Исправлено
+- Циклическая зависимость раннего precheck с ожиданием FL: перенос шага устранил ожидание и падения при первичной загрузке; повторные прогоны больше не требуются.
 ## [02-09-2025] - Валидация S6 и экспорт, обновление документации
 ### Добавлено
 - Валидатор триггеров расширен поддержкой переходов 2→6 (partout) с проверкой по `day_u16` (UInt16)
