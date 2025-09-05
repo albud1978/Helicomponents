@@ -226,6 +226,29 @@ LOG_LEVEL=DEBUG python3 code/extract_master.py
 2. **Загрузка данных:** Запустите `extract_master.py`
 3. **Проверка результатов:** Используйте утилиты в `code/utils/`
 
+### Команды запуска симуляции (prod smoke + экспорт)
+
+```bash
+# Очистка таблицы результатов перед прогоном
+python3 - << 'PY'
+from code.utils.config_loader import get_clickhouse_client
+c = get_clickhouse_client(); c.execute('TRUNCATE TABLE sim_results'); print('TRUNCATE sim_results: OK')
+PY
+
+# 10-летний прогон с экспортом в ClickHouse (без постпроцессинга MP2)
+LOG=logs/sim_export_$(date +%Y%m%d_%H%M%S).log; \
+PYTHONUNBUFFERED=1 HL_ENABLE_MP2=1 HL_ENABLE_MP2_POST=0 \
+python3 -u code/sim_master.py \
+  --status12456-smoke-real \
+  --status12456-days 3650 \
+  --export-sim on \
+  --export-truncate \
+  --export-d0 off \
+  --export-postprocess off \
+  --seatbelts off \
+  2>&1 | tee "$LOG" | cat
+```
+
 ## 🔥 GPU Smoke‑тесты (Flame GPU)
 
 ### Внутренний smoke (детерминированный менеджер квот intent→approve→apply)

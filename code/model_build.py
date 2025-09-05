@@ -335,6 +335,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("ops_ticket", 0)
     agent.newVariableUInt("daily_today_u32", 0)
     agent.newVariableUInt("daily_next_u32", 0)
+    # Дата производства в ord-днях (UInt, трактуем как UInt16 по диапазону)
+    agent.newVariableUInt("mfg_date", 0)
     # Для status_4 smoke
     agent.newVariableUInt("status_id", 0)
     agent.newVariableUInt("repair_days", 0)

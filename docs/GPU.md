@@ -85,6 +85,29 @@ PYTHONUNBUFFERED=1 python3 -u code/sim_master.py \
 - `--export-truncate` — очищает таблицу перед прогоном (только для тестов).
 - Для фокусной отладки триггеров используйте `--export-triggers-only` (минимальный экспорт без derived).
 
+### Команды очистки и полного прогона с экспортом (10 лет)
+
+```bash
+# Очистка таблицы результатов
+python3 - << 'PY'
+from code.utils.config_loader import get_clickhouse_client
+c = get_clickhouse_client(); c.execute('TRUNCATE TABLE sim_results'); print('TRUNCATE sim_results: OK')
+PY
+
+# Полный прогон (без MP2 постпроцессинга, включён MP2 лог)
+LOG=logs/sim_export_$(date +%Y%m%d_%H%M%S).log; \
+PYTHONUNBUFFERED=1 HL_ENABLE_MP2=1 HL_ENABLE_MP2_POST=0 \
+python3 -u code/sim_master.py \
+  --status12456-smoke-real \
+  --status12456-days 3650 \
+  --export-sim on \
+  --export-truncate \
+  --export-d0 off \
+  --export-postprocess off \
+  --seatbelts off \
+  2>&1 | tee "$LOG" | cat
+```
+
 ### План переноса постпроцессинга на GPU
 - Добавить RTC‑ядро `rtc_export_gather` после завершения всех слоёв суток:
   - На вход: `active_trigger`, `repair_time`, `partout_time`, `assembly_time`, `status_id`, `repair_days`.
@@ -147,6 +170,7 @@ PYTHONUNBUFFERED=1 python3 -u code/sim_master.py \
   - Идентификация: `idx` (плотный индекс агента, привязан к `aircraft_number`; используется для логирования (MP2/MP5, MultiBOM) и для прямого доступа к MP5), `psn`
   - Привязка к планеру: `aircraft_number` (parent_id для MultiBOM), `ac_type_mask` (ежедневно участвует в выборе типа квоты: MI‑8/MI‑17), `ll`, `oh`, (ежедневно участвуют в расчете остатка ресурса)
   - Статус и счётчики: `status_id` (state, меняется не более 1 раза за сутки), `sne`, `ppr`, `repair_days`, `ops_ticket`, `active_trigger`, `partout_trigger`, `assembly_trigger`
+  - Расширенные поля (фактически используются в симуляции/экспорте): `partseqno_i`, `group_by`, `repair_time`, `assembly_time`, `partout_time`, `br`, `daily_today_u32`, `daily_next_u32`, `intent_flag`
 
 - Критерии выбора agent variables
   1) Переменные, которые изменяются внутри агента хотя бы в одном слое (например, `status_id`, `sne`, `ppr`, `repair_days`, триггеры, `ops_ticket`).
@@ -159,14 +183,23 @@ PYTHONUNBUFFERED=1 python3 -u code/sim_master.py \
 | --- | --- | --- | --- |
 | `idx` | UInt32 | Инициализация | Плотный индекс агента (по `aircraft_number`); используется для логирования (MP2/MP5, MultiBOM) и прямого доступа к MP5 (`base = day * frames_total + idx`) |
 | `psn` | UInt32 | MP3 | Серийный номер агрегата (планера) |
+| `partseqno_i` | UInt32 | MP3 | Ключ к нормативам MP1 для данного агрегата |
 | `aircraft_number` | UInt32 | MP3 | Бортовой номер планера; parent_id для MultiBOM; связка с MP5 |
+| `group_by` | UInt8 | MP3 | Группа взаимозаменяемости (1=МИ‑8Т, 2=МИ‑17) для выбора квот/слоёв |
 | `status_id` | UInt32 | MP3/RTC | Текущий статус: 1,2,3,4,5,6; применяется коммитом не более 1 раза за сутки |
 | `sne` | UInt32 | MP3/RTC | Наработка (сумма налёта) — инкремент в статусе 2 |
 | `ppr` | UInt32 | MP3/RTC | Параллельный счётчик ресурса — инкремент в статусе 2 |
 | `ll` | UInt32 | MP3 | Порог по SNE (ежедневно используется в статусе 2) |
 | `oh` | UInt32 | MP3 | Порог по PPR (ежедневно используется в статусе 2) |
+| `br` | UInt32 | MP1/инициализация | Порог списания (Beyond Repair) по типу планёра (минуты) |
 | `repair_days` | UInt32 | MP3/RTC | Сутки в ремонте (изменяется ежедневно в статусе 4) |
 | `ops_ticket` | UInt32 | RTC | Билет допуска на эксплуатацию следующего дня (0/1) |
+| `intent_flag` | UInt32 | RTC | Фиксация намерения участия в квоте в текущие сутки (0/1) |
+| `repair_time` | UInt16 | MP1/инициализация | Норматив ремонта (дни) для окон 2→4/4→5 |
+| `assembly_time` | UInt16 | MP1/инициализация | Дни до сборки внутри окна ремонта |
+| `partout_time` | UInt16 | MP1/инициализация | Дни до снятия (разборки) внутри окна ремонта |
+| `daily_today_u32` | UInt32 | MP5/RTC | Суточный налёт за D (минуты) для агентов в статусе 2 |
+| `daily_next_u32` | UInt32 | MP5/RTC | Суточный налёт за D+1 (минуты) для проверок LL/OH на завтра |
 | `active_trigger` | UInt32 | RTC | Дата‑триггер активации (0 либо дни от 1970‑01‑01); изменяется при входе в эксплуатацию |
 | `partout_trigger` | UInt32 | RTC | Дата предполагаемого снятия (0 либо дни от 1970‑01‑01); задаётся при выборе 2→4 |
 | `assembly_trigger` | UInt32 | RTC | Дата сборки (0 либо дни от 1970‑01‑01); задаётся при 2→4 или выходе из ремонта |
@@ -187,8 +220,10 @@ PYTHONUNBUFFERED=1 python3 -u code/sim_master.py \
 | --- | --- | --- |
 | `idx` | Производный (GPU) | Плотный индекс борта по `aircraft_number` при инициализации |
 | `psn` | MP3 | Из столбца `psn` |
+| `partseqno_i` | MP3 | Из столбца `partseqno_i` |
 | `aircraft_number` | MP3 | Из столбца `aircraft_number` |
 | `ac_type_mask` | MP3 | Из столбца `ac_type_mask` (маска типа ВС) |
+| `group_by` | MP3 | Из столбца `group_by` (1=МИ‑8Т, 2=МИ‑17) |
 | `status_id` | MP3 | Из столбца `status_id` (начальное состояние) |
 | `sne` | MP3 | Из столбца `sne` |
 | `ppr` | MP3 | Из столбца `ppr` |
@@ -196,9 +231,16 @@ PYTHONUNBUFFERED=1 python3 -u code/sim_master.py \
 | `ops_ticket` | Константа | 0 при инициализации |
 | `ll` | MP3 | Из столбца `ll` (по `psn`) |
 | `oh` | MP3 | Из столбца `oh` (по `psn`) |
+| `br` | MP1 | Выбор `br_mi8/br_mi17` по `ac_type_mask` и `partseqno_i` |
+| `repair_time` | MP1 | Из поля `repair_time` по `partseqno_i` |
+| `assembly_time` | MP1 | Из поля `assembly_time` по `partseqno_i` |
+| `partout_time` | MP1 | Из поля `partout_time` по `partseqno_i` |
 | `active_trigger` | Константа | 0 (если нет известной даты активации) |
 | `partout_trigger` | Константа | 0 (будет выставлено при 2→4) |
 | `assembly_trigger` | Константа | 0 (будет выставлено при 2→4 или выходе из ремонта) |
+| `daily_today_u32` | Константа/MP5 | 0 на старте; далее из MP5 по `base = day * frames_total + idx` |
+| `daily_next_u32` | Константа/MP5 | 0 на старте; далее из MP5 по `base + frames_total` |
+| `intent_flag` | Константа | 0 на старте; выставляется в статусе 2 перед квотой |
 
 ## Порядок слоёв (сутки)
 

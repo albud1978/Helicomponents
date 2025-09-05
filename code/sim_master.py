@@ -133,6 +133,7 @@ def main():
           day_date         Date,
           idx              UInt16,
           aircraft_number  UInt32,
+          mfg_date_date    Date,
           partseqno_i      UInt32,
           group_by         UInt8,
           status_id        UInt8,
@@ -166,6 +167,8 @@ def main():
                 alters.append(f"ADD COLUMN version_date_date Date AFTER version_id")
             if 'day_date' not in cols:
                 alters.append(f"ADD COLUMN day_date Date AFTER day_abs")
+            if 'mfg_date_date' not in cols:
+                alters.append(f"ADD COLUMN mfg_date_date Date AFTER aircraft_number")
             for stmt in alters:
                 _client.execute(f"ALTER TABLE {table_name} {stmt}")
         except Exception as _e:
@@ -203,6 +206,14 @@ def main():
             ag = pop_after[i]
             idx_v = int(ag.getVariableUInt('idx'))
             aircraft_v = int(ag.getVariableUInt('aircraft_number')) if 'aircraft_number' in dir(ag) else int(rows_src[i][idx_map_local.get('aircraft_number', -1)] or 0)
+            # mfg_date_date: конвертируем ord-дни UInt16 → Date
+            try:
+                mfg_ord = int(ag.getVariableUInt('mfg_date'))
+            except Exception:
+                mfg_ord = 0
+            from datetime import date as _date, timedelta as _td
+            base_epoch = _date(1970, 1, 1)
+            mfg_date_date = base_epoch + _td(days=max(0, mfg_ord)) if mfg_ord > 0 else base_epoch
             partseq_v = partseq_list[i]
             group_v = int(ag.getVariableUInt('group_by'))
             orig_status_v = int(ag.getVariableUInt('status_id'))
@@ -261,7 +272,7 @@ def main():
             else:
                 batch_buf.append((
                     int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
-                    int(idx_v), int(aircraft_v), int(partseq_v), int(group_v), int(orig_status_v),
+                    int(idx_v), int(aircraft_v), mfg_date_date, int(partseq_v), int(group_v), int(orig_status_v),
                     int(orig_repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
                     int(sne_v), int(ppr_v), int(ll_v), int(oh_v), int(br_v), int(dt_v), int(dn_v),
                     int(ticket_v), int(intent_v), int(act_v), int(asm_v), int(part_tr_v)
@@ -276,7 +287,7 @@ def main():
             cols = columns_override
         else:
             cols = (
-                "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,partseqno_i,group_by,status_id,"
+                "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,mfg_date_date,partseqno_i,group_by,status_id,"
                 "repair_days,repair_time,assembly_time,partout_time,sne,ppr,ll,oh,br,daily_today_u32,daily_next_u32,"
                 "ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger"
             )
@@ -1194,6 +1205,18 @@ def main():
             elif mask & 64:
                 br = int(mp1_map.get(partseq, (0,0,0,0,0))[1])
             av[i].setVariableUInt("br", br)
+            # Дата производства: ord-дни UInt16
+            # Источник: mp3_rows.mfg_date → ord; фолбэк 0
+            try:
+                from datetime import date as _date
+                mfg_val = r[idx_map.get('mfg_date', -1)] if 'mfg_date' in idx_map else None
+                ord_val = 0
+                if mfg_val:
+                    epoch = _date(1970, 1, 1)
+                    ord_val = max(0, int((mfg_val - epoch).days))
+            except Exception:
+                ord_val = 0
+            av[i].setVariableUInt("mfg_date", int(ord_val & 0xFFFF))
             # dt D0
             base = 0 * FRAMES + (fi if fi < FRAMES else 0)
             dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
