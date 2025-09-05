@@ -264,7 +264,21 @@ class FlightProgramDirectLoader:
             result = self.client.execute(query)
             aircraft_list = [(row[0], row[1]) for row in result]
             self.logger.info(f"🚁 Найдено {len(aircraft_list)} планеров в словаре")
-            return aircraft_list
+            if aircraft_list:
+                return aircraft_list
+            # Fallback: если словарь пуст, берём из heli_pandas
+            self.logger.warning("⚠️ Словарь dict_aircraft_number_flat пуст, используем fallback из heli_pandas")
+            hp_rows = self.client.execute(
+                """
+                SELECT DISTINCT aircraft_number, ac_type_mask
+                FROM heli_pandas
+                WHERE aircraft_number > 0
+                ORDER BY aircraft_number
+                """
+            )
+            hp_list = [(int(a or 0), int(m or 0)) for a, m in hp_rows]
+            self.logger.info(f"📋 Fallback набор планеров из heli_pandas: {len(hp_list)}")
+            return hp_list
         except Exception as e:
             self.logger.error(f"❌ Ошибка получения списка планеров: {e}")
             return []
@@ -278,7 +292,7 @@ class FlightProgramDirectLoader:
             # Создаем новую таблицу
             create_table_sql = """
             CREATE TABLE flight_program_fl (
-                aircraft_number UInt16,
+                aircraft_number UInt32,
                 dates Date,
                 daily_hours UInt32,
                 ac_type_mask UInt8,
@@ -357,7 +371,7 @@ class FlightProgramDirectLoader:
                     daily_hours = expansion_engine.find_matching_data(month_number, year_number, monthly_data)
                     
                     insert_data.append([
-                        aircraft_number,
+                        int(aircraft_number),
                         flight_date,  # dates (переименовано из flight_date)
                         int(daily_hours),  # Конвертируем в UInt32
                         ac_type_mask,
@@ -372,10 +386,97 @@ class FlightProgramDirectLoader:
             self.logger.info(f"   - Всего записей для вставки: {len(insert_data):,}")
             
             return insert_data
-            
+
         except Exception as e:
             self.logger.error(f"❌ Ошибка применения логики приоритетов: {e}")
             raise
+
+    def generate_new_mi17_aircraft_numbers(self) -> List[int]:
+        """Генерирует последовательность новых aircraft_number для Ми‑17 начиная с 100000.
+
+        Источник количества: суммарный new_counter_mi17 из flight_program_ac по последней версии.
+        Тип: UInt32. Маска типа для этих бортов: 64.
+        """
+        try:
+            # Получаем последнюю версию flight_program_ac
+            # Проверим, существует ли flight_program_ac
+            exists = self.client.execute("EXISTS TABLE flight_program_ac")[0][0]
+            if not exists:
+                self.logger.info("ℹ️ flight_program_ac отсутствует — пропускаем генерацию новых Ми-17")
+                return []
+            ver = self.client.execute(
+                """
+                SELECT version_date, version_id
+                FROM flight_program_ac
+                ORDER BY version_date DESC, version_id DESC
+                LIMIT 1
+                """
+            )
+            if not ver:
+                return []
+            vdate, vid = ver[0]
+            rows = self.client.execute(
+                f"""
+                SELECT toInt64(SUM(new_counter_mi17))
+                FROM flight_program_ac
+                WHERE version_date = '{vdate}' AND version_id = {int(vid)}
+                """
+            )
+            total_new = int(rows[0][0] or 0)
+            if total_new <= 0:
+                return []
+            # Проверим занятые номера ≥100000, чтобы избежать коллизий при повторных загрузках
+            res = self.client.execute(
+                """
+                SELECT max(aircraft_number) FROM dict_aircraft_number_flat
+                WHERE aircraft_number >= 100000
+                """
+            )
+            max_existing = int(res[0][0] or 99999)
+            start = max(100000, max_existing + 1)
+            return [start + i for i in range(total_new)]
+            
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка генерации новых Ми‑17 номеров: {e}")
+            return []
+
+    def extend_aircraft_dictionary_with_new_mi17(self, aircraft_list: List[Tuple[int,int]]) -> List[Tuple[int,int]]:
+        """Дополняет словарь бортов новыми Ми‑17 (mask=64) по сгенерированным номерам.
+        Возвращает объединённый список пар (aircraft_number, ac_type_mask).
+        """
+        try:
+            new_numbers = self.generate_new_mi17_aircraft_numbers()
+            if not new_numbers:
+                return aircraft_list
+            extended = list(aircraft_list)
+            for ac in new_numbers:
+                extended.append((int(ac), 64))
+            # Зафиксируем их в dict_aircraft_number_flat, чтобы последующие шаги видели их
+            values = [(int(ac), 64,)]
+            try:
+                self.client.execute("""
+                    CREATE TABLE IF NOT EXISTS dict_aircraft_number_flat (
+                        aircraft_number UInt32,
+                        ac_type_mask UInt8,
+                        version_date Date DEFAULT today(),
+                        version_id UInt8 DEFAULT 1
+                    ) ENGINE = MergeTree()
+                    ORDER BY aircraft_number
+                """)
+            except Exception:
+                pass
+            # Вставляем пачками, игнорируя дубликаты через ON CLUSTER отсутствует — делаем фильтр
+            existing = {int(r[0]) for r in self.client.execute("SELECT aircraft_number FROM dict_aircraft_number_flat WHERE aircraft_number >= 100000")}
+            insert_vals = [(ac, 64) for ac in new_numbers if ac not in existing]
+            if insert_vals:
+                self.client.execute("INSERT INTO dict_aircraft_number_flat (aircraft_number, ac_type_mask) VALUES", insert_vals)
+                self.logger.info(f"📘 Добавлено в словарь новых Ми‑17: {len(insert_vals)} записей, диапазон [{insert_vals[0][0]}..{insert_vals[-1][0]}]")
+            else:
+                self.logger.info("ℹ️ Новых Ми‑17 для словаря не требуется — всё уже есть")
+            return extended
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка дополнения словаря новыми Ми‑17: {e}")
+            return aircraft_list
     
     def insert_tensor_data(self, insert_data: List[List]) -> bool:
         """Массовая вставка тензора в ClickHouse"""
@@ -544,8 +645,9 @@ class FlightProgramDirectLoader:
             expansion_engine = YearExpansionEngine(excel_data['year_mapping'])
             calendar = expansion_engine.generate_4000_day_calendar(version_date)
             
-            # 4. Загрузка словаря планеров
+            # 4. Загрузка словаря планеров и расширение новыми Ми‑17
             all_aircraft = self.load_aircraft_dictionary()
+            all_aircraft = self.extend_aircraft_dictionary_with_new_mi17(all_aircraft)
             if not all_aircraft:
                 self.logger.error("❌ Нет данных о планерах")
                 return False
