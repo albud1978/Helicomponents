@@ -57,18 +57,19 @@ def fetch_mp3(client, vdate: date, vid: int):
 def preload_mp4_by_day(client) -> Dict[date, Dict[str,int]]:
     rows = client.execute(
         """
-        SELECT dates, ops_counter_mi8, ops_counter_mi17, trigger_program_mi8, trigger_program_mi17
+        SELECT dates, ops_counter_mi8, ops_counter_mi17, trigger_program_mi8, trigger_program_mi17, new_counter_mi17
         FROM flight_program_ac
         ORDER BY dates
         """
     )
     result: Dict[date, Dict[str,int]] = {}
-    for d, mi8, mi17, t8, t17 in rows:
+    for d, mi8, mi17, t8, t17, n17 in rows:
         result[d] = {
             "ops_counter_mi8": int(mi8 or 0),
             "ops_counter_mi17": int(mi17 or 0),
             "trigger_program_mi8": int(t8 or 0),
             "trigger_program_mi17": int(t17 or 0),
+            "new_counter_mi17": int(n17 or 0),
         }
     return result
 
@@ -251,7 +252,10 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     # Если в flight_program_ac появится явная колонка new_counter_mi17, можно читать её напрямую
     for D in days_sorted:
         md = mp4_by_day.get(D, {})
-        mp4_new_counter_mi17_seed.append(int(md.get('trigger_program_mi17', 0)))
+        v = int(md.get('new_counter_mi17', 0))
+        if v < 0:
+            v = 0
+        mp4_new_counter_mi17_seed.append(v)
     mp1_br8, mp1_br17, mp1_rt, mp1_pt, mp1_at, mp1_index = build_mp1_arrays(mp1_map)
     # Соберём массивы OH по индексу MP1
     keys_sorted = sorted(mp1_index.keys(), key=lambda k: mp1_index[k])
@@ -263,6 +267,12 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         mp1_oh17_arr.append(int(oh17 or 0))
     mp3_arrays = build_mp3_arrays(mp3_rows, mp3_fields)
 
+    # month_first_u32: ordinal первого дня месяца для каждого дня симуляции
+    month_first_u32: List[int] = []
+    for D in days_sorted:
+        first = _date(D.year, D.month, 1)
+        month_first_u32.append(days_to_epoch_u16(first))
+
     env_data = {
         'version_date_u16': days_to_epoch_u16(vdate),
         'frames_total_u16': int(frames_total),
@@ -273,6 +283,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mp4_ops_counter_mi17': mp4_ops17,
         'mp4_new_counter_mi17_seed': mp4_new_counter_mi17_seed,
         'mp5_daily_hours_linear': mp5_linear,
+        'month_first_u32': month_first_u32,
         'mp1_br_mi8': mp1_br8,
         'mp1_br_mi17': mp1_br17,
         'mp1_repair_time': mp1_rt,
@@ -291,6 +302,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     assert len(env_data['mp4_ops_counter_mi17']) == dt, "MP4_mi17 размер не равен days_total"
     assert len(env_data['mp4_new_counter_mi17_seed']) == dt, "MP4 new_counter_mi17 seed размер не равен days_total"
     assert len(env_data['mp5_daily_hours_linear']) == (dt + 1) * ft, "MP5_linear размер != (days_total+1)*frames_total"
+    assert len(env_data['month_first_u32']) == dt, "month_first_u32 размер не равен days_total"
     # mp3_arrays длины согласованы
     a = env_data['mp3_arrays']
     n3 = int(env_data['mp3_count'])
@@ -310,6 +322,8 @@ def apply_env_to_sim(sim, env_data: Dict[str, object]):
     sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
     # Seed планов спавна и инициализация MacroProperty (делается отдельной RTC-функцией позже)
     sim.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed']))
+    # Первый день месяца (ord days) для mfg_date
+    sim.setEnvironmentPropertyArrayUInt32("month_first_u32", list(env_data['month_first_u32']))
     # MP5 (линейный массив с паддингом)
     sim.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", list(env_data['mp5_daily_hours_linear']))
     # MP1 (SoA)

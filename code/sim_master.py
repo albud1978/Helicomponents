@@ -53,6 +53,8 @@ def main():
     p.add_argument('--gpu-quota-smoke-external', action='store_true', help='Запустить внешний стабильный smoke раннер (gpu_quota_smoke_from_env.py)')
     p.add_argument('--mp5-probe', action='store_true', help='Пробный запуск чтения MP5 (dt/dn) в агентные переменные')
     p.add_argument('--jit-log', action='store_true', help='Включить подробный вывод NVRTC/JIT (stdout on error)')
+    p.add_argument('--spawn-smoke-real', action='store_true', help='Smoke спавна (GPU-only) на реальных MP4/MP1: шаги N, печать born по дням')
+    p.add_argument('--spawn-days', type=int, default=365, help='Сколько суток шагать в spawn-smoke-real (по умолчанию 365)')
     p.add_argument('--seatbelts', choices=['on', 'off'], default='on', help='Включить/выключить FLAMEGPU seatbelts')
     p.add_argument('--status4-smoke', action='store_true', help='Smoke status_4: инкремент repair_days и переход в 5 при достижении repair_time')
     p.add_argument('--status4-smoke-real', action='store_true', help='Smoke status_4 на реальных MP3/MP1: N шагов, переходы 4→5')
@@ -120,6 +122,75 @@ def main():
     mp4 = preload_mp4_by_day(client)
     # Подготовка Env Property/MacroProperty (MP1/MP3/MP4/MP5, скаляры)
     env_data = prepare_env_arrays(client)
+
+    # === Spawn smoke (GPU-only RTC спавн) ===
+    if a.spawn_smoke_real:
+        # Собираем минимальную модель с RTC-ядром спавна и запускаем симуляцию
+        FRAMES = int(env_data['frames_total_u16'])
+        DAYS = int(a.spawn_days)
+        # Отключаем квотные RTC-слои: оставляем только спавн
+        os.environ['HL_RTC_MODE'] = 'spawn_only'
+        # Гарантируем корректный CUDA_PATH
+        if not os.environ.get('CUDA_PATH'):
+            for pth in ["/usr/local/cuda-12.8", "/usr/local/cuda", "/usr/local/cuda-12", "/usr/local/cuda-12.4", "/usr/local/cuda-12.3", "/usr/local/cuda-12.2", "/usr/local/cuda-12.1", "/usr/local/cuda-12.0"]:
+                if os.path.isdir(pth) and os.path.isdir(os.path.join(pth, 'include')):
+                    os.environ['CUDA_PATH'] = pth
+                    break
+        # Минимизируем окружение (без MP1/MP5), оставляем MP4 и служебные
+        os.environ['HL_ENV_MINIMAL'] = '1'
+        hm = HeliSimModel()
+        hm.build_model(num_agents=max(1, FRAMES), env_sizes={
+            'days_total': DAYS,
+            'frames_total': FRAMES,
+            'mp1_len': 1,
+            'mp3_count': max(1, int(env_data.get('mp3_count', 1)))
+        })
+        sim = hm.build_simulation()
+        # Устанавливаем скаляры и усечённые массивы на DAYS
+        sim.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
+        sim.setEnvironmentPropertyUInt("frames_total", FRAMES)
+        sim.setEnvironmentPropertyUInt("days_total", DAYS)
+        sim.setEnvironmentPropertyUInt("frames_initial", int(env_data.get('mp3_count', 0)))
+        # MP4/seed/month_first (усечённые до DAYS)
+        try:
+            import numpy as _np
+            _ops8  = _np.asarray(list(env_data['mp4_ops_counter_mi8'])[:DAYS], dtype=_np.uint32)
+            _ops17 = _np.asarray(list(env_data['mp4_ops_counter_mi17'])[:DAYS], dtype=_np.uint32)
+            _seed  = _np.asarray(list(env_data['mp4_new_counter_mi17_seed'])[:DAYS], dtype=_np.uint32)
+            _m1    = _np.asarray(list(env_data['month_first_u32'])[:DAYS], dtype=_np.uint32)
+            sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", _ops8.tolist())
+            sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", _ops17.tolist())
+            sim.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", _seed.tolist())
+            sim.setEnvironmentPropertyArrayUInt32("month_first_u32", _m1.tolist())
+        except Exception:
+            sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", [int(x) for x in list(env_data['mp4_ops_counter_mi8'])[:DAYS]])
+            sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", [int(x) for x in list(env_data['mp4_ops_counter_mi17'])[:DAYS]])
+            sim.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", [int(x) for x in list(env_data['mp4_new_counter_mi17_seed'])[:DAYS]])
+            sim.setEnvironmentPropertyArrayUInt32("month_first_u32", [int(x) for x in list(env_data['month_first_u32'])[:DAYS]])
+        # Инициализируем 16 тикетов (0..15) и одного менеджера
+        spawn_desc = hm.model.getAgent("spawn_ticket")
+        st = pyflamegpu.AgentVector(spawn_desc, 16)
+        for i in range(16):
+            st[i].setVariableUInt("ticket", i)
+        mgr_desc = hm.model.getAgent("spawn_mgr")
+        sm = pyflamegpu.AgentVector(mgr_desc, 1)
+        sim.setPopulationData(st)
+        sim.setPopulationData(sm)
+        # Прогоним DAYS суток и печатаем рождение по дням
+        import datetime as _dt
+        base_epoch = _dt.date(1970, 1, 1)
+        prev_total = int(env_data.get('mp3_count', 0))
+        comp_desc = hm.model.getAgent("component")
+        for d in range(DAYS):
+            sim.step()
+            comp_pop = pyflamegpu.AgentVector(comp_desc)
+            sim.getPopulationData(comp_pop)
+            total = len(comp_pop)
+            born = max(0, total - prev_total)
+            day_date = base_epoch + _dt.timedelta(days=int(env_data['version_date_u16']) + d + 1)
+            print(f"D={d+1} date={day_date} born={born} total={total}")
+            prev_total = total
+        return
 
     # === Экспорт симуляции: подготовка DDL ===
     def ensure_sim_results_table(_client, table_name: str) -> None:
