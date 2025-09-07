@@ -245,6 +245,13 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     frames_index, frames_total = build_frames_index(mp3_rows, mp3_fields)
     mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
     mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
+    # План новых Ми-17 по дням (seed для MacroProperty на GPU)
+    mp4_new_counter_mi17_seed: List[int] = []
+    from datetime import date as _date
+    # Если в flight_program_ac появится явная колонка new_counter_mi17, можно читать её напрямую
+    for D in days_sorted:
+        md = mp4_by_day.get(D, {})
+        mp4_new_counter_mi17_seed.append(int(md.get('trigger_program_mi17', 0)))
     mp1_br8, mp1_br17, mp1_rt, mp1_pt, mp1_at, mp1_index = build_mp1_arrays(mp1_map)
     # Соберём массивы OH по индексу MP1
     keys_sorted = sorted(mp1_index.keys(), key=lambda k: mp1_index[k])
@@ -264,6 +271,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'frames_index': frames_index,
         'mp4_ops_counter_mi8': mp4_ops8,
         'mp4_ops_counter_mi17': mp4_ops17,
+        'mp4_new_counter_mi17_seed': mp4_new_counter_mi17_seed,
         'mp5_daily_hours_linear': mp5_linear,
         'mp1_br_mi8': mp1_br8,
         'mp1_br_mi17': mp1_br17,
@@ -281,6 +289,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     ft = int(env_data['frames_total_u16'])
     assert len(env_data['mp4_ops_counter_mi8']) == dt, "MP4_mi8 размер не равен days_total"
     assert len(env_data['mp4_ops_counter_mi17']) == dt, "MP4_mi17 размер не равен days_total"
+    assert len(env_data['mp4_new_counter_mi17_seed']) == dt, "MP4 new_counter_mi17 seed размер не равен days_total"
     assert len(env_data['mp5_daily_hours_linear']) == (dt + 1) * ft, "MP5_linear размер != (days_total+1)*frames_total"
     # mp3_arrays длины согласованы
     a = env_data['mp3_arrays']
@@ -299,6 +308,8 @@ def apply_env_to_sim(sim, env_data: Dict[str, object]):
     # MP4
     sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8']))
     sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
+    # Seed планов спавна и инициализация MacroProperty (делается отдельной RTC-функцией позже)
+    sim.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed']))
     # MP5 (линейный массив с паддингом)
     sim.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", list(env_data['mp5_daily_hours_linear']))
     # MP1 (SoA)

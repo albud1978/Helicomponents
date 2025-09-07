@@ -58,6 +58,11 @@ class HeliSimModel:
         # MP4 arrays всегда нужны для квот
         env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * max(1, days_total))
         env.newPropertyArrayUInt32("mp4_ops_counter_mi17", [0] * max(1, days_total))
+        # План поставок (seed) и рабочий MacroProperty для спавна
+        env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", [0] * max(1, days_total))
+        env.newMacroPropertyUInt("mp4_new_counter_mi17", max(1, days_total))
+        # Первый день месяца для mfg_date (ord days)
+        env.newPropertyArrayUInt32("month_first_u32", [0] * max(1, days_total))
         if not minimal_env or enable_mp5:
             # MP5 linear array with padding (UInt16 по спецификации)
             env.newPropertyArrayUInt16("mp5_daily_hours", [0] * max(1, (days_total + 1) * frames_total))
@@ -269,6 +274,20 @@ class HeliSimModel:
             lyr2 = model.newLayer(); lyr2.addAgentFunction(agent.getFunction("rtc_quota_approve_manager"))
         if enable_apply:
             lyr3 = model.newLayer(); lyr3.addAgentFunction(agent.getFunction("rtc_quota_apply"))
+
+        # === Каркас слоя спавна (пустой, без логики) ===
+        spawn_ticket = model.newAgent("spawn_ticket")
+        spawn_ticket.newVariableUInt("ticket", 0)
+        rtc_spawn_noop = """
+        FLAMEGPU_AGENT_FUNCTION(rtc_spawn_mi17_atomic, flamegpu::MessageNone, flamegpu::MessageNone) {
+            // Каркас: логика спавна будет добавлена на следующем этапе
+            return flamegpu::ALIVE;
+        }
+        """
+        _safe_add_rtc_function(spawn_ticket, "rtc_spawn_mi17_atomic", rtc_spawn_noop)
+
+        # Последний слой: спавн выполняется строго после логгера/основных слоёв
+        lyr_spawn = model.newLayer(); lyr_spawn.addAgentFunction(spawn_ticket.getFunction("rtc_spawn_mi17_atomic"))
 
         self.model = model
         return model
