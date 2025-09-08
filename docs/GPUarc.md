@@ -1,6 +1,6 @@
 ### GPUarc: Архитектура спавна и прохождения этапов симуляции HELI (FLAME GPU)
 
-Дата: 2025-09-06
+Дата: 2025-09-08
 
 ### Область документа
 - **Цель**: согласовать архитектуру спавна новых агентов (MI‑17) и их включения в общий конвейер симуляции от загрузки MP до экспорта.
@@ -55,6 +55,29 @@
 3) Квоты: intent → approve → apply → intent_clear; пост‑обработка статусов 3/5/1 (как в текущей модели).
 4) Логгер MP2 (если включён) — в самом конце шага.
 5) Спавн — самый последний слой (после логгера).
+
+### Минимальная интеграция спавна в существующую модель (без изменения остальной логики)
+- Объявить новые сущности в модели:
+  - Агент `spawn_ticket` с переменной `ticket UInt32` (значения 0..K−1; K=16 достаточно для нашего сценария и тестов).
+  - Агент `spawn_mgr` с переменными `next_idx UInt32`, `next_acn UInt32`, `next_psn UInt32` (менеджер генерации ID).
+  - Свойства окружения (если ещё не объявлены):
+    - `mp4_new_counter_mi17_seed[day]` (PropertyArrayUInt32) — план рождения (из MP4).
+    - `month_first_u32[day]` (PropertyArrayUInt32) — первый день месяца (для mfg_date).
+    - `mp1_idx_mi17_spawn` (UInt) — индекс строки MP1 для `partseqno_i=70482`.
+    - MacroProperty по дням (UInt32): `spawn_need_u32`, `spawn_base_idx_u32`, `spawn_base_acn_u32`, `spawn_base_psn_u32`.
+    - MacroProperty‑счётчики (UInt32, длина=1): `next_idx_spawn`, `next_aircraft_no_mi17`, `next_psn_mi17`.
+- RTC‑функции:
+  - `rtc_spawn_mgr` (на `spawn_mgr`): читает `need = mp4_new_counter_mi17_seed[day]`, публикует `need` и базовые ID в MacroProperty по текущему дню; локально инкрементирует `next_*`.
+  - `rtc_spawn_mi17_atomic` (на `spawn_ticket`): для каждого `ticket=k`, если `k < need[day]`, создаёт одного `component` через `agent_out` и инициализирует поля по спецификации проекта.
+- Порядок слоёв:
+  - Добавить `lyr_spawn_mgr` сразу перед самым последним слоем.
+  - Добавить `lyr_spawn` строго последним (после логгера), чтобы новорождённые участвовали в симуляции с D+1.
+- Критично: включить `setAgentOutput("component")` на мутируемом дескрипторе RTC (`spawn_ticket.newRTCFunction(...)`).
+
+### Совместимость с рабочей моделью без спавна
+- При `mp4_new_counter_mi17_seed[day] == 0` спавн не создаёт агентов; весь остальной конвейер остаётся неизменным.
+- Слои статусов, квоты и логгер не меняются; добавление двух слоёв спавна в конец не влияет на «без спавна» режим.
+- FRAMES и MP5 должны быть заранее рассчитаны под будущих агентов; выход за границы недопустим.
 
 ### Переменные агента HELI (фактически используемые) — для спавна
 -- **Идентификация**
@@ -152,7 +175,9 @@
     - `old = atomicSub(mp4_new_counter_mi17, day, 1u)`; если `old > 0u` — создаёт ровно одного нового `component` через `agent_out`;
     - при создании инициализирует все поля по правилам этого документа; `idx = atomicAdd(next_idx_spawn, 1u)`; `psn/aircraft_number` из `atomicAdd(..)` соответствующих счётчиков;
     - mfg_date = month_first_u32[day]; MP1‑поля читаются по `mp1_idx_mi17_spawn`.
-  - Слои: гарантировать размещение `rtc_spawn_mi17_atomic` строго после всех слоёв дня (после логгера, если хотим включать новорождённых с D+1).
+  - Слои: гарантировать размещение `rtc_spawn_mi17_atomic` строго после всех слоёв дня (после логгера, чтобы новорождённые включались с D+1).
+
+Примечание: актуальная реализация использует паттерн «менеджер + тикеты» для обхода ограничения «1 агент на один вызов RTC». Вариант с единым `atomicSub` на счётчике дня эквивалентен по эффекту и может рассматриваться альтернативой, не меняя позицию слоя спавна.
 
 - Инварианты и согласования
   - Порядок будущих строк в MP5 обязан совпадать с порядком генерации aircraft_number счётчиком `next_aircraft_no_mi17`, чтобы индексация idx ↔ aircraft_number оставалась согласованной.
@@ -194,3 +219,47 @@
 
 8) Документация
 - Обновить transform.md (правила спавна), changelog.md; описать сценарии тестов.
+
+### Команды запуска (два режима)
+- Режим А: симуляция без спавна (проверка базовой логики статусов/квот/экспорта)
+  - 365 суток (seatbelts off), экспорт выключен:
+    ```bash
+    PYTHONUNBUFFERED=1 HL_ENABLE_MP2=0 HL_ENABLE_MP2_POST=0 \
+    python3 -u code/sim_master.py \
+      --status12456-smoke-real --status12456-days 365 \
+      --export-sim off --export-truncate \
+      --export-d0 off --export-postprocess off \
+      --seatbelts off
+    ```
+  - 3650 суток (10 лет) с экспортом (пример из практики):
+    ```bash
+    LOG=logs/sim_$(date +%Y%m%d_%H%M%S).log; mkdir -p logs;
+    PYTHONUNBUFFERED=1 HL_ENABLE_MP2=1 HL_ENABLE_MP2_POST=0 \
+    python3 -u code/sim_master.py \
+      --status12456-smoke-real --status12456-days 3650 \
+      --export-sim on --export-truncate \
+      --export-d0 off --export-postprocess off \
+      --seatbelts off 2>&1 | tee "$LOG" | cat
+    ```
+
+- Режим B: спавн отдельно (полный GPU, слои спавна; остальные RTC отключены)
+  - 365 суток, JIT-лог включён, CUDA_PATH задан явно:
+    ```bash
+    LOG=logs/sim_spawn_smoke_$(date +%Y%m%d_%H%M%S).log; mkdir -p logs;
+    CUDA_PATH=/usr/local/cuda-12.8 \
+    PYTHONUNBUFFERED=1 HL_RTC_MODE=spawn_only HL_JIT_LOG=1 \
+    python3 -u code/sim_master.py \
+      --spawn-smoke-real --spawn-days 365 \
+      --seatbelts off 2>&1 | tee "$LOG" | tail -n 260 | cat
+    ```
+  - Проверка NVRTC-ошибок и исходника RTC (диагностика):
+    ```bash
+    LOG=logs/sim_spawn_smoke_debug_$(date +%Y%m%d_%H%M%S).log; mkdir -p logs;
+    CUDA_PATH=/usr/local/cuda-12.8 \
+    PYTHONUNBUFFERED=1 HL_RTC_MODE=spawn_only HL_JIT_LOG=1 \
+    python3 -u code/sim_master.py --spawn-smoke-real --spawn-days 365 --seatbelts off \
+      > "$LOG" 2>&1 || true; \
+    echo '--- NVRTC errors (grep error:) ---'; grep -n "error:" "$LOG" | head -n 80 || true; \
+    echo '--- RTC block ---'; sed -n '/===== RTC SOURCE: rtc_spawn_mi17_atomic =====/,/===== END SOURCE =====/p' "$LOG" | cat; \
+    echo '--- last 200 lines ---'; tail -n 200 "$LOG" | cat
+    ```
