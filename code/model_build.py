@@ -40,6 +40,8 @@ class HeliSimModel:
         enable_mp5 = os.environ.get("HL_ENV_ENABLE_MP5", "0") == "1"
         enable_mp1 = os.environ.get("HL_ENV_ENABLE_MP1", "0") == "1"
         enable_mp3 = os.environ.get("HL_ENV_ENABLE_MP3", "0") == "1"
+        enable_mp2 = os.environ.get("HL_ENABLE_MP2", "0") == "1"
+        enable_mp2_post = os.environ.get("HL_ENABLE_MP2_POST", "0") == "1"
 
         # Scalars
         env.newPropertyUInt("version_date", 0)
@@ -63,11 +65,11 @@ class HeliSimModel:
         # План поставок (seed) и рабочий MacroProperty для спавна
         env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", [0] * max(1, days_total))
         env.newMacroPropertyUInt("mp4_new_counter_mi17", max(1, days_total))
-        # Вспомогательные MP для билетов спавна: по дням (размер DAYS)
-        env.newMacroPropertyUInt("spawn_need_u32", max(1, days_total))
-        env.newMacroPropertyUInt("spawn_base_idx_u32", max(1, days_total))
-        env.newMacroPropertyUInt("spawn_base_acn_u32", max(1, days_total))
-        env.newMacroPropertyUInt("spawn_base_psn_u32", max(1, days_total))
+        # Вспомогательные MacroProperty для билетов спавна: скаляры (длина=1)
+        env.newMacroPropertyUInt("spawn_need_u32", 1)
+        env.newMacroPropertyUInt("spawn_base_idx_u32", 1)
+        env.newMacroPropertyUInt("spawn_base_acn_u32", 1)
+        env.newMacroPropertyUInt("spawn_base_psn_u32", 1)
         # MacroProperty-счётчики для генерации идентификаторов спавна (как 1D массивы длиной 1)
         env.newMacroPropertyUInt("next_idx_spawn", 1)
         env.newMacroPropertyUInt("next_aircraft_no_mi17", 1)
@@ -296,19 +298,18 @@ class HeliSimModel:
             if (FLAMEGPU->getVariable<unsigned int>("ticket") >= 0xFFFFFFFFu) return flamegpu::ALIVE; // safety
             const unsigned int k = FLAMEGPU->getVariable<unsigned int>("ticket");
             // Чтение подготовленных менеджером значений (по dню)
-            static const unsigned int DAYS = ${DAYS}u;
             const unsigned int day = FLAMEGPU->getStepCounter();
             const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
             const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-            auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_need_u32");
-            auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_idx_u32");
-            auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_acn_u32");
-            auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_psn_u32");
-            const unsigned int need = need_mp[safe_day];
+            auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_need_u32");
+            auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_idx_u32");
+            auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_acn_u32");
+            auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_psn_u32");
+            const unsigned int need = need_mp;
             if (k >= need) return flamegpu::ALIVE;
-            const unsigned int idx = bidx_mp[safe_day] + k;
-            const unsigned int acn = bacn_mp[safe_day] + k;
-            const unsigned int psn = bpsn_mp[safe_day] + k;
+            const unsigned int idx = bidx_mp + k;
+            const unsigned int acn = bacn_mp + k;
+            const unsigned int psn = bpsn_mp + k;
             const unsigned int mfg = FLAMEGPU->environment.getProperty<unsigned int>("month_first_u32", safe_day);
             auto out = FLAMEGPU->agent_out;
             out.setVariable<unsigned int>("idx", idx);
@@ -360,7 +361,7 @@ class HeliSimModel:
             const unsigned int day = FLAMEGPU->getStepCounter();
             const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
             const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-            const unsigned int need = FLAMEGPU->environment.getProperty<unsigned int>("mp4_new_counter_mi17_seed", safe_day);
+            const unsigned int need_plan = FLAMEGPU->environment.getProperty<unsigned int>("mp4_new_counter_mi17_seed", safe_day);
             unsigned int nx = FLAMEGPU->getVariable<unsigned int>("next_idx");
             unsigned int na = FLAMEGPU->getVariable<unsigned int>("next_acn");
             unsigned int np = FLAMEGPU->getVariable<unsigned int>("next_psn");
@@ -370,15 +371,18 @@ class HeliSimModel:
                 if (na < 100000u) na = 100000u;
                 if (np < 2000000u) np = 2000000u;
             }
-            static const unsigned int DAYS = ${DAYS}u;
-            auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_need_u32");
-            auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_idx_u32");
-            auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_acn_u32");
-            auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_psn_u32");
-            need_mp[safe_day].exchange(need);
-            bidx_mp[safe_day].exchange(nx);
-            bacn_mp[safe_day].exchange(na);
-            bpsn_mp[safe_day].exchange(np);
+            // Ограничение по frames_total
+            const unsigned int frames_max = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+            unsigned int need = need_plan;
+            if (nx + need > frames_max) need = (frames_max > nx ? (frames_max - nx) : 0u);
+            auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_need_u32");
+            auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_idx_u32");
+            auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_acn_u32");
+            auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_psn_u32");
+            bidx_mp.exchange(nx);
+            bacn_mp.exchange(na);
+            bpsn_mp.exchange(np);
+            need_mp.exchange(need);
             nx += need; na += need; np += need;
             FLAMEGPU->setVariable<unsigned int>("next_idx", nx);
             FLAMEGPU->setVariable<unsigned int>("next_acn", na);
@@ -439,6 +443,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     env.newPropertyUInt("version_date", 0)
     env.newPropertyUInt("frames_total", 0)
     env.newPropertyUInt("days_total", 0)
+    # Число стартовых агентов (для спавна): установим на host перед шагами
+    env.newPropertyUInt("frames_initial", 0)
     env.newPropertyUInt("export_phase", 0)  # 0=sim, 1=copyout MP2, 2=postprocess MP2
     env.newPropertyUInt("export_day", 0)
     enable_mp2 = os.environ.get("HL_ENABLE_MP2", "0") == "1"
@@ -504,6 +510,18 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         env.newMacroPropertyUInt32("mp2_repair_days", FRAMES * DAYS)
         env.newMacroPropertyUInt32("mp2_active_trigger", FRAMES * DAYS)
         env.newMacroPropertyUInt32("mp2_assembly_trigger", FRAMES * DAYS)
+
+    # Опциональные Env/MP для спавна (включаются, если HL_ENABLE_SPAWN=1)
+    _enable_spawn = os.environ.get("HL_ENABLE_SPAWN", "0") == "1"
+    if _enable_spawn:
+        # Источники спавна по дням (RO в шагах): план и первый день месяца
+        env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", [0] * DAYS)
+        env.newPropertyArrayUInt32("month_first_u32", [0] * DAYS)
+        # Широковещательные MacroProperty (скаляры длиной 1), которые заполняет менеджер
+        env.newMacroPropertyUInt("spawn_need_u32", 1)
+        env.newMacroPropertyUInt("spawn_base_idx_u32", 1)
+        env.newMacroPropertyUInt("spawn_base_acn_u32", 1)
+        env.newMacroPropertyUInt("spawn_base_psn_u32", 1)
 
     # RTC: intent
     rtc_intent = f"""
@@ -776,7 +794,19 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         return flamegpu::ALIVE;
     }
     """
-    agent.newRTCFunction("rtc_status_6", rtc_status6_src)
+    if _os.environ.get("HL_JIT_LOG", "0") == "1":
+        try:
+            print("\n===== RTC SOURCE: rtc_status_6 =====\n" + rtc_status6_src + "\n===== END SOURCE =====\n")
+        except Exception:
+            pass
+    try:
+        agent.newRTCFunction("rtc_status_6", rtc_status6_src)
+    except Exception as e:
+        try:
+            print(f"\n===== NVRTC ERROR in rtc_status_6 (register) =====\n{e}\n----- SOURCE BEGIN -----\n{rtc_status6_src}\n----- SOURCE END -----\n")
+        except Exception:
+            pass
+        raise
     # Опциональный слой status_2: начисление dt и проверки LL/OH с BR-веткой (без квот)
     rtc_status2_src = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_status_2, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -826,37 +856,79 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     """
     agent.newRTCFunction("rtc_status_2", rtc_status2_src)
 
-    # RTC: логгер суток в MP2 (в конце шага)
+    # RTC: логгер суток в MP2 (в конце шага) — безопасный вариант через agent_out
+    # Объявим тип строки MP2
+    mp2_row = model.newAgent("MP2_ROW")
+    for _v in [
+        "day","idx","psn","aircraft_number","status_id",
+        "daily_flight","ops_current_mi8","ops_current_mi17",
+        "quota_claimed_mi8","quota_claimed_mi17",
+        "sne","ppr","repair_days","active_trigger","partout_trigger","assembly_trigger"
+    ]:
+        mp2_row.newVariableUInt(_v, 0)
     rtc_log_day_src = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_log_day, flamegpu::MessageNone, flamegpu::MessageNone) {{
         const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
         if (phase != 0u) return flamegpu::ALIVE;
-        static const unsigned int FRAMES = {FRAMES}u;
-        static const unsigned int DAYS   = {DAYS}u;
-        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (idx >= FRAMES) return flamegpu::ALIVE;
-        const unsigned int day = FLAMEGPU->getStepCounter();
-        if (day >= DAYS) return flamegpu::ALIVE;
-        const unsigned int row = day * FRAMES + idx;
-        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_status");
-        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_repair_days");
-        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_active_trigger");
-        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_assembly_trigger");
-        a_stat[row].exchange(FLAMEGPU->getVariable<unsigned int>("status_id"));
-        a_rd[row].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-        a_act[row].exchange(FLAMEGPU->getVariable<unsigned int>("active_trigger"));
-        a_asm[row].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_trigger"));
+        const unsigned int day  = FLAMEGPU->getStepCounter();
+        const unsigned int idx  = FLAMEGPU->getVariable<unsigned int>("idx");
+        const unsigned int psn  = FLAMEGPU->getVariable<unsigned int>("psn");
+        const unsigned int acn  = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        const unsigned int sid  = FLAMEGPU->getVariable<unsigned int>("status_id");
+        const unsigned int dt   = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
+        const unsigned int sne  = FLAMEGPU->getVariable<unsigned int>("sne");
+        const unsigned int ppr  = FLAMEGPU->getVariable<unsigned int>("ppr");
+        const unsigned int rday = FLAMEGPU->getVariable<unsigned int>("repair_days");
+        const unsigned int act  = FLAMEGPU->getVariable<unsigned int>("active_trigger");
+        const unsigned int par  = FLAMEGPU->getVariable<unsigned int>("partout_trigger");
+        const unsigned int asm_tr  = FLAMEGPU->getVariable<unsigned int>("assembly_trigger");
+        unsigned int ops_cur_8  = 0u;
+        unsigned int ops_cur_17 = 0u;
+        unsigned int q_cl_8     = 0u;
+        unsigned int q_cl_17    = 0u;
+        auto out = FLAMEGPU->agent_out;
+        out.setVariable<unsigned int>("day", day);
+        out.setVariable<unsigned int>("idx", idx);
+        out.setVariable<unsigned int>("psn", psn);
+        out.setVariable<unsigned int>("aircraft_number", acn);
+        out.setVariable<unsigned int>("status_id", sid);
+        out.setVariable<unsigned int>("daily_flight", (sid == 2u ? dt : 0u));
+        out.setVariable<unsigned int>("ops_current_mi8",  ops_cur_8);
+        out.setVariable<unsigned int>("ops_current_mi17", ops_cur_17);
+        out.setVariable<unsigned int>("quota_claimed_mi8",  q_cl_8);
+        out.setVariable<unsigned int>("quota_claimed_mi17", q_cl_17);
+        out.setVariable<unsigned int>("sne", sne);
+        out.setVariable<unsigned int>("ppr", ppr);
+        out.setVariable<unsigned int>("repair_days", rday);
+        out.setVariable<unsigned int>("active_trigger", act);
+        out.setVariable<unsigned int>("partout_trigger", par);
+        out.setVariable<unsigned int>("assembly_trigger", asm_tr);
         return flamegpu::ALIVE;
     }}
     """
     if enable_mp2:
-        agent.newRTCFunction("rtc_log_day", rtc_log_day_src)
+        if _os.environ.get("HL_JIT_LOG", "0") == "1":
+            try:
+                print("\n===== RTC SOURCE: rtc_log_day =====\n" + rtc_log_day_src + "\n===== END SOURCE =====\n")
+            except Exception:
+                pass
+        try:
+            fn_log = agent.newRTCFunction("rtc_log_day", rtc_log_day_src)
+            fn_log.setAgentOutput("MP2_ROW")
+        except Exception as e:
+            try:
+                print(f"\n===== NVRTC ERROR in rtc_log_day (register) =====\n{e}\n----- SOURCE BEGIN -----\n{rtc_log_day_src}\n----- SOURCE END -----\n")
+            except Exception:
+                pass
+            raise
+        
 
     # RTC: постпроцессинг MP2 в фазе export_phase=2 (per-agent, один проход по дням)
     rtc_mp2_post_src = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess, flamegpu::MessageNone, flamegpu::MessageNone) {{
         static const unsigned int FRAMES = {FRAMES}u;
         static const unsigned int DAYS   = {DAYS}u;
+        static const unsigned int FRAMESDAYS = {FRAMES * DAYS}u;
         // Выполнять только в фазе export_phase=2
         const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
         if (phase != 2u) return flamegpu::ALIVE;
@@ -865,10 +937,10 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         const unsigned int vdate = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
         const unsigned int R = FLAMEGPU->getVariable<unsigned int>("repair_time");
         const unsigned int A = FLAMEGPU->getVariable<unsigned int>("assembly_time");
-        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_status");
-        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_repair_days");
-        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_active_trigger");
-        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_assembly_trigger");
+        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMESDAYS>("mp2_status");
+        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMESDAYS>("mp2_repair_days");
+        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMESDAYS>("mp2_active_trigger");
+        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMESDAYS>("mp2_assembly_trigger");
 
         bool processed = false;
         for (unsigned int d_set = 0u; d_set < DAYS && !processed; ++d_set) {{
@@ -916,6 +988,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     FLAMEGPU_AGENT_FUNCTION(rtc_mp2_copyout, flamegpu::MessageNone, flamegpu::MessageNone) {{
         static const unsigned int FRAMES = {FRAMES}u;
         static const unsigned int DAYS   = {DAYS}u;
+        static const unsigned int FRAMESDAYS = {FRAMES * DAYS}u;
         const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
         if (phase != 1u) return flamegpu::ALIVE;
         const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
@@ -923,10 +996,10 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         unsigned int d = FLAMEGPU->environment.getProperty<unsigned int>("export_day");
         if (d >= DAYS) return flamegpu::ALIVE;
         const unsigned int row = d * FRAMES + i;
-        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_status");
-        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_repair_days");
-        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_active_trigger");
-        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_assembly_trigger");
+        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMESDAYS>("mp2_status");
+        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMESDAYS>("mp2_repair_days");
+        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMESDAYS>("mp2_active_trigger");
+        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMESDAYS>("mp2_assembly_trigger");
         FLAMEGPU->setVariable<unsigned int>("status_id", a_stat[row]);
         FLAMEGPU->setVariable<unsigned int>("repair_days", a_rd[row]);
         FLAMEGPU->setVariable<unsigned int>("active_trigger", a_act[row]);
@@ -968,7 +1041,19 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         return flamegpu::ALIVE;
     }}
     """
-    agent.newRTCFunction("rtc_quota_intent_clear", rtc_intent_clear)
+    if _os.environ.get("HL_JIT_LOG", "0") == "1":
+        try:
+            print("\n===== RTC SOURCE: rtc_quota_intent_clear =====\n" + rtc_intent_clear + "\n===== END SOURCE =====\n")
+        except Exception:
+            pass
+    try:
+        agent.newRTCFunction("rtc_quota_intent_clear", rtc_intent_clear)
+    except Exception as e:
+        try:
+            print(f"\n===== NVRTC ERROR in rtc_quota_intent_clear (register) =====\n{e}\n----- SOURCE BEGIN -----\n{rtc_intent_clear}\n----- SOURCE END -----\n")
+        except Exception:
+            pass
+        raise
     l3b = model.newLayer(); l3b.addAgentFunction(agent.getFunction("rtc_quota_intent_clear"))
 
     # Вторая фаза квотирования: статус 3 на остатке квоты после фазы статуса 2
@@ -1153,7 +1238,104 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     if enable_mp2_post:
         l_co = model.newLayer(); l_co.addAgentFunction(agent.getFunction("rtc_mp2_copyout"))
 
-    
+    # === Опциональная интеграция спавна после логгера ===
+    _enable_spawn = os.environ.get("HL_ENABLE_SPAWN", "0") == "1"
+    if _enable_spawn:
+        # Агент тикетов (каждый тикет порождает не более одного HELI в свой день)
+        spawn_ticket = model.newAgent("SPAWN_TICKET")
+        spawn_ticket.newVariableUInt("ticket", 0)
+        rtc_spawn_ticket_src = f"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_spawn_ticket, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            const unsigned int day = FLAMEGPU->getStepCounter();
+            static const unsigned int DAYS = {DAYS}u;
+            if (day >= DAYS) return flamegpu::ALIVE;
+            const unsigned int t = FLAMEGPU->getVariable<unsigned int>("ticket");
+            auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_need_u32");
+            auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_idx_u32");
+            auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_acn_u32");
+            auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_psn_u32");
+            const unsigned int need = need_mp;
+            if (t >= need) return flamegpu::ALIVE;
+            const unsigned int idx = bidx_mp + t;
+            const unsigned int acn = bacn_mp + t;
+            const unsigned int psn = bpsn_mp + t;
+            const unsigned int mfg = FLAMEGPU->environment.getProperty<unsigned int>("month_first_u32", day);
+            auto out = FLAMEGPU->agent_out;
+            out.setVariable<unsigned int>("idx", idx);
+            out.setVariable<unsigned int>("psn", psn);
+            out.setVariable<unsigned int>("aircraft_number", acn);
+            out.setVariable<unsigned int>("ac_type_mask", 64u);
+            out.setVariable<unsigned int>("group_by", 2u);
+            out.setVariable<unsigned int>("partseqno_i", 70482u);
+            out.setVariable<unsigned int>("mfg_date", mfg);
+            out.setVariable<unsigned int>("status_id", 3u);
+            out.setVariable<unsigned int>("sne", 0u);
+            out.setVariable<unsigned int>("ppr", 0u);
+            out.setVariable<unsigned int>("repair_days", 0u);
+            out.setVariable<unsigned int>("ops_ticket", 0u);
+            out.setVariable<unsigned int>("intent_flag", 0u);
+            out.setVariable<unsigned int>("ll", 0u);
+            out.setVariable<unsigned int>("oh", 0u);
+            out.setVariable<unsigned int>("br", 0u);
+            out.setVariable<unsigned int>("repair_time", 0u);
+            out.setVariable<unsigned int>("assembly_time", 0u);
+            out.setVariable<unsigned int>("partout_time", 0u);
+            out.setVariable<unsigned int>("daily_today_u32", 0u);
+            out.setVariable<unsigned int>("daily_next_u32", 0u);
+            out.setVariable<unsigned int>("active_trigger", 0u);
+            out.setVariable<unsigned int>("assembly_trigger", 0u);
+            out.setVariable<unsigned int>("partout_trigger", 0u);
+            out.setVariable<unsigned int>("s6_days", 0u);
+            out.setVariable<unsigned int>("s6_started", 0u);
+            return flamegpu::ALIVE;
+        }}
+        """
+        fn_spawn_ticket = spawn_ticket.newRTCFunction("rtc_spawn_ticket", rtc_spawn_ticket_src)
+        fn_spawn_ticket.setAgentOutput(agent)
+
+        # Менеджер спавна (один агент)
+        spawn_mgr = model.newAgent("SPAWN_MANAGER")
+        spawn_mgr.newVariableUInt("next_idx", 0)
+        spawn_mgr.newVariableUInt("next_acn", 0)
+        spawn_mgr.newVariableUInt("next_psn", 0)
+        rtc_spawn_mgr_src = f"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_spawn_mgr, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            const unsigned int day = FLAMEGPU->getStepCounter();
+            static const unsigned int DAYS = {DAYS}u;
+            if (day >= DAYS) return flamegpu::ALIVE;
+            unsigned int nx = FLAMEGPU->getVariable<unsigned int>("next_idx");
+            unsigned int na = FLAMEGPU->getVariable<unsigned int>("next_acn");
+            unsigned int np = FLAMEGPU->getVariable<unsigned int>("next_psn");
+            if (day == 0u) {{
+                const unsigned int frames_initial = FLAMEGPU->environment.getProperty<unsigned int>("frames_initial");
+                if (nx < frames_initial) nx = frames_initial;
+                if (na < 100000u) na = 100000u;
+                if (np < 2000000u) np = 2000000u;
+            }}
+            const unsigned int frames_max = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+            const unsigned int need_plan = FLAMEGPU->environment.getProperty<unsigned int>("mp4_new_counter_mi17_seed", day);
+            unsigned int need = need_plan;
+            if (nx + need > frames_max) need = (frames_max > nx ? (frames_max - nx) : 0u);
+            auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_need_u32");
+            auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_idx_u32");
+            auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_acn_u32");
+            auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int>("spawn_base_psn_u32");
+            need_mp.exchange(need);
+            bidx_mp.exchange(nx);
+            bacn_mp.exchange(na);
+            bpsn_mp.exchange(np);
+            nx += need; na += need; np += need;
+            FLAMEGPU->setVariable<unsigned int>("next_idx", nx);
+            FLAMEGPU->setVariable<unsigned int>("next_acn", na);
+            FLAMEGPU->setVariable<unsigned int>("next_psn", np);
+            return flamegpu::ALIVE;
+        }}
+        """
+        fn_spawn_mgr = spawn_mgr.newRTCFunction("rtc_spawn_mgr", rtc_spawn_mgr_src)
+
+        # Слои спавна в самом конце
+        l_spawn_mgr = model.newLayer(); l_spawn_mgr.addAgentFunction(fn_spawn_mgr)
+        l_spawn = model.newLayer(); l_spawn.addAgentFunction(fn_spawn_ticket)
 
     return model, agent
 
