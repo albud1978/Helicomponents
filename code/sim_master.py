@@ -150,7 +150,7 @@ def main():
         sim.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
         sim.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim.setEnvironmentPropertyUInt("days_total", DAYS)
-        sim.setEnvironmentPropertyUInt("frames_initial", 0)
+        sim.setEnvironmentPropertyUInt("frames_initial", int(env_data.get('mp3_count', 0)))
         # MP4/seed/month_first (усечённые до DAYS)
         try:
             import numpy as _np
@@ -179,8 +179,7 @@ def main():
         # Прогоним DAYS суток и печатаем рождение по дням
         import datetime as _dt
         base_epoch = _dt.date(1970, 1, 1)
-        # В spawn-smoke стартовая популяция component не загружается, поэтому prev_total = 0
-        prev_total = 0
+        prev_total = int(env_data.get('mp3_count', 0))
         comp_desc = hm.model.getAgent("component")
         for d in range(DAYS):
             sim.step()
@@ -1172,11 +1171,9 @@ def main():
         FRAMES = int(env_data['frames_total_u16'])
         DAYS = int(env_data['days_total_u16'])
         os.environ['HL_STATUS246_SMOKE'] = '1'
-        # Включаем MP2-лог и MP2-постпроцессинг в модели (уважаем внешние overrides)
-        os.environ.setdefault('HL_ENABLE_MP2', '1')
-        os.environ.setdefault('HL_ENABLE_MP2_POST', '1')
-        # Включаем интеграцию спавна в общий цикл
-        os.environ['HL_ENABLE_SPAWN'] = '1'
+        # Включаем MP2-лог и MP2-постпроцессинг в модели
+        os.environ['HL_ENABLE_MP2'] = '1'
+        os.environ['HL_ENABLE_MP2_POST'] = '1'
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         # Таймеры
@@ -1186,17 +1183,9 @@ def main():
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
         sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim2.setEnvironmentPropertyUInt("days_total", DAYS)
-        # frames_initial = объём стартовой популяции (агентов из MP3)
-        # Установим перед шагами, чтобы менеджер использовал стартовый порог idx
-        # Инициализируется позже после формирования rows/av (см. ниже)
         # MP4 квоты
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8']))
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
-        # Источники спавна: планы и первый день месяца (ord days)
-        if 'mp4_new_counter_mi17_seed' in env_data:
-            sim2.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed']))
-        if 'month_first_u32' in env_data:
-            sim2.setEnvironmentPropertyArrayUInt32("month_first_u32", list(env_data['month_first_u32']))
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
         frames_index = env_data.get('frames_index', {})
         # Берём статусы 1,2,4,5,6
@@ -1220,8 +1209,6 @@ def main():
         else:
             print("BR[MI-17] minutes: count=0")
         K = len(rows)
-        # frames_initial для менеджера спавна
-        sim2.setEnvironmentPropertyUInt("frames_initial", int(K))
         av = pyflamegpu.AgentVector(a_desc, K)
         # Подготовка массива mfg_date_days по кадрам (FRAMES), заполняем по индексу кадра fi
         mfg_by_frame = [0] * max(1, FRAMES)
@@ -1307,21 +1294,6 @@ def main():
             av[i].setVariableUInt("daily_today_u32", dt)
             av[i].setVariableUInt("daily_next_u32", 0)
         sim2.setPopulationData(av)
-        # Пул тикетов спавна и менеджер (если включён HL_ENABLE_SPAWN)
-        try:
-            st_desc = model2.getAgent("SPAWN_TICKET")
-            sm_desc = model2.getAgent("SPAWN_MANAGER")
-            # По умолчанию MaxPerDay=64
-            max_per_day = int(os.environ.get('HL_SPAWN_MAX_PER_DAY', '64'))
-            st_vec = pyflamegpu.AgentVector(st_desc, max_per_day)
-            for i in range(max_per_day):
-                st_vec[i].setVariableUInt("ticket", i)
-            sm_vec = pyflamegpu.AgentVector(sm_desc, 1)
-            sim2.setPopulationData(st_vec)
-            sim2.setPopulationData(sm_vec)
-        except Exception:
-            # Спавн может быть отключён в сборке модели
-            pass
         t_load_s += (_t.perf_counter() - t0)
         before = pyflamegpu.AgentVector(a_desc)
         sim2.getPopulationData(before)
