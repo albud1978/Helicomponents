@@ -271,3 +271,55 @@
     ```
 
 - Режим B (deprecated): отдельный spawn‑smoke. Не используется в прод‑сценариях; оставлен только для низкоуровневой диагностики JIT.
+
+### Интеграция спавна в Mode A (план)
+
+- Предпосылки
+  - Ветка разработки с рабочим spawn-only (Mode B); откат `code/` к стабильному коммиту.
+  - Индексация кадров: FRAMES = |distinct aircraft_number| по объединению `MP3 ∪ MP5`; порядок индексов `[MP3] + [будущие из MP5 ↑]`.
+  - `frames_initial = |MP3|` (только стартовая популяция), `frames_total = FRAMES`.
+
+- Правила стабильности JIT (Mode A vs Mode B)
+  - Builder строго по флагу: при `HL_ENABLE_SPAWN=1` добавляются только объекты спавна (Env, агенты, 2 слоя). Никаких дополнительных RTC/слоёв из других подсистем.
+  - Mode B (spawn-only): массивы на DAYS для `spawn_need_u32/base_*` допускаются и сохраняются как есть (builder/RTC изолированы и согласованы).
+  - Mode A (совместная модель): предпочтительно скалярные MacroProperty для `spawn_need_u32/base_*` (без `<…,DAYS>`), чтобы исключить рассинхронизацию `(1)!=(DAYS)` в смешанной сборке. Допустимы массивы, если гарантирована полная изоморфность builder↔RTC и изоляция лишних RTC.
+  - Все Env‑имена, к которым обращается RTC, должны быть объявлены в builder ДО первого `setEnvironmentProperty*`.
+
+- Изменения по файлам
+  - `code/model_build.py` (build_model_for_quota_smoke)
+    - Scalars: добавить `frames_initial`.
+    - Arrays (PropertyArrayUInt32, длиной DAYS): `mp4_new_counter_mi17_seed`, `month_first_u32`.
+    - MacroProperty (скаляры длиной=1): `spawn_need_u32`, `spawn_base_idx_u32`, `spawn_base_acn_u32`, `spawn_base_psn_u32`.
+    - Агенты/RTC: `SPAWN_MANAGER` с `rtc_spawn_mgr`; `SPAWN_TICKET` с `rtc_spawn_ticket`, включить `setAgentOutput("HELI")` (совпадает с действующим агентом модели).
+    - Порядок слоёв (phase=0): добавить два последних слоя строго ПОСЛЕ `rtc_log_day`.
+    - Все перечисленное за флагом `HL_ENABLE_SPAWN=1` (совместимость при `0`).
+  - `code/sim_master.py` (ветка Mode A `--status12456-smoke-real`)
+    - Установить `HL_ENABLE_SPAWN` (через `setdefault`, уважая внешние overrides).
+    - Прокинуть в окружение: `frames_total = FRAMES`, `days_total`, `version_date`, `frames_initial = |MP3|`.
+    - Загрузить массивы: `mp4_new_counter_mi17_seed[:DAYS]`, `month_first_u32[:DAYS]`.
+    - Инициализировать популяции: `SPAWN_TICKET` (K = `HL_SPAWN_MAX_PER_DAY`, по умолчанию 64) с `ticket=0..K−1`; `SPAWN_MANAGER` (1 агент).
+  - `code/sim_env_setup.py`
+    - Использовать индекс кадров по объединению `MP3 ∪ MP5` (FRAMES) и собирать `MP5` размером `(DAYS+1) × FRAMES` в согласованном порядке.
+    - Источники спавна: формировать `mp4_new_counter_mi17_seed` и `month_first_u32` (как сейчас), отдавать их в `env_data`.
+
+- Инициализация новорождённого (инварианты)
+  - `idx=base_idx+k`, `aircraft_number=base_acn+k (≥100000)`, `psn=base_psn+k (≥2000000)`.
+  - `ac_type_mask=64`, `group_by=2`, `partseqno_i=70482`.
+  - `mfg_date=month_first_u32[D]`, `status_id=3`.
+  - `repair_days=0`, `ops_ticket=0`, `intent_flag=0`, `daily_today_u32=0`, `daily_next_u32=0`, `active/assembly/partout_trigger=0`.
+  - Включение в расчёты/экспорт с D+1 (слой спавна строго после `rtc_log_day`).
+
+- Переключатели и совместимость
+  - `HL_ENABLE_SPAWN=1` — включает спавн в Mode A; при `0` модель работает как прежде.
+  - `HL_SPAWN_MAX_PER_DAY` — мощность пула тикетов (дефолт 64).
+
+- Тест‑план
+  - Mode B (spawn‑only): без изменений; проверить Σ born и LAST_TOTAL.
+  - Mode A 365 дней: Σ born == Σ `mp4_new_counter_mi17_seed`; включение с D+1; отсутствие выходов за границы (`idx < FRAMES`, `row < FRAMES×DAYS`).
+  - Mode A 3650 с экспортом: инварианты + проверка таймингов; без регрессий статусов/квот.
+
+- Риски и меры
+  - Несоответствие индексации MP5 ↔ frames_index — фиксируется порядком `[MP3] + [MP5 ↑]` и стартом `next_idx` от `frames_initial`.
+  - Обязателен `setAgentOutput("component")` для слоя спавна.
+  - При нехватке ёмкости: `need = min(need_plan, frames_total − next_idx)`; «тихих пропусков» нет.
+

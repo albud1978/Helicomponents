@@ -758,6 +758,17 @@ SupersetBI: Direct Join по status_id
 *Последнее обновление: 31-08-2025* 
 *Примечание 09-09-2025: включение spawn вызвало пакетную JIT‑сборку и падение на `rtc_quota_intent_clear`; требуется изоляция RTC через фиче‑флаг и/или исправление компиляции. До исправления основная задача `run-status12456-365-born-check` заблокирована NVRTC‑ошибкой.*
 
+## [P1] Интеграция спавна в Mode A (09-09-2025)
+
+- Статус: В процессе
+- Описание: Реализовать интеграцию спавна (MI‑17) в основной суточный конвейер Mode A как последние слои `rtc_spawn_mgr → rtc_spawn_ticket` после `rtc_log_day`. Использовать существующие источники `mp4_new_counter_mi17_seed` и `month_first_u32`, MacroProperty‑скаляры `spawn_need_u32/base_*`, индексацию FRAMES по `MP3 ∪ MP5`. Сохранить совместимость при `HL_ENABLE_SPAWN=0`.
+- План:
+  1) model_build.py: объявить `frames_initial`, PropertyArrays (`mp4_new_counter_mi17_seed`, `month_first_u32`), MacroProperty скаляры `spawn_*`, агенты и RTC; добавить два последних слоя (за флагом `HL_ENABLE_SPAWN`).
+  2) sim_master.py (Mode A): прокинуть `frames_total`, `frames_initial`, массивы `seed/month_first`; создать популяции `SPAWN_TICKET` (K=HL_SPAWN_MAX_PER_DAY, по умолчанию 64) и `SPAWN_MANAGER` (1).
+  3) sim_env_setup.py: подтвердить FRAMES из объединения `MP3 ∪ MP5` и готовность массивов `seed/month_first`.
+  4) Тесты: Mode B — без изменений; Mode A — 365/3650 суток, инварианты рождения и D+1 включение, отсутствие выходов за границы.
+- Критерии приёмки: Σ born == Σ seed; новорождённые участвуют с D+1; экспорт корректен; без регрессий по статусам/квотам.
+
 ## Задача: Обогащение MacroProperty3 начальными статусами (pre-simulation)
 - **Статус**: Не начата
 - **Дата создания**: 10-08-2025
