@@ -1,6 +1,6 @@
 ### GPUarc: Архитектура спавна и прохождения этапов симуляции HELI (FLAME GPU)
 
-Дата: 2025-09-08
+Дата: 2025-09-09
 
 ### Область документа
 - **Цель**: согласовать архитектуру спавна новых агентов (MI‑17) и их включения в общий конвейер симуляции от загрузки MP до экспорта.
@@ -12,6 +12,11 @@
 - **FRAMES**: максимальная мощность кадров (размер популяции по осям индексов агентов) на весь горизонт.
 - **DAYS**: число симулируемых суток.
 - **D**: номер текущих суток; D0 — начальный день.
+
+### Фазы выполнения (по факту оркестрации)
+- **Фаза 0 — симуляция (ежесуточный блок)**: выполняются все RTC слои статусов/квот/логгера и спавн. К host не обращаемся.
+- **Фаза 2 — постпроцессинг (один раз после всех суток)**: выполняется только `rtc_mp2_postprocess`; остальные RTC выходят сразу.
+- **Фаза 1 — экспорт (один батч после постпроцессинга)**: цикл по дням; на каждом d вызывается `rtc_mp2_copyout`, затем host читает и пишет батчами в БД. В конце возвращаемся на фазу 0.
 
 ### Изменения в Extract (Condition precedent) — интерпретация месяца поставки
 - Месяц поставки трактовать как 15‑е число месяца (не последний день):
@@ -43,9 +48,12 @@
 - Создаём только агентов, присутствующих в MP3 (текущая популяция).
 - Будущие номера из MP5 не создаём заранее: для них зарезервированы индексы в `frames_index`, строки MP5/MP2 подготовлены, но будут заполнены после спавна.
 
-### Этап 2 — спавн (GPU‑only, atomicSub)
-- На конце суток D RTC‑функция выполняет `atomicSub(mp4_new_counter_mi17[D], 1)` для каждого тикета и при `old>0` создаёт по одному агенту `agent_out`; `idx/psn/aircraft_number` берутся из device‑счётчиков; поля — по правилам ниже. См. раздел «GPU‑only спавн — условия (Condition precedent)».
-- **Позиция**: слой спавна выполняется строго после логгера (новые в экспорт с D+1).
+### Этап 2 — спавн (GPU‑only, менеджер + тикеты)
+- На конце суток D выполняется два слоя:
+  1) `rtc_spawn_mgr` (1 агент) читает план `mp4_new_counter_mi17_seed[day]`, ограничивает по `frames_total`, публикует скаляры MacroProperty: `spawn_need_u32`, `spawn_base_idx_u32`, `spawn_base_acn_u32`, `spawn_base_psn_u32`, и сдвигает локальные `next_*`.
+  2) `rtc_spawn_ticket` (K тикетов, у нас K=16): для `ticket=k`, если `k < spawn_need_u32`, создаёт ровно одного `component` через `agent_out`, заполняя поля по правилам ниже.
+- Используются именно скалярные MacroProperty (не массивы) для совместимости с текущим PyFLAMEGPU.
+- **Позиция**: блок спавна выполняется строго последним, после логгера (новорождённые входят в расчёты с D+1 и в экспорт попадают начиная с D+1).
 
 Примечание: если в MP5 есть номера, отсутствующие в MP3, они не создаются автоматически на старте. Они появятся только в тот день, когда `new_counter_mi17[D] > 0`.
 
@@ -55,6 +63,26 @@
 3) Квоты: intent → approve → apply → intent_clear; пост‑обработка статусов 3/5/1 (как в текущей модели).
 4) Логгер MP2 (если включён) — в самом конце шага.
 5) Спавн — самый последний слой (после логгера).
+
+#### Таблица: последовательность слоёв внутри суток (phase=0)
+
+| № | Слой / RTC | Назначение | Примечания |
+|---|---|---|---|
+| 1 | rtc_probe_mp5 | Заполнить dt/dn из MP5 | Включён всегда в полной сборке |
+| 2 | rtc_quota_begin_day | Обнулить ops_ticket, intent_flag и все триггеры | Утренний сброс |
+| 3 | rtc_status_6 | Логика статуса 6 | |
+| 4 | rtc_status_4 | Логика статуса 4 | |
+| 5 | rtc_status_2 | Начисления и пороги LL/OH/BR | Требует dt/dn |
+| 6 | rtc_quota_intent | Intent для S2 | |
+| 7 | rtc_quota_approve_manager | Распределение для S2 | Один менеджер |
+| 8 | rtc_quota_apply | Проставить ops_ticket | По approve буферам |
+| 9 | rtc_quota_intent_clear | Очистить intent‑буферы | Не трогает флаги агента |
+| 10 | rtc_quota_intent_s3 → approve_s3 → apply → intent_clear → rtc_status_3_post_quota | Квоты для S3 и переход 3→2 | Остаток от S2 |
+| 11 | rtc_quota_intent_s5 → approve_s5 → apply → intent_clear | Квоты для S5 | |
+| 12 | rtc_quota_intent_s1 → approve_s1 → apply → intent_clear → rtc_status_1_post_quota | Квоты для S1 и переход 1→2 | Политика по mfg_date |
+| 13 | rtc_status_5_post_quota → rtc_status_2_post_quota | Финальные переходы | Исключить двойные переходы |
+| 14 | rtc_log_day | Запись дня в MP2 (agent_out) | Перед спавном |
+| 15 | rtc_spawn_mgr → rtc_spawn_ticket | Рождение новых HELI | Всегда последним |
 
 ### Минимальная интеграция спавна в существующую модель (без изменения остальной логики)
 - Объявить новые сущности в модели:
@@ -150,7 +178,7 @@
 
 
 
-### GPU‑only спавн (atomicSub)
+### GPU‑only спавн (менеджер + тикеты)
 Это основной и единственный поддерживаемый вариант спавна: полностью на GPU, без host‑батчей. Ниже — обязательные предварительные требования.
 
 - Данные и размерности
@@ -162,7 +190,7 @@
   - days_total, version_date, frames_total (= FRAMES) заданы.
   - month_first_u32[day] доступен (PropertyArrayUInt32).
   - MP1‑массивы для 70482 готовы: br_mi17, ll_mi17, oh_mi17, repair_time, assembly_time, partout_time, sne_new, ppr_new; задан `mp1_idx_mi17_spawn`.
-  - mp4_new_counter_mi17 — перевести в MacroPropertyUInt<DAYS> (а не только PropertyArray), чтобы был доступ к атомикам на device. Значения инициализируются из источника MP4.
+  - mp4_new_counter_mi17_seed — PropertyArrayUInt32; внутри шага используется менеджером как источник плана. Отдельный MacroProperty‑массив по дням не требуется.
   - Ввести MacroProperty‑счётчики (UInt32):
     - next_idx_spawn (init = frames_initial)
     - next_aircraft_no_mi17 (init = первый свободный ≥ 100000, согласованный с порядком будущих строк MP5)
@@ -203,8 +231,8 @@
 - Агент `spawn_ticket` (|FRAMES|), пустая RTC-функция и слой строго после логгера.
 - Тест: 7 дней — идентичен базе.
 
-4) RTC: atomicSub (минимум)
-- В ядре: `old = atomicSub(mp4_new_counter_mi17[day], 1u)`; при `old>0` — единичное `agent_out`; idx через `atomicAdd(next_idx_spawn,1u)`; временные константы.
+4) RTC: менеджер + тикеты (минимум)
+- Менеджер публикует `need/base_*` в скалярные MacroProperty, тикеты создают по одному HELI при `k < need`.
 - Тест: 10 дней, искусственный план — born == sum(new_counter).
 
 5) Полная инициализация полей
@@ -220,7 +248,7 @@
 8) Документация
 - Обновить transform.md (правила спавна), changelog.md; описать сценарии тестов.
 
-### Команды запуска (два режима)
+### Команды запуска
 - Режим А: симуляция без спавна (проверка базовой логики статусов/квот/экспорта)
   - 365 суток (seatbelts off), экспорт выключен:
     ```bash
@@ -242,24 +270,56 @@
       --seatbelts off 2>&1 | tee "$LOG" | cat
     ```
 
-- Режим B: спавн отдельно (полный GPU, слои спавна; остальные RTC отключены)
-  - 365 суток, JIT-лог включён, CUDA_PATH задан явно:
-    ```bash
-    LOG=logs/sim_spawn_smoke_$(date +%Y%m%d_%H%M%S).log; mkdir -p logs;
-    CUDA_PATH=/usr/local/cuda-12.8 \
-    PYTHONUNBUFFERED=1 HL_RTC_MODE=spawn_only HL_JIT_LOG=1 \
-    python3 -u code/sim_master.py \
-      --spawn-smoke-real --spawn-days 365 \
-      --seatbelts off 2>&1 | tee "$LOG" | tail -n 260 | cat
-    ```
-  - Проверка NVRTC-ошибок и исходника RTC (диагностика):
-    ```bash
-    LOG=logs/sim_spawn_smoke_debug_$(date +%Y%m%d_%H%M%S).log; mkdir -p logs;
-    CUDA_PATH=/usr/local/cuda-12.8 \
-    PYTHONUNBUFFERED=1 HL_RTC_MODE=spawn_only HL_JIT_LOG=1 \
-    python3 -u code/sim_master.py --spawn-smoke-real --spawn-days 365 --seatbelts off \
-      > "$LOG" 2>&1 || true; \
-    echo '--- NVRTC errors (grep error:) ---'; grep -n "error:" "$LOG" | head -n 80 || true; \
-    echo '--- RTC block ---'; sed -n '/===== RTC SOURCE: rtc_spawn_mi17_atomic =====/,/===== END SOURCE =====/p' "$LOG" | cat; \
-    echo '--- last 200 lines ---'; tail -n 200 "$LOG" | cat
-    ```
+- Режим B (deprecated): отдельный spawn‑smoke. Не используется в прод‑сценариях; оставлен только для низкоуровневой диагностики JIT.
+
+### Интеграция спавна в Mode A (план)
+
+- Предпосылки
+  - Ветка разработки с рабочим spawn-only (Mode B); откат `code/` к стабильному коммиту.
+  - Индексация кадров: FRAMES = |distinct aircraft_number| по объединению `MP3 ∪ MP5`; порядок индексов `[MP3] + [будущие из MP5 ↑]`.
+  - `frames_initial = |MP3|` (только стартовая популяция), `frames_total = FRAMES`.
+
+- Правила стабильности JIT (Mode A vs Mode B)
+  - Builder строго по флагу: при `HL_ENABLE_SPAWN=1` добавляются только объекты спавна (Env, агенты, 2 слоя). Никаких дополнительных RTC/слоёв из других подсистем.
+  - Mode B (spawn-only): массивы на DAYS для `spawn_need_u32/base_*` допускаются и сохраняются как есть (builder/RTC изолированы и согласованы).
+  - Mode A (совместная модель): предпочтительно скалярные MacroProperty для `spawn_need_u32/base_*` (без `<…,DAYS>`), чтобы исключить рассинхронизацию `(1)!=(DAYS)` в смешанной сборке. Допустимы массивы, если гарантирована полная изоморфность builder↔RTC и изоляция лишних RTC.
+  - Все Env‑имена, к которым обращается RTC, должны быть объявлены в builder ДО первого `setEnvironmentProperty*`.
+
+- Изменения по файлам
+  - `code/model_build.py` (build_model_for_quota_smoke)
+    - Scalars: добавить `frames_initial`.
+    - Arrays (PropertyArrayUInt32, длиной DAYS): `mp4_new_counter_mi17_seed`, `month_first_u32`.
+    - MacroProperty (скаляры длиной=1): `spawn_need_u32`, `spawn_base_idx_u32`, `spawn_base_acn_u32`, `spawn_base_psn_u32`.
+    - Агенты/RTC: `SPAWN_MANAGER` с `rtc_spawn_mgr`; `SPAWN_TICKET` с `rtc_spawn_ticket`, включить `setAgentOutput("HELI")` (совпадает с действующим агентом модели).
+    - Порядок слоёв (phase=0): добавить два последних слоя строго ПОСЛЕ `rtc_log_day`.
+    - Все перечисленное за флагом `HL_ENABLE_SPAWN=1` (совместимость при `0`).
+  - `code/sim_master.py` (ветка Mode A `--status12456-smoke-real`)
+    - Установить `HL_ENABLE_SPAWN` (через `setdefault`, уважая внешние overrides).
+    - Прокинуть в окружение: `frames_total = FRAMES`, `days_total`, `version_date`, `frames_initial = |MP3|`.
+    - Загрузить массивы: `mp4_new_counter_mi17_seed[:DAYS]`, `month_first_u32[:DAYS]`.
+    - Инициализировать популяции: `SPAWN_TICKET` (K = `HL_SPAWN_MAX_PER_DAY`, по умолчанию 64) с `ticket=0..K−1`; `SPAWN_MANAGER` (1 агент).
+  - `code/sim_env_setup.py`
+    - Использовать индекс кадров по объединению `MP3 ∪ MP5` (FRAMES) и собирать `MP5` размером `(DAYS+1) × FRAMES` в согласованном порядке.
+    - Источники спавна: формировать `mp4_new_counter_mi17_seed` и `month_first_u32` (как сейчас), отдавать их в `env_data`.
+
+- Инициализация новорождённого (инварианты)
+  - `idx=base_idx+k`, `aircraft_number=base_acn+k (≥100000)`, `psn=base_psn+k (≥2000000)`.
+  - `ac_type_mask=64`, `group_by=2`, `partseqno_i=70482`.
+  - `mfg_date=month_first_u32[D]`, `status_id=3`.
+  - `repair_days=0`, `ops_ticket=0`, `intent_flag=0`, `daily_today_u32=0`, `daily_next_u32=0`, `active/assembly/partout_trigger=0`.
+  - Включение в расчёты/экспорт с D+1 (слой спавна строго после `rtc_log_day`).
+
+- Переключатели и совместимость
+  - `HL_ENABLE_SPAWN=1` — включает спавн в Mode A; при `0` модель работает как прежде.
+  - `HL_SPAWN_MAX_PER_DAY` — мощность пула тикетов (дефолт 64).
+
+- Тест‑план
+  - Mode B (spawn‑only): без изменений; проверить Σ born и LAST_TOTAL.
+  - Mode A 365 дней: Σ born == Σ `mp4_new_counter_mi17_seed`; включение с D+1; отсутствие выходов за границы (`idx < FRAMES`, `row < FRAMES×DAYS`).
+  - Mode A 3650 с экспортом: инварианты + проверка таймингов; без регрессий статусов/квот.
+
+- Риски и меры
+  - Несоответствие индексации MP5 ↔ frames_index — фиксируется порядком `[MP3] + [MP5 ↑]` и стартом `next_idx` от `frames_initial`.
+  - Обязателен `setAgentOutput("component")` для слоя спавна.
+  - При нехватке ёмкости: `need = min(need_plan, frames_total − next_idx)`; «тихих пропусков» нет.
+
