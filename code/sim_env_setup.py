@@ -135,27 +135,6 @@ def build_frames_index(mp3_rows, mp3_fields: List[str]) -> Tuple[Dict[int, int],
     return frames_index, len(ac_list)
 
 
-def build_frames_index_union_mp3_mp5(mp3_rows, mp3_fields: List[str], mp5_by_day: Dict[date, Dict[int,int]]) -> Tuple[Dict[int, int], int]:
-    """Формирует индекс кадров как объединение бортов из MP3 и всех aircraft_number из MP5.
-    Это даёт хедрум для будущих планёров и позволяет спавну работать в общем пайплайне.
-    """
-    # Борта из MP3 (как было)
-    base_index, _ = build_frames_index(mp3_rows, mp3_fields)
-    ac_set = set(base_index.keys())
-    # Добавим все борта, встречающиеся в MP5 по любым датам
-    for by_ac in mp5_by_day.values():
-        for ac in by_ac.keys():
-            try:
-                ac_int = int(ac)
-            except Exception:
-                continue
-            if ac_int > 0:
-                ac_set.add(ac_int)
-    ac_list = sorted(ac_set)
-    frames_index = {ac: i for i, ac in enumerate(ac_list)}
-    return frames_index, len(ac_list)
-
-
 def get_days_sorted(mp4_by_day: Dict[date, Dict[str, int]]) -> List[date]:
     return sorted(mp4_by_day.keys())
 
@@ -264,8 +243,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     mp5_by_day = preload_mp5_maps(client)
 
     days_sorted = get_days_sorted(mp4_by_day)
-    # Включаем будущие борта из MP5 в индекс кадров
-    frames_index, frames_total = build_frames_index_union_mp3_mp5(mp3_rows, mp3_fields, mp5_by_day)
+    frames_index, frames_total = build_frames_index(mp3_rows, mp3_fields)
     mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
     mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
     # План новых Ми-17 по дням (seed для MacroProperty на GPU)
