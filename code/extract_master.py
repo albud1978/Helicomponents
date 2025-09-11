@@ -159,21 +159,24 @@ class ExtractMaster:
             'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
             'dependencies': ['heli_pandas', 'md_components'],
             'result_table': 'dict_aircraft_number_flat',
-            'critical': False
+            'critical': False,
+            # На этом шаге словарь может быть временно пуст (до генерации новых ВС в AC/FL)
+            # Предупреждение валидации для пустой таблицы по текущей версии подавляем осознанно
+            'allow_empty': True
         },
         # === ТЕНЗОРЫ (в самом конце, когда все данные готовы) ===
-        {
-            'script': 'program_fl_direct_loader.py',
-            'description': 'Flight Program FL Direct - прямой тензор программ полетов на 4000 дней',
-            'dependencies': ['dict_aircraft_number_flat'],
-            'result_table': 'flight_program_fl',
-            'critical': False
-        },
         {
             'script': 'program_ac_direct_loader.py',
             'description': 'Flight Program AC Direct - прямой тензор операций ВС на 4000 дней с постпроцессингом',
             'dependencies': ['heli_pandas', 'md_components'],
             'result_table': 'flight_program_ac',
+            'critical': False
+        },
+        {
+            'script': 'program_fl_direct_loader.py',
+            'description': 'Flight Program FL Direct - прямой тензор программ полетов на 4000 дней',
+            'dependencies': ['dict_aircraft_number_flat'],
+            'result_table': 'flight_program_fl',
             'critical': False
         },
         {
@@ -526,6 +529,9 @@ class ExtractMaster:
                 count = self.client.execute(count_sql)[0][0]
                 
                 if count == 0:
+                    # Разрешаем пустую таблицу, если шаг помечен allow_empty
+                    if step.get('allow_empty'):
+                        return {'success': True, 'message': f'{result_table}: 0 записей (допустимо для этого шага)'}
                     return {'success': False, 'message': f'Нет данных в {result_table} для версии {self.version_date}v{self.version_id}'}
                 
                 return {'success': True, 'message': f'{result_table}: {count:,} записей (версия {self.version_id})'}
@@ -535,6 +541,8 @@ class ExtractMaster:
                 count = self.client.execute(count_sql)[0][0]
                 
                 if count == 0:
+                    if step.get('allow_empty'):
+                        return {'success': True, 'message': f'{result_table}: 0 записей (допустимо для этого шага)'}
                     return {'success': False, 'message': f'Нет данных в {result_table}'}
                 
                 return {'success': True, 'message': f'{result_table}: {count:,} записей (без версионирования)'}
