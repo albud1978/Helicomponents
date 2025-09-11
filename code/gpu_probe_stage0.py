@@ -59,7 +59,7 @@ def main():
     if not days_sorted:
         print("❌ MP4 пуст: нет дат")
         sys.exit(1)
-    frames_index, frames_total = build_frames_index(mp3_rows, mp3_fields)
+    frames_index, frames_total = build_frames_index(mp3_rows, mp3_fields, mp5_by_day)
     days_total = len(days_sorted)
 
     mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
