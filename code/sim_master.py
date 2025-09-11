@@ -1186,6 +1186,14 @@ def main():
         # MP4 квоты
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8']))
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
+        # План рождения и вспомогательные даты для mfg_date (нужны спавну)
+        if 'mp4_new_counter_mi17_seed' in env_data:
+            sim2.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed']))
+        if 'month_first_u32' in env_data:
+            sim2.setEnvironmentPropertyArrayUInt32("month_first_u32", list(env_data['month_first_u32']))
+        # frames_initial для корректной базовой индексации новорождённых
+        if 'frames_initial_u32' in env_data:
+            sim2.setEnvironmentPropertyUInt("frames_initial", int(env_data['frames_initial_u32']))
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
         frames_index = env_data.get('frames_index', {})
         # Берём статусы 1,2,4,5,6
@@ -1311,6 +1319,7 @@ def main():
         export_truncate = bool(getattr(a, 'export_truncate', False)) if hasattr(a, 'export_truncate') else False
         export_triggers_only = bool(getattr(a, 'export_triggers_only', False)) if hasattr(a, 'export_triggers_only') else False
         export_buf: list = []
+        export_rows: int = 0
         if export_on:
             ensure_sim_results_table(client, export_table)
             if export_truncate:
@@ -1339,9 +1348,13 @@ def main():
                     )
                     if export_triggers_only:
                         cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                        export_rows += n
                     else:
+                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf)
+                        export_rows += n
         trans12_log: List[Tuple[str,int]] = []
         trans12_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans23_log: List[Tuple[str,int]] = []
@@ -1357,6 +1370,19 @@ def main():
         trans32_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans52_info: List[Tuple[str,int,int,int,int,int,int]] = []
         total_5to2 = 0
+        # Инициализация агентов спавна (иконки тикетов и менеджер)
+        try:
+            st_desc = model2.getAgent("spawn_ticket")
+            st_vec = pyflamegpu.AgentVector(st_desc, 16)
+            for i in range(16):
+                st_vec[i].setVariableUInt("ticket", i)
+            sm_desc = model2.getAgent("spawn_mgr")
+            sm_vec = pyflamegpu.AgentVector(sm_desc, 1)
+            sim2.setPopulationData(st_vec)
+            sim2.setPopulationData(sm_vec)
+        except Exception:
+            pass
+
         for d in range(steps):
             pop_before = pyflamegpu.AgentVector(a_desc)
             t_bcpu0 = _t.perf_counter()
@@ -1391,16 +1417,24 @@ def main():
                 if len(export_buf) >= export_batch:
                     if export_triggers_only:
                         cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                        export_rows += n
                     else:
+                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf)
+                        export_rows += n
         # Финальный сброс буфера для режима без постпроцессинга
         if export_on and getattr(a, 'export_postprocess', 'on') == 'off' and export_buf:
             if export_triggers_only:
                 cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                n = len(export_buf)
                 t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                export_rows += n
             else:
+                n = len(export_buf)
                 t_db_s += flush_export_buffer(client, export_table, export_buf)
+                export_rows += n
             for i in range(K):
                 sb = status_before[i]
                 sa = int(pop_after[i].getVariableUInt('status_id'))
@@ -1485,15 +1519,23 @@ def main():
                 if len(export_buf) >= export_batch:
                     if export_triggers_only:
                         cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                        export_rows += n
                     else:
+                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf)
+                        export_rows += n
             if export_buf:
                 if export_triggers_only:
                     cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                    n = len(export_buf)
                     t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                    export_rows += n
                 else:
+                    n = len(export_buf)
                     t_db_s += flush_export_buffer(client, export_table, export_buf)
+                    export_rows += n
             # Вернуть фазу симуляции
             sim2.setEnvironmentPropertyUInt("export_phase", 0)
         after = pyflamegpu.AgentVector(a_desc)
@@ -1505,6 +1547,7 @@ def main():
         cnt5_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 5)
         cnt6_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 6)
         print(f"status12456_smoke_real: steps={steps}, cnt1 {cnt1_b}->{cnt1_a}, cnt2 {cnt2_b}->{cnt2_a}, cnt3 {cnt3_b}->{cnt3_a}, cnt4 {cnt4_b}->{cnt4_a}, cnt5 {cnt5_b}->{cnt5_a}, cnt6 {cnt6_b}->{cnt6_a}")
+        print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}, db_insert={t_db_s*1000:.2f}, rows_exported={export_rows}")
         if trans12_log:
             print("  transitions_1to2:")
             for dstr, acn in trans12_log:
