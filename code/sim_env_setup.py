@@ -109,17 +109,11 @@ def build_daily_arrays(mp3_rows, mp3_fields: List[str], mp1_br_rt_map: Dict[int,
 
 # === Full‑GPU подготовка окружения (Этап 0) ===
 
-def build_frames_index_union_mp3_mp5(mp3_rows, mp3_fields: List[str], mp5_by_day: Dict[date, Dict[int, int]]) -> Tuple[Dict[int, int], int, int]:
-    """Строит индекс кадров по объединению MP3 ∪ MP5.
-
-    Возвращает:
-    - frames_index: aircraft_number -> idx для объединённого множества
-    - frames_total: |MP3 ∪ MP5|
-    - frames_initial: |MP3| (число стартовых агентов)
-    """
+def build_frames_index(mp3_rows, mp3_fields: List[str], mp5_by_day: Dict[date, Dict[int, int]] = None) -> Tuple[Dict[int, int], int]:
     idx = {name: i for i, name in enumerate(mp3_fields)}
-    mp3_ac_set = set()
+    ac_set = set()
     for r in mp3_rows:
+        # Отбираем только планеры: group_by ∈ {1,2} ИЛИ маска типа с битами 32/64
         ac = int(r[idx['aircraft_number']] or 0)
         if ac <= 0:
             continue
@@ -130,20 +124,23 @@ def build_frames_index_union_mp3_mp5(mp3_rows, mp3_fields: List[str], mp5_by_day
         elif 'ac_type_mask' in idx:
             m = int(r[idx['ac_type_mask']] or 0)
             is_plane = (m & (32 | 64)) != 0
+        else:
+            # Если нет признаков — консервативно исключаем
+            is_plane = False
         if is_plane:
-            mp3_ac_set.add(ac)
-    # MP5 борта из flight_program_fl
-    mp5_ac_set = set()
-    for by_ac in mp5_by_day.values():
-        for ac in by_ac.keys():
-            a = int(ac)
-            if a > 0:
-                mp5_ac_set.add(a)
-    union_ac = sorted((mp3_ac_set | mp5_ac_set))
-    frames_index = {ac: i for i, ac in enumerate(union_ac)}
-    frames_total = len(union_ac)
-    frames_initial = len(mp3_ac_set)
-    return frames_index, frames_total, frames_initial
+            ac_set.add(ac)
+    
+    # НОВОЕ: Добавляем aircraft_number из MP5 (будущие вертолеты для спавна)
+    if mp5_by_day:
+        for day_data in mp5_by_day.values():
+            for ac in day_data.keys():
+                if ac > 0:  # Исключаем 0
+                    ac_set.add(ac)
+    
+    # 0 как «нет борта» исключаем
+    ac_list = sorted([ac for ac in ac_set if ac > 0])
+    frames_index = {ac: i for i, ac in enumerate(ac_list)}
+    return frames_index, len(ac_list)
 
 
 def get_days_sorted(mp4_by_day: Dict[date, Dict[str, int]]) -> List[date]:
@@ -254,7 +251,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     mp5_by_day = preload_mp5_maps(client)
 
     days_sorted = get_days_sorted(mp4_by_day)
-    frames_index, frames_total, frames_initial = build_frames_index_union_mp3_mp5(mp3_rows, mp3_fields, mp5_by_day)
+    frames_index, frames_total = build_frames_index(mp3_rows, mp3_fields, mp5_by_day)
     mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
     mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
     # План новых Ми-17 по дням (seed для MacroProperty на GPU)
@@ -287,7 +284,6 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     env_data = {
         'version_date_u16': days_to_epoch_u16(vdate),
         'frames_total_u16': int(frames_total),
-        'frames_initial_u32': int(frames_initial),
         'days_total_u16': int(len(days_sorted)),
         'days_sorted': days_sorted,
         'frames_index': frames_index,
@@ -314,10 +310,6 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     assert len(env_data['mp4_ops_counter_mi17']) == dt, "MP4_mi17 размер не равен days_total"
     assert len(env_data['mp4_new_counter_mi17_seed']) == dt, "MP4 new_counter_mi17 seed размер не равен days_total"
     assert len(env_data['mp5_daily_hours_linear']) == (dt + 1) * ft, "MP5_linear размер != (days_total+1)*frames_total"
-    # Контроль типа для MP5: UInt16
-    if env_data['mp5_daily_hours_linear']:
-        mx = max(env_data['mp5_daily_hours_linear'])
-        assert mx <= 65535, f"MP5_daily_hours содержит значение > 65535: {mx}"
     assert len(env_data['month_first_u32']) == dt, "month_first_u32 размер не равен days_total"
     # mp3_arrays длины согласованы
     a = env_data['mp3_arrays']
@@ -333,8 +325,6 @@ def apply_env_to_sim(sim, env_data: Dict[str, object]):
     sim.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
     sim.setEnvironmentPropertyUInt("frames_total", int(env_data['frames_total_u16']))
     sim.setEnvironmentPropertyUInt("days_total", int(env_data['days_total_u16']))
-    if 'frames_initial_u32' in env_data:
-        sim.setEnvironmentPropertyUInt("frames_initial", int(env_data['frames_initial_u32']))
     # MP4
     sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8']))
     sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
@@ -342,8 +332,10 @@ def apply_env_to_sim(sim, env_data: Dict[str, object]):
     sim.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed']))
     # Первый день месяца (ord days) для mfg_date
     sim.setEnvironmentPropertyArrayUInt32("month_first_u32", list(env_data['month_first_u32']))
-    # MP5 (линейный массив с паддингом) — UInt16
-    sim.setEnvironmentPropertyArrayUInt16("mp5_daily_hours", [int(x) & 0xFFFF for x in env_data['mp5_daily_hours_linear']])
+    # frames_initial для spawn (количество существующих агентов из MP3)
+    sim.setEnvironmentPropertyUInt("frames_initial", int(env_data.get('mp3_count', 0)))
+    # MP5 (линейный массив с паддингом)
+    sim.setEnvironmentPropertyArrayUInt16("mp5_daily_hours", list(env_data['mp5_daily_hours_linear']))
     # MP1 (SoA)
     if 'mp1_br_mi8' in env_data:
         sim.setEnvironmentPropertyArrayUInt32("mp1_br_mi8", list(env_data['mp1_br_mi8']))

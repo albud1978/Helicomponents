@@ -1169,11 +1169,18 @@ def main():
     # === Совместный слой 1/2/4/5/6 (REAL) ===
     if getattr(a, 'status12456_smoke_real', False):
         FRAMES = int(env_data['frames_total_u16'])
-        DAYS = int(env_data['days_total_u16'])
+        # Используем параметр командной строки, но ограничиваем максимальным значением
+        DAYS_REQUESTED = max(1, int(getattr(a, 'status12456_days', 7)))
+        DAYS = min(DAYS_REQUESTED, 365)  # Временное ограничение для избежания проблем компиляции
+        if DAYS < DAYS_REQUESTED:
+            print(f"⚠️ Предупреждение: запрошено {DAYS_REQUESTED} дней, ограничено до {DAYS} для стабильности")
+        
         os.environ['HL_STATUS246_SMOKE'] = '1'
         # Включаем MP2-лог и MP2-постпроцессинг в модели
         os.environ['HL_ENABLE_MP2'] = '1'
         os.environ['HL_ENABLE_MP2_POST'] = '1'
+        # Включаем spawn для Mode A
+        os.environ.setdefault('HL_ENABLE_SPAWN', '1')
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         # Таймеры
@@ -1183,17 +1190,19 @@ def main():
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
         sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim2.setEnvironmentPropertyUInt("days_total", DAYS)
-        # MP4 квоты
-        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8']))
-        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
-        # План рождения и вспомогательные даты для mfg_date (нужны спавну)
-        if 'mp4_new_counter_mi17_seed' in env_data:
-            sim2.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed']))
-        if 'month_first_u32' in env_data:
-            sim2.setEnvironmentPropertyArrayUInt32("month_first_u32", list(env_data['month_first_u32']))
-        # frames_initial для корректной базовой индексации новорождённых
-        if 'frames_initial_u32' in env_data:
-            sim2.setEnvironmentPropertyUInt("frames_initial", int(env_data['frames_initial_u32']))
+        # MP4 квоты - обрезаем до нужного количества дней
+        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8'])[:DAYS])
+        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17'])[:DAYS])
+        # month_first_u32 нужен всегда для mfg_date - обрезаем до DAYS
+        sim2.setEnvironmentPropertyArrayUInt32("month_first_u32", list(env_data['month_first_u32'])[:DAYS])
+        # Spawn данные (загружаем только если spawn включен в модели)
+        if os.environ.get('HL_ENABLE_SPAWN', '0') == '1':
+            sim2.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed'])[:DAYS])
+        
+        # MP5 daily hours - обрезаем до (DAYS+1)*FRAMES
+        mp5_size = (DAYS + 1) * FRAMES
+        sim2.setEnvironmentPropertyArrayUInt16("mp5_daily_hours", list(env_data['mp5_daily_hours_linear'])[:mp5_size])
+        
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
         frames_index = env_data.get('frames_index', {})
         # Берём статусы 1,2,4,5,6
@@ -1302,6 +1311,40 @@ def main():
             av[i].setVariableUInt("daily_today_u32", dt)
             av[i].setVariableUInt("daily_next_u32", 0)
         sim2.setPopulationData(av)
+        
+        # Создаем популяции спавна (если включен)
+        if os.environ.get('HL_ENABLE_SPAWN', '0') == '1':
+            try:
+                # Spawn ticket популяция
+                spawn_ticket_desc = model2.getAgent("spawn_ticket")
+                spawn_tickets = pyflamegpu.AgentVector(spawn_ticket_desc, 64)  # HL_SPAWN_MAX_PER_DAY
+                for i in range(64):
+                    spawn_tickets[i].setVariableUInt("ticket", i)
+                sim2.setPopulationData(spawn_tickets)
+                
+                # Spawn manager популяция
+                spawn_mgr_desc = model2.getAgent("spawn_mgr")
+                spawn_mgr = pyflamegpu.AgentVector(spawn_mgr_desc, 1)
+                # frames_initial - это количество существующих вертолетов (group_by=1,2)
+                # Считаем уникальные aircraft_number из mp3_rows с фильтром по group_by
+                unique_aircraft = set()
+                for r in mp3_rows:
+                    group_by = int(r[idx_map.get('group_by', -1)] or 0)
+                    if group_by in (1, 2):  # Только вертолеты
+                        ac = int(r[idx_map.get('aircraft_number', -1)] or 0)
+                        if ac > 0:
+                            unique_aircraft.add(ac)
+                frames_initial = len(unique_aircraft)
+                
+                spawn_mgr[0].setVariableUInt("next_idx", frames_initial)
+                spawn_mgr[0].setVariableUInt("next_acn", 100000)
+                spawn_mgr[0].setVariableUInt("next_psn", 2000000)
+                sim2.setPopulationData(spawn_mgr)
+                print(f"✅ Spawn популяции созданы: frames_initial={frames_initial} (уникальных вертолетов), spawn_tickets=64")
+            except Exception as e:
+                print(f"⚠️ Не удалось создать spawn популяции: {e}")
+                print("   Spawn будет отключен для этого запуска")
+        
         t_load_s += (_t.perf_counter() - t0)
         before = pyflamegpu.AgentVector(a_desc)
         sim2.getPopulationData(before)
@@ -1319,7 +1362,6 @@ def main():
         export_truncate = bool(getattr(a, 'export_truncate', False)) if hasattr(a, 'export_truncate') else False
         export_triggers_only = bool(getattr(a, 'export_triggers_only', False)) if hasattr(a, 'export_triggers_only') else False
         export_buf: list = []
-        export_rows: int = 0
         if export_on:
             ensure_sim_results_table(client, export_table)
             if export_truncate:
@@ -1348,13 +1390,9 @@ def main():
                     )
                     if export_triggers_only:
                         cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
-                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
-                        export_rows += n
                     else:
-                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf)
-                        export_rows += n
         trans12_log: List[Tuple[str,int]] = []
         trans12_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans23_log: List[Tuple[str,int]] = []
@@ -1370,19 +1408,6 @@ def main():
         trans32_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans52_info: List[Tuple[str,int,int,int,int,int,int]] = []
         total_5to2 = 0
-        # Инициализация агентов спавна (иконки тикетов и менеджер)
-        try:
-            st_desc = model2.getAgent("spawn_ticket")
-            st_vec = pyflamegpu.AgentVector(st_desc, 16)
-            for i in range(16):
-                st_vec[i].setVariableUInt("ticket", i)
-            sm_desc = model2.getAgent("spawn_mgr")
-            sm_vec = pyflamegpu.AgentVector(sm_desc, 1)
-            sim2.setPopulationData(st_vec)
-            sim2.setPopulationData(sm_vec)
-        except Exception:
-            pass
-
         for d in range(steps):
             pop_before = pyflamegpu.AgentVector(a_desc)
             t_bcpu0 = _t.perf_counter()
@@ -1417,24 +1442,16 @@ def main():
                 if len(export_buf) >= export_batch:
                     if export_triggers_only:
                         cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
-                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
-                        export_rows += n
                     else:
-                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf)
-                        export_rows += n
         # Финальный сброс буфера для режима без постпроцессинга
         if export_on and getattr(a, 'export_postprocess', 'on') == 'off' and export_buf:
             if export_triggers_only:
                 cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
-                n = len(export_buf)
                 t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
-                export_rows += n
             else:
-                n = len(export_buf)
                 t_db_s += flush_export_buffer(client, export_table, export_buf)
-                export_rows += n
             for i in range(K):
                 sb = status_before[i]
                 sa = int(pop_after[i].getVariableUInt('status_id'))
@@ -1519,23 +1536,15 @@ def main():
                 if len(export_buf) >= export_batch:
                     if export_triggers_only:
                         cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
-                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
-                        export_rows += n
                     else:
-                        n = len(export_buf)
                         t_db_s += flush_export_buffer(client, export_table, export_buf)
-                        export_rows += n
             if export_buf:
                 if export_triggers_only:
                     cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
-                    n = len(export_buf)
                     t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
-                    export_rows += n
                 else:
-                    n = len(export_buf)
                     t_db_s += flush_export_buffer(client, export_table, export_buf)
-                    export_rows += n
             # Вернуть фазу симуляции
             sim2.setEnvironmentPropertyUInt("export_phase", 0)
         after = pyflamegpu.AgentVector(a_desc)
@@ -1546,8 +1555,11 @@ def main():
         cnt4_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 4)
         cnt5_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 5)
         cnt6_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 6)
+        # Подсчитаем общее количество агентов
+        total_before = cnt1_b + cnt2_b + cnt3_b + cnt4_b + cnt5_b + cnt6_b
+        total_after = cnt1_a + cnt2_a + cnt3_a + cnt4_a + cnt5_a + cnt6_a
         print(f"status12456_smoke_real: steps={steps}, cnt1 {cnt1_b}->{cnt1_a}, cnt2 {cnt2_b}->{cnt2_a}, cnt3 {cnt3_b}->{cnt3_a}, cnt4 {cnt4_b}->{cnt4_a}, cnt5 {cnt5_b}->{cnt5_a}, cnt6 {cnt6_b}->{cnt6_a}")
-        print(f"timing_ms: load_gpu={t_load_s*1000:.2f}, sim_gpu={t_gpu_s*1000:.2f}, cpu_log={t_cpu_s*1000:.2f}, db_insert={t_db_s*1000:.2f}, rows_exported={export_rows}")
+        print(f"  Общее количество агентов: {total_before} -> {total_after} (изменение: {total_after - total_before})")
         if trans12_log:
             print("  transitions_1to2:")
             for dstr, acn in trans12_log:
@@ -1708,7 +1720,7 @@ def main():
         dtot = sim.getEnvironmentPropertyUInt("days_total")
         arr_mi8 = sim.getEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8")
         arr_mi17 = sim.getEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17")
-        arr_mp5 = sim.getEnvironmentPropertyArrayUInt32("mp5_daily_hours")
+        arr_mp5 = sim.getEnvironmentPropertyArrayUInt16("mp5_daily_hours")
         d0 = 0
         d1 = 1 if dtot > 1 else 0
         idx0 = 0

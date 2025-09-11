@@ -53,7 +53,7 @@ def main():
         print("❌ Нет дат в MP4/MP5")
         sys.exit(1)
 
-    frames_index, frames_total = build_frames_index(mp3_rows, mp3_fields)
+    frames_index, frames_total = build_frames_index(mp3_rows, mp3_fields, mp5_by_day)
     mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
     days_total = len(days_sorted)
 
