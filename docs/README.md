@@ -46,6 +46,21 @@ python3 code/utils/cleanup_dictionaries.py
 python3 code/utils/database_cleanup.py
 ```
 
+### **Тестирование новой модульной архитектуры симуляции (12-09-2025)**
+```bash
+# Тест базового Environment
+python3 code/test_minimal_env.py
+
+# Тест новой архитектуры RTC
+python3 code/test_new_architecture.py
+
+# Пошаговое добавление RTC функций
+python3 code/sim_rtc_step_by_step.py --add-begin-day
+
+# Информация о RTC пайплайне
+python3 code/sim_master_v2.py --pipeline-info --profile minimal
+```
+
 ## 🔄 Типичные сценарии использования
 
 ### **Работа на новом компьютере**
@@ -195,6 +210,7 @@ LOG_LEVEL=DEBUG python3 code/extract_master.py
 - **[Extract](extract.md)** - Извлечение данных из Excel
 - **[Transform](transform.md)** - Обработка и подготовка данных
 - **[Load](load.md)** - Загрузка результатов моделирования
+- **[RTC Pipeline Architecture](rtc_pipeline_architecture.md)** - Архитектура RTC функций и модульная структура
 
 ## 🗂️ Приоритеты задач и порядок публикации
 

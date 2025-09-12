@@ -248,8 +248,10 @@ Always respond in Russian
 - archive_vnv_cpu_project/ - полная защита
 - code/archive/ - архивные компоненты  
 - code/utils/ - рабочие утилиты
+- code/sim/ - новая модульная архитектура симуляции
+- code/rtc/ - RTC функции в отдельных файлах
 - data_input/ - входные данные
-- docs/ - только 6 основных MD файлов (README.md, extract.md, transform.md, load.md, changelog.md, Tasktracker.md)
+- docs/ - основные MD файлы (README.md, extract.md, transform.md, load.md, changelog.md, Tasktracker.md, rtc_pipeline_architecture.md)
 - logs/ - логи
 - config/ - конфигурация
 
