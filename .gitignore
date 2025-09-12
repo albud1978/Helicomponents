@@ -134,3 +134,4 @@ path==*
 debug_*.xlsx
 *.whl
 .cache/pip/
+FLAMEGPU2/

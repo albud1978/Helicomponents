@@ -10,11 +10,343 @@ HeliSim: минимальная сборка модели по GPU.md для Э�
 from __future__ import annotations
 from typing import Optional, Dict
 import os
+from typing import List, Tuple
 
 try:
     import pyflamegpu
 except Exception:
     pyflamegpu = None
+
+
+# === УНИФИЦИРОВАННЫЙ RTC ПАЙПЛАЙН ===
+
+# Предустановленные профили
+RTC_PROFILES = {
+    "full": {
+        "HL_ENABLE_MP5_PROBE": "1",
+        "HL_ENABLE_STATUS_6": "1",
+        "HL_ENABLE_STATUS_4": "1",
+        "HL_ENABLE_STATUS_2": "1",
+        "HL_ENABLE_QUOTA_S2": "1",
+        "HL_ENABLE_QUOTA_S3": "1",
+        "HL_ENABLE_QUOTA_S5": "1",
+        "HL_ENABLE_QUOTA_S1": "1",
+        "HL_ENABLE_STATUS_3_POST": "1",
+        "HL_ENABLE_STATUS_1_POST": "1",
+        "HL_ENABLE_STATUS_5_POST": "1",
+        "HL_ENABLE_STATUS_2_POST": "1",
+        "HL_ENABLE_MP2_LOG": "1",
+        "HL_ENABLE_MP2_POST": "1",
+        "HL_ENABLE_MP2_COPY": "1",
+        "HL_ENABLE_SPAWN": "1",
+    },
+    "status_only": {
+        "HL_ENABLE_STATUS_6": "1",
+        "HL_ENABLE_STATUS_4": "1",
+        "HL_ENABLE_STATUS_2": "1",
+        "HL_ENABLE_MP2_LOG": "1",
+    },
+    "quota_only": {
+        "HL_ENABLE_QUOTA_S2": "1",
+        "HL_ENABLE_MP2_LOG": "1",
+    },
+    "spawn_only": {
+        "HL_ENABLE_SPAWN": "1",
+        "HL_ENABLE_MP2_LOG": "1",
+    },
+    "minimal": {
+        "HL_ENABLE_MP2_LOG": "1",
+    }
+}
+
+# Порядок выполнения RTC функций
+RTC_PIPELINE = [
+    ("rtc_probe_mp5", "HL_ENABLE_MP5_PROBE"),
+    ("rtc_quota_begin_day", "HL_ALWAYS_ON"),
+    ("rtc_status_6", "HL_ENABLE_STATUS_6"),
+    ("rtc_status_4", "HL_ENABLE_STATUS_4"),
+    ("rtc_status_2", "HL_ENABLE_STATUS_2"),
+    ("rtc_quota_intent_s2", "HL_ENABLE_QUOTA_S2"),
+    ("rtc_quota_approve_s2", "HL_ENABLE_QUOTA_S2"),
+    ("rtc_quota_apply_s2", "HL_ENABLE_QUOTA_S2"),
+    ("rtc_quota_clear_s2", "HL_ENABLE_QUOTA_S2"),
+    ("rtc_quota_intent_s3", "HL_ENABLE_QUOTA_S3"),
+    ("rtc_quota_approve_s3", "HL_ENABLE_QUOTA_S3"),
+    ("rtc_quota_apply_s3", "HL_ENABLE_QUOTA_S3"),
+    ("rtc_quota_clear_s3", "HL_ENABLE_QUOTA_S3"),
+    ("rtc_status_3_post", "HL_ENABLE_STATUS_3_POST"),
+    ("rtc_quota_intent_s5", "HL_ENABLE_QUOTA_S5"),
+    ("rtc_quota_approve_s5", "HL_ENABLE_QUOTA_S5"),
+    ("rtc_quota_apply_s5", "HL_ENABLE_QUOTA_S5"),
+    ("rtc_quota_clear_s5", "HL_ENABLE_QUOTA_S5"),
+    ("rtc_quota_intent_s1", "HL_ENABLE_QUOTA_S1"),
+    ("rtc_quota_approve_s1", "HL_ENABLE_QUOTA_S1"),
+    ("rtc_quota_apply_s1", "HL_ENABLE_QUOTA_S1"),
+    ("rtc_quota_clear_s1", "HL_ENABLE_QUOTA_S1"),
+    ("rtc_status_1_post", "HL_ENABLE_STATUS_1_POST"),
+    ("rtc_status_5_post", "HL_ENABLE_STATUS_5_POST"),
+    ("rtc_status_2_post", "HL_ENABLE_STATUS_2_POST"),
+    ("rtc_log_day", "HL_ENABLE_MP2_LOG"),
+    ("rtc_mp2_postprocess", "HL_ENABLE_MP2_POST"),
+    ("rtc_mp2_copyout", "HL_ENABLE_MP2_COPY"),
+    ("rtc_spawn_mgr", "HL_ENABLE_SPAWN"),
+    ("rtc_spawn_ticket", "HL_ENABLE_SPAWN"),
+]
+
+
+def apply_profile(profile_name: str):
+    """Применяет предустановленный профиль RTC функций"""
+    if profile_name not in RTC_PROFILES:
+        raise ValueError(f"Неизвестный профиль: {profile_name}. Доступные: {list(RTC_PROFILES.keys())}")
+    
+    # Сначала очищаем все флаги
+    for _, flag in RTC_PIPELINE:
+        if flag != "HL_ALWAYS_ON":
+            os.environ.pop(flag, None)
+    
+    # Применяем профиль
+    profile = RTC_PROFILES[profile_name]
+    for flag, value in profile.items():
+        os.environ[flag] = value
+    
+    print(f"🎯 Применен профиль '{profile_name}': {len(profile)} функций включено")
+
+
+def migrate_legacy_flags():
+    """Автоматическая миграция старых флагов в новые"""
+    migrations = []
+    
+    # Миграция HL_RTC_MODE
+    rtc_mode = os.environ.get('HL_RTC_MODE', '').lower()
+    if rtc_mode == 'spawn_only':
+        apply_profile('spawn_only')
+        migrations.append(f"HL_RTC_MODE=spawn_only → профиль 'spawn_only'")
+    elif rtc_mode in ('intent_only', 'approve_only'):
+        apply_profile('quota_only')
+        migrations.append(f"HL_RTC_MODE={rtc_mode} → профиль 'quota_only'")
+    elif rtc_mode == 'full':
+        apply_profile('full')
+        migrations.append(f"HL_RTC_MODE=full → профиль 'full'")
+    
+    # Миграция HL_STATUS246_SMOKE
+    if os.environ.get('HL_STATUS246_SMOKE') == '1':
+        if not os.environ.get('HL_PROFILE'):  # Если профиль не установлен явно
+            apply_profile('full')
+            migrations.append("HL_STATUS246_SMOKE=1 → профиль 'full'")
+    
+    # Миграция отдельных smoke флагов
+    smoke_flags = {
+        'HL_STATUS4_SMOKE': 'HL_ENABLE_STATUS_4',
+        'HL_STATUS6_SMOKE': 'HL_ENABLE_STATUS_6', 
+        'HL_STATUS2_SMOKE': 'HL_ENABLE_STATUS_2',
+    }
+    for old_flag, new_flag in smoke_flags.items():
+        if os.environ.get(old_flag) == '1':
+            os.environ[new_flag] = '1'
+            migrations.append(f"{old_flag}=1 → {new_flag}=1")
+    
+    # Миграция других флагов
+    if os.environ.get('HL_ENABLE_MP2') == '1':
+        os.environ['HL_ENABLE_MP2_LOG'] = '1'
+        migrations.append("HL_ENABLE_MP2=1 → HL_ENABLE_MP2_LOG=1")
+    
+    if migrations:
+        print(f"🔄 Миграция флагов: {', '.join(migrations)}")
+
+
+def is_rtc_enabled(flag: str) -> bool:
+    """Проверяет, включена ли RTC функция"""
+    if flag == "HL_ALWAYS_ON":
+        return True
+    return os.environ.get(flag, '0') == '1'
+
+
+def build_unified_pipeline(model, agent, frames_total: int, days_total: int) -> List[Tuple[str, str]]:
+    """
+    Создает унифицированный пайплайн RTC функций
+    
+    Returns:
+        List[Tuple[str, str]]: Список (function_name, layer_name) добавленных функций
+    """
+    print("🏗️ Создание унифицированного RTC пайплайна...")
+    
+    # Применяем профиль если указан
+    profile = os.environ.get('HL_PROFILE')
+    if profile:
+        apply_profile(profile)
+    else:
+        # Миграция старых флагов
+        migrate_legacy_flags()
+    
+    created_layers = []
+    rtc_sources = {}
+    
+    # Обходим все функции в порядке пайплайна
+    for func_name, enable_flag in RTC_PIPELINE:
+        if not is_rtc_enabled(enable_flag):
+            continue
+            
+        print(f"  ✅ Добавляем {func_name} (флаг: {enable_flag})")
+        
+        try:
+            # Создаем RTC функцию и слой
+            rtc_source = _create_rtc_function(func_name, agent, frames_total, days_total)
+            if rtc_source:
+                rtc_sources[func_name] = rtc_source
+            
+            # Создаем слой и добавляем функцию
+            layer_name = f"l_{func_name}"
+            layer = model.newLayer()
+            
+            # Специальная обработка для spawn функций
+            if func_name == "rtc_spawn_mgr":
+                spawn_mgr_agent = model.getAgent("spawn_mgr")
+                layer.addAgentFunction(spawn_mgr_agent.getFunction(func_name))
+            elif func_name == "rtc_spawn_ticket":
+                spawn_ticket_agent = model.getAgent("spawn_ticket") 
+                layer.addAgentFunction(spawn_ticket_agent.getFunction("rtc_spawn_mi17_atomic"))
+            else:
+                layer.addAgentFunction(agent.getFunction(func_name))
+            
+            created_layers.append((func_name, layer_name))
+            
+        except Exception as e:
+            print(f"  ⚠️ Ошибка создания {func_name}: {e}")
+            # Продолжаем выполнение, просто пропускаем проблемную функцию
+            continue
+    
+    print(f"🎯 Создано {len(created_layers)} RTC слоев")
+    return created_layers
+
+
+def _create_rtc_function(func_name: str, agent, frames_total: int, days_total: int) -> str:
+    """Создает исходный код и регистрирует RTC функцию"""
+    
+    # Получаем шаблон функции
+    rtc_source = _get_rtc_template(func_name, frames_total, days_total)
+    if not rtc_source:
+        return ""
+    
+    # Регистрируем функцию
+    try:
+        if func_name not in ["rtc_spawn_mgr", "rtc_spawn_ticket"]:  # spawn функции обрабатываются отдельно
+            agent.newRTCFunction(func_name, rtc_source)
+    except Exception as e:
+        print(f"⚠️ Ошибка регистрации {func_name}: {e}")
+        return ""
+    
+    return rtc_source
+
+
+def _get_rtc_template(func_name: str, frames_total: int, days_total: int) -> str:
+    """Возвращает шаблон RTC функции"""
+    
+    # Пока используем заглушки - позже заменим на реальные шаблоны
+    templates = {
+        "rtc_probe_mp5": f"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_probe_mp5, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            // TODO: Реализовать чтение MP5
+            return flamegpu::ALIVE;
+        }}
+        """,
+        
+        "rtc_quota_begin_day": """
+        FLAMEGPU_AGENT_FUNCTION(rtc_quota_begin_day, flamegpu::MessageNone, flamegpu::MessageNone) {
+            // Сброс триггеров и флагов в начале суток
+            FLAMEGPU->setVariable<unsigned int>("ops_ticket", 0u);
+            FLAMEGPU->setVariable<unsigned int>("intent_flag", 0u);
+            return flamegpu::ALIVE;
+        }
+        """,
+        
+        "rtc_status_6": """
+        FLAMEGPU_AGENT_FUNCTION(rtc_status_6, flamegpu::MessageNone, flamegpu::MessageNone) {
+            // TODO: Логика статуса 6 (хранение)
+            return flamegpu::ALIVE;
+        }
+        """,
+        
+        "rtc_status_4": """
+        FLAMEGPU_AGENT_FUNCTION(rtc_status_4, flamegpu::MessageNone, flamegpu::MessageNone) {
+            // TODO: Логика статуса 4 (ремонт)
+            return flamegpu::ALIVE;
+        }
+        """,
+        
+        "rtc_status_2": """
+        FLAMEGPU_AGENT_FUNCTION(rtc_status_2, flamegpu::MessageNone, flamegpu::MessageNone) {
+            // TODO: Логика статуса 2 (эксплуатация)
+            return flamegpu::ALIVE;
+        }
+        """,
+        
+        "rtc_log_day": f"""
+        FLAMEGPU_AGENT_FUNCTION(rtc_log_day, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            // TODO: Логирование в MP2
+            return flamegpu::ALIVE;
+        }}
+        """,
+    }
+    
+    # Шаблоны квотирования (упрощенные пока)
+    quota_functions = ["rtc_quota_intent_s2", "rtc_quota_intent_s3", "rtc_quota_intent_s5", "rtc_quota_intent_s1"]
+    for qf in quota_functions:
+        status_num = qf.split("_s")[1]
+        templates[qf] = f"""
+        FLAMEGPU_AGENT_FUNCTION({qf}, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            if (FLAMEGPU->getVariable<unsigned int>("status_id") != {status_num}u) return flamegpu::ALIVE;
+            // TODO: Intent для статуса {status_num}
+            return flamegpu::ALIVE;
+        }}
+        """
+    
+    # Шаблоны approve и apply (пока заглушки)
+    for suffix in ["approve_s2", "approve_s3", "approve_s5", "approve_s1", "apply_s2", "apply_s3", "apply_s5", "apply_s1"]:
+        func = f"rtc_quota_{suffix}"
+        templates[func] = f"""
+        FLAMEGPU_AGENT_FUNCTION({func}, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            // TODO: {suffix} логика
+            return flamegpu::ALIVE;
+        }}
+        """
+    
+    # Шаблоны clear
+    for suffix in ["clear_s2", "clear_s3", "clear_s5", "clear_s1"]:
+        func = f"rtc_quota_{suffix}"
+        templates[func] = f"""
+        FLAMEGPU_AGENT_FUNCTION({func}, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            // TODO: Очистка intent для {suffix.split('_')[1]}
+            return flamegpu::ALIVE;
+        }}
+        """
+    
+    # Post статусы
+    post_functions = ["rtc_status_1_post", "rtc_status_2_post", "rtc_status_3_post", "rtc_status_5_post"]
+    for pf in post_functions:
+        status_num = pf.split("_")[2]
+        templates[pf] = f"""
+        FLAMEGPU_AGENT_FUNCTION({pf}, flamegpu::MessageNone, flamegpu::MessageNone) {{
+            // TODO: Post обработка статуса {status_num}
+            return flamegpu::ALIVE;
+        }}
+        """
+    
+    # MP2 функции
+    templates["rtc_mp2_postprocess"] = """
+    FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess, flamegpu::MessageNone, flamegpu::MessageNone) {
+        // TODO: Постпроцессинг MP2
+        return flamegpu::ALIVE;
+    }
+    """
+    
+    templates["rtc_mp2_copyout"] = """
+    FLAMEGPU_AGENT_FUNCTION(rtc_mp2_copyout, flamegpu::MessageNone, flamegpu::MessageNone) {
+        // TODO: Копирование MP2 в host
+        return flamegpu::ALIVE;
+    }
+    """
+    
+    return templates.get(func_name, "")
 
 
 class HeliSimModel:
@@ -1288,6 +1620,47 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
             print(f"⚠️ Предупреждение: spawn агенты/функции не найдены в модели: {e}")
             print("   Spawn будет отключен для этого запуска")
 
+    # === ОПЦИЯ: УНИФИЦИРОВАННЫЙ ПАЙПЛАЙН ===
+    # Если включена новая система, используем унифицированный билдер вместо старого
+    use_unified = os.environ.get('HL_USE_UNIFIED_PIPELINE', '0') == '1'
+    if use_unified:
+        print("🚀 Используется УНИФИЦИРОВАННЫЙ RTC пайплайн")
+        # Создаем новую модель с унифицированным пайплайном
+        model_unified = pyflamegpu.ModelDescription("HeliSimUnified")
+        
+        # Копируем агента и его переменные
+        agent_unified = model_unified.newAgent("component")
+        
+        # Копируем все переменные агента из оригинального
+        for var_name in ["idx", "psn", "aircraft_number", "ac_type_mask", "group_by", "partseqno_i", 
+                        "mfg_date", "status_id", "sne", "ppr", "repair_days", "ops_ticket", "intent_flag",
+                        "ll", "oh", "br", "repair_time", "assembly_time", "partout_time",
+                        "daily_today_u32", "daily_next_u32", "active_trigger", "assembly_trigger", "partout_trigger"]:
+            agent_unified.newVariableUInt(var_name)
+        
+        # Копируем Environment из оригинальной модели
+        # TODO: Здесь нужно скопировать все Environment свойства
+        
+        # Создаем spawn агентов если нужно
+        if os.environ.get('HL_ENABLE_SPAWN', '0') == '1':
+            spawn_mgr_unified = model_unified.newAgent("spawn_mgr")
+            spawn_mgr_unified.newVariableUInt("next_idx")
+            spawn_mgr_unified.newVariableUInt("next_acn") 
+            spawn_mgr_unified.newVariableUInt("next_psn")
+            
+            spawn_ticket_unified = model_unified.newAgent("spawn_ticket")
+            spawn_ticket_unified.newVariableUInt("ticket")
+        
+        # Создаем унифицированный пайплайн
+        try:
+            created_layers = build_unified_pipeline(model_unified, agent_unified, frames_total, days_total)
+            print(f"✅ Унифицированный пайплайн создан: {len(created_layers)} слоев")
+            return model_unified, agent_unified
+        except Exception as e:
+            print(f"❌ Ошибка создания унифицированного пайплайна: {e}")
+            print("   Переключаемся на старый пайплайн")
+            # Продолжаем со старой моделью
+    
     return model, agent
 
 
