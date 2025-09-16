@@ -240,6 +240,7 @@ def main():
                 alters.append(f"ADD COLUMN day_date Date AFTER day_abs")
             if 'mfg_date_date' not in cols:
                 alters.append(f"ADD COLUMN mfg_date_date Date AFTER aircraft_number")
+            # psn и дополнительные служебные поля не используются в sim_results
             for stmt in alters:
                 _client.execute(f"ALTER TABLE {table_name} {stmt}")
         except Exception as _e:
@@ -247,7 +248,8 @@ def main():
 
     def export_day_snapshot(_client, table_name: str, version_date_u32: int, version_id_u32: int,
                              day_idx: int, rows_src, pop_after, frames_total: int,
-                             idx_map_local, mp1_map_local, batch_buf: list, triggers_only: bool=False) -> None:
+                             idx_map_local, mp1_map_local, batch_buf: list, triggers_only: bool=False,
+                             max_agents: int | None = None) -> None:
         day_u16 = int(day_idx)
         if day_u16 < 0:
             day_u16 = 0
@@ -262,6 +264,8 @@ def main():
         day_date = base_epoch + _td(days=int(day_abs))
         K_loc = len(rows_src)
         N_pop = len(pop_after)
+        if max_agents is not None:
+            N_pop = min(N_pop, int(max_agents))
         # Предзагружаем partout_time/repair_time/assembly_time из MP1 по partseq для исходных K_loc
         partseq_list = [int(rows_src[i][idx_map_local.get('partseqno_i', -1)] or 0) for i in range(K_loc)]
         rt_cache = [0] * K_loc
@@ -299,6 +303,10 @@ def main():
             group_v = int(ag.getVariableUInt('group_by')) if 'group_by' in dir(ag) else (2 if i >= K_loc else 0)
             orig_status_v = int(ag.getVariableUInt('status_id')) if 'status_id' in dir(ag) else 0
             orig_repair_days_v = int(ag.getVariableUInt('repair_days')) if 'repair_days' in dir(ag) else 0
+            try:
+                ac_type_mask_v = int(ag.getVariableUInt('ac_type_mask'))
+            except Exception:
+                ac_type_mask_v = 0
             # Нормативы времени: сначала из агента, затем кэши исходных строк, затем 0
             try:
                 repair_time_v = int(ag.getVariableUInt('repair_time'))
@@ -313,6 +321,14 @@ def main():
             except Exception:
                 partout_time_v = (pt_cache[i] if i < K_loc else 0)
             # Пороги/счётчики
+            try:
+                s6_days_v = int(ag.getVariableUInt('s6_days'))
+            except Exception:
+                s6_days_v = 0
+            try:
+                s6_started_v = int(ag.getVariableUInt('s6_started'))
+            except Exception:
+                s6_started_v = 0
             sne_v = int(ag.getVariableUInt('sne')) if 'sne' in dir(ag) else 0
             ppr_v = int(ag.getVariableUInt('ppr')) if 'ppr' in dir(ag) else 0
             ll_v = int(ag.getVariableUInt('ll')) if 'll' in dir(ag) else 0
@@ -346,6 +362,23 @@ def main():
                 part_tr_v = int(ag.getVariableUInt('partout_trigger'))
             except Exception:
                 part_tr_v = 0
+            try:
+                act_mark_v = int(ag.getVariableUInt('active_trigger_mark'))
+            except Exception:
+                act_mark_v = 0
+            try:
+                asm_mark_v = int(ag.getVariableUInt('assembly_trigger_mark'))
+            except Exception:
+                asm_mark_v = 0
+            try:
+                part_mark_v = int(ag.getVariableUInt('partout_trigger_mark'))
+            except Exception:
+                part_mark_v = 0
+            # psn
+            try:
+                psn_v = int(ag.getVariableUInt('psn'))
+            except Exception:
+                psn_v = 0
             if triggers_only:
                 batch_buf.append((
                     int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
@@ -438,13 +471,13 @@ def main():
                 )
                 if len(export_buf) >= export_batch:
                     if export_triggers_only:
-                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,psn,active_trigger,assembly_trigger,partout_trigger"
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
                     else:
                         t_db_s += flush_export_buffer(client, export_table, export_buf)
             if export_buf:
                 if export_triggers_only:
-                    cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                    cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,psn,active_trigger,assembly_trigger,partout_trigger"
                     t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
                 else:
                     t_db_s += flush_export_buffer(client, export_table, export_buf)
@@ -1379,7 +1412,7 @@ def main():
                         triggers_only=export_triggers_only
                     )
                     if export_triggers_only:
-                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,psn,active_trigger,assembly_trigger,partout_trigger"
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
                     else:
                         t_db_s += flush_export_buffer(client, export_table, export_buf)
@@ -1429,10 +1462,43 @@ def main():
                 born = max(0, total - prev_total)
                 planned = int(env_data.get('mp4_new_counter_mi17_seed', [0]* (DAYS+1))[d] if d < DAYS else 0)
                 print(f"D={d+1} spawn plan={planned} born={born} pop={total}")
+                if born > 0:
+                    sample = min(10, born)
+                    for j in range(sample):
+                        agn = pop_after[prev_total + j]
+                        try:
+                            _idx = int(agn.getVariableUInt('idx'))
+                        except Exception:
+                            _idx = -1
+                        try:
+                            _acn = int(agn.getVariableUInt('aircraft_number'))
+                        except Exception:
+                            _acn = 0
+                        try:
+                            _psn = int(agn.getVariableUInt('psn'))
+                        except Exception:
+                            _psn = 0
+                        try:
+                            _sid = int(agn.getVariableUInt('status_id'))
+                        except Exception:
+                            _sid = -1
+                        try:
+                            _gb = int(agn.getVariableUInt('group_by'))
+                        except Exception:
+                            _gb = 0
+                        try:
+                            _pseq = int(agn.getVariableUInt('partseqno_i'))
+                        except Exception:
+                            _pseq = 0
+                        try:
+                            _mfg = int(agn.getVariableUInt('mfg_date'))
+                        except Exception:
+                            _mfg = 0
+                        print(f"  newborn[{j}]: idx={_idx} ac={_acn} psn={_psn} status_id={_sid} gb={_gb} partseqno_i={_pseq} mfg_ord={_mfg}")
                 prev_total = total
             except Exception:
                 pass
-            # Экспорт в режиме без постпроцессинга: напрямую из agent vars после шага
+            # Экспорт после шага напрямую из agent vars (без MP2 copyout)
             if export_on and getattr(a, 'export_postprocess', 'on') == 'off':
                 export_day_snapshot(
                     client, export_table, int(env_data['version_date_u16']), int(vid), d,
@@ -1507,46 +1573,14 @@ def main():
                 if sb == 4 and sa == 5:
                     day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
                     trans45_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
-        # Экспорт в режиме с постпроцессингом MP2: один проход после симуляции
+        # Экспорт в режиме с постпроцессингом: используем те же собранные после шага данные
         if export_on and getattr(a, 'export_postprocess', 'on') == 'on':
-            # 1) Постпроцессинг MP2 in-place по всему горизонту
-            try:
-                sim2.setEnvironmentPropertyUInt("export_phase", 2)
-                import time as _t
-                t_gpp0 = _t.perf_counter()
-                sim2.step()
-                t_gpu_s += (_t.perf_counter() - t_gpp0)
-            except Exception as _e:
-                print(f"⚠️ rtc_mp2_postprocess пропущен: {_e}")
-            # 2) Copyout и экспорт по дням из MP2
-            sim2.setEnvironmentPropertyUInt("export_phase", 1)
-            export_buf.clear()
-            for d_exp in range(steps):
-                sim2.setEnvironmentPropertyUInt("export_day", int(d_exp))
-                t_gco0 = _t.perf_counter()
-                sim2.step()
-                t_gpu_s += (_t.perf_counter() - t_gco0)
-                pop_day = pyflamegpu.AgentVector(a_desc)
-                sim2.getPopulationData(pop_day)
-                export_day_snapshot(
-                    client, export_table, int(env_data['version_date_u16']), int(vid), d_exp,
-                    rows, pop_day, FRAMES, idx_map, mp1_map, export_buf,
-                    triggers_only=export_triggers_only
-                )
-                if len(export_buf) >= export_batch:
-                    if export_triggers_only:
-                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
-                        t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
-                    else:
-                        t_db_s += flush_export_buffer(client, export_table, export_buf)
             if export_buf:
                 if export_triggers_only:
                     cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
                     t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
                 else:
                     t_db_s += flush_export_buffer(client, export_table, export_buf)
-            # Вернуть фазу симуляции
-            sim2.setEnvironmentPropertyUInt("export_phase", 0)
         after = pyflamegpu.AgentVector(a_desc)
         sim2.getPopulationData(after)
         cnt1_a = sum(1 for ag in after if int(ag.getVariableUInt('status_id')) == 1)
