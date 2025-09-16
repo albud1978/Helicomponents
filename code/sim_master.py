@@ -1403,8 +1403,15 @@ def main():
         export_truncate = bool(getattr(a, 'export_truncate', False)) if hasattr(a, 'export_truncate') else False
         export_triggers_only = bool(getattr(a, 'export_triggers_only', False)) if hasattr(a, 'export_triggers_only') else False
         export_buf: list = []
+        export_has_psn = False
         if export_on:
             ensure_sim_results_table(client, export_table)
+            # Определим, есть ли столбец psn в целевой таблице
+            try:
+                _cols = {row[0] for row in client.execute(f"DESCRIBE TABLE {export_table}")}
+                export_has_psn = ('psn' in _cols)
+            except Exception as _e:
+                print(f"⚠️ DESCRIBE {export_table} не удалось: {_e}")
             if export_truncate:
                 try:
                     client.execute(f"TRUNCATE TABLE {export_table}")
@@ -1427,13 +1434,25 @@ def main():
                     export_day_snapshot(
                         client, export_table, int(env_data['version_date_u16']), int(vid), -1,
                         rows, before, FRAMES, idx_map, mp1_map, export_buf,
-                        triggers_only=export_triggers_only
+                        triggers_only=export_triggers_only, include_psn=export_has_psn
                     )
                     if export_triggers_only:
-                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,psn,active_trigger,assembly_trigger,partout_trigger"
+                        cols = (
+                            "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,"
+                            + ("psn," if export_has_psn else "")
+                            + "active_trigger,assembly_trigger,partout_trigger"
+                        )
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
                     else:
-                        t_db_s += flush_export_buffer(client, export_table, export_buf)
+                        if export_has_psn:
+                            cols = (
+                                "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,psn,"
+                                "mfg_date_date,partseqno_i,group_by,status_id,repair_days,repair_time,assembly_time,partout_time,"
+                                "sne,ppr,ll,oh,br,daily_today_u32,daily_next_u32,ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger"
+                            )
+                            t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                        else:
+                            t_db_s += flush_export_buffer(client, export_table, export_buf)
         trans12_log: List[Tuple[str,int]] = []
         trans12_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans23_log: List[Tuple[str,int]] = []
@@ -1518,24 +1537,49 @@ def main():
                 pass
             # Экспорт после шага напрямую из agent vars (без MP2 copyout)
             if export_on and getattr(a, 'export_postprocess', 'on') == 'off':
+                # Гейт pre-spawn: исключаем новорождённых дня d (они должны появиться с D+1)
                 export_day_snapshot(
                     client, export_table, int(env_data['version_date_u16']), int(vid), d,
                     rows, pop_after, FRAMES, idx_map, mp1_map, export_buf,
-                    triggers_only=export_triggers_only
+                    triggers_only=export_triggers_only, max_agents=prev_total, include_psn=export_has_psn
                 )
                 if len(export_buf) >= export_batch:
                     if export_triggers_only:
-                        cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                        cols = (
+                            "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,"
+                            + ("psn," if export_has_psn else "")
+                            + "active_trigger,assembly_trigger,partout_trigger"
+                        )
                         t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
                     else:
-                        t_db_s += flush_export_buffer(client, export_table, export_buf)
+                        if export_has_psn:
+                            cols = (
+                                "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,psn,"
+                                "mfg_date_date,partseqno_i,group_by,status_id,repair_days,repair_time,assembly_time,partout_time,"
+                                "sne,ppr,ll,oh,br,daily_today_u32,daily_next_u32,ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger"
+                            )
+                            t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                        else:
+                            t_db_s += flush_export_buffer(client, export_table, export_buf)
         # Финальный сброс буфера для режима без постпроцессинга
         if export_on and getattr(a, 'export_postprocess', 'on') == 'off' and export_buf:
             if export_triggers_only:
-                cols = "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,active_trigger,assembly_trigger,partout_trigger"
+                cols = (
+                    "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,"
+                    + ("psn," if export_has_psn else "")
+                    + "active_trigger,assembly_trigger,partout_trigger"
+                )
                 t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
             else:
-                t_db_s += flush_export_buffer(client, export_table, export_buf)
+                if export_has_psn:
+                    cols = (
+                        "version_date,version_id,version_date_date,day_u16,day_abs,day_date,idx,aircraft_number,psn,"
+                        "mfg_date_date,partseqno_i,group_by,status_id,repair_days,repair_time,assembly_time,partout_time,"
+                        "sne,ppr,ll,oh,br,daily_today_u32,daily_next_u32,ops_ticket,intent_flag,active_trigger,assembly_trigger,partout_trigger"
+                    )
+                    t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
+                else:
+                    t_db_s += flush_export_buffer(client, export_table, export_buf)
             for i in range(K):
                 sb = status_before[i]
                 sa = int(pop_after[i].getVariableUInt('status_id'))
