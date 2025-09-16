@@ -249,7 +249,7 @@ def main():
     def export_day_snapshot(_client, table_name: str, version_date_u32: int, version_id_u32: int,
                              day_idx: int, rows_src, pop_after, frames_total: int,
                              idx_map_local, mp1_map_local, batch_buf: list, triggers_only: bool=False,
-                             max_agents: int | None = None) -> None:
+                             max_agents: int | None = None, include_psn: bool=False) -> None:
         day_u16 = int(day_idx)
         if day_u16 < 0:
             day_u16 = 0
@@ -300,9 +300,18 @@ def main():
             except Exception:
                 partseq_v = int(partseq_list[i]) if i < K_loc else 70482
             # Группа/статус/счётчики
-            group_v = int(ag.getVariableUInt('group_by')) if 'group_by' in dir(ag) else (2 if i >= K_loc else 0)
-            orig_status_v = int(ag.getVariableUInt('status_id')) if 'status_id' in dir(ag) else 0
-            orig_repair_days_v = int(ag.getVariableUInt('repair_days')) if 'repair_days' in dir(ag) else 0
+            try:
+                group_v = int(ag.getVariableUInt('group_by'))
+            except Exception:
+                group_v = (2 if i >= K_loc else 0)
+            try:
+                orig_status_v = int(ag.getVariableUInt('status_id'))
+            except Exception:
+                orig_status_v = 0
+            try:
+                orig_repair_days_v = int(ag.getVariableUInt('repair_days'))
+            except Exception:
+                orig_repair_days_v = 0
             try:
                 ac_type_mask_v = int(ag.getVariableUInt('ac_type_mask'))
             except Exception:
@@ -385,13 +394,22 @@ def main():
                     int(idx_v), int(aircraft_v), int(act_v), int(asm_v), int(part_tr_v)
                 ))
             else:
-                batch_buf.append((
-                    int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
-                    int(idx_v), int(aircraft_v), mfg_date_date, int(partseq_v), int(group_v), int(orig_status_v),
-                    int(orig_repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
-                    int(sne_v), int(ppr_v), int(ll_v), int(oh_v), int(br_v), int(dt_v), int(dn_v),
-                    int(ticket_v), int(intent_v), int(act_v), int(asm_v), int(part_tr_v)
-                ))
+                if include_psn:
+                    batch_buf.append((
+                        int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
+                        int(idx_v), int(aircraft_v), int(psn_v), mfg_date_date, int(partseq_v), int(group_v), int(orig_status_v),
+                        int(orig_repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
+                        int(sne_v), int(ppr_v), int(ll_v), int(oh_v), int(br_v), int(dt_v), int(dn_v),
+                        int(ticket_v), int(intent_v), int(act_v), int(asm_v), int(part_tr_v)
+                    ))
+                else:
+                    batch_buf.append((
+                        int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
+                        int(idx_v), int(aircraft_v), mfg_date_date, int(partseq_v), int(group_v), int(orig_status_v),
+                        int(orig_repair_days_v), int(repair_time_v), int(assembly_time_v), int(partout_time_v),
+                        int(sne_v), int(ppr_v), int(ll_v), int(oh_v), int(br_v), int(dt_v), int(dn_v),
+                        int(ticket_v), int(intent_v), int(act_v), int(asm_v), int(part_tr_v)
+                    ))
         # Вставляем при переполнении буфера — делается снаружи
         return
 
