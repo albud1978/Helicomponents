@@ -45,6 +45,10 @@ class HeliSimModel:
         env.newPropertyUInt("version_date", 0)
         env.newPropertyUInt("frames_total", 0)
         env.newPropertyUInt("days_total", 0)
+        # Константы нормативов для MI-17 (используются в rtc_spawn_mi17_atomic)
+        env.newPropertyUInt("mi17_repair_time_const", 0)
+        env.newPropertyUInt("mi17_partout_time_const", 0)
+        env.newPropertyUInt("mi17_assembly_time_const", 0)
         # Число стартовых агентов (для next_idx_spawn)
         env.newPropertyUInt("frames_initial", 0)
         # MacroProperty 1D квоты по дням (инициализируются из MP4) — не обязательны для smoke
@@ -316,6 +320,10 @@ class HeliSimModel:
             out.setVariable<unsigned int>("ac_type_mask", 64u);
             out.setVariable<unsigned int>("group_by", 2u);
             out.setVariable<unsigned int>("partseqno_i", 70482u);
+            // Нормативы времени из env-констант для MI-17
+            out.setVariable<unsigned int>("repair_time", FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const"));
+            out.setVariable<unsigned int>("assembly_time", FLAMEGPU->environment.getProperty<unsigned int>("mi17_assembly_time_const"));
+            out.setVariable<unsigned int>("partout_time", FLAMEGPU->environment.getProperty<unsigned int>("mi17_partout_time_const"));
             out.setVariable<unsigned int>("mfg_date", mfg);
             out.setVariable<unsigned int>("status_id", 3u);
             out.setVariable<unsigned int>("sne", 0u);
@@ -326,9 +334,6 @@ class HeliSimModel:
             out.setVariable<unsigned int>("ll", 0u);
             out.setVariable<unsigned int>("oh", 0u);
             out.setVariable<unsigned int>("br", 0u);
-            out.setVariable<unsigned int>("repair_time", 0u);
-            out.setVariable<unsigned int>("assembly_time", 0u);
-            out.setVariable<unsigned int>("partout_time", 0u);
             out.setVariable<unsigned int>("daily_today_u32", 0u);
             out.setVariable<unsigned int>("daily_next_u32", 0u);
             out.setVariable<unsigned int>("active_trigger", 0u);
@@ -438,6 +443,10 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     env.newPropertyUInt("days_total", 0)
     env.newPropertyUInt("export_phase", 0)  # 0=sim, 1=copyout MP2, 2=postprocess MP2
     env.newPropertyUInt("export_day", 0)
+    # Константы нормативов для MI-17 (для присвоения новорождённым при спавне)
+    env.newPropertyUInt("mi17_repair_time_const", 0)
+    env.newPropertyUInt("mi17_partout_time_const", 0)
+    env.newPropertyUInt("mi17_assembly_time_const", 0)
     enable_mp2 = os.environ.get("HL_ENABLE_MP2", "0") == "1"
     enable_mp2_post = os.environ.get("HL_ENABLE_MP2_POST", "0") == "1"
     env.newPropertyUInt("approve_policy", 0)  # 0 = по idx (детерминизм)
@@ -1227,6 +1236,10 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         out.setVariable<unsigned int>("ac_type_mask", 64u);
         out.setVariable<unsigned int>("group_by", 2u);
         out.setVariable<unsigned int>("partseqno_i", 70482u);
+        // Нормативы времени из env-констант для MI-17
+        out.setVariable<unsigned int>("repair_time", FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const"));
+        out.setVariable<unsigned int>("assembly_time", FLAMEGPU->environment.getProperty<unsigned int>("mi17_assembly_time_const"));
+        out.setVariable<unsigned int>("partout_time", FLAMEGPU->environment.getProperty<unsigned int>("mi17_partout_time_const"));
         out.setVariable<unsigned int>("mfg_date", mfg);
         out.setVariable<unsigned int>("status_id", 3u);
         out.setVariable<unsigned int>("sne", 0u);
@@ -1237,9 +1250,6 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         out.setVariable<unsigned int>("ll", 0u);
         out.setVariable<unsigned int>("oh", 0u);
         out.setVariable<unsigned int>("br", 0u);
-        out.setVariable<unsigned int>("repair_time", 0u);
-        out.setVariable<unsigned int>("assembly_time", 0u);
-        out.setVariable<unsigned int>("partout_time", 0u);
         out.setVariable<unsigned int>("daily_today_u32", 0u);
         out.setVariable<unsigned int>("daily_next_u32", 0u);
         out.setVariable<unsigned int>("active_trigger", 0u);

@@ -441,6 +441,42 @@ def main():
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
         sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim2.setEnvironmentPropertyUInt("days_total", DAYS)
+        # Установим ENV‑константы нормативов для MI‑17 строго по partno_comp=70482 из MP1
+        try:
+            _mi17_partseq = 70482
+            _mi17_tuple = mp1_map.get(70482, (0,0,0,0,0))
+            sim2.setEnvironmentPropertyUInt("mi17_repair_time_const", int(_mi17_tuple[2] or 0))
+            sim2.setEnvironmentPropertyUInt("mi17_partout_time_const", int(_mi17_tuple[3] or 0))
+            sim2.setEnvironmentPropertyUInt("mi17_assembly_time_const", int(_mi17_tuple[4] or 0))
+            try:
+                print(f"spawn ENV consts (MI-17 from MP1): partseq={_mi17_partseq}, rt={int(_mi17_tuple[2] or 0)}, pt={int(_mi17_tuple[3] or 0)}, at={int(_mi17_tuple[4] or 0)}")
+            except Exception:
+                pass
+        except Exception as _e:
+            print(f"⚠️ MI-17 env consts set skipped: {_e}")
+        # Передадим константы нормативов для MI-17 в ENV (берём partseq из MP3 при наличии, иначе 70482)
+        _mi17_partseq = 70482
+        try:
+            pidx = idx_map.get('partseqno_i', -1)
+            midx = idx_map.get('ac_type_mask', -1)
+            gbix = idx_map.get('group_by', -1)
+            if pidx >= 0 and rows:
+                for _r in rows:
+                    _mask = int(_r[midx] or 0) if midx >= 0 else 0
+                    _gb = int(_r[gbix] or 0) if gbix >= 0 else 0
+                    if (_mask & 64) or (_gb == 2):
+                        _mi17_partseq = int(_r[pidx] or 0)
+                        break
+        except Exception:
+            pass
+        _mi17_tuple = mp1_map.get(_mi17_partseq, (0,0,0,0,0))
+        sim2.setEnvironmentPropertyUInt("mi17_repair_time_const", int(_mi17_tuple[2] or 0))
+        sim2.setEnvironmentPropertyUInt("mi17_partout_time_const", int(_mi17_tuple[3] or 0))
+        sim2.setEnvironmentPropertyUInt("mi17_assembly_time_const", int(_mi17_tuple[4] or 0))
+        try:
+            print(f"spawn ENV consts (MI-17 from MP1): partseq={_mi17_partseq}, rt={int(_mi17_tuple[2] or 0)}, pt={int(_mi17_tuple[3] or 0)}, at={int(_mi17_tuple[4] or 0)}")
+        except Exception:
+            pass
         # Построим популяцию: возьмем K=8 агентов в статусе 4 с repair_time=3
         K = min(8, FRAMES)
         av = pyflamegpu.AgentVector(a_desc, K)
@@ -1257,6 +1293,18 @@ def main():
             sim2.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed'])[:DAYS])
         if 'month_first_u32' in env_data:
             sim2.setEnvironmentPropertyArrayUInt32("month_first_u32", list(env_data['month_first_u32'])[:DAYS])
+        # ENV-константы нормативов для новорождённых MI-17 (используются в rtc_spawn_mi17_atomic)
+        try:
+            _mi17_tuple = mp1_map.get(70482, (0,0,0,0,0))
+            sim2.setEnvironmentPropertyUInt("mi17_repair_time_const", int(_mi17_tuple[2] or 0))
+            sim2.setEnvironmentPropertyUInt("mi17_partout_time_const", int(_mi17_tuple[3] or 0))
+            sim2.setEnvironmentPropertyUInt("mi17_assembly_time_const", int(_mi17_tuple[4] or 0))
+            try:
+                print(f"spawn ENV consts (MI-17 from MP1): partseq=70482, rt={int(_mi17_tuple[2] or 0)}, pt={int(_mi17_tuple[3] or 0)}, at={int(_mi17_tuple[4] or 0)}")
+            except Exception:
+                pass
+        except Exception as _e:
+            print(f"⚠️ MI-17 env consts set skipped (status12456_smoke_real): {_e}")
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
         frames_index = env_data.get('frames_index', {})
         # Берём статусы 1,2,4,5,6
@@ -1531,7 +1579,19 @@ def main():
                             _mfg = int(agn.getVariableUInt('mfg_date'))
                         except Exception:
                             _mfg = 0
-                        print(f"  newborn[{j}]: idx={_idx} ac={_acn} psn={_psn} status_id={_sid} gb={_gb} partseqno_i={_pseq} mfg_ord={_mfg}")
+                        try:
+                            _rt = int(agn.getVariableUInt('repair_time'))
+                        except Exception:
+                            _rt = -1
+                        try:
+                            _at = int(agn.getVariableUInt('assembly_time'))
+                        except Exception:
+                            _at = -1
+                        try:
+                            _pt = int(agn.getVariableUInt('partout_time'))
+                        except Exception:
+                            _pt = -1
+                        print(f"  newborn[{j}]: idx={_idx} ac={_acn} psn={_psn} status_id={_sid} gb={_gb} partseqno_i={_pseq} mfg_ord={_mfg} rt={_rt} at={_at} pt={_pt}")
                 prev_total = total
             except Exception:
                 pass

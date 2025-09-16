@@ -28,14 +28,72 @@ def fetch_versions(client) -> Tuple[date, int]:
 
 
 def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int]]:
-    """Возвращает карту partno_comp → (br_mi8, br_mi17, repair_time, partout_time, assembly_time). BR в минутах."""
-    rows = client.execute("SELECT partno_comp, br_mi8, br_mi17, repair_time, partout_time, assembly_time FROM md_components")
+    """Возвращает карту partseq → (br_mi8, br_mi17, repair_time, partout_time, assembly_time). BR в минутах.
+    Подбирает: идентификатор (partseq) и имя колонок нормативов по нескольким вариантам.
+    """
+    id_candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
+    rpa_variants = [
+        ("repair_time", "partout_time", "assembly_time"),
+        ("repair_time_mi17", "partout_time_mi17", "assembly_time_mi17"),
+        ("rt_mi17", "pt_mi17", "at_mi17"),
+    ]
+    rows = []
+    last_err: Exception | None = None
+    for id_col in id_candidates:
+        for (rt_col, pt_col, at_col) in rpa_variants:
+            try:
+                sql = (
+                    "SELECT\n"
+                    f"  toUInt32OrZero(toString({id_col})) AS partseq,\n"
+                    "  toUInt32OrZero(toString(br_mi8))  AS br_mi8,\n"
+                    "  toUInt32OrZero(toString(br_mi17)) AS br_mi17,\n"
+                    f"  toUInt32OrZero(toString({rt_col})) AS repair_time,\n"
+                    f"  toUInt32OrZero(toString({pt_col})) AS partout_time,\n"
+                    f"  toUInt32OrZero(toString({at_col})) AS assembly_time\n"
+                    "FROM md_components"
+                )
+                test = client.execute(sql)
+                if test:
+                    rows = test
+                    raise StopIteration  # break both loops
+            except StopIteration:
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                rows = []
+                continue
+        if rows:
+            break
+    if not rows and last_err is not None:
+        raise last_err
     return {int(p): (int(b8 or 0), int(b17 or 0), int(rt or 0), int(pt or 0), int(at or 0)) for p, b8, b17, rt, pt, at in rows}
 
 
 def fetch_mp1_oh(client) -> Dict[int, Tuple[int, int]]:
-    """Возвращает карту partno_comp → (oh_mi8, oh_mi17). Единицы ожидаются в минутах."""
-    rows = client.execute("SELECT partno_comp, oh_mi8, oh_mi17 FROM md_components")
+    """Возвращает карту partseq → (oh_mi8, oh_mi17). Единицы ожидаются в минутах.
+    Подбирает корректную колонку идентификатора по очереди: partseqno_i, `partno.comp`, partno_comp, partno.
+    """
+    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
+    rows = []
+    last_err: Exception | None = None
+    for col in candidates:
+        try:
+            sql = (
+                "SELECT\n"
+                f"  toUInt32OrZero({col}) AS partseq,\n"
+                "  oh_mi8, oh_mi17\n"
+                "FROM md_components"
+            )
+            rows = client.execute(sql)
+            if rows:
+                break
+        except Exception as e:
+            last_err = e
+            rows = []
+            continue
+    if not rows and last_err is not None:
+        raise last_err
     return {int(p): (int(oh8 or 0), int(oh17 or 0)) for p, oh8, oh17 in rows}
 
 
