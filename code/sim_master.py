@@ -261,7 +261,8 @@ def main():
         version_date_date = base_epoch + _td(days=int(version_date_u32))
         day_date = base_epoch + _td(days=int(day_abs))
         K_loc = len(rows_src)
-        # Предзагружаем partout_time из MP1 по partseq
+        N_pop = len(pop_after)
+        # Предзагружаем partout_time/repair_time/assembly_time из MP1 по partseq для исходных K_loc
         partseq_list = [int(rows_src[i][idx_map_local.get('partseqno_i', -1)] or 0) for i in range(K_loc)]
         rt_cache = [0] * K_loc
         pt_cache = [0] * K_loc
@@ -272,12 +273,16 @@ def main():
             rt_cache[i] = int(tpl[2] or 0)
             pt_cache[i] = int(tpl[3] or 0)
             at_cache[i] = int(tpl[4] or 0)
-        # Собираем строки
-        for i in range(K_loc):
+        # Собираем строки по всей текущей популяции (Variant A)
+        for i in range(N_pop):
             ag = pop_after[i]
             idx_v = int(ag.getVariableUInt('idx'))
-            aircraft_v = int(ag.getVariableUInt('aircraft_number')) if 'aircraft_number' in dir(ag) else int(rows_src[i][idx_map_local.get('aircraft_number', -1)] or 0)
-            # mfg_date_date: конвертируем ord-дни UInt16 → Date
+            # aircraft_number из агента; фолбэк по исходным данным при наличии
+            try:
+                aircraft_v = int(ag.getVariableUInt('aircraft_number'))
+            except Exception:
+                aircraft_v = int(rows_src[i][idx_map_local.get('aircraft_number', -1)] or 0) if i < K_loc else 0
+            # mfg_date_date: конвертируем ord-дни UInt → Date
             try:
                 mfg_ord = int(ag.getVariableUInt('mfg_date'))
             except Exception:
@@ -285,27 +290,34 @@ def main():
             from datetime import date as _date, timedelta as _td
             base_epoch = _date(1970, 1, 1)
             mfg_date_date = base_epoch + _td(days=max(0, mfg_ord)) if mfg_ord > 0 else base_epoch
-            partseq_v = partseq_list[i]
-            group_v = int(ag.getVariableUInt('group_by'))
-            orig_status_v = int(ag.getVariableUInt('status_id'))
-            orig_repair_days_v = int(ag.getVariableUInt('repair_days'))
+            # partseq: из агента, иначе из rows_src (для исходных), иначе константа типа MI-17
+            try:
+                partseq_v = int(ag.getVariableUInt('partseqno_i'))
+            except Exception:
+                partseq_v = int(partseq_list[i]) if i < K_loc else 70482
+            # Группа/статус/счётчики
+            group_v = int(ag.getVariableUInt('group_by')) if 'group_by' in dir(ag) else (2 if i >= K_loc else 0)
+            orig_status_v = int(ag.getVariableUInt('status_id')) if 'status_id' in dir(ag) else 0
+            orig_repair_days_v = int(ag.getVariableUInt('repair_days')) if 'repair_days' in dir(ag) else 0
+            # Нормативы времени: сначала из агента, затем кэши исходных строк, затем 0
             try:
                 repair_time_v = int(ag.getVariableUInt('repair_time'))
             except Exception:
-                repair_time_v = rt_cache[i]
+                repair_time_v = (rt_cache[i] if i < K_loc else 0)
             try:
                 assembly_time_v = int(ag.getVariableUInt('assembly_time'))
             except Exception:
-                assembly_time_v = at_cache[i]
+                assembly_time_v = (at_cache[i] if i < K_loc else 0)
             try:
                 partout_time_v = int(ag.getVariableUInt('partout_time'))
             except Exception:
-                partout_time_v = pt_cache[i]
-            sne_v = int(ag.getVariableUInt('sne'))
-            ppr_v = int(ag.getVariableUInt('ppr'))
-            ll_v = int(ag.getVariableUInt('ll'))
-            oh_v = int(ag.getVariableUInt('oh'))
-            br_v = int(ag.getVariableUInt('br'))
+                partout_time_v = (pt_cache[i] if i < K_loc else 0)
+            # Пороги/счётчики
+            sne_v = int(ag.getVariableUInt('sne')) if 'sne' in dir(ag) else 0
+            ppr_v = int(ag.getVariableUInt('ppr')) if 'ppr' in dir(ag) else 0
+            ll_v = int(ag.getVariableUInt('ll')) if 'll' in dir(ag) else 0
+            oh_v = int(ag.getVariableUInt('oh')) if 'oh' in dir(ag) else 0
+            br_v = int(ag.getVariableUInt('br')) if 'br' in dir(ag) else 0
             try:
                 dt_v = int(ag.getVariableUInt('daily_today_u32'))
             except Exception:
@@ -335,7 +347,6 @@ def main():
             except Exception:
                 part_tr_v = 0
             if triggers_only:
-                # Минимальный набор колонок: ключи + триггеры, остальное по умолчанию
                 batch_buf.append((
                     int(version_date_u32), int(version_id_u32), version_date_date, int(day_u16), int(day_abs), day_date,
                     int(idx_v), int(aircraft_v), int(act_v), int(asm_v), int(part_tr_v)
@@ -1319,6 +1330,12 @@ def main():
             av[i].setVariableUInt("daily_next_u32", 0)
         sim2.setPopulationData(av)
         t_load_s += (_t.perf_counter() - t0)
+        # Логирование плана спавна: сумма по горизонту
+        try:
+            _seed_arr = list(env_data.get('mp4_new_counter_mi17_seed', []))[:DAYS]
+            print(f"spawn plan total ({DAYS}d) = {sum(int(x) for x in _seed_arr)}")
+        except Exception:
+            pass
         before = pyflamegpu.AgentVector(a_desc)
         sim2.getPopulationData(before)
         cnt1_b = sum(1 for ag in before if int(ag.getVariableUInt('status_id')) == 1)
@@ -1381,6 +1398,7 @@ def main():
         trans32_info: List[Tuple[str,int,int,int,int,int,int]] = []
         trans52_info: List[Tuple[str,int,int,int,int,int,int]] = []
         total_5to2 = 0
+        prev_total = len(before)
         for d in range(steps):
             pop_before = pyflamegpu.AgentVector(a_desc)
             t_bcpu0 = _t.perf_counter()
@@ -1405,6 +1423,15 @@ def main():
             t_acpu0 = _t.perf_counter()
             sim2.getPopulationData(pop_after)
             t_cpu_s += (_t.perf_counter() - t_acpu0)
+            # Диагностика рождений по дням
+            try:
+                total = len(pop_after)
+                born = max(0, total - prev_total)
+                planned = int(env_data.get('mp4_new_counter_mi17_seed', [0]* (DAYS+1))[d] if d < DAYS else 0)
+                print(f"D={d+1} spawn plan={planned} born={born} pop={total}")
+                prev_total = total
+            except Exception:
+                pass
             # Экспорт в режиме без постпроцессинга: напрямую из agent vars после шага
             if export_on and getattr(a, 'export_postprocess', 'on') == 'off':
                 export_day_snapshot(
