@@ -13,7 +13,7 @@ Program AC Direct Loader - Прямое создание тензора прог
 
 ЛОГИКА РАСПРЕДЕЛЕНИЯ:
 - ops_counter_*: равномерно по всем дням месяца
-- new_counter_*: полное значение в середину месяца (15-е число), остальные дни = 0
+- new_counter_*: полное значение только в последний день месяца, остальные дни = 0
 - Период: 4000 дней от базовой даты
 - Группировка: по ac_type_mask (типы ВС)
 
@@ -163,7 +163,7 @@ class ProgramHeliAnalyzer:
             return []
     
     def parse_new_data(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Парсит данные new_counter_* для размещения на 15-е число месяца"""
+        """Парсит данные new_counter_* для размещения в последний день месяца"""
         try:
             new_data = []
             
@@ -362,11 +362,14 @@ class ACTensorEngine:
                 return monthly_value
                 
             elif distribution_type == 'last_day_only':
-                # new_counter: только для конкретного года/месяца в середину месяца (15-е число)
+                # new_counter: только для конкретного года/месяца в последний день
                 monthly_value = self.find_exact_column_value(target_month, target_year, column_data, year_mapping)
                 if monthly_value == 0.0:
                     return 0.0
-                return monthly_value if target_date.day == 15 else 0.0
+                    
+                next_day = target_date + timedelta(days=1)
+                is_last_day = next_day.month != target_date.month
+                return monthly_value if is_last_day else 0.0
             
             else:
                 self.logger.error(f"❌ Неизвестный тип распределения: {distribution_type}")
