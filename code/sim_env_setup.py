@@ -243,7 +243,23 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     mp5_by_day = preload_mp5_maps(client)
 
     days_sorted = get_days_sorted(mp4_by_day)
-    frames_index, frames_total = build_frames_index(mp3_rows, mp3_fields)
+    # Индексация кадров: объединение MP3 ∪ MP5 (MP3 сначала, затем будущие из MP5 по возрастанию)
+    frames_index_mp3, _ = build_frames_index(mp3_rows, mp3_fields)
+    ac_mp3_ordered = [ac for ac, _ in sorted(frames_index_mp3.items(), key=lambda kv: kv[1])]
+    ac_mp5_set = set()
+    for d, by_ac in mp5_by_day.items():
+        for ac in by_ac.keys():
+            try:
+                ac_i = int(ac)
+            except Exception:
+                ac_i = 0
+            if ac_i > 0:
+                ac_mp5_set.add(ac_i)
+    ac_union = list(ac_mp3_ordered)
+    extra_from_mp5 = sorted([ac for ac in ac_mp5_set if ac not in frames_index_mp3])
+    ac_union.extend(extra_from_mp5)
+    frames_index = {ac: i for i, ac in enumerate(ac_union)}
+    frames_total = len(frames_index)
     mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
     mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
     # План новых Ми-17 по дням (seed для MacroProperty на GPU)

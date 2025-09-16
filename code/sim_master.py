@@ -1169,11 +1169,11 @@ def main():
     # === Совместный слой 1/2/4/5/6 (REAL) ===
     if getattr(a, 'status12456_smoke_real', False):
         FRAMES = int(env_data['frames_total_u16'])
-        DAYS = int(env_data['days_total_u16'])
+        # Уважать ограничение по дням из CLI, но не превышать доступный горизонт
+        DAYS = min(int(getattr(a, 'status12456_days', env_data['days_total_u16'])), int(env_data['days_total_u16']))
         os.environ['HL_STATUS246_SMOKE'] = '1'
-        # Включаем MP2-лог и MP2-постпроцессинг в модели
+        # Включаем MP2-лог, но постпроцессинг оставляем по внешнему флагу (не форсируем ON)
         os.environ['HL_ENABLE_MP2'] = '1'
-        os.environ['HL_ENABLE_MP2_POST'] = '1'
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         # Таймеры
@@ -1183,9 +1183,18 @@ def main():
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
         sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim2.setEnvironmentPropertyUInt("days_total", DAYS)
-        # MP4 квоты
-        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8']))
-        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
+        # MP4 квоты (усечённые по DAYS)
+        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8'])[:DAYS])
+        sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17'])[:DAYS])
+        # Спавн: frames_initial и по-дневные массивы
+        try:
+            sim2.setEnvironmentPropertyUInt("frames_initial", int(env_data.get('mp3_count', 0)))
+        except Exception:
+            pass
+        if 'mp4_new_counter_mi17_seed' in env_data:
+            sim2.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed'])[:DAYS])
+        if 'month_first_u32' in env_data:
+            sim2.setEnvironmentPropertyArrayUInt32("month_first_u32", list(env_data['month_first_u32'])[:DAYS])
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
         frames_index = env_data.get('frames_index', {})
         # Берём статусы 1,2,4,5,6
@@ -1229,6 +1238,21 @@ def main():
                 if ord_val > mfg_by_frame[fi]:
                     mfg_by_frame[fi] = ord_val
         sim2.setEnvironmentPropertyArrayUInt32("mp3_mfg_date_days", mfg_by_frame)
+        # Инициализируем популяции спавна (если агенты присутствуют): тикеты и один менеджер
+        try:
+            K = int(os.environ.get('HL_SPAWN_MAX_PER_DAY', '64'))
+            spawn_ticket_desc = model2.getAgent("spawn_ticket")
+            if spawn_ticket_desc is not None:
+                st = pyflamegpu.AgentVector(spawn_ticket_desc, max(1, K))
+                for i in range(max(1, K)):
+                    st[i].setVariableUInt("ticket", i)
+                sim2.setPopulationData(st)
+            spawn_mgr_desc = model2.getAgent("spawn_mgr")
+            if spawn_mgr_desc is not None:
+                sm = pyflamegpu.AgentVector(spawn_mgr_desc, 1)
+                sim2.setPopulationData(sm)
+        except Exception:
+            pass
         for i, r in enumerate(rows):
             sid = int(r[idx_map['status_id']] or 0)
             ac = int(r[idx_map['aircraft_number']] or 0)
