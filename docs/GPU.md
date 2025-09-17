@@ -96,7 +96,7 @@ PY
 
 # Полный прогон (без MP2 постпроцессинга, включён MP2 лог)
 LOG=logs/sim_export_$(date +%Y%m%d_%H%M%S).log; \
-PYTHONUNBUFFERED=1 HL_ENABLE_MP2=1 HL_ENABLE_MP2_POST=0 \
+PYTHONUNBUFFERED=1 \
 python3 -u code/sim_master.py \
   --status12456-smoke-real \
   --status12456-days 3650 \

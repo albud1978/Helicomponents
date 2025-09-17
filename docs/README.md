@@ -251,16 +251,15 @@ from code.utils.config_loader import get_clickhouse_client
 c = get_clickhouse_client(); c.execute('TRUNCATE TABLE sim_results'); print('TRUNCATE sim_results: OK')
 PY
 
-# 10-летний прогон с экспортом в ClickHouse (без постпроцессинга MP2)
+# 10-летний прогон с экспортом в ClickHouse
 LOG=logs/sim_export_$(date +%Y%m%d_%H%M%S).log; \
-PYTHONUNBUFFERED=1 HL_ENABLE_MP2=1 HL_ENABLE_MP2_POST=0 \
+PYTHONUNBUFFERED=1 \
 python3 -u code/sim_master.py \
   --status12456-smoke-real \
   --status12456-days 3650 \
   --export-sim on \
   --export-truncate \
   --export-d0 off \
-  --export-postprocess off \
   --seatbelts off \
   2>&1 | tee "$LOG" | cat
 ```
@@ -287,4 +286,4 @@ python3 code/model_nvrtc_probe.py --days 1000 --frames 279 --emit-code --emit-pa
 
 Примечания:
 - `CUDA_PATH` авто‑детектируется (проверяются /usr/local/cuda*). При необходимости задайте вручную: `export CUDA_PATH=/usr/local/cuda-12.4`.
-- Флаг `--jit-log` включает подробный stdout NVRTC; `--seatbelts on` активирует дополнительные проверки FLAME GPU.
+- `--jit-log` включает подробный NVRTC‑вывод; `--seatbelts on` — дополнительные проверки FLAME GPU.
