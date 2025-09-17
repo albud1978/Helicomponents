@@ -1301,9 +1301,10 @@ def main():
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17'])[:DAYS])
         # Спавн: frames_initial и по-дневные массивы, а также базовые счётчики ACN/PSN
         try:
-            # Используем количество кадров планёров (MP3 ∪ MP5) без будущих,
-            # чтобы спавн начинался с корректного хвоста FRAMES
-            sim2.setEnvironmentPropertyUInt("frames_initial", int(env_data.get('frames_union_no_future', env_data.get('mp3_count', 0))))
+            # Спавн должен занимать сначала зарезервированные MP5-слоты (279..285),
+            # поэтому задаём frames_initial как индекс первого зарезервированного слота
+            frames_initial = int(env_data.get('first_reserved_idx', env_data.get('frames_union_no_future', env_data.get('mp3_count', 0))))
+            sim2.setEnvironmentPropertyUInt("frames_initial", frames_initial)
         except Exception:
             pass
         if 'mp4_new_counter_mi17_seed' in env_data:
@@ -1318,7 +1319,8 @@ def main():
                 # next_idx стартует с позиции первого будущего борта:
                 # если base_acn_spawn уже присутствует в union (зарезервирован MP5), используем его индекс;
                 # иначе — frames_union_no_future
-                next_idx = int(env_data.get('first_future_idx', env_data.get('frames_union_no_future', env_data.get('mp3_count', 0))))
+                # next_idx начинаем с первого зарезервированного индекса, чтобы заполнить 279..285
+                next_idx = int(env_data.get('first_reserved_idx', env_data.get('first_future_idx', env_data.get('frames_union_no_future', env_data.get('mp3_count', 0)))))
                 base_acn = int(env_data.get('base_acn_spawn', 100000))
                 base_psn = int(os.environ.get('HL_BASE_PSN_SPAWN', '2000000'))
                 sm[0].setVariableUInt('next_idx', next_idx)
