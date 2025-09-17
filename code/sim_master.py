@@ -338,11 +338,26 @@ def main():
                 s6_started_v = int(ag.getVariableUInt('s6_started'))
             except Exception:
                 s6_started_v = 0
-            sne_v = int(ag.getVariableUInt('sne')) if 'sne' in dir(ag) else 0
-            ppr_v = int(ag.getVariableUInt('ppr')) if 'ppr' in dir(ag) else 0
-            ll_v = int(ag.getVariableUInt('ll')) if 'll' in dir(ag) else 0
-            oh_v = int(ag.getVariableUInt('oh')) if 'oh' in dir(ag) else 0
-            br_v = int(ag.getVariableUInt('br')) if 'br' in dir(ag) else 0
+            try:
+                sne_v = int(ag.getVariableUInt('sne'))
+            except Exception:
+                sne_v = 0
+            try:
+                ppr_v = int(ag.getVariableUInt('ppr'))
+            except Exception:
+                ppr_v = 0
+            try:
+                ll_v = int(ag.getVariableUInt('ll'))
+            except Exception:
+                ll_v = 0
+            try:
+                oh_v = int(ag.getVariableUInt('oh'))
+            except Exception:
+                oh_v = 0
+            try:
+                br_v = int(ag.getVariableUInt('br'))
+            except Exception:
+                br_v = 0
             try:
                 dt_v = int(ag.getVariableUInt('daily_today_u32'))
             except Exception:
@@ -1299,8 +1314,26 @@ def main():
             sim2.setEnvironmentPropertyUInt("mi17_repair_time_const", int(_mi17_tuple[2] or 0))
             sim2.setEnvironmentPropertyUInt("mi17_partout_time_const", int(_mi17_tuple[3] or 0))
             sim2.setEnvironmentPropertyUInt("mi17_assembly_time_const", int(_mi17_tuple[4] or 0))
+            # BR/LL/OH для MI-17 из MP1
+            _br17 = int(mp1_map.get(70482, (0,0,0,0,0))[1] or 0)
+            _mp1_index = env_data.get('mp1_index', {})
+            _pidx = int(_mp1_index.get(70482, -1))
+            _ll17 = 0
+            _oh17 = 0
+            arr_ll17 = env_data.get('mp1_ll_mi17', [])
+            arr_oh17 = env_data.get('mp1_oh_mi17', [])
+            if _pidx >= 0 and _pidx < len(arr_ll17):
+                _ll17 = int(arr_ll17[_pidx] or 0)
+            if _pidx >= 0 and _pidx < len(arr_oh17):
+                _oh17 = int(arr_oh17[_pidx] or 0)
+            sim2.setEnvironmentPropertyUInt("mi17_br_const", int(_br17))
+            sim2.setEnvironmentPropertyUInt("mi17_ll_const", int(_ll17))
+            sim2.setEnvironmentPropertyUInt("mi17_oh_const", int(_oh17))
             try:
-                print(f"spawn ENV consts (MI-17 from MP1): partseq=70482, rt={int(_mi17_tuple[2] or 0)}, pt={int(_mi17_tuple[3] or 0)}, at={int(_mi17_tuple[4] or 0)}")
+                print(
+                    f"spawn ENV consts (MI-17): partseq=70482, rt={int(_mi17_tuple[2] or 0)}, pt={int(_mi17_tuple[3] or 0)}, at={int(_mi17_tuple[4] or 0)}, "
+                    f"br17={_br17}, ll17={_ll17}, oh17={_oh17}"
+                )
             except Exception:
                 pass
         except Exception as _e:
@@ -1591,7 +1624,19 @@ def main():
                             _pt = int(agn.getVariableUInt('partout_time'))
                         except Exception:
                             _pt = -1
-                        print(f"  newborn[{j}]: idx={_idx} ac={_acn} psn={_psn} status_id={_sid} gb={_gb} partseqno_i={_pseq} mfg_ord={_mfg} rt={_rt} at={_at} pt={_pt}")
+                        try:
+                            _ll = int(agn.getVariableUInt('ll'))
+                        except Exception:
+                            _ll = -1
+                        try:
+                            _oh = int(agn.getVariableUInt('oh'))
+                        except Exception:
+                            _oh = -1
+                        try:
+                            _br = int(agn.getVariableUInt('br'))
+                        except Exception:
+                            _br = -1
+                        print(f"  newborn[{j}]: idx={_idx} ac={_acn} psn={_psn} status_id={_sid} gb={_gb} partseqno_i={_pseq} mfg_ord={_mfg} rt={_rt} at={_at} pt={_pt} ll={_ll} oh={_oh} br={_br}")
                 prev_total = total
             except Exception:
                 pass
