@@ -368,6 +368,9 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     ac_union.extend(extra_from_mp5)
     # Количество кадров без будущих (для выравнивания стартового индекса спавна)
     frames_union_no_future = len(ac_union)
+    # Зарезервированные слоты под MP5-only планёры (без стартовых агентов): займём их спавном
+    reserved_slots_count = len(extra_from_mp5)
+    first_reserved_idx = max(0, frames_union_no_future - reserved_slots_count)
     # Будущие ACN без дублей
     future_count = max(0, future_spawn_total + frames_buffer)
     if future_count > 0:
@@ -418,6 +421,8 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'base_acn_spawn': int(base_acn_spawn),
         'first_future_idx': int(first_future_idx),
         'frames_union_no_future': int(frames_union_no_future),
+        'reserved_slots_count': int(reserved_slots_count),
+        'first_reserved_idx': int(first_reserved_idx),
         'future_spawn_total': int(future_spawn_total),
         'mp4_ops_counter_mi8': mp4_ops8,
         'mp4_ops_counter_mi17': mp4_ops17,
