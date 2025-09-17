@@ -1299,7 +1299,7 @@ def main():
         # MP4 квоты (усечённые по DAYS)
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8'])[:DAYS])
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17'])[:DAYS])
-        # Спавн: frames_initial и по-дневные массивы
+        # Спавн: frames_initial и по-дневные массивы, а также базовые счётчики ACN/PSN
         try:
             sim2.setEnvironmentPropertyUInt("frames_initial", int(env_data.get('mp3_count', 0)))
         except Exception:
@@ -1308,6 +1308,21 @@ def main():
             sim2.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed'])[:DAYS])
         if 'month_first_u32' in env_data:
             sim2.setEnvironmentPropertyArrayUInt32("month_first_u32", list(env_data['month_first_u32'])[:DAYS])
+        # Инициализация базовых значений для spawn_mgr (next_acn/next_psn через агентные переменные)
+        try:
+            spawn_mgr_desc = model2.getAgent("spawn_mgr")
+            if spawn_mgr_desc is not None:
+                sm = pyflamegpu.AgentVector(spawn_mgr_desc, 1)
+                # next_idx стартует от frames_initial, остальное — от баз из env_data или дефолтов
+                next_idx = int(env_data.get('mp3_count', 0))
+                base_acn = int(env_data.get('base_acn_spawn', 100000))
+                base_psn = int(os.environ.get('HL_BASE_PSN_SPAWN', '2000000'))
+                sm[0].setVariableUInt('next_idx', next_idx)
+                sm[0].setVariableUInt('next_acn', base_acn)
+                sm[0].setVariableUInt('next_psn', base_psn)
+                sim2.setPopulationData(sm)
+        except Exception:
+            pass
         # ENV-константы нормативов для новорождённых MI-17 (используются в rtc_spawn_mi17_atomic)
         try:
             _mi17_tuple = mp1_map.get(70482, (0,0,0,0,0))
@@ -1580,6 +1595,54 @@ def main():
             t_acpu0 = _t.perf_counter()
             sim2.getPopulationData(pop_after)
             t_cpu_s += (_t.perf_counter() - t_acpu0)
+            # Подсчёт переходов за текущий день (накапливаем суммарно)
+            day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
+            for i in range(K):
+                sb = status_before[i]
+                sa = int(pop_after[i].getVariableUInt('status_id'))
+                if sb == 1 and sa == 2:
+                    trans12_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans12_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 1 and sa == 4:
+                    trans14_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                if sb == 2 and sa == 3:
+                    trans23_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans23_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 2 and sa == 4:
+                    trans24_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                if sb == 2 and sa == 6:
+                    trans26_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                if sb == 3 and sa == 2:
+                    trans32_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans32_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
+                if sb == 5 and sa == 2:
+                    trans52_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                    sne_v = int(pop_after[i].getVariableUInt('sne'))
+                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
+                    ll_v = int(pop_after[i].getVariableUInt('ll'))
+                    oh_v = int(pop_after[i].getVariableUInt('oh'))
+                    br_v = int(pop_after[i].getVariableUInt('br'))
+                    trans52_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
+                    total_5to2 += 1
+                if sb == 4 and sa == 2:
+                    trans42_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
+                if sb == 4 and sa == 5:
+                    trans45_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
             # Диагностика рождений по дням
             try:
                 total = len(pop_after)
@@ -1691,61 +1754,6 @@ def main():
                     t_db_s += flush_export_buffer(client, export_table, export_buf, columns_override=cols)
                 else:
                     t_db_s += flush_export_buffer(client, export_table, export_buf)
-            for i in range(K):
-                sb = status_before[i]
-                sa = int(pop_after[i].getVariableUInt('status_id'))
-                if sb == 1 and sa == 2:
-                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
-                    trans12_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
-                    sne_v = int(pop_after[i].getVariableUInt('sne'))
-                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
-                    ll_v = int(pop_after[i].getVariableUInt('ll'))
-                    oh_v = int(pop_after[i].getVariableUInt('oh'))
-                    br_v = int(pop_after[i].getVariableUInt('br'))
-                    trans12_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
-                if sb == 1 and sa == 4:
-                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
-                    trans14_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
-                if sb == 2 and sa == 3:
-                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
-                    trans23_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
-                    sne_v = int(pop_after[i].getVariableUInt('sne'))
-                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
-                    ll_v = int(pop_after[i].getVariableUInt('ll'))
-                    oh_v = int(pop_after[i].getVariableUInt('oh'))
-                    br_v = int(pop_after[i].getVariableUInt('br'))
-                    trans23_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
-                if sb == 2 and sa == 4:
-                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
-                    trans24_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
-                if sb == 2 and sa == 6:
-                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
-                    trans26_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
-                if sb == 3 and sa == 2:
-                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
-                    trans32_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
-                    sne_v = int(pop_after[i].getVariableUInt('sne'))
-                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
-                    ll_v = int(pop_after[i].getVariableUInt('ll'))
-                    oh_v = int(pop_after[i].getVariableUInt('oh'))
-                    br_v = int(pop_after[i].getVariableUInt('br'))
-                    trans32_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
-                if sb == 5 and sa == 2:
-                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
-                    trans52_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
-                    sne_v = int(pop_after[i].getVariableUInt('sne'))
-                    ppr_v = int(pop_after[i].getVariableUInt('ppr'))
-                    ll_v = int(pop_after[i].getVariableUInt('ll'))
-                    oh_v = int(pop_after[i].getVariableUInt('oh'))
-                    br_v = int(pop_after[i].getVariableUInt('br'))
-                    trans52_info.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number')), sne_v, ppr_v, ll_v, oh_v, br_v))
-                    total_5to2 += 1
-                if sb == 4 and sa == 2:
-                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
-                    trans42_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
-                if sb == 4 and sa == 5:
-                    day_str = env_data['days_sorted'][d] if d < len(env_data['days_sorted']) else str(d)
-                    trans45_log.append((day_str, int(pop_after[i].getVariableUInt('aircraft_number'))))
         # Экспорт в режиме с постпроцессингом: используем те же собранные после шага данные
         if export_on and getattr(a, 'export_postprocess', 'on') == 'on':
             if export_buf:

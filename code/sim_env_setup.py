@@ -340,23 +340,49 @@ def prepare_env_arrays(client) -> Dict[str, object]:
                 ac_i = 0
             if ac_i > 0:
                 ac_mp5_set.add(ac_i)
-    ac_union = list(ac_mp3_ordered)
-    extra_from_mp5 = sorted([ac for ac in ac_mp5_set if ac not in frames_index_mp3])
-    ac_union.extend(extra_from_mp5)
-    frames_index = {ac: i for i, ac in enumerate(ac_union)}
-    frames_total = len(frames_index)
-    mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
-    mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
     # План новых Ми-17 по дням (seed для MacroProperty на GPU)
     mp4_new_counter_mi17_seed: List[int] = []
     from datetime import date as _date
-    # Если в flight_program_ac появится явная колонка new_counter_mi17, можно читать её напрямую
     for D in days_sorted:
         md = mp4_by_day.get(D, {})
         v = int(md.get('new_counter_mi17', 0))
         if v < 0:
             v = 0
         mp4_new_counter_mi17_seed.append(v)
+    # FRAMES-upfront: заранее расширяем пул кадров под будущий спавн
+    future_spawn_total = int(sum(int(x) for x in mp4_new_counter_mi17_seed))
+    try:
+        frames_buffer = int(os.environ.get('HL_FRAMES_BUFFER', '0'))
+        if frames_buffer < 0:
+            frames_buffer = 0
+    except Exception:
+        frames_buffer = 0
+    # База для ACN: максимум среди существующих/MP5 и порог 100000
+    existing_set = set(ac_mp3_ordered)
+    existing_set.update(ac_mp5_set)
+    max_existing_acn = max(existing_set) if existing_set else 0
+    base_acn_spawn = max(100000, max_existing_acn + 1)
+    # Собираем объединение: MP3 → доп. из MP5 → будущие ACN
+    ac_union = list(ac_mp3_ordered)
+    extra_from_mp5 = sorted([ac for ac in ac_mp5_set if ac not in frames_index_mp3])
+    ac_union.extend(extra_from_mp5)
+    # Будущие ACN без дублей
+    future_count = max(0, future_spawn_total + frames_buffer)
+    if future_count > 0:
+        future_acn = []
+        cur = base_acn_spawn
+        taken = set(ac_union)
+        while len(future_acn) < future_count:
+            if cur not in taken:
+                future_acn.append(cur)
+                taken.add(cur)
+            cur += 1
+        ac_union.extend(future_acn)
+    frames_index = {ac: i for i, ac in enumerate(ac_union)}
+    frames_total = len(frames_index)
+    # Построение MP5 на расширенном FRAMES (для новых кадров часы = 0)
+    mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
+    mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
     mp1_br8, mp1_br17, mp1_rt, mp1_pt, mp1_at, mp1_index = build_mp1_arrays(mp1_map)
     # Соберём массивы OH по индексу MP1
     keys_sorted = sorted(mp1_index.keys(), key=lambda k: mp1_index[k])
@@ -385,6 +411,8 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'days_total_u16': int(len(days_sorted)),
         'days_sorted': days_sorted,
         'frames_index': frames_index,
+        'base_acn_spawn': int(base_acn_spawn),
+        'future_spawn_total': int(future_spawn_total),
         'mp4_ops_counter_mi8': mp4_ops8,
         'mp4_ops_counter_mi17': mp4_ops17,
         'mp4_new_counter_mi17_seed': mp4_new_counter_mi17_seed,
