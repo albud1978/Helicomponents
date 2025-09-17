@@ -1401,6 +1401,12 @@ def main():
             ac = int(r[idx_map['aircraft_number']] or 0)
             fi = int(frames_index.get(ac, i % max(1, FRAMES)))
             av[i].setVariableUInt("idx", fi)
+            # PSN из MP3 (если колонка присутствует)
+            try:
+                psn_init = int(r[idx_map.get('psn', -1)] or 0)
+            except Exception:
+                psn_init = 0
+            av[i].setVariableUInt("psn", psn_init)
             gb = int(r[idx_map.get('group_by', -1)] or 0) if 'group_by' in idx_map else 0
             if gb not in (1,2):
                 mask = int(r[idx_map.get('ac_type_mask', -1)] or 0)

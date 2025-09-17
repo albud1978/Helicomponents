@@ -51,4 +51,38 @@
 - Работать с MacroProperty
 - Оптимизировать производительность GPU
 
-*Последнее обновление: 30-07-2025* 
+*Последнее обновление: 17-09-2025*  
+
+## Изменения 17-09-2025 (миграция симуляции / экспорт)
+
+### Новые ENV-константы (PyFLAMEGPU Environment)
+- `mi17_repair_time_const` (UInt32)
+- `mi17_partout_time_const` (UInt32)
+- `mi17_assembly_time_const` (UInt32)
+- `mi17_br_const` (UInt32)
+- `mi17_ll_const` (UInt32)
+- `mi17_oh_const` (UInt32)
+
+Источник значений: MP1 (`md_components`) по `partseqno_i = partno_comp` c динамическим выбором имён колонок.
+
+### Инициализация переменных новорождённых (rtc_spawn_mi17_atomic)
+- Устанавливаются: `psn`, `aircraft_number`, `partseqno_i=70482`, `status_id=3`, `mfg_date = month_first_u32[day]`,
+  а также `repair_time/assembly_time/partout_time`, `ll/oh/br` из ENV-констант.
+
+### Экспорт sim_results (ClickHouse)
+- Поля `ll/oh/br` экспортируются как `UInt32` из агентных переменных.
+- Для новорождённых действует D+1 гейт (исключение из экспорта текущего дня: `max_agents=prev_total`).
+- Инициализация `psn` у стартовой популяции: читается из MP3 при создании агентов.
+
+### Проверки в БД (рекомендуемые запросы)
+```sql
+SELECT day_u16, aircraft_number, ll, oh, br
+FROM sim_results
+WHERE aircraft_number BETWEEN 100000 AND 100010
+ORDER BY day_u16, aircraft_number;
+
+SELECT day_u16, count() c, sum(ll=0) z_ll, sum(oh=0) z_oh, sum(br=0) z_br
+FROM sim_results
+GROUP BY day_u16
+ORDER BY day_u16;
+```
