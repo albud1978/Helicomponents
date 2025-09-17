@@ -1301,7 +1301,9 @@ def main():
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17'])[:DAYS])
         # Спавн: frames_initial и по-дневные массивы, а также базовые счётчики ACN/PSN
         try:
-            sim2.setEnvironmentPropertyUInt("frames_initial", int(env_data.get('mp3_count', 0)))
+            # Используем количество кадров планёров (MP3 ∪ MP5) без будущих,
+            # чтобы спавн начинался с корректного хвоста FRAMES
+            sim2.setEnvironmentPropertyUInt("frames_initial", int(env_data.get('frames_union_no_future', env_data.get('mp3_count', 0))))
         except Exception:
             pass
         if 'mp4_new_counter_mi17_seed' in env_data:
@@ -1313,8 +1315,10 @@ def main():
             spawn_mgr_desc = model2.getAgent("spawn_mgr")
             if spawn_mgr_desc is not None:
                 sm = pyflamegpu.AgentVector(spawn_mgr_desc, 1)
-                # next_idx стартует от frames_initial, остальное — от баз из env_data или дефолтов
-                next_idx = int(env_data.get('mp3_count', 0))
+                # next_idx стартует с позиции первого будущего борта:
+                # если base_acn_spawn уже присутствует в union (зарезервирован MP5), используем его индекс;
+                # иначе — frames_union_no_future
+                next_idx = int(env_data.get('first_future_idx', env_data.get('frames_union_no_future', env_data.get('mp3_count', 0))))
                 base_acn = int(env_data.get('base_acn_spawn', 100000))
                 base_psn = int(os.environ.get('HL_BASE_PSN_SPAWN', '2000000'))
                 sm[0].setVariableUInt('next_idx', next_idx)
