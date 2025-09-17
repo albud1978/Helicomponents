@@ -366,6 +366,8 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     ac_union = list(ac_mp3_ordered)
     extra_from_mp5 = sorted([ac for ac in ac_mp5_set if ac not in frames_index_mp3])
     ac_union.extend(extra_from_mp5)
+    # Количество кадров без будущих (для выравнивания стартового индекса спавна)
+    frames_union_no_future = len(ac_union)
     # Будущие ACN без дублей
     future_count = max(0, future_spawn_total + frames_buffer)
     if future_count > 0:
@@ -380,6 +382,8 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         ac_union.extend(future_acn)
     frames_index = {ac: i for i, ac in enumerate(ac_union)}
     frames_total = len(frames_index)
+    # Индекс первого будущего борта (если присутствует в MP5/union)
+    first_future_idx = int(frames_index.get(base_acn_spawn, frames_union_no_future))
     # Построение MP5 на расширенном FRAMES (для новых кадров часы = 0)
     mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
     mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
@@ -412,6 +416,8 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'days_sorted': days_sorted,
         'frames_index': frames_index,
         'base_acn_spawn': int(base_acn_spawn),
+        'first_future_idx': int(first_future_idx),
+        'frames_union_no_future': int(frames_union_no_future),
         'future_spawn_total': int(future_spawn_total),
         'mp4_ops_counter_mi8': mp4_ops8,
         'mp4_ops_counter_mi17': mp4_ops17,
