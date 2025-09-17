@@ -49,6 +49,10 @@ class HeliSimModel:
         env.newPropertyUInt("mi17_repair_time_const", 0)
         env.newPropertyUInt("mi17_partout_time_const", 0)
         env.newPropertyUInt("mi17_assembly_time_const", 0)
+        # Пороговые/нормативные значения MI-17 из MP1: BR/LL/OH
+        env.newPropertyUInt("mi17_br_const", 0)
+        env.newPropertyUInt("mi17_ll_const", 0)
+        env.newPropertyUInt("mi17_oh_const", 0)
         # Число стартовых агентов (для next_idx_spawn)
         env.newPropertyUInt("frames_initial", 0)
         # MacroProperty 1D квоты по дням (инициализируются из MP4) — не обязательны для smoke
@@ -331,9 +335,10 @@ class HeliSimModel:
             out.setVariable<unsigned int>("repair_days", 0u);
             out.setVariable<unsigned int>("ops_ticket", 0u);
             out.setVariable<unsigned int>("intent_flag", 0u);
-            out.setVariable<unsigned int>("ll", 0u);
-            out.setVariable<unsigned int>("oh", 0u);
-            out.setVariable<unsigned int>("br", 0u);
+            // BR/LL/OH для MI-17 из ENV-констант
+            out.setVariable<unsigned int>("ll", FLAMEGPU->environment.getProperty<unsigned int>("mi17_ll_const"));
+            out.setVariable<unsigned int>("oh", FLAMEGPU->environment.getProperty<unsigned int>("mi17_oh_const"));
+            out.setVariable<unsigned int>("br", FLAMEGPU->environment.getProperty<unsigned int>("mi17_br_const"));
             out.setVariable<unsigned int>("daily_today_u32", 0u);
             out.setVariable<unsigned int>("daily_next_u32", 0u);
             out.setVariable<unsigned int>("active_trigger", 0u);
@@ -447,6 +452,10 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     env.newPropertyUInt("mi17_repair_time_const", 0)
     env.newPropertyUInt("mi17_partout_time_const", 0)
     env.newPropertyUInt("mi17_assembly_time_const", 0)
+    # Пороговые/нормативные значения MI-17 из MP1: BR/LL/OH
+    env.newPropertyUInt("mi17_br_const", 0)
+    env.newPropertyUInt("mi17_ll_const", 0)
+    env.newPropertyUInt("mi17_oh_const", 0)
     enable_mp2 = os.environ.get("HL_ENABLE_MP2", "0") == "1"
     enable_mp2_post = os.environ.get("HL_ENABLE_MP2_POST", "0") == "1"
     env.newPropertyUInt("approve_policy", 0)  # 0 = по idx (детерминизм)
@@ -1247,9 +1256,10 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         out.setVariable<unsigned int>("repair_days", 0u);
         out.setVariable<unsigned int>("ops_ticket", 0u);
         out.setVariable<unsigned int>("intent_flag", 0u);
-        out.setVariable<unsigned int>("ll", 0u);
-        out.setVariable<unsigned int>("oh", 0u);
-        out.setVariable<unsigned int>("br", 0u);
+        // BR/LL/OH для MI-17 из ENV-констант
+        out.setVariable<unsigned int>("ll", FLAMEGPU->environment.getProperty<unsigned int>("mi17_ll_const"));
+        out.setVariable<unsigned int>("oh", FLAMEGPU->environment.getProperty<unsigned int>("mi17_oh_const"));
+        out.setVariable<unsigned int>("br", FLAMEGPU->environment.getProperty<unsigned int>("mi17_br_const"));
         out.setVariable<unsigned int>("daily_today_u32", 0u);
         out.setVariable<unsigned int>("daily_next_u32", 0u);
         out.setVariable<unsigned int>("active_trigger", 0u);

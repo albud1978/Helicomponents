@@ -71,7 +71,7 @@ def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int]]:
 
 
 def fetch_mp1_oh(client) -> Dict[int, Tuple[int, int]]:
-    """Возвращает карту partseq → (oh_mi8, oh_mi17). Единицы ожидаются в минутах.
+    """Возвращает карту partseq → (oh_mi8, oh_mi17). Единицы в минутах.
     Подбирает корректную колонку идентификатора по очереди: partseqno_i, `partno.comp`, partno_comp, partno.
     """
     candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
@@ -81,8 +81,9 @@ def fetch_mp1_oh(client) -> Dict[int, Tuple[int, int]]:
         try:
             sql = (
                 "SELECT\n"
-                f"  toUInt32OrZero({col}) AS partseq,\n"
-                "  oh_mi8, oh_mi17\n"
+                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
+                "  toUInt32OrZero(toString(oh_mi8))  AS oh_mi8,\n"
+                "  toUInt32OrZero(toString(oh_mi17)) AS oh_mi17\n"
                 "FROM md_components"
             )
             rows = client.execute(sql)
@@ -95,6 +96,31 @@ def fetch_mp1_oh(client) -> Dict[int, Tuple[int, int]]:
     if not rows and last_err is not None:
         raise last_err
     return {int(p): (int(oh8 or 0), int(oh17 or 0)) for p, oh8, oh17 in rows}
+
+
+def fetch_mp1_ll(client) -> Dict[int, int]:
+    """Возвращает карту partseq → ll_mi17 (минуты)."""
+    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
+    rows = []
+    last_err: Exception | None = None
+    for col in candidates:
+        try:
+            sql = (
+                "SELECT\n"
+                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
+                "  toUInt32OrZero(toString(ll_mi17)) AS ll_mi17\n"
+                "FROM md_components"
+            )
+            rows = client.execute(sql)
+            if rows:
+                break
+        except Exception as e:
+            last_err = e
+            rows = []
+            continue
+    if not rows and last_err is not None:
+        raise last_err
+    return {int(p): int(ll or 0) for p, ll in rows}
 
 
 def fetch_mp3(client, vdate: date, vid: int):
@@ -297,6 +323,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     mp3_rows, mp3_fields = fetch_mp3(client, vdate, vid)
     mp1_map = fetch_mp1_br_rt(client)
     mp1_oh_map = fetch_mp1_oh(client)
+    mp1_ll_map = fetch_mp1_ll(client)
     mp4_by_day = preload_mp4_by_day(client)
     mp5_by_day = preload_mp5_maps(client)
 
@@ -339,6 +366,11 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         oh8, oh17 = mp1_oh_map.get(k, (0, 0))
         mp1_oh8_arr.append(int(oh8 or 0))
         mp1_oh17_arr.append(int(oh17 or 0))
+    # Соберём массив LL по индексу MP1 (для mi17)
+    mp1_ll17_arr: List[int] = []
+    for k in keys_sorted:
+        llv = mp1_ll_map.get(k, 0)
+        mp1_ll17_arr.append(int(llv or 0))
     mp3_arrays = build_mp3_arrays(mp3_rows, mp3_fields)
 
     # month_first_u32: ordinal первого дня месяца для каждого дня симуляции
@@ -365,6 +397,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mp1_assembly_time': mp1_at,
         'mp1_oh_mi8': mp1_oh8_arr,
         'mp1_oh_mi17': mp1_oh17_arr,
+        'mp1_ll_mi17': mp1_ll17_arr,
         'mp1_index': mp1_index,
         'mp3_arrays': mp3_arrays,
         'mp3_count': len(mp3_rows),
