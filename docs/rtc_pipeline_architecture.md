@@ -143,3 +143,83 @@ MP5 probe для чтения часов работы и сброс флагов
 4. **Модульная архитектура**: Разделение RTC функций по файлам
 5. **Профили выполнения**: Предустановленные конфигурации для разных сценариев
 
+
+## Инвентаризация Env (Mode A + Spawn, MP2=off)
+
+- **Property (скаляры)**
+  - `version_date`: опорная дата (ord) для расчётов в S1/S5 post и логике.
+  - `days_total`: горизонт расчёта; гейт для day/индексации в RTC.
+  - `frames_total`: размерность FRAMES, параметр шаблонов RTC.
+  - `export_phase`: гейт (0 в данной конфигурации); ряд RTC функций ранится только при 0.
+  - `export_day`: не используется при MP2=off.
+  - `approve_policy`: политика менеджера approve; 0 — по индексу (детерминизм).
+  - `mi17_repair_time_const`, `mi17_partout_time_const`, `mi17_assembly_time_const`: нормативы времени из MP1 для новорождённых.
+  - `mi17_br_const`, `mi17_ll_const`, `mi17_oh_const`: пороги BR/LL/OH для MI‑17 (для новорождённых).
+
+- **PropertyArray (по дням, длина = DAYS)**
+  - `mp4_ops_counter_mi8`, `mp4_ops_counter_mi17`: суточные квоты (используются в approve всех фаз).
+  - `mp4_new_counter_mi17_seed`: план спавна Ми‑17 (используется spawn_mgr/spawn_ticket).
+  - `month_first_u32`: ord первого дня месяца (mfg_date новорождённых).
+
+- **PropertyArray (по кадрам, длина = FRAMES)**
+  - `mp3_mfg_date_days`: дата производства по кадрам (используется в approve S1 приоритетом «самые молодые»).
+
+- **PropertyArray (линейный, длина = (DAYS+1)*FRAMES)**
+  - `mp5_daily_hours`: часовые данные MP5; читаются только при включённом `HL_MP5_PROBE=1` (функция `rtc_probe_mp5`). При MP5_PROBE=0 фактически не используются; `daily_today_u32/daily_next_u32` остаются 0.
+
+- **MacroProperty (по кадрам, длина = FRAMES)**
+  - Intent/Approve (статусы 2/3/5/1): `mi8_intent`, `mi17_intent`, `mi8_approve`, `mi17_approve`,
+    `mi8_approve_s3`, `mi17_approve_s3`, `mi8_approve_s5`, `mi17_approve_s5`, `mi8_approve_s1`, `mi17_approve_s1`.
+
+- **MacroProperty (по дням, длина = DAYS)**
+  - Spawn: `spawn_need_u32`, `spawn_base_idx_u32`, `spawn_base_acn_u32`, `spawn_base_psn_u32`.
+
+- **MacroProperty (служебные, длина = 1) — в текущей логике RTC не читаются**
+  - `next_idx_spawn`, `next_aircraft_no_mi17`, `next_psn_mi17` (используются агентными переменными `spawn_mgr`, а в Env — как резерв).
+
+- **Неиспользуемые при MP2=off**
+  - Все MP2 MacroProperty (`mp2_*`) и фазы `export_phase` 1/2 (copyout/postprocess).
+  - `export_day` (активен только при `export_phase=1`).
+
+- **Костыли/хардкод (зафиксировано, без изменений логики)**
+  - Spawn новорождённых: `group_by=2`, `ac_type_mask=64u`, `partseqno_i=70482u` заданы константами в `rtc_spawn_mi17_atomic`.
+  - Политика approve по умолчанию: `approve_policy=0` (скан по idx) — упрощённая детерминированная стратегия.
+  - Лимит тикетов спавна: в текущем сценарии создаётся 16 агентов `spawn_ticket`, что ограничивает суточный спавн 16 шт. (если `need > 16`, часть переносится на следующий шаг; требует явного решения при масштабировании).
+  - Заполнение `daily_today_u32/daily_next_u32`: без `HL_MP5_PROBE=1` остаются нулями (агенты 2‑го статуса считают dt=0).
+
+- **Рекомендации для «реальных данных» (без постпроцессинга MP2)**
+  - Включить чтение MP5 на GPU: запуск с `HL_MP5_PROBE=1` (и `--seatbelts on`) для заполнения `daily_today_u32/daily_next_u32` из `mp5_daily_hours`.
+  - Убедиться, что `mp5_daily_hours` имеет длину `(DAYS+1)*FRAMES` и индексируется формулой `row = day*FRAMES + idx`, паддинг `D+1` присутствует.
+  - Контролировать источники порогов для новорождённых: `mi17_*_const` должны заполняться из MP1 (это уже реализовано в менеджере симуляции).
+  - Если потребуется приоритизация approve помимо «по idx», согласовать новую политику (например, по `mp3_mfg_date_days` для S2/S3/S5) и включить её явно через `approve_policy`.
+
+
+## V2: Пошаговый пайплайн и загрузка Env
+
+- **Шаг setup_env (обязательный, первый)**
+  - Источник: ClickHouse (готовые массивы MP1/MP3/MP4/MP5).
+  - Построение индексов и размерностей:
+    - `frames_index`: плотный индекс по `aircraft_number` из объединения (MP3_planes ∪ MP5_planes), порядок: MP3 → MP5-only.
+    - `frames_union_no_future`: |MP3_planes ∪ MP5_planes| (без будущих ACN).
+    - `first_reserved_idx`: начало блока MP5‑only слотов (заполняется спавном).
+    - `first_future_idx`: индекс `base_acn_spawn` если присутствует в union; иначе = `frames_union_no_future`.
+    - `frames_total`: при необходимости → `frames_union_no_future + future_buffer`.
+  - Формирование Env массивов (по мере потребности RTC):
+    - Всегда: `mp4_ops_counter_mi8/mi17`, `mp4_new_counter_mi17_seed`, `month_first_u32` (длина = DAYS).
+    - Для MP5‑probe: `mp5_daily_hours` (длина = (DAYS+1)*FRAMES, паддинг D+1 обязателен).
+    - Для S1 приоритета: `mp3_mfg_date_days` (длина = FRAMES).
+  - Валидации (жёсткие):
+    - Длины массивов соответствуют DAYS/FRAMES.
+    - `(DAYS+1)*FRAMES` для MP5, индексация `row = day*FRAMES + idx` корректна.
+    - `frames_index` плотный, без дырок; новые индексы спавна стартуют с `first_reserved_idx`/`first_future_idx`.
+
+- **Поэтапная загрузка Env**
+  - Под RTC‑потребителей данных: включаем только нужные массивы/скаляры на текущем шаге.
+  - Примеры:
+    - MP5‑probe включён → добавляем только `mp5_daily_hours`.
+    - Подключаем S1‑approve (приоритет по дате) → добавляем `mp3_mfg_date_days`.
+
+- **Тест setup_env (smoke)**
+  - Печать: FRAMES, DAYS, размеры ключевых массивов, top‑5 `frames_index` и границы блоков.
+  - Проверка инвариантов и assert при несоответствии.
+
