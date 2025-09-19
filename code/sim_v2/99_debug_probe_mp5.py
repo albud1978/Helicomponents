@@ -26,7 +26,11 @@ def main() -> int:
     env.newPropertyUInt("version_date", 0)
     env.newPropertyUInt("frames_total", FRAMES)
     env.newPropertyUInt("days_total", DAYS)
-    env.newPropertyArrayUInt32("mp5_daily_hours", [0] * ((DAYS + 1) * FRAMES))
+    use_macro = os.environ.get('HL_V2_USE_MACRO', '0') == '1'
+    if use_macro:
+        env.newMacroPropertyUInt32("mp5_lin", FRAMES * (DAYS + 1))
+    else:
+        env.newPropertyArrayUInt32("mp5_daily_hours", [0] * ((DAYS + 1) * FRAMES))
 
     a = model.newAgent("component")
     a.newVariableUInt("idx", 0)
@@ -34,7 +38,24 @@ def main() -> int:
     a.newVariableUInt("daily_next_u32", 0)
 
     func_name = f"rtc_probe_mp5_d{DAYS}"
-    rtc_src = f"""
+    if use_macro:
+        rtc_src = f"""
+FLAMEGPU_AGENT_FUNCTION({func_name}, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    static const unsigned int FRAMES = {FRAMES}u;
+    static const unsigned int DAYS   = {DAYS}u;
+    const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (i >= FRAMES) return flamegpu::ALIVE;
+    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int d = (day < DAYS ? day : (DAYS > 0u ? DAYS - 1u : 0u));
+    const unsigned int base = d * FRAMES + i;
+    auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*(DAYS+1))>("mp5_lin");
+    const unsigned int dt = mp[base];
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
+    return flamegpu::ALIVE;
+}}
+"""
+    else:
+        rtc_src = f"""
 FLAMEGPU_AGENT_FUNCTION({func_name}, flamegpu::MessageNone, flamegpu::MessageNone) {{
     static const unsigned int FRAMES = {FRAMES}u;
     static const unsigned int DAYS   = {DAYS}u;
@@ -63,7 +84,10 @@ FLAMEGPU_AGENT_FUNCTION({func_name}, flamegpu::MessageNone, flamegpu::MessageNon
         sim.setEnvironmentPropertyUInt("version_date", 0)
         sim.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim.setEnvironmentPropertyUInt("days_total", DAYS)
-        sim.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", [0] * ((DAYS + 1) * FRAMES))
+        if use_macro:
+            pass
+        else:
+            sim.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", [0] * ((DAYS + 1) * FRAMES))
     except Exception as e:
         print("[NVRTC ERROR at setEnvironmentProperty]", e)
         return 3

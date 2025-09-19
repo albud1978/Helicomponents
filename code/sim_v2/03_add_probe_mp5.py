@@ -43,8 +43,9 @@ def main() -> int:
     e.newPropertyUInt("version_date", int(env['version_date_u16']))
     e.newPropertyUInt("frames_total", FRAMES)
     e.newPropertyUInt("days_total", DAYS)
-    # MP5 линейный массив (UInt32)
-    e.newPropertyArrayUInt32("mp5_daily_hours", [0] * ((DAYS + 1) * FRAMES))
+    # MP5 линейный MacroProperty (UInt32) + источник для копирования
+    e.newMacroPropertyUInt32("mp5_lin", FRAMES * (DAYS + 1))
+    e.newPropertyArrayUInt32("mp5_src", [0] * ((DAYS + 1) * FRAMES))
 
     a = model.newAgent("component")
     a.newVariableUInt("idx", 0)
@@ -52,6 +53,24 @@ def main() -> int:
     a.newVariableUInt("daily_next_u32", 0)
 
     func_name = f"rtc_probe_mp5_d{DAYS}"
+    # Копирование MP5 из PropertyArray в MacroProperty (каждый агент копирует свою колонку по дням)
+    rtc_copy = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_mp5_copy_columns, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        static const unsigned int FRAMES = {FRAMES}u;
+        static const unsigned int DAYS = {DAYS}u;
+        const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
+        if (i >= FRAMES) return flamegpu::ALIVE;
+        auto dst = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*(DAYS+1))>("mp5_lin");
+        for (unsigned int d = 0u; d <= DAYS; ++d) {{
+            const unsigned int base = d * FRAMES + i;
+            const unsigned int v = FLAMEGPU->environment.getProperty<unsigned int>("mp5_src", base);
+            dst[base].exchange(v);
+        }}
+        return flamegpu::ALIVE;
+    }}
+    """
+    a.newRTCFunction("rtc_mp5_copy_columns", rtc_copy)
+
     rtc_src = f"""
     FLAMEGPU_AGENT_FUNCTION({func_name}, flamegpu::MessageNone, flamegpu::MessageNone) {{
         static const unsigned int FRAMES = {FRAMES}u;
@@ -61,9 +80,10 @@ def main() -> int:
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int d = (day < DAYS ? day : (DAYS > 0u ? DAYS - 1u : 0u));
         const unsigned int base = d * FRAMES + i;
-        const unsigned int base_next = base + FRAMES; // упрощение индекса следующего дня
-        const unsigned int dt = FLAMEGPU->environment.getProperty<unsigned int>("mp5_daily_hours", base);
-        const unsigned int dn = FLAMEGPU->environment.getProperty<unsigned int>("mp5_daily_hours", base_next);
+        const unsigned int base_next = base + FRAMES;
+        auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*(DAYS+1))>("mp5_lin");
+        const unsigned int dt = mp[base];
+        const unsigned int dn = mp[base_next];
         FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
         FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
         return flamegpu::ALIVE;
@@ -71,7 +91,8 @@ def main() -> int:
     """
     a.newRTCFunction(func_name, rtc_src)
 
-    # Слой с probe
+    # Слои: копирование MP5 → probe
+    lcopy = model.newLayer(); lcopy.addAgentFunction(a.getFunction("rtc_mp5_copy_columns"))
     l0 = model.newLayer(); l0.addAgentFunction(a.getFunction(func_name))
 
     # Инициализируем популяцию на FRAMES агентов с idx=0..FRAMES-1
@@ -79,12 +100,12 @@ def main() -> int:
     sim.setEnvironmentPropertyUInt("version_date", int(env['version_date_u16']))
     sim.setEnvironmentPropertyUInt("frames_total", FRAMES)
     sim.setEnvironmentPropertyUInt("days_total", DAYS)
-    # Сформируем mp5 линейный с учётом FRAMES
+    # Заполняем источник MP5 из ClickHouse
     mp5 = list(env['mp5_daily_hours_linear'])
     need = (DAYS + 1) * FRAMES
     mp5 = mp5[:need]
-    assert len(mp5) == need, f"mp5_daily_hours length mismatch: {len(mp5)} != {need}"
-    sim.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", mp5)
+    assert len(mp5) == need, f"mp5_src length mismatch: {len(mp5)} != {need}"
+    sim.setEnvironmentPropertyArrayUInt32("mp5_src", mp5)
 
     av = fg.AgentVector(a, FRAMES)
     for i in range(FRAMES):
