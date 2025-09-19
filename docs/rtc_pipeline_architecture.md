@@ -196,6 +196,14 @@ MP5 probe для чтения часов работы и сброс флагов
 
 ## V2: Пошаговый пайплайн и загрузка Env
 
+- Нумерация шагов (скрипты `code/sim_v2/`):
+  1) 01_setup_env.py — загрузка Env из ClickHouse, построение `frames_index`, строгие валидации
+  2) 02_build_model_base.py — базовая модель без RTC, применение Env, smoke
+  3) 03_add_probe_mp5.py — подключение `rtc_probe_mp5` (MacroProperty), smoke/trace
+  4) 04_add_status_246.py — статусы 2/4/6 с чтением MP5, проверки по validation.md
+  5) 05_export_mp5_excel.py — диагностика/экспорт MP5 в Excel (длинный/шахматный вид)
+  99) 99_debug_probe_mp5.py — минимальный стенд для компиляции/отладки NVRTC
+
 - **Шаг setup_env (обязательный, первый)**
   - Источник: ClickHouse (готовые массивы MP1/MP3/MP4/MP5).
   - Построение индексов и размерностей:
