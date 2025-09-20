@@ -778,30 +778,11 @@ def main():
         FRAMES = int(env_data['frames_total_u16'])
         DAYS = int(env_data['days_total_u16'])
         os.environ['HL_STATUS2_SMOKE'] = '1'
-        
-        # Включаем режим MacroProperty для MP5 при больших объемах данных
-        # чтобы избежать конфликтов чтения/записи
-        if FRAMES * DAYS > 10000:  # Порог для переключения на MacroProperty
-            os.environ['HL_USE_MP5_MACRO'] = '1'
-            print(f"[MP5] Включен режим MacroProperty (FRAMES={FRAMES}, DAYS={DAYS}, total={FRAMES*DAYS})")
-        
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
         sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim2.setEnvironmentPropertyUInt("days_total", DAYS)
-        
-        # Инициализация MP5 PropertyArray
-        if 'mp5_daily_hours_linear' in env_data:
-            mp5_data = list(env_data['mp5_daily_hours_linear'])
-            mp5_needed = (DAYS + 1) * FRAMES
-            if len(mp5_data) > mp5_needed:
-                mp5_data = mp5_data[:mp5_needed]
-            elif len(mp5_data) < mp5_needed:
-                mp5_data.extend([0] * (mp5_needed - len(mp5_data)))
-            mp5_data_u32 = [int(x) & 0xFFFFFFFF for x in mp5_data]
-            sim2.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", mp5_data_u32)
-        
         # Заполним MP5 на host: day 0 dt, day 1 dn и так далее не требуются в статус2 smoke
         # Популяция: все агенты из MP3 со status_id=2
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
@@ -870,13 +851,6 @@ def main():
         FRAMES = int(env_data['frames_total_u16'])
         DAYS = int(env_data['days_total_u16'])
         os.environ['HL_STATUS246_SMOKE'] = '1'
-        
-        # Включаем режим MacroProperty для MP5 при больших объемах данных
-        # чтобы избежать конфликтов чтения/записи
-        if FRAMES * DAYS > 10000:  # Порог для переключения на MacroProperty
-            os.environ['HL_USE_MP5_MACRO'] = '1'
-            print(f"[MP5] Включен режим MacroProperty (FRAMES={FRAMES}, DAYS={DAYS}, total={FRAMES*DAYS})")
-        
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         # Таймеры стадий
@@ -891,24 +865,6 @@ def main():
         # MP4 квоты для менеджера intent→approve→apply
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8']))
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17']))
-        
-        # Инициализация MP5 PropertyArray (нужен для probe и status2)
-        if 'mp5_daily_hours_linear' in env_data:
-            mp5_data = list(env_data['mp5_daily_hours_linear'])
-            # Обрезаем до нужного размера (DAYS+1)*FRAMES
-            mp5_needed = (DAYS + 1) * FRAMES
-            if len(mp5_data) > mp5_needed:
-                mp5_data = mp5_data[:mp5_needed]
-            elif len(mp5_data) < mp5_needed:
-                # Дополняем нулями если данных недостаточно
-                mp5_data.extend([0] * (mp5_needed - len(mp5_data)))
-            # Конвертируем в UInt32 для PropertyArray
-            mp5_data_u32 = [int(x) & 0xFFFFFFFF for x in mp5_data]
-            sim2.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", mp5_data_u32)
-            
-            # Диагностика: первые несколько значений MP5
-            sample_size = min(5, len(mp5_data_u32))
-            print(f"[MP5] Инициализировано {len(mp5_data_u32)} значений, первые {sample_size}: {mp5_data_u32[:sample_size]}")
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
         frames_index = env_data.get('frames_index', {})
         # Берём всех агентов с статусами 2,4,6
@@ -1331,13 +1287,6 @@ def main():
         os.environ['HL_STATUS246_SMOKE'] = '1'
         # Включаем MP2-лог, но постпроцессинг оставляем по внешнему флагу (не форсируем ON)
         os.environ['HL_ENABLE_MP2'] = '1'
-        
-        # Включаем режим MacroProperty для MP5 при больших объемах данных
-        # чтобы избежать конфликтов чтения/записи
-        if FRAMES * DAYS > 10000:  # Порог для переключения на MacroProperty
-            os.environ['HL_USE_MP5_MACRO'] = '1'
-            print(f"[MP5] Включен режим MacroProperty (FRAMES={FRAMES}, DAYS={DAYS}, total={FRAMES*DAYS})")
-        
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         # Таймеры
@@ -1350,17 +1299,6 @@ def main():
         # MP4 квоты (усечённые по DAYS)
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8'])[:DAYS])
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17'])[:DAYS])
-        
-        # Инициализация MP5 PropertyArray
-        if 'mp5_daily_hours_linear' in env_data:
-            mp5_data = list(env_data['mp5_daily_hours_linear'])
-            mp5_needed = (DAYS + 1) * FRAMES
-            if len(mp5_data) > mp5_needed:
-                mp5_data = mp5_data[:mp5_needed]
-            elif len(mp5_data) < mp5_needed:
-                mp5_data.extend([0] * (mp5_needed - len(mp5_data)))
-            mp5_data_u32 = [int(x) & 0xFFFFFFFF for x in mp5_data]
-            sim2.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", mp5_data_u32)
         # Спавн: frames_initial и по-дневные массивы, а также базовые счётчики ACN/PSN
         try:
             # Спавн должен занимать сначала зарезервированные MP5-слоты (279..285),
@@ -1895,13 +1833,6 @@ def main():
         FRAMES = int(env_data['frames_total_u16'])
         DAYS = int(env_data['days_total_u16'])
         os.environ['HL_STATUS246_SMOKE'] = '1'
-        
-        # Включаем режим MacroProperty для MP5 при больших объемах данных
-        # чтобы избежать конфликтов чтения/записи
-        if FRAMES * DAYS > 10000:  # Порог для переключения на MacroProperty
-            os.environ['HL_USE_MP5_MACRO'] = '1'
-            print(f"[MP5] Включен режим MacroProperty (FRAMES={FRAMES}, DAYS={DAYS}, total={FRAMES*DAYS})")
-        
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         # Таймеры стадий
@@ -1913,18 +1844,6 @@ def main():
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
         sim2.setEnvironmentPropertyUInt("frames_total", FRAMES)
         sim2.setEnvironmentPropertyUInt("days_total", DAYS)
-        
-        # Инициализация MP5 PropertyArray
-        if 'mp5_daily_hours_linear' in env_data:
-            mp5_data = list(env_data['mp5_daily_hours_linear'])
-            mp5_needed = (DAYS + 1) * FRAMES
-            if len(mp5_data) > mp5_needed:
-                mp5_data = mp5_data[:mp5_needed]
-            elif len(mp5_data) < mp5_needed:
-                mp5_data.extend([0] * (mp5_needed - len(mp5_data)))
-            mp5_data_u32 = [int(x) & 0xFFFFFFFF for x in mp5_data]
-            sim2.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", mp5_data_u32)
-        
         idx_map = {name: i for i, name in enumerate(mp3_fields)}
         frames_index = env_data.get('frames_index', {})
         ac_target = int(a.status2_case_ac)
@@ -2037,13 +1956,6 @@ def main():
         mp4_ops17 = list(env_data['mp4_ops_counter_mi17'])
         if a.mp5_probe:
             os.environ['HL_MP5_PROBE'] = '1'
-            
-        # Включаем режим MacroProperty для MP5 при больших объемах данных
-        # чтобы избежать конфликтов чтения/записи
-        if FRAMES * DAYS > 10000:  # Порог для переключения на MacroProperty
-            os.environ['HL_USE_MP5_MACRO'] = '1'
-            print(f"[MP5] Включен режим MacroProperty (FRAMES={FRAMES}, DAYS={DAYS}, total={FRAMES*DAYS})")
-            
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         sim2.setEnvironmentPropertyUInt("version_date", int(env_data['version_date_u16']))
@@ -2052,17 +1964,6 @@ def main():
         sim2.setEnvironmentPropertyUInt("approve_policy", 0)
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", mp4_ops8)
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", mp4_ops17)
-        
-        # Инициализация MP5 PropertyArray
-        if 'mp5_daily_hours_linear' in env_data:
-            mp5_data = list(env_data['mp5_daily_hours_linear'])
-            mp5_needed = (DAYS + 1) * FRAMES
-            if len(mp5_data) > mp5_needed:
-                mp5_data = mp5_data[:mp5_needed]
-            elif len(mp5_data) < mp5_needed:
-                mp5_data.extend([0] * (mp5_needed - len(mp5_data)))
-            mp5_data_u32 = [int(x) & 0xFFFFFFFF for x in mp5_data]
-            sim2.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", mp5_data_u32)
         # Построим карту group_by по frames_index
         frame_gb = [0] * FRAMES
         ac_nums = env_data['mp3_arrays'].get('mp3_aircraft_number', [])

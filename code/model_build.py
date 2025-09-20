@@ -84,12 +84,6 @@ class HeliSimModel:
         if not minimal_env or enable_mp5:
             # MP5 linear array with padding (UInt16 по спецификации)
             env.newPropertyArrayUInt16("mp5_daily_hours", [0] * max(1, (days_total + 1) * frames_total))
-            
-            # MacroProperty для GPU-only доступа (когда включен режим MacroProperty)
-            if os.environ.get("HL_USE_MP5_MACRO", "0") == "1":
-                # Используем UInt32 для совместимости с существующими RTC
-                env.newMacroPropertyUInt32("mp5_lin", (days_total + 1) * frames_total)
-                env.newPropertyUInt8("mp5_ready", 0)  # Флаг готовности
         if not minimal_env or enable_mp1:
             # MP1 SoA
             env.newPropertyArrayUInt32("mp1_br_mi8", [0] * max(1, mp1_len))
@@ -534,14 +528,6 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("assembly_trigger_mark", 0)
     agent.newVariableUInt("partout_trigger_mark", 0)
 
-    # MP5 daily hours (всегда нужен для probe и status2)
-    env.newPropertyArrayUInt32("mp5_daily_hours", [0] * ((DAYS + 1) * FRAMES))
-    
-    # MacroProperty для GPU-only доступа к MP5 (когда включен режим)
-    if os.environ.get("HL_USE_MP5_MACRO", "0") == "1":
-        env.newMacroPropertyUInt32("mp5_lin", (DAYS + 1) * FRAMES)
-        env.newPropertyUInt8("mp5_ready", 0)  # Флаг готовности
-    
     # MP2 SoA (1D линейные массивы длиной DAYS*FRAMES)
     if enable_mp2:
         env.newMacroPropertyUInt32("mp2_status", FRAMES * DAYS)
@@ -739,134 +725,11 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     }}
     """
     agent.newRTCFunction("rtc_probe_mp5", rtc_probe_mp5)
-    
-    # RTC функции для работы с MacroProperty MP5 (когда включен режим)
-    if os.environ.get("HL_USE_MP5_MACRO", "0") == "1":
-        # Функция копирования PropertyArray -> MacroProperty (WRITE)
-        rtc_mp5_copy_once = f"""
-        FLAMEGPU_AGENT_FUNCTION(rtc_mp5_copy_once, flamegpu::MessageNone, flamegpu::MessageNone) {{
-            static const unsigned int FRAMES = {FRAMES}u;
-            static const unsigned int DAYS = {DAYS}u;
-            
-            // Копируем только если еще не готово
-            if (FLAMEGPU->environment.getProperty<unsigned int>("mp5_ready") == 1u) {{
-                return flamegpu::ALIVE;
-            }}
-            
-            const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-            if (idx >= FRAMES) return flamegpu::ALIVE;
-            
-            auto mp5_dst = FLAMEGPU->environment.getMacroProperty<unsigned int, ((DAYS+1)*FRAMES)>("mp5_lin");
-            
-            // Каждый агент копирует свою колонку
-            for (unsigned int d = 0u; d <= DAYS; ++d) {{
-                const unsigned int pos = d * FRAMES + idx;
-                const unsigned int val = FLAMEGPU->environment.getProperty<unsigned int>("mp5_daily_hours", pos);
-                mp5_dst[pos].exchange(val);
-            }}
-            
-            return flamegpu::ALIVE;
-        }}
-        """
-        agent.newRTCFunction("rtc_mp5_copy_once", rtc_mp5_copy_once)
-        
-        # Модифицированный probe для чтения из MacroProperty (READ)
-        rtc_probe_mp5_macro = f"""
-        FLAMEGPU_AGENT_FUNCTION(rtc_probe_mp5_macro, flamegpu::MessageNone, flamegpu::MessageNone) {{
-            static const unsigned int FRAMES = {FRAMES}u;
-            
-            // Читаем только если готово
-            if (FLAMEGPU->environment.getProperty<unsigned int>("mp5_ready") == 0u) {{
-                return flamegpu::ALIVE;
-            }}
-            
-            const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-            if (idx >= FRAMES) return flamegpu::ALIVE;
-            
-            const unsigned int day = FLAMEGPU->getStepCounter();
-            const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-            const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-            
-            auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, ((DAYS+1)*FRAMES)>("mp5_lin");
-            const unsigned int base = safe_day * FRAMES + idx;
-            const unsigned int base_next = (safe_day + 1u) * FRAMES + idx;
-            
-            const unsigned int dt = mp5[base];
-            const unsigned int dn = mp5[base_next];
-            
-            FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
-            FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
-            
-            return flamegpu::ALIVE;
-        }}
-        """
-        agent.newRTCFunction("rtc_probe_mp5_macro", rtc_probe_mp5_macro)
-    
-    # HostFunction для установки флага готовности MP5
-    def _set_mp5_ready():
-        """HostFunction: устанавливает mp5_ready=1 после копирования"""
-        def fn(sim_inst):
-            if os.environ.get("HL_USE_MP5_MACRO", "0") == "1":
-                # Устанавливаем флаг только на первом шаге
-                if sim_inst.getStepCounter() == 0:
-                    sim_inst.environment.setPropertyUInt8("mp5_ready", 1)
-        return fn
-    
-    # HostCondition для контроля выполнения слоев
-    def _cond_first_step_mp5_not_ready():
-        """Условие: первый шаг И mp5_ready==0"""
-        def fn(sim_inst):
-            if os.environ.get("HL_USE_MP5_MACRO", "0") != "1":
-                return False
-            return sim_inst.getStepCounter() == 0 and sim_inst.environment.getPropertyUInt8("mp5_ready") == 0
-        return fn
-    
-    def _cond_mp5_ready():
-        """Условие: mp5_ready==1 или режим отключен"""
-        def fn(sim_inst):
-            if os.environ.get("HL_USE_MP5_MACRO", "0") != "1":
-                return True  # Если режим отключен, всегда выполняем
-            return sim_inst.environment.getPropertyUInt8("mp5_ready") == 1
-        return fn
 
     # Слои: intent → approve → apply (с опциональным прологом mp5_probe)
     import os as _os
-    
-    # Слои для копирования MP5 (если включен режим MacroProperty)
-    if _os.environ.get("HL_USE_MP5_MACRO", "0") == "1":
-        print(f"[BUILD] Создание слоев для MacroProperty MP5 (FRAMES={FRAMES}, DAYS={DAYS})")
-        
-        # Слой 1: Копирование PropertyArray -> MacroProperty (WRITE)
-        l_mp5_copy = model.newLayer("mp5_copy_once")
-        l_mp5_copy.addAgentFunction(agent.getFunction("rtc_mp5_copy_once"))
-        # Выполняется только на первом шаге если mp5_ready==0
-        cond_fn = _cond_first_step_mp5_not_ready()
-        model.addHostCondition(cond_fn, "mp5_copy_condition")
-        l_mp5_copy.addHostCondition(model.getHostCondition("mp5_copy_condition"))
-        print("[BUILD] + Слой mp5_copy_once (WRITE mp5_lin)")
-        
-        # Слой 2: Установка флага готовности
-        l_mp5_mark = model.newLayer("mp5_mark_ready")
-        hf_mark = _set_mp5_ready()
-        model.addHostFunction(hf_mark, "set_mp5_ready")
-        l_mp5_mark.addHostFunction(model.getHostFunction("set_mp5_ready"))
-        print("[BUILD] + Слой mp5_mark_ready (установка mp5_ready=1)")
-    
-    # Слой probe MP5 (READ)
     if _os.environ.get("HL_MP5_PROBE", "0") == "1":
-        l0 = model.newLayer("probe_mp5")
-        if _os.environ.get("HL_USE_MP5_MACRO", "0") == "1":
-            # Используем версию для MacroProperty
-            l0.addAgentFunction(agent.getFunction("rtc_probe_mp5_macro"))
-            # Выполняется только если mp5_ready==1
-            cond_ready = _cond_mp5_ready()
-            model.addHostCondition(cond_ready, "mp5_ready_condition")
-            l0.addHostCondition(model.getHostCondition("mp5_ready_condition"))
-            print("[BUILD] + Слой probe_mp5 (READ mp5_lin через MacroProperty)")
-        else:
-            # Используем обычную версию
-            l0.addAgentFunction(agent.getFunction("rtc_probe_mp5"))
-            print("[BUILD] + Слой probe_mp5 (READ mp5_daily_hours через PropertyArray)")
+        l0 = model.newLayer(); l0.addAgentFunction(agent.getFunction("rtc_probe_mp5"))
     # Сброс в начале суток — определить функцию и гарантировать её первым слоем
     rtc_begin_day = """
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_begin_day, flamegpu::MessageNone, flamegpu::MessageNone) {
@@ -1109,30 +972,16 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     if combined_246:
         # FLAME GPU не позволяет несколько функций с одним и тем же state в одном Layer,
         # поэтому оформляем как три последовательных слоя в одном блоке шага.
-        l_246a = model.newLayer("status_6"); l_246a.addAgentFunction(agent.getFunction("rtc_status_6"))
-        l_246b = model.newLayer("status_4"); l_246b.addAgentFunction(agent.getFunction("rtc_status_4"))
-        l_246c = model.newLayer("status_2"); l_246c.addAgentFunction(agent.getFunction("rtc_status_2"))
-        
-        # Если используем MacroProperty, добавляем условие готовности для статус 2 (он читает MP5)
-        if _os.environ.get("HL_USE_MP5_MACRO", "0") == "1":
-            if "mp5_ready_condition" not in [c.getName() for c in model.getHostConditions()]:
-                cond_ready = _cond_mp5_ready()
-                model.addHostCondition(cond_ready, "mp5_ready_condition")
-            l_246c.addHostCondition(model.getHostCondition("mp5_ready_condition"))
-            print("[BUILD] + Условие mp5_ready для слоя status_2")
+        l_246a = model.newLayer(); l_246a.addAgentFunction(agent.getFunction("rtc_status_6"))
+        l_246b = model.newLayer(); l_246b.addAgentFunction(agent.getFunction("rtc_status_4"))
+        l_246c = model.newLayer(); l_246c.addAgentFunction(agent.getFunction("rtc_status_2"))
     else:
         if _os.environ.get("HL_STATUS4_SMOKE", "0") == "1":
-            ls4 = model.newLayer("status_4"); ls4.addAgentFunction(agent.getFunction("rtc_status_4"))
+            ls4 = model.newLayer(); ls4.addAgentFunction(agent.getFunction("rtc_status_4"))
         if _os.environ.get("HL_STATUS6_SMOKE", "0") == "1":
-            ls6 = model.newLayer("status_6"); ls6.addAgentFunction(agent.getFunction("rtc_status_6"))
+            ls6 = model.newLayer(); ls6.addAgentFunction(agent.getFunction("rtc_status_6"))
         if _os.environ.get("HL_STATUS2_SMOKE", "0") == "1":
-            ls2 = model.newLayer("status_2"); ls2.addAgentFunction(agent.getFunction("rtc_status_2"))
-            # Статус 2 читает MP5 через dt/dn, добавляем условие готовности
-            if _os.environ.get("HL_USE_MP5_MACRO", "0") == "1":
-                if "mp5_ready_condition" not in [c.getName() for c in model.getHostConditions()]:
-                    cond_ready = _cond_mp5_ready()
-                    model.addHostCondition(cond_ready, "mp5_ready_condition")
-                ls2.addHostCondition(model.getHostCondition("mp5_ready_condition"))
+            ls2 = model.newLayer(); ls2.addAgentFunction(agent.getFunction("rtc_status_2"))
     # begin_day уже добавлен как первый слой выше
     l1 = model.newLayer(); l1.addAgentFunction(agent.getFunction("rtc_quota_intent"))
     l2 = model.newLayer(); l2.addAgentFunction(agent.getFunction("rtc_quota_approve_manager"))
