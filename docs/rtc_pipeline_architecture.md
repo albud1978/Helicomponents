@@ -199,8 +199,8 @@ MP5 probe для чтения часов работы и сброс флагов
 - Нумерация шагов (скрипты `code/sim_v2/`):
   1) 01_setup_env.py — загрузка Env из ClickHouse, построение `frames_index`, строгие валидации
   2) 02_build_model_base.py — базовая модель без RTC, применение Env, smoke
-  3) 03_add_probe_mp5.py — подключение `rtc_probe_mp5` (MacroProperty), smoke/trace
-  4) 04_add_status_246.py — статусы 2/4/6 с чтением MP5, проверки по validation.md
+  3) 03_add_probe_mp5.py — host‑инициализация `mp5_lin` и/или probe‑smoke MP5 (без копирования RTC)
+  4) 04_add_status_246.py — статусы 2/4/6 с чтением MP5 (без копирования), проверки по validation.md
   5) 05_export_mp5_excel.py — диагностика/экспорт MP5 в Excel (длинный/шахматный вид)
   99) 99_debug_probe_mp5.py — минимальный стенд для компиляции/отладки NVRTC
 
@@ -214,7 +214,7 @@ MP5 probe для чтения часов работы и сброс флагов
     - `frames_total`: при необходимости → `frames_union_no_future + future_buffer`.
   - Формирование Env массивов (по мере потребности RTC):
     - Всегда: `mp4_ops_counter_mi8/mi17`, `mp4_new_counter_mi17_seed`, `month_first_u32` (длина = DAYS).
-    - Для MP5‑probe: `mp5_daily_hours` (длина = (DAYS+1)*FRAMES, паддинг D+1 обязателен).
+    - Для MP5: `mp5_daily_hours` (длина = (DAYS+1)*FRAMES, паддинг D+1 обязателен) → на хосте загружается сразу в MacroProperty `mp5_lin`.
     - Для S1 приоритета: `mp3_mfg_date_days` (длина = FRAMES).
   - Валидации (жёсткие):
     - Длины массивов соответствуют DAYS/FRAMES.
@@ -231,3 +231,34 @@ MP5 probe для чтения часов работы и сброс флагов
   - Печать: FRAMES, DAYS, размеры ключевых массивов, top‑5 `frames_index` и границы блоков.
   - Проверка инвариантов и assert при несоответствии.
 
+
+## V2: Таблица скриптов и их RTC/функционал (host‑only инициализация MP5)
+
+| № | Скрипт/Шаг | RTC Функции | Назначение | Что делает | Входные данные | Выходные данные | Когда выполняется |
+|---|------------|-------------|------------|------------|----------------|-----------------|-------------------|
+| 1 | `code/sim_v2/01_setup_env.py` | — | ETL и снапшоты окружения | Загружает из ClickHouse MP1/MP3/MP4/MP5, строит `frames_index`, вычисляет `FRAMES`/`DAYS`, валидирует формы; сохраняет `env_snapshot.json` | ClickHouse: MP1/MP3/MP4/MP5 | `env_snapshot.json`, диагностические логи | Один раз до сборки модели |
+| 2 | `code/sim_v2/02_build_model_base.py` | — | Базовая модель без RTC | Объявляет Environment и агент `component` с базовыми переменными; инициализирует скаляры `version_date/frames_total/days_total`; smoke печать | `env_snapshot.json`, массивы Env из ClickHouse | Готовая базовая модель (без RTC), сообщение `V2 Base OK` | Один раз до запуска RTC |
+| 3 | `code/sim_v2/03_add_probe_mp5.py` | — (HostFunction `hf_load_mp5`), опц. `rtc_probe_mp5_d{DAYS}` | Host‑инициализация MP5 и/или smoke‑проба | Заполняет `mp5_lin` напрямую на хосте из `mp5_daily_hours_linear` (без `mp5_src` и копирующего RTC); опционально запускает probe‑ядро для верификации `dt/dn` | `env_snapshot.json`, `mp5_daily_hours_linear` | Заполненный `mp5_lin`, логи sample(dt,dn) | Один раз до симуляции / отладка |
+| 4 | `code/sim_v2/04_add_status_246.py` | `rtc_probe_mp5`, `rtc_status_2` | Основной симуляционный цикл (минимум) | На каждом дне читает `mp5_lin` в `dt/dn`, выполняет статус‑2 (начисление `sne/ppr`, LL‑порог 2→6); логи и валидации | `env_snapshot.json`, `mp5_lin`, `mp3_ll_by_frame`, `mp3_oh_by_frame` | Обновлённые агентные переменные, счётчики переходов и валидаций | Каждый симуляционный день |
+| 5 | `code/sim_v2/05_export_mp5_excel.py` | — | Экспорт MP5 в Excel | Формирует long‑view и матричный сэмпл MP5; пишет в XLSX чанками | `mp5_daily_hours_linear`, `frames_index` | Файл Excel (`tmp/mp5_export.xlsx`) | По необходимости, вне цикла |
+| 6 | `code/sim_v2/99_debug_probe_mp5.py` | `rtc_probe_mp5_d{DAYS}` | NVRTC/RTC отладка | Минимальная компиляция probe‑ядра; печать исходника и ошибок NVRTC | `env_snapshot.json`, размеры DAYS/FRAMES | Диагностические логи компиляции/запуска | Ад‑hoc отладка |
+
+Примечания:
+- На шаге 04 в текущей реализации включён только `rtc_status_2`; `rtc_status_4`/`rtc_status_6` планируются к добавлению после стабилизации MP5 и валидаторов.
+- Fallback‑инициализация через `rtc_mp5_copy_columns` исключена: MP5 загружается напрямую в `mp5_lin` на хосте.
+
+## V2: Оркестрация инициализации MP5 (host‑only)
+
+- Оркестратор окружения: `01_setup_env.py` (создаёт `env_snapshot.json`).
+- Базовая модель: `02_build_model_base.py` (объявляет Env/агентов, без RTC).
+- Инициализация MP5 (`mp5_lin[(DAYS+1)*FRAMES]`): host init (import/HostFunction) в `03_add_probe_mp5.py` без копирующих RTC.
+- Симуляция: `04_add_status_246.py` — слои на шаг: `rtc_probe_mp5` → `rtc_status_6` → `rtc_status_4` → `rtc_status_2` (на тек. этапе активен `rtc_status_2`).
+
+ENV‑инварианты:
+- `FRAMES`, `DAYS`, `frames_index` берутся из `env_snapshot.json` и не пересчитываются в шагах 03/04.
+- После инициализации `mp5_lin` доступен только на чтение в RTC; запись в него запрещена.
+- RTC имена фиксированы: `rtc_mp5_copy_columns`, `rtc_probe_mp5`, `rtc_status_2`, `rtc_status_4`, `rtc_status_6`.
+
+Критерии приёмки и тест‑матрица (host‑only):
+- DAYS={5,90,365}; отсутствие падений NVRTC; логи содержат размеры `mp5_lin`, checksum первых 64КБ, первые значения.
+- Валидации: неизменность S6, `Δsne_s2 == sum(dt_s2)`; корректная индексация `base = day*FRAMES + idx`.
