@@ -219,8 +219,10 @@ def build_frames_index(mp3_rows, mp3_fields: List[str]) -> Tuple[Dict[int, int],
     return frames_index, len(ac_list)
 
 
-def get_days_sorted(mp4_by_day: Dict[date, Dict[str, int]]) -> List[date]:
-    return sorted(mp4_by_day.keys())
+def get_days_sorted_union(mp4_by_day: Dict[date, Dict[str, int]], mp5_by_day: Dict[date, Dict[int,int]]) -> List[date]:
+    days = set(mp4_by_day.keys())
+    days.update(mp5_by_day.keys())
+    return sorted(days)
 
 
 def build_mp5_linear(mp5_by_day: Dict[date, Dict[int, int]], days_sorted: List[date], frames_index: Dict[int, int], frames_total: int) -> List[int]:
@@ -264,6 +266,7 @@ def build_mp3_arrays(mp3_rows, mp3_fields: List[str]) -> Dict[str, List[int]]:
     to_u16 = lambda v: int(v or 0)
     arr: Dict[str, List[int]] = {
         'mp3_psn': [],
+        'mp3_partseqno_i': [],
         'mp3_aircraft_number': [],
         'mp3_ac_type_mask': [],
         'mp3_group_by': [],
@@ -279,6 +282,18 @@ def build_mp3_arrays(mp3_rows, mp3_fields: List[str]) -> Dict[str, List[int]]:
     epoch = _date(1970,1,1)
     for r in mp3_rows:
         arr['mp3_psn'].append(to_u32(r[idx['psn']]))
+        # partseqno_i может называться по-разному в источнике, подберём корректную колонку
+        try:
+            if 'partseqno_i' in idx:
+                arr['mp3_partseqno_i'].append(to_u32(r[idx['partseqno_i']]))
+            elif 'partno_comp' in idx:
+                arr['mp3_partseqno_i'].append(to_u32(r[idx['partno_comp']]))
+            elif '`partno.comp`' in idx:
+                arr['mp3_partseqno_i'].append(to_u32(r[idx['`partno.comp`']]))
+            else:
+                arr['mp3_partseqno_i'].append(0)
+        except Exception:
+            arr['mp3_partseqno_i'].append(0)
         arr['mp3_aircraft_number'].append(to_u32(r[idx['aircraft_number']]))
         arr['mp3_ac_type_mask'].append(to_u16(r[idx['ac_type_mask']]))
         arr['mp3_group_by'].append(to_u16(r[idx.get('group_by', -1)] if 'group_by' in idx else 0))
@@ -327,7 +342,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     mp4_by_day = preload_mp4_by_day(client)
     mp5_by_day = preload_mp5_maps(client)
 
-    days_sorted = get_days_sorted(mp4_by_day)
+    days_sorted = get_days_sorted_union(mp4_by_day, mp5_by_day)
     # Индексация кадров: объединение MP3 ∪ MP5 (MP3 сначала, затем будущие из MP5 по возрастанию)
     frames_index_mp3, _ = build_frames_index(mp3_rows, mp3_fields)
     ac_mp3_ordered = [ac for ac, _ in sorted(frames_index_mp3.items(), key=lambda kv: kv[1])]
@@ -341,6 +356,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
             if ac_i > 0:
                 ac_mp5_set.add(ac_i)
     # План новых Ми-17 по дням (seed для MacroProperty на GPU)
+    # Примечание: НЕ используем для расширения FRAMES; FRAMES = |MP3 ∪ MP5|.
     mp4_new_counter_mi17_seed: List[int] = []
     from datetime import date as _date
     for D in days_sorted:
@@ -349,20 +365,15 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         if v < 0:
             v = 0
         mp4_new_counter_mi17_seed.append(v)
-    # FRAMES-upfront: заранее расширяем пул кадров под будущий спавн
-    future_spawn_total = int(sum(int(x) for x in mp4_new_counter_mi17_seed))
-    try:
-        frames_buffer = int(os.environ.get('HL_FRAMES_BUFFER', '0'))
-        if frames_buffer < 0:
-            frames_buffer = 0
-    except Exception:
-        frames_buffer = 0
+    # FRAMES-upfront: отключено. Будущий спавн не расширяет FRAMES на этапе Env.
+    future_spawn_total = 0
+    frames_buffer = 0
     # База для ACN: максимум среди существующих/MP5 и порог 100000
     existing_set = set(ac_mp3_ordered)
     existing_set.update(ac_mp5_set)
     max_existing_acn = max(existing_set) if existing_set else 0
     base_acn_spawn = max(100000, max_existing_acn + 1)
-    # Собираем объединение: MP3 → доп. из MP5 → будущие ACN
+    # Собираем объединение: MP3 → доп. из MP5 (без будущих ACN)
     ac_union = list(ac_mp3_ordered)
     extra_from_mp5 = sorted([ac for ac in ac_mp5_set if ac not in frames_index_mp3])
     ac_union.extend(extra_from_mp5)
@@ -371,18 +382,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     # Зарезервированные слоты под MP5-only планёры (без стартовых агентов): займём их спавном
     reserved_slots_count = len(extra_from_mp5)
     first_reserved_idx = max(0, frames_union_no_future - reserved_slots_count)
-    # Будущие ACN без дублей
-    future_count = max(0, future_spawn_total + frames_buffer)
-    if future_count > 0:
-        future_acn = []
-        cur = base_acn_spawn
-        taken = set(ac_union)
-        while len(future_acn) < future_count:
-            if cur not in taken:
-                future_acn.append(cur)
-                taken.add(cur)
-            cur += 1
-        ac_union.extend(future_acn)
+    # Будущие ACN не включаем в FRAMES: индексация стабильна по |MP3 ∪ MP5|
     frames_index = {ac: i for i, ac in enumerate(ac_union)}
     frames_total = len(frames_index)
     # Индекс первого будущего борта (если присутствует в MP5/union)
