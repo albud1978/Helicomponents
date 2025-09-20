@@ -100,7 +100,7 @@ def main() -> int:
     a = model.newAgent("component")
     for name in [
         "idx","aircraft_number","partseqno_i","group_by",
-        "status_id","sne","ppr","repair_days",
+        "status_id","sne","ppr","repair_days","repair_time",
         "daily_today_u32","daily_next_u32","ll","oh","s6_days","s6_started"
     ]:
         a.newVariableUInt(name, 0)
@@ -110,10 +110,7 @@ def main() -> int:
     # Статус 2/4/6 + запись dt/dn из mp5_lin
     rtc_246 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_status_246_run, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FR = {FRAMES}u;
-        static const unsigned int DY = {DAYS}u;
         const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (i >= FR) return flamegpu::ALIVE;
         // dt/dn передаются с host в агентные переменные перед каждым шагом
         const unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
         const unsigned int dn = FLAMEGPU->getVariable<unsigned int>("daily_next_u32");
@@ -145,7 +142,15 @@ def main() -> int:
         }}
         }} else if (sid == 4u) {{
             unsigned int rd = FLAMEGPU->getVariable<unsigned int>("repair_days");
-            FLAMEGPU->setVariable<unsigned int>("repair_days", rd + 1u);
+            rd = rd + 1u;
+            FLAMEGPU->setVariable<unsigned int>("repair_days", rd);
+            const unsigned int rt = FLAMEGPU->getVariable<unsigned int>("repair_time");
+            if (rt > 0u && rd >= rt) {{
+                FLAMEGPU->setVariable<unsigned int>("status_id", 5u);
+                // Сайд эффекты: обнуление PPR и REPAIR_DAYS при выходе из ремонта
+                FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+                FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
+            }}
         }} else if (sid == 6u) {{
             unsigned int s6d = FLAMEGPU->getVariable<unsigned int>("s6_days");
             FLAMEGPU->setVariable<unsigned int>("s6_days", s6d + 1u);
@@ -186,6 +191,7 @@ def main() -> int:
 
     # Собираем агрегат по AC (последнее значение в MP3) и дополняем anyLast из heli_pandas
     agg_by_ac: Dict[int, Dict[str,int]] = {}
+    rd_list  = mp3.get('mp3_repair_days', [])
     m = min(len(ac_list), len(st_list), len(sne_list), len(ppr_list))
     for row in range(m):
         ac = int(ac_list[row] or 0)
@@ -195,15 +201,16 @@ def main() -> int:
             'sne': int(sne_list[row] or 0),
             'ppr': int(ppr_list[row] or 0),
             'partseqno_i': int(psn_list[row] or 0) if row < len(psn_list) else 0,
+            'repair_days': int(rd_list[row] or 0) if row < len(rd_list) else 0,
         }
     try:
         vdate, vid = fetch_versions(client)
         sql = (
-            "SELECT aircraft_number, anyLast(sne) sne, anyLast(ppr) ppr, anyLast(status_id) sid, anyLast(group_by) gb "
+            "SELECT aircraft_number, anyLast(sne) sne, anyLast(ppr) ppr, anyLast(status_id) sid, anyLast(group_by) gb, anyLast(repair_days) rd "
             f"FROM heli_pandas WHERE version_date = '{vdate}' AND version_id = {vid} AND group_by IN (1,2) GROUP BY aircraft_number"
         )
         rows = client.execute(sql)
-        for ac, sne_v, ppr_v, sid_v, gb_v in rows:
+        for ac, sne_v, ppr_v, sid_v, gb_v, rd_v in rows:
             ac_i = int(ac or 0)
             base = agg_by_ac.get(ac_i, {})
             base.update({
@@ -211,6 +218,7 @@ def main() -> int:
                 'status_id': int(sid_v or base.get('status_id', 0)),
                 'sne': int(sne_v or base.get('sne', 0)),
                 'ppr': int(ppr_v or base.get('ppr', 0)),
+                'repair_days': int(rd_v or base.get('repair_days', 0)),
             })
             agg_by_ac[ac_i] = base
     except Exception:
@@ -229,6 +237,7 @@ def main() -> int:
             av[i].setVariableUInt("sne", int(base.get('sne', 0)))
             av[i].setVariableUInt("ppr", int(base.get('ppr', 0)))
             av[i].setVariableUInt("partseqno_i", int(base.get('partseqno_i', 0)))
+            av[i].setVariableUInt("repair_days", int(base.get('repair_days', 0)))
         else:
             av[i].setVariableUInt("group_by", 0)
             av[i].setVariableUInt("status_id", 0)
@@ -241,6 +250,7 @@ def main() -> int:
     oh17 = env.get('mp1_oh_mi17', [])
     br8 = env.get('mp1_br_mi8', [])
     br17 = env.get('mp1_br_mi17', [])
+    rt_arr = env.get('mp1_repair_time', [])
     # Построим pseq_by_f по MP3 с фильтром по gb
     pseq_by_f = [0] * FRAMES
     for row in range(m):
@@ -252,6 +262,7 @@ def main() -> int:
                 pseq_by_f[fi] = int(psn_list[row] or 0)
     oh_by_f = [0] * FRAMES
     br_by_f = [0] * FRAMES
+    rt_by_f = [0] * FRAMES
     for i in range(FRAMES):
         ac = int(inv_index.get(i, 0))
         gb = int(agg_by_ac.get(ac, {}).get('group_by', 0))
@@ -267,28 +278,33 @@ def main() -> int:
                 br_by_f[i] = int(br8[pidx] if pidx < len(br8) else 0)
             elif gb == 2:
                 br_by_f[i] = int(br17[pidx] if pidx < len(br17) else 0)
+            # Норматив ремонта в днях
+            rt_by_f[i] = int(rt_arr[pidx] if pidx < len(rt_arr) else 0)
 
     # Обновим Env после пересчёта порогов
     sim.setEnvironmentPropertyArrayUInt32("mp1_oh_by_frame", oh_by_f)
     sim.setEnvironmentPropertyArrayUInt32("mp1_br_by_frame", br_by_f)
+    # Проставим repair_time агентам
+    for i in range(FRAMES):
+        av[i].setVariableUInt("repair_time", int(rt_by_f[i] if 0 <= i < len(rt_by_f) else 0))
     sim.setPopulationData(av)
 
     # D0 сверка с базой heli_pandas (anyLast) перед шагами
     try:
         vdate, vid = fetch_versions(client)
         sql = (
-            "SELECT aircraft_number, anyLast(sne) sne, anyLast(ppr) ppr, anyLast(status_id) sid "
+            "SELECT aircraft_number, anyLast(sne) sne, anyLast(ppr) ppr, anyLast(status_id) sid, anyLast(repair_days) rd "
             f"FROM heli_pandas WHERE version_date = '{vdate}' AND version_id = {vid} AND group_by IN (1,2) GROUP BY aircraft_number"
         )
         rows = client.execute(sql)
-        base_map = {int(ac): (int(sne or 0), int(ppr or 0), int(sid or 0)) for ac, sne, ppr, sid in rows}
+        base_map = {int(ac): (int(sne or 0), int(ppr or 0), int(sid or 0), int(rd or 0)) for ac, sne, ppr, sid, rd in rows}
         out0 = fg.AgentVector(a)
         sim.getPopulationData(out0)
         mism_sne = mism_ppr = mism_sid = 0
         zero_status_should_be_plane: List[int] = []
         for ac, fi in frames_index.items():
             if ac in base_map:
-                sne_b, ppr_b, sid_b = base_map[ac]
+                sne_b, ppr_b, sid_b, rd_b = base_map[ac]
                 sne0 = int(out0[fi].getVariableUInt("sne"))
                 ppr0 = int(out0[fi].getVariableUInt("ppr"))
                 sid0 = int(out0[fi].getVariableUInt("status_id"))
@@ -324,6 +340,15 @@ def main() -> int:
     prev_vec = fg.AgentVector(a)
     sim.getPopulationData(prev_vec)
     prev_status = [int(prev_vec[i].getVariableUInt("status_id")) for i in range(FRAMES)]
+    prev_rd = [int(prev_vec[i].getVariableUInt("repair_days")) for i in range(FRAMES)]
+    prev_s6d = [int(prev_vec[i].getVariableUInt("s6_days")) for i in range(FRAMES)]
+    # День входа в статус 4 (1-based). Для стартовых S4 считаем вход на D1
+    entered_s4_day = [1 if prev_status[i] == 4 else -1 for i in range(FRAMES)]
+    entered_s4_rd_start = [int(prev_rd[i]) if prev_status[i] == 4 else -1 for i in range(FRAMES)]
+    s6_break_total = 0
+    s6_break_samples: List[tuple] = []  # (day, ac, prev->cur)
+    s4_rd_viol_total = 0
+    s4_rd_viol_samples: List[tuple] = []  # (day, ac, rd_prev, rd_cur)
 
     for d in range(DAYS):
         # Перед шагом: подготовить dt/dn для агентов в статусе 2
@@ -344,6 +369,22 @@ def main() -> int:
         for i in range(FRAMES):
             ps = prev_status[i]
             cs = int(cur_all[i].getVariableUInt("status_id"))
+            rd_prev = int(prev_rd[i])
+            rd_cur = int(cur_all[i].getVariableUInt("repair_days"))
+            s6d_prev = int(prev_s6d[i])
+            s6d_cur = int(cur_all[i].getVariableUInt("s6_days"))
+            # Инвариант S6: не должен выходить из 6
+            if ps == 6 and cs != 6:
+                s6_break_total += 1
+                if len(s6_break_samples) < 10:
+                    acn = int(cur_all[i].getVariableUInt("aircraft_number"))
+                    s6_break_samples.append((d+1, acn, ps, cs))
+            # Инкремент repair_days в статусе 4 при удержании 4
+            if ps == 4 and cs == 4 and not (rd_cur == rd_prev + 1):
+                s4_rd_viol_total += 1
+                if len(s4_rd_viol_samples) < 10:
+                    acn = int(cur_all[i].getVariableUInt("aircraft_number"))
+                    s4_rd_viol_samples.append((d+1, acn, rd_prev, rd_cur))
             if ps == 2 and cs == 4:
                 trans_24 += 1
                 day_str = env['days_sorted'][d] if d < len(env.get('days_sorted', [])) else str(d+1)
@@ -354,6 +395,10 @@ def main() -> int:
                 oh_v = int(oh_by_f[i] if 0 <= i < len(oh_by_f) else 0)
                 br_v = int(br_by_f[i] if 0 <= i < len(br_by_f) else 0)
                 trans24_info.append((day_str, acn, cs, sne_v, ppr_v, ll_v, oh_v, br_v))
+                # Зафиксируем день входа в 4, если ранее не фиксировали
+                if entered_s4_day[i] < 0:
+                    entered_s4_day[i] = d + 1
+                    entered_s4_rd_start[i] = int(cur_all[i].getVariableUInt("repair_days"))
             elif ps == 2 and cs == 6:
                 trans_26 += 1
                 day_str = env['days_sorted'][d] if d < len(env.get('days_sorted', [])) else str(d+1)
@@ -373,8 +418,15 @@ def main() -> int:
                 ll_v = int(ll_by_f[i] if 0 <= i < len(ll_by_f) else 0)
                 oh_v = int(oh_by_f[i] if 0 <= i < len(oh_by_f) else 0)
                 br_v = int(br_by_f[i] if 0 <= i < len(br_by_f) else 0)
-                trans45_info.append((day_str, acn, cs, sne_v, ppr_v, ll_v, oh_v, br_v))
+                rt_v = int(cur_all[i].getVariableUInt("repair_time"))
+                s4_day = entered_s4_day[i]
+                rd_start = int(entered_s4_rd_start[i]) if entered_s4_rd_start[i] >= 0 else int(prev_rd[i])
+                delta_elapsed = (d + 1 - s4_day) if s4_day > 0 else -1
+                delta_needed = (rt_v - rd_start) if rt_v > 0 and rd_start >= 0 else -1
+                trans45_info.append((day_str, acn, cs, sne_v, ppr_v, ll_v, oh_v, br_v, rt_v, delta_elapsed, delta_needed, rd_start))
             prev_status[i] = cs
+            prev_rd[i] = rd_cur
+            prev_s6d[i] = s6d_cur
 
         if 0 <= trace_idx < FRAMES:
             cur = fg.AgentVector(a)
@@ -405,6 +457,17 @@ def main() -> int:
         rows.append((i, st, sne, ppr, dt, dn, gb))
     print(f"Orchestrated Status246 OK: DAYS={DAYS}, FRAMES={FRAMES}, sample(idx,st,sne,ppr,dt,dn,gb)={rows}")
     print(f"transitions summary: 2->4={trans_24}, 2->6={trans_26}, 4->5={trans_45}")
+    # Инварианты статусов 4/6
+    print(f"status4_repair_days_increments_violations={s4_rd_viol_total}")
+    if s4_rd_viol_samples:
+        print("status4_rd_violations samples (day, ac, rd_prev, rd_cur):")
+        for rec in s4_rd_viol_samples:
+            print(f"  {rec[0]} ac={rec[1]} rd_prev={rec[2]} rd_cur={rec[3]}")
+    print(f"status6_invariance_violations={s6_break_total}")
+    if s6_break_samples:
+        print("status6_break samples (day, ac, prev, cur):")
+        for rec in s6_break_samples:
+            print(f"  {rec[0]} ac={rec[1]} prev={rec[2]} cur={rec[3]}")
     # Подробные логи (ограничим выводом первых 200 записей на тип перехода)
     if trans24_info:
         print("transitions_2to4 details (day, ac, status, sne, ppr, ll, oh, br):")
@@ -419,9 +482,9 @@ def main() -> int:
         if len(trans26_info) > 200:
             print(f"  ... ({len(trans26_info)-200} more)")
     if trans45_info:
-        print("transitions_4to5 details (day, ac, status, sne, ppr, ll, oh, br):")
+        print("transitions_4to5 details (day, ac, status, sne, ppr, ll, oh, br, rt, delta_elapsed, delta_needed, rd_start):")
         for rec in trans45_info[:200]:
-            print(f"  {rec[0]} ac={rec[1]} st={rec[2]} sne={rec[3]} ppr={rec[4]} ll={rec[5]} oh={rec[6]} br={rec[7]}")
+            print(f"  {rec[0]} ac={rec[1]} st={rec[2]} sne={rec[3]} ppr={rec[4]} ll={rec[5]} oh={rec[6]} br={rec[7]} rt={rec[8]} d_elapsed={rec[9]} d_needed={rec[10]} rd0={rec[11]}")
         if len(trans45_info) > 200:
             print(f"  ... ({len(trans45_info)-200} more)")
     if timeline:
