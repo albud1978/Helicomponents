@@ -198,16 +198,21 @@ def main() -> int:
     FLAMEGPU_AGENT_FUNCTION(rtc_status_246_run, flamegpu::MessageNone, flamegpu::MessageNone) {{
         static const unsigned int FR = {FRAMES}u;
         static const unsigned int DY = {DAYS}u;
+        static const unsigned int TOTAL_SIZE = {(DAYS+1)*FRAMES}u;
+        
         const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
         if (i >= FR) return flamegpu::ALIVE;
+        
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int d = (day < DY ? day : (DY > 0u ? DY - 1u : 0u));
         const unsigned int base = d * FR + i;
         const unsigned int base_next = base + FR;
+        
         // Чтение MP5 из MacroProperty
-        auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, (FR*(DY+1))>("mp5_lin");
+        auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, TOTAL_SIZE>("mp5_lin");
         const unsigned int dt = mp[base];
         const unsigned int dn = (d < DY) ? mp[base_next] : 0u;
+        
         FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
         FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
         // Фильтр по планёрам: только group_by ∈ {{1,2}} влияют на логику статусов

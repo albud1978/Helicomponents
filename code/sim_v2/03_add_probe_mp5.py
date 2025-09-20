@@ -58,9 +58,13 @@ def main() -> int:
     FLAMEGPU_AGENT_FUNCTION(rtc_mp5_copy_columns, flamegpu::MessageNone, flamegpu::MessageNone) {{
         static const unsigned int FRAMES = {FRAMES}u;
         static const unsigned int DAYS = {DAYS}u;
+        static const unsigned int TOTAL_SIZE = {(DAYS+1)*FRAMES}u;
+        
         const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
         if (i >= FRAMES) return flamegpu::ALIVE;
-        auto dst = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*(DAYS+1))>("mp5_lin");
+        
+        auto dst = FLAMEGPU->environment.getMacroProperty<unsigned int, TOTAL_SIZE>("mp5_lin");
+        
         for (unsigned int d = 0u; d <= DAYS; ++d) {{
             const unsigned int base = d * FRAMES + i;
             const unsigned int v = FLAMEGPU->environment.getProperty<unsigned int>("mp5_src", base);
@@ -75,15 +79,20 @@ def main() -> int:
     FLAMEGPU_AGENT_FUNCTION({func_name}, flamegpu::MessageNone, flamegpu::MessageNone) {{
         static const unsigned int FRAMES = {FRAMES}u;
         static const unsigned int DAYS = {DAYS}u;
+        static const unsigned int TOTAL_SIZE = {(DAYS+1)*FRAMES}u;
+        
         const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
         if (i >= FRAMES) return flamegpu::ALIVE;
+        
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int d = (day < DAYS ? day : (DAYS > 0u ? DAYS - 1u : 0u));
         const unsigned int base = d * FRAMES + i;
         const unsigned int base_next = base + FRAMES;
-        auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*(DAYS+1))>("mp5_lin");
+        
+        auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, TOTAL_SIZE>("mp5_lin");
         const unsigned int dt = mp[base];
         const unsigned int dn = mp[base_next];
+        
         FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
         FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
         return flamegpu::ALIVE;

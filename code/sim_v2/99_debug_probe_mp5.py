@@ -48,7 +48,8 @@ FLAMEGPU_AGENT_FUNCTION({func_name}, flamegpu::MessageNone, flamegpu::MessageNon
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int d = (day < DAYS ? day : (DAYS > 0u ? DAYS - 1u : 0u));
     const unsigned int base = d * FRAMES + i;
-    auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*(DAYS+1))>("mp5_lin");
+    static const unsigned int TOTAL_SIZE = FRAMES * (DAYS + 1u);
+    auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, TOTAL_SIZE>("mp5_lin");
     const unsigned int dt = mp[base];
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     return flamegpu::ALIVE;

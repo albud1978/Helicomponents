@@ -1,0 +1,63 @@
+# Патч для исправления ошибки компиляции RTC в orchestrator
+# 
+# Применение:
+# 1. Найдите в вашем файле 04_status246_orchestrator.py функцию rtc_mp5_copy_columns
+# 2. Замените её на исправленную версию ниже
+#
+# Основные изменения:
+# - Добавлена константа TOTAL_SIZE вместо выражения в шаблонном параметре
+# - Улучшено форматирование для читаемости
+
+# === ИСПРАВЛЕННАЯ ФУНКЦИЯ rtc_mp5_copy_columns ===
+rtc_copy = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mp5_copy_columns, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    static const unsigned int FRAMES = {FRAMES}u;
+    static const unsigned int DAYS = {DAYS}u;
+    static const unsigned int TOTAL_SIZE = {(DAYS+1)*FRAMES}u;
+    
+    const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (i >= FRAMES) return flamegpu::ALIVE;
+    
+    auto dst = FLAMEGPU->environment.getMacroProperty<unsigned int, TOTAL_SIZE>("mp5_lin");
+    
+    for (unsigned int d = 0u; d <= DAYS; ++d) {{
+        const unsigned int base = d * FRAMES + i;
+        const unsigned int v = FLAMEGPU->environment.getProperty<unsigned int>("mp5_src", base);
+        dst[base].exchange(v);
+    }}
+    return flamegpu::ALIVE;
+}}
+"""
+
+# === Если у вас есть другие функции с getMacroProperty ===
+# Найдите все места где используется конструкция вида:
+#   getMacroProperty<тип, (выражение)>("имя")
+# 
+# И замените на:
+#   static const unsigned int РАЗМЕР = выражение;
+#   getMacroProperty<тип, РАЗМЕР>("имя")
+#
+# Пример для функции probe:
+rtc_probe = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_probe_mp5, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    static const unsigned int FRAMES = {FRAMES}u;
+    static const unsigned int DAYS = {DAYS}u;
+    static const unsigned int TOTAL_SIZE = {(DAYS+1)*FRAMES}u;
+    
+    const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (i >= FRAMES) return flamegpu::ALIVE;
+    
+    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int d = (day < DAYS ? day : (DAYS > 0u ? DAYS - 1u : 0u));
+    const unsigned int base = d * FRAMES + i;
+    const unsigned int base_next = base + FRAMES;
+    
+    auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, TOTAL_SIZE>("mp5_lin");
+    const unsigned int dt = mp[base];
+    const unsigned int dn = mp[base_next];
+    
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
+    FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
+    return flamegpu::ALIVE;
+}}
+"""
