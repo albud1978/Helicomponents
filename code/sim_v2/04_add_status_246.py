@@ -181,17 +181,7 @@ def main() -> int:
     ]:
         a.newVariableUInt(name, 0)
 
-    # HostFunction init: заполнение mp5_lin из mp5_daily_hours_linear (без RTC)
-    import pyflamegpu as fg
-    class HF_Init_MP5(fg.HostFunction):
-        def run(self, sim):
-            envp = sim.getEnvironment()
-            mp = envp.getMacroPropertyUInt32("mp5_lin")
-            # Загружаем полный горизонт (DAYS_full из снапшота env, а не STEPS)
-            for k, v in enumerate(self._payload):
-                mp[k].exchange(int(v))
-    
-    hf = HF_Init_MP5()
+    # Материализация MP5 выполняется в шаге 03 (rtc_mp5_copy_columns). Шаг 04 не материализует MP5.
 
     # Единое ядро: rtc_status_246 (probe MP5 из PropertyArray + логика статусов 2/4/6)
     rtc_246 = """
@@ -268,13 +258,12 @@ def main() -> int:
     sim.setEnvironmentPropertyUInt("version_date", int(env['version_date_u16']))
     sim.setEnvironmentPropertyUInt("frames_total", FRAMES)
     sim.setEnvironmentPropertyUInt("days_total", DAYS)
-    # MP5: хост‑инициализация MacroProperty для текущего горизонта STEPS (DAYS+1)*FRAMES
+    # MP5: источник доступен для диагностики; шаг 04 не выполняет копирование/инициализацию
     mp5 = list(env['mp5_daily_hours_linear'])
     need_steps = (DAYS + 1) * FRAMES
     mp5_steps = mp5[:need_steps]
     assert len(mp5_steps) == need_steps, f"mp5_linear length mismatch: {len(mp5_steps)} != {need_steps}"
-    hf._payload = mp5_steps
-    model.addInitFunction(hf)
+    # Примечание: mp5_lin должен быть заполнен на этапе 03 в рамках одной оркестрации процесса.
     sim.setEnvironmentPropertyArrayUInt32("mp3_ll_by_frame", ll_by_f)
     sim.setEnvironmentPropertyArrayUInt32("mp1_oh_by_frame", oh_by_f)
 
