@@ -303,12 +303,11 @@ def main() -> int:
     except Exception as _e:
         print(f"D0_check skipped: {_e}")
 
-    # Автотрассировка по HL_V2_CHECK_ACN
+    # Автотрассировка по HL_V2_CHECK_ACN (без лишнего лога)
     check_acn_env = os.environ.get('HL_V2_CHECK_ACN', '').strip()
     if check_acn_env.isdigit():
         acn_for_trace = int(check_acn_env)
         mapped_idx = int(frames_index.get(acn_for_trace, -1))
-        print(f"[trace] ACN {acn_for_trace} → frame_idx {mapped_idx}")
         if mapped_idx >= 0:
             os.environ['HL_V2_TRACE_IDX'] = str(mapped_idx)
 
@@ -316,8 +315,11 @@ def main() -> int:
     trace_idx = int(trace_idx_env) if trace_idx_env.isdigit() else -1
     timeline: List[tuple] = []
 
-    # Суммарные счётчики переходов
+    # Суммарные счётчики и подробные логи переходов
     trans_24 = trans_26 = trans_45 = 0
+    trans24_info: List[tuple] = []  # (day_str, acn, status_id, sne, ppr, ll, oh, br)
+    trans26_info: List[tuple] = []
+    trans45_info: List[tuple] = []
     # Предыдущее состояние статусов
     prev_vec = fg.AgentVector(a)
     sim.getPopulationData(prev_vec)
@@ -344,10 +346,34 @@ def main() -> int:
             cs = int(cur_all[i].getVariableUInt("status_id"))
             if ps == 2 and cs == 4:
                 trans_24 += 1
+                day_str = env['days_sorted'][d] if d < len(env.get('days_sorted', [])) else str(d+1)
+                acn = int(cur_all[i].getVariableUInt("aircraft_number"))
+                sne_v = int(cur_all[i].getVariableUInt("sne"))
+                ppr_v = int(cur_all[i].getVariableUInt("ppr"))
+                ll_v = int(ll_by_f[i] if 0 <= i < len(ll_by_f) else 0)
+                oh_v = int(oh_by_f[i] if 0 <= i < len(oh_by_f) else 0)
+                br_v = int(br_by_f[i] if 0 <= i < len(br_by_f) else 0)
+                trans24_info.append((day_str, acn, cs, sne_v, ppr_v, ll_v, oh_v, br_v))
             elif ps == 2 and cs == 6:
                 trans_26 += 1
+                day_str = env['days_sorted'][d] if d < len(env.get('days_sorted', [])) else str(d+1)
+                acn = int(cur_all[i].getVariableUInt("aircraft_number"))
+                sne_v = int(cur_all[i].getVariableUInt("sne"))
+                ppr_v = int(cur_all[i].getVariableUInt("ppr"))
+                ll_v = int(ll_by_f[i] if 0 <= i < len(ll_by_f) else 0)
+                oh_v = int(oh_by_f[i] if 0 <= i < len(oh_by_f) else 0)
+                br_v = int(br_by_f[i] if 0 <= i < len(br_by_f) else 0)
+                trans26_info.append((day_str, acn, cs, sne_v, ppr_v, ll_v, oh_v, br_v))
             elif ps == 4 and cs == 5:
                 trans_45 += 1
+                day_str = env['days_sorted'][d] if d < len(env.get('days_sorted', [])) else str(d+1)
+                acn = int(cur_all[i].getVariableUInt("aircraft_number"))
+                sne_v = int(cur_all[i].getVariableUInt("sne"))
+                ppr_v = int(cur_all[i].getVariableUInt("ppr"))
+                ll_v = int(ll_by_f[i] if 0 <= i < len(ll_by_f) else 0)
+                oh_v = int(oh_by_f[i] if 0 <= i < len(oh_by_f) else 0)
+                br_v = int(br_by_f[i] if 0 <= i < len(br_by_f) else 0)
+                trans45_info.append((day_str, acn, cs, sne_v, ppr_v, ll_v, oh_v, br_v))
             prev_status[i] = cs
 
         if 0 <= trace_idx < FRAMES:
@@ -379,6 +405,25 @@ def main() -> int:
         rows.append((i, st, sne, ppr, dt, dn, gb))
     print(f"Orchestrated Status246 OK: DAYS={DAYS}, FRAMES={FRAMES}, sample(idx,st,sne,ppr,dt,dn,gb)={rows}")
     print(f"transitions summary: 2->4={trans_24}, 2->6={trans_26}, 4->5={trans_45}")
+    # Подробные логи (ограничим выводом первых 200 записей на тип перехода)
+    if trans24_info:
+        print("transitions_2to4 details (day, ac, status, sne, ppr, ll, oh, br):")
+        for rec in trans24_info[:200]:
+            print(f"  {rec[0]} ac={rec[1]} st={rec[2]} sne={rec[3]} ppr={rec[4]} ll={rec[5]} oh={rec[6]} br={rec[7]}")
+        if len(trans24_info) > 200:
+            print(f"  ... ({len(trans24_info)-200} more)")
+    if trans26_info:
+        print("transitions_2to6 details (day, ac, status, sne, ppr, ll, oh, br):")
+        for rec in trans26_info[:200]:
+            print(f"  {rec[0]} ac={rec[1]} st={rec[2]} sne={rec[3]} ppr={rec[4]} ll={rec[5]} oh={rec[6]} br={rec[7]}")
+        if len(trans26_info) > 200:
+            print(f"  ... ({len(trans26_info)-200} more)")
+    if trans45_info:
+        print("transitions_4to5 details (day, ac, status, sne, ppr, ll, oh, br):")
+        for rec in trans45_info[:200]:
+            print(f"  {rec[0]} ac={rec[1]} st={rec[2]} sne={rec[3]} ppr={rec[4]} ll={rec[5]} oh={rec[6]} br={rec[7]}")
+        if len(trans45_info) > 200:
+            print(f"  ... ({len(trans45_info)-200} more)")
     if timeline:
         print("trace_idx timeline (day, idx, dt, dn, sne, ppr, status, gb, ll, oh, br):")
         for rec in timeline[:15]:
