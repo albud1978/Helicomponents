@@ -250,15 +250,52 @@ MP5 probe для чтения часов работы и сброс флагов
 ## V2: Оркестрация инициализации MP5 (host‑only)
 
 - Оркестратор окружения: `01_setup_env.py` (создаёт `env_snapshot.json`).
-- Базовая модель: `02_build_model_base.py` (объявляет Env/агентов, без RTC).
-- Инициализация MP5 (`mp5_lin[(DAYS+1)*FRAMES]`): host init (import/HostFunction) в `03_add_probe_mp5.py` без копирующих RTC.
-- Симуляция: `04_add_status_246.py` — слои на шаг: `rtc_probe_mp5` → `rtc_status_6` → `rtc_status_4` → `rtc_status_2` (на тек. этапе активен `rtc_status_2`).
+- Базовая модель: `02_build_model_base.py` (объявляет Env/агентов с фиксированным MAX_SIZE, без RTC).
+- Инициализация MP5 (`mp5_lin[MAX_SIZE]`): ТОЛЬКО через HostFunction в `03_add_probe_mp5.py`. RTC копирование запрещено.
+- Симуляция: `04_add_status_246.py` — слои на шаг: `rtc_probe_mp5` → `rtc_status_6` → `rtc_status_4` → `rtc_status_2`.
 
 ENV‑инварианты:
 - `FRAMES`, `DAYS`, `frames_index` берутся из `env_snapshot.json` и не пересчитываются в шагах 03/04.
+- MacroProperty размеры фиксированы: MAX_FRAMES=250, MAX_DAYS=3650, MAX_SIZE=912750.
 - После инициализации `mp5_lin` доступен только на чтение в RTC; запись в него запрещена.
-- RTC имена фиксированы: `rtc_mp5_copy_columns`, `rtc_probe_mp5`, `rtc_status_2`, `rtc_status_4`, `rtc_status_6`.
+- RTC имена фиксированы: `rtc_probe_mp5`, `rtc_status_2`, `rtc_status_4`, `rtc_status_6` (без `rtc_mp5_copy_columns`).
 
 Критерии приёмки и тест‑матрица (host‑only):
 - DAYS={5,90,365}; отсутствие падений NVRTC; логи содержат размеры `mp5_lin`, checksum первых 64КБ, первые значения.
-- Валидации: неизменность S6, `Δsne_s2 == sum(dt_s2)`; корректная индексация `base = day*FRAMES + idx`.
+- Валидации: неизменность S6, `Δsne_s2 == sum(dt_s2)`; корректная индексация `base = day*MAX_FRAMES + idx`.
+
+## Стандартный паттерн работы с MacroProperty MP5
+
+### 1. Объявление в модели (с фиксированными константами):
+```python
+MAX_FRAMES = 250
+MAX_DAYS = 3650
+MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
+e.newMacroPropertyUInt32("mp5_lin", MAX_SIZE)
+```
+
+### 2. Инициализация через HostFunction:
+```python
+class HF_InitMP5(fg.HostFunction):
+    def __init__(self, data: list[int], frames: int, days: int):
+        super().__init__()
+        self.data = data
+        self.frames = frames
+        self.days = days
+
+    def run(self, FLAMEGPU):
+        mp = FLAMEGPU.environment.getMacroPropertyUInt32("mp5_lin")
+        for d in range(self.days + 1):
+            for f in range(self.frames):
+                src_idx = d * self.frames + f
+                dst_idx = d * MAX_FRAMES + f  # Важно: используем MAX_FRAMES
+                if src_idx < len(self.data):
+                    mp[dst_idx] = self.data[src_idx]
+```
+
+### 3. Чтение в RTC (с фиксированными размерами):
+```cuda
+const unsigned int base = day * 250u + frame_idx;  // 250 = MAX_FRAMES
+auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 912750u>("mp5_lin");
+const unsigned int value = mp[base];
+```
