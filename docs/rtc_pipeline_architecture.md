@@ -247,16 +247,34 @@ MP5 probe для чтения часов работы и сброс флагов
 - На шаге 04 в текущей реализации включён только `rtc_status_2`; `rtc_status_4`/`rtc_status_6` планируются к добавлению после стабилизации MP5 и валидаторов.
 - Fallback‑инициализация через `rtc_mp5_copy_columns` исключена: MP5 загружается напрямую в `mp5_lin` на хосте.
 
-## V2: Оркестрация инициализации MP5 (host‑only)
+## V2: Оркестрация с state-based архитектурой (обновлено 22.12.2024)
 
-- Оркестратор окружения: `01_setup_env.py` (создаёт `env_snapshot.json`).
-- Базовая модель: `02_build_model_base.py` (объявляет Env/агентов с фиксированным MAX_SIZE, без RTC).
-- Инициализация MP5 (`mp5_lin[MAX_SIZE]`): ТОЛЬКО через HostFunction в `03_add_probe_mp5.py`. RTC копирование запрещено.
-- Симуляция: `04_add_status_246.py` — слои на шаг: `rtc_probe_mp5` → `rtc_status_6` → `rtc_status_4` → `rtc_status_2`.
+### Ключевые изменения:
+- **State-based**: Переход с переменной `status_id` на FLAME GPU States для оптимизации GPU
+- **Централизованное квотирование**: Единый менеджер квот вместо распределенной логики
+- **Атомарные переходы**: Все изменения состояний в единой RTC функции в конце степа
+
+### Структура выполнения на каждом степе:
+1. **Фаза 0**: HostFunction для MP5 (только на step=0)
+2. **Фаза 1**: Параллельные RTC по состояниям
+   - Отдельная RTC функция для каждого state (0-6)
+   - Все функции в одном слое, GPU фильтрует автоматически
+   - Параллельное выполнение между состояниями
+3. **Фаза 2**: Последовательное квотирование с приоритетами
+4. **Фаза 3**: Единая функция переходов состояний
+
+### Ключевые архитектурные принципы:
+- **OH из MP1 при создании**: Значения oh определяются при создании агентов, не в RTC
+- **Фильтрация планеров**: Только group_by ∈ {1,2} становятся агентами
+- **Фиксированные размеры**: MAX_FRAMES из данных, MAX_DAYS=4000
+- **Единая загрузка MP5**: Через HostFunction на step=0
+
+Детальное описание: [v2_architecture_consolidated.md](v2_architecture_consolidated.md)
+(Старый документ: [v2_state_based_architecture.md](v2_state_based_architecture.md))
 
 ENV‑инварианты:
 - `FRAMES`, `DAYS`, `frames_index` берутся из `env_snapshot.json` и не пересчитываются в шагах 03/04.
-- MacroProperty размеры фиксированы: MAX_FRAMES=300, MAX_DAYS=4000, MAX_SIZE=1,200,300. Всегда используется полный размер буфера для единообразной компиляции RTC независимо от периода симуляции.
+- MacroProperty размеры: MAX_FRAMES определяется из данных MP3/MP5, MAX_DAYS=4000, MAX_SIZE=MAX_FRAMES*(MAX_DAYS+1). Всегда используется полный размер буфера для единообразной компиляции RTC независимо от периода симуляции.
 - После инициализации `mp5_lin` доступен только на чтение в RTC; запись в него запрещена.
 - RTC имена фиксированы: `rtc_probe_mp5`, `rtc_status_2`, `rtc_status_4`, `rtc_status_6` (без `rtc_mp5_copy_columns`).
 
@@ -266,11 +284,13 @@ ENV‑инварианты:
 
 ## Стандартный паттерн работы с MacroProperty MP5
 
-### 1. Объявление в модели (с фиксированными константами):
+### 1. Объявление в модели (с динамически определяемыми константами):
 ```python
-MAX_FRAMES = 250
-MAX_DAYS = 3650
-MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
+# MAX_FRAMES определяется из данных при загрузке
+from model_build import MAX_FRAMES, MAX_DAYS, MAX_SIZE, set_max_frames_from_data
+# После загрузки данных:
+set_max_frames_from_data(frames_count_from_data)
+# Затем в модели:
 e.newMacroPropertyUInt32("mp5_lin", MAX_SIZE)
 ```
 
@@ -293,9 +313,10 @@ class HF_InitMP5(fg.HostFunction):
                     mp[dst_idx] = self.data[src_idx]
 ```
 
-### 3. Чтение в RTC (с фиксированными размерами):
+### 3. Чтение в RTC (с размерами, определенными на этапе компиляции):
 ```cuda
-const unsigned int base = day * 250u + frame_idx;  // 250 = MAX_FRAMES
-auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 912750u>("mp5_lin");
+const unsigned int base = day * ${MAX_FRAMES}u + frame_idx;  
+auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_SIZE}u>("mp5_lin");
 const unsigned int value = mp[base];
 ```
+Примечание: `${MAX_FRAMES}` и `${MAX_SIZE}` подставляются при генерации RTC кода из Python.
