@@ -46,6 +46,24 @@ python3 code/utils/cleanup_dictionaries.py
 python3 code/utils/database_cleanup.py
 ```
 
+## 📚 Документация проекта
+
+### Архитектура симуляции
+- **[v2_architecture_consolidated.md](v2_architecture_consolidated.md)** - 🆕 Консолидированная документация V2 state-based архитектуры
+- [rtc_pipeline_architecture.md](rtc_pipeline_architecture.md) - Архитектура RTC пайплайна (V1 и обзор V2)
+- [validation.md](validation.md) - Инварианты и проверки данных
+- [migration.md](migration.md) - Миграция между версиями
+
+### ETL процессы
+- [extract.md](extract.md) - Процесс извлечения данных (шаг 01)
+- [transform.md](transform.md) - Процесс трансформации данных (шаг 02)
+- [load.md](load.md) - Процесс загрузки данных (шаг 03)
+
+### История и архивы
+- [changelog.md](changelog.md) - История изменений проекта
+- [v2_state_based_architecture.md](v2_state_based_architecture.md) - Первоначальное описание V2
+- [v2_modular_architecture_summary.md](v2_modular_architecture_summary.md) - Итоги работы по модульной архитектуре
+
 ### **Тестирование новой модульной архитектуры симуляции (12-09-2025)**
 ```bash
 # Тест базового Environment

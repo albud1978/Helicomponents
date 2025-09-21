@@ -16,10 +16,20 @@ try:
 except Exception:
     pyflamegpu = None
 
-# Константы для MacroProperty размеров (должны совпадать во всех модулях)
-MAX_FRAMES = 300  # Максимальное количество frames
+# Константы для MacroProperty размеров
+# TODO: MAX_FRAMES должен определяться динамически из данных при загрузке
+MAX_FRAMES = 286  # Временно захардкожено для тестирования
 MAX_DAYS = 4000   # Максимальное количество дней симуляции (фиксированный размер буфера)
-MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Размер линейного массива MP5 = 300 * 4001 = 1,200,300
+MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # 286 * 4001 = 1,144,286
+
+def set_max_frames_from_data(frames_count: int):
+    """Устанавливает MAX_FRAMES из реальных данных MP3/MP5"""
+    global MAX_FRAMES, MAX_SIZE
+    if MAX_FRAMES != frames_count:
+        print(f"ВНИМАНИЕ: MAX_FRAMES={MAX_FRAMES} в коде, но из данных получено {frames_count}")
+        # TODO: раскомментировать когда будет готово динамическое определение
+        # raise ValueError(f"MAX_FRAMES уже установлен как {MAX_FRAMES}, но получено новое значение {frames_count}")
+    print(f"Размеры MacroProperty: MAX_FRAMES={MAX_FRAMES}, MAX_DAYS={MAX_DAYS}, MAX_SIZE={MAX_SIZE}")
 
 
 class HeliSimModel:
@@ -62,30 +72,30 @@ class HeliSimModel:
         env.newPropertyUInt("frames_initial", 0)
         # MacroProperty 1D квоты по дням (инициализируются из MP4) — не обязательны для smoke
         if not minimal_env:
-            env.newMacroPropertyUInt("mp4_quota_mi8", max(1, days_total))
-            env.newMacroPropertyUInt("mp4_quota_mi17", max(1, days_total))
+            env.newMacroPropertyUInt("mp4_quota_mi8", MAX_DAYS)
+            env.newMacroPropertyUInt("mp4_quota_mi17", MAX_DAYS)
         # MacroProperty (FRAMES) для детерминированного менеджера квот (UInt32)
-        env.newMacroPropertyUInt32("mi8_intent", max(1, frames_total))
-        env.newMacroPropertyUInt32("mi17_intent", max(1, frames_total))
-        env.newMacroPropertyUInt32("mi8_approve", max(1, frames_total))
-        env.newMacroPropertyUInt32("mi17_approve", max(1, frames_total))
+        env.newMacroPropertyUInt32("mi8_intent", MAX_FRAMES)
+        env.newMacroPropertyUInt32("mi17_intent", MAX_FRAMES)
+        env.newMacroPropertyUInt32("mi8_approve", MAX_FRAMES)
+        env.newMacroPropertyUInt32("mi17_approve", MAX_FRAMES)
 
         # MP4 arrays всегда нужны для квот
-        env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * max(1, days_total))
-        env.newPropertyArrayUInt32("mp4_ops_counter_mi17", [0] * max(1, days_total))
+        env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * MAX_DAYS)
+        env.newPropertyArrayUInt32("mp4_ops_counter_mi17", [0] * MAX_DAYS)
         # План поставок (seed) и служебные массивы спавна
-        env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", [0] * max(1, days_total))
-        # Вспомогательные MP для билетов спавна: по дням (размер DAYS)
-        env.newMacroPropertyUInt("spawn_need_u32", max(1, days_total))
-        env.newMacroPropertyUInt("spawn_base_idx_u32", max(1, days_total))
-        env.newMacroPropertyUInt("spawn_base_acn_u32", max(1, days_total))
-        env.newMacroPropertyUInt("spawn_base_psn_u32", max(1, days_total))
+        env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", [0] * MAX_DAYS)
+        # Вспомогательные MP для билетов спавна: по дням (размер MAX_DAYS)
+        env.newMacroPropertyUInt("spawn_need_u32", MAX_DAYS)
+        env.newMacroPropertyUInt("spawn_base_idx_u32", MAX_DAYS)
+        env.newMacroPropertyUInt("spawn_base_acn_u32", MAX_DAYS)
+        env.newMacroPropertyUInt("spawn_base_psn_u32", MAX_DAYS)
         # MacroProperty-счётчики для генерации идентификаторов спавна (как 1D массивы длиной 1)
         env.newMacroPropertyUInt("next_idx_spawn", 1)
         env.newMacroPropertyUInt("next_aircraft_no_mi17", 1)
         env.newMacroPropertyUInt("next_psn_mi17", 1)
         # Первый день месяца для mfg_date (ord days)
-        env.newPropertyArrayUInt32("month_first_u32", [0] * max(1, days_total))
+        env.newPropertyArrayUInt32("month_first_u32", [0] * MAX_DAYS)
         if not minimal_env or enable_mp5:
             # MP5 как MacroProperty с фиксированным размером
             env.newMacroPropertyUInt32("mp5_lin", MAX_SIZE)
@@ -144,9 +154,8 @@ class HeliSimModel:
         FLAMEGPU_AGENT_FUNCTION(rtc_seed_mp4_quota, flamegpu::MessageNone, flamegpu::MessageNone) {
             // Выполняет только один агент (idx==0) для избежания гонок при инициализации
             if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
-            static const unsigned int DAYS = ${DAYS}u;
-            auto q8  = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("mp4_quota_mi8");
-            auto q17 = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("mp4_quota_mi17");
+            auto q8  = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("mp4_quota_mi8");
+            auto q17 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("mp4_quota_mi17");
             // Для smoke: инициализируем только D+1 (при day=0 → индекс 1, иначе 0)
             const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
             const unsigned int d1 = (days_total > 1u ? 1u : 0u);
@@ -158,7 +167,7 @@ class HeliSimModel:
         }
             """
         )
-        rtc_seed_mp4_quota_src = _seed_tpl.substitute(DAYS=str(max(1, days_total)))
+        rtc_seed_mp4_quota_src = _seed_tpl.substitute(MAX_DAYS=str(MAX_DAYS))
         # Примечание: seed-функция не регистрируется, т.к. квоты читаются из MP4 напрямую в менеджере
 
         # RTC: probe_mp5 — временно отключено в smoke (починим отдельно с NVRTC-логом)
@@ -174,9 +183,9 @@ class HeliSimModel:
             static const unsigned int FRAMES = ${FRAMES}u;
             const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
             const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-            if (idx >= FRAMES) return flamegpu::ALIVE;
-            if (gb == 1u) { auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }
-            else if (gb == 2u) { auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }
+            if (idx >= {MAX_FRAMES}u) return flamegpu::ALIVE;
+            if (gb == 1u) { auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent"); i8[idx].exchange(1u); }
+            else if (gb == 2u) { auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent"); i17[idx].exchange(1u); }
             return flamegpu::ALIVE;
         }
             """
@@ -211,11 +220,11 @@ class HeliSimModel:
             const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
             const unsigned int last = (days_total > 0u ? days_total - 1u : 0u);
             const unsigned int dayp1 = (day < last ? day + 1u : last);
-            auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
-            auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
-            auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
-            auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
-            for (unsigned int k=0u;k<FRAMES;++k) { a8[k].exchange(0u); a17[k].exchange(0u); }
+            auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent");
+            auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent");
+            auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+            auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+            for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) { a8[k].exchange(0u); a17[k].exchange(0u); }
             unsigned int left8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
             unsigned int left17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
             for (unsigned int k=0u;k<FRAMES && left8>0u;++k) { if (i8[k]) { a8[k].exchange(1u); --left8; } }
@@ -238,9 +247,9 @@ class HeliSimModel:
             static const unsigned int FRAMES = ${FRAMES}u;
             const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
             const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-            if (idx >= FRAMES) return flamegpu::ALIVE;
-            if (gb == 1u) { auto a8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve"); if (a8[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }
-            else if (gb == 2u) { auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve"); if (a17[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }
+            if (idx >= {MAX_FRAMES}u) return flamegpu::ALIVE;
+            if (gb == 1u) { auto a8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve"); if (a8[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }
+            else if (gb == 2u) { auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve"); if (a17[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u); }
             return flamegpu::ALIVE;
         }
             """
@@ -254,12 +263,12 @@ class HeliSimModel:
         _apply_simple_tpl = Template(
             """
         FLAMEGPU_AGENT_FUNCTION(rtc_quota_apply_simple, flamegpu::MessageNone, flamegpu::MessageNone) {
-            static const unsigned int DAYS = ${DAYS}u;
             const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
             if (gb != 1u && gb != 2u) return flamegpu::ALIVE;
             const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
             const unsigned int day = FLAMEGPU->getStepCounter();
-            const unsigned int dayp1 = (day + 1u < DAYS ? day + 1u : day);
+            const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+            const unsigned int dayp1 = (day + 1u < days_total ? day + 1u : day);
             unsigned int seed8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
             unsigned int seed17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
             if ((gb == 1u && idx < seed8) || (gb == 2u && idx < seed17)) {
@@ -269,24 +278,24 @@ class HeliSimModel:
         }
         """
         )
-        rtc_quota_apply_simple_src = _apply_simple_tpl.substitute(DAYS=str(max(1, days_total)))
+        rtc_quota_apply_simple_src = _apply_simple_tpl.substitute()
 
         # RTC: пост-слой чтения остатка квоты (для валидации)
         _readleft_tpl = Template(
             """
         FLAMEGPU_AGENT_FUNCTION(rtc_read_quota_left, flamegpu::MessageNone, flamegpu::MessageNone) {
             if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
-            static const unsigned int DAYS = ${DAYS}u;
             const unsigned int day = FLAMEGPU->getStepCounter();
-            const unsigned int dayp1 = (day + 1u < DAYS ? day + 1u : day);
-            auto q8  = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("mp4_quota_mi8");
+            const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+            const unsigned int dayp1 = (day + 1u < days_total ? day + 1u : day);
+            auto q8  = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("mp4_quota_mi8");
             unsigned int left = q8[dayp1];
             FLAMEGPU->setVariable<unsigned int>("quota_left", left);
             return flamegpu::ALIVE;
         }
         """
         )
-        rtc_read_quota_left_src = _readleft_tpl.substitute(DAYS=str(max(1, days_total)))
+        rtc_read_quota_left_src = _readleft_tpl.substitute(MAX_DAYS=str(MAX_DAYS))
         # Отключено: диагностика остатка квоты не используется в слоях и тянет DAYS
         # agent.newRTCFunction("rtc_read_quota_left", rtc_read_quota_left_src)
 
@@ -308,14 +317,13 @@ class HeliSimModel:
             if (FLAMEGPU->getVariable<unsigned int>("ticket") >= 0xFFFFFFFFu) return flamegpu::ALIVE; // safety
             const unsigned int k = FLAMEGPU->getVariable<unsigned int>("ticket");
             // Чтение подготовленных менеджером значений (по dню)
-            static const unsigned int DAYS = ${DAYS}u;
             const unsigned int day = FLAMEGPU->getStepCounter();
             const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
             const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-            auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_need_u32");
-            auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_idx_u32");
-            auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_acn_u32");
-            auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_psn_u32");
+            auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_need_u32");
+            auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_idx_u32");
+            auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_acn_u32");
+            auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_psn_u32");
             const unsigned int need = need_mp[safe_day];
             if (k >= need) return flamegpu::ALIVE;
             const unsigned int idx = bidx_mp[safe_day] + k;
@@ -384,11 +392,10 @@ class HeliSimModel:
                 if (na < 100000u) na = 100000u;
                 if (np < 2000000u) np = 2000000u;
             }
-            static const unsigned int DAYS = ${DAYS}u;
-            auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_need_u32");
-            auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_idx_u32");
-            auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_acn_u32");
-            auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_psn_u32");
+            auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_need_u32");
+            auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_idx_u32");
+            auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_acn_u32");
+            auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_psn_u32");
             need_mp[safe_day].exchange(need);
             bidx_mp[safe_day].exchange(nx);
             bacn_mp[safe_day].exchange(na);
@@ -465,35 +472,35 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     enable_mp2_post = os.environ.get("HL_ENABLE_MP2_POST", "0") == "1"
     env.newPropertyUInt("approve_policy", 0)  # 0 = по idx (детерминизм)
     # Буферы остатка квоты не требуются: остаток вычисляется во второй фазе как seed - used
-    env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * DAYS)
-    env.newPropertyArrayUInt32("mp4_ops_counter_mi17", [0] * DAYS)
+    env.newPropertyArrayUInt32("mp4_ops_counter_mi8", [0] * MAX_DAYS)
+    env.newPropertyArrayUInt32("mp4_ops_counter_mi17", [0] * MAX_DAYS)
     # Спавн: входные Property/скаляры и MacroProperty
     env.newPropertyUInt("frames_initial", 0)
-    env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", [0] * DAYS)
-    env.newPropertyArrayUInt32("month_first_u32", [0] * DAYS)
-    env.newMacroPropertyUInt("spawn_need_u32", DAYS)
-    env.newMacroPropertyUInt("spawn_base_idx_u32", DAYS)
-    env.newMacroPropertyUInt("spawn_base_acn_u32", DAYS)
-    env.newMacroPropertyUInt("spawn_base_psn_u32", DAYS)
+    env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", [0] * MAX_DAYS)
+    env.newPropertyArrayUInt32("month_first_u32", [0] * MAX_DAYS)
+    env.newMacroPropertyUInt("spawn_need_u32", MAX_DAYS)
+    env.newMacroPropertyUInt("spawn_base_idx_u32", MAX_DAYS)
+    env.newMacroPropertyUInt("spawn_base_acn_u32", MAX_DAYS)
+    env.newMacroPropertyUInt("spawn_base_psn_u32", MAX_DAYS)
     env.newMacroPropertyUInt("next_idx_spawn", 1)
     env.newMacroPropertyUInt("next_aircraft_no_mi17", 1)
     env.newMacroPropertyUInt("next_psn_mi17", 1)
     # MP3 производственные даты (ord days) по кадрам для приоритизации 1→2
-    env.newPropertyArrayUInt32("mp3_mfg_date_days", [0] * FRAMES)
+    env.newPropertyArrayUInt32("mp3_mfg_date_days", [0] * MAX_FRAMES)
     # Буферы менеджера квот (по кадрам)
-    env.newMacroPropertyUInt32("mi8_intent", FRAMES)
-    env.newMacroPropertyUInt32("mi17_intent", FRAMES)
-    env.newMacroPropertyUInt32("mi8_approve", FRAMES)
-    env.newMacroPropertyUInt32("mi17_approve", FRAMES)
+    env.newMacroPropertyUInt32("mi8_intent", MAX_FRAMES)
+    env.newMacroPropertyUInt32("mi17_intent", MAX_FRAMES)
+    env.newMacroPropertyUInt32("mi8_approve", MAX_FRAMES)
+    env.newMacroPropertyUInt32("mi17_approve", MAX_FRAMES)
     # Вторая фаза approve для статуса 3
-    env.newMacroPropertyUInt32("mi8_approve_s3", FRAMES)
-    env.newMacroPropertyUInt32("mi17_approve_s3", FRAMES)
+    env.newMacroPropertyUInt32("mi8_approve_s3", MAX_FRAMES)
+    env.newMacroPropertyUInt32("mi17_approve_s3", MAX_FRAMES)
     # Третья фаза approve для статуса 5
-    env.newMacroPropertyUInt32("mi8_approve_s5", FRAMES)
-    env.newMacroPropertyUInt32("mi17_approve_s5", FRAMES)
+    env.newMacroPropertyUInt32("mi8_approve_s5", MAX_FRAMES)
+    env.newMacroPropertyUInt32("mi17_approve_s5", MAX_FRAMES)
     # Четвёртая фаза approve для статуса 1
-    env.newMacroPropertyUInt32("mi8_approve_s1", FRAMES)
-    env.newMacroPropertyUInt32("mi17_approve_s1", FRAMES)
+    env.newMacroPropertyUInt32("mi8_approve_s1", MAX_FRAMES)
+    env.newMacroPropertyUInt32("mi17_approve_s1", MAX_FRAMES)
     
     # MP5 если включен probe
     if os.environ.get("HL_MP5_PROBE", "0") == "1":
@@ -537,23 +544,22 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     agent.newVariableUInt("assembly_trigger_mark", 0)
     agent.newVariableUInt("partout_trigger_mark", 0)
 
-    # MP2 SoA (1D линейные массивы длиной DAYS*FRAMES)
+    # MP2 SoA (1D линейные массивы длиной MAX_FRAMES*MAX_DAYS)
     if enable_mp2:
-        env.newMacroPropertyUInt32("mp2_status", FRAMES * DAYS)
-        env.newMacroPropertyUInt32("mp2_repair_days", FRAMES * DAYS)
-        env.newMacroPropertyUInt32("mp2_active_trigger", FRAMES * DAYS)
-        env.newMacroPropertyUInt32("mp2_assembly_trigger", FRAMES * DAYS)
+        env.newMacroPropertyUInt32("mp2_status", MAX_FRAMES * MAX_DAYS)
+        env.newMacroPropertyUInt32("mp2_repair_days", MAX_FRAMES * MAX_DAYS)
+        env.newMacroPropertyUInt32("mp2_active_trigger", MAX_FRAMES * MAX_DAYS)
+        env.newMacroPropertyUInt32("mp2_assembly_trigger", MAX_FRAMES * MAX_DAYS)
 
     # RTC: intent
     rtc_intent = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 2u) return flamegpu::ALIVE;
         const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (idx >= FRAMES) return flamegpu::ALIVE;
-        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }}
-        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }}
+        if (idx >= {MAX_FRAMES}u) return flamegpu::ALIVE;
+        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent"); i8[idx].exchange(1u); }}
+        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent"); i17[idx].exchange(1u); }}
         FLAMEGPU->setVariable<unsigned int>("intent_flag", 1u);
         return flamegpu::ALIVE;
     }}
@@ -563,18 +569,17 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: approve (менеджер idx==0). Политика выбирается по env.approve_policy (0=по idx)
     rtc_approve = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         const unsigned int last = (days_total > 0u ? days_total - 1u : 0u);
         const unsigned int dayp1 = (day < last ? day + 1u : last);
         const unsigned int policy = FLAMEGPU->environment.getProperty<unsigned int>("approve_policy");
-        auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
-        auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
-        auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
-        auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
-        for (unsigned int k=0u;k<FRAMES;++k) {{ a8[k].exchange(0u); a17[k].exchange(0u); }}
+        auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent");
+        auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent");
+        auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+        auto a17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+        for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{ a8[k].exchange(0u); a17[k].exchange(0u); }}
         unsigned int left8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
         unsigned int left17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
         // policy 0: скан по idx (детерминированно)
@@ -594,21 +599,20 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: apply — учитывает approve из четырёх фаз (status 2, 3, 5 и 1)
     rtc_apply = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_apply, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (idx >= FRAMES) return flamegpu::ALIVE;
+        if (idx >= {MAX_FRAMES}u) return flamegpu::ALIVE;
         if (gb == 1u) {{
-            auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
-            auto a8b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s3");
-            auto a8c = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s5");
-            auto a8d = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s1");
+            auto a8  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+            auto a8b = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
+            auto a8c = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+            auto a8d = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
             if (a8[idx] || a8b[idx] || a8c[idx] || a8d[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
         }} else if (gb == 2u) {{
-            auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
-            auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s3");
-            auto a17c = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s5");
-            auto a17d = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s1");
+            auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+            auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
+            auto a17c = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+            auto a17d = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
             if (a17[idx] || a17b[idx] || a17c[idx] || a17d[idx]) FLAMEGPU->setVariable<unsigned int>("ops_ticket", 1u);
         }}
         return flamegpu::ALIVE;
@@ -619,13 +623,12 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: intent для статуса 3 (используется во второй фазе квотирования)
     rtc_intent_s3 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent_s3, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 3u) return flamegpu::ALIVE;
         const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (idx >= FRAMES) return flamegpu::ALIVE;
-        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }}
-        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }}
+        if (idx >= {MAX_FRAMES}u) return flamegpu::ALIVE;
+        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent"); i8[idx].exchange(1u); }}
+        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent"); i17[idx].exchange(1u); }}
         FLAMEGPU->setVariable<unsigned int>("intent_flag", 1u);
         return flamegpu::ALIVE;
     }}
@@ -635,17 +638,16 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: approve для статуса 3 - использует остаток квоты от первой фазы
     rtc_approve_s3 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager_s3, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
-        auto i8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
-        auto i17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
-        auto a8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
-        auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
-        auto a8b  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s3");
-        auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s3");
+        auto i8   = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent");
+        auto i17  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent");
+        auto a8   = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+        auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+        auto a8b  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
+        auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
         // Считаем сколько уже было одобрено в фазе статуса 2
         unsigned int used8 = 0u; unsigned int used17 = 0u;
-        for (unsigned int k=0u;k<FRAMES;++k) {{ used8 += (a8[k] ? 1u : 0u); used17 += (a17[k] ? 1u : 0u); }}
+        for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{ used8 += (a8[k] ? 1u : 0u); used17 += (a17[k] ? 1u : 0u); }}
         // Инициализируем семена на D+1 и вычисляем остаток
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
@@ -656,7 +658,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         unsigned int left8 = (seed8 > used8 ? (seed8 - used8) : 0u);
         unsigned int left17 = (seed17 > used17 ? (seed17 - used17) : 0u);
         // Очистим approve-буферы второй фазы и распределим остаток по intent статуса 3
-        for (unsigned int k=0u;k<FRAMES;++k) {{ a8b[k].exchange(0u); a17b[k].exchange(0u); }}
+        for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{ a8b[k].exchange(0u); a17b[k].exchange(0u); }}
         for (unsigned int k=0u;k<FRAMES && left8>0u;++k) {{ if (i8[k]) {{ a8b[k].exchange(1u); --left8; }} }}
         for (unsigned int k=0u;k<FRAMES && left17>0u;++k) {{ if (i17[k]) {{ a17b[k].exchange(1u); --left17; }} }}
         return flamegpu::ALIVE;
@@ -667,13 +669,12 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: intent для статуса 5 (третья фаза квотирования)
     rtc_intent_s5 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent_s5, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 5u) return flamegpu::ALIVE;
         const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (idx >= FRAMES) return flamegpu::ALIVE;
-        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }}
-        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }}
+        if (idx >= {MAX_FRAMES}u) return flamegpu::ALIVE;
+        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent"); i8[idx].exchange(1u); }}
+        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent"); i17[idx].exchange(1u); }}
         FLAMEGPU->setVariable<unsigned int>("intent_flag", 1u);
         return flamegpu::ALIVE;
     }}
@@ -683,20 +684,19 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: approve для статуса 5 — остаток после фаз 2 и 3
     rtc_approve_s5 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager_s5, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
-        auto i8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
-        auto i17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
-        auto a8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
-        auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
-        auto a8b  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s3");
-        auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s3");
-        auto a8c  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s5");
-        auto a17c = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s5");
+        auto i8   = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent");
+        auto i17  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent");
+        auto a8   = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+        auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+        auto a8b  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
+        auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
+        auto a8c  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto a17c = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
         // Считаем сколько уже было одобрено в фазах 2 и 3
         unsigned int used8 = 0u; unsigned int used17 = 0u;
-        for (unsigned int k=0u;k<FRAMES;++k) {{ used8 += (a8[k] ? 1u : 0u); used17 += (a17[k] ? 1u : 0u); }}
-        for (unsigned int k=0u;k<FRAMES;++k) {{ used8 += (a8b[k] ? 1u : 0u); used17 += (a17b[k] ? 1u : 0u); }}
+        for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{ used8 += (a8[k] ? 1u : 0u); used17 += (a17[k] ? 1u : 0u); }}
+        for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{ used8 += (a8b[k] ? 1u : 0u); used17 += (a17b[k] ? 1u : 0u); }}
         // Остаток на D+1
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
@@ -707,7 +707,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         unsigned int left8 = (seed8 > used8 ? (seed8 - used8) : 0u);
         unsigned int left17 = (seed17 > used17 ? (seed17 - used17) : 0u);
         // Очистим approve-буферы третьей фазы и распределим остаток по intent статуса 5
-        for (unsigned int k=0u;k<FRAMES;++k) {{ a8c[k].exchange(0u); a17c[k].exchange(0u); }}
+        for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{ a8c[k].exchange(0u); a17c[k].exchange(0u); }}
         for (unsigned int k=0u;k<FRAMES && left8>0u;++k) {{ if (i8[k]) {{ a8c[k].exchange(1u); --left8; }} }}
         for (unsigned int k=0u;k<FRAMES && left17>0u;++k) {{ if (i17[k]) {{ a17c[k].exchange(1u); --left17; }} }}
         return flamegpu::ALIVE;
@@ -871,17 +871,16 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     FLAMEGPU_AGENT_FUNCTION(rtc_log_day, flamegpu::MessageNone, flamegpu::MessageNone) {{
         const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
         if (phase != 0u) return flamegpu::ALIVE;
-        static const unsigned int FRAMES = {FRAMES}u;
-        static const unsigned int DAYS   = {DAYS}u;
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (idx >= FRAMES) return flamegpu::ALIVE;
+        if (idx >= {MAX_FRAMES}u) return flamegpu::ALIVE;
         const unsigned int day = FLAMEGPU->getStepCounter();
-        if (day >= DAYS) return flamegpu::ALIVE;
-        const unsigned int row = day * FRAMES + idx;
-        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_status");
-        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_repair_days");
-        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_active_trigger");
-        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_assembly_trigger");
+        const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+        if (day >= days_total) return flamegpu::ALIVE;
+        const unsigned int row = day * {MAX_FRAMES}u + idx;
+        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_status");
+        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_repair_days");
+        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_active_trigger");
+        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_assembly_trigger");
         a_stat[row].exchange(FLAMEGPU->getVariable<unsigned int>("status_id"));
         a_rd[row].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
         a_act[row].exchange(FLAMEGPU->getVariable<unsigned int>("active_trigger"));
@@ -895,24 +894,23 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: постпроцессинг MP2 в фазе export_phase=2 (per-agent, один проход по дням)
     rtc_mp2_post_src = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
-        static const unsigned int DAYS   = {DAYS}u;
         // Выполнять только в фазе export_phase=2
         const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
         if (phase != 2u) return flamegpu::ALIVE;
         const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (i >= FRAMES) return flamegpu::ALIVE;
+        if (i >= {MAX_FRAMES}u) return flamegpu::ALIVE;
         const unsigned int vdate = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
         const unsigned int R = FLAMEGPU->getVariable<unsigned int>("repair_time");
         const unsigned int A = FLAMEGPU->getVariable<unsigned int>("assembly_time");
-        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_status");
-        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_repair_days");
-        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_active_trigger");
-        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_assembly_trigger");
+        const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_status");
+        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_repair_days");
+        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_active_trigger");
+        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_assembly_trigger");
 
         bool processed = false;
-        for (unsigned int d_set = 0u; d_set < DAYS && !processed; ++d_set) {{
-            const unsigned int row_set = d_set * FRAMES + i;
+        for (unsigned int d_set = 0u; d_set < days_total && !processed; ++d_set) {{
+            const unsigned int row_set = d_set * {MAX_FRAMES}u + i;
             // Учитываем любое событие active_trigger>0 в день d_set; день d_set не модифицируем
             const unsigned int act_abs = a_act[row_set];
             if (act_abs > 0u) {{
@@ -924,12 +922,12 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
                     unsigned int tmp = act_abs - vdate; // >=1 при act_abs>vdate
                     s_rel = (tmp > 0u ? tmp - 1u : 0u);
                 }}
-                if (s_rel >= DAYS) continue; // вне горизонта
+                if (s_rel >= days_total) continue; // вне горизонта
                 unsigned int e = d_set - 1u; // правый конец окна (день до d_set)
                 if (s_rel > e) continue;     // пустое/некорректное окно
                 // Проставляем окно [s..e]: status_id=4, repair_days=1..R (обрезка по горизонту)
-                for (unsigned int d = s_rel; d <= e && d < DAYS; ++d) {{
-                    const unsigned int row = d * FRAMES + i;
+                for (unsigned int d = s_rel; d <= e && d < days_total; ++d) {{
+                    const unsigned int row = d * {MAX_FRAMES}u + i;
                     a_stat[row].exchange(4u);
                     const unsigned int rdv = (d - s_rel + 1u);
                     a_rd[row].exchange(rdv);
@@ -937,8 +935,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
                 // assembly_trigger = 1 в день (d_set - A)
                 if (d_set >= A) {{
                     const unsigned int asm_day = d_set - A;
-                    if (asm_day < DAYS) {{
-                        const unsigned int row_asm = asm_day * FRAMES + i;
+                    if (asm_day < days_total) {{
+                        const unsigned int row_asm = asm_day * {MAX_FRAMES}u + i;
                         a_asm[row_asm].exchange(1u);
                     }}
                 }}
@@ -954,19 +952,18 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: copyout из MP2 в агентные переменные для конкретного дня (export_phase=1)
     rtc_mp2_copyout_src = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_mp2_copyout, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
-        static const unsigned int DAYS   = {DAYS}u;
         const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
         if (phase != 1u) return flamegpu::ALIVE;
         const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (i >= FRAMES) return flamegpu::ALIVE;
+        if (i >= {MAX_FRAMES}u) return flamegpu::ALIVE;
         unsigned int d = FLAMEGPU->environment.getProperty<unsigned int>("export_day");
-        if (d >= DAYS) return flamegpu::ALIVE;
-        const unsigned int row = d * FRAMES + i;
-        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_status");
-        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_repair_days");
-        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_active_trigger");
-        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, (FRAMES*DAYS)>("mp2_assembly_trigger");
+        const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+        if (d >= days_total) return flamegpu::ALIVE;
+        const unsigned int row = d * {MAX_FRAMES}u + i;
+        auto a_stat = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_status");
+        auto a_rd   = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_repair_days");
+        auto a_act  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_active_trigger");
+        auto a_asm  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * MAX_DAYS}u>("mp2_assembly_trigger");
         FLAMEGPU->setVariable<unsigned int>("status_id", a_stat[row]);
         FLAMEGPU->setVariable<unsigned int>("repair_days", a_rd[row]);
         FLAMEGPU->setVariable<unsigned int>("active_trigger", a_act[row]);
@@ -999,12 +996,11 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Очистка intent: отдельный слой после apply (без чтения intent в этом слое)
     rtc_intent_clear = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent_clear, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
-        auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
-        auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
-        for (unsigned int k=0u;k<FRAMES;++k) {{ i8[k].exchange(0u); }}
-        for (unsigned int k=0u;k<FRAMES;++k) {{ i17[k].exchange(0u); }}
+        auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent");
+        auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent");
+        for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{ i8[k].exchange(0u); }}
+        for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{ i17[k].exchange(0u); }}
         return flamegpu::ALIVE;
     }}
     """
@@ -1039,10 +1035,9 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Четвёртая фаза квотирования: статус 1 на остатке после фаз 2,3 и 5
     rtc_intent_s1 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_intent_s1, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("status_id") != 1u) return flamegpu::ALIVE;
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (idx >= FRAMES) return flamegpu::ALIVE;
+        if (idx >= {MAX_FRAMES}u) return flamegpu::ALIVE;
         // Гейт по сроку ремонта: квотируем только если (D+1) - version_date >= repair_time
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int vdate = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
@@ -1050,8 +1045,8 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
         if ((dayp1_abs - vdate) < repair_time) return flamegpu::ALIVE;
         const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
-        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent"); i8[idx].exchange(1u); }}
-        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent"); i17[idx].exchange(1u); }}
+        if (gb == 1u) {{ auto i8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent"); i8[idx].exchange(1u); }}
+        else if (gb == 2u) {{ auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent"); i17[idx].exchange(1u); }}
         FLAMEGPU->setVariable<unsigned int>("intent_flag", 1u);
         return flamegpu::ALIVE;
     }}
@@ -1060,40 +1055,39 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
 
     rtc_approve_s1 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_quota_approve_manager_s1, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int DAYS = {DAYS}u;
-        static const unsigned int FRAMES = {FRAMES}u;
         if (FLAMEGPU->getVariable<unsigned int>("idx") != 0u) return flamegpu::ALIVE;
         const unsigned int day = FLAMEGPU->getStepCounter();
-        const unsigned int last = (DAYS > 0u ? DAYS - 1u : 0u);
+        const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+        const unsigned int last = (days_total > 0u ? days_total - 1u : 0u);
         const unsigned int dayp1 = (day < last ? day + 1u : last);
-        auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_intent");
-        auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_intent");
-        auto a8   = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve");
-        auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve");
-        auto a8b  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s3");
-        auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s3");
-        auto a8c  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s5");
-        auto a17c = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s5");
-        auto a8d  = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi8_approve_s1");
-        auto a17d = FLAMEGPU->environment.getMacroProperty<unsigned int, FRAMES>("mi17_approve_s1");
+        auto i8  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_intent");
+        auto i17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_intent");
+        auto a8   = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+        auto a17  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+        auto a8b  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
+        auto a17b = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
+        auto a8c  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto a17c = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto a8d  = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
+        auto a17d = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
         // Очистим буферы фазу S1
-        for (unsigned int k=0u;k<FRAMES;++k) {{ a8d[k].exchange(0u); a17d[k].exchange(0u); }}
+        for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{ a8d[k].exchange(0u); a17d[k].exchange(0u); }}
         // Остаток от семени после фаз 2,3,5
         unsigned int seed8  = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", dayp1);
         unsigned int seed17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", dayp1);
         unsigned int used8 = 0u, used17 = 0u;
-        for (unsigned int k=0u;k<FRAMES;++k) {{ if (a8[k] || a8b[k] || a8c[k]) ++used8; if (a17[k] || a17b[k] || a17c[k]) ++used17; }}
+        for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{ if (a8[k] || a8b[k] || a8c[k]) ++used8; if (a17[k] || a17b[k] || a17c[k]) ++used17; }}
         unsigned int left8 = (seed8 > used8 ? (seed8 - used8) : 0u);
         unsigned int left17 = (seed17 > used17 ? (seed17 - used17) : 0u);
         // Приоритет: самые молодые по mfg_date (больший ordinal день)
         if (left8 > 0u) {{
             // Локальная отметка выбранных индексов, чтобы не читать/писать approve повторно
             bool picked8[FRAMES];
-            for (unsigned int k=0u;k<FRAMES;++k) picked8[k] = false;
+            for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) picked8[k] = false;
             while (left8 > 0u) {{
                 unsigned int best_idx = FRAMES;
                 unsigned int best_mfg = 0u;
-                for (unsigned int k=0u;k<FRAMES;++k) {{
+                for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{
                     if (picked8[k]) continue;
                     if (i8[k]) {{
                         const unsigned int mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", k);
@@ -1106,11 +1100,11 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         }}
         if (left17 > 0u) {{
             bool picked17[FRAMES];
-            for (unsigned int k=0u;k<FRAMES;++k) picked17[k] = false;
+            for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) picked17[k] = false;
             while (left17 > 0u) {{
                 unsigned int best_idx = FRAMES;
                 unsigned int best_mfg = 0u;
-                for (unsigned int k=0u;k<FRAMES;++k) {{
+                for (unsigned int k=0u;k<{MAX_FRAMES}u;++k) {{
                     if (picked17[k]) continue;
                     if (i17[k]) {{
                         const unsigned int mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", k);
@@ -1211,11 +1205,10 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
             if (na < 100000u) na = 100000u;
             if (np < 2000000u) np = 2000000u;
         }
-        static const unsigned int DAYS = ${DAYS}u;
-        auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_need_u32");
-        auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_idx_u32");
-        auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_acn_u32");
-        auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_psn_u32");
+        auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_need_u32");
+        auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_idx_u32");
+        auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_acn_u32");
+        auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_psn_u32");
         need_mp[safe_day].exchange(need);
         bidx_mp[safe_day].exchange(nx);
         bacn_mp[safe_day].exchange(na);
@@ -1228,7 +1221,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     }
         """
     )
-    spawn_mgr_fn = spawn_mgr.newRTCFunction("rtc_spawn_mgr", _mgr_tpl2.substitute(DAYS=str(max(1, days_total))))
+    spawn_mgr_fn = spawn_mgr.newRTCFunction("rtc_spawn_mgr", _mgr_tpl2.substitute(MAX_DAYS=str(MAX_DAYS)))
 
     _spawn_tpl2 = _TM2(
         """
@@ -1237,13 +1230,12 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-        static const unsigned int DAYS = ${DAYS}u;
-        auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_need_u32");
+        auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_need_u32");
         const unsigned int need = need_mp[safe_day];
         if (k >= need) return flamegpu::ALIVE;
-        auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_idx_u32");
-        auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_acn_u32");
-        auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, DAYS>("spawn_base_psn_u32");
+        auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_idx_u32");
+        auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_acn_u32");
+        auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_base_psn_u32");
         const unsigned int idx = bidx_mp[safe_day] + k;
         const unsigned int acn = bacn_mp[safe_day] + k;
         const unsigned int psn = bpsn_mp[safe_day] + k;
@@ -1281,7 +1273,7 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     }
         """
     )
-    spawn_fn2 = spawn_ticket.newRTCFunction("rtc_spawn_mi17_atomic", _spawn_tpl2.substitute(DAYS=str(max(1, days_total))))
+    spawn_fn2 = spawn_ticket.newRTCFunction("rtc_spawn_mi17_atomic", _spawn_tpl2.substitute(MAX_DAYS=str(MAX_DAYS)))
     spawn_fn2.setAgentOutput(agent)
     l_spawn_mgr = model.newLayer(); l_spawn_mgr.addAgentFunction(spawn_mgr_fn)
     l_spawn = model.newLayer(); l_spawn.addAgentFunction(spawn_fn2)
