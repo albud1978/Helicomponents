@@ -23,7 +23,7 @@ alwaysApply: true
 - FRAMES = |MP3 ∪ MP5| (без расширения «впрок»). Индексы для будущих бортов берутся из объединения.
 - MP5 держать в `MacroProperty mp5_lin[MAX_SIZE]` с фиксированным MAX_SIZE; инициализация ТОЛЬКО через HostFunction до первых RTC.
 - Запрет записи в `mp5_lin` после начала чтения агентами. RTC копирование (`rtc_mp5_copy_columns`) запрещено.
-- Размеры MacroProperty: MAX_FRAMES=300, MAX_DAYS=3650, MAX_SIZE=MAX_FRAMES*(MAX_DAYS+1).
+- Размеры MacroProperty: MAX_FRAMES=300, MAX_DAYS=4000, MAX_SIZE=MAX_FRAMES*(MAX_DAYS+1). Всегда используется фиксированный размер буфера независимо от количества шагов симуляции.
 - Фикс‑имена RTC: `rtc_status_246` (минимум), далее `rtc_probe_mp5`, `rtc_status_2`, `rtc_status_4`, `rtc_status_6` при расширении.
 
 ## Тестирование и валидации

@@ -16,6 +16,11 @@ try:
 except Exception:
     pyflamegpu = None
 
+# Константы для MacroProperty размеров (должны совпадать во всех модулях)
+MAX_FRAMES = 300  # Максимальное количество frames
+MAX_DAYS = 4000   # Максимальное количество дней симуляции (фиксированный размер буфера)
+MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Размер линейного массива MP5 = 300 * 4001 = 1,200,300
+
 
 class HeliSimModel:
     def __init__(self) -> None:
@@ -82,8 +87,8 @@ class HeliSimModel:
         # Первый день месяца для mfg_date (ord days)
         env.newPropertyArrayUInt32("month_first_u32", [0] * max(1, days_total))
         if not minimal_env or enable_mp5:
-            # MP5 linear array with padding (UInt16 по спецификации)
-            env.newPropertyArrayUInt16("mp5_daily_hours", [0] * max(1, (days_total + 1) * frames_total))
+            # MP5 как MacroProperty с фиксированным размером
+            env.newMacroPropertyUInt32("mp5_lin", MAX_SIZE)
         if not minimal_env or enable_mp1:
             # MP1 SoA
             env.newPropertyArrayUInt32("mp1_br_mi8", [0] * max(1, mp1_len))
@@ -489,6 +494,10 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # Четвёртая фаза approve для статуса 1
     env.newMacroPropertyUInt32("mi8_approve_s1", FRAMES)
     env.newMacroPropertyUInt32("mi17_approve_s1", FRAMES)
+    
+    # MP5 если включен probe
+    if os.environ.get("HL_MP5_PROBE", "0") == "1":
+        env.newMacroPropertyUInt32("mp5_lin", MAX_SIZE)
 
     # Агент и минимальные переменные
     agent = model.newAgent("component")
@@ -709,16 +718,17 @@ def build_model_for_quota_smoke(frames_total: int, days_total: int):
     # RTC: probe MP5 (опционально) — пишет dt/dn в агентные переменные
     rtc_probe_mp5 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_probe_mp5, flamegpu::MessageNone, flamegpu::MessageNone) {{
-        static const unsigned int FRAMES = {FRAMES}u;
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-        if (idx >= FRAMES) return flamegpu::ALIVE;
+        if (idx >= {MAX_FRAMES}u) return flamegpu::ALIVE;
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-        const unsigned int base = safe_day * FRAMES + idx;
-        const unsigned int base_next = (safe_day + 1u) * FRAMES + idx; // паддинг D+1 гарантирует безопасность
-        const unsigned int dt = FLAMEGPU->environment.getProperty<unsigned int>("mp5_daily_hours", base);
-        const unsigned int dn = FLAMEGPU->environment.getProperty<unsigned int>("mp5_daily_hours", base_next);
+        const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
+        const unsigned int base_next = base + {MAX_FRAMES}u;
+        // Чтение из MacroProperty mp5_lin
+        auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
+        const unsigned int dt = mp[base];
+        const unsigned int dn = (safe_day < days_total - 1u ? mp[base_next] : 0u);
         FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
         FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
         return flamegpu::ALIVE;

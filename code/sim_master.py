@@ -31,6 +31,7 @@ from sim_env_setup import (
 
 from model_build import HeliSimModel
 from model_build import build_model_for_quota_smoke
+from model_build import MAX_FRAMES, MAX_DAYS, MAX_SIZE
 
 try:
     import pyflamegpu
@@ -1286,7 +1287,7 @@ def main():
         DAYS = min(int(getattr(a, 'status12456_days', env_data['days_total_u16'])), int(env_data['days_total_u16']))
         os.environ['HL_STATUS246_SMOKE'] = '1'
         # Включаем MP2-лог, но постпроцессинг оставляем по внешнему флагу (не форсируем ON)
-        os.environ['HL_ENABLE_MP2'] = '1'
+        # os.environ['HL_ENABLE_MP2'] = '1'  # Отключено для больших периодов из-за лимитов MacroProperty
         model2, a_desc = build_model_for_quota_smoke(FRAMES, DAYS)
         sim2 = pyflamegpu.CUDASimulation(model2)
         # Таймеры
@@ -1299,6 +1300,10 @@ def main():
         # MP4 квоты (усечённые по DAYS)
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", list(env_data['mp4_ops_counter_mi8'])[:DAYS])
         sim2.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", list(env_data['mp4_ops_counter_mi17'])[:DAYS])
+        # MP5 теперь инициализируется через HostFunction в MacroProperty mp5_lin
+        # if os.environ.get("HL_MP5_PROBE", "0") == "1":
+        #     mp5_size = (DAYS + 1) * FRAMES
+        #     sim2.setEnvironmentPropertyArrayUInt16("mp5_daily_hours", list(env_data['mp5_daily_hours_linear'])[:mp5_size])
         # Спавн: frames_initial и по-дневные массивы, а также базовые счётчики ACN/PSN
         try:
             # Спавн должен занимать сначала зарезервированные MP5-слоты (279..285),
@@ -1489,6 +1494,59 @@ def main():
             av[i].setVariableUInt("daily_next_u32", 0)
         sim2.setPopulationData(av)
         t_load_s += (_t.perf_counter() - t0)
+        
+        # Проверка размеров для MacroProperty
+        if FRAMES > MAX_FRAMES:
+            print(f"ERROR: FRAMES={FRAMES} превышает MAX_FRAMES={MAX_FRAMES}")
+            return
+        if DAYS > MAX_DAYS:
+            print(f"ERROR: DAYS={DAYS} превышает MAX_DAYS={MAX_DAYS}")
+            return
+        
+        # Инициализация MP5 через HostFunction если включен MP5_PROBE
+        if os.environ.get("HL_MP5_PROBE", "0") == "1":
+            class HF_InitMP5(pyflamegpu.HostFunction):
+                def __init__(self, data, frames, sim_days):
+                    super().__init__()
+                    self.data = data
+                    self.frames = frames
+                    self.sim_days = sim_days  # Количество дней симуляции
+                
+                def run(self, FLAMEGPU):
+                    if FLAMEGPU.getStepCounter() > 0:
+                        return
+                    mp = FLAMEGPU.environment.getMacroPropertyUInt32("mp5_lin")
+                    # Инициализируем весь буфер до MAX_DAYS
+                    data_days = len(self.data) // self.frames - 1 if self.frames > 0 else 0
+                    print(f"HF_InitMP5: Инициализация mp5_lin для FRAMES={self.frames}, SIM_DAYS={self.sim_days}, DATA_DAYS={data_days}")
+                    
+                    # Копируем реальные данные
+                    for idx in range(len(self.data)):
+                        d = idx // self.frames
+                        f = idx % self.frames
+                        dst_idx = d * MAX_FRAMES + f
+                        mp[dst_idx] = int(self.data[idx])
+                    
+                    # Остальное уже заполнено нулями при создании MacroProperty
+                    print(f"HF_InitMP5: Инициализировано {len(self.data)} элементов данных в буфере размером {MAX_SIZE}")
+            
+            # Подготовка данных MP5 - всегда загружаем полный объем до MAX_DAYS
+            mp5_data = list(env_data['mp5_daily_hours_linear'])
+            # Загружаем данные до фактического горизонта или MAX_DAYS (что меньше)
+            data_days = min(int(env_data['days_total_u16']), MAX_DAYS)
+            need = (data_days + 1) * FRAMES
+            mp5_data = mp5_data[:need]
+            # Дополняем нулями до MAX_DAYS если данных меньше
+            if data_days < MAX_DAYS:
+                mp5_data.extend([0] * ((MAX_DAYS - data_days) * FRAMES))
+            
+            # Создаем слой с HostFunction для инициализации MP5
+            init_layer = model2.newLayer()
+            init_layer.addHostFunction(HF_InitMP5(mp5_data, FRAMES, DAYS))
+            
+            # Инициализация MP5 будет выполнена на первом шаге симуляции
+            print("MP5 будет инициализирован при первом шаге симуляции")
+        
         # Логирование плана спавна: сумма по горизонту
         try:
             _seed_arr = list(env_data.get('mp4_new_counter_mi17_seed', []))[:DAYS]
@@ -1583,16 +1641,17 @@ def main():
             sim2.getPopulationData(pop_before)
             status_before = [int(pop_before[i].getVariableUInt('status_id')) for i in range(K)]
             t_cpu_s += (_t.perf_counter() - t_bcpu0)
-            # Подготовка dt/dn для s2
-            for i in range(K):
-                if status_before[i] == 2:
-                    ag = pop_before[i]
-                    fi = int(ag.getVariableUInt('idx'))
-                    base = d * FRAMES + (fi if fi < FRAMES else 0)
-                    dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
-                    dn = int(env_data['mp5_daily_hours_linear'][base + FRAMES]) if (base + FRAMES) < len(env_data['mp5_daily_hours_linear']) else 0
-                    ag.setVariableUInt('daily_today_u32', dt)
-                    ag.setVariableUInt('daily_next_u32', dn)
+            # MP5 теперь читается напрямую из MacroProperty в RTC функциях
+            # Хост-инъекция больше не нужна
+            # for i in range(K):
+            #     if status_before[i] == 2:
+            #         ag = pop_before[i]
+            #         fi = int(ag.getVariableUInt('idx'))
+            #         base = d * FRAMES + (fi if fi < FRAMES else 0)
+            #         dt = int(env_data['mp5_daily_hours_linear'][base]) if base < len(env_data['mp5_daily_hours_linear']) else 0
+            #         dn = int(env_data['mp5_daily_hours_linear'][base + FRAMES]) if (base + FRAMES) < len(env_data['mp5_daily_hours_linear']) else 0
+            #         ag.setVariableUInt('daily_today_u32', dt)
+            #         ag.setVariableUInt('daily_next_u32', dn)
             sim2.setPopulationData(pop_before)
             t_g0 = _t.perf_counter()
             sim2.step()

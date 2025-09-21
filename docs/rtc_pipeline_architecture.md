@@ -256,7 +256,7 @@ MP5 probe для чтения часов работы и сброс флагов
 
 ENV‑инварианты:
 - `FRAMES`, `DAYS`, `frames_index` берутся из `env_snapshot.json` и не пересчитываются в шагах 03/04.
-- MacroProperty размеры фиксированы: MAX_FRAMES=250, MAX_DAYS=3650, MAX_SIZE=912750.
+- MacroProperty размеры фиксированы: MAX_FRAMES=300, MAX_DAYS=4000, MAX_SIZE=1,200,300. Всегда используется полный размер буфера для единообразной компиляции RTC независимо от периода симуляции.
 - После инициализации `mp5_lin` доступен только на чтение в RTC; запись в него запрещена.
 - RTC имена фиксированы: `rtc_probe_mp5`, `rtc_status_2`, `rtc_status_4`, `rtc_status_6` (без `rtc_mp5_copy_columns`).
 

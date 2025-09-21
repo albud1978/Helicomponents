@@ -470,8 +470,8 @@ def apply_env_to_sim(sim, env_data: Dict[str, object]):
     sim.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", list(env_data['mp4_new_counter_mi17_seed']))
     # Первый день месяца (ord days) для mfg_date
     sim.setEnvironmentPropertyArrayUInt32("month_first_u32", list(env_data['month_first_u32']))
-    # MP5 (линейный массив с паддингом)
-    sim.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", list(env_data['mp5_daily_hours_linear']))
+    # MP5 теперь инициализируется через HostFunction в MacroProperty mp5_lin
+    # sim.setEnvironmentPropertyArrayUInt16("mp5_daily_hours", list(env_data['mp5_daily_hours_linear']))
     # MP1 (SoA)
     if 'mp1_br_mi8' in env_data:
         sim.setEnvironmentPropertyArrayUInt32("mp1_br_mi8", list(env_data['mp1_br_mi8']))
