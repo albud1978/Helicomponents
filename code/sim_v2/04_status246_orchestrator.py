@@ -87,7 +87,7 @@ def main() -> int:
 
     # Константы для MacroProperty
     MAX_FRAMES = 300  # Увеличено для покрытия 286 frames
-    MAX_DAYS = 3650
+    MAX_DAYS = 4000   # Фиксированный размер буфера данных
     MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
     
     if FRAMES > MAX_FRAMES:
