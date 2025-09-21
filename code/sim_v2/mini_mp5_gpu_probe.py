@@ -62,29 +62,33 @@ def main() -> int:
     e.newPropertyUInt("frames_total", FRAMES)
     e.newPropertyUInt("days_total", DAYS)
     e.newMacroPropertyUInt32("mp5_lin", FRAMES * (DAYS + 1))
-    e.newPropertyArrayUInt32("mp5_src", [0] * ((DAYS + 1) * FRAMES))
+    # Источник MP5 из ENV (как в проде)
+    e.newPropertyArrayUInt32("mp5_daily_hours", [0] * (FRAMES * (DAYS + 1)))
 
     a = model.newAgent("component")
     a.newVariableUInt("idx", 0)  # индекс кадра и позиция в популяции одинаковы
     a.newVariableUInt("daily_today_u32", 0)
     a.newVariableUInt("daily_next_u32", 0)
 
-    # RTC: копирование mp5_src -> mp5_lin (каждый агент копирует свою колонку)
-    rtc_copy = f"""
-    FLAMEGPU_AGENT_FUNCTION(rtc_mp5_copy_columns, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    # RTC: однократно материализует mp5_daily_hours -> mp5_lin на шаге 0
+    rtc_mat = f"""
+    FLAMEGPU_AGENT_FUNCTION(rtc_mp5_materialize, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        const unsigned int step = FLAMEGPU->getStepCounter();
+        if (step > 0u) return flamegpu::ALIVE;
+        const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
         static const unsigned int FR = {FRAMES}u;
         static const unsigned int DY = {DAYS}u;
-        const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
-        auto dst = FLAMEGPU->environment.getMacroProperty<unsigned int, (FR*(DY+1))>("mp5_lin");
+        const unsigned int SZ = FR * (DY + 1u);
+        auto dst = FLAMEGPU->environment.getMacroProperty<unsigned int, SZ>("mp5_lin");
         for (unsigned int d = 0u; d <= DY; ++d) {{
             const unsigned int base = d * FR + i;
-            const unsigned int v = FLAMEGPU->environment.getProperty<unsigned int>("mp5_src", base);
+            const unsigned int v = FLAMEGPU->environment.getProperty<unsigned int>("mp5_daily_hours", base);
             dst[base].exchange(v);
         }}
         return flamegpu::ALIVE;
     }}
     """
-    a.newRTCFunction("rtc_mp5_copy_columns", rtc_copy)
+    a.newRTCFunction("rtc_mp5_materialize", rtc_mat)
 
     # RTC: чтение dt и dn из mp5_lin
     SIZE = DAYS + 1
@@ -97,7 +101,8 @@ def main() -> int:
         const unsigned int d = (day < DY ? day : (DY > 0u ? DY - 1u : 0u));
         const unsigned int base = d * FR + frame_i;
         const unsigned int base_next = base + FR;
-        auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, (FR*(DY+1))>("mp5_lin");
+        const unsigned int SZ = FR * (DY + 1u);
+        auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, SZ>("mp5_lin");
         const unsigned int dt = mp[base];
         const unsigned int dn = (d < DY ? mp[base_next] : 0u);
         FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
@@ -106,20 +111,23 @@ def main() -> int:
     }}
     """
     a.newRTCFunction("rtc_probe_mp5", rtc)
-    l0 = model.newLayer(); l0.addAgentFunction(a.getFunction("rtc_mp5_copy_columns"))
-    l1 = model.newLayer(); l1.addAgentFunction(a.getFunction("rtc_probe_mp5"))
 
-    # Инициализация: готовим линейный MP5 целиком для PropertyArray источника
+    # Инициализация: готовим линейный MP5 для источника ENV
     mp5_full = list(env['mp5_daily_hours_linear'])
     need = (DAYS + 1) * FRAMES
     mp5_full = mp5_full[:need]
     assert len(mp5_full) == need, f"mp5 size mismatch: {len(mp5_full)} != {need}"
-    # Создаём симуляцию после регистрации HostFunction
+    # Слои: материализация MP5 -> probe ядро
+    l0 = model.newLayer(); l0.addAgentFunction(a.getFunction("rtc_mp5_materialize"))
+    l1 = model.newLayer(); l1.addAgentFunction(a.getFunction("rtc_probe_mp5"))
+
+    # Создаём симуляцию
     sim = fg.CUDASimulation(model)
     sim.setEnvironmentPropertyUInt("version_date", int(env['version_date_u16']))
     sim.setEnvironmentPropertyUInt("frames_total", FRAMES)
     sim.setEnvironmentPropertyUInt("days_total", DAYS)
-    sim.setEnvironmentPropertyArrayUInt32("mp5_src", mp5_full)
+    # Заполняем источник ENV массивом MP5
+    sim.setEnvironmentPropertyArrayUInt32("mp5_daily_hours", mp5_full)
 
     av = fg.AgentVector(a, FRAMES)
     for i in range(FRAMES):
@@ -133,7 +141,7 @@ def main() -> int:
         sim.getPopulationData(out)
         dt = int(out[fi].getVariableUInt("daily_today_u32"))
         dn = int(out[fi].getVariableUInt("daily_next_u32"))
-        print(f"D{d+1}: idx=0 dt={dt} dn={dn}")
+        print(f"D{d+1}: idx={fi} dt={dt} dn={dn}")
 
     return 0
 
