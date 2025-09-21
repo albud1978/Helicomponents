@@ -85,6 +85,18 @@ def main() -> int:
     STEPS = int(os.environ.get('HL_V2_STEPS', '90'))
     DAYS = min(STEPS, DAYS_full)
 
+    # Константы для MacroProperty
+    MAX_FRAMES = 300  # Увеличено для покрытия 286 frames
+    MAX_DAYS = 3650
+    MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
+    
+    if FRAMES > MAX_FRAMES:
+        print(f"ERROR: FRAMES={FRAMES} превышает MAX_FRAMES={MAX_FRAMES}. Используйте больший MAX_FRAMES или уменьшите количество кадров.")
+        return 1
+    if DAYS > MAX_DAYS:
+        print(f"ERROR: DAYS={DAYS} превышает MAX_DAYS={MAX_DAYS}")
+        return 1
+
     ll_by_f, oh_by_f, br_by_f = build_ll_oh_br_by_frame(env, FRAMES)
 
     model = fg.ModelDescription("HeliSim_V2_Status246_Orchestrated")
@@ -95,7 +107,8 @@ def main() -> int:
     e.newPropertyArrayUInt32("mp3_ll_by_frame", ll_by_f)
     e.newPropertyArrayUInt32("mp1_oh_by_frame", oh_by_f)
     e.newPropertyArrayUInt32("mp1_br_by_frame", br_by_f)
-    # MP5 MacroProperty не используется в этом оркестраторе (dt/dn задаются на host перед шагом)
+    # MP5 MacroProperty с фиксированными размерами (константы объявлены выше)
+    e.newMacroPropertyUInt32("mp5_lin", MAX_SIZE)
 
     a = model.newAgent("component")
     for name in [
@@ -107,15 +120,25 @@ def main() -> int:
 
     import pyflamegpu as fg
 
-    # Статус 2/4/6 + запись dt/dn из mp5_lin
+    # Статус 2/4/6 + чтение dt/dn из mp5_lin MacroProperty
     rtc_246 = f"""
     FLAMEGPU_AGENT_FUNCTION(rtc_status_246_run, flamegpu::MessageNone, flamegpu::MessageNone) {{
         const unsigned int i = FLAMEGPU->getVariable<unsigned int>("idx");
-        // dt/dn передаются с host в агентные переменные перед каждым шагом
-        const unsigned int dt = FLAMEGPU->getVariable<unsigned int>("daily_today_u32");
-        const unsigned int dn = FLAMEGPU->getVariable<unsigned int>("daily_next_u32");
         const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
         if (!(gb == 1u || gb == 2u)) return flamegpu::ALIVE;
+        
+        // Чтение MP5 из MacroProperty
+        const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int DAYS = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+        const unsigned int d = (day < DAYS ? day : (DAYS > 0u ? DAYS - 1u : 0u));
+        const unsigned int base = d * {MAX_FRAMES}u + i;
+        const unsigned int base_next = base + {MAX_FRAMES}u;
+        auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
+        const unsigned int dt = mp[base];
+        const unsigned int dn = (d < DAYS ? mp[base_next] : 0u);
+        FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
+        FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
+        
         unsigned int sid = FLAMEGPU->getVariable<unsigned int>("status_id");
         if (sid == 2u) {{
             unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
@@ -160,14 +183,38 @@ def main() -> int:
     """
     a.newRTCFunction("rtc_status_246_run", rtc_246)
 
-    # Слои: только статус 246 (MP5 будет инициализирован HostFunction до запуска симуляции)
-    l0 = model.newLayer(); l0.addAgentFunction(a.getFunction("rtc_status_246_run"))
+    # HostFunction для инициализации mp5_lin
+    class HF_InitMP5(fg.HostFunction):
+        def __init__(self, data: list[int], frames: int, days: int):
+            super().__init__()
+            self.data = data
+            self.frames = frames
+            self.days = days
 
-    # Источник MP5 линейный массив (используется host-циклом перед шагами)
+        def run(self, FLAMEGPU):
+            # Выполняется только на шаге 0
+            if FLAMEGPU.getStepCounter() > 0:
+                return
+            mp = FLAMEGPU.environment.getMacroPropertyUInt32("mp5_lin")
+            print(f"HF_InitMP5: Инициализация mp5_lin для FRAMES={self.frames}, DAYS={self.days}")
+            for d in range(self.days + 1):
+                for f in range(self.frames):
+                    src_idx = d * self.frames + f
+                    dst_idx = d * MAX_FRAMES + f  # Используем MAX_FRAMES для индексации
+                    if src_idx < len(self.data):
+                        mp[dst_idx] = self.data[src_idx]
+            print(f"HF_InitMP5: Инициализировано {(self.days+1)*self.frames} элементов")
+
+    # Источник MP5 линейный массив
     mp5 = list(env['mp5_daily_hours_linear'])
     need = (DAYS + 1) * FRAMES
     mp5 = mp5[:need]
     assert len(mp5) == need, f"mp5 length mismatch: {len(mp5)} != {need}"
+
+    # Слои: инициализация MP5 + статус 246
+    l0 = model.newLayer()
+    l0.addHostFunction(HF_InitMP5(mp5, FRAMES, DAYS))
+    l1 = model.newLayer(); l1.addAgentFunction(a.getFunction("rtc_status_246_run"))
 
     # Данные окружения
     sim = fg.CUDASimulation(model)
@@ -351,17 +398,7 @@ def main() -> int:
     s4_rd_viol_samples: List[tuple] = []  # (day, ac, rd_prev, rd_cur)
 
     for d in range(DAYS):
-        # Перед шагом: подготовить dt/dn для агентов в статусе 2
-        pop_before = fg.AgentVector(a)
-        sim.getPopulationData(pop_before)
-        for i in range(FRAMES):
-            if int(pop_before[i].getVariableUInt("status_id")) == 2:
-                base = d * FRAMES + i
-                dt = int(mp5[base]) if 0 <= base < len(mp5) else 0
-                dn = int(mp5[base + FRAMES]) if 0 <= (base + FRAMES) < len(mp5) else 0
-                pop_before[i].setVariableUInt("daily_today_u32", dt)
-                pop_before[i].setVariableUInt("daily_next_u32", dn)
-        sim.setPopulationData(pop_before)
+        # Шаг симуляции (MP5 читается из MacroProperty внутри RTC)
         sim.step()
         # Подсчёт переходов за день
         cur_all = fg.AgentVector(a)

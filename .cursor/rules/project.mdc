@@ -21,8 +21,9 @@ alwaysApply: true
 ## Transform / RTC инварианты (v2)
 - Один процесс: единый `ModelDescription` + `CUDASimulation`, без перезагрузки `env` между шагами.
 - FRAMES = |MP3 ∪ MP5| (без расширения «впрок»). Индексы для будущих бортов берутся из объединения.
-- MP5 держать в `MacroProperty mp5_lin[(DAYS+1)*FRAMES]`; инициализация строго до первых RTC через HostFunction/`importMacroProperty()`.
-- Запрет записи в `mp5_lin` после начала чтения агентами.
+- MP5 держать в `MacroProperty mp5_lin[MAX_SIZE]` с фиксированным MAX_SIZE; инициализация ТОЛЬКО через HostFunction до первых RTC.
+- Запрет записи в `mp5_lin` после начала чтения агентами. RTC копирование (`rtc_mp5_copy_columns`) запрещено.
+- Размеры MacroProperty: MAX_FRAMES=300, MAX_DAYS=3650, MAX_SIZE=MAX_FRAMES*(MAX_DAYS+1).
 - Фикс‑имена RTC: `rtc_status_246` (минимум), далее `rtc_probe_mp5`, `rtc_status_2`, `rtc_status_4`, `rtc_status_6` при расширении.
 
 ## Тестирование и валидации
