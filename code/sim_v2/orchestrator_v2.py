@@ -43,6 +43,9 @@ class V2Orchestrator:
         if 'mp5_probe' in rtc_modules:
             self._add_mp5_init_layer()
         
+        # Создаем слой для обработки состояний
+        state_layer = self.model.newLayer('state_processing')
+        
         # Подключаем RTC модули
         for module_name in rtc_modules:
             print(f"  Подключение модуля: {module_name}")
@@ -71,10 +74,7 @@ class V2Orchestrator:
         return self.simulation
     
     def _populate_agents(self):
-        """Загружает агентов из MP3 данных"""
-        # Создаем пустую популяцию для заполнения
-        pop = fg.AgentVector(self.base_model.agent)
-        
+        """Загружает агентов из MP3 данных с поддержкой States"""
         # Извлекаем массивы MP3
         mp3 = self.env_data.get('mp3_arrays', {})
         ac_list = mp3.get('mp3_aircraft_number', [])
@@ -85,50 +85,157 @@ class V2Orchestrator:
         gb_list = mp3.get('mp3_group_by', [])
         pseq_list = mp3.get('mp3_partseqno_i', [])
         
+        # Получаем MP1 данные для OH
+        mp1_arrays = self.env_data.get('mp1_arrays', {})
+        mp1_partseqno = mp1_arrays.get('partseqno_i', [])
+        mp1_oh_mi8 = mp1_arrays.get('oh_mi8', [])
+        mp1_oh_mi17 = mp1_arrays.get('oh_mi17', [])
+        
         # Индекс кадров
         frames_index = self.env_data.get('frames_index', {})
         
         # Предварительно вычисляем LL/OH/BR по кадрам
         ll_by_frame, oh_by_frame, br_by_frame = self._build_norms_by_frame()
         
-        # Заполняем агентов
+        # Создаем популяции для каждого состояния
+        populations = {
+            'inactive': fg.AgentVector(self.base_model.agent),      # state_1
+            'operations': fg.AgentVector(self.base_model.agent),    # state_2
+            'serviceable': fg.AgentVector(self.base_model.agent),   # state_3
+            'repair': fg.AgentVector(self.base_model.agent),        # state_4
+            'reserve': fg.AgentVector(self.base_model.agent),       # state_5
+            'storage': fg.AgentVector(self.base_model.agent)        # state_6
+        }
+        
+        # Маппинг status_id -> state name
+        status_to_state = {
+            0: 'inactive',      # Статус 0 тоже считаем неактивным
+            1: 'inactive',
+            2: 'operations',
+            3: 'serviceable',
+            4: 'repair',
+            5: 'reserve',
+            6: 'storage'
+        }
+        
+        # Сначала фильтруем записи с group_by in [1,2]
+        plane_records = []
+        for j in range(len(ac_list)):
+            gb = int(gb_list[j] or 0) if j < len(gb_list) else 0
+            if gb in [1, 2]:
+                ac = int(ac_list[j] or 0)
+                if ac > 0 and ac in frames_index:
+                    plane_records.append({
+                        'idx': j,
+                        'aircraft_number': ac,
+                        'frame_idx': frames_index[ac],
+                        'status_id': int(status_list[j] or 1) if j < len(status_list) else 1,
+                        'sne': int(sne_list[j] or 0) if j < len(sne_list) else 0,
+                        'ppr': int(ppr_list[j] or 0) if j < len(ppr_list) else 0,
+                        'repair_days': int(repair_days_list[j] or 0) if j < len(repair_days_list) else 0,
+                        'group_by': gb,
+                        'partseqno_i': int(pseq_list[j] or 0) if j < len(pseq_list) else 0
+                    })
+        
+        # Группируем по frame_idx и берем первую запись для каждого
+        records_by_frame = {}
+        for rec in plane_records:
+            frame_idx = rec['frame_idx']
+            if frame_idx not in records_by_frame:
+                records_by_frame[frame_idx] = rec
+        
+        # Получаем информацию о зарезервированных слотах
+        first_reserved_idx = self.env_data.get('first_reserved_idx', self.frames)
+        
+        # Заполняем агентов и распределяем по состояниям
+        # Создаем только реальных агентов, пропускаем зарезервированные слоты
         for i in range(self.frames):
+            # Пропускаем зарезервированные слоты для будущего спавна
+            if i >= first_reserved_idx:
+                continue
+                
+            # Берем данные для этого frame_idx
+            agent_data = records_by_frame.get(i, {
+                'aircraft_number': 0,
+                'status_id': 1,  # По умолчанию inactive
+                'sne': 0,
+                'ppr': 0,
+                'repair_days': 0,
+                'group_by': 0,
+                'partseqno_i': 0
+            })
+            
+            # Определяем состояние и добавляем агента
+            status_id = agent_data['status_id']
+            state_name = status_to_state.get(status_id, 'inactive')
+            pop = populations[state_name]
             pop.push_back()
-            agent = pop[i]
+            agent = pop[len(pop) - 1]
             
             # Базовые переменные
             agent.setVariableUInt("idx", i)
+            agent.setVariableUInt("aircraft_number", agent_data['aircraft_number'])
+            agent.setVariableUInt("status_id", status_id)
+            agent.setVariableUInt("sne", agent_data['sne'])
+            agent.setVariableUInt("ppr", agent_data['ppr'])
+            agent.setVariableUInt("repair_days", agent_data['repair_days'])
+            agent.setVariableUInt("group_by", agent_data['group_by'])
+            agent.setVariableUInt("partseqno_i", agent_data['partseqno_i'])
             
-            # Ищем данные по индексу кадра
-            ac = 0
-            for j, ac_num in enumerate(ac_list):
-                if frames_index.get(int(ac_num or 0), -1) == i:
-                    ac = int(ac_num or 0)
-                    agent.setVariableUInt("aircraft_number", ac)
-                    agent.setVariableUInt("status_id", int(status_list[j] or 0) if j < len(status_list) else 0)
-                    agent.setVariableUInt("sne", int(sne_list[j] or 0) if j < len(sne_list) else 0)
-                    agent.setVariableUInt("ppr", int(ppr_list[j] or 0) if j < len(ppr_list) else 0)
-                    agent.setVariableUInt("repair_days", int(repair_days_list[j] or 0) if j < len(repair_days_list) else 0)
-                    agent.setVariableUInt("group_by", int(gb_list[j] or 0) if j < len(gb_list) else 0)
-                    agent.setVariableUInt("partseqno_i", int(pseq_list[j] or 0) if j < len(pseq_list) else 0)
-                    break
+            # Определяем OH из MP1 (приоритет oh_mi8/oh_mi17 > 0)
+            partseqno = agent_data.get('partseqno_i', 0)
+            oh_value = oh_by_frame[i]  # Значение по умолчанию
+            
+            if partseqno > 0 and mp1_partseqno:
+                # Ищем в MP1
+                try:
+                    idx_in_mp1 = mp1_partseqno.index(partseqno)
+                    oh_mi8 = int(mp1_oh_mi8[idx_in_mp1]) if idx_in_mp1 < len(mp1_oh_mi8) else 0
+                    oh_mi17 = int(mp1_oh_mi17[idx_in_mp1]) if idx_in_mp1 < len(mp1_oh_mi17) else 0
+                    
+                    # Берем ненулевое значение (минуты -> часы)
+                    if oh_mi8 > 0:
+                        oh_value = oh_mi8 * 60
+                    elif oh_mi17 > 0:
+                        oh_value = oh_mi17 * 60
+                except ValueError:
+                    pass  # partseqno не найден в MP1
             
             # Нормативы
             agent.setVariableUInt("ll", ll_by_frame[i])
-            agent.setVariableUInt("oh", oh_by_frame[i])
+            agent.setVariableUInt("oh", oh_value)
             agent.setVariableUInt("br", br_by_frame[i])
             
             # Времена ремонта из констант
-            gb = agent.getVariableUInt("group_by")
+            gb = agent_data.get('group_by', 0)
             if gb == 1:
                 agent.setVariableUInt("repair_time", self.simulation.getEnvironmentPropertyUInt("mi8_repair_time_const"))
                 agent.setVariableUInt("assembly_time", self.simulation.getEnvironmentPropertyUInt("mi8_assembly_time_const"))
             elif gb == 2:
                 agent.setVariableUInt("repair_time", self.simulation.getEnvironmentPropertyUInt("mi17_repair_time_const"))
                 agent.setVariableUInt("assembly_time", self.simulation.getEnvironmentPropertyUInt("mi17_assembly_time_const"))
+            
+            # Для агентов в статусе 6 устанавливаем s6_started
+            if status_id == 6:
+                agent.setVariableUInt("s6_started", 0)  # Изначально в статусе 6
+            
+            # Для агентов в статусе 4 проверяем assembly_trigger
+            if status_id == 4:
+                repair_time = agent.getVariableUInt("repair_time")
+                repair_days = agent.getVariableUInt("repair_days")
+                assembly_time = agent.getVariableUInt("assembly_time")
+                
+                if repair_time - repair_days > assembly_time:
+                    agent.setVariableUInt("assembly_trigger", 1)
+            
+            # intent_state = 0 для всех (нет начальных намерений)
+            agent.setVariableUInt("intent_state", 0)
         
-        # Загружаем популяцию в симуляцию (состояние по умолчанию)
-        self.simulation.setPopulationData(pop)
+        # Загружаем популяции в симуляцию по состояниям
+        for state_name, pop in populations.items():
+            if len(pop) > 0:
+                self.simulation.setPopulationData(pop, state_name)
+                print(f"  Загружено {len(pop)} агентов в состояние '{state_name}'")
     
     def _build_norms_by_frame(self):
         """Вычисляет нормативы LL/OH/BR по кадрам"""
@@ -171,22 +278,46 @@ class V2Orchestrator:
                 print(f"  Шаг {step+1}/{steps}")
     
     def get_results(self):
-        """Извлекает результаты симуляции"""
-        pop = fg.AgentVector(self.base_model.agent)
-        self.simulation.getPopulationData(pop)
+        """Извлекает результаты симуляции из всех состояний"""
         results = []
         
-        for i in range(self.frames):
-            agent = pop[i]
-            results.append({
-                'idx': i,
-                'aircraft_number': agent.getVariableUInt("aircraft_number"),
-                'status_id': agent.getVariableUInt("status_id"),
-                'sne': agent.getVariableUInt("sne"),
-                'ppr': agent.getVariableUInt("ppr"),
-                'daily_today': agent.getVariableUInt("daily_today_u32"),
-                'daily_next': agent.getVariableUInt("daily_next_u32")
-            })
+        # Маппинг state -> status_id для обратной совместимости
+        state_to_status = {
+            'inactive': 1,
+            'operations': 2,
+            'serviceable': 3,
+            'repair': 4,
+            'reserve': 5,
+            'storage': 6
+        }
+        
+        # Извлекаем агентов из каждого состояния
+        for state_name, status_id in state_to_status.items():
+            pop = fg.AgentVector(self.base_model.agent)
+            self.simulation.getPopulationData(pop, state_name)
+            
+            for i in range(len(pop)):
+                agent = pop[i]
+                results.append({
+                    'idx': agent.getVariableUInt("idx"),
+                    'aircraft_number': agent.getVariableUInt("aircraft_number"),
+                    'status_id': status_id,  # Восстанавливаем из state
+                    'state': state_name,
+                    'sne': agent.getVariableUInt("sne"),
+                    'ppr': agent.getVariableUInt("ppr"),
+                    'daily_today': agent.getVariableUInt("daily_today_u32"),
+                    'daily_next': agent.getVariableUInt("daily_next_u32"),
+                    'intent_state': agent.getVariableUInt("intent_state")
+                })
+        
+        # Сортируем по idx для удобства
+        results.sort(key=lambda x: x['idx'])
+        
+        # Отладочная информация о пропущенных слотах
+        actual_count = len(results)
+        expected_count = self.env_data.get('first_reserved_idx', self.frames)
+        if actual_count != expected_count:
+            print(f"  Внимание: создано {actual_count} агентов из {expected_count} ожидаемых (без учета {self.frames - expected_count} зарезервированных слотов)")
         
         return results
 
@@ -231,11 +362,22 @@ def main():
     print(f"  Всего агентов: {len(results)}")
     print(f"  Статусы: {dict(sorted(status_counts.items()))}")
     
-    # Примеры агентов
-    samples = results[:5]
-    print(f"  Примеры (idx, st, sne, ppr, dt, dn):")
-    for r in samples:
-        print(f"    {r['idx']}: st={r['status_id']}, sne={r['sne']}, ppr={r['ppr']}, dt={r['daily_today']}, dn={r['daily_next']}")
+    # Примеры агентов по состояниям
+    print(f"\n  Примеры по состояниям (idx, state, st, intent, sne, ppr, dt, dn):")
+    
+    # Группируем по состояниям
+    by_state = {}
+    for r in results:
+        state = r.get('state', 'unknown')
+        if state not in by_state:
+            by_state[state] = []
+        by_state[state].append(r)
+    
+    # Выводим по 2 примера из каждого состояния
+    for state, agents in sorted(by_state.items()):
+        print(f"\n  {state} ({len(agents)} агентов):")
+        for r in agents[:2]:
+            print(f"    {r['idx']}: st={r['status_id']}, intent={r.get('intent_state', '?')}, sne={r['sne']}, ppr={r['ppr']}, dt={r['daily_today']}, dn={r['daily_next']}")
     
     return 0
 

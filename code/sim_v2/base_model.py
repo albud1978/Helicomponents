@@ -100,15 +100,26 @@ class V2BaseModel:
         """Создание и настройка агента HELI"""
         agent = self.model.newAgent("heli")
         
+        # Создаем состояния агентов
+        agent.newState("inactive")      # state_1
+        agent.newState("operations")    # state_2
+        agent.newState("serviceable")   # state_3
+        agent.newState("repair")        # state_4
+        agent.newState("reserve")       # state_5
+        agent.newState("storage")       # state_6
+        
         # Идентификаторы
         agent.newVariableUInt("idx", 0)
         agent.newVariableUInt("aircraft_number", 0)
         agent.newVariableUInt("partseqno_i", 0)
         agent.newVariableUInt("group_by", 0)
         
-        # Состояние
+        # Состояние (оставляем для обратной совместимости при загрузке)
         agent.newVariableUInt("status_id", 0)
         agent.newVariableUInt("s6_started", 0)
+        
+        # Новая переменная для intent-based архитектуры
+        agent.newVariableUInt("intent_state", 0)
         
         # Наработки
         agent.newVariableUInt("sne", 0)
@@ -124,10 +135,16 @@ class V2BaseModel:
         agent.newVariableUInt("repair_time", 180)
         agent.newVariableUInt("assembly_time", 180)
         agent.newVariableUInt("repair_days", 0)
+        agent.newVariableUInt("assembly_trigger", 0)
         
         # MP5 данные (текущий/следующий день)
         agent.newVariableUInt("daily_today_u32", 0)
         agent.newVariableUInt("daily_next_u32", 0)
+        
+        # Временные счетчики для state_6
+        agent.newVariableUInt("s6_days", 0)
+        agent.newVariableUInt("partout_time", 180)
+        agent.newVariableUInt("partout_trigger", 0)
         
         # Квоты (если включены)
         if os.environ.get('HL_ENABLE_QUOTAS', '0') == '1':
