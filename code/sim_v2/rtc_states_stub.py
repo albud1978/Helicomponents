@@ -22,21 +22,36 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_1_inactive, flamegpu::MessageNone, flamegpu::M
     // Но обновляем MP5 данные для консистентности
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
+    
+    // Не выполнять на шаге 0 (только инициализация MP5)
+    if (step_day == 0u) {{
+        return flamegpu::ALIVE;
+    }}
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (step_day < days_total ? step_day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
-    const unsigned int base_next = base + {MAX_FRAMES}u;
+    const unsigned int offset = idx * {MAX_DAYS + 1}u + safe_day;
+    const unsigned int offset_next = offset + 1u;
     
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
-    const unsigned int dt = mp5[base];
-    const unsigned int dn = (safe_day < days_total - 1u ? mp5[base_next] : 0u);
+    const unsigned int dt = mp5[offset];
+    const unsigned int dn = (safe_day < days_total - 1u ? mp5[offset_next] : 0u);
     
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
     
-    // Нет intent (остаемся неактивными)
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 0u);
+    // Логика state_1: if (current_date - repair_time) > version_date then intent = 2 else intent = 1
+    const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
+    const unsigned int version_date = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
+    
+    if ((step_day - repair_time) > version_date) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+        
+        // Не логируем, так как для state_1 intent=2 это нормально
+    }} else {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 1u);
+    }}
+    
     return flamegpu::ALIVE;
 }}
 """
@@ -47,21 +62,34 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_3_serviceable, flamegpu::MessageNone, flamegpu
     // Исправные агенты хотят в эксплуатацию
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
+    
+    // Не выполнять на шаге 0 (только инициализация MP5)
+    if (step_day == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (step_day < days_total ? step_day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
-    const unsigned int base_next = base + {MAX_FRAMES}u;
+    const unsigned int offset = idx * {MAX_DAYS + 1}u + safe_day;
+    const unsigned int offset_next = offset + 1u;
     
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
-    const unsigned int dt = mp5[base];
-    const unsigned int dn = (safe_day < days_total - 1u ? mp5[base_next] : 0u);
+    const unsigned int dt = mp5[offset];
+    const unsigned int dn = (safe_day < days_total - 1u ? mp5[offset_next] : 0u);
     
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
     
-    // Намерение перейти в эксплуатацию
+    // State_3: всегда хочет в эксплуатацию
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+    
+    // Логирование намерения
+    if (step_day < 5u || FLAMEGPU->getVariable<unsigned int>("aircraft_number") == 22418u) {{
+        printf("  [Step %u] AC %u: intent=2 (from serviceable)\\n", 
+               step_day, FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    }}
+    
     return flamegpu::ALIVE;
 }}
 """
@@ -72,15 +100,21 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
     // Агенты в ремонте
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
+    
+    // Не выполнять на шаге 0 (только инициализация MP5)
+    if (step_day == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (step_day < days_total ? step_day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
-    const unsigned int base_next = base + {MAX_FRAMES}u;
+    const unsigned int offset = idx * {MAX_DAYS + 1}u + safe_day;
+    const unsigned int offset_next = offset + 1u;
     
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
-    const unsigned int dt = mp5[base];
-    const unsigned int dn = (safe_day < days_total - 1u ? mp5[base_next] : 0u);
+    const unsigned int dt = mp5[offset];
+    const unsigned int dn = (safe_day < days_total - 1u ? mp5[offset_next] : 0u);
     
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
@@ -90,16 +124,34 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
     repair_days++;
     FLAMEGPU->setVariable<unsigned int>("repair_days", repair_days);
     
-    // Проверяем завершение ремонта
+    // Логирование прогресса ремонта отключено - логируем только переходы
+    
+    // Проверяем assembly_trigger
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
-    if (repair_days >= repair_time) {{
-        // Детерминированный переход 4->5
-        FLAMEGPU->setVariable<unsigned int>("ppr", 0u); // Сброс PPR
+    const unsigned int assembly_time = FLAMEGPU->getVariable<unsigned int>("assembly_time");
+    if (repair_days >= repair_time - assembly_time) {{
+        FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 1u);
+    }}
+    
+    // Проверяем завершение ремонта
+    if (repair_days == repair_time) {{
+        // Переход в резерв
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
+        
+        // Сброс счетчиков при переходе
         FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 5u); // Намерение перейти в резерв
+        FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 0u);
+        
+        // Логирование перехода
+        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
+        const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+        const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
+        printf("  [Step %u] AC %u: intent=5 (reserve), repair complete rd=%u/%u, ll=%u, oh=%u, br=%u\\n", 
+               step_day, aircraft_number, repair_days, repair_time, ll, oh, br);
     }} else {{
         // Остаемся в ремонте
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 0u);
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
     }}
     
     return flamegpu::ALIVE;
@@ -112,21 +164,34 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_5_reserve, flamegpu::MessageNone, flamegpu::Me
     // Агенты в резерве хотят в эксплуатацию
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
+    
+    // Не выполнять на шаге 0 (только инициализация MP5)
+    if (step_day == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (step_day < days_total ? step_day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
-    const unsigned int base_next = base + {MAX_FRAMES}u;
+    const unsigned int offset = idx * {MAX_DAYS + 1}u + safe_day;
+    const unsigned int offset_next = offset + 1u;
     
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
-    const unsigned int dt = mp5[base];
-    const unsigned int dn = (safe_day < days_total - 1u ? mp5[base_next] : 0u);
+    const unsigned int dt = mp5[offset];
+    const unsigned int dn = (safe_day < days_total - 1u ? mp5[offset_next] : 0u);
     
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
     
-    // Намерение перейти в эксплуатацию
+    // State_5: всегда хочет в эксплуатацию
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+    
+    // Логирование намерения
+    if (step_day < 5u || FLAMEGPU->getVariable<unsigned int>("aircraft_number") == 22418u) {{
+        printf("  [Step %u] AC %u: intent=2 (from reserve)\\n", 
+               step_day, FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    }}
+    
     return flamegpu::ALIVE;
 }}
 """
@@ -137,68 +202,64 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_6_storage, flamegpu::MessageNone, flamegpu::Me
     // Агенты в хранении
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int s6_started = FLAMEGPU->getVariable<unsigned int>("s6_started");
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    
+    // Не выполнять на шаге 0 (только инициализация MP5)
+    if (step_day == 0u) {{
+        return flamegpu::ALIVE;
+    }}
     
     // Обновляем MP5 данные
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (step_day < days_total ? step_day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
-    const unsigned int base_next = base + {MAX_FRAMES}u;
+    const unsigned int offset = idx * {MAX_DAYS + 1}u + safe_day;
+    const unsigned int offset_next = offset + 1u;
     
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
-    const unsigned int dt = mp5[base];
-    const unsigned int dn = (safe_day < days_total - 1u ? mp5[base_next] : 0u);
+    const unsigned int dt = mp5[offset];
+    const unsigned int dn = (safe_day < days_total - 1u ? mp5[offset_next] : 0u);
     
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
     
-    // Если агент изначально был в статусе 6, ничего не делаем
-    if (s6_started == 0u) {{
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 0u);
-        return flamegpu::ALIVE;
+    // State_6: остаемся в хранении
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
+    
+    // Логирование намерения (только для новых агентов в хранении)
+    if (s6_started == 1u && (step_day < 5u || FLAMEGPU->getVariable<unsigned int>("aircraft_number") == 22418u)) {{
+        printf("  [Step %u] AC %u: intent=6 (storage)\\n", 
+               step_day, FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
     }}
     
-    // Для перешедших в статус 6 - увеличиваем счетчик дней
-    unsigned int s6_days = FLAMEGPU->getVariable<unsigned int>("s6_days");
-    const unsigned int partout_time = FLAMEGPU->getVariable<unsigned int>("partout_time");
-    
-    if (s6_days < partout_time) {{
-        s6_days++;
-        FLAMEGPU->setVariable<unsigned int>("s6_days", s6_days);
-        
-        if (s6_days >= partout_time) {{
-            FLAMEGPU->setVariable<unsigned int>("partout_trigger", 1u);
-        }}
-    }}
-    
-    // Остаемся в хранении
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 0u);
     return flamegpu::ALIVE;
 }}
 """
 
 
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
-    """Регистрирует RTC функции для всех состояний"""
+    """Регистрирует RTC функции для всех состояний с setEndState"""
     
-    # Создаем RTC функции
+    # Все функции теперь с setEndState для корректной работы
     funcs = [
-        ("rtc_state_1_inactive", RTC_STATE_1_INACTIVE, "inactive"),
-        ("rtc_state_3_serviceable", RTC_STATE_3_SERVICEABLE, "serviceable"),
-        ("rtc_state_4_repair", RTC_STATE_4_REPAIR, "repair"),
-        ("rtc_state_5_reserve", RTC_STATE_5_RESERVE, "reserve"),
-        ("rtc_state_6_storage", RTC_STATE_6_STORAGE, "storage")
+        ("rtc_state_1_inactive", RTC_STATE_1_INACTIVE, "inactive", "inactive"),  # Остаётся
+        ("rtc_state_3_serviceable", RTC_STATE_3_SERVICEABLE, "serviceable", "serviceable"),  # Остаётся  
+        ("rtc_state_4_repair", RTC_STATE_4_REPAIR, "repair", None),  # Условные переходы внутри
+        ("rtc_state_5_reserve", RTC_STATE_5_RESERVE, "reserve", "reserve"),  # Остаётся
+        ("rtc_state_6_storage", RTC_STATE_6_STORAGE, "storage", "storage")  # Остаётся
     ]
     
-    for func_name, func_code, state_name in funcs:
+    for func_name, func_code, state_name, end_state in funcs:
         try:
             # Создаем RTC функцию
             rtc_func = agent.newRTCFunction(func_name, func_code)
             
             # Устанавливаем состояние для функции
             rtc_func.setInitialState(state_name)
-            rtc_func.setEndState(state_name)  # Не меняем состояние
+            # ВАЖНО: всегда устанавливаем setEndState, иначе агенты уйдут в inactive
+            if not end_state:
+                end_state = state_name  # Остаются в том же состоянии
+            rtc_func.setEndState(end_state)
             
             # Создаем слой для функции
             layer = model.newLayer()

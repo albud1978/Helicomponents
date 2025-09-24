@@ -1,0 +1,7 @@
+
+Запустить тест на 5 дней? (y/n): Traceback (most recent call last):
+  File "/home/budnik_an/cube_linux/cube/code/sim_v2/test_rtc_functions.py", line 82, in <module>
+    main()
+  File "/home/budnik_an/cube_linux/cube/code/sim_v2/test_rtc_functions.py", line 67, in main
+    response = input(f"\nЗапустить тест на {days} дней? (y/n): ")
+EOFError: EOF when reading a line

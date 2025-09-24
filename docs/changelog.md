@@ -393,7 +393,29 @@
 - Экспорт чата: docs/last_chat_export_18-08-2025.md
 - Важные файлы: `code/flame_macroproperty2_exporter.py`, `code/flame_gpu_transform_runner.py`, `code/flame_gpu_gpu_runner.py`, `code/digital_values_dictionary_creator.py`, `code/utils/cleanup_dictionaries.py`, `code/transform_master.py`
 
-# Changelog - История изменений проекта
+# Changelog
+
+## [24-09-2025] - Intent-based State Management Architecture
+### Добавлено
+- Концепция `intent_state` для разделения логики намерений и переходов
+- RTC функции для каждого состояния (state_1 до state_6)
+- Тестовый state manager для перехода 2→4
+- Документация архитектуры в `rtc_pipeline_architecture.md`
+
+### Изменено
+- Переход от монолитных RTC к модульной архитектуре состояний
+- Все RTC функции теперь устанавливают `intent_state` вместо прямого изменения состояния
+- Использование `setInitialState`/`setEndState` для правильной работы FLAME GPU States
+
+### Исправлено
+- Проблема с возвратом всех агентов в inactive состояние
+- Корректная загрузка OH из MP1 с использованием `mp1_index`
+- Устранение двойного умножения OH на 60 (значения в MP1 уже в минутах)
+
+### Технические детали
+- `intent_state` обязателен для установки в каждой RTC функции
+- State Manager выполняется в отдельном слое после всех RTC состояний
+- Детерминированные переходы применяются сразу, квотированные - планируются к реализации - История изменений проекта
 **Последнее обновление:** 04-09-2025
 ## [04-09-2025] - Разрыв цикла Extract: D1 precheck после FL и утилита очистки
 ### Добавлено

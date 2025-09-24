@@ -48,6 +48,8 @@ class V2Orchestrator:
         
         # Подключаем RTC модули
         for module_name in rtc_modules:
+            if module_name == 'mp5_probe':
+                continue  # MP5 уже обработан выше
             print(f"  Подключение модуля: {module_name}")
             self.base_model.add_rtc_module(module_name)
             
@@ -88,14 +90,18 @@ class V2Orchestrator:
         # Получаем MP1 данные для OH
         mp1_arrays = self.env_data.get('mp1_arrays', {})
         mp1_partseqno = mp1_arrays.get('partseqno_i', [])
-        mp1_oh_mi8 = mp1_arrays.get('oh_mi8', [])
-        mp1_oh_mi17 = mp1_arrays.get('oh_mi17', [])
+        # OH берём из верхнего уровня env_data как в sim_master
+        mp1_oh_mi8 = self.env_data.get('mp1_oh_mi8', [])
+        mp1_oh_mi17 = self.env_data.get('mp1_oh_mi17', [])
         
         # Индекс кадров
         frames_index = self.env_data.get('frames_index', {})
         
         # Предварительно вычисляем LL/OH/BR по кадрам
         ll_by_frame, oh_by_frame, br_by_frame = self._build_norms_by_frame()
+        
+        # Отладка: проверяем значения OH по умолчанию
+        print(f"[DEBUG] Примеры oh_by_frame (первые 10): {oh_by_frame[:10]}")
         
         # Создаем популяции для каждого состояния
         populations = {
@@ -179,35 +185,54 @@ class V2Orchestrator:
             agent.setVariableUInt("sne", agent_data['sne'])
             agent.setVariableUInt("ppr", agent_data['ppr'])
             agent.setVariableUInt("repair_days", agent_data['repair_days'])
-            agent.setVariableUInt("group_by", agent_data['group_by'])
-            agent.setVariableUInt("partseqno_i", agent_data['partseqno_i'])
-            
-            # Определяем OH из MP1 (приоритет oh_mi8/oh_mi17 > 0)
+            gb = agent_data.get('group_by', 0)
             partseqno = agent_data.get('partseqno_i', 0)
+            agent.setVariableUInt("group_by", gb)
+            agent.setVariableUInt("partseqno_i", partseqno)
+            
+            # OH берём из MP1 по типу вертолёта
             oh_value = oh_by_frame[i]  # Значение по умолчанию
             
-            if partseqno > 0 and mp1_partseqno:
-                # Ищем в MP1
-                try:
-                    idx_in_mp1 = mp1_partseqno.index(partseqno)
-                    oh_mi8 = int(mp1_oh_mi8[idx_in_mp1]) if idx_in_mp1 < len(mp1_oh_mi8) else 0
-                    oh_mi17 = int(mp1_oh_mi17[idx_in_mp1]) if idx_in_mp1 < len(mp1_oh_mi17) else 0
-                    
-                    # Берем ненулевое значение (минуты -> часы)
-                    if oh_mi8 > 0:
-                        oh_value = oh_mi8 * 60
-                    elif oh_mi17 > 0:
-                        oh_value = oh_mi17 * 60
-                except ValueError:
-                    pass  # partseqno не найден в MP1
+            # Используем mp1_index как в sim_master
+            mp1_index = self.env_data.get('mp1_index', {})
+            pidx = mp1_index.get(partseqno, -1)
+            
+            if pidx >= 0:
+                # В sim_master используется ac_type_mask, но у нас есть group_by
+                # group_by = 1 это Mi-8 (mask & 32)
+                # group_by = 2 это Mi-17 (mask & 64)
+                if gb == 1:  # Mi-8
+                    if pidx < len(mp1_oh_mi8):
+                        oh_value = int(mp1_oh_mi8[pidx] or 0)
+                elif gb == 2:  # Mi-17
+                    if pidx < len(mp1_oh_mi17):
+                        oh_value = int(mp1_oh_mi17[pidx] or 0)
             
             # Нормативы
-            agent.setVariableUInt("ll", ll_by_frame[i])
+            # LL берём из MP3 (heli_pandas)
+            ll_list = mp3.get('mp3_ll', [])
+            # Используем индекс из agent_data, который указывает на позицию в MP3
+            mp3_idx = agent_data.get('idx', -1)
+            if mp3_idx >= 0 and mp3_idx < len(ll_list):
+                ll_value = int(ll_list[mp3_idx] or 0)
+                if ll_value == 0:  # Если 0, используем значение по умолчанию
+                    ll_value = ll_by_frame[i]
+            else:
+                ll_value = ll_by_frame[i]  # значение по умолчанию
+            
+            agent.setVariableUInt("ll", ll_value)
             agent.setVariableUInt("oh", oh_value)
             agent.setVariableUInt("br", br_by_frame[i])
             
+            # Отладка для первых нескольких агентов operations
+            real_ac = agent_data.get('aircraft_number', 0)
+            if state_name == "operations":
+                mp1_idx = self.env_data.get('mp1_index', {}).get(partseqno, -1)
+                ppr_val = agent_data.get('ppr', 0)
+                sne_val = agent_data.get('sne', 0)
+                print(f"[DEBUG] AC {real_ac}: partseq={partseqno}, mp1_idx={mp1_idx}, gb={gb}, oh={oh_value}, sne={sne_val}, ppr={ppr_val}, ppr>=oh: {ppr_val >= oh_value}")
+            
             # Времена ремонта из констант
-            gb = agent_data.get('group_by', 0)
             if gb == 1:
                 agent.setVariableUInt("repair_time", self.simulation.getEnvironmentPropertyUInt("mi8_repair_time_const"))
                 agent.setVariableUInt("assembly_time", self.simulation.getEnvironmentPropertyUInt("mi8_assembly_time_const"))
@@ -231,6 +256,8 @@ class V2Orchestrator:
             # intent_state = 0 для всех (нет начальных намерений)
             agent.setVariableUInt("intent_state", 0)
         
+        # Удаляем отладочный код для AC 22417
+        
         # Загружаем популяции в симуляцию по состояниям
         for state_name, pop in populations.items():
             if len(pop) > 0:
@@ -239,13 +266,93 @@ class V2Orchestrator:
     
     def _build_norms_by_frame(self):
         """Вычисляет нормативы LL/OH/BR по кадрам"""
-        # TODO: Перенести эту логику в отдельный модуль
-        # Временно используем упрощенную версию
-        ll_by_frame = [1080000] * self.frames  # Значения по умолчанию
-        oh_by_frame = [270000] * self.frames
-        br_by_frame = [973750] * self.frames
+        ll_by_frame = [0] * self.frames
+        oh_by_frame = [0] * self.frames
+        br_by_frame = [0] * self.frames
         
-        # Можно улучшить, взяв из MP1/MP3 реальные значения
+        # Получаем данные из env_data
+        mp3_arrays = self.env_data.get('mp3_arrays', {})
+        mp1_arrays = self.env_data.get('mp1_arrays', {})
+        
+        # MP3 данные
+        ac_list = mp3_arrays.get('mp3_aircraft_number', [])
+        gb_list = mp3_arrays.get('mp3_group_by', [])
+        pseq_list = mp3_arrays.get('mp3_partseqno_i', [])
+        
+        # MP1 данные (нормативы из md_components)
+        mp1_partseqno = mp1_arrays.get('partseqno_i', [])
+        mp1_ll_mi8 = mp1_arrays.get('ll_mi8', [])
+        mp1_ll_mi17 = mp1_arrays.get('ll_mi17', [])
+        # OH берём из верхнего уровня env_data как в sim_master
+        mp1_oh_mi8 = self.env_data.get('mp1_oh_mi8', [])
+        mp1_oh_mi17 = self.env_data.get('mp1_oh_mi17', [])
+        mp1_br_mi8 = mp1_arrays.get('br_mi8', [])
+        mp1_br_mi17 = mp1_arrays.get('br_mi17', [])
+        
+        # Создаем карту partseqno -> нормативы
+        norms_map = {}
+        for i, partseq in enumerate(mp1_partseqno):
+            if i < len(mp1_ll_mi8):
+                norms_map[partseq] = {
+                    'll_mi8': mp1_ll_mi8[i] if i < len(mp1_ll_mi8) else 0,
+                    'll_mi17': mp1_ll_mi17[i] if i < len(mp1_ll_mi17) else 0,
+                    'oh_mi8': mp1_oh_mi8[i] if i < len(mp1_oh_mi8) else 0,
+                    'oh_mi17': mp1_oh_mi17[i] if i < len(mp1_oh_mi17) else 0,
+                    'br_mi8': mp1_br_mi8[i] if i < len(mp1_br_mi8) else 0,
+                    'br_mi17': mp1_br_mi17[i] if i < len(mp1_br_mi17) else 0,
+                }
+        
+        # Индекс кадров
+        frames_index = self.env_data.get('frames_index', {})
+        
+        # Заполняем нормативы для каждого frame
+        for i in range(self.frames):
+            # Находим aircraft_number для этого frame
+            ac = 0
+            gb = 0
+            partseq = 0
+            
+            # Ищем в frames_index
+            for aircraft_number, frame_idx in frames_index.items():
+                if frame_idx == i:
+                    ac = aircraft_number
+                    # Находим group_by и partseqno для этого AC в MP3
+                    for j, mp3_ac in enumerate(ac_list):
+                        if int(mp3_ac or 0) == ac and j < len(gb_list):
+                            gb_val = int(gb_list[j] or 0)
+                            if gb_val in [1, 2]:  # Только планеры
+                                gb = gb_val
+                                partseq = int(pseq_list[j] or 0) if j < len(pseq_list) else 0
+                                break
+                    break
+            
+            # Получаем нормативы из карты
+            if partseq in norms_map:
+                norms = norms_map[partseq]
+                if gb == 1:  # Mi-8
+                    ll_by_frame[i] = norms['ll_mi8']
+                    oh_by_frame[i] = norms['oh_mi8']
+                    br_by_frame[i] = norms['br_mi8']
+                elif gb == 2:  # Mi-17
+                    ll_by_frame[i] = norms['ll_mi17']
+                    oh_by_frame[i] = norms['oh_mi17']
+                    br_by_frame[i] = norms['br_mi17']
+            
+            # Значения по умолчанию если не нашли
+            if ll_by_frame[i] == 0:
+                if gb == 1:  # Mi-8
+                    ll_by_frame[i] = 1080000
+                    oh_by_frame[i] = 270000
+                    br_by_frame[i] = 973750
+                elif gb == 2:  # Mi-17
+                    ll_by_frame[i] = 1800000
+                    oh_by_frame[i] = 270000
+                    br_by_frame[i] = 1551121
+                else:  # По умолчанию как Mi-8
+                    ll_by_frame[i] = 1080000
+                    oh_by_frame[i] = 270000
+                    br_by_frame[i] = 973750
+        
         return ll_by_frame, oh_by_frame, br_by_frame
     
     def _add_mp5_init_layer(self):
@@ -296,18 +403,21 @@ class V2Orchestrator:
             pop = fg.AgentVector(self.base_model.agent)
             self.simulation.getPopulationData(pop, state_name)
             
+            print(f"  Извлечено {len(pop)} агентов из состояния '{state_name}'")
+            
             for i in range(len(pop)):
                 agent = pop[i]
                 results.append({
                     'idx': agent.getVariableUInt("idx"),
                     'aircraft_number': agent.getVariableUInt("aircraft_number"),
-                    'status_id': status_id,  # Восстанавливаем из state
+                    'status_id': agent.getVariableUInt("status_id"),  # Читаем из агента
                     'state': state_name,
                     'sne': agent.getVariableUInt("sne"),
                     'ppr': agent.getVariableUInt("ppr"),
                     'daily_today': agent.getVariableUInt("daily_today_u32"),
                     'daily_next': agent.getVariableUInt("daily_next_u32"),
-                    'intent_state': agent.getVariableUInt("intent_state")
+                    'intent_state': agent.getVariableUInt("intent_state"),
+                    'repair_days': agent.getVariableUInt("repair_days")
                 })
         
         # Сортируем по idx для удобства
@@ -363,7 +473,7 @@ def main():
     print(f"  Статусы: {dict(sorted(status_counts.items()))}")
     
     # Примеры агентов по состояниям
-    print(f"\n  Примеры по состояниям (idx, state, st, intent, sne, ppr, dt, dn):")
+    print(f"\n  Примеры по состояниям (idx, state, st, intent, sne, ppr, repair_days, dt, dn):")
     
     # Группируем по состояниям
     by_state = {}
@@ -376,8 +486,8 @@ def main():
     # Выводим по 2 примера из каждого состояния
     for state, agents in sorted(by_state.items()):
         print(f"\n  {state} ({len(agents)} агентов):")
-        for r in agents[:2]:
-            print(f"    {r['idx']}: st={r['status_id']}, intent={r.get('intent_state', '?')}, sne={r['sne']}, ppr={r['ppr']}, dt={r['daily_today']}, dn={r['daily_next']}")
+        for r in agents[:10]:
+            print(f"    {r['idx']}: AC {r['aircraft_number']}, st={r['status_id']}, intent={r.get('intent_state', '?')}, sne={r['sne']}, ppr={r['ppr']}, rd={r.get('repair_days', 0)}, dt={r['daily_today']}, dn={r['daily_next']}")
     
     return 0
 
