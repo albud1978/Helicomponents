@@ -412,6 +412,20 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         first = _date(D.year, D.month, 1)
         month_first_u32.append(days_to_epoch_u16(first))
 
+    # Создаем mp1_arrays для удобства использования в orchestrator
+    mp1_arrays = {
+        'partseqno_i': keys_sorted,  # Отсортированные partseqno_i из mp1_index
+        'br_mi8': mp1_br8,
+        'br_mi17': mp1_br17,
+        'repair_time': mp1_rt,
+        'partout_time': mp1_pt,
+        'assembly_time': mp1_at,
+        'oh_mi8': mp1_oh8_arr,
+        'oh_mi17': mp1_oh17_arr,
+        'll_mi8': [0] * len(keys_sorted),  # TODO: добавить загрузку ll_mi8
+        'll_mi17': mp1_ll17_arr,
+    }
+
     env_data = {
         'version_date_u16': days_to_epoch_u16(vdate),
         'frames_total_u16': int(frames_total),
@@ -438,6 +452,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mp1_oh_mi17': mp1_oh17_arr,
         'mp1_ll_mi17': mp1_ll17_arr,
         'mp1_index': mp1_index,
+        'mp1_arrays': mp1_arrays,  # Добавляем сгруппированные mp1 данные
         'mp3_arrays': mp3_arrays,
         'mp3_count': len(mp3_rows),
     }

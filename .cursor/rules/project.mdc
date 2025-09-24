@@ -25,7 +25,10 @@ alwaysApply: true
 - MP5 держать в `MacroProperty mp5_lin[MAX_SIZE]` с фиксированным MAX_SIZE; инициализация ТОЛЬКО через HostFunction до первых RTC.
 - Запрет записи в `mp5_lin` после начала чтения агентами. RTC копирование запрещено.
 - Размеры MacroProperty: MAX_FRAMES определяется из данных MP3/MP5, MAX_DAYS=4000, MAX_SIZE=MAX_FRAMES*(MAX_DAYS+1).
-- **OH при создании**: Значения oh (overhaul hours) определять при создании агентов из MP1 по group_by, НЕ в RTC.
+- **OH при создании**: Значения oh (overhaul hours) определять при создании агентов из MP1 по group_by, НЕ в RTC. OH в MP1 уже хранится в минутах, умножать на 60 НЕ НАДО!
+  - Использовать `mp1_index` для получения индекса: `pidx = mp1_index.get(partseqno, -1)`
+  - Для Mi-8 (group_by=1): брать из `mp1_oh_mi8[pidx]`
+  - Для Mi-17 (group_by=2): брать из `mp1_oh_mi17[pidx]`
 - **Assembly trigger при создании**: Для агентов в статусе 4 проверять `repair_time - repair_days > assembly_time` и устанавливать `assembly_trigger = 1` если условие выполнено.
 - **State-based архитектура**: Использовать FLAME GPU States вместо переменной status_id.
 - **Отдельные RTC функции**: Каждое состояние имеет свою RTC функцию для модульности.

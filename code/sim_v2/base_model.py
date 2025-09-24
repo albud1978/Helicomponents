@@ -136,6 +136,8 @@ class V2BaseModel:
         agent.newVariableUInt("assembly_time", 180)
         agent.newVariableUInt("repair_days", 0)
         agent.newVariableUInt("assembly_trigger", 0)
+        agent.newVariableUInt("active_trigger", 0)
+        agent.newVariableUInt("mfg_date", 0)  # Дата производства для приоритизации
         
         # MP5 данные (текущий/следующий день)
         agent.newVariableUInt("daily_today_u32", 0)
@@ -143,8 +145,6 @@ class V2BaseModel:
         
         # Временные счетчики для state_6
         agent.newVariableUInt("s6_days", 0)
-        agent.newVariableUInt("partout_time", 180)
-        agent.newVariableUInt("partout_trigger", 0)
         
         # Квоты (если включены)
         if os.environ.get('HL_ENABLE_QUOTAS', '0') == '1':
@@ -155,14 +155,53 @@ class V2BaseModel:
     def add_rtc_module(self, module_name: str):
         """Динамически подключает RTC модуль по имени"""
         try:
-            # Импортируем модуль
-            module = __import__(f'rtc_{module_name}', fromlist=['register_rtc'])
-            
-            # Регистрируем RTC функции и слои
-            if hasattr(module, 'register_rtc'):
-                module.register_rtc(self.model, self.agent)
+            # Специальная обработка для некоторых модулей
+            if module_name == "mp5_probe":
+                # MP5 обрабатывается отдельно в orchestrator
+                pass
+                
+            elif module_name == "state_2_operations":
+                import rtc_state_2_operations
+                rtc_state_2_operations.register_rtc(self.model, self.agent)
+                
+            elif module_name == "states_stub":
+                import rtc_states_stub
+                rtc_states_stub.register_rtc(self.model, self.agent)
+                
+            elif module_name == "state_manager":
+                import rtc_state_manager
+                layer = self.model.newLayer()
+                rtc_state_manager.register_state_manager_simple(self.model, self.agent, layer)
+                
+            elif module_name == "state_manager_v2":
+                import rtc_state_manager_v2
+                rtc_state_manager_v2.register_state_manager_v2(self.model, self.agent)
+                
+            elif module_name == "state_manager_intermediate":
+                import rtc_state_manager_intermediate
+                rtc_state_manager_intermediate.register_state_manager_intermediate(self.model, self.agent)
+                
+            elif module_name == "state_manager_conditional":
+                import rtc_state_manager_conditional
+                rtc_state_manager_conditional.register_state_manager_conditional(self.model, self.agent)
+                
+            elif module_name == "state_manager_test":
+                import rtc_state_manager_test
+                rtc_state_manager_test.register_state_manager_test(self.model, self.agent)
+                
+            elif module_name == "state_manager_full":
+                import rtc_state_manager_full
+                rtc_state_manager_full.register_state_manager_full(self.model, self.agent)
+                
             else:
-                raise ValueError(f"Модуль rtc_{module_name} не содержит функцию register_rtc")
+                # Стандартная обработка для других модулей
+                module = __import__(f'rtc_{module_name}', fromlist=['register_rtc'])
+                
+                # Регистрируем RTC функции и слои
+                if hasattr(module, 'register_rtc'):
+                    module.register_rtc(self.model, self.agent)
+                else:
+                    raise ValueError(f"Модуль rtc_{module_name} не содержит функцию register_rtc")
                 
         except ImportError as e:
             raise RuntimeError(f"Не удалось загрузить RTC модуль '{module_name}': {e}")
