@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import argparse
+import datetime
 from typing import Dict, List
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -30,7 +31,10 @@ class V2Orchestrator:
         
         # Параметры из окружения
         self.frames = int(env_data['frames_total_u16'])
-        self.days = int(os.environ.get('HL_V2_STEPS', '90'))
+        # Берем реальное количество дней из данных MP5
+        self.days = int(env_data.get('days_total_u16', 90))
+        # Базовая дата (ord) для вычисления календарного дня
+        self.version_date_ord = int(env_data.get('version_date_u16', 0))
         
     def build_model(self, rtc_modules: List[str]):
         """Строит модель с указанными RTC модулями"""
@@ -39,17 +43,14 @@ class V2Orchestrator:
         # Создаем базовую модель
         self.model = self.base_model.create_model(self.env_data)
         
-        # Если есть MP5 модуль, добавляем слой инициализации первым
-        if 'mp5_probe' in rtc_modules:
-            self._add_mp5_init_layer()
+        # MP5 всегда инициализируется, так как используется в функциях состояний
+        self._add_mp5_init_layer()
         
         # Создаем слой для обработки состояний
         state_layer = self.model.newLayer('state_processing')
         
         # Подключаем RTC модули
         for module_name in rtc_modules:
-            if module_name == 'mp5_probe':
-                continue  # MP5 уже обработан выше
             print(f"  Подключение модуля: {module_name}")
             self.base_model.add_rtc_module(module_name)
             
@@ -100,8 +101,7 @@ class V2Orchestrator:
         # Предварительно вычисляем LL/OH/BR по кадрам
         ll_by_frame, oh_by_frame, br_by_frame = self._build_norms_by_frame()
         
-        # Отладка: проверяем значения OH по умолчанию
-        print(f"[DEBUG] Примеры oh_by_frame (первые 10): {oh_by_frame[:10]}")
+        # Отладка OH отключена (минимальный лог)
         
         # Создаем популяции для каждого состояния
         populations = {
@@ -230,7 +230,7 @@ class V2Orchestrator:
                 mp1_idx = self.env_data.get('mp1_index', {}).get(partseqno, -1)
                 ppr_val = agent_data.get('ppr', 0)
                 sne_val = agent_data.get('sne', 0)
-                print(f"[DEBUG] AC {real_ac}: partseq={partseqno}, mp1_idx={mp1_idx}, gb={gb}, oh={oh_value}, sne={sne_val}, ppr={ppr_val}, ppr>=oh: {ppr_val >= oh_value}")
+                # Отладочный вывод отключён
             
             # Времена ремонта из констант
             if gb == 1:
@@ -376,13 +376,71 @@ class V2Orchestrator:
     def run(self, steps: int):
         """Запускает симуляцию на указанное количество шагов"""
         print(f"Запуск симуляции на {steps} шагов")
-        
+
+        # Подготовка: состояния и предыдущее значение intent для operations
+        state_names = [
+            'inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage'
+        ]
+
+        def get_operations_intents():
+            pop = fg.AgentVector(self.base_model.agent)
+            self.simulation.getPopulationData(pop, 'operations')
+            result = {}
+            for i in range(len(pop)):
+                ag = pop[i]
+                idx = ag.getVariableUInt('idx')
+                intent = ag.getVariableUInt('intent_state')
+                ac = ag.getVariableUInt('aircraft_number')
+                sne = ag.getVariableUInt('sne')
+                ppr = ag.getVariableUInt('ppr')
+                dt = ag.getVariableUInt('daily_today_u32')
+                dn = ag.getVariableUInt('daily_next_u32')
+                ll = ag.getVariableUInt('ll')
+                oh = ag.getVariableUInt('oh')
+                br = ag.getVariableUInt('br')
+                result[idx] = (intent, ac, sne, ppr, dt, dn, ll, oh, br)
+            return result
+
+        def print_step_state_counts(step_index: int):
+            counts = {}
+            for s in state_names:
+                pop = fg.AgentVector(self.base_model.agent)
+                self.simulation.getPopulationData(pop, s)
+                counts[s] = len(pop)
+            print(f"  Step {step_index}: counts "
+                  f"inactive={counts['inactive']}, operations={counts['operations']}, "
+                  f"serviceable={counts['serviceable']}, repair={counts['repair']}, "
+                  f"reserve={counts['reserve']}, storage={counts['storage']}")
+
+        prev_ops_intent = get_operations_intents()
+
         for step in range(steps):
             self.simulation.step()
-            
-            # Логирование прогресса каждые 10 шагов
-            if step % 10 == 0 or step == steps - 1:
-                print(f"  Шаг {step+1}/{steps}")
+
+            # Сводка по состояниям на каждом шаге
+            print_step_state_counts(step + 1)
+
+            # Логи изменений intent в operations на значения != 2
+            curr_ops_intent = get_operations_intents()
+            for idx, vals in curr_ops_intent.items():
+                new_intent, ac, sne, ppr, dt, dn, ll, oh, br = vals
+                old_vals = prev_ops_intent.get(idx, (None, ac, None, None, None, None, None, None, None))
+                old_intent, _ac_old, sne_old, ppr_old, dt_old, dn_old, _ll_old, _oh_old, _br_old = old_vals
+                if new_intent != 2 and new_intent != old_intent:
+                    # Прогноз на завтра должен основываться на значениях ДО шага: p_next=ppr_old+dn_old; s_next=sne_old+dn_old
+                    s_next = (sne_old + dn_old) if sne_old is not None and dn_old is not None else None
+                    p_next = (ppr_old + dn_old) if ppr_old is not None and dn_old is not None else None
+                    # Дата перехода: day_abs = version_date_u16 + day_u16, где day_u16 = step+1
+                    base_date = datetime.date(1970, 1, 1)
+                    day_abs = int(self.version_date_ord) + (step + 1)
+                    date_str = (base_date + datetime.timedelta(days=day_abs)).isoformat()
+                    print(
+                        f"  [Day {step+1} | date={date_str}] AC {ac} idx={idx}: "
+                        f"intent {old_intent}->{new_intent} (operations) "
+                        f"sne={sne}, ppr={ppr}, dt={dt}, dn={dn}, s_next={s_next}, p_next={p_next}, "
+                        f"ll={ll}, oh={oh}, br={br}"
+                    )
+            prev_ops_intent = curr_ops_intent
     
     def get_results(self):
         """Извлекает результаты симуляции из всех состояний"""
@@ -399,25 +457,27 @@ class V2Orchestrator:
         }
         
         # Извлекаем агентов из каждого состояния
-        for state_name, status_id in state_to_status.items():
+        for state_name in state_to_status.keys():
             pop = fg.AgentVector(self.base_model.agent)
             self.simulation.getPopulationData(pop, state_name)
             
-            print(f"  Извлечено {len(pop)} агентов из состояния '{state_name}'")
+            # Подробный вывод по извлечению отключен
             
             for i in range(len(pop)):
                 agent = pop[i]
                 results.append({
                     'idx': agent.getVariableUInt("idx"),
                     'aircraft_number': agent.getVariableUInt("aircraft_number"),
-                    'status_id': agent.getVariableUInt("status_id"),  # Читаем из агента
                     'state': state_name,
                     'sne': agent.getVariableUInt("sne"),
                     'ppr': agent.getVariableUInt("ppr"),
                     'daily_today': agent.getVariableUInt("daily_today_u32"),
                     'daily_next': agent.getVariableUInt("daily_next_u32"),
                     'intent_state': agent.getVariableUInt("intent_state"),
-                    'repair_days': agent.getVariableUInt("repair_days")
+                    'repair_days': agent.getVariableUInt("repair_days"),
+                    'll': agent.getVariableUInt("ll"),
+                    'oh': agent.getVariableUInt("oh"),
+                    'br': agent.getVariableUInt("br")
                 })
         
         # Сортируем по idx для удобства
@@ -459,35 +519,10 @@ def main():
     steps = args.steps or orchestrator.days
     orchestrator.run(steps)
     
-    # Получаем и выводим результаты
-    results = orchestrator.get_results()
-    
-    # Выводим сводку
-    status_counts = {}
-    for r in results:
-        st = r['status_id']
-        status_counts[st] = status_counts.get(st, 0) + 1
-    
-    print(f"\nРезультаты симуляции:")
-    print(f"  Всего агентов: {len(results)}")
-    print(f"  Статусы: {dict(sorted(status_counts.items()))}")
-    
-    # Примеры агентов по состояниям
-    print(f"\n  Примеры по состояниям (idx, state, st, intent, sne, ppr, repair_days, dt, dn):")
-    
-    # Группируем по состояниям
-    by_state = {}
-    for r in results:
-        state = r.get('state', 'unknown')
-        if state not in by_state:
-            by_state[state] = []
-        by_state[state].append(r)
-    
-    # Выводим по 2 примера из каждого состояния
-    for state, agents in sorted(by_state.items()):
-        print(f"\n  {state} ({len(agents)} агентов):")
-        for r in agents[:10]:
-            print(f"    {r['idx']}: AC {r['aircraft_number']}, st={r['status_id']}, intent={r.get('intent_state', '?')}, sne={r['sne']}, ppr={r['ppr']}, rd={r.get('repair_days', 0)}, dt={r['daily_today']}, dn={r['daily_next']}")
+    # Получаем результаты (без подробного печатного вывода)
+    _ = orchestrator.get_results()
+    # Итоговую сводку по состояниям не печатаем — по требованию выводим только
+    # поминутные/помесячные сводки по шагам и переходы intent в operations
     
     return 0
 
