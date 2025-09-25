@@ -144,6 +144,35 @@ MP5 probe для чтения часов работы и сброс флагов
 5. **Профили выполнения**: Предустановленные конфигурации для разных сценариев
 
 
+## MP2 Device-side Export (добавлено 25-09-2025)
+
+В V2 архитектуре реализован device-side экспорт данных для оптимизации производительности:
+
+### Архитектура MP2
+
+1. **MacroProperty MP2**: набор массивов на GPU для хранения снимков состояния агентов
+   - Кольцевой буфер на 400 дней (MP2_RING_DAYS)
+   - Поля: day, idx, aircraft_number, state, intent_state, sne, ppr, repair_days, dt, dn
+   - Запись через `exchange()` операцию в RTC функциях
+
+2. **RTC функции записи**: пишут данные напрямую из GPU без копирования на CPU
+   - Отдельные функции для каждого состояния (rtc_mp2_write_inactive, rtc_mp2_write_operations, etc.)
+   - Гарантируют корректную запись текущего state агента
+   - Выполняются в конце каждого шага симуляции
+
+3. **Host функция дренажа**: периодически выгружает накопленные данные в ClickHouse
+   - Интервал дренажа: 365 дней (оптимально для батчинга)
+   - Размер батча: 250000 записей
+   - Таблица: sim_masterv2
+   - Автоматическое создание таблицы при первом запуске
+
+4. **Тайминги выполнения** (как в sim_master):
+   - Загрузка модели и данных - время подготовки данных из ClickHouse
+   - Обработка на GPU - общее время выполнения всех шагов симуляции
+     - в т.ч. выгрузка в СУБД (параллельно) - время всех операций дренажа MP2
+   - Общее время выполнения - от начала до конца работы скрипта
+   - Среднее время на шаг - расчетная метрика производительности
+
 ## Инвентаризация Env (Mode A + Spawn, MP2=off)
 
 - **Property (скаляры)**
@@ -418,3 +447,29 @@ auto mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_SIZE}u>("mp
 const unsigned int value = mp[base];
 ```
 Примечание: `${MAX_FRAMES}` и `${MAX_SIZE}` подставляются при генерации RTC кода из Python.
+
+## Обновления архитектуры (25-09-2025)
+
+### Реализованные компоненты V2
+1. **rtc_state_2_operations**: Полная логика для operations с переходами 2→2, 2→4, 2→6
+2. **state_manager_operations**: Трехслойный менеджер переходов с RTC conditions
+3. **Корректная индексация MP5**: `step_day * MAX_FRAMES + idx` синхронизирована везде
+4. **Intent consistency**: Гарантированная установка intent_state на всех шагах
+
+### Формат логирования V2
+```
+# Пошаговая сводка
+Step N: counts inactive=X, operations=Y, serviceable=Z, repair=A, reserve=B, storage=C
+
+# Детальные изменения intent (для operations)
+[Day N | date=YYYY-MM-DD] AC 12345 idx=5: intent 2->4 (operations) sne=X, ppr=Y, dt=A, dn=B, s_next=C, p_next=D, ll=E, oh=F, br=G
+
+# Переходы состояний
+[Step N] AC 12345: TRANSITION operations -> repair (intent=4), sne=X, oh=Y, br=Z
+[Step N] AC 12345: TRANSITION operations -> storage (intent=6), sne=X, ppr=Y, ll=Z, oh=A, br=B
+```
+
+### Статистика переходов за 3650 дней
+- operations → repair: 90 переходов (условие: ppr ≥ oh AND sne < br)
+- operations → storage: 62 перехода (57 по BR, 5 по LL)
+- Финальное распределение: operations=2, repair=97, storage=62
