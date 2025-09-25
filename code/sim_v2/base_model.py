@@ -157,8 +157,9 @@ class V2BaseModel:
         try:
             # Специальная обработка для некоторых модулей
             if module_name == "mp5_probe":
-                # MP5 обрабатывается отдельно в orchestrator
-                pass
+                # Регистрируем RTC функцию чтения MP5
+                import rtc_mp5_probe
+                rtc_mp5_probe.register_rtc(self.model, self.agent)
                 
             elif module_name == "state_2_operations":
                 import rtc_state_2_operations

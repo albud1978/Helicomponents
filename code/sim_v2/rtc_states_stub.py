@@ -23,19 +23,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_1_inactive, flamegpu::MessageNone, flamegpu::M
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     
-    // Не выполнять на шаге 0 (только инициализация MP5)
-    if (step_day == 0u) {{
-        return flamegpu::ALIVE;
-    }}
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (step_day < days_total ? step_day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int offset = idx * {MAX_DAYS + 1}u + safe_day;
-    const unsigned int offset_next = offset + 1u;
+    // Читаем MP5 всегда, даже на шаге 0
+    const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
+    const unsigned int base_next = base + {MAX_FRAMES}u;
     
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
-    const unsigned int dt = mp5[offset];
-    const unsigned int dn = (safe_day < days_total - 1u ? mp5[offset_next] : 0u);
+    const unsigned int dt = mp5[base];
+    const unsigned int dn = (safe_day < days_total - 1u ? mp5[base_next] : 0u);
     
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
@@ -51,6 +48,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_1_inactive, flamegpu::MessageNone, flamegpu::M
     }} else {{
         FLAMEGPU->setVariable<unsigned int>("intent_state", 1u);
     }}
+    // Полное логирование состояния inactive
+    {{
+        const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+        printf("  [Step %u] AC %u: state=inactive, intent=%u, dt=%u, dn=%u\\n", step_day, ac, intent, dt, dn);
+    }}
     
     return flamegpu::ALIVE;
 }}
@@ -63,31 +66,31 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_3_serviceable, flamegpu::MessageNone, flamegpu
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     
-    // Не выполнять на шаге 0 (только инициализация MP5)
+    // На шаге 0 не выполняем переходы, но intent должен быть задан явно
     if (step_day == 0u) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
         return flamegpu::ALIVE;
     }}
     
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (step_day < days_total ? step_day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int offset = idx * {MAX_DAYS + 1}u + safe_day;
-    const unsigned int offset_next = offset + 1u;
+    const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
+    const unsigned int base_next = base + {MAX_FRAMES}u;
     
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
-    const unsigned int dt = mp5[offset];
-    const unsigned int dn = (safe_day < days_total - 1u ? mp5[offset_next] : 0u);
+    const unsigned int dt = mp5[base];
+    const unsigned int dn = (safe_day < days_total - 1u ? mp5[base_next] : 0u);
     
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
     
     // State_3: всегда хочет в эксплуатацию
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-    
-    // Логирование намерения
-    if (step_day < 5u || FLAMEGPU->getVariable<unsigned int>("aircraft_number") == 22418u) {{
-        printf("  [Step %u] AC %u: intent=2 (from serviceable)\\n", 
-               step_day, FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    // Полное логирование состояния serviceable
+    {{
+        const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        printf("  [Step %u] AC %u: state=serviceable, intent=2, dt=%u, dn=%u\\n", step_day, ac, dt, dn);
     }}
     
     return flamegpu::ALIVE;
@@ -101,20 +104,21 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     
-    // Не выполнять на шаге 0 (только инициализация MP5)
+    // На шаге 0 не выполняем переходы, но intent должен быть задан явно
     if (step_day == 0u) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
         return flamegpu::ALIVE;
     }}
     
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (step_day < days_total ? step_day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int offset = idx * {MAX_DAYS + 1}u + safe_day;
-    const unsigned int offset_next = offset + 1u;
+    const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
+    const unsigned int base_next = base + {MAX_FRAMES}u;
     
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
-    const unsigned int dt = mp5[offset];
-    const unsigned int dn = (safe_day < days_total - 1u ? mp5[offset_next] : 0u);
+    const unsigned int dt = mp5[base];
+    const unsigned int dn = (safe_day < days_total - 1u ? mp5[base_next] : 0u);
     
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
@@ -152,6 +156,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
     }} else {{
         // Остаемся в ремонте
         FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
+        // Полное логирование состояния repair (продолжается)
+        {{
+            const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+            printf("  [Step %u] AC %u: state=repair, intent=4, rd=%u, dt=%u, dn=%u\\n", step_day, ac, repair_days, dt, dn);
+        }}
     }}
     
     return flamegpu::ALIVE;
@@ -165,31 +174,31 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_5_reserve, flamegpu::MessageNone, flamegpu::Me
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     
-    // Не выполнять на шаге 0 (только инициализация MP5)
+    // На шаге 0 не выполняем переходы, но intent должен быть задан явно
     if (step_day == 0u) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
         return flamegpu::ALIVE;
     }}
     
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (step_day < days_total ? step_day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int offset = idx * {MAX_DAYS + 1}u + safe_day;
-    const unsigned int offset_next = offset + 1u;
+    const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
+    const unsigned int base_next = base + {MAX_FRAMES}u;
     
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
-    const unsigned int dt = mp5[offset];
-    const unsigned int dn = (safe_day < days_total - 1u ? mp5[offset_next] : 0u);
+    const unsigned int dt = mp5[base];
+    const unsigned int dn = (safe_day < days_total - 1u ? mp5[base_next] : 0u);
     
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
     
     // State_5: всегда хочет в эксплуатацию
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-    
-    // Логирование намерения
-    if (step_day < 5u || FLAMEGPU->getVariable<unsigned int>("aircraft_number") == 22418u) {{
-        printf("  [Step %u] AC %u: intent=2 (from reserve)\\n", 
-               step_day, FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    // Полное логирование состояния reserve
+    {{
+        const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        printf("  [Step %u] AC %u: state=reserve, intent=2, dt=%u, dn=%u\\n", step_day, ac, dt, dn);
     }}
     
     return flamegpu::ALIVE;
@@ -204,8 +213,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_6_storage, flamegpu::MessageNone, flamegpu::Me
     const unsigned int s6_started = FLAMEGPU->getVariable<unsigned int>("s6_started");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     
-    // Не выполнять на шаге 0 (только инициализация MP5)
+    // На шаге 0 не выполняем переходы, но intent должен быть задан явно
     if (step_day == 0u) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
         return flamegpu::ALIVE;
     }}
     
@@ -213,12 +223,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_6_storage, flamegpu::MessageNone, flamegpu::Me
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (step_day < days_total ? step_day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int offset = idx * {MAX_DAYS + 1}u + safe_day;
-    const unsigned int offset_next = offset + 1u;
+    const unsigned int base = safe_day * {MAX_FRAMES}u + idx;
+    const unsigned int base_next = base + {MAX_FRAMES}u;
     
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}u>("mp5_lin");
-    const unsigned int dt = mp5[offset];
-    const unsigned int dn = (safe_day < days_total - 1u ? mp5[offset_next] : 0u);
+    const unsigned int dt = mp5[base];
+    const unsigned int dn = (safe_day < days_total - 1u ? mp5[base_next] : 0u);
     
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
@@ -226,10 +236,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_6_storage, flamegpu::MessageNone, flamegpu::Me
     // State_6: остаемся в хранении
     FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
     
-    // Логирование намерения (только для новых агентов в хранении)
-    if (s6_started == 1u && (step_day < 5u || FLAMEGPU->getVariable<unsigned int>("aircraft_number") == 22418u)) {{
-        printf("  [Step %u] AC %u: intent=6 (storage)\\n", 
-               step_day, FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    // Полное логирование состояния storage
+    {{
+        const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        printf("  [Step %u] AC %u: state=storage, intent=6, dt=%u, dn=%u\\n", step_day, ac, dt, dn);
     }}
     
     return flamegpu::ALIVE;

@@ -29,8 +29,20 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     
-    // Не выполнять на шаге 0
+    // Получаем суточный налёт из MP5 (всегда, даже на шаге 0)
+    const unsigned int base = step_day * {MAX_FRAMES} + idx;
+    const unsigned int base_next = base + {MAX_FRAMES};
+    auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}>("mp5_lin");
+    const unsigned int dt = mp5[base];
+    const unsigned int dn = (step_day < {MAX_DAYS} - 1u) ? mp5[base_next] : 0u;
+    
+    // Обновляем MP5 в агенте
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
+    FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
+    
+    // На шаге 0 не выполняем переходы, но intent должен быть задан явно
     if (step_day == 0u) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
         return flamegpu::ALIVE;
     }}
     
@@ -41,16 +53,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     
-    // Получаем суточный налёт из MP5
-    const unsigned int offset = idx * {MAX_DAYS + 1} + step_day;
-    auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}>("mp5_lin");
-    const unsigned int dt = mp5[offset];
-    const unsigned int dn = (step_day < {MAX_DAYS} - 1u) ? mp5[offset + 1] : 0u;
-    
-    // Обновляем MP5 в агенте
-    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
-    FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
-    
     // Начисляем налёт
     const unsigned int sne_new = sne + dt;
     const unsigned int ppr_new = ppr + dt;
@@ -58,15 +60,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     FLAMEGPU->setVariable<unsigned int>("ppr", ppr_new);
     
     // Отладка для первых агентов
-    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-    if (aircraft_number == 22171u || aircraft_number == 22172u) {{
-        printf("  [DEBUG Step %u] AC %u: sne=%u, ppr=%u, oh=%u, br=%u, ll=%u, dt=%u, dn=%u\\n", 
-               step_day, aircraft_number, sne, ppr, oh, br, ll, dt, dn);
-    }}
+    // DEBUG печать отключена
     
-    // Прогноз на завтра для условий переходов (как в sim_master)
-    const unsigned int s_next = sne_new + dn;
-    const unsigned int p_next = ppr_new + dn;
+    // Прогноз на завтра для условий переходов (без сегодняшнего dt)
+    const unsigned int s_next = sne + dn;
+    const unsigned int p_next = ppr + dn;
     
     // ПРИОРИТЕТ проверок:
     // 1. Сначала проверяем LL
