@@ -120,6 +120,7 @@ class V2BaseModel:
         
         # Новая переменная для intent-based архитектуры
         agent.newVariableUInt("intent_state", 0)
+        agent.newVariableUInt("prev_intent_state", 0)  # Для детекции переходов в MP2
         
         # Наработки
         agent.newVariableUInt("sne", 0)
@@ -193,6 +194,10 @@ class V2BaseModel:
             elif module_name == "state_manager_full":
                 import rtc_state_manager_full
                 rtc_state_manager_full.register_state_manager_full(self.model, self.agent)
+                
+            elif module_name == "state_manager_operations":
+                import rtc_state_manager_operations
+                rtc_state_manager_operations.register_state_manager_operations(self.model, self.agent)
                 
             else:
                 # Стандартная обработка для других модулей

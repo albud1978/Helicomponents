@@ -7,6 +7,7 @@ import sys
 import json
 import argparse
 import datetime
+import time
 from typing import Dict, List
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -23,7 +24,7 @@ except ImportError as e:
 class V2Orchestrator:
     """Оркестратор для управления модульной симуляцией"""
     
-    def __init__(self, env_data: Dict[str, object]):
+    def __init__(self, env_data: Dict[str, object], enable_mp2: bool = False, clickhouse_client = None):
         self.env_data = env_data
         self.base_model = V2BaseModel()
         self.model = None
@@ -35,6 +36,11 @@ class V2Orchestrator:
         self.days = int(env_data.get('days_total_u16', 90))
         # Базовая дата (ord) для вычисления календарного дня
         self.version_date_ord = int(env_data.get('version_date_u16', 0))
+        
+        # MP2 параметры
+        self.enable_mp2 = enable_mp2
+        self.clickhouse_client = clickhouse_client
+        self.mp2_drain_func = None
         
     def build_model(self, rtc_modules: List[str]):
         """Строит модель с указанными RTC модулями"""
@@ -54,6 +60,12 @@ class V2Orchestrator:
             print(f"  Подключение модуля: {module_name}")
             self.base_model.add_rtc_module(module_name)
             
+        # Добавляем MP2 writer если включен
+        if self.enable_mp2:
+            print("  Подключение MP2 device-side export")
+            import rtc_mp2_writer
+            self.mp2_drain_func = rtc_mp2_writer.register_mp2_writer(self.model, self.base_model.agent, self.clickhouse_client)
+        
         return self.model
     
     def create_simulation(self):
@@ -376,6 +388,7 @@ class V2Orchestrator:
     def run(self, steps: int):
         """Запускает симуляцию на указанное количество шагов"""
         print(f"Запуск симуляции на {steps} шагов")
+        
 
         # Подготовка: состояния и предыдущее значение intent для operations
         state_names = [
@@ -419,6 +432,8 @@ class V2Orchestrator:
 
             # Сводка по состояниям на каждом шаге
             print_step_state_counts(step + 1)
+            
+            # MP2 дренаж выполняется автоматически через зарегистрированную host функцию
 
             # Логи изменений intent в operations на значения != 2
             curr_ops_intent = get_operations_intents()
@@ -499,15 +514,26 @@ def main():
                       help='Список RTC модулей для подключения')
     parser.add_argument('--steps', type=int, default=None,
                       help='Количество шагов симуляции (по умолчанию из HL_V2_STEPS)')
+    parser.add_argument('--enable-mp2', action='store_true',
+                      help='Включить MP2 device-side export')
+    parser.add_argument('--mp2-drain-interval', type=int, default=30,
+                      help='Интервал дренажа MP2 (шаги)')
     args = parser.parse_args()
+    
+    # Начало общего времени
+    t_total_start = time.perf_counter()
     
     # Загружаем данные
     print("Загрузка данных из ClickHouse...")
+    t_data_start = time.perf_counter()
     client = get_client()
     env_data = prepare_env_arrays(client)
+    t_data_load = time.perf_counter() - t_data_start
+    print(f"  Данные загружены за {t_data_load:.2f}с")
     
-    # Создаем оркестратор
-    orchestrator = V2Orchestrator(env_data)
+    # Создаем оркестратор с поддержкой MP2
+    orchestrator = V2Orchestrator(env_data, enable_mp2=args.enable_mp2,
+                                  clickhouse_client=client if args.enable_mp2 else None)
     
     # Строим модель с указанными модулями
     orchestrator.build_model(args.modules)
@@ -515,9 +541,31 @@ def main():
     # Создаем симуляцию
     orchestrator.create_simulation()
     
+    # Замеряем время GPU обработки
+    t_gpu_start = time.perf_counter()
+    
     # Запускаем симуляцию
     steps = args.steps or orchestrator.days
     orchestrator.run(steps)
+    
+    t_gpu_total = time.perf_counter() - t_gpu_start
+    
+    # Получаем время дренажа если MP2 включен
+    t_db_total = 0.0
+    if args.enable_mp2 and orchestrator.mp2_drain_func:
+        t_db_total = orchestrator.mp2_drain_func.total_drain_time
+    
+    # Общее время
+    t_total = time.perf_counter() - t_total_start
+    
+    # Выводим статистику по таймингам
+    print(f"\n=== Тайминги выполнения ===")
+    print(f"Загрузка модели и данных: {t_data_load:.2f}с")
+    print(f"Обработка на GPU: {t_gpu_total:.2f}с")
+    if args.enable_mp2:
+        print(f"  - в т.ч. выгрузка в СУБД: {t_db_total:.2f}с (параллельно)")
+    print(f"Общее время выполнения: {t_total:.2f}с")
+    print(f"Среднее время на шаг: {t_gpu_total/args.steps*1000:.1f}мс")
     
     # Получаем результаты (без подробного печатного вывода)
     _ = orchestrator.get_results()
