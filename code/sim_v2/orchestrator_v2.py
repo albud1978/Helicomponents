@@ -351,11 +351,11 @@ class V2Orchestrator:
                 if gb == 1:  # Mi-8
                     ll_by_frame[i] = 1080000
                     oh_by_frame[i] = 270000
-                    br_by_frame[i] = 973750
+                    br_by_frame[i] = 973750  # BR для Mi-8
                 elif gb == 2:  # Mi-17
                     ll_by_frame[i] = 1800000
                     oh_by_frame[i] = 270000
-                    br_by_frame[i] = 1551121
+                    br_by_frame[i] = 973750  # BR для Mi-17 (из данных)
                 else:  # По умолчанию как Mi-8
                     ll_by_frame[i] = 1080000
                     oh_by_frame[i] = 270000
@@ -384,6 +384,10 @@ class V2Orchestrator:
     def run(self, steps: int):
         """Запускает симуляцию на указанное количество шагов"""
         print(f"Запуск симуляции на {steps} шагов")
+        
+        # Обновляем количество шагов в MP2 drain функции
+        if self.mp2_drain_func:
+            self.mp2_drain_func.simulation_steps = steps
         
 
         # Подготовка: состояния и предыдущее значение intent для operations

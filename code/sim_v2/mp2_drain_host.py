@@ -10,17 +10,13 @@ class MP2DrainHostFunction(fg.HostFunction):
     """Host функция для батчевой выгрузки MP2 с GPU в СУБД"""
     
     def __init__(self, client, table_name: str = 'sim_masterv2', 
-                 ring_days: int = 400, batch_size: int = 250000,
-                 drain_interval: int = 365, simulation_steps: int = 365):
+                 batch_size: int = 250000, simulation_steps: int = 365):
         super().__init__()
         self.client = client
         self.table_name = table_name
-        self.ring_days = ring_days
         self.batch_size = batch_size
-        self.drain_interval = drain_interval
         self.simulation_steps = simulation_steps
         self.batch = []
-        self.last_drain_step = -1
         self.total_rows_written = 0
         self.total_drain_time = 0.0
         
@@ -67,24 +63,17 @@ class MP2DrainHostFunction(fg.HostFunction):
         self.client.execute(ddl)
         
     def run(self, FLAMEGPU):
-        """Выполняется после каждого шага симуляции"""
+        """Выполняет финальный дренаж MP2 в конце симуляции"""
         step = FLAMEGPU.getStepCounter()
         
-        # Дренаж по расписанию или на последнем шаге
-        should_drain = (
-            (step > 0 and step % self.drain_interval == 0) or
-            (step == self.simulation_steps - 1) or
-            (step > self.last_drain_step + self.ring_days - 50)  # Защита от переполнения кольца (400-50=350 дней)
-        )
-        
-        if should_drain:
+        # Дренаж только на последнем шаге
+        if step == self.simulation_steps - 1:
             t_start = time.perf_counter()
             rows_drained = self._drain_mp2(FLAMEGPU, step)
             t_elapsed = time.perf_counter() - t_start
             
             self.total_drain_time += t_elapsed
             self.total_rows_written += rows_drained
-            self.last_drain_step = step
             
             # Логирование MP2 drain отключено
             
@@ -95,15 +84,11 @@ class MP2DrainHostFunction(fg.HostFunction):
         version_date = FLAMEGPU.environment.getPropertyUInt("version_date")
         version_id = 0  # FLAMEGPU.environment.getPropertyUInt("version_id") если будет добавлено
         
-        # Определяем диапазон дней для выгрузки
-        start_day = max(0, self.last_drain_step + 1)
-        end_day = min(current_step + 1, start_day + self.ring_days)
-        
-        if start_day >= end_day:
-            return 0
+        # Финальный дренаж - выгружаем все дни
+        start_day = 0
+        end_day = current_step + 1
             
         # Читаем MacroProperty массивы
-        mp2_size = frames * self.ring_days
         
         # Получаем данные с GPU через environment
         mp2_day = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_day_u16")
@@ -122,15 +107,16 @@ class MP2DrainHostFunction(fg.HostFunction):
         
         # Собираем батч
         for day in range(start_day, end_day):
-            ring_offset = (day % self.ring_days) * frames
+            # Прямая адресация в плотной матрице
+            day_offset = day * frames
             day_date = base_date + timedelta(days=version_date + day)
             
             for idx in range(frames):
-                pos = ring_offset + idx
+                pos = day_offset + idx
                 
-                # Проверяем актуальность данных в кольце и исключаем пустые записи
+                # Проверяем aircraft_number > 0 для исключения пустых слотов
                 aircraft_number = int(mp2_aircraft[pos])
-                if int(mp2_day[pos]) == day and aircraft_number > 0:
+                if aircraft_number > 0:
                     row = (
                         version_date,
                         version_id,
