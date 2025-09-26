@@ -48,12 +48,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_1_inactive, flamegpu::MessageNone, flamegpu::M
     }} else {{
         FLAMEGPU->setVariable<unsigned int>("intent_state", 1u);
     }}
-    // Полное логирование состояния inactive
-    {{
-        const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-        printf("  [Step %u] AC %u: state=inactive, intent=%u, dt=%u, dn=%u\\n", step_day, ac, intent, dt, dn);
-    }}
+    // Логирование отключено для inactive
     
     return flamegpu::ALIVE;
 }}
@@ -87,11 +82,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_3_serviceable, flamegpu::MessageNone, flamegpu
     
     // State_3: всегда хочет в эксплуатацию
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-    // Полное логирование состояния serviceable
-    {{
-        const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [Step %u] AC %u: state=serviceable, intent=2, dt=%u, dn=%u\\n", step_day, ac, dt, dn);
-    }}
+    // Логирование отключено для serviceable
     
     return flamegpu::ALIVE;
 }}
@@ -142,9 +133,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
         // Переход в резерв
         FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
         
-        // Сброс счетчиков при переходе
-        FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
-        FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 0u);
+        // НЕ сбрасываем счетчики здесь - это делает state_manager
         
         // Логирование перехода
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -156,11 +145,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
     }} else {{
         // Остаемся в ремонте
         FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
-        // Полное логирование состояния repair (продолжается)
-        {{
-            const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-            printf("  [Step %u] AC %u: state=repair, intent=4, rd=%u, dt=%u, dn=%u\\n", step_day, ac, repair_days, dt, dn);
-        }}
+        // Логирование отключено для repair (продолжается)
     }}
     
     return flamegpu::ALIVE;
@@ -195,11 +180,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_5_reserve, flamegpu::MessageNone, flamegpu::Me
     
     // State_5: всегда хочет в эксплуатацию
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-    // Полное логирование состояния reserve
-    {{
-        const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [Step %u] AC %u: state=reserve, intent=2, dt=%u, dn=%u\\n", step_day, ac, dt, dn);
-    }}
+    // Логирование отключено для reserve
     
     return flamegpu::ALIVE;
 }}
@@ -236,11 +217,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_6_storage, flamegpu::MessageNone, flamegpu::Me
     // State_6: остаемся в хранении
     FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
     
-    // Полное логирование состояния storage
-    {{
-        const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [Step %u] AC %u: state=storage, intent=6, dt=%u, dn=%u\\n", step_day, ac, dt, dn);
-    }}
+    // Логирование отключено для storage
     
     return flamegpu::ALIVE;
 }}

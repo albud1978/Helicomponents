@@ -199,6 +199,10 @@ class V2BaseModel:
                 import rtc_state_manager_operations
                 rtc_state_manager_operations.register_state_manager_operations(self.model, self.agent)
                 
+            elif module_name == "state_manager_repair":
+                import rtc_state_manager_repair
+                rtc_state_manager_repair.register_state_manager_repair(self.model, self.agent)
+                
             else:
                 # Стандартная обработка для других модулей
                 module = __import__(f'rtc_{module_name}', fromlist=['register_rtc'])

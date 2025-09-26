@@ -172,16 +172,12 @@ class V2Orchestrator:
             if i >= first_reserved_idx:
                 continue
                 
+            # Пропускаем индексы без реальных агентов
+            if i not in records_by_frame:
+                continue
+                
             # Берем данные для этого frame_idx
-            agent_data = records_by_frame.get(i, {
-                'aircraft_number': 0,
-                'status_id': 1,  # По умолчанию inactive
-                'sne': 0,
-                'ppr': 0,
-                'repair_days': 0,
-                'group_by': 0,
-                'partseqno_i': 0
-            })
+            agent_data = records_by_frame[i]
             
             # Определяем состояние и добавляем агента
             status_id = agent_data['status_id']
@@ -430,8 +426,7 @@ class V2Orchestrator:
         for step in range(steps):
             self.simulation.step()
 
-            # Сводка по состояниям на каждом шаге
-            print_step_state_counts(step + 1)
+            # Сводка по состояниям отключена
             
             # MP2 дренаж выполняется автоматически через зарегистрированную host функцию
 
