@@ -7,10 +7,10 @@ import pyflamegpu as fg
 def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, clickhouse_client=None):
     """Регистрирует RTC функции для записи в MP2 и host функцию для дренажа"""
     
-    # Получаем MAX_FRAMES из модели
+    # Получаем MAX_FRAMES и DAYS из модели
     MAX_FRAMES = model.Environment().getPropertyUInt("frames_total")
-    MP2_RING_DAYS = 400  # Увеличено с 30 до 400 дней для редких дренажей
-    MP2_SIZE = MAX_FRAMES * MP2_RING_DAYS
+    MAX_DAYS = model.Environment().getPropertyUInt("days_total")
+    MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Плотная матрица с D+1 паддингом
     
     # Основные колонки MP2
     model.Environment().newMacroPropertyUInt("mp2_day_u16", MP2_SIZE)
@@ -41,8 +41,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_snapshot, flamegpu::MessageNone, flamegpu:
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
-    // Кольцевая адресация
-    const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
+    // Прямая адресация в плотной матрице
+    const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
     // Получаем MacroProperty массивы
     auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
@@ -57,9 +57,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_snapshot, flamegpu::MessageNone, flamegpu:
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
     // Записываем данные агента
-    mp2_day[ring_pos].exchange(step_day);
-    mp2_idx[ring_pos].exchange(idx);
-    mp2_aircraft[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    mp2_day[pos].exchange(step_day);
+    mp2_idx[pos].exchange(idx);
+    mp2_aircraft[pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
     
     // Маппинг текущего состояния в число
     // В V2 это определяется через getState(), но пока используем переменную
@@ -74,13 +74,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_snapshot, flamegpu::MessageNone, flamegpu:
     else if (intent == 5u) current_state = 5u; // reserve
     else if (intent == 6u) current_state = 6u; // storage
     
-    mp2_state[ring_pos].exchange(current_state);
-    mp2_intent[ring_pos].exchange(intent);
-    mp2_sne[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
-    mp2_ppr[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
-    mp2_repair_days[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_dt[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
-    mp2_dn[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    mp2_state[pos].exchange(current_state);
+    mp2_intent[pos].exchange(intent);
+    mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
+    mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     return flamegpu::ALIVE;
 }}
@@ -146,10 +146,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
+    const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
-    mp2_state[ring_pos].exchange(1u); // 1 = inactive
+    mp2_state[pos].exchange(1u); // 1 = inactive
     
     // Записываем остальные поля
     auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
@@ -162,15 +162,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    mp2_day[ring_pos].exchange(step_day);
-    mp2_idx[ring_pos].exchange(idx);
-    mp2_aircraft[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
-    mp2_intent[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_sne[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
-    mp2_ppr[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
-    mp2_repair_days[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_dt[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
-    mp2_dn[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    mp2_day[pos].exchange(step_day);
+    mp2_idx[pos].exchange(idx);
+    mp2_aircraft[pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
+    mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
+    mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     return flamegpu::ALIVE;
 }}
@@ -189,10 +189,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
+    const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
-    mp2_state[ring_pos].exchange(2u); // 2 = operations
+    mp2_state[pos].exchange(2u); // 2 = operations
     
     // Остальные поля
     auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
@@ -205,15 +205,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    mp2_day[ring_pos].exchange(step_day);
-    mp2_idx[ring_pos].exchange(idx);
-    mp2_aircraft[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
-    mp2_intent[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_sne[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
-    mp2_ppr[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
-    mp2_repair_days[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_dt[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
-    mp2_dn[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    mp2_day[pos].exchange(step_day);
+    mp2_idx[pos].exchange(idx);
+    mp2_aircraft[pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
+    mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
+    mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     return flamegpu::ALIVE;
 }}
@@ -232,10 +232,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
+    const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
-    mp2_state[ring_pos].exchange(4u); // 4 = repair
+    mp2_state[pos].exchange(4u); // 4 = repair
     
     // Остальные поля (код такой же)
     auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
@@ -248,15 +248,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    mp2_day[ring_pos].exchange(step_day);
-    mp2_idx[ring_pos].exchange(idx);
-    mp2_aircraft[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
-    mp2_intent[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_sne[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
-    mp2_ppr[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
-    mp2_repair_days[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_dt[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
-    mp2_dn[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    mp2_day[pos].exchange(step_day);
+    mp2_idx[pos].exchange(idx);
+    mp2_aircraft[pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
+    mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
+    mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     return flamegpu::ALIVE;
 }}
@@ -275,10 +275,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
+    const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
-    mp2_state[ring_pos].exchange(6u); // 6 = storage
+    mp2_state[pos].exchange(6u); // 6 = storage
     
     // Остальные поля (код такой же)
     auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
@@ -291,15 +291,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    mp2_day[ring_pos].exchange(step_day);
-    mp2_idx[ring_pos].exchange(idx);
-    mp2_aircraft[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
-    mp2_intent[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_sne[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
-    mp2_ppr[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
-    mp2_repair_days[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_dt[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
-    mp2_dn[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    mp2_day[pos].exchange(step_day);
+    mp2_idx[pos].exchange(idx);
+    mp2_aircraft[pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
+    mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
+    mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     return flamegpu::ALIVE;
 }}
@@ -318,10 +318,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
+    const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
-    mp2_state[ring_pos].exchange(3u); // 3 = serviceable
+    mp2_state[pos].exchange(3u); // 3 = serviceable
     
     // Остальные поля
     auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
@@ -334,15 +334,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    mp2_day[ring_pos].exchange(step_day);
-    mp2_idx[ring_pos].exchange(idx);
-    mp2_aircraft[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
-    mp2_intent[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_sne[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
-    mp2_ppr[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
-    mp2_repair_days[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_dt[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
-    mp2_dn[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    mp2_day[pos].exchange(step_day);
+    mp2_idx[pos].exchange(idx);
+    mp2_aircraft[pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
+    mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
+    mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     return flamegpu::ALIVE;
 }}
@@ -361,10 +361,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
+    const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
-    mp2_state[ring_pos].exchange(5u); // 5 = reserve
+    mp2_state[pos].exchange(5u); // 5 = reserve
     
     // Остальные поля
     auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
@@ -377,15 +377,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    mp2_day[ring_pos].exchange(step_day);
-    mp2_idx[ring_pos].exchange(idx);
-    mp2_aircraft[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
-    mp2_intent[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_sne[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
-    mp2_ppr[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
-    mp2_repair_days[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_dt[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
-    mp2_dn[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    mp2_day[pos].exchange(step_day);
+    mp2_idx[pos].exchange(idx);
+    mp2_aircraft[pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
+    mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
+    mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     return flamegpu::ALIVE;
 }}
@@ -410,13 +410,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     if clickhouse_client is not None:
         from mp2_drain_host import MP2DrainHostFunction
         
-        # Создаем host функцию с правильными параметрами
+        # Создаем host функцию для финального дренажа
         mp2_drain = MP2DrainHostFunction(
             client=clickhouse_client,
             table_name='sim_masterv2',
-            ring_days=MP2_RING_DAYS,
             batch_size=250000,
-            drain_interval=365,  # Дренаж раз в год вместо каждые 30 дней
             simulation_steps=365  # Будет обновлено в orchestrator
         )
         
