@@ -97,12 +97,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     // 3. Остаёмся в operations
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
     
-    // Логирование для агентов, остающихся в operations на поздних шагах
-    if (step_day >= 3640u) {{
-        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [Step %u] AC %u: staying in operations, sne=%u, ppr=%u, dt=%u, dn=%u, ll=%u, oh=%u, br=%u\\n", 
-               step_day, aircraft_number, sne_new, ppr_new, dt, dn, ll, oh, br);
-    }}
+    // Логирование агентов, остающихся в operations, отключено
     
     // Побочные эффекты (side effects)
     // 1. Если active_trigger=1, сбрасываем в 0

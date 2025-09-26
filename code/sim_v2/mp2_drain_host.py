@@ -86,7 +86,7 @@ class MP2DrainHostFunction(fg.HostFunction):
             self.total_rows_written += rows_drained
             self.last_drain_step = step
             
-            print(f"  MP2 drain at step {step}: {rows_drained} rows in {t_elapsed:.2f}s")
+            # Логирование MP2 drain отключено
             
     def _drain_mp2(self, FLAMEGPU, current_step: int) -> int:
         """Выгружает MP2 данные с GPU"""
@@ -128,8 +128,9 @@ class MP2DrainHostFunction(fg.HostFunction):
             for idx in range(frames):
                 pos = ring_offset + idx
                 
-                # Проверяем актуальность данных в кольце
-                if int(mp2_day[pos]) == day:
+                # Проверяем актуальность данных в кольце и исключаем пустые записи
+                aircraft_number = int(mp2_aircraft[pos])
+                if int(mp2_day[pos]) == day and aircraft_number > 0:
                     row = (
                         version_date,
                         version_id,

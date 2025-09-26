@@ -89,6 +89,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_snapshot, flamegpu::MessageNone, flamegpu:
     # RTC функция записи событий переходов
     rtc_write_event = agent.newRTCFunction("rtc_mp2_write_event", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_event, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Пропускаем агентов с aircraft_number=0 (запас под спавн)
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    if (aircraft_number == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
     // Детектируем переход состояний
     const unsigned int prev_intent = FLAMEGPU->getVariable<unsigned int>("prev_intent_state");
     const unsigned int curr_intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
@@ -132,6 +138,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_event, flamegpu::MessageNone, flamegpu::Me
     # Функция записи для inactive
     rtc_write_inactive = agent.newRTCFunction("rtc_mp2_write_inactive", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Пропускаем агентов с aircraft_number=0 (запас под спавн)
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    if (aircraft_number == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
@@ -169,6 +181,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     # Аналогично для operations (state=2)
     rtc_write_operations = agent.newRTCFunction("rtc_mp2_write_operations", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Пропускаем агентов с aircraft_number=0 (запас под спавн)
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    if (aircraft_number == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
@@ -206,6 +224,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     # repair (state=4)
     rtc_write_repair = agent.newRTCFunction("rtc_mp2_write_repair", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Пропускаем агентов с aircraft_number=0 (запас под спавн)
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    if (aircraft_number == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
@@ -240,12 +264,143 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     rtc_write_repair.setInitialState("repair")
     rtc_write_repair.setEndState("repair")
     
+    # storage (state=6)
+    rtc_write_storage = agent.newRTCFunction("rtc_mp2_write_storage", f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Пропускаем агентов с aircraft_number=0 (запас под спавн)
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    if (aircraft_number == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
+    
+    auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
+    mp2_state[ring_pos].exchange(6u); // 6 = storage
+    
+    // Остальные поля (код такой же)
+    auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
+    auto mp2_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_idx");
+    auto mp2_aircraft = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_aircraft_number");
+    auto mp2_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_intent_state");
+    auto mp2_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_sne");
+    auto mp2_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ppr");
+    auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_repair_days");
+    auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
+    auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
+    
+    mp2_day[ring_pos].exchange(step_day);
+    mp2_idx[ring_pos].exchange(idx);
+    mp2_aircraft[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    mp2_intent[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
+    mp2_sne[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    mp2_ppr[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
+    mp2_repair_days[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+    mp2_dt[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    mp2_dn[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    
+    return flamegpu::ALIVE;
+}}
+""")
+    rtc_write_storage.setInitialState("storage")
+    rtc_write_storage.setEndState("storage")
+    
+    # serviceable (state=3)
+    rtc_write_serviceable = agent.newRTCFunction("rtc_mp2_write_serviceable", f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Пропускаем агентов с aircraft_number=0 (запас под спавн)
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    if (aircraft_number == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
+    
+    auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
+    mp2_state[ring_pos].exchange(3u); // 3 = serviceable
+    
+    // Остальные поля
+    auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
+    auto mp2_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_idx");
+    auto mp2_aircraft = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_aircraft_number");
+    auto mp2_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_intent_state");
+    auto mp2_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_sne");
+    auto mp2_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ppr");
+    auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_repair_days");
+    auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
+    auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
+    
+    mp2_day[ring_pos].exchange(step_day);
+    mp2_idx[ring_pos].exchange(idx);
+    mp2_aircraft[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    mp2_intent[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
+    mp2_sne[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    mp2_ppr[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
+    mp2_repair_days[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+    mp2_dt[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    mp2_dn[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    
+    return flamegpu::ALIVE;
+}}
+""")
+    rtc_write_serviceable.setInitialState("serviceable")
+    rtc_write_serviceable.setEndState("serviceable")
+    
+    # reserve (state=5)
+    rtc_write_reserve = agent.newRTCFunction("rtc_mp2_write_reserve", f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Пропускаем агентов с aircraft_number=0 (запас под спавн)
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    if (aircraft_number == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int ring_pos = (step_day % {MP2_RING_DAYS}u) * {MAX_FRAMES}u + idx;
+    
+    auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
+    mp2_state[ring_pos].exchange(5u); // 5 = reserve
+    
+    // Остальные поля
+    auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
+    auto mp2_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_idx");
+    auto mp2_aircraft = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_aircraft_number");
+    auto mp2_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_intent_state");
+    auto mp2_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_sne");
+    auto mp2_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ppr");
+    auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_repair_days");
+    auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
+    auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
+    
+    mp2_day[ring_pos].exchange(step_day);
+    mp2_idx[ring_pos].exchange(idx);
+    mp2_aircraft[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    mp2_intent[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
+    mp2_sne[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    mp2_ppr[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
+    mp2_repair_days[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
+    mp2_dt[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    mp2_dn[ring_pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    
+    return flamegpu::ALIVE;
+}}
+""")
+    rtc_write_reserve.setInitialState("reserve")
+    rtc_write_reserve.setEndState("reserve")
+    
     # Слой записи снимков (после всех state transitions)
     layer_snapshot = model.newLayer("mp2_write_snapshot")
     layer_snapshot.addAgentFunction(rtc_write_inactive)
     layer_snapshot.addAgentFunction(rtc_write_operations)
+    layer_snapshot.addAgentFunction(rtc_write_serviceable)
     layer_snapshot.addAgentFunction(rtc_write_repair)
-    # TODO: Добавить serviceable, reserve, storage
+    layer_snapshot.addAgentFunction(rtc_write_reserve)
+    layer_snapshot.addAgentFunction(rtc_write_storage)
     
     # Слой записи событий (после снимков)
     layer_events = model.newLayer("mp2_write_events")
@@ -268,7 +423,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
         # Регистрируем host функцию в отдельном слое после всех RTC функций
         layer_drain = model.newLayer("mp2_drain_to_db")
         layer_drain.addHostFunction(mp2_drain)
-        print("  MP2 drain host функция зарегистрирована")
+        # MP2 drain host функция зарегистрирована
         
         # Возвращаем ссылку на drain функцию для доступа к статистике
         return mp2_drain
