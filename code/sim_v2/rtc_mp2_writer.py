@@ -79,8 +79,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_snapshot, flamegpu::MessageNone, flamegpu:
     mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
     mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
     mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
-    mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
+    // Read dt/dn directly from MP5 MacroProperty
+    const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    const unsigned int base = step_day * {MAX_FRAMES}u + idx;
+    const unsigned int base_next = base + {MAX_FRAMES}u;
+    auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp5_lin");
+    const unsigned int dt = mp5[base];
+    const unsigned int dn = (step_day < days_total - 1u ? mp5[base_next] : 0u);
+    mp2_dt[pos].exchange(dt);
+    mp2_dn[pos].exchange(dn);
     
     return flamegpu::ALIVE;
 }}
