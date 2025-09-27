@@ -52,6 +52,8 @@ class V2BaseModel:
     def _setup_scalar_properties(self, env_data: Dict[str, object]):
         """Настройка скалярных свойств окружения"""
         self.env.newPropertyUInt("version_date", int(env_data['version_date_u16']))
+        # Идентификатор версии симуляции
+        self.env.newPropertyUInt("version_id", int(env_data.get('version_id_u32', 0)))
         self.env.newPropertyUInt("frames_total", int(env_data['frames_total_u16']))
         self.env.newPropertyUInt("days_total", int(env_data['days_total_u16']))
         
@@ -202,6 +204,10 @@ class V2BaseModel:
             elif module_name == "state_manager_repair":
                 import rtc_state_manager_repair
                 rtc_state_manager_repair.register_state_manager_repair(self.model, self.agent)
+            
+            elif module_name == "state_manager_storage":
+                import rtc_state_manager_storage
+                rtc_state_manager_storage.register_state_manager_storage(self.model, self.agent)
                 
             else:
                 # Стандартная обработка для других модулей

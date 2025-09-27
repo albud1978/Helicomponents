@@ -428,6 +428,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
 
     env_data = {
         'version_date_u16': days_to_epoch_u16(vdate),
+        'version_id_u32': int(vid),
         'frames_total_u16': int(frames_total),
         'days_total_u16': int(len(days_sorted)),
         'days_sorted': days_sorted,

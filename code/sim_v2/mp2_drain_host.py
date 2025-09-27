@@ -82,7 +82,7 @@ class MP2DrainHostFunction(fg.HostFunction):
         # В Host функции доступ к environment через FLAMEGPU.environment
         frames = FLAMEGPU.environment.getPropertyUInt("frames_total")
         version_date = FLAMEGPU.environment.getPropertyUInt("version_date")
-        version_id = 0  # FLAMEGPU.environment.getPropertyUInt("version_id") если будет добавлено
+        version_id = FLAMEGPU.environment.getPropertyUInt("version_id")
         
         # Финальный дренаж - выгружаем все дни
         start_day = 0

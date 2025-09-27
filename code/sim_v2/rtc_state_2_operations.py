@@ -62,9 +62,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     // Отладка для первых агентов
     // DEBUG печать отключена
     
-    // Прогноз на завтра для условий переходов (без сегодняшнего dt)
-    const unsigned int s_next = sne + dn;
-    const unsigned int p_next = ppr + dn;
+    // Прогноз на завтра для условий переходов: учитываем сегодняшний dt
+    const unsigned int s_next = sne_new + dn;
+    const unsigned int p_next = ppr_new + dn;
     
     // ПРИОРИТЕТ проверок:
     // 1. Сначала проверяем LL

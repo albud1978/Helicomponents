@@ -78,6 +78,8 @@ class V2Orchestrator:
         # Заполняем окружение
         sim = self.simulation
         sim.setEnvironmentPropertyUInt("version_date", int(self.env_data['version_date_u16']))
+        if 'version_id_u32' in self.env_data:
+            sim.setEnvironmentPropertyUInt("version_id", int(self.env_data['version_id_u32']))
         sim.setEnvironmentPropertyUInt("frames_total", self.frames)
         sim.setEnvironmentPropertyUInt("days_total", self.days)
         
@@ -312,9 +314,11 @@ class V2Orchestrator:
         
         # Индекс кадров
         frames_index = self.env_data.get('frames_index', {})
+        # Начало зарезервированной области под будущий спавн — эти кадры пропускаем
+        first_reserved_idx = int(self.env_data.get('first_reserved_idx', self.frames))
         
-        # Заполняем нормативы для каждого frame
-        for i in range(self.frames):
+        # Заполняем нормативы только для реальных кадров (без зарезервированных)
+        for i in range(first_reserved_idx):
             # Находим aircraft_number для этого frame
             ac = 0
             gb = 0
@@ -334,32 +338,39 @@ class V2Orchestrator:
                                 break
                     break
             
-            # Получаем нормативы из карты
-            if partseq in norms_map:
-                norms = norms_map[partseq]
-                if gb == 1:  # Mi-8
-                    ll_by_frame[i] = norms['ll_mi8']
-                    oh_by_frame[i] = norms['oh_mi8']
-                    br_by_frame[i] = norms['br_mi8']
-                elif gb == 2:  # Mi-17
-                    ll_by_frame[i] = norms['ll_mi17']
-                    oh_by_frame[i] = norms['oh_mi17']
-                    br_by_frame[i] = norms['br_mi17']
-            
-            # Значения по умолчанию если не нашли
-            if ll_by_frame[i] == 0:
-                if gb == 1:  # Mi-8
-                    ll_by_frame[i] = 1080000
-                    oh_by_frame[i] = 270000
-                    br_by_frame[i] = 973750  # BR для Mi-8
-                elif gb == 2:  # Mi-17
-                    ll_by_frame[i] = 1800000
-                    oh_by_frame[i] = 270000
-                    br_by_frame[i] = 973750  # BR для Mi-17 (из данных)
-                else:  # По умолчанию как Mi-8
-                    ll_by_frame[i] = 1080000
-                    oh_by_frame[i] = 270000
-                    br_by_frame[i] = 973750
+            # Проверяем принадлежность к планёрам и наличие ключевых полей
+            if gb not in (1, 2) or partseq == 0:
+                raise RuntimeError(
+                    f"Отсутствуют MP1-данные для кадра i={i} (ac={ac}, group_by={gb}, partseqno_i={partseq}). "
+                    "Пайплайн остановлен: запрещены дефолтные нормативы."
+                )
+
+            # Получаем нормативы из карты (строго без дефолтов)
+            if partseq not in norms_map:
+                raise RuntimeError(
+                    f"Не найден partseqno_i={partseq} в MP1 для кадра i={i} (ac={ac}, group_by={gb}). "
+                    "Проверьте md_components.* источники."
+                )
+
+            norms = norms_map[partseq]
+            if gb == 1:  # Mi-8
+                ll_by_frame[i] = int(norms.get('ll_mi8', 0) or 0)
+                oh_by_frame[i] = int(norms.get('oh_mi8', 0) or 0)
+                br_by_frame[i] = int(norms.get('br_mi8', 0) or 0)
+                if oh_by_frame[i] == 0 or br_by_frame[i] == 0:
+                    raise RuntimeError(
+                        f"Нормативы OH/BR отсутствуют (0) для Mi-8: i={i}, ac={ac}, partseq={partseq}. "
+                        "Запрещены дефолтные значения."
+                    )
+            else:  # gb == 2, Mi-17
+                ll_by_frame[i] = int(norms.get('ll_mi17', 0) or 0)
+                oh_by_frame[i] = int(norms.get('oh_mi17', 0) or 0)
+                br_by_frame[i] = int(norms.get('br_mi17', 0) or 0)
+                if oh_by_frame[i] == 0 or br_by_frame[i] == 0:
+                    raise RuntimeError(
+                        f"Нормативы OH/BR отсутствуют (0) для Mi-17: i={i}, ac={ac}, partseq={partseq}. "
+                        "Запрещены дефолтные значения."
+                    )
         
         return ll_by_frame, oh_by_frame, br_by_frame
     
@@ -517,6 +528,8 @@ def main():
                       help='Включить MP2 device-side export')
     parser.add_argument('--mp2-drain-interval', type=int, default=30,
                       help='Интервал дренажа MP2 (шаги)')
+    parser.add_argument('--drop-table', action='store_true',
+                      help='Перед запуском дропнуть таблицу sim_masterv2 (DROP TABLE IF EXISTS)')
     args = parser.parse_args()
     
     # Начало общего времени
@@ -526,6 +539,16 @@ def main():
     print("Загрузка данных из ClickHouse...")
     t_data_start = time.perf_counter()
     client = get_client()
+    # Опционально дропаем таблицу проекта перед запуском
+    if args.drop_table:
+        try:
+            print("Удаление таблицы sim_masterv2 (DROP TABLE IF EXISTS)...")
+            client.execute("DROP TABLE IF EXISTS sim_masterv2")
+            print("  Таблица sim_masterv2 удалена (если существовала)")
+        except Exception as e:
+            print(f"  Ошибка удаления таблицы sim_masterv2: {e}")
+            raise
+
     env_data = prepare_env_arrays(client)
     t_data_load = time.perf_counter() - t_data_start
     print(f"  Данные загружены за {t_data_load:.2f}с")
