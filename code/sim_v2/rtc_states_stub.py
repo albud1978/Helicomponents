@@ -133,8 +133,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
         // Переход в резерв
         FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
         
-        // НЕ сбрасываем счетчики здесь - это делает state_manager
-        
         // Логирование перехода
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
@@ -142,6 +140,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
         const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
         printf("  [Step %u] AC %u: intent=5 (reserve), repair complete rd=%u/%u, ll=%u, oh=%u, br=%u\\n", 
                step_day, aircraft_number, repair_days, repair_time, ll, oh, br);
+
+        // Сбрасываем ppr и repair_days согласно требованию
+        FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+        FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
     }} else {{
         // Остаемся в ремонте
         FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);

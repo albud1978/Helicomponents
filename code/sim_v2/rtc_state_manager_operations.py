@@ -48,9 +48,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_4, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     
-    // При переходе в ремонт сбрасываем PPR
-    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
-    
     // Логирование перехода
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
