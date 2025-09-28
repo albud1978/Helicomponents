@@ -538,8 +538,8 @@ def main():
                       help='Количество шагов симуляции (по умолчанию из HL_V2_STEPS)')
     parser.add_argument('--enable-mp2', action='store_true',
                       help='Включить MP2 device-side export')
-    parser.add_argument('--mp2-drain-interval', type=int, default=30,
-                      help='Интервал дренажа MP2 (шаги)')
+    parser.add_argument('--mp2-drain-interval', type=int, default=0,
+                      help='Интервал дренажа MP2 (шаги). 0 = только финальный дренаж')
     parser.add_argument('--drop-table', action='store_true',
                       help='Перед запуском дропнуть таблицу sim_masterv2 (DROP TABLE IF EXISTS)')
     args = parser.parse_args()
