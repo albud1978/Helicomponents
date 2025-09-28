@@ -446,8 +446,12 @@ class V2Orchestrator:
 
         prev_ops_intent = get_operations_intents()
 
+        # Расширенная телеметрия по шагам
+        step_times = []
         for step in range(steps):
+            t0 = time.perf_counter()
             self.simulation.step()
+            step_times.append(time.perf_counter() - t0)
 
             # Сводка по состояниям отключена
             
@@ -570,6 +574,12 @@ def main():
     
     # Создаем симуляцию
     orchestrator.create_simulation()
+    # Настраиваем интервал инкрементального дренажа MP2 (если подключен)
+    if args.enable_mp2 and orchestrator.mp2_drain_func:
+        try:
+            orchestrator.mp2_drain_func.interval_days = max(0, int(args.mp2_drain_interval))
+        except Exception:
+            pass
     
     # Замеряем время GPU обработки
     t_gpu_start = time.perf_counter()
@@ -596,6 +606,24 @@ def main():
         print(f"  - в т.ч. выгрузка в СУБД: {t_db_total:.2f}с (параллельно)")
     print(f"Общее время выполнения: {t_total:.2f}с")
     print(f"Среднее время на шаг: {t_gpu_total/args.steps*1000:.1f}мс")
+    # Детализация шагов (p50/p95/max)
+    try:
+        import statistics
+        p50 = statistics.median(step_times) if 'step_times' in locals() and step_times else 0.0
+        p95 = sorted(step_times)[int(0.95*len(step_times))-1] if step_times else 0.0
+        pmax = max(step_times) if step_times else 0.0
+        print(f"Шаги: p50={p50*1000:.1f}мс, p95={p95*1000:.1f}мс, max={pmax*1000:.1f}мс")
+    except Exception:
+        pass
+    if args.enable_mp2 and orchestrator.mp2_drain_func:
+        d = orchestrator.mp2_drain_func
+        # Скорость и статистика дренажа
+        rows = getattr(d, 'total_rows_written', 0)
+        flushes = getattr(d, 'flush_count', 0)
+        t_flush = getattr(d, 'total_flush_time', 0.0)
+        max_batch = getattr(d, 'max_batch_rows', 0)
+        rps = (rows / t_db_total) if t_db_total > 0 else 0.0
+        print(f"Дренаж MP2: rows={rows}, flushes={flushes}, max_batch={max_batch}, flush_time={t_flush:.2f}с, rows/s≈{rps:,.0f}")
     
     # Получаем результаты (без подробного печатного вывода)
     _ = orchestrator.get_results()
