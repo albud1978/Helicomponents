@@ -21,9 +21,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_mark_candidates, flamegpu::MessageNone, flameg
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int day = FLAMEGPU->getStepCounter();
     
-    // Логирование для отладки на день 181
-    if (day == 181u && idx == 0u) {{
-        printf("  [QUOTA MARK Day %u] Function called for idx=0, intent=%u\\n", day, intent);
+    // Диагностика входа в фазу MARK на ключевых днях
+    if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
+        printf("  [QUOTA MARK Day %u] start\\n", day);
     }}
     
     // Исключаем только тех, кто уже помечен на технологические переходы
@@ -38,15 +38,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_mark_candidates, flamegpu::MessageNone, flameg
     if (group_by == 1u) {{
         auto mask = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
         mask[idx].exchange(1u);
-        if (day == 181u && idx < 5u) {{
-            printf("  [QUOTA MARK Day %u] Mi-8 candidate marked: idx=%u\\n", day, idx);
-        }}
+        // подробные логи отключены
     }} else if (group_by == 2u) {{
         auto mask = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
         mask[idx].exchange(1u);
-        if (day == 181u && idx < 5u) {{
-            printf("  [QUOTA MARK Day %u] Mi-17 candidate marked: idx=%u\\n", day, idx);
-        }}
+        // подробные логи отключены
     }}
     
     return flamegpu::ALIVE;
@@ -61,6 +57,19 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_state_operations) {
 }
 """
 
+    # Фаза S1: Очистка масок для всех агентов (только запись, без чтения)
+    RTC_CLEAR_MASKS = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_quota_clear_masks, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    // Без чтения значений: только атомарная очистка
+    auto mask8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
+    auto mask17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
+    mask8[idx].exchange(0u);
+    mask17[idx].exchange(0u);
+    return flamegpu::ALIVE;
+}}
+"""
+
     # Фаза S3: Применение квоты (пер-агентно, детерминированно, без idx==0)
     RTC_QUOTA_MANAGER = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -72,6 +81,17 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager, flamegpu::MessageNone, flamegpu::Mess
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int current_intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+
+    // Диагностика входа в фазу S3 на ключевых днях
+    if ((day == 180u || day == 181u || day == 182u)) {{
+        if (idx == 0u) {{
+            printf("  [QUOTA S3 ENTER Day %u] safe_day=%u\\n", day, safe_day);
+        }}
+        // Логируем первые 3 агента для понимания вызова функции
+        if (idx < 3u) {{
+            printf("  [QUOTA S3 Day %u] idx=%u, group_by=%u, intent=%u\\n", day, idx, group_by, current_intent);
+        }}
+    }}
 
     if (group_by == 1u) {{
         auto mask = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
@@ -228,6 +248,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_set_intents_bulk, flamegpu::MessageNone, flame
 
     # Регистрация слоев
     
+    # Слой S1: Очистка масок для всех состояний (функция без initial/end state)
+    layer_clear = model.newLayer("quota_clear_masks")
+    rtc_func_clear = agent.newRTCFunction("rtc_quota_clear_masks", RTC_CLEAR_MASKS)
+    rtc_func_clear.setAllowAgentDeath(False)
+    # Не задаём initial/end state, чтобы выполнить для всех агентов во всех состояниях
+    layer_clear.addAgentFunction(rtc_func_clear)
+    
     # Слой S2: Пометка кандидатов
     layer_mark = model.newLayer("quota_mark_candidates")
     rtc_func_mark = agent.newRTCFunction("rtc_quota_mark_candidates", RTC_MARK_CANDIDATES)
@@ -240,16 +267,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_set_intents_bulk, flamegpu::MessageNone, flame
     layer_manager = model.newLayer("quota_manager")
     rtc_func_manager = agent.newRTCFunction("rtc_quota_manager", RTC_QUOTA_MANAGER)
     rtc_func_manager.setAllowAgentDeath(False)
-    # Менеджер выполняется для ВСЕХ агентов (проверка idx==0 внутри)
-    # Не устанавливаем initial/end state - функция работает для всех
+    rtc_func_manager.setInitialState("operations")
+    rtc_func_manager.setEndState("operations")
     layer_manager.addAgentFunction(rtc_func_manager)
     
-    # Слой S4: Массовое изменение intent
-    layer_bulk = model.newLayer("quota_set_intents_bulk")
-    rtc_func_bulk = agent.newRTCFunction("rtc_quota_set_intents_bulk", RTC_SET_INTENTS_BULK)
-    rtc_func_bulk.setAllowAgentDeath(False)
-    # Выполняется для всех агентов (фильтрация внутри функции)
-    layer_bulk.addAgentFunction(rtc_func_bulk)
+    # S4 убран - решения уже приняты в S3, маски очистятся в следующем цикле
     
     print("  RTC модуль quota_ops_excess зарегистрирован")
     print("  RTC модуль quota_ops_excess зарегистрирован")
