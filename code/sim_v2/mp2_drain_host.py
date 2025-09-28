@@ -25,6 +25,13 @@ class MP2DrainHostFunction(fg.HostFunction):
         # Инкрементальный дренаж
         self.interval_days = 0  # 0 = только финальный дренаж
         self._last_drained_day = 0
+        # Поштучный (budgeted) дренаж без длинных пауз
+        self.drain_rows_per_step = 100000  # лимит строк на один вызов run()
+        self._pending = False
+        self._pend_start_day = 0
+        self._pend_end_day = 0
+        self._pend_day_cursor = 0
+        self._pend_idx_cursor = 0
         
         # Создаем таблицу если не существует
         self._ensure_table()
@@ -71,19 +78,41 @@ class MP2DrainHostFunction(fg.HostFunction):
     def run(self, FLAMEGPU):
         """Выполняет финальный дренаж MP2 в конце симуляции"""
         step = FLAMEGPU.getStepCounter()
-        # Инкрементальный дренаж каждые interval_days и финальный на последнем шаге
+        # Инициализация новой порции дренажа по интервалу/финалу
         do_interval = (self.interval_days > 0 and (step + 1) % self.interval_days == 0)
         is_final = (step == self.simulation_steps - 1)
-        if do_interval or is_final:
+
+        # Режим: без инкрементов — финальный дренаж целиком батчами batch_size
+        if is_final and self.interval_days == 0:
             t_start = time.perf_counter()
-            rows_drained = self._drain_mp2_range(FLAMEGPU, self._last_drained_day, step)
+            rows = self._drain_mp2_range(FLAMEGPU, self._last_drained_day, step)
+            self.total_drain_time += (time.perf_counter() - t_start)
+            self.total_rows_written += rows
+            self._last_drained_day = step + 1
+            self._pending = False
+            return
+        if (do_interval or is_final) and not self._pending and (self._last_drained_day <= step):
+            self._pending = True
+            self._pend_start_day = self._last_drained_day
+            self._pend_end_day = step
+            self._pend_day_cursor = self._pend_start_day
+            self._pend_idx_cursor = 0
+        
+        # Если есть незавершённый дренаж — обрабатываем с лимитом по строкам, без длинной паузы
+        if self._pending:
+            t_start = time.perf_counter()
+            rows_drained, finished = self._drain_mp2_budgeted(FLAMEGPU, 
+                self._pend_day_cursor, self._pend_end_day, self._pend_idx_cursor, self.drain_rows_per_step)
             t_elapsed = time.perf_counter() - t_start
-            
             self.total_drain_time += t_elapsed
             self.total_rows_written += rows_drained
-            self._last_drained_day = step + 1
-            
-            # Логирование MP2 drain отключено
+            if finished:
+                # Продвинули последнюю слитую дату
+                self._last_drained_day = self._pend_end_day + 1
+                self._pending = False
+            else:
+                # Продолжаем со следующей позиции на следующем шаге
+                self._pend_day_cursor, self._pend_idx_cursor = finished  # type: ignore
             
     def _drain_mp2_range(self, FLAMEGPU, start_day_inclusive: int, end_day_inclusive: int) -> int:
         """Выгружает MP2 данные с GPU за диапазон дней [start..end]"""
@@ -152,6 +181,73 @@ class MP2DrainHostFunction(fg.HostFunction):
             self._flush_batch()
             
         return rows_count
+
+    def _drain_mp2_budgeted(self, FLAMEGPU, start_day_inclusive: int, end_day_inclusive: int, 
+                             start_idx: int, max_rows: int):
+        """Дренаж с ограничением по количеству строк за вызов. Возвращает (rows, finished),
+        где finished либо True (если диапазон завершён), либо (day_cursor, idx_cursor) для продолжения."""
+        frames = FLAMEGPU.environment.getPropertyUInt("frames_total")
+        version_date = FLAMEGPU.environment.getPropertyUInt("version_date")
+        version_id = FLAMEGPU.environment.getPropertyUInt("version_id")
+        base_date = datetime(1970, 1, 1)
+        
+        # Читаем ссылки на MP2 MacroProperty (host view)
+        mp2_day = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_day_u16")
+        mp2_idx = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_idx")
+        mp2_aircraft = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_aircraft_number")
+        mp2_state = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_state")
+        mp2_intent = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_intent_state")
+        mp2_sne = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_sne")
+        mp2_ppr = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ppr")
+        mp2_repair_days = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_repair_days")
+        mp2_dt = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dt")
+        mp2_dn = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dn")
+        
+        rows_count = 0
+        day = max(0, int(start_day_inclusive))
+        end_day = int(end_day_inclusive)
+        idx_cursor = int(start_idx)
+        
+        while day <= end_day:
+            day_offset = day * frames
+            day_date = base_date + timedelta(days=version_date + day)
+            # Итерируем по индексам начиная с текущего курсора
+            for idx in range(idx_cursor, frames):
+                pos = day_offset + idx
+                aircraft_number = int(mp2_aircraft[pos])
+                if aircraft_number > 0:
+                    row = (
+                        version_date,
+                        version_id,
+                        day,
+                        day_date,
+                        int(mp2_idx[pos]),
+                        aircraft_number,
+                        self._map_state_to_string(int(mp2_state[pos])),
+                        int(mp2_intent[pos]),
+                        int(mp2_sne[pos]),
+                        int(mp2_ppr[pos]),
+                        int(mp2_repair_days[pos]),
+                        int(mp2_dt[pos]),
+                        int(mp2_dn[pos])
+                    )
+                    self.batch.append(row)
+                    rows_count += 1
+                    if len(self.batch) >= self.batch_size:
+                        self._flush_batch()
+                    if rows_count >= max_rows:
+                        # Сохраняем курсор и возвращаемся в следующем шаге
+                        if self.batch:
+                            self._flush_batch()
+                        return rows_count, (day, idx + 1)
+            # Перешли на следующий день
+            idx_cursor = 0
+            day += 1
+        
+        # Диапазон завершён
+        if self.batch:
+            self._flush_batch()
+        return rows_count, True
         
     def _flush_batch(self):
         """Записывает батч в ClickHouse"""
