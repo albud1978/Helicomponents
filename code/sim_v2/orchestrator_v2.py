@@ -233,6 +233,14 @@ class V2Orchestrator:
             agent.setVariableUInt("ll", ll_value)
             agent.setVariableUInt("oh", oh_value)
             agent.setVariableUInt("br", br_by_frame[i])
+
+            # mfg_date для приоритизации квот (ord days от 1970-01-01)
+            mfg_list = mp3.get('mp3_mfg_date_days', [])
+            if mp3_idx >= 0 and mp3_idx < len(mfg_list):
+                mfg_val = int(mfg_list[mp3_idx] or 0)
+            else:
+                mfg_val = 0
+            agent.setVariableUInt("mfg_date", mfg_val)
             
             # Отладка для первых нескольких агентов operations
             real_ac = agent_data.get('aircraft_number', 0)

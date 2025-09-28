@@ -74,6 +74,15 @@ class V2BaseModel:
         # MP5 линейный массив
         self.env.newMacroPropertyUInt32("mp5_lin", MAX_SIZE)
         
+        # Маска для квотного демоута (0: не кандидат, 1: кандидат, 2: выбран на демоут)
+        self.env.newMacroPropertyUInt32("quota_ops_mask", MAX_FRAMES)
+        # Скаляр для передачи решения менеджера (количество демоутов)
+        self.env.newMacroPropertyUInt32("quota_decision", 1)
+        
+        # Временные маски для квотирования (используются модулем quota_ops_excess)
+        self.env.newMacroPropertyUInt32("mi8_approve", MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_approve", MAX_FRAMES)
+
         # MP4 квоты (если включены)
         if os.environ.get('HL_ENABLE_QUOTAS', '0') == '1':
             self.env.newMacroPropertyUInt("mp4_quota_mi8", MAX_DAYS)
@@ -82,8 +91,6 @@ class V2BaseModel:
             # Буферы менеджера квот
             self.env.newMacroPropertyUInt32("mi8_intent", MAX_FRAMES)
             self.env.newMacroPropertyUInt32("mi17_intent", MAX_FRAMES)
-            self.env.newMacroPropertyUInt32("mi8_approve", MAX_FRAMES)
-            self.env.newMacroPropertyUInt32("mi17_approve", MAX_FRAMES)
     
     def _setup_property_arrays(self, env_data: Dict[str, object]):
         """Настройка PropertyArray для небольших массивов"""
@@ -97,6 +104,13 @@ class V2BaseModel:
         
         self.env.newPropertyArrayUInt32("mp4_ops_counter_mi8", mp4_ops8)
         self.env.newPropertyArrayUInt32("mp4_ops_counter_mi17", mp4_ops17)
+        
+        # MP3 даты производства для приоритизации квот
+        mp3_mfg = list(env_data.get('mp3_arrays', {}).get('mp3_mfg_date_days', []))
+        if not mp3_mfg:
+            mp3_mfg = [0] * MAX_FRAMES
+        mp3_mfg = (mp3_mfg + [0] * MAX_FRAMES)[:MAX_FRAMES]
+        self.env.newPropertyArrayUInt32("mp3_mfg_date_days", mp3_mfg)
     
     def _setup_agent(self) -> fg.AgentDescription:
         """Создание и настройка агента HELI"""
@@ -208,6 +222,11 @@ class V2BaseModel:
             elif module_name == "state_manager_storage":
                 import rtc_state_manager_storage
                 rtc_state_manager_storage.register_state_manager_storage(self.model, self.agent)
+                
+            elif module_name == "quota_ops_excess":
+                import rtc_quota_ops_excess
+                rtc_quota_ops_excess.register_rtc(self.model, self.agent)
+            
                 
             else:
                 # Стандартная обработка для других модулей
