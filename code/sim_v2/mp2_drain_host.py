@@ -44,7 +44,7 @@ class MP2DrainHostFunction(fg.HostFunction):
             version_date      UInt32,
             version_id        UInt32,
             day_u16          UInt16,
-            day_date         Date,
+            day_date         Date MATERIALIZED addDays(toDate('1970-01-01'), toUInt32(version_date) + toUInt32(day_u16)),
             
             -- Идентификаторы
             idx              UInt16,
@@ -140,13 +140,12 @@ class MP2DrainHostFunction(fg.HostFunction):
         mp2_dn = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dn")
         
         rows_count = 0
-        base_date = datetime(1970, 1, 1)
+        # day_date вычисляется в ClickHouse (MATERIALIZED), в Python не считаем
         
         # Собираем батч
         for day in range(start_day, end_day):
             # Прямая адресация в плотной матрице
             day_offset = day * frames
-            day_date = base_date + timedelta(days=version_date + day)
             
             for idx in range(frames):
                 pos = day_offset + idx
@@ -158,7 +157,6 @@ class MP2DrainHostFunction(fg.HostFunction):
                         version_date,
                         version_id,
                         day,
-                        day_date,
                         int(mp2_idx[pos]),
                         int(mp2_aircraft[pos]),
                         self._map_state_to_string(int(mp2_state[pos])),
@@ -189,7 +187,7 @@ class MP2DrainHostFunction(fg.HostFunction):
         frames = FLAMEGPU.environment.getPropertyUInt("frames_total")
         version_date = FLAMEGPU.environment.getPropertyUInt("version_date")
         version_id = FLAMEGPU.environment.getPropertyUInt("version_id")
-        base_date = datetime(1970, 1, 1)
+        # day_date вычисляется в ClickHouse (MATERIALIZED), в Python не считаем
         
         # Читаем ссылки на MP2 MacroProperty (host view)
         mp2_day = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_day_u16")
@@ -210,7 +208,6 @@ class MP2DrainHostFunction(fg.HostFunction):
         
         while day <= end_day:
             day_offset = day * frames
-            day_date = base_date + timedelta(days=version_date + day)
             # Итерируем по индексам начиная с текущего курсора
             for idx in range(idx_cursor, frames):
                 pos = day_offset + idx
@@ -220,7 +217,6 @@ class MP2DrainHostFunction(fg.HostFunction):
                         version_date,
                         version_id,
                         day,
-                        day_date,
                         int(mp2_idx[pos]),
                         aircraft_number,
                         self._map_state_to_string(int(mp2_state[pos])),
@@ -258,10 +254,16 @@ class MP2DrainHostFunction(fg.HostFunction):
         if batch_rows > self.max_batch_rows:
             self.max_batch_rows = batch_rows
         t_start = time.perf_counter()
-        columns = "version_date,version_id,day_u16,day_date,idx,aircraft_number,state,intent_state,sne,ppr,repair_days,dt,dn"
+        # MATERIALIZED day_date вычисляется на стороне ClickHouse, не вставляем её явно
+        columns = "version_date,version_id,day_u16,idx,aircraft_number,state,intent_state,sne,ppr,repair_days,dt,dn"
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES"
-        
-        self.client.execute(query, self.batch)
+        # Подаём данные в колоннарном формате для уменьшения накладных расходов драйвера
+        num_cols = 12
+        cols = [[] for _ in range(num_cols)]
+        for r in self.batch:
+            for i, v in enumerate(r):
+                cols[i].append(v)
+        self.client.execute(query, cols, columnar=True)
         self.flush_count += 1
         self.total_flush_time += (time.perf_counter() - t_start)
         self.batch.clear()
