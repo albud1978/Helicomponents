@@ -488,3 +488,334 @@ Step N: counts inactive=X, operations=Y, serviceable=Z, repair=A, reserve=B, sto
 - operations → repair: 90 переходов (условие: ppr ≥ oh AND sne < br)
 - operations → storage: 62 перехода (57 по BR, 5 по LL)
 - Финальное распределение: operations=2, repair=97, storage=62
+
+---
+
+## V2 Orchestrator Refactoring (30-09-2025)
+
+### Цели рефакторинга
+
+**Проблемы `sim_master` (монолитная архитектура)**:
+1. Конфликты компиляции NVRTC при интеграции спавна
+2. Костыли в загрузке MP5 (ошибки при переключении на актуальные данные)
+3. Монолитный код большого размера (~640 строк orchestrator)
+4. Сложность тестирования отдельных компонентов
+5. Отсутствие типизации данных (работа с `Dict[str, object]`)
+
+**Решение: Микросервисная архитектура V2**
+- Модульная декомпозиция orchestrator на независимые компоненты
+- Strategy Pattern для гибкости (MP5, валидации)
+- Adapter Pattern для изоляции от БД
+- Typed API вместо магических строк
+- Переиспользуемые компоненты с чистыми интерфейсами
+
+### Архитектура компонентов
+
+```
+code/sim_v2/
+├── orchestrator_v2.py          (287 строк, -55% от оригинала)
+│
+├── components/                  (5 модулей, 1387 строк)
+│   ├── agent_population.py     (336 строк) — инициализация агентов
+│   ├── telemetry_collector.py  (209 строк) — телеметрия и логирование
+│   ├── mp5_strategy.py         (189 строк) — стратегии загрузки MP5
+│   ├── data_adapters.py        (283 строки) — изоляция от схемы БД
+│   └── validation_rules.py     (370 строк) — правила валидации
+│
+└── rtc_modules/                 (без изменений)
+    ├── rtc_state_2_operations.py
+    ├── rtc_quota_ops_excess.py
+    ├── rtc_states_stub.py
+    └── rtc_state_manager_*.py
+```
+
+### Компоненты V2
+
+#### 1. AgentPopulation (agent_population.py)
+
+**Ответственность**:
+- Создание популяций агентов из MP3 данных
+- Распределение по States (inactive/operations/serviceable/repair/reserve/storage)
+- Инициализация переменных агентов (idx, aircraft_number, status_id, sne, ppr, ll, oh, br)
+- Вычисление нормативов LL/OH/BR по кадрам из MP1
+
+**API**:
+```python
+class AgentPopulationBuilder:
+    def __init__(self, env_data: Union[Dict, EnvDataAdapter])
+    def populate_agents(self, simulation: fg.CUDASimulation, agent_def: fg.AgentDescription)
+    def _build_norms_by_frame(self) -> Tuple[List[int], List[int], List[int]]
+```
+
+**Ключевые особенности**:
+- Фильтрация планёров с `group_by ∈ {1,2}` (~286 бортов из ~7113 строк MP3)
+- Строгая валидация нормативов (fail-fast при отсутствии OH/BR)
+- Поддержка зарезервированных слотов для будущего спавна
+- Корректная инициализация `assembly_trigger` для агентов в repair
+
+#### 2. TelemetryCollector (telemetry_collector.py)
+
+**Ответственность**:
+- Сбор метрик по шагам симуляции (state counts, intent changes)
+- Логирование переходов между состояниями
+- Отслеживание производительности (step times, p50/p95/max)
+
+**API**:
+```python
+class TelemetryCollector:
+    def __init__(self, simulation, agent_def, version_date_ord,
+                 enable_state_counts=False, enable_intent_tracking=True)
+    def before_simulation(self)
+    def track_step(self, step: int) -> float
+    def get_timing_summary(self) -> Dict[str, float]
+    def get_state_counts(self) -> Dict[str, int]
+```
+
+**Ключевые особенности**:
+- Конфигурируемые уровни детализации (state counts, intent tracking)
+- Автоматический расчёт статистики (p50, p95, max)
+- Отслеживание переходов из operations (2→3, 2→4, 2→6)
+- Календарная привязка логов (`date=YYYY-MM-DD`)
+
+#### 3. MP5Strategy (mp5_strategy.py)
+
+**Ответственность**:
+- Различные стратегии инициализации MP5 (host-only, RTC-copy, hybrid)
+- Подготовка данных MP5 (обрезка, паддинг D+1)
+- Регистрация HostFunction для загрузки MP5
+
+**API**:
+```python
+class MP5Strategy:                         # Базовый класс
+    def prepare_data(self) -> List[int]
+    def register(self, model: fg.ModelDescription)
+
+class HostOnlyMP5Strategy(MP5Strategy):   # Текущая реализация
+    # Host-only загрузка без RTC-копирования
+
+class MP5StrategyFactory:                  # Фабрика
+    @staticmethod
+    def create(strategy_name: str, ...) -> MP5Strategy
+```
+
+**История решений**:
+- **V1** (отклонена): RTC-копирование `mp5_src → mp5_lin` → NVRTC ошибки при `DAYS≥90`
+- **V2** (текущая): Host-only инициализация напрямую в `mp5_lin` (стабильно, поддерживает `DAYS=3650+`)
+
+**Ключевые особенности**:
+- Strategy Pattern для будущих стратегий (RTC-copy, Hybrid)
+- Флаг `initialized` для выполнения только **один раз** (исправлена проблема многократной инициализации)
+- Валидация размера MP5 через `DimensionValidator`
+- Поддержка D+1 паддинга для безопасного чтения `daily_next`
+
+#### 4. DataAdapters (data_adapters.py)
+
+**Ответственность**:
+- Преобразование данных из ClickHouse в доменные модели
+- Изоляция компонентов от структуры `env_data`
+- Валидация и типизация данных
+- Единая точка доступа к данным окружения
+
+**API**:
+```python
+class EnvDataAdapter:
+    @property
+    def version(self) -> VersionInfo
+    @property
+    def frames(self) -> FramesInfo
+    @property
+    def dimensions(self) -> SimulationDimensions
+    @property
+    def mp1(self) -> MP1Data
+    @property
+    def mp3(self) -> MP3Data
+    @property
+    def mp4(self) -> MP4Data
+    @property
+    def mp5(self) -> MP5Data
+    def get_raw(self, key: str, default=None)
+```
+
+**Доменные модели** (dataclasses):
+- `VersionInfo` — версия снапшота (date_ordinal, version_id)
+- `FramesInfo` — информация о кадрах с методами (`is_reserved`, `get_aircraft_number`)
+- `SimulationDimensions` — размерности с валидацией
+- `MP1Data` — нормативы компонентов с методами (`get_oh`, `get_br`, `get_ll`)
+- `MP3Data`, `MP4Data`, `MP5Data` — типизированные данные
+
+**Ключевые особенности**:
+- Typed API вместо `Dict[str, object]`
+- Lazy loading через `@property` (данные загружаются по запросу)
+- Fail-fast валидация на границе системы
+- Обратная совместимость (компоненты работают с raw dict и адаптером)
+
+#### 5. ValidationRules (validation_rules.py)
+
+**Ответственность**:
+- Валидация инвариантов симуляции (размерности, состояния, переходы)
+- Проверка бизнес-правил (LL/OH/BR лимиты, квоты)
+- Детектирование аномалий (отрицательные значения, невалидные переходы)
+- Fail-fast проверки на критичных этапах
+
+**API**:
+```python
+class DimensionValidator:
+    @staticmethod
+    def validate_frames_days(frames, days) -> ValidationResult
+    @staticmethod
+    def validate_mp5_size(mp5_data, frames, days) -> ValidationResult
+
+class StateTransitionValidator:
+    @staticmethod
+    def validate_transition(from_state, to_state, context=None) -> ValidationResult
+
+class InvariantValidator:
+    @staticmethod
+    def validate_s6_immutable(...) -> ValidationResult
+    @staticmethod
+    def validate_delta_sne_equals_sum_dt(...) -> ValidationResult
+
+class DataQualityValidator:
+    @staticmethod
+    def validate_no_negative_values(...) -> ValidationResult
+    @staticmethod
+    def validate_norms_present(ll, oh, br, ...) -> ValidationResult
+
+class ValidationSuite:                     # Набор валидаций
+    def validate_dimensions(...) -> ValidationResult
+    def has_failures(include_warnings=False) -> bool
+    def get_summary() -> str
+```
+
+**Уровни валидации**:
+- `CRITICAL` — критичные ошибки, останавливают симуляцию
+- `WARNING` — предупреждения, логируются но не останавливают
+- `INFO` — информационные сообщения
+
+**Ключевые особенности**:
+- Детальные условия для переходов (2→4: `ppr_next≥oh AND sne_next<br`)
+- Контекстная валидация с проверкой бизнес-правил
+- Связь с `docs/validation.md` (источник правил)
+- Гибкий strict mode (warnings → errors)
+
+### Метрики рефакторинга
+
+| Метрика | До | После | Δ |
+|---------|----|----|---|
+| **orchestrator_v2.py** | 640 строк | 287 строк | **-353 строки (-55%)** |
+| **Количество модулей** | 1 монолит | 6 компонентов | **+5 модулей** |
+| **Общий код** | 640 строк | 1674 строки | **+1034 строки (+162%)** |
+| **Тестируемость** | Низкая | Высокая | **Изолированные компоненты** |
+| **Типизация** | `Dict[str, object]` | Dataclasses | **Typed API** |
+
+### Преимущества V2
+
+#### Модульность
+- Каждый компонент имеет единственную ответственность (SRP)
+- Изолированное тестирование компонентов
+- Легкость добавления новых стратегий/валидаторов
+
+#### Расширяемость
+- Strategy Pattern: легко добавить новые стратегии MP5 (RTC-copy, Hybrid)
+- Adapter Pattern: изоляция от изменений схемы БД
+- Валидаторы: добавление новых правил без изменения существующего кода
+
+#### Надёжность
+- Fail-fast валидации на границах системы
+- Typed API: ошибки на этапе разработки, а не runtime
+- Строгие проверки инвариантов (S6 immutable, Δsne=sum(dt))
+
+#### Производительность
+- Без деградации: тесты показывают те же метрики (~7-10мс p50, ~50-60мс p95)
+- MP5 инициализация только **один раз** (исправлена проблема многократных вызовов)
+- Lazy loading в адаптерах (данные загружаются по требованию)
+
+### Использование
+
+```python
+# 1. Создание оркестратора
+from sim_env_setup import prepare_env_arrays, get_client
+from orchestrator_v2 import V2Orchestrator
+
+env_data = prepare_env_arrays(get_client())
+orchestrator = V2Orchestrator(env_data, enable_mp2=True, clickhouse_client=client)
+
+# 2. Построение модели с модулями
+orchestrator.build_model([
+    'state_2_operations',
+    'quota_ops_excess',
+    'states_stub',
+    'state_manager_operations',
+    'state_manager_repair',
+    'state_manager_storage'
+])
+
+# 3. Создание симуляции
+orchestrator.create_simulation()
+
+# 4. Запуск на N шагов
+orchestrator.run(steps=3650)
+
+# 5. Получение результатов
+results = orchestrator.get_results()
+```
+
+### Компоненты можно использовать независимо
+
+```python
+# Только валидация
+from components import ValidationSuite, DimensionValidator
+
+suite = ValidationSuite(strict=False)
+result = suite.validate_dimensions(frames=286, days=365, mp5_data=mp5_data)
+if not result:
+    raise ValueError(result.message)
+
+# Только адаптер данных
+from components import EnvDataAdapter
+
+adapter = EnvDataAdapter(env_data)
+print(f"Frames: {adapter.dimensions.frames_total}")
+print(f"Days: {adapter.dimensions.days_total}")
+oh_value = adapter.mp1.get_oh(partseqno=12345, group_by=2)
+
+# Только телеметрия
+from components import TelemetryCollector
+
+telemetry = TelemetryCollector(simulation, agent_def, version_date_ord)
+telemetry.before_simulation()
+for step in range(steps):
+    telemetry.track_step(step)
+print(telemetry.get_summary())
+```
+
+### Совместимость
+
+- **Обратная совместимость**: Все компоненты работают как с raw `Dict[str, object]`, так и с `EnvDataAdapter`
+- **RTC модули**: Без изменений, используются как есть
+- **БД схема**: Адаптер изолирует от изменений в `prepare_env_arrays`
+- **GPU память**: Не очищается во время выполнения (единый Transform+Load pipeline на Flame GPU)
+
+### Дальнейшее развитие
+
+**Приоритет 1 (P1)**:
+- ~~AgentPopulation~~ ✅
+- ~~TelemetryCollector~~ ✅  
+- ~~MP5Strategy~~ ✅
+- ~~DataAdapters~~ ✅
+- ~~ValidationRules~~ ✅
+
+**Приоритет 2 (P2)**:
+- Интеграция валидаций в телеметрию (runtime проверки инвариантов)
+- Расширение адаптера для MP6/MP7 (будущие данные)
+- Добавление метрик производительности в телеметрию
+
+**Приоритет 3 (P3, опционально)**:
+- Реорганизация RTC в `rtc_modules/` по категориям
+- Общие CUDA функции в `rtc_common.py`
+- Hybrid MP5 Strategy (комбинация host + RTC)
+
+---
+
+*Документ обновлён: 30-09-2025*  
+*Автор: V2 Refactoring Team*

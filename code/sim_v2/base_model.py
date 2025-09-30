@@ -23,9 +23,13 @@ class V2BaseModel:
         self.model: Optional[fg.ModelDescription] = None
         self.agent: Optional[fg.AgentDescription] = None
         self.env: Optional[fg.EnvironmentDescription] = None
+        self.env_data: Optional[Dict[str, object]] = None  # Для модулей типа spawn
     
     def create_model(self, env_data: Dict[str, object]) -> fg.ModelDescription:
         """Создает базовую модель с окружением из env_data"""
+        
+        # Сохраняем env_data для модулей
+        self.env_data = env_data
         
         # Устанавливаем MAX_FRAMES из данных
         frames_from_data = int(env_data['frames_total_u16'])
@@ -62,6 +66,7 @@ class V2BaseModel:
         self.env.newPropertyUInt("mi8_assembly_time_const", int(env_data.get('mi8_assembly_time_const', 180)))
         self.env.newPropertyUInt("mi17_repair_time_const", int(env_data.get('mi17_repair_time_const', 180)))
         self.env.newPropertyUInt("mi17_assembly_time_const", int(env_data.get('mi17_assembly_time_const', 180)))
+        self.env.newPropertyUInt("mi17_partout_time_const", int(env_data.get('mi17_partout_time_const', 180)))
         
         # Инициализация констант для группы 17
         if 'mi17_ll_const' in env_data:
@@ -111,6 +116,20 @@ class V2BaseModel:
             mp3_mfg = [0] * MAX_FRAMES
         mp3_mfg = (mp3_mfg + [0] * MAX_FRAMES)[:MAX_FRAMES]
         self.env.newPropertyArrayUInt32("mp3_mfg_date_days", mp3_mfg)
+        
+        # MP4 month_first для spawn (дата производства новорождённых)
+        mp4_month = list(env_data.get('mp4_month_first_u32', []))
+        if not mp4_month:
+            mp4_month = [0] * MAX_DAYS
+        mp4_month = (mp4_month + [0] * MAX_DAYS)[:MAX_DAYS]
+        self.env.newPropertyArrayUInt32("month_first_u32", mp4_month)
+        
+        # MP4 new_counter для spawn (количество новых бортов в день)
+        mp4_new = list(env_data.get('mp4_new_counter_mi17_seed', []))
+        if not mp4_new:
+            mp4_new = [0] * MAX_DAYS
+        mp4_new = (mp4_new + [0] * MAX_DAYS)[:MAX_DAYS]
+        self.env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", mp4_new)
     
     def _setup_agent(self) -> fg.AgentDescription:
         """Создание и настройка агента HELI"""
@@ -130,8 +149,7 @@ class V2BaseModel:
         agent.newVariableUInt("partseqno_i", 0)
         agent.newVariableUInt("group_by", 0)
         
-        # Состояние (оставляем для обратной совместимости при загрузке)
-        agent.newVariableUInt("status_id", 0)
+        # Состояние (только для state_6)
         agent.newVariableUInt("s6_started", 0)
         
         # Новая переменная для intent-based архитектуры
@@ -151,9 +169,11 @@ class V2BaseModel:
         # Временные характеристики
         agent.newVariableUInt("repair_time", 180)
         agent.newVariableUInt("assembly_time", 180)
+        agent.newVariableUInt("partout_time", 180)
         agent.newVariableUInt("repair_days", 0)
         agent.newVariableUInt("assembly_trigger", 0)
         agent.newVariableUInt("active_trigger", 0)
+        agent.newVariableUInt("partout_trigger", 0)
         agent.newVariableUInt("mfg_date", 0)  # Дата производства для приоритизации
         
         # MP5 данные (текущий/следующий день)
@@ -227,6 +247,17 @@ class V2BaseModel:
                 import rtc_quota_ops_excess
                 rtc_quota_ops_excess.register_rtc(self.model, self.agent)
             
+            elif module_name == "spawn":
+                # Спавн новых агентов (Mi-17)
+                from rtc_modules import rtc_spawn_integration
+                rtc_spawn_integration.register_spawn_rtc(self.model, self.agent, self.env_data)
+                print("  RTC модуль spawn зарегистрирован")
+            
+            elif module_name == "spawn_simple":
+                # Упрощённый спавн для отладки NVRTC
+                from rtc_modules import rtc_spawn_simple
+                rtc_spawn_simple.register_simple_spawn(self.model, self.agent)
+                print("  RTC модуль spawn_simple зарегистрирован")
                 
             else:
                 # Стандартная обработка для других модулей

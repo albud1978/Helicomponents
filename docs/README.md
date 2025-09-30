@@ -49,8 +49,10 @@ python3 code/utils/database_cleanup.py
 ## 📚 Документация проекта
 
 ### Архитектура симуляции
-- **[v2_architecture_consolidated.md](v2_architecture_consolidated.md)** - 🆕 Консолидированная документация V2 state-based архитектуры
-- [rtc_pipeline_architecture.md](rtc_pipeline_architecture.md) - Архитектура RTC пайплайна (V1 и обзор V2)
+- **[rtc_pipeline_architecture.md](rtc_pipeline_architecture.md)** - 🆕 **Архитектура RTC пайплайна + V2 Refactoring (30-09-2025)**
+- **[refactoring_summary_30-09-2025.md](refactoring_summary_30-09-2025.md)** - 🎉 **Итоговая сводка рефакторинга V2 Orchestrator**
+- **[v2_rtc_modules_map.md](v2_rtc_modules_map.md)** - 📋 **Карта распределения RTC модулей и ядер**
+- [v2_architecture_consolidated.md](v2_architecture_consolidated.md) - Консолидированная документация V2 state-based архитектуры
 - [validation.md](validation.md) - Инварианты и проверки данных
 - [migration.md](migration.md) - Миграция между версиями
 
