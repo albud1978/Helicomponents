@@ -89,15 +89,8 @@ class V2Orchestrator:
             
         self.simulation = fg.CUDASimulation(self.model)
         
-        # Заполняем окружение
-        sim = self.simulation
-        sim.setEnvironmentPropertyUInt("version_date", int(self.env_data['version_date_u16']))
-        if 'version_id_u32' in self.env_data:
-            sim.setEnvironmentPropertyUInt("version_id", int(self.env_data['version_id_u32']))
-        sim.setEnvironmentPropertyUInt("frames_total", self.frames)
-        sim.setEnvironmentPropertyUInt("days_total", self.days)
-        
-        # MP4 квоты уже установлены в базовой модели с правильным размером
+        # Environment properties УЖЕ установлены в base_model.create_model()
+        # Повторная установка триггерит NVRTC компиляцию и вызывает Error 425
         
         # Создаем популяцию агентов из MP3
         self._populate_agents()

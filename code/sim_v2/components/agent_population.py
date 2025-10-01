@@ -145,7 +145,7 @@ class AgentPopulationBuilder:
             # Базовые переменные
             agent.setVariableUInt("idx", i)
             agent.setVariableUInt("aircraft_number", agent_data['aircraft_number'])
-            agent.setVariableUInt("status_id", status_id)
+            # status_id НЕ используется - переведено на States
             agent.setVariableUInt("sne", agent_data['sne'])
             agent.setVariableUInt("ppr", agent_data['ppr'])
             agent.setVariableUInt("repair_days", agent_data['repair_days'])
@@ -196,15 +196,15 @@ class AgentPopulationBuilder:
                 mfg_val = 0
             agent.setVariableUInt("mfg_date", mfg_val)
             
-            # Времена ремонта из констант
+            # Времена ремонта из env_data (НЕ simulation - триггерит NVRTC!)
             if gb == 1:
-                agent.setVariableUInt("repair_time", simulation.getEnvironmentPropertyUInt("mi8_repair_time_const"))
-                agent.setVariableUInt("assembly_time", simulation.getEnvironmentPropertyUInt("mi8_assembly_time_const"))
+                agent.setVariableUInt("repair_time", int(self.env_data.get('mi8_repair_time_const', 180)))
+                agent.setVariableUInt("assembly_time", int(self.env_data.get('mi8_assembly_time_const', 180)))
                 agent.setVariableUInt("partout_time", 180)  # Дефолт для Mi-8
             elif gb == 2:
-                agent.setVariableUInt("repair_time", simulation.getEnvironmentPropertyUInt("mi17_repair_time_const"))
-                agent.setVariableUInt("assembly_time", simulation.getEnvironmentPropertyUInt("mi17_assembly_time_const"))
-                agent.setVariableUInt("partout_time", simulation.getEnvironmentPropertyUInt("mi17_partout_time_const"))
+                agent.setVariableUInt("repair_time", int(self.env_data.get('mi17_repair_time_const', 180)))
+                agent.setVariableUInt("assembly_time", int(self.env_data.get('mi17_assembly_time_const', 180)))
+                agent.setVariableUInt("partout_time", int(self.env_data.get('mi17_partout_time_const', 180)))
             
             # Для агентов в статусе 6 устанавливаем s6_started
             if status_id == 6:
@@ -227,7 +227,7 @@ class AgentPopulationBuilder:
         all_states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage']
         
         for state_name in all_states:
-            pop = populations.get(state_name, fg.AgentVector(simulation.getAgentDescription("heli")))
+            pop = populations.get(state_name, fg.AgentVector(agent_def))
             simulation.setPopulationData(pop, state_name)
             if len(pop) > 0:
                 print(f"  Загружено {len(pop)} агентов в состояние '{state_name}'")
