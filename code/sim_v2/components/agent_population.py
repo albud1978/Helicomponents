@@ -145,7 +145,7 @@ class AgentPopulationBuilder:
             # Базовые переменные
             agent.setVariableUInt("idx", i)
             agent.setVariableUInt("aircraft_number", agent_data['aircraft_number'])
-            # status_id НЕ используется - переведено на States
+            # FIX 2: status_id НЕ используется - переведено на States
             agent.setVariableUInt("sne", agent_data['sne'])
             agent.setVariableUInt("ppr", agent_data['ppr'])
             agent.setVariableUInt("repair_days", agent_data['repair_days'])
@@ -196,7 +196,8 @@ class AgentPopulationBuilder:
                 mfg_val = 0
             agent.setVariableUInt("mfg_date", mfg_val)
             
-            # Времена ремонта из env_data (НЕ simulation - триггерит NVRTC!)
+            # Времена ремонта из констант
+            # FIX 3: Чтение из env_data, НЕ simulation (триггерит NVRTC!)
             if gb == 1:
                 agent.setVariableUInt("repair_time", int(self.env_data.get('mi8_repair_time_const', 180)))
                 agent.setVariableUInt("assembly_time", int(self.env_data.get('mi8_assembly_time_const', 180)))
@@ -226,6 +227,7 @@ class AgentPopulationBuilder:
         # ВАЖНО: Нужно инициализировать ВСЕ states, даже пустые (для spawn)
         all_states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage']
         
+        # FIX 4: Используем agent_def, НЕ simulation.getAgentDescription (нет такого метода!)
         for state_name in all_states:
             pop = populations.get(state_name, fg.AgentVector(agent_def))
             simulation.setPopulationData(pop, state_name)

@@ -89,7 +89,7 @@ class V2Orchestrator:
             
         self.simulation = fg.CUDASimulation(self.model)
         
-        # Environment properties УЖЕ установлены в base_model.create_model()
+        # FIX 1: Environment properties УЖЕ установлены в base_model.create_model()
         # Повторная установка триггерит NVRTC компиляцию и вызывает Error 425
         
         # Создаем популяцию агентов из MP3
