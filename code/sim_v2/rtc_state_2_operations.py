@@ -32,7 +32,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     // Получаем суточный налёт из MP5 (всегда, даже на шаге 0)
     const unsigned int base = step_day * {MAX_FRAMES} + idx;
     const unsigned int base_next = base + {MAX_FRAMES};
-    auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}>("mp5_lin");
+    auto mp5 = FLAMEGPU->environment.getMacroProperty<uint32_t, {MAX_SIZE}>("mp5_lin");
     const unsigned int dt = mp5[base];
     const unsigned int dn = (step_day < {MAX_DAYS} - 1u) ? mp5[base_next] : 0u;
     
