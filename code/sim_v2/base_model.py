@@ -117,19 +117,18 @@ class V2BaseModel:
         mp3_mfg = (mp3_mfg + [0] * MAX_FRAMES)[:MAX_FRAMES]
         self.env.newPropertyArrayUInt32("mp3_mfg_date_days", mp3_mfg)
         
-        # MP4 month_first для spawn (дата производства новорождённых)
-        mp4_month = list(env_data.get('mp4_month_first_u32', []))
-        if not mp4_month:
-            mp4_month = [0] * MAX_DAYS
-        mp4_month = (mp4_month + [0] * MAX_DAYS)[:MAX_DAYS]
-        self.env.newPropertyArrayUInt32("month_first_u32", mp4_month)
-        
-        # MP4 new_counter для spawn (количество новых бортов в день)
-        mp4_new = list(env_data.get('mp4_new_counter_mi17_seed', []))
-        if not mp4_new:
-            mp4_new = [0] * MAX_DAYS
-        mp4_new = (mp4_new + [0] * MAX_DAYS)[:MAX_DAYS]
-        self.env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", mp4_new)
+        # MP4 month_first и new_counter для spawn ОТКЛЮЧЕНЫ для диагностики
+        # mp4_month = list(env_data.get('mp4_month_first_u32', []))
+        # if not mp4_month:
+        #     mp4_month = [0] * MAX_DAYS
+        # mp4_month = (mp4_month + [0] * MAX_DAYS)[:MAX_DAYS]
+        # self.env.newPropertyArrayUInt32("month_first_u32", mp4_month)
+        # 
+        # mp4_new = list(env_data.get('mp4_new_counter_mi17_seed', []))
+        # if not mp4_new:
+        #     mp4_new = [0] * MAX_DAYS
+        # mp4_new = (mp4_new + [0] * MAX_DAYS)[:MAX_DAYS]
+        # self.env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", mp4_new)
     
     def _setup_agent(self) -> fg.AgentDescription:
         """Создание и настройка агента HELI"""
