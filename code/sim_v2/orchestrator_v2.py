@@ -56,6 +56,9 @@ class V2Orchestrator:
         """Строит модель с указанными RTC модулями"""
         print(f"Построение модели с модулями: {', '.join(rtc_modules)}")
         
+        # Сохраняем список модулей для проверки в create_simulation
+        self.modules = rtc_modules
+        
         # Создаем базовую модель
         self.model = self.base_model.create_model(self.env_data)
         
@@ -71,7 +74,7 @@ class V2Orchestrator:
             self.base_model.add_rtc_module(module_name)
             
             # Отмечаем если подключён спавн
-            if module_name in ("spawn", "spawn_simple"):
+            if module_name in ("spawn", "spawn_simple", "spawn_v2"):
                 self.spawn_enabled = True
             
         # Добавляем MP2 writer если включен
@@ -98,7 +101,10 @@ class V2Orchestrator:
         # Инициализируем spawn популяцию если включен
         if self.spawn_enabled:
             # Проверяем какой модуль spawn используется
-            if 'spawn_simple' in self.modules:
+            if 'spawn_v2' in self.modules:
+                from rtc_modules import rtc_spawn_v2
+                rtc_spawn_v2.initialize_spawn_population(self.simulation, self.model, self.env_data)
+            elif 'spawn_simple' in self.modules:
                 from rtc_modules import rtc_spawn_simple
                 rtc_spawn_simple.initialize_simple_spawn_population(self.simulation, self.env_data)
             else:
