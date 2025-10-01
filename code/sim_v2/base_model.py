@@ -117,18 +117,12 @@ class V2BaseModel:
         mp3_mfg = (mp3_mfg + [0] * MAX_FRAMES)[:MAX_FRAMES]
         self.env.newPropertyArrayUInt32("mp3_mfg_date_days", mp3_mfg)
         
-        # MP4 month_first и new_counter для spawn ОТКЛЮЧЕНЫ для диагностики
-        # mp4_month = list(env_data.get('mp4_month_first_u32', []))
-        # if not mp4_month:
-        #     mp4_month = [0] * MAX_DAYS
-        # mp4_month = (mp4_month + [0] * MAX_DAYS)[:MAX_DAYS]
-        # self.env.newPropertyArrayUInt32("month_first_u32", mp4_month)
-        # 
-        # mp4_new = list(env_data.get('mp4_new_counter_mi17_seed', []))
-        # if not mp4_new:
-        #     mp4_new = [0] * MAX_DAYS
-        # mp4_new = (mp4_new + [0] * MAX_DAYS)[:MAX_DAYS]
-        # self.env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", mp4_new)
+        # MP4 new_counter для spawn (дата берём из version_date+day, НЕ из month_first)
+        mp4_new = list(env_data.get('mp4_new_counter_mi17_seed', []))
+        if not mp4_new:
+            mp4_new = [0] * MAX_DAYS
+        mp4_new = (mp4_new + [0] * MAX_DAYS)[:MAX_DAYS]
+        self.env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", mp4_new)
     
     def _setup_agent(self) -> fg.AgentDescription:
         """Создание и настройка агента HELI"""
@@ -257,6 +251,12 @@ class V2BaseModel:
                 from rtc_modules import rtc_spawn_simple
                 rtc_spawn_simple.register_simple_spawn(self.model, self.agent)
                 print("  RTC модуль spawn_simple зарегистрирован")
+            
+            elif module_name == "spawn_v2":
+                # Адаптированный spawn для orchestrator_v2
+                from rtc_modules import rtc_spawn_v2
+                rtc_spawn_v2.register_rtc(self.model, self.agent, self.env_data)
+                print("  RTC модуль spawn_v2 зарегистрирован")
                 
             else:
                 # Стандартная обработка для других модулей
