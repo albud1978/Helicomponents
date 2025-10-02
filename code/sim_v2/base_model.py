@@ -68,11 +68,10 @@ class V2BaseModel:
         self.env.newPropertyUInt("mi17_assembly_time_const", int(env_data.get('mi17_assembly_time_const', 180)))
         self.env.newPropertyUInt("mi17_partout_time_const", int(env_data.get('mi17_partout_time_const', 180)))
         
-        # Инициализация констант для группы 17
-        if 'mi17_ll_const' in env_data:
-            self.env.newPropertyUInt("mi17_ll_const", int(env_data['mi17_ll_const']))
-            self.env.newPropertyUInt("mi17_oh_const", int(env_data['mi17_oh_const']))
-            self.env.newPropertyUInt("mi17_br_const", int(env_data['mi17_br_const']))
+        # Инициализация констант для группы 17 (ВСЕГДА, для spawn!)
+        self.env.newPropertyUInt("mi17_ll_const", int(env_data.get('mi17_ll_const', 1800000)))
+        self.env.newPropertyUInt("mi17_oh_const", int(env_data.get('mi17_oh_const', 270000)))
+        self.env.newPropertyUInt("mi17_br_const", int(env_data.get('mi17_br_const', 1551121)))
     
     def _setup_macro_properties(self):
         """Настройка MacroProperty для больших данных"""
