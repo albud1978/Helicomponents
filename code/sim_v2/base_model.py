@@ -62,11 +62,29 @@ class V2BaseModel:
         self.env.newPropertyUInt("days_total", int(env_data['days_total_u16']))
         
         # Константы нормативов из MP1
-        self.env.newPropertyUInt("mi8_repair_time_const", int(env_data.get('mi8_repair_time_const', 180)))
-        self.env.newPropertyUInt("mi8_assembly_time_const", int(env_data.get('mi8_assembly_time_const', 180)))
-        self.env.newPropertyUInt("mi17_repair_time_const", int(env_data.get('mi17_repair_time_const', 180)))
-        self.env.newPropertyUInt("mi17_assembly_time_const", int(env_data.get('mi17_assembly_time_const', 180)))
-        self.env.newPropertyUInt("mi17_partout_time_const", int(env_data.get('mi17_partout_time_const', 180)))
+        # БЕЗ FALLBACK! Если ключа нет → ошибка
+        if 'mi8_repair_time_const' not in env_data:
+            raise KeyError("❌ 'mi8_repair_time_const' отсутствует в env_data! Проверьте sim_env_setup.py")
+        if 'mi8_assembly_time_const' not in env_data:
+            raise KeyError("❌ 'mi8_assembly_time_const' отсутствует в env_data! Проверьте sim_env_setup.py")
+        if 'mi8_partout_time_const' not in env_data:
+            raise KeyError("❌ 'mi8_partout_time_const' отсутствует в env_data! Проверьте sim_env_setup.py")
+        
+        self.env.newPropertyUInt("mi8_repair_time_const", int(env_data['mi8_repair_time_const']))
+        self.env.newPropertyUInt("mi8_assembly_time_const", int(env_data['mi8_assembly_time_const']))
+        self.env.newPropertyUInt("mi8_partout_time_const", int(env_data['mi8_partout_time_const']))
+        
+        # Mi-17 константы БЕЗ FALLBACK
+        if 'mi17_repair_time_const' not in env_data:
+            raise KeyError("❌ 'mi17_repair_time_const' отсутствует в env_data! Проверьте sim_env_setup.py")
+        if 'mi17_assembly_time_const' not in env_data:
+            raise KeyError("❌ 'mi17_assembly_time_const' отсутствует в env_data! Проверьте sim_env_setup.py")
+        if 'mi17_partout_time_const' not in env_data:
+            raise KeyError("❌ 'mi17_partout_time_const' отсутствует в env_data! Проверьте sim_env_setup.py")
+        
+        self.env.newPropertyUInt("mi17_repair_time_const", int(env_data['mi17_repair_time_const']))
+        self.env.newPropertyUInt("mi17_assembly_time_const", int(env_data['mi17_assembly_time_const']))
+        self.env.newPropertyUInt("mi17_partout_time_const", int(env_data['mi17_partout_time_const']))
         
         # Инициализация констант для группы 17 из MP1 (ВСЕГДА, для spawn!)
         # Берём из MP1 по partseqno_i=70482 (Mi-17)

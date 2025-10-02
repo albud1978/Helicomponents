@@ -196,16 +196,30 @@ class AgentPopulationBuilder:
                 mfg_val = 0
             agent.setVariableUInt("mfg_date", mfg_val)
             
-            # Времена ремонта из констант
+            # Времена ремонта из констант БЕЗ FALLBACK
             # FIX 3: Чтение из env_data, НЕ simulation (триггерит NVRTC!)
             if gb == 1:
-                agent.setVariableUInt("repair_time", int(self.env_data.get('mi8_repair_time_const', 180)))
-                agent.setVariableUInt("assembly_time", int(self.env_data.get('mi8_assembly_time_const', 180)))
-                agent.setVariableUInt("partout_time", 180)  # Дефолт для Mi-8
+                if 'mi8_repair_time_const' not in self.env_data:
+                    raise KeyError(f"❌ 'mi8_repair_time_const' отсутствует в env_data для агента idx={idx}, group_by=1")
+                if 'mi8_assembly_time_const' not in self.env_data:
+                    raise KeyError(f"❌ 'mi8_assembly_time_const' отсутствует в env_data для агента idx={idx}, group_by=1")
+                if 'mi8_partout_time_const' not in self.env_data:
+                    raise KeyError(f"❌ 'mi8_partout_time_const' отсутствует в env_data для агента idx={idx}, group_by=1")
+                
+                agent.setVariableUInt("repair_time", int(self.env_data['mi8_repair_time_const']))
+                agent.setVariableUInt("assembly_time", int(self.env_data['mi8_assembly_time_const']))
+                agent.setVariableUInt("partout_time", int(self.env_data['mi8_partout_time_const']))
             elif gb == 2:
-                agent.setVariableUInt("repair_time", int(self.env_data.get('mi17_repair_time_const', 180)))
-                agent.setVariableUInt("assembly_time", int(self.env_data.get('mi17_assembly_time_const', 180)))
-                agent.setVariableUInt("partout_time", int(self.env_data.get('mi17_partout_time_const', 180)))
+                if 'mi17_repair_time_const' not in self.env_data:
+                    raise KeyError(f"❌ 'mi17_repair_time_const' отсутствует в env_data для агента idx={idx}, group_by=2")
+                if 'mi17_assembly_time_const' not in self.env_data:
+                    raise KeyError(f"❌ 'mi17_assembly_time_const' отсутствует в env_data для агента idx={idx}, group_by=2")
+                if 'mi17_partout_time_const' not in self.env_data:
+                    raise KeyError(f"❌ 'mi17_partout_time_const' отсутствует в env_data для агента idx={idx}, group_by=2")
+                
+                agent.setVariableUInt("repair_time", int(self.env_data['mi17_repair_time_const']))
+                agent.setVariableUInt("assembly_time", int(self.env_data['mi17_assembly_time_const']))
+                agent.setVariableUInt("partout_time", int(self.env_data['mi17_partout_time_const']))
             
             # Для агентов в статусе 6 устанавливаем s6_started
             if status_id == 6:
