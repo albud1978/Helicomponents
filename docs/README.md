@@ -265,7 +265,45 @@ LOG_LEVEL=DEBUG python3 code/extract_master.py
 2. **Загрузка данных:** Запустите `extract_master.py`
 3. **Проверка результатов:** Используйте утилиты в `code/utils/`
 
-### Команды запуска симуляции (prod smoke + экспорт)
+### Команды запуска симуляции V2 (с spawn и MP2 export)
+
+```bash
+# 🎯 ОСНОВНАЯ КОМАНДА: Полный 10-летний прогон с spawn и выгрузкой в СУБД
+cd "/home/budnik_an/cube linux/cube" && \
+rm -rf code/sim_v2/__pycache__ code/sim_v2/rtc_modules/__pycache__ code/sim_v2/components/__pycache__ && \
+export CUDA_PATH=/usr/local/cuda-12.8 CUBE_CONFIG_PATH="/home/budnik_an/cube linux/cube" && \
+python3 code/sim_v2/orchestrator_v2.py \
+  --modules spawn_v2 state_2_operations quota_ops_excess states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --steps 3650 \
+  --enable-mp2 \
+  --drop-table \
+  2>&1 | cat
+
+# Краткая версия (без очистки кэша):
+python3 code/sim_v2/orchestrator_v2.py \
+  --modules spawn_v2 state_2_operations quota_ops_excess states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --steps 3650 --enable-mp2 --drop-table
+
+# Тест на 300 дней (для проверки spawn на день 226):
+python3 code/sim_v2/orchestrator_v2.py \
+  --modules spawn_v2 state_2_operations quota_ops_excess states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --steps 300 --enable-mp2 --drop-table
+
+# Без spawn (базовый пайплайн):
+python3 code/sim_v2/orchestrator_v2.py \
+  --modules state_2_operations quota_ops_excess states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --steps 3650 --enable-mp2 --drop-table
+```
+
+**Результаты успешного прогона (3650 дней):**
+- ✅ Spawn работает: 7 новых агентов Mi-17 на день 226 (idx 279-285, acn 100000-100006)
+- ✅ Serviceable растёт: 19→26 (после spawn)→35 (к концу)
+- ✅ MP2 export: 1,042,318 строк в таблицу `sim_masterv2`
+- ✅ Производительность: 44.58с на GPU, среднее время шага 11.2мс
+
+---
+
+### Команды запуска симуляции V1 (legacy, для справки)
 
 ```bash
 # Очистка таблицы результатов перед прогоном
