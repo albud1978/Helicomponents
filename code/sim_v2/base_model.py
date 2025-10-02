@@ -68,10 +68,31 @@ class V2BaseModel:
         self.env.newPropertyUInt("mi17_assembly_time_const", int(env_data.get('mi17_assembly_time_const', 180)))
         self.env.newPropertyUInt("mi17_partout_time_const", int(env_data.get('mi17_partout_time_const', 180)))
         
-        # Инициализация констант для группы 17 (ВСЕГДА, для spawn!)
-        self.env.newPropertyUInt("mi17_ll_const", int(env_data.get('mi17_ll_const', 1800000)))
-        self.env.newPropertyUInt("mi17_oh_const", int(env_data.get('mi17_oh_const', 270000)))
-        self.env.newPropertyUInt("mi17_br_const", int(env_data.get('mi17_br_const', 1551121)))
+        # Инициализация констант для группы 17 из MP1 (ВСЕГДА, для spawn!)
+        # Берём из MP1 по partseqno_i=70482 (Mi-17)
+        mp1_index = env_data.get('mp1_index', {})
+        pidx_mi17 = mp1_index.get(70482, -1)
+        
+        if pidx_mi17 < 0:
+            raise RuntimeError("partseqno_i=70482 (Mi-17) НЕ найден в mp1_index! Проверьте Extract/MP1.")
+        
+        arr_ll17 = env_data.get('mp1_ll_mi17', [])
+        arr_oh17 = env_data.get('mp1_oh_mi17', [])
+        arr_br17 = env_data.get('mp1_br_mi17', [])
+        
+        if pidx_mi17 >= len(arr_ll17) or pidx_mi17 >= len(arr_oh17) or pidx_mi17 >= len(arr_br17):
+            raise RuntimeError(f"MP1 массивы недостаточной длины для pidx={pidx_mi17}")
+        
+        mi17_ll = int(arr_ll17[pidx_mi17])
+        mi17_oh = int(arr_oh17[pidx_mi17])
+        mi17_br = int(arr_br17[pidx_mi17])
+        
+        if mi17_ll == 0 or mi17_oh == 0 or mi17_br == 0:
+            raise RuntimeError(f"Mi-17 нормативы = 0! ll={mi17_ll}, oh={mi17_oh}, br={mi17_br}. Проверьте MP1 данные.")
+        
+        self.env.newPropertyUInt("mi17_ll_const", mi17_ll)
+        self.env.newPropertyUInt("mi17_oh_const", mi17_oh)
+        self.env.newPropertyUInt("mi17_br_const", mi17_br)
     
     def _setup_macro_properties(self):
         """Настройка MacroProperty для больших данных"""
