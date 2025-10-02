@@ -145,6 +145,12 @@ class V2Orchestrator:
             else:
                 # Fallback если телеметрия отключена
                 self.simulation.step()
+            
+            # Логирование spawn каждые 50 шагов
+            if self.spawn_enabled and step > 0 and step % 50 == 0:
+                serv_pop = fg.AgentVector(self.base_model.agent)
+                self.simulation.getPopulationData(serv_pop, 'serviceable')
+                print(f"  [Day {step}] serviceable={len(serv_pop)}")
     
     def get_results(self):
         """Извлекает результаты симуляции из всех состояний"""

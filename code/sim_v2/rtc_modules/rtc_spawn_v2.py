@@ -28,8 +28,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     
     env = model.Environment()
     
-    # frames_initial для spawn (откуда начинать idx)
-    frames_initial = env_data.get('first_future_idx', env_data.get('frames_union_no_future', 286))
+    # frames_initial для spawn (ПРАВИЛЬНО: first_reserved_idx!)
+    frames_initial = env_data.get('first_reserved_idx', 279)
     env.newPropertyUInt("frames_initial", frames_initial)
     
     # Агенты-утилиты спавна
@@ -83,6 +83,12 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         bacn_mp[safe_day].exchange(next_acn);
         bpsn_mp[safe_day].exchange(next_psn);
         
+        // Логирование как в sim_master
+        if (need > 0u) {
+            printf("  [SPAWN MGR Day %u] need=%u, next_idx=%u->%u, next_acn=%u->%u\\n",
+                   day, need, next_idx, next_idx + need, next_acn, next_acn + need);
+        }
+        
         // Сдвигаем курсоры
         next_idx += need;
         next_acn += need;
@@ -128,6 +134,12 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("aircraft_number", acn);
         FLAMEGPU->agent_out.setVariable<unsigned int>("partseqno_i", 70482u);  // Mi-17
         FLAMEGPU->agent_out.setVariable<unsigned int>("group_by", 2u);         // Mi-17
+        
+        // Логирование создания как в sim_master
+        if (ticket == 0u) {
+            printf("  [SPAWN Day %u] Создаём %u агентов Mi-17: idx %u-%u, acn %u-%u\\n",
+                   day, need, base_idx, base_idx + need - 1u, base_acn, base_acn + need - 1u);
+        }
         
         // 2. Времена из Environment constants
         FLAMEGPU->agent_out.setVariable<unsigned int>("repair_time", 
@@ -210,11 +222,12 @@ def initialize_spawn_population(simulation: 'fg.CUDASimulation', model: 'fg.Mode
     mgr_pop = fg.AgentVector(model.getAgent("spawn_mgr"))
     mgr_pop.push_back()
     
-    first_future_idx = env_data.get('first_future_idx', env_data.get('frames_union_no_future', 286))
-    base_acn_spawn = env_data.get('base_acn_spawn', 100000)
+    # ПРАВИЛЬНО: first_reserved_idx (279), НЕ first_future_idx (286)!
+    first_reserved_idx = env_data.get('first_reserved_idx', 279)
+    base_acn_spawn = 100000  # ХАРДКОД - начинаем с 100000 ВСЕГДА
     base_psn_spawn = 70482  # Mi-17
     
-    mgr_pop[0].setVariableUInt("next_idx", first_future_idx)
+    mgr_pop[0].setVariableUInt("next_idx", first_reserved_idx)
     mgr_pop[0].setVariableUInt("next_acn", base_acn_spawn)
     mgr_pop[0].setVariableUInt("next_psn", base_psn_spawn)
     
@@ -230,5 +243,5 @@ def initialize_spawn_population(simulation: 'fg.CUDASimulation', model: 'fg.Mode
     
     simulation.setPopulationData(ticket_pop, "default")
     
-    print(f"  Spawn_v2 популяция: mgr next_idx={first_future_idx}, тикетов={ticket_count}")
+    print(f"  Spawn_v2 популяция: mgr next_idx={first_reserved_idx}, тикетов={ticket_count}")
 
