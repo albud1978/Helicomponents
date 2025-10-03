@@ -62,7 +62,9 @@ python3 code/utils/database_cleanup.py
 - [load.md](load.md) - Процесс загрузки данных (шаг 03)
 
 ### История и архивы
-- [changelog.md](changelog.md) - История изменений проекта
+- [changelog.md](changelog.md) - 🆕 **История изменений проекта (обновлено 02-10-2025)**
+- [hardcode_summary_02-10-2025.md](hardcode_summary_02-10-2025.md) - 🎯 **Сводка устранения хардкода (завершено 02-10-2025)**
+- [hardcode_audit_02-10-2025.md](hardcode_audit_02-10-2025.md) - ✅ **Детальный аудит хардкода**
 - [v2_state_based_architecture.md](v2_state_based_architecture.md) - Первоначальное описание V2
 - [v2_modular_architecture_summary.md](v2_modular_architecture_summary.md) - Итоги работы по модульной архитектуре
 
