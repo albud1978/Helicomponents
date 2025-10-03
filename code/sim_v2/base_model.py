@@ -87,12 +87,16 @@ class V2BaseModel:
         self.env.newPropertyUInt("mi17_partout_time_const", int(env_data['mi17_partout_time_const']))
         
         # Инициализация констант для группы 17 из MP1 (ВСЕГДА, для spawn!)
-        # Берём из MP1 по partseqno_i=70482 (Mi-17)
+        # Читаем partseqno из env_data (единая точка определения)
+        spawn_partseqno_mi17 = env_data.get('spawn_partseqno_mi17')
+        if spawn_partseqno_mi17 is None:
+            raise KeyError("❌ 'spawn_partseqno_mi17' отсутствует в env_data!")
+        
         mp1_index = env_data.get('mp1_index', {})
-        pidx_mi17 = mp1_index.get(70482, -1)
+        pidx_mi17 = mp1_index.get(spawn_partseqno_mi17, -1)
         
         if pidx_mi17 < 0:
-            raise RuntimeError("partseqno_i=70482 (Mi-17) НЕ найден в mp1_index! Проверьте Extract/MP1.")
+            raise RuntimeError(f"partseqno_i={spawn_partseqno_mi17} (Mi-17) НЕ найден в mp1_index! Проверьте Extract/MP1.")
         
         arr_ll17 = env_data.get('mp1_ll_mi17', [])
         arr_oh17 = env_data.get('mp1_oh_mi17', [])
@@ -111,6 +115,10 @@ class V2BaseModel:
         self.env.newPropertyUInt("mi17_ll_const", mi17_ll)
         self.env.newPropertyUInt("mi17_oh_const", mi17_oh)
         self.env.newPropertyUInt("mi17_br_const", mi17_br)
+        
+        # Partseqno и group_by для spawn (читаем из env_data)
+        self.env.newPropertyUInt("spawn_partseqno_mi17", spawn_partseqno_mi17)
+        self.env.newPropertyUInt("spawn_group_by_mi17", int(env_data.get('spawn_group_by_mi17', 2)))
     
     def _setup_macro_properties(self):
         """Настройка MacroProperty для больших данных"""

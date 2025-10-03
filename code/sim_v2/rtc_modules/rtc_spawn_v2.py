@@ -69,7 +69,9 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
             const unsigned int frames_initial = FLAMEGPU->environment.getProperty<unsigned int>("frames_initial");
             if (next_idx < frames_initial) next_idx = frames_initial;
             if (next_acn < 100000u) next_acn = 100000u;
-            if (next_psn < 70482u) next_psn = 70482u;  // Mi-17 partseqno
+            // Читаем partseqno из Environment (единая точка определения)
+            const unsigned int spawn_psn = FLAMEGPU->environment.getProperty<unsigned int>("spawn_partseqno_mi17");
+            if (next_psn < spawn_psn) next_psn = spawn_psn;
         }
         
         // Публикуем в MacroProperty МАССИВЫ
@@ -132,8 +134,12 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         // 1. Идентификаторы (БЕЗ psn, ac_type_mask)
         FLAMEGPU->agent_out.setVariable<unsigned int>("idx", idx);
         FLAMEGPU->agent_out.setVariable<unsigned int>("aircraft_number", acn);
-        FLAMEGPU->agent_out.setVariable<unsigned int>("partseqno_i", 70482u);  // Mi-17
-        FLAMEGPU->agent_out.setVariable<unsigned int>("group_by", 2u);         // Mi-17
+        // Читаем partseqno и group_by из Environment
+        const unsigned int spawn_psn = FLAMEGPU->environment.getProperty<unsigned int>("spawn_partseqno_mi17");
+        const unsigned int spawn_gb = FLAMEGPU->environment.getProperty<unsigned int>("spawn_group_by_mi17");
+        
+        FLAMEGPU->agent_out.setVariable<unsigned int>("partseqno_i", spawn_psn);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("group_by", spawn_gb);
         
         // Логирование создания как в sim_master
         if (ticket == 0u) {
@@ -225,7 +231,8 @@ def initialize_spawn_population(simulation: 'fg.CUDASimulation', model: 'fg.Mode
     # ПРАВИЛЬНО: first_reserved_idx (279), НЕ first_future_idx (286)!
     first_reserved_idx = env_data.get('first_reserved_idx', 279)
     base_acn_spawn = 100000  # ХАРДКОД - начинаем с 100000 ВСЕГДА
-    base_psn_spawn = 70482  # Mi-17
+    # Читаем partseqno из env_data (единая точка определения)
+    base_psn_spawn = env_data.get('spawn_partseqno_mi17', 70386)
     
     mgr_pop[0].setVariableUInt("next_idx", first_reserved_idx)
     mgr_pop[0].setVariableUInt("next_acn", base_acn_spawn)

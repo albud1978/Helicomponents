@@ -429,14 +429,18 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     # Извлекаем константы для Mi-8 (partseqno_i=70387, МИ-8Т, group_by=1) и Mi-17 (partseqno_i=70386, МИ-8АМТ, group_by=2)
     # БЕЗ FALLBACK! Если данных нет → ошибка
     
+    # Определяем partseqno для типов ВС (единая точка определения для всего проекта)
+    SPAWN_PARTSEQNO_MI8 = 70387   # МИ-8Т, group_by=1
+    SPAWN_PARTSEQNO_MI17 = 70386  # МИ-8АМТ, group_by=2
+    
     # Mi-8: partseqno=70387 (МИ-8Т, group_by=1)
-    if 70387 not in mp1_map:
+    if SPAWN_PARTSEQNO_MI8 not in mp1_map:
         raise ValueError(
-            "❌ partseqno=70387 (Mi-8, МИ-8Т) НЕ найден в справочнике md_components! "
+            f"❌ partseqno={SPAWN_PARTSEQNO_MI8} (Mi-8, МИ-8Т) НЕ найден в справочнике md_components! "
             "Проверьте данные в таблице md_components."
         )
     
-    mi8_tuple = mp1_map[70387]  # (br_mi8, br_mi17, repair_time, partout_time, assembly_time)
+    mi8_tuple = mp1_map[SPAWN_PARTSEQNO_MI8]  # (br_mi8, br_mi17, repair_time, partout_time, assembly_time)
     mi8_repair_time_const = int(mi8_tuple[2])
     mi8_partout_time_const = int(mi8_tuple[3])
     mi8_assembly_time_const = int(mi8_tuple[4])
@@ -450,13 +454,13 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         raise ValueError(f"❌ Mi-8 assembly_time={mi8_assembly_time_const} <= 0 в справочнике md_components!")
     
     # Mi-17: partseqno=70386 (МИ-8АМТ, group_by=2)
-    if 70386 not in mp1_map:
+    if SPAWN_PARTSEQNO_MI17 not in mp1_map:
         raise ValueError(
-            "❌ partseqno=70386 (Mi-17, МИ-8АМТ) НЕ найден в справочнике md_components! "
+            f"❌ partseqno={SPAWN_PARTSEQNO_MI17} (Mi-17, МИ-8АМТ) НЕ найден в справочнике md_components! "
             "Проверьте данные в таблице md_components."
         )
     
-    mi17_tuple = mp1_map[70386]  # (br_mi8, br_mi17, repair_time, partout_time, assembly_time)
+    mi17_tuple = mp1_map[SPAWN_PARTSEQNO_MI17]  # (br_mi8, br_mi17, repair_time, partout_time, assembly_time)
     mi17_repair_time_const = int(mi17_tuple[2])
     mi17_partout_time_const = int(mi17_tuple[3])
     mi17_assembly_time_const = int(mi17_tuple[4])
@@ -500,6 +504,11 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mp1_arrays': mp1_arrays,  # Добавляем сгруппированные mp1 данные
         'mp3_arrays': mp3_arrays,
         'mp3_count': len(mp3_rows),
+        # Partseqno для типов ВС (единая точка определения для всего проекта)
+        'spawn_partseqno_mi8': SPAWN_PARTSEQNO_MI8,
+        'spawn_partseqno_mi17': SPAWN_PARTSEQNO_MI17,
+        'spawn_group_by_mi8': 1,
+        'spawn_group_by_mi17': 2,
         # Скалярные константы времени для Mi-8/Mi-17 (из mp1_map как в sim_master.py)
         'mi8_repair_time_const': mi8_repair_time_const,
         'mi8_partout_time_const': mi8_partout_time_const,
