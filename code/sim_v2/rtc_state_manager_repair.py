@@ -32,11 +32,12 @@ RTC_APPLY_4_TO_5 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_5, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     
-    printf("  [Step %u] AC %u: TRANSITION repair -> reserve (intent=5), repair_days=%u/%u\\n", 
-           step_day, aircraft_number, repair_days, repair_time);
+    printf("  [TRANSITION 4→5 Day %u] AC %u (idx %u): repair -> reserve, repair_days=%u/%u\\n", 
+           step_day, aircraft_number, idx, repair_days, repair_time);
     
     // Сбрасываем счетчики при переходе в резерв
     FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);

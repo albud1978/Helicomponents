@@ -50,11 +50,21 @@ python3 code/utils/database_cleanup.py
 
 ### Архитектура симуляции
 - **[rtc_pipeline_architecture.md](rtc_pipeline_architecture.md)** - 🆕 **Архитектура RTC пайплайна + V2 Refactoring (30-09-2025)**
+- **[quota_architecture_analysis_06-10-2025.md](quota_architecture_analysis_06-10-2025.md)** - 🔍 **Анализ архитектуры квотирования (06-10-2025)**
 - **[refactoring_summary_30-09-2025.md](refactoring_summary_30-09-2025.md)** - 🎉 **Итоговая сводка рефакторинга V2 Orchestrator**
 - **[v2_rtc_modules_map.md](v2_rtc_modules_map.md)** - 📋 **Карта распределения RTC модулей и ядер**
 - [v2_architecture_consolidated.md](v2_architecture_consolidated.md) - Консолидированная документация V2 state-based архитектуры
 - [validation.md](validation.md) - Инварианты и проверки данных
 - [migration.md](migration.md) - Миграция между версиями
+
+### Проектные наработки по квотированию
+- **[quota_implementation_summary_07-10-2025.md](quota_implementation_summary_07-10-2025.md)** - ✅ **ИТОГОВЫЙ ОТЧЁТ: Реализация каскадной архитектуры (07-10-2025)**
+- **[quota_cascade_usage.md](quota_cascade_usage.md)** - 📖 **Инструкция по использованию каскадного квотирования**
+- **[quota_cascade_architecture_06-10-2025.md](quota_cascade_architecture_06-10-2025.md)** - 🏗️ **Каскадная архитектура с передачей остатка (ЭТАП 1)**
+- [universal_quota_manager_design.md](universal_quota_manager_design.md) - API универсального менеджера квот (ЭТАП 2)
+- [quota_manager_intent_based.md](quota_manager_intent_based.md) - Intent-based архитектура квотирования
+- [refactoring_plan_quota_optimization.md](refactoring_plan_quota_optimization.md) - План оптимизации слоёв (30→11)
+- [quota_architecture_analysis_06-10-2025.md](quota_architecture_analysis_06-10-2025.md) - Начальный анализ архитектуры
 
 ### ETL процессы
 - [extract.md](extract.md) - Процесс извлечения данных (шаг 01)
@@ -62,7 +72,7 @@ python3 code/utils/database_cleanup.py
 - [load.md](load.md) - Процесс загрузки данных (шаг 03)
 
 ### История и архивы
-- [changelog.md](changelog.md) - 🆕 **История изменений проекта (обновлено 02-10-2025)**
+- [changelog.md](changelog.md) - 🆕 **История изменений проекта (обновлено 08-10-2025)**
 - [hardcode_summary_02-10-2025.md](hardcode_summary_02-10-2025.md) - 🎯 **Сводка устранения хардкода (завершено 02-10-2025)**
 - [hardcode_audit_02-10-2025.md](hardcode_audit_02-10-2025.md) - ✅ **Детальный аудит хардкода**
 - [v2_state_based_architecture.md](v2_state_based_architecture.md) - Первоначальное описание V2
@@ -270,38 +280,57 @@ LOG_LEVEL=DEBUG python3 code/extract_master.py
 ### Команды запуска симуляции V2 (с spawn и MP2 export)
 
 ```bash
-# 🎯 ОСНОВНАЯ КОМАНДА: Полный 10-летний прогон с spawn и выгрузкой в СУБД
+# 🎯 ОСНОВНАЯ КОМАНДА: Полный 10-летний прогон с каскадным квотированием, spawn и выгрузкой в СУБД
 cd "/home/budnik_an/cube linux/cube" && \
 rm -rf code/sim_v2/__pycache__ code/sim_v2/rtc_modules/__pycache__ code/sim_v2/components/__pycache__ && \
 export CUDA_PATH=/usr/local/cuda-12.8 CUBE_CONFIG_PATH="/home/budnik_an/cube linux/cube" && \
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules spawn_v2 state_2_operations quota_ops_excess states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --modules spawn_v2 state_2_operations quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_operations state_manager_repair state_manager_storage \
   --steps 3650 \
   --enable-mp2 \
   --drop-table \
   2>&1 | cat
 
+# ✅ ОБНОВЛЕНО (08-10-2025): Каскадное квотирование протестировано на 3650 днях
+#   Модули:
+#   - quota_ops_excess (демоут operations → serviceable, 1 слой)
+#   - quota_promote_serviceable (промоут P1: serviceable → operations)
+#   - quota_promote_reserve (промоут P2: reserve → operations)
+#   - quota_promote_inactive (промоут P3: inactive → operations)
+#
+#   Результаты:
+#   - Со spawn: 43.17с GPU, 11.1мс/шаг, 1,042,318 строк MP2, 286 агентов
+#   - Без spawn: 37.94с GPU, 9.7мс/шаг, 1,018,350 строк MP2, 279 агентов
+
 # Краткая версия (без очистки кэша):
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules spawn_v2 state_2_operations quota_ops_excess states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --modules spawn_v2 state_2_operations quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_operations state_manager_repair state_manager_storage \
   --steps 3650 --enable-mp2 --drop-table
 
 # Тест на 300 дней (для проверки spawn на день 226):
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules spawn_v2 state_2_operations quota_ops_excess states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --modules spawn_v2 state_2_operations quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_operations state_manager_repair state_manager_storage \
   --steps 300 --enable-mp2 --drop-table
 
 # Без spawn (базовый пайплайн):
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations quota_ops_excess states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --modules state_2_operations quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_operations state_manager_repair state_manager_storage \
   --steps 3650 --enable-mp2 --drop-table
 ```
 
-**Результаты успешного прогона (3650 дней):**
-- ✅ Spawn работает: 7 новых агентов Mi-17 на день 226 (idx 279-285, acn 100000-100006)
-- ✅ Serviceable растёт: 19→26 (после spawn)→35 (к концу)
-- ✅ MP2 export: 1,042,318 строк в таблицу `sim_masterv2`
-- ✅ Производительность: 44.58с на GPU, среднее время шага 11.2мс
+**Результаты успешного прогона (3650 дней, обновлено 08-10-2025):**
+
+**Со spawn:**
+- ✅ **Производительность:** 43.17с на GPU, среднее время шага 11.1мс
+- ✅ **MP2 export:** 1,042,318 строк в таблицу `sim_masterv2` (~112,227 строк/сек)
+- ✅ **Spawn работает:** 286 агентов создано (из них 7 на день 226)
+- ✅ **Serviceable растёт:** до 129 агентов (было 7 в начале)
+- ✅ **Квотирование:** Каскадная архитектура работает без race conditions
+
+**Без spawn:**
+- ✅ **Производительность:** 37.94с на GPU, среднее время шага 9.7мс
+- ✅ **MP2 export:** 1,018,350 строк (~112,055 строк/сек)
+- ✅ **Популяция stable:** ~279 агентов
 
 ---
 

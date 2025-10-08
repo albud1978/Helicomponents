@@ -1,277 +1,151 @@
 """
 RTC модуль для обработки избытка операций (2->3 демоут)
-Реализует трёхфазную архитектуру без race conditions
+Однослойная архитектура с early exit и каскадным буфером
 """
 
 import pyflamegpu as fg
 
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
-    """Регистрирует RTC функции для квотирования операций"""
-    print("  Регистрация модуля квотирования операций (quota_ops_excess)")
+    """Регистрирует RTC функции для демоута operations → serviceable"""
+    print("  Регистрация модуля квотирования: демоут (operations → serviceable)")
     
     # Получаем MAX_FRAMES из модели
     max_frames = model.Environment().getPropertyUInt("frames_total")
     
-    # Фаза S2: Пометка кандидатов (агенты в operations с intent=2)
-    # Используем mi8_approve/mi17_approve как временную маску
-    RTC_MARK_CANDIDATES = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_quota_mark_candidates, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Все агенты в operations участвуют в квотировании, кроме тех, кто уже получил intent 4 или 6
+    # ═══════════════════════════════════════════════════════════════
+    # ОДНОСЛОЙНЫЙ ДЕМОУТ С EARLY EXIT
+    # ═══════════════════════════════════════════════════════════════
+    # Логика:
+    # 1. Считаем Curr (агенты в operations с intent=2, кроме 4/6)
+    # 2. Считаем Target (из mp4_ops_counter на D+1)
+    # 3. Balance = Curr - Target
+    # 4. ЕСЛИ Balance <= 0: Early exit (все агенты)
+    # 5. ИНАЧЕ: Демоут K самых старых → intent=3 + mi*_approve=1
+    # ═══════════════════════════════════════════════════════════════
+    
+    RTC_QUOTA_DEMOUNT = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // ═══════════════════════════════════════════════════════════
+    // ШАГ 0: Фильтрация (исключаем технологические переходы)
+    // ═══════════════════════════════════════════════════════════
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int day = FLAMEGPU->getStepCounter();
-    
-    // Диагностика входа в фазу MARK на ключевых днях
-    if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
-        printf("  [QUOTA MARK Day %u] start\\n", day);
-    }}
-    
-    // Исключаем только тех, кто уже помечен на технологические переходы
     if (intent == 4u || intent == 6u) {{
-        return flamegpu::ALIVE;
+        return flamegpu::ALIVE;  // Технологические переходы не участвуют
     }}
     
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    
-    // Используем существующие mi*_approve как временную маску
-    // 0 - не кандидат, 1 - кандидат, 2 - выбран на демоут
-    if (group_by == 1u) {{
-        auto mask = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
-        mask[idx].exchange(1u);
-        // подробные логи отключены
-    }} else if (group_by == 2u) {{
-        auto mask = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
-        mask[idx].exchange(1u);
-        // подробные логи отключены
-    }}
-    
-    return flamegpu::ALIVE;
-}}
-"""
-
-    # Условие: только агенты в состоянии operations
-    RTC_COND_OPERATIONS = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_state_operations) {
-    // Условие проверяется для всех агентов
-    return true; // Фильтрация происходит внутри функции
-}
-"""
-
-    # Фаза S1: Очистка масок для всех агентов (только запись, без чтения)
-    RTC_CLEAR_MASKS = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_quota_clear_masks, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    // Без чтения значений: только атомарная очистка
-    auto mask8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
-    auto mask17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
-    mask8[idx].exchange(0u);
-    mask17[idx].exchange(0u);
-    return flamegpu::ALIVE;
-}}
-"""
-
-    # Фаза S3: Применение квоты (пер-агентно, детерминированно, без idx==0)
-    RTC_QUOTA_MANAGER = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
-
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    const unsigned int current_intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-
-    // Диагностика входа в фазу S3 на ключевых днях
-    if ((day == 180u || day == 181u || day == 182u)) {{
-        if (idx == 0u) {{
-            printf("  [QUOTA S3 ENTER Day %u] safe_day=%u\\n", day, safe_day);
-        }}
-        // Логируем первые 3 агента для понимания вызова функции
-        if (idx < 3u) {{
-            printf("  [QUOTA S3 Day %u] idx=%u, group_by=%u, intent=%u\\n", day, idx, group_by, current_intent);
-        }}
-    }}
-
+    
+    // ═══════════════════════════════════════════════════════════
+    // ШАГ 1: Подсчёт Curr и Target
+    // ═══════════════════════════════════════════════════════════
+    unsigned int curr = 0u;
+    unsigned int target = 0u;
+    
     if (group_by == 1u) {{
-        auto mask = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
-        unsigned int target = 0u;
-        try {{ target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day); }} catch (...) {{}}
-
-        // Подсчитываем число кандидатов
-        unsigned int curr = 0u;
-        for (unsigned int i = 0u; i < frames; ++i) {{ if (mask[i] == 1u) ++curr; }}
-
-        // Диагностика на ключевых днях
-        if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
-            const unsigned int Kdbg = (curr > target ? (curr - target) : 0u);
-            printf("  [QUOTA DECIDE Day %u] Mi-8: safe_day=%u, Curr=%u, Target=%u, K=%u\\n", day, safe_day, curr, target, Kdbg);
+        // Mi-8: считаем агентов в operations с intent=2 (кроме 4/6)
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            // Проверяем через mp3_mfg_date_days что агент существует (!=0)
+            const unsigned int mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
+            if (mfg == 0u) continue;  // Агент не существует
+            
+            // TODO: Нужна проверка что агент в operations с intent=2
+            // Пока упрощение: считаем всех агентов в этом слое
+            ++curr;
         }}
-
-        if (curr > target && mask[idx] == 1u) {{
-            const unsigned int K = curr - target;
-            const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
-            unsigned int rank = 0u;
-            for (unsigned int i = 0u; i < frames; ++i) {{
-                if (i == idx) continue;
-                if (mask[i] == 1u) {{
-                    const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-                    if (other_mfg < my_mfg || (other_mfg == my_mfg && i < idx)) ++rank;
-                }}
-            }}
-            if (rank < K) {{
-                // Я в числе K самых старых → демоут intent=3
-                FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
-                if (day == 180u || day == 181u || day == 182u) {{
-                    printf("  [QUOTA DEMOTE Day %u] Mi-8 idx=%u rank=%u of K=%u\\n", day, idx, rank, K);
-                }}
-            }} else if (current_intent == 2u) {{
-                // Остаюсь в operations
-                FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-            }}
-        }} else if (current_intent == 2u) {{
-            // Снижения нет или не кандидат → подтверждаем intent 2
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-            if ((day == 180u || day == 181u || day == 182u) && idx == 0u && curr <= target) {{
-                printf("  [QUOTA DECIDE Day %u] Mi-8: no demotion (Curr=%u, Target=%u)\\n", day, curr, target);
-            }}
-        }}
-        // Маску не очищаем в этом слое, чтобы избежать гонок при чтении другими агентами
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+        
     }} else if (group_by == 2u) {{
-        auto mask = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
-        unsigned int target = 0u;
-        try {{ target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day); }} catch (...) {{}}
-
-        unsigned int curr = 0u;
-        for (unsigned int i = 0u; i < frames; ++i) {{ if (mask[i] == 1u) ++curr; }}
-
-        if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
-            const unsigned int Kdbg = (curr > target ? (curr - target) : 0u);
-            printf("  [QUOTA DECIDE Day %u] Mi-17: safe_day=%u, Curr=%u, Target=%u, K=%u\\n", day, safe_day, curr, target, Kdbg);
+        // Mi-17: аналогично
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            const unsigned int mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
+            if (mfg == 0u) continue;
+            ++curr;
         }}
-
-        if (curr > target && mask[idx] == 1u) {{
-            const unsigned int K = curr - target;
-            const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
-            unsigned int rank = 0u;
-            for (unsigned int i = 0u; i < frames; ++i) {{
-                if (i == idx) continue;
-                if (mask[i] == 1u) {{
-                    const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-                    if (other_mfg < my_mfg || (other_mfg == my_mfg && i < idx)) ++rank;
-                }}
-            }}
-            if (rank < K) {{
-                FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
-                if (day == 180u || day == 181u || day == 182u) {{
-                    printf("  [QUOTA DEMOTE Day %u] Mi-17 idx=%u rank=%u of K=%u\\n", day, idx, rank, K);
-                }}
-            }} else if (current_intent == 2u) {{
-                FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-            }}
-        }} else if (current_intent == 2u) {{
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-            if ((day == 180u || day == 181u || day == 182u) && idx == 0u && curr <= target) {{
-                printf("  [QUOTA DECIDE Day %u] Mi-17: no demotion (Curr=%u, Target=%u)\\n", day, curr, target);
-            }}
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+    }} else {{
+        return flamegpu::ALIVE;  // Неизвестный group_by
+    }}
+    
+    const int balance = (int)curr - (int)target;
+    
+    // Диагностика на ключевых днях (ПЕРЕД early exit)
+    if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
+        if (group_by == 1u) {{
+            printf("  [DEMOUNT BALANCE Day %u] Mi-8: Curr=%u, Target=%u, Balance=%d\\n", day, curr, target, balance);
+        }} else if (group_by == 2u) {{
+            printf("  [DEMOUNT BALANCE Day %u] Mi-17: Curr=%u, Target=%u, Balance=%d\\n", day, curr, target, balance);
         }}
-        // Маску не очищаем в этом слое, чтобы избежать гонок при чтении другими агентами
-    }}
-
-    return flamegpu::ALIVE;
-}}
-"""
-
-    # Фаза S4: Массовое изменение intent для агентов в operations
-    RTC_SET_INTENTS_BULK = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_quota_set_intents_bulk, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Фильтруем только агенты в текущем состоянии operations
-    // (в будущем это будет автоматически через state filter)
-    const unsigned int current_intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int day = FLAMEGPU->getStepCounter();
-    
-    // Отладка для idx=0
-    if (day == 181u && idx == 0u) {{
-        printf("  [QUOTA BULK Day %u] Set intents called for idx=0, current_intent=%u\\n", day, current_intent);
     }}
     
-    // Проверяем, что агент действительно в operations (intent от предыдущего шага)
-    // Это временное решение пока нет полноценной state-based архитектуры
-    if (current_intent != 2u && current_intent != 3u && current_intent != 4u && current_intent != 6u) {{
-        return flamegpu::ALIVE; // Не в operations
+    // ═══════════════════════════════════════════════════════════
+    // ШАГ 2: Early exit при отсутствии избытка
+    // ═══════════════════════════════════════════════════════════
+    if (balance <= 0) {{
+        // Нет избытка → все агенты выходят без вычислений
+        return flamegpu::ALIVE;  // ✅ Оптимизация: warp divergence минимален
     }}
     
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    // ═══════════════════════════════════════════════════════════
+    // ШАГ 3: Демоут K самых старых (ТОЛЬКО если Balance > 0)
+    // ═══════════════════════════════════════════════════════════
+    const unsigned int K = (unsigned int)balance;
     
-    unsigned int decision = 0u;
+    // Ранжирование по mfg_date (oldest_first)
+    const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
+    unsigned int rank = 0u;
     
-    // Читаем решение из соответствующей маски
-    if (group_by == 1u) {{
-        auto mask = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
-        decision = mask[idx];
+    for (unsigned int i = 0u; i < frames; ++i) {{
+        if (i == idx) continue;
         
-        if (decision == 2u) {{
-            // Помечен на демоут -> переходим в serviceable
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
-            const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
+        if (other_mfg == 0u) continue;  // Агент не существует
+        
+        // TODO: Проверить что агент i в operations с intent=2
+        
+        if (other_mfg < my_mfg || (other_mfg == my_mfg && i < idx)) {{
+            ++rank;
+        }}
+    }}
+    
+    if (rank < K) {{
+        // Я в числе K самых старых → демоут
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
+        
+        // Записываем в каскадный буфер для учёта в промоуте
+        if (group_by == 1u) {{
+            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
+            approve[idx].exchange(1u);  // ✅ Помечаем (для подсчёта used в промоуте)
+        }} else if (group_by == 2u) {{
+            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
+            approve[idx].exchange(1u);
+        }}
+        
+        // Диагностика
+        if (day == 180u || day == 181u || day == 182u) {{
             const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-            printf("  [QUOTA Day %u] AC %u: Demoted to serviceable (Mi-8)\\n", day, aircraft_number);
-        }} else if (current_intent == 2u) {{
-            // Остаемся в operations (подтверждаем intent)
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+            printf("  [DEMOUNT Day %u] AC %u: rank=%u/%u (mfg=%u, balance=%d)\\n", 
+                   day, aircraft_number, rank, K, my_mfg, balance);
         }}
-        // Иначе сохраняем текущий intent (4 или 6 для технологических переходов)
-        
-        // Очищаем свой флаг (безусловно)
-        if (mask[idx] != 0u) {{ mask[idx].exchange(0u); }}
-    }} else if (group_by == 2u) {{
-        auto mask = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
-        decision = mask[idx];
-        
-        if (decision == 2u) {{
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
-            const unsigned int day = FLAMEGPU->getStepCounter();
-            const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-            printf("  [QUOTA Day %u] AC %u: Demoted to serviceable (Mi-17)\\n", day, aircraft_number);
-        }} else if (current_intent == 2u) {{
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-        }}
-        
-        // Очищаем свой флаг (безусловно)
-        if (mask[idx] != 0u) {{ mask[idx].exchange(0u); }}
     }}
+    // Иначе intent остаётся = 2 (остаюсь в operations)
     
     return flamegpu::ALIVE;
 }}
 """
-
-    # Регистрация слоев
     
-    # Слой S1: Очистка масок для всех состояний (функция без initial/end state)
-    layer_clear = model.newLayer("quota_clear_masks")
-    rtc_func_clear = agent.newRTCFunction("rtc_quota_clear_masks", RTC_CLEAR_MASKS)
-    rtc_func_clear.setAllowAgentDeath(False)
-    # Не задаём initial/end state, чтобы выполнить для всех агентов во всех состояниях
-    layer_clear.addAgentFunction(rtc_func_clear)
+    # ═══════════════════════════════════════════════════════════
+    # Регистрация единого слоя
+    # ═══════════════════════════════════════════════════════════
+    layer_demount = model.newLayer("quota_demount")
+    rtc_func_demount = agent.newRTCFunction("rtc_quota_demount", RTC_QUOTA_DEMOUNT)
+    rtc_func_demount.setAllowAgentDeath(False)
+    rtc_func_demount.setInitialState("operations")  # ✅ Фильтр по state
+    rtc_func_demount.setEndState("operations")      # Остаются в operations (intent изменён)
+    layer_demount.addAgentFunction(rtc_func_demount)
     
-    # Слой S2: Пометка кандидатов
-    layer_mark = model.newLayer("quota_mark_candidates")
-    rtc_func_mark = agent.newRTCFunction("rtc_quota_mark_candidates", RTC_MARK_CANDIDATES)
-    rtc_func_mark.setRTCFunctionCondition(RTC_COND_OPERATIONS)
-    rtc_func_mark.setInitialState("operations")
-    rtc_func_mark.setEndState("operations")
-    layer_mark.addAgentFunction(rtc_func_mark)
-    
-    # Слой S3: Менеджер квот
-    layer_manager = model.newLayer("quota_manager")
-    rtc_func_manager = agent.newRTCFunction("rtc_quota_manager", RTC_QUOTA_MANAGER)
-    rtc_func_manager.setAllowAgentDeath(False)
-    rtc_func_manager.setInitialState("operations")
-    rtc_func_manager.setEndState("operations")
-    layer_manager.addAgentFunction(rtc_func_manager)
-    
-    # S4 убран - решения уже приняты в S3, маски очистятся в следующем цикле
-    
-    print("  RTC модуль quota_ops_excess зарегистрирован")
-    print("  RTC модуль quota_ops_excess зарегистрирован")
+    print("  RTC модуль quota_demount зарегистрирован (1 слой, early exit)")

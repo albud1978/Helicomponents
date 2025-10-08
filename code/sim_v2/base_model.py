@@ -130,9 +130,18 @@ class V2BaseModel:
         # Скаляр для передачи решения менеджера (количество демоутов)
         self.env.newMacroPropertyUInt32("quota_decision", 1)
         
-        # Временные маски для квотирования (используются модулем quota_ops_excess)
+        # Временные маски для квотирования (используются модулями quota_*)
+        # Демоут (operations → serviceable)
         self.env.newMacroPropertyUInt32("mi8_approve", MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi17_approve", MAX_FRAMES)
+        
+        # Промоут (раздельные буферы для каждого приоритета)
+        self.env.newMacroPropertyUInt32("mi8_approve_s3", MAX_FRAMES)   # serviceable → operations
+        self.env.newMacroPropertyUInt32("mi17_approve_s3", MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi8_approve_s5", MAX_FRAMES)   # reserve → operations
+        self.env.newMacroPropertyUInt32("mi17_approve_s5", MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi8_approve_s1", MAX_FRAMES)   # inactive → operations
+        self.env.newMacroPropertyUInt32("mi17_approve_s1", MAX_FRAMES)
 
         # MP4 квоты (если включены)
         if os.environ.get('HL_ENABLE_QUOTAS', '0') == '1':
@@ -285,6 +294,18 @@ class V2BaseModel:
             elif module_name == "quota_ops_excess":
                 import rtc_quota_ops_excess
                 rtc_quota_ops_excess.register_rtc(self.model, self.agent)
+            
+            elif module_name == "quota_promote_serviceable":
+                import rtc_quota_promote_serviceable
+                rtc_quota_promote_serviceable.register_rtc(self.model, self.agent)
+            
+            elif module_name == "quota_promote_reserve":
+                import rtc_quota_promote_reserve
+                rtc_quota_promote_reserve.register_rtc(self.model, self.agent)
+            
+            elif module_name == "quota_promote_inactive":
+                import rtc_quota_promote_inactive
+                rtc_quota_promote_inactive.register_rtc(self.model, self.agent)
             
             elif module_name == "spawn":
                 # Спавн новых агентов (Mi-17)
