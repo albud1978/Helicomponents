@@ -141,9 +141,12 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("partseqno_i", spawn_psn);
         FLAMEGPU->agent_out.setVariable<unsigned int>("group_by", spawn_gb);
         
-        // Логирование создания как в sim_master
+        // Детальное логирование создания агентов
+        printf("  [SPAWN Day %u] Creating AC %u (idx %u), state=serviceable, intent=2 (wants operations)\\n",
+               day, acn, idx);
+        
         if (ticket == 0u) {
-            printf("  [SPAWN Day %u] Создаём %u агентов Mi-17: idx %u-%u, acn %u-%u\\n",
+            printf("  [SPAWN Day %u] Creating %u agents Mi-17: idx %u-%u, acn %u-%u\\n",
                    day, need, base_idx, base_idx + need - 1u, base_acn, base_acn + need - 1u);
         }
         
