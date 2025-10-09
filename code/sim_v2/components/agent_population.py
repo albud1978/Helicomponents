@@ -234,8 +234,16 @@ class AgentPopulationBuilder:
                 if repair_time - repair_days > assembly_time:
                     agent.setVariableUInt("assembly_trigger", 1)
             
-            # intent_state = 0 для всех (нет начальных намерений)
-            agent.setVariableUInt("intent_state", 0)
+            # intent_state зависит от status_id (state):
+            # - operations/serviceable/reserve/inactive → 2 (хотят в operations)
+            # - repair → 4 (в ремонте)
+            # - storage → 6 (утилизирован)
+            if status_id == 4:
+                agent.setVariableUInt("intent_state", 4)
+            elif status_id == 6:
+                agent.setVariableUInt("intent_state", 6)
+            else:  # 1, 2, 3, 5
+                agent.setVariableUInt("intent_state", 2)
         
         # Загружаем популяции в симуляцию по состояниям
         # ВАЖНО: Нужно инициализировать ВСЕ states, даже пустые (для spawn)
