@@ -131,6 +131,12 @@ class V2BaseModel:
         self.env.newMacroPropertyUInt32("quota_decision", 1)
         
         # Временные маски для квотирования (используются модулями quota_*)
+        # Подсчёт агентов в operations и serviceable (для расчёта balance и rank)
+        self.env.newMacroPropertyUInt32("mi8_ops_count", MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_ops_count", MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi8_svc_count", MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_svc_count", MAX_FRAMES)
+        
         # Демоут (operations → serviceable)
         self.env.newMacroPropertyUInt32("mi8_approve", MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi17_approve", MAX_FRAMES)
@@ -246,6 +252,10 @@ class V2BaseModel:
                 import rtc_mp5_probe
                 rtc_mp5_probe.register_rtc(self.model, self.agent)
                 
+            elif module_name == "count_ops":
+                import rtc_quota_count_ops
+                rtc_quota_count_ops.register_rtc(self.model, self.agent)
+                
             elif module_name == "state_2_operations":
                 import rtc_state_2_operations
                 rtc_state_2_operations.register_rtc(self.model, self.agent)
@@ -278,6 +288,10 @@ class V2BaseModel:
             elif module_name == "state_manager_full":
                 import rtc_state_manager_full
                 rtc_state_manager_full.register_state_manager_full(self.model, self.agent)
+                
+            elif module_name == "state_manager_serviceable":
+                import rtc_state_manager_serviceable
+                rtc_state_manager_serviceable.register_rtc(self.model, self.agent)
                 
             elif module_name == "state_manager_operations":
                 import rtc_state_manager_operations

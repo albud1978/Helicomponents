@@ -41,30 +41,24 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 1: Подсчёт Curr и Target
+    // ШАГ 1: Подсчёт Curr и Target (из ops_count буфера)
     // ═══════════════════════════════════════════════════════════
     unsigned int curr = 0u;
     unsigned int target = 0u;
     
     if (group_by == 1u) {{
-        // Mi-8: считаем агентов в operations с intent=2 (кроме 4/6)
+        // Mi-8: считаем из ops_count буфера (заполненного в count_ops)
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
-            // Проверяем через mp3_mfg_date_days что агент существует (!=0)
-            const unsigned int mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            if (mfg == 0u) continue;  // Агент не существует
-            
-            // TODO: Нужна проверка что агент в operations с intent=2
-            // Пока упрощение: считаем всех агентов в этом слое
-            ++curr;
+            if (ops_count[i] == 1u) ++curr;
         }}
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
         
     }} else if (group_by == 2u) {{
         // Mi-17: аналогично
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
-            const unsigned int mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            if (mfg == 0u) continue;
-            ++curr;
+            if (ops_count[i] == 1u) ++curr;
         }}
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
     }} else {{
@@ -74,7 +68,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
     const int balance = (int)curr - (int)target;
     
     // Диагностика на ключевых днях (ПЕРЕД early exit)
-    if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
+    if ((day == 180u || day == 181u || day == 182u || day == 226u || day == 227u) && idx == 0u) {{
         if (group_by == 1u) {{
             printf("  [DEMOUNT BALANCE Day %u] Mi-8: Curr=%u, Target=%u, Balance=%d\\n", day, curr, target, balance);
         }} else if (group_by == 2u) {{
@@ -95,20 +89,31 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
     // ═══════════════════════════════════════════════════════════
     const unsigned int K = (unsigned int)balance;
     
-    // Ранжирование по mfg_date (oldest_first)
+    // Ранжирование по mfg_date (oldest_first) среди агентов в operations
     const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
     unsigned int rank = 0u;
     
-    for (unsigned int i = 0u; i < frames; ++i) {{
-        if (i == idx) continue;
-        
-        const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-        if (other_mfg == 0u) continue;  // Агент не существует
-        
-        // TODO: Проверить что агент i в operations с intent=2
-        
-        if (other_mfg < my_mfg || (other_mfg == my_mfg && i < idx)) {{
-            ++rank;
+    if (group_by == 1u) {{
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            if (i == idx) continue;
+            if (ops_count[i] != 1u) continue;  // ✅ Только агенты в operations
+            
+            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
+            if (other_mfg < my_mfg || (other_mfg == my_mfg && i < idx)) {{
+                ++rank;
+            }}
+        }}
+    }} else if (group_by == 2u) {{
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            if (i == idx) continue;
+            if (ops_count[i] != 1u) continue;  // ✅ Только агенты в operations
+            
+            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
+            if (other_mfg < my_mfg || (other_mfg == my_mfg && i < idx)) {{
+                ++rank;
+            }}
         }}
     }}
     

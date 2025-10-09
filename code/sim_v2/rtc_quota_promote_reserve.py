@@ -39,27 +39,35 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 1: Подсчёт used (демоут + serviceable)
+    // ШАГ 1: Подсчёт curr + used (curr из operations + одобренные в P1)
     // ═══════════════════════════════════════════════════════════
+    unsigned int curr = 0u;
     unsigned int used = 0u;
     unsigned int target = 0u;
     
     if (group_by == 1u) {{
-        // Mi-8: считаем одобренных в демоуте + serviceable
-        auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
+        // Mi-8: считаем текущих в operations
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            if (ops_count[i] == 1u) ++curr;
+        }}
+        
+        // Считаем одобренных в P1 (serviceable)
         auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s3");
         for (unsigned int i = 0u; i < frames; ++i) {{
-            if (approve[i] == 1u) ++used;      // Демоут
-            if (approve_s3[i] == 1u) ++used;   // Serviceable
+            if (approve_s3[i] == 1u) ++used;
         }}
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
         
     }} else if (group_by == 2u) {{
-        // Mi-17: аналогично
-        auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
+        // Mi-17
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            if (ops_count[i] == 1u) ++curr;
+        }}
+        
         auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s3");
         for (unsigned int i = 0u; i < frames; ++i) {{
-            if (approve[i] == 1u) ++used;
             if (approve_s3[i] == 1u) ++used;
         }}
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
@@ -67,14 +75,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
         return flamegpu::ALIVE;  // Неизвестный group_by
     }}
     
-    const int deficit = (int)target - (int)used;
+    const int deficit = (int)target - (int)(curr + used);
     
     // Диагностика на ключевых днях (ПЕРЕД early exit)
-    if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
+    if ((day == 180u || day == 181u || day == 182u || day == 226u || day == 227u) && idx == 0u) {{
         if (group_by == 1u) {{
-            printf("  [PROMOTE P2 DEFICIT Day %u] Mi-8: Used=%u, Target=%u, Deficit=%d\\n", day, used, target, deficit);
+            printf("  [PROMOTE P2 DEFICIT Day %u] Mi-8: Curr=%u, Used=%u, Target=%u, Deficit=%d\\n", day, curr, used, target, deficit);
         }} else if (group_by == 2u) {{
-            printf("  [PROMOTE P2 DEFICIT Day %u] Mi-17: Used=%u, Target=%u, Deficit=%d\\n", day, used, target, deficit);
+            printf("  [PROMOTE P2 DEFICIT Day %u] Mi-17: Curr=%u, Used=%u, Target=%u, Deficit=%d\\n", day, curr, used, target, deficit);
         }}
     }}
     
@@ -87,17 +95,26 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
     }}
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 3: Промоут deficit агентов (FCFS)
+    // ШАГ 3: Промоут deficit агентов (youngest first по mfg_date)
     // ═══════════════════════════════════════════════════════════
     const unsigned int K = (unsigned int)deficit;
     
-    // Ранжирование по idx (FCFS = первые по idx)
+    // Ранжирование: youngest first (как в serviceable)
+    const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
     unsigned int rank = 0u;
     
-    for (unsigned int i = 0u; i < idx; ++i) {{
-        // TODO: Проверить что агент i в reserve с intent=2
-        // Пока упрощение: считаем всех агентов в этом слое
-        ++rank;
+    for (unsigned int i = 0u; i < frames; ++i) {{
+        if (i == idx) continue;
+        
+        const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
+        if (other_mfg == 0u) continue;  // Агент не существует
+        
+        // TODO: проверить что i в reserve (state=5, intent=2)
+        
+        // Youngest first: rank растёт если other МОЛОЖЕ меня
+        if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
+            ++rank;
+        }}
     }}
     
     if (rank < K) {{
