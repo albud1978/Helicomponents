@@ -147,8 +147,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
                    day, aircraft_number, idx, rank, K, deficit);
         }}
     }} else {{
-        // Не вошёл в квоту → intent остаётся 1 (inactive)
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 1u);
+        // Не вошёл в квоту → intent остаётся 2 (всё ещё хочу в operations)
+        // НЕ меняем intent! Агент продолжает хотеть в operations для следующего шага
         
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         if (aircraft_number >= 100000u || day == 226u || day == 227u || day == 228u || day == 229u || day == 230u) {{

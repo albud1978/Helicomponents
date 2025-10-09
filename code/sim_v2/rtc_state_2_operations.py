@@ -95,6 +95,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     }}
     
     // 3. Остаёмся в operations
+    // intent=2 означает "хочу в operations" (для демоута/промоута)
+    // Агент работает И хочет продолжать работать → участвует в квотировании
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
     
     // Логирование агентов, остающихся в operations, отключено

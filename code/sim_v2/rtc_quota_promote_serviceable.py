@@ -146,8 +146,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
                    day, aircraft_number, idx, rank, K, deficit);
         }}
     }} else {{
-        // Не вошёл в квоту → intent остаётся 3 (serviceable)
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
+        // Не вошёл в квоту → intent остаётся 2 (всё ещё хочу в operations)
+        // НЕ меняем intent! Агент продолжает хотеть в operations для следующего шага
         
         // Логирование для новых агентов, которые НЕ прошли квоту
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");

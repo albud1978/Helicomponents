@@ -27,14 +27,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_3_to_2, flamegpu::MessageNone, flamegpu::Messa
         
         // Логирование для новых spawn агентов и ключевых дней
         if (aircraft_number >= 100000u || day == 226u || day == 227u || day == 228u) {
-            printf("  [TRANSITION 3→2 Day %u] AC %u (idx %u): serviceable -> operations\\n", 
+            printf("  [TRANSITION 3→2 Day %u] AC %u (idx %u): serviceable -> operations (intent=2 preserved)\\n", 
                    day, aircraft_number, idx);
         }
         
         // Переход в operations происходит через setEndState()
-        // НЕ меняем state напрямую!
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 0u);  // Сброс intent
-        return flamegpu::ALIVE;  // Агент перейдёт в operations автоматически
+        // НЕ сбрасываем intent! Он будет установлен в 0 на следующем шаге в state_2_operations
+        // ВАЖНО: intent=2 сохраняется, чтобы в MP2 было видно что агент хотел в operations
+        return flamegpu::ALIVE;  // Агент перейдёт в operations с intent=2
     }
     
     // Если intent!=2, агент остаётся в serviceable
