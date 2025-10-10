@@ -48,6 +48,9 @@ python3 code/utils/database_cleanup.py
 
 ## 📚 Документация проекта
 
+### 🔬 Детальная документация модулей
+- **[count_ops_detailed_10-10-2025.md](count_ops_detailed_10-10-2025.md)** - Полный разбор модуля подсчёта агентов в operations/serviceable
+
 ### Архитектура симуляции
 - **[rtc_pipeline_architecture.md](rtc_pipeline_architecture.md)** - 🆕 **Архитектура RTC пайплайна + V2 Refactoring (30-09-2025)**
 - **[quota_architecture_analysis_06-10-2025.md](quota_architecture_analysis_06-10-2025.md)** - 🔍 **Анализ архитектуры квотирования (06-10-2025)**
@@ -285,36 +288,40 @@ cd "/home/budnik_an/cube linux/cube" && \
 rm -rf code/sim_v2/__pycache__ code/sim_v2/rtc_modules/__pycache__ code/sim_v2/components/__pycache__ && \
 export CUDA_PATH=/usr/local/cuda-12.8 CUBE_CONFIG_PATH="/home/budnik_an/cube linux/cube" && \
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules spawn_v2 state_2_operations quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --modules state_2_operations count_ops quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_serviceable state_manager_operations state_manager_repair state_manager_storage spawn_v2 \
   --steps 3650 \
   --enable-mp2 \
   --drop-table \
   2>&1 | cat
 
-# ✅ ОБНОВЛЕНО (08-10-2025): Каскадное квотирование протестировано на 3650 днях
-#   Модули:
-#   - quota_ops_excess (демоут operations → serviceable, 1 слой)
-#   - quota_promote_serviceable (промоут P1: serviceable → operations)
-#   - quota_promote_reserve (промоут P2: reserve → operations)
-#   - quota_promote_inactive (промоут P3: inactive → operations)
+# ✅ ОБНОВЛЕНО (10-10-2025): Вариант B - count_ops считает по intent=2
+#   Порядок модулей:
+#   1. state_2_operations (устанавливает intent=2 + инкременты)
+#   2. count_ops (считает агентов с intent=2 в operations)
+#   3. quota_ops_excess (демоут operations → serviceable, oldest first)
+#   4. quota_promote_serviceable (промоут P1: serviceable → operations, youngest first)
+#   5. quota_promote_reserve (промоут P2: reserve → operations, youngest first)
+#   6. quota_promote_inactive (промоут P3: inactive → operations, youngest first)
+#   7. states_stub, state managers
+#   8. spawn_v2 (в конце - новые агенты в serviceable на день рождения)
 #
-#   Результаты:
+#   Результаты (старые, до Варианта B):
 #   - Со spawn: 43.17с GPU, 11.1мс/шаг, 1,042,318 строк MP2, 286 агентов
 #   - Без spawn: 37.94с GPU, 9.7мс/шаг, 1,018,350 строк MP2, 279 агентов
 
 # Краткая версия (без очистки кэша):
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules spawn_v2 state_2_operations quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --modules state_2_operations count_ops quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_serviceable state_manager_operations state_manager_repair state_manager_storage spawn_v2 \
   --steps 3650 --enable-mp2 --drop-table
 
 # Тест на 300 дней (для проверки spawn на день 226):
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules spawn_v2 state_2_operations quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --modules state_2_operations count_ops quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_serviceable state_manager_operations state_manager_repair state_manager_storage spawn_v2 \
   --steps 300 --enable-mp2 --drop-table
 
 # Без spawn (базовый пайплайн):
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_operations state_manager_repair state_manager_storage \
+  --modules state_2_operations count_ops quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive states_stub state_manager_serviceable state_manager_operations state_manager_repair state_manager_storage \
   --steps 3650 --enable-mp2 --drop-table
 ```
 

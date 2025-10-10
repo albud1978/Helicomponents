@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
 RTC модуль для подсчёта агентов в operations и serviceable
-Должен выполняться ПЕРЕД квотированием
+Должен выполняться ПОСЛЕ state_2_operations (когда intent уже установлен)
+
+ВАРИАНТ B: Считаем агентов по intent=2, а не по state
+- operations агенты с intent=2 → хотят остаться в operations
+- serviceable без проверки intent (для ранжирования в промоуте)
 
 ВАЖНО: Первый агент (idx=0) сбрасывает ВСЕ буферы перед подсчётом!
 """
@@ -44,20 +48,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
     layer_reset.addAgentFunction(rtc_reset)
     
     # =========================================================================
-    # Слой 2: Подсчёт агентов в operations
+    # Слой 2: Подсчёт агентов в operations с intent=2
     # =========================================================================
     RTC_COUNT_OPS = """
 FLAMEGPU_AGENT_FUNCTION(rtc_count_ops, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
     
-    // Записываем флаг что этот агент в operations
-    if (group_by == 1u) {
-        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_ops_count");
-        ops_count[idx].exchange(1u);
-    } else if (group_by == 2u) {
-        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_ops_count");
-        ops_count[idx].exchange(1u);
+    // ✅ ВАРИАНТ B: Считаем только агентов с intent=2 (хотят быть в operations)
+    if (intent == 2u) {
+        if (group_by == 1u) {
+            auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_ops_count");
+            ops_count[idx].exchange(1u);
+        } else if (group_by == 2u) {
+            auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_ops_count");
+            ops_count[idx].exchange(1u);
+        }
     }
     
     return flamegpu::ALIVE;

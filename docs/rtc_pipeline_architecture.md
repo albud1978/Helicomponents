@@ -346,83 +346,126 @@ ENV‑инварианты:
 Примечание:
 - Подробные перечни агентов и расширенный отладочный вывод отключены по умолчанию и не печатаются без отдельного запроса.
 
-## State Manager и Intent-based архитектура (обновлено 24.09.2025)
+## State Manager и Intent-based архитектура (обновлено 10.10.2025)
 
-### Концепция intent_state
+### Концепция intent_state (V2 финальная)
 
-Архитектура основана на разделении логики определения намерений и фактических переходов состояний:
+Архитектура основана на **разделении желания и факта**:
 
-1. **intent_state** - переменная агента, указывающая желаемое следующее состояние
-2. **RTC функции состояний** - определяют intent_state на основе бизнес-логики, НЕ меняют фактическое состояние
-3. **State Manager** - централизованно обрабатывает все переходы на основе intent_state
+1. **intent_state** - переменная агента, указывающая **желаемое** следующее состояние
+2. **RTC функции состояний** - устанавливают intent_state на основе бизнес-логики, **НЕ меняют** state
+3. **Quota модули** - корректируют intent_state на основе доступных квот (повышение/понижение приоритета)
+4. **State Managers** - применяют **фактические переходы** через `setEndState()` на основе финального intent_state
 
-### Принципы работы
+### Принципы работы (актуальная реализация)
 
-#### 1. Установка intent_state в RTC функциях:
+#### 1. Установка intent_state в RTC функциях состояний:
 ```cuda
 // В rtc_state_2_operations
+const unsigned int sne_next = sne + dn;
+const unsigned int ppr_next = ppr + dn;
+
 if (ppr_next >= oh && sne_next < br) {
-    // Хотим перейти в ремонт
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);  // Ремонт
 } else if (sne_next >= ll) {
-    // Хотим перейти в хранение
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);  // Хранение
 } else {
-    // Остаёмся в operations
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Operations
 }
 ```
 
-#### 2. Обязательность intent_state:
-- Каждая RTC функция состояния ДОЛЖНА установить intent_state
-- intent_state = 0 считается ошибкой
-- Даже если агент остаётся в том же состоянии, нужно явно установить intent_state равным текущему состоянию
+#### 2. Семантика intent_state (финальная):
+- **intent=2** — агент **хочет быть** в operations (или уже там и хочет остаться)
+- **intent=3** — демоунт в serviceable (недостаточно квоты для operations)
+- **intent=4** — переход в ремонт (ppr ≥ oh AND sne < br)
+- **intent=6** — переход в хранение (sne ≥ ll)
+- **intent=0** — **НЕ используется** (всегда явное желание)
 
-#### 3. State Manager обрабатывает переходы:
+**Важно:** intent **не сбрасывается** в 0 при отклонении квоты — агенты всегда имеют текущее желаемое состояние.
+
+#### 3. Корректировка intent через quota модули:
 ```cuda
-// rtc_state_manager выполняется в отдельном слое после всех RTC состояний
+// quota_ops_excess (демоут)
+if (balance > 0 && rank < K) {
+    // Избыток в operations → отправляем в serviceable
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
+}
+
+// quota_promote_serviceable (промоут P1)
+if (deficit > 0 && rank < K) {
+    // Дефицит в operations → промоут из serviceable
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+    approve_s3[idx] = 1u;  // Помечаем для следующего слоя
+}
+// Если НЕ одобрили: intent остаётся без изменений (не сбрасываем в 0!)
+```
+
+#### 4. Применение переходов в State Managers:
+```cuda
+// state_manager_operations (для state=operations)
 const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
 
-// Детерминированные переходы (без квот)
-if (intent == 4u) {  // Переход в ремонт
+if (intent == 4u) {
+    // Детерминированный переход в ремонт
     FLAMEGPU->setInitialState("operations");
     FLAMEGPU->setEndState("repair");
+    return flamegpu::ALIVE;
+} else if (intent == 6u) {
+    // Детерминированный переход в хранение
+    FLAMEGPU->setInitialState("operations");
+    FLAMEGPU->setEndState("storage");
+    return flamegpu::ALIVE;
+} else if (intent == 3u) {
+    // Квотируемый демоунт в serviceable
+    FLAMEGPU->setInitialState("operations");
+    FLAMEGPU->setEndState("serviceable");
+    return flamegpu::ALIVE;
+} else if (intent == 2u) {
+    // Остаёмся в operations
+    return flamegpu::DEAD;  // Нет перехода
 }
-// ... другие переходы
 ```
 
-### Преимущества архитектуры
+### Преимущества архитектуры V2
 
-1. **Модульность**: Логика состояний изолирована от логики переходов
-2. **Гибкость**: Легко добавлять новые условия переходов
-3. **Централизованное квотирование**: Все квоты обрабатываются в одном месте
-4. **Отладка**: Можно логировать все намерения перед применением
+1. **Модульность**: RTC состояний + Quota + State Managers — независимые компоненты
+2. **Каскадное квотирование**: P1→P2→P3 с передачей остатка между слоями
+3. **Синхронизация intent и quota**: count_ops считает по intent=2, не по state
+4. **Приоритизация**: youngest first (промоут) / oldest first (демоут)
+5. **Отладка**: Полное логирование intent изменений и переходов
 
-### Текущая реализация
+### Реализованные модули V2
 
-#### Реализованные модули:
-- `rtc_state_1_inactive.py` - обработка неактивных агентов
-- `rtc_state_2_operations.py` - обработка агентов в эксплуатации  
-- `rtc_state_3_serviceable.py` - обработка исправных агентов
-- `rtc_state_4_repair.py` - обработка агентов в ремонте
-- `rtc_state_5_reserve.py` - обработка агентов в резерве
-- `rtc_state_6_storage.py` - обработка агентов в хранении
-- `rtc_state_manager_test.py` - тестовый менеджер для перехода 2→4
+#### RTC функции состояний:
+- `rtc_state_2_operations.py` — обработка operations (sne/ppr инкременты + intent)
+- `rtc_states_stub.py` — установка intent для остальных состояний (1, 4, 5, 6)
 
-#### Правила использования setInitialState/setEndState:
-1. В RTC функциях состояний:
-   - `setInitialState(state_name)` - обязательно в начале
-   - `setEndState(state_name)` - обязательно в конце (тот же state)
+#### Quota модули (каскадное квотирование):
+- `rtc_quota_count_ops.py` — подсчёт агентов с intent=2 в operations (**Вариант B**)
+- `rtc_quota_ops_excess.py` — демоунт (operations → serviceable, oldest first)
+- `rtc_quota_promote_serviceable.py` — промоут P1 (serviceable → operations, youngest first)
+- `rtc_quota_promote_reserve.py` — промоут P2 (reserve → operations, youngest first)
+- `rtc_quota_promote_inactive.py` — промоут P3 (inactive → operations, youngest first)
+
+#### State Managers (применение переходов):
+- `rtc_state_manager_serviceable.py` — переход 3→2 (serviceable → operations)
+- `rtc_state_manager_operations.py` — переходы 2→2, 2→3, 2→4, 2→6
+- `rtc_state_manager_repair.py` — переходы 4→4, 4→5 (repair → reserve)
+- `rtc_state_manager_storage.py` — переход 6→6 (storage → storage)
+
+#### Вспомогательные модули:
+- `rtc_spawn_v2.py` — создание новых агентов (в конце пайплайна!)
+
+### Правила использования setInitialState/setEndState
+
+1. **В RTC функциях состояний:**
+   - **НЕ используем** `setInitialState/setEndState` (только intent!)
    
-2. В State Manager:
-   - `setInitialState` - исходное состояние для перехода
-   - `setEndState` - целевое состояние перехода
-
-### Планы развития
-
-1. **Полный State Manager**: Обработка всех типов переходов
-2. **Система квот**: Приоритизация и ограничения на переходы
-3. **Логирование переходов**: Детальная отчётность о всех изменениях состояний
+2. **В State Managers:**
+   - `setInitialState(state_name)` — текущее состояние агента
+   - `setEndState(state_name)` — целевое состояние перехода
+   - `return flamegpu::ALIVE` — переход выполняется
+   - `return flamegpu::DEAD` — агент остаётся в текущем состоянии
 
 ## Стандартный паттерн работы с MacroProperty MP5
 
@@ -817,5 +860,221 @@ print(telemetry.get_summary())
 
 ---
 
-*Документ обновлён: 30-09-2025*  
-*Автор: V2 Refactoring Team*
+## V2: Текущая архитектура RTC пайплайна (обновлено 10-10-2025)
+
+### Финальная конфигурация с Вариантом B
+
+**Статус:** ✅ **Production Ready** (протестировано на 3650 днях)
+
+### Порядок модулей в пайплайне
+
+```
+1. state_2_operations        — инкременты sne/ppr + установка intent=2
+2. count_ops                 — подсчёт агентов с intent=2 в operations
+3. quota_ops_excess          — демоут (operations → serviceable, oldest first)
+4. quota_promote_serviceable — промоут P1 (serviceable → operations, youngest first)
+5. quota_promote_reserve     — промоут P2 (reserve → operations, youngest first)
+6. quota_promote_inactive    — промоут P3 (inactive → operations, youngest first)
+7. states_stub               — установка intent для остальных состояний
+8. state_manager_serviceable — переход 3→2 (serviceable → operations)
+9. state_manager_operations  — переходы из operations (2→2, 2→3, 2→4, 2→6)
+10. state_manager_repair     — переходы из repair (4→4, 4→5)
+11. state_manager_storage    — переход 6→6 (storage → storage)
+12. spawn_v2                 — создание новых агентов (в конце!)
+13. MP2 export               — выгрузка в СУБД (если --enable-mp2)
+```
+
+### Ключевые принципы архитектуры
+
+#### 1. **Вариант B: count_ops считает по intent=2**
+
+**До (неправильно):**
+```cpp
+// count_ops считал ВСЕХ агентов в state=operations
+ops_count[idx].exchange(1u);  // ❌ Включая тех, кто идёт в ремонт!
+```
+
+**После (правильно):**
+```cpp
+// count_ops считает ТОЛЬКО агентов с intent=2
+const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+if (intent == 2u) {  // ✅ Хотят быть в operations
+    ops_count[idx].exchange(1u);
+}
+```
+
+**Результат:** Баланс считается корректно, не учитывая агентов, уходящих в ремонт (intent=4) или хранение (intent=6).
+
+#### 2. **Каскадное квотирование с приоритетами**
+
+**Демоут (избыток агентов в operations):**
+```cpp
+// quota_ops_excess
+Curr = sum(ops_count)  // Агенты с intent=2
+Balance = Curr - Target
+if (Balance > 0) {
+    K = Balance
+    // Ранжирование: oldest first (по mfg_date)
+    if (rank < K) {
+        intent_state = 3u;  // Демоунт в serviceable
+    }
+}
+```
+
+**Промоут (дефицит агентов в operations):**
+```cpp
+// quota_promote_serviceable (P1)
+Curr = sum(ops_count)
+Used = 0  // Первый слой
+Deficit = Target - (Curr + Used)
+if (Deficit > 0) {
+    K = Deficit
+    // Ранжирование: youngest first (по mfg_date)
+    if (rank < K) {
+        intent_state = 2u;  // Промоут в operations
+        approve_s3[idx] = 1u;  // Помечаем для P2
+    }
+}
+
+// quota_promote_reserve (P2)
+Curr = sum(ops_count)
+Used = sum(approve_s3)  // Учитываем P1
+Deficit = Target - (Curr + Used)
+// ... аналогично P1
+
+// quota_promote_inactive (P3)
+Curr = sum(ops_count)
+Used = sum(approve_s3 + approve_s5)  // P1 + P2
+Deficit = Target - (Curr + Used)
+// ... аналогично P1
+```
+
+**Приоритеты:**
+1. **P1:** serviceable → operations (самый высокий приоритет)
+2. **P2:** reserve → operations
+3. **P3:** inactive → operations (самый низкий приоритет)
+
+#### 3. **Ранжирование по mfg_date**
+
+**Демоут (oldest first):**
+- Старые агенты выводятся из operations первыми
+- Критерий: `mfg_date < my_mfg_date` → rank++
+
+**Промоут (youngest first):**
+- Молодые агенты промоутятся в operations первыми
+- Критерий: `mfg_date > my_mfg_date` → rank++
+
+**Фильтрация через буферы:**
+```cpp
+// Демоут: только агенты в operations
+auto ops_count = FLAMEGPU->environment.getMacroProperty<...>("mi17_ops_count");
+if (ops_count[i] != 1u) continue;  // Пропускаем не-operations
+
+// Промоут P1: только агенты в serviceable
+auto svc_count = FLAMEGPU->environment.getMacroProperty<...>("mi17_svc_count");
+if (svc_count[i] != 1u) continue;  // Пропускаем не-serviceable
+```
+
+#### 4. **Intent-based переходы состояний**
+
+**Установка intent (state_2_operations):**
+```cpp
+const unsigned int sne_next = sne + dn;
+const unsigned int ppr_next = ppr + dn;
+
+if (ppr_next >= oh && sne_next < br) {
+    intent_state = 4u;  // Хотим в ремонт
+} else if (sne_next >= ll) {
+    intent_state = 6u;  // Хотим в хранение
+} else {
+    intent_state = 2u;  // Остаёмся в operations
+}
+```
+
+**Применение переходов (state_manager_operations):**
+```cpp
+const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+
+if (intent == 4u) {
+    // Переход в ремонт
+    FLAMEGPU->setInitialState("operations");
+    FLAMEGPU->setEndState("repair");
+} else if (intent == 6u) {
+    // Переход в хранение
+    FLAMEGPU->setInitialState("operations");
+    FLAMEGPU->setEndState("storage");
+} else if (intent == 3u) {
+    // Демоунт в serviceable
+    FLAMEGPU->setInitialState("operations");
+    FLAMEGPU->setEndState("serviceable");
+}
+```
+
+### MacroProperty буферы
+
+**Для подсчёта агентов:**
+- `mi8_ops_count[286]` — флаги агентов Mi-8 в operations с intent=2
+- `mi17_ops_count[286]` — флаги агентов Mi-17 в operations с intent=2
+- `mi8_svc_count[286]` — флаги агентов Mi-8 в serviceable
+- `mi17_svc_count[286]` — флаги агентов Mi-17 в serviceable
+
+**Для каскада промоута:**
+- `mi8_approve[286]` — демоунт Mi-8
+- `mi17_approve[286]` — демоунт Mi-17
+- `mi8_approve_s3[286]` — промоут P1 Mi-8 (serviceable)
+- `mi17_approve_s3[286]` — промоут P1 Mi-17 (serviceable)
+- `mi8_approve_s5[286]` — промоут P2 Mi-8 (reserve)
+- `mi17_approve_s5[286]` — промоут P2 Mi-17 (reserve)
+- `mi8_approve_s1[286]` — промоут P3 Mi-8 (inactive)
+- `mi17_approve_s1[286]` — промоут P3 Mi-17 (inactive)
+
+### Команда запуска
+
+```bash
+python3 code/sim_v2/orchestrator_v2.py \
+  --modules state_2_operations count_ops quota_ops_excess \
+            quota_promote_serviceable quota_promote_reserve \
+            quota_promote_inactive states_stub \
+            state_manager_serviceable state_manager_operations \
+            state_manager_repair state_manager_storage spawn_v2 \
+  --steps 3650 \
+  --enable-mp2 \
+  --drop-table
+```
+
+### Результаты тестирования (3650 дней)
+
+| Метрика | Значение |
+|---------|----------|
+| GPU время | 54.91с |
+| Среднее время/шаг | 13.9мс |
+| MP2 строк | 1,042,318 |
+| Агенты | 286 (279 + 7 spawn) |
+| Serviceable | 0 (стабильно после Day 550) |
+| Производительность | p50=10.8мс, p95=14.6мс |
+
+**Новые агенты (spawn Day 226):**
+- Day 226: state=serviceable, intent=2 ✅ Рождение
+- Day 227: state=operations, intent=2 ✅ Промоут через квоту
+- Day 228: state=operations, sne=83 ✅ Начали работать
+- Day 3649: state=reserve, sne=269,977 ✅ После ремонта
+
+### Документация
+
+- **Детали реализации:** `docs/count_ops_variant_b_10-10-2025.md`
+- **Результаты тестирования:** `docs/variant_b_results_10-10-2025.md`
+- **Схема квотирования:** `docs/quota_flow_complete_10-10-2025.md`
+- **Детальный разбор count_ops:** `docs/count_ops_detailed_10-10-2025.md`
+
+### Ключевые изменения от предыдущей версии
+
+1. ✅ **count_ops по intent=2** — синхронизация с квотированием
+2. ✅ **Порядок модулей** — state_2_operations → count_ops
+3. ✅ **Ранжирование по mfg_date** — oldest/youngest first
+4. ✅ **Каскадное квотирование** — P1→P2→P3 с передачей остатка
+5. ✅ **Spawn в конце** — новые агенты в serviceable на день рождения
+
+---
+
+*Документ обновлён: 10-10-2025*  
+*Автор: V2 Refactoring Team + Variant B Implementation*
