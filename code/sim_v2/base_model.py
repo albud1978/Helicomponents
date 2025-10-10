@@ -237,9 +237,8 @@ class V2BaseModel:
         # Временные счетчики для state_6
         agent.newVariableUInt("s6_days", 0)
         
-        # Квоты (если включены)
-        if os.environ.get('HL_ENABLE_QUOTAS', '0') == '1':
-            agent.newVariableUInt("ops_ticket", 0)
+        # Квоты (всегда для MP2 логирования)
+        agent.newVariableUInt("ops_ticket", 0)
         
         return agent
     
