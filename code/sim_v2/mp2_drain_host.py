@@ -49,26 +49,52 @@ class MP2DrainHostFunction(fg.HostFunction):
             -- Идентификаторы
             idx              UInt16,
             aircraft_number  UInt32,
+            partseqno        UInt32,
+            group_by         UInt8,
             
             -- V2 State информация
             state            String,
             intent_state     UInt8,
+            prev_intent_state UInt8,
+            s6_started       UInt16,
             
             -- Наработки
             sne              UInt32,
             ppr              UInt32,
+            cso              UInt32,
+            
+            -- Нормативы
+            ll               UInt32,
+            oh               UInt32,
+            br               UInt32,
+            
+            -- Временные характеристики (нормативы времени)
+            repair_time      UInt16,
+            assembly_time    UInt16,
+            partout_time     UInt16,
+            
+            -- Временные характеристики (текущие значения и триггеры)
             repair_days      UInt16,
+            s6_days          UInt16,
+            assembly_trigger UInt8,
+            active_trigger   UInt8,
+            partout_trigger  UInt8,
+            mfg_date_days    UInt32,
             
             -- MP5 данные
             dt               UInt32,
             dn               UInt32,
+            
+            -- Квоты (опционально, может быть NULL)
+            ops_ticket       UInt8,
             
             -- Временная метка записи
             export_timestamp DateTime DEFAULT now(),
             
             INDEX idx_version (version_date, version_id) TYPE minmax GRANULARITY 1,
             INDEX idx_day (day_u16) TYPE minmax GRANULARITY 1,
-            INDEX idx_state (state) TYPE bloom_filter GRANULARITY 1
+            INDEX idx_state (state) TYPE bloom_filter GRANULARITY 1,
+            INDEX idx_group_by (group_by) TYPE minmax GRANULARITY 1
         ) ENGINE = MergeTree()
         PARTITION BY toYYYYMM(day_date)
         ORDER BY (version_date, day_u16, idx)
@@ -131,13 +157,37 @@ class MP2DrainHostFunction(fg.HostFunction):
         mp2_day = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_day_u16")
         mp2_idx = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_idx")
         mp2_aircraft = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_aircraft_number")
+        mp2_partseqno = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_partseqno")
+        mp2_group_by = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_group_by")
+        
         mp2_state = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_state")
         mp2_intent = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_intent_state")
+        mp2_prev_intent = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_prev_intent_state")
+        mp2_s6_started = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_s6_started")
+        
         mp2_sne = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_sne")
         mp2_ppr = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ppr")
+        mp2_cso = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_cso")
+        
+        mp2_ll = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ll")
+        mp2_oh = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_oh")
+        mp2_br = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_br")
+        
+        mp2_repair_time = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_repair_time")
+        mp2_assembly_time = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_assembly_time")
+        mp2_partout_time = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_partout_time")
+        
         mp2_repair_days = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_repair_days")
+        mp2_s6_days = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_s6_days")
+        mp2_assembly_trigger = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_assembly_trigger")
+        mp2_active_trigger = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_active_trigger")
+        mp2_partout_trigger = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_partout_trigger")
+        mp2_mfg_date = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_mfg_date_days")
+        
         mp2_dt = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dt")
         mp2_dn = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dn")
+        
+        mp2_ops_ticket = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ops_ticket")
         
         rows_count = 0
         # day_date вычисляется в ClickHouse (MATERIALIZED), в Python не считаем
@@ -159,13 +209,30 @@ class MP2DrainHostFunction(fg.HostFunction):
                         day,
                         int(mp2_idx[pos]),
                         int(mp2_aircraft[pos]),
+                        int(mp2_partseqno[pos]),
+                        int(mp2_group_by[pos]),
                         self._map_state_to_string(int(mp2_state[pos])),
                         int(mp2_intent[pos]),
+                        int(mp2_prev_intent[pos]),
+                        int(mp2_s6_started[pos]),
                         int(mp2_sne[pos]),
                         int(mp2_ppr[pos]),
+                        int(mp2_cso[pos]),
+                        int(mp2_ll[pos]),
+                        int(mp2_oh[pos]),
+                        int(mp2_br[pos]),
+                        int(mp2_repair_time[pos]),
+                        int(mp2_assembly_time[pos]),
+                        int(mp2_partout_time[pos]),
                         int(mp2_repair_days[pos]),
+                        int(mp2_s6_days[pos]),
+                        int(mp2_assembly_trigger[pos]),
+                        int(mp2_active_trigger[pos]),
+                        int(mp2_partout_trigger[pos]),
+                        int(mp2_mfg_date[pos]),
                         int(mp2_dt[pos]),
-                        int(mp2_dn[pos])
+                        int(mp2_dn[pos]),
+                        int(mp2_ops_ticket[pos])
                     )
                     self.batch.append(row)
                     rows_count += 1
@@ -193,13 +260,37 @@ class MP2DrainHostFunction(fg.HostFunction):
         mp2_day = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_day_u16")
         mp2_idx = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_idx")
         mp2_aircraft = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_aircraft_number")
+        mp2_partseqno = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_partseqno")
+        mp2_group_by = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_group_by")
+        
         mp2_state = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_state")
         mp2_intent = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_intent_state")
+        mp2_prev_intent = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_prev_intent_state")
+        mp2_s6_started = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_s6_started")
+        
         mp2_sne = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_sne")
         mp2_ppr = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ppr")
+        mp2_cso = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_cso")
+        
+        mp2_ll = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ll")
+        mp2_oh = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_oh")
+        mp2_br = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_br")
+        
+        mp2_repair_time = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_repair_time")
+        mp2_assembly_time = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_assembly_time")
+        mp2_partout_time = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_partout_time")
+        
         mp2_repair_days = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_repair_days")
+        mp2_s6_days = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_s6_days")
+        mp2_assembly_trigger = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_assembly_trigger")
+        mp2_active_trigger = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_active_trigger")
+        mp2_partout_trigger = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_partout_trigger")
+        mp2_mfg_date = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_mfg_date_days")
+        
         mp2_dt = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dt")
         mp2_dn = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dn")
+        
+        mp2_ops_ticket = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ops_ticket")
         
         rows_count = 0
         day = max(0, int(start_day_inclusive))
@@ -219,13 +310,30 @@ class MP2DrainHostFunction(fg.HostFunction):
                         day,
                         int(mp2_idx[pos]),
                         aircraft_number,
+                        int(mp2_partseqno[pos]),
+                        int(mp2_group_by[pos]),
                         self._map_state_to_string(int(mp2_state[pos])),
                         int(mp2_intent[pos]),
+                        int(mp2_prev_intent[pos]),
+                        int(mp2_s6_started[pos]),
                         int(mp2_sne[pos]),
                         int(mp2_ppr[pos]),
+                        int(mp2_cso[pos]),
+                        int(mp2_ll[pos]),
+                        int(mp2_oh[pos]),
+                        int(mp2_br[pos]),
+                        int(mp2_repair_time[pos]),
+                        int(mp2_assembly_time[pos]),
+                        int(mp2_partout_time[pos]),
                         int(mp2_repair_days[pos]),
+                        int(mp2_s6_days[pos]),
+                        int(mp2_assembly_trigger[pos]),
+                        int(mp2_active_trigger[pos]),
+                        int(mp2_partout_trigger[pos]),
+                        int(mp2_mfg_date[pos]),
                         int(mp2_dt[pos]),
-                        int(mp2_dn[pos])
+                        int(mp2_dn[pos]),
+                        int(mp2_ops_ticket[pos])
                     )
                     self.batch.append(row)
                     rows_count += 1
@@ -255,10 +363,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             self.max_batch_rows = batch_rows
         t_start = time.perf_counter()
         # MATERIALIZED day_date вычисляется на стороне ClickHouse, не вставляем её явно
-        columns = "version_date,version_id,day_u16,idx,aircraft_number,state,intent_state,sne,ppr,repair_days,dt,dn"
+        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,prev_intent_state,s6_started,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s6_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,ops_ticket"
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES"
         # Подаём данные в колоннарном формате для уменьшения накладных расходов драйвера
-        num_cols = 12
+        num_cols = 29
         cols = [[] for _ in range(num_cols)]
         for r in self.batch:
             for i, v in enumerate(r):
