@@ -5,7 +5,7 @@ RTC Spawn для orchestrator_v2
 
 ИЗМЕНЕНИЯ относительно sim_master:
 - Убрано: status_id, intent_flag, psn, ac_type_mask, ops_ticket
-- Добавлено: cso=0, intent_state=2 (вместо intent_flag), prev_intent_state=2
+- Добавлено: cso=0, intent_state=2 (вместо intent_flag)
 - State для новорожденных: serviceable (нейтральное)
 """
 
@@ -169,9 +169,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("cso", 0u);  // +НОВАЯ
         FLAMEGPU->agent_out.setVariable<unsigned int>("repair_days", 0u);
         
-        // 5. Intent (ИЗМЕНЕНО: intent_flag → intent_state, ДОБАВЛЕНО prev_intent_state)
+        // 5. Intent (ИЗМЕНЕНО: intent_flag → intent_state)
         FLAMEGPU->agent_out.setVariable<unsigned int>("intent_state", 2u);       // operations
-        FLAMEGPU->agent_out.setVariable<unsigned int>("prev_intent_state", 2u);  // +НОВАЯ
         
         // 6. Нормативы из Environment constants
         FLAMEGPU->agent_out.setVariable<unsigned int>("ll", 

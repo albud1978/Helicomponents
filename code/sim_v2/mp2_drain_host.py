@@ -55,7 +55,6 @@ class MP2DrainHostFunction(fg.HostFunction):
             -- V2 State информация
             state            String,
             intent_state     UInt8,
-            prev_intent_state UInt8,
             s6_started       UInt16,
             
             -- Наработки
@@ -162,7 +161,6 @@ class MP2DrainHostFunction(fg.HostFunction):
         
         mp2_state = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_state")
         mp2_intent = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_intent_state")
-        mp2_prev_intent = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_prev_intent_state")
         mp2_s6_started = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_s6_started")
         
         mp2_sne = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_sne")
@@ -213,7 +211,6 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_group_by[pos]),
                         self._map_state_to_string(int(mp2_state[pos])),
                         int(mp2_intent[pos]),
-                        int(mp2_prev_intent[pos]),
                         int(mp2_s6_started[pos]),
                         int(mp2_sne[pos]),
                         int(mp2_ppr[pos]),
@@ -265,7 +262,6 @@ class MP2DrainHostFunction(fg.HostFunction):
         
         mp2_state = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_state")
         mp2_intent = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_intent_state")
-        mp2_prev_intent = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_prev_intent_state")
         mp2_s6_started = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_s6_started")
         
         mp2_sne = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_sne")
@@ -314,7 +310,6 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_group_by[pos]),
                         self._map_state_to_string(int(mp2_state[pos])),
                         int(mp2_intent[pos]),
-                        int(mp2_prev_intent[pos]),
                         int(mp2_s6_started[pos]),
                         int(mp2_sne[pos]),
                         int(mp2_ppr[pos]),
@@ -363,10 +358,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             self.max_batch_rows = batch_rows
         t_start = time.perf_counter()
         # MATERIALIZED day_date вычисляется на стороне ClickHouse, не вставляем её явно
-        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,prev_intent_state,s6_started,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s6_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,ops_ticket"
+        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,s6_started,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s6_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,ops_ticket"
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES"
         # Подаём данные в колоннарном формате для уменьшения накладных расходов драйвера
-        num_cols = 29
+        num_cols = 28
         cols = [[] for _ in range(num_cols)]
         for r in self.batch:
             for i, v in enumerate(r):

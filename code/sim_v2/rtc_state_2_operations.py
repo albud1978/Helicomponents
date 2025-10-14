@@ -102,16 +102,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     // Логирование агентов, остающихся в operations, отключено
     
     // Побочные эффекты (side effects)
-    // 1. Если active_trigger=1, сбрасываем в 0
+    // Если active_trigger=1, сбрасываем в 0 (факт активации зафиксирован)
     unsigned int active_trigger = FLAMEGPU->getVariable<unsigned int>("active_trigger");
     if (active_trigger == 1u) {{
         FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
-    }}
-    
-    // 2. Если assembly_trigger=0, устанавливаем в 1
-    unsigned int assembly_trigger = FLAMEGPU->getVariable<unsigned int>("assembly_trigger");
-    if (assembly_trigger == 0u) {{
-        FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 1u);
     }}
     
     return flamegpu::ALIVE;
