@@ -231,7 +231,8 @@ class AgentPopulationBuilder:
                 repair_days = agent.getVariableUInt("repair_days")
                 assembly_time = agent.getVariableUInt("assembly_time")
                 
-                if repair_time - repair_days > assembly_time:
+                # Если осталось до конца ремонта МЕНЬШЕ assembly_time - агент в фазе сборки
+                if repair_time - repair_days < assembly_time:
                     agent.setVariableUInt("assembly_trigger", 1)
             
             # intent_state зависит от status_id (state):

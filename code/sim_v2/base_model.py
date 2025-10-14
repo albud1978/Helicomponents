@@ -208,7 +208,6 @@ class V2BaseModel:
         
         # Новая переменная для intent-based архитектуры
         agent.newVariableUInt("intent_state", 0)
-        agent.newVariableUInt("prev_intent_state", 0)  # Для детекции переходов в MP2
         
         # Наработки
         agent.newVariableUInt("sne", 0)
