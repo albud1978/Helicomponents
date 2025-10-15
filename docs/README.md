@@ -58,12 +58,12 @@ python3 code/utils/database_cleanup.py
 - **[count_ops_detailed_10-10-2025.md](count_ops_detailed_10-10-2025.md)** - Полный разбор модуля подсчёта агентов в operations/serviceable
 
 ### Архитектура симуляции
-- **[rtc_pipeline_architecture.md](rtc_pipeline_architecture.md)** - 🆕 **Архитектура RTC пайплайна + V2 Refactoring (30-09-2025)** + ✅ **Детальная логика state_2_operations и states_stub (валидировано 14.10.2025)**
+- **[rtc_pipeline_architecture.md](rtc_pipeline_architecture.md)** - 🆕 **Архитектура RTC пайплайна + V2 Refactoring (30-09-2025)** + ✅ **Детальная логика state_2_operations, states_stub (14.10.2025) и count_ops (15.10.2025)**
 - **[quota_architecture_analysis_06-10-2025.md](quota_architecture_analysis_06-10-2025.md)** - 🔍 **Анализ архитектуры квотирования (06-10-2025)**
 - **[refactoring_summary_30-09-2025.md](refactoring_summary_30-09-2025.md)** - 🎉 **Итоговая сводка рефакторинга V2 Orchestrator**
 - **[v2_rtc_modules_map.md](v2_rtc_modules_map.md)** - 📋 **Карта распределения RTC модулей и ядер**
 - [v2_architecture_consolidated.md](v2_architecture_consolidated.md) - Консолидированная документация V2 state-based архитектуры
-- [validation.md](validation.md) - Инварианты и проверки данных
+- **[validation.md](validation.md)** - ✅ **Инварианты и проверки: state_2_operations (13.10), states_stub (14.10), count_ops (15.10)**
 - [migration.md](migration.md) - Миграция между версиями
 
 ### Проектные наработки по квотированию
