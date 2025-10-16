@@ -22,15 +22,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_1_inactive, flamegpu::MessageNone, flamegpu::M
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     
-    // Логика state_1: проверка достаточности времени для ремонта
-    // Если с начала симуляции прошло достаточно времени для завершения ремонта агента,
-    // то он может быть активирован (intent=2), иначе остаётся в железном ряду (intent=1)
+    // ✅ Если время ремонта ещё не наступило - остаются в холдинге (intent=3)
+    // Только quota_promote_inactive выберет молодых в operations когда появится дефицит
     if (step_day >= repair_time) {{
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-        // Агент готов к активации через квотирование
+        // Время пришло - теперь ждут решения в холдинге
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
     }} else {{
+        // Ещё не готовы - остаются с intent=1 (заморозка)
         FLAMEGPU->setVariable<unsigned int>("intent_state", 1u);
-        // Ещё не прошло достаточно времени для завершения ремонта
     }}
     
     return flamegpu::ALIVE;
@@ -40,8 +39,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_1_inactive, flamegpu::MessageNone, flamegpu::M
 # RTC функция для state_3 (serviceable)
 RTC_STATE_3_SERVICEABLE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_3_serviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Исправные агенты всегда хотят в эксплуатацию
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+    // ✅ Все агенты в serviceable по умолчанию хотят вернуться в operations (intent=3)
+    // Только избранные (выбранные quota_promote_serviceable) получат intent=2 и перейдут
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
     
     return flamegpu::ALIVE;
 }}
@@ -107,8 +107,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
 # RTC функция для state_5 (reserve)
 RTC_STATE_5_RESERVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_5_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Агенты в резерве всегда хотят в эксплуатацию
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+    // ✅ Все агенты в резерве по умолчанию хотят вернуться в operations (intent=3)
+    // Только избранные (выбранные quota_promote_reserve) получат intent=2 и перейдут
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
     
     return flamegpu::ALIVE;
 }}

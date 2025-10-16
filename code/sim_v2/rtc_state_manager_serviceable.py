@@ -13,32 +13,24 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """
     
     # ═════════════════════════════════════════════════════════════════════════
-    # Переход 3→2: serviceable → operations (по одобрению промоута)
+    # Переход 3→2: serviceable → operations
+    # Обрабатывает оба случая:
+    #   - intent=2: агент выбран на промоут (из quota_promote_serviceable)
+    #   - intent=3: демутированный агент возвращается в operations
     # ═════════════════════════════════════════════════════════════════════════
     RTC_APPLY_3_TO_2 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_3_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int intent_state = FLAMEGPU->getVariable<unsigned int>("intent_state");
     
-    // Если intent=2 (промоут одобрен), переходим в operations
+    // ✅ Работаем ТОЛЬКО с intent=2 (промутированные агенты, одобренные на операции)
+    // intent=3 (холдинг) остаются в serviceable
     if (intent_state == 2u) {
-        const unsigned int day = FLAMEGPU->getStepCounter();
-        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-        
-        // Логирование для новых spawn агентов и ключевых дней
-        if (aircraft_number >= 100000u || day == 226u || day == 227u || day == 228u) {
-            printf("  [TRANSITION 3→2 Day %u] AC %u (idx %u): serviceable -> operations (intent=2 preserved)\\n", 
-                   day, aircraft_number, idx);
-        }
-        
-        // Переход в operations происходит через setEndState()
-        // НЕ сбрасываем intent! Он будет установлен в 0 на следующем шаге в state_2_operations
-        // ВАЖНО: intent=2 сохраняется, чтобы в MP2 было видно что агент хотел в operations
+        // Переходим в operations
         return flamegpu::ALIVE;  // Агент перейдёт в operations с intent=2
     }
     
     // Если intent!=2, агент остаётся в serviceable
-    return flamegpu::DEAD;  // НЕ переходим
+    return flamegpu::ALIVE;
 }
 """
     
@@ -50,5 +42,5 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_3_to_2, flamegpu::MessageNone, flamegpu::Messa
     layer_3_to_2 = model.newLayer("transition_3_to_2")
     layer_3_to_2.addAgentFunction(rtc_func_3_to_2)
     
-    print("  Регистрация state manager для serviceable (3→2)")
+    print("  Регистрация state manager для serviceable (3→2, оба случая)")
 

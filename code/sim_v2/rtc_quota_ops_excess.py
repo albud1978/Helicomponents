@@ -33,6 +33,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
         return flamegpu::ALIVE;  // Технологические переходы не участвуют
     }}
     
+    // ✅ ВАЖНО: Работаем ТОЛЬКО с intent=2 (хотят в operations)
+    if (intent != 2u) {{
+        return flamegpu::ALIVE;  // Любые другие intent - пропускаем
+    }}
+    
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->getStepCounter();

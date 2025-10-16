@@ -41,8 +41,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
 """
     
     rtc_reset = agent.newRTCFunction("rtc_reset_quota_buffers", RTC_RESET_BUFFERS)
-    rtc_reset.setInitialState("operations")
-    rtc_reset.setEndState("operations")
+    # ✅ ИСПРАВЛЕНИЕ: Убираем фильтр по state, чтобы reset срабатывал для ВСЕХ агентов
+    # Только первый агент (idx=0) сбросит буферы, остальные просто пройдут
+    # rtc_reset.setInitialState("operations")  ← УДАЛЕНО
+    # rtc_reset.setEndState("operations")      ← УДАЛЕНО
     
     layer_reset = model.newLayer("reset_quota_buffers")
     layer_reset.addAgentFunction(rtc_reset)

@@ -27,9 +27,18 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     
     RTC_QUOTA_PROMOTE_INACTIVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Фильтр: только агенты с intent=2 (хотят в operations)
+    // Фильтр: только агенты с intent=3 (в холдинге, ждут решения)
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-    if (intent != 2u) {{
+    if (intent != 3u) {{
+        return flamegpu::ALIVE;
+    }}
+    
+    // ✅ ВАЖНО: Только агенты, у которых пришло время (step_day >= repair_time)
+    // Остальные остаются в frozen состоянии (intent=1) в состоянии inactive
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
+    if (step_day < repair_time) {{
+        // Ещё не готовы - пропускаем
         return flamegpu::ALIVE;
     }}
     
@@ -128,8 +137,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
     }}
     
     if (rank < K) {{
-        // Я в числе K первых → промоут
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Подтверждаем intent
+        // Я в числе K первых → промоут, меняю intent=3 на intent=2
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Изменяем: 3→2 (одобрены на операции)
         
         // Записываем в ОТДЕЛЬНЫЙ буфер для inactive (избегаем race condition)
         if (group_by == 1u) {{
@@ -147,8 +156,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
                    day, aircraft_number, idx, rank, K, deficit);
         }}
     }} else {{
-        // Не вошёл в квоту → intent остаётся 2 (всё ещё хочу в operations)
-        // НЕ меняем intent! Агент продолжает хотеть в operations для следующего шага
+        // Не вошёл в квоту → intent остаётся 3 (холдинг, ждёт следующего дня)
+        // НЕ меняем intent! Агент остаётся в inactive на следующий день
         
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         if (aircraft_number >= 100000u || day == 226u || day == 227u || day == 228u || day == 229u || day == 230u) {{
