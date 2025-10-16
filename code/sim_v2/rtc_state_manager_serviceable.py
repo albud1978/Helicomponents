@@ -14,33 +14,33 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     
     # ═════════════════════════════════════════════════════════════════════════
     # Переход 3→2: serviceable → operations
-    # Обрабатывает оба случая:
-    #   - intent=2: агент выбран на промоут (из quota_promote_serviceable)
-    #   - intent=3: демутированный агент возвращается в operations
+    # Обрабатывает ТОЛЬКО intent=3 (холдинг в serviceable)
     # ═════════════════════════════════════════════════════════════════════════
-    RTC_APPLY_3_TO_2 = """
-FLAMEGPU_AGENT_FUNCTION(rtc_apply_3_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
+    RTC_SERVICEABLE_HOLDING = """
+FLAMEGPU_AGENT_FUNCTION(rtc_serviceable_holding_confirm, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int intent_state = FLAMEGPU->getVariable<unsigned int>("intent_state");
     
-    // ✅ Работаем ТОЛЬКО с intent=2 (промутированные агенты, одобренные на операции)
-    // intent=3 (холдинг) остаются в serviceable
-    if (intent_state == 2u) {
-        // Переходим в operations
-        return flamegpu::ALIVE;  // Агент перейдёт в operations с intent=2
+    // ✅ Работаем ТОЛЬКО с intent=3 (агенты в холдинге в serviceable)
+    // intent=2 обрабатывается в других слоях (quota_promote уже ставит intent=2)
+    if (intent_state != 3u) {
+        // intent!=3 - пропускаем
+        return flamegpu::ALIVE;
     }
     
-    // Если intent!=2, агент остаётся в serviceable
+    // ✅ intent=3 в serviceable - остаёмся в serviceable
+    // Эта RTC функция подтверждает, что агент остаётся в serviceable
+    // (не переводит его в operations)
     return flamegpu::ALIVE;
 }
 """
     
-    rtc_func_3_to_2 = agent.newRTCFunction("rtc_apply_3_to_2", RTC_APPLY_3_TO_2)
-    rtc_func_3_to_2.setInitialState("serviceable")
-    rtc_func_3_to_2.setEndState("operations")
-    rtc_func_3_to_2.setAllowAgentDeath(False)
+    rtc_func_holding = agent.newRTCFunction("rtc_serviceable_holding_confirm", RTC_SERVICEABLE_HOLDING)
+    rtc_func_holding.setInitialState("serviceable")
+    rtc_func_holding.setEndState("serviceable")  # ✅ Остаёмся в serviceable!
+    rtc_func_holding.setAllowAgentDeath(False)
     
-    layer_3_to_2 = model.newLayer("transition_3_to_2")
-    layer_3_to_2.addAgentFunction(rtc_func_3_to_2)
+    layer_holding = model.newLayer("serviceable_holding_confirm")
+    layer_holding.addAgentFunction(rtc_func_holding)
     
-    print("  Регистрация state manager для serviceable (3→2, оба случая)")
+    print("  Регистрация state manager для serviceable (3→serviceable, холдинг)")
 

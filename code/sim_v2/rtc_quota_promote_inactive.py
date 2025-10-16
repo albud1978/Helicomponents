@@ -27,9 +27,9 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     
     RTC_QUOTA_PROMOTE_INACTIVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Фильтр: только агенты с intent=3 (в холдинге, ждут решения)
+    // Фильтр: только агенты с intent=1 (замороженные в inactive)
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-    if (intent != 3u) {{
+    if (intent != 1u) {{
         return flamegpu::ALIVE;
     }}
     

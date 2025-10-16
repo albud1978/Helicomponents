@@ -18,19 +18,9 @@ except ImportError as e:
 # RTC функция для state_1 (inactive)
 RTC_STATE_1_INACTIVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_1_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Неактивные агенты в "железном ряду"
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
-    const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
-    
-    // ✅ Если время ремонта ещё не наступило - остаются в холдинге (intent=3)
-    // Только quota_promote_inactive выберет молодых в operations когда появится дефицит
-    if (step_day >= repair_time) {{
-        // Время пришло - теперь ждут решения в холдинге
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
-    }} else {{
-        // Ещё не готовы - остаются с intent=1 (заморозка)
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 1u);
-    }}
+    // ✅ Все неактивные агенты замороженные (intent=1)
+    // Логика проверки step_day >= repair_time находится в quota_promote_inactive
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 1u);
     
     return flamegpu::ALIVE;
 }}
@@ -107,9 +97,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
 # RTC функция для state_5 (reserve)
 RTC_STATE_5_RESERVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_5_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // ✅ Все агенты в резерве по умолчанию хотят вернуться в operations (intent=3)
-    // Только избранные (выбранные quota_promote_reserve) получат intent=2 и перейдут
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
+    // ✅ Все агенты в резерве ставят intent=5 (холдинг, ожидание решения)
+    // Только quota_promote_reserve будет менять на intent=2 для избранных
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
     
     return flamegpu::ALIVE;
 }}
