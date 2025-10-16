@@ -5,8 +5,8 @@ RTC Spawn для orchestrator_v2
 
 ИЗМЕНЕНИЯ относительно sim_master:
 - Убрано: status_id, intent_flag, psn, ac_type_mask, ops_ticket
-- Добавлено: cso=0, intent_state=2 (вместо intent_flag)
-- State для новорожденных: serviceable (нейтральное)
+- Добавлено: cso=0, intent_state=3 (holding в serviceable)
+- State для новорожденных: serviceable&intent=3 (holding, ожидание решения по операциям)
 """
 
 try:
@@ -142,7 +142,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("group_by", spawn_gb);
         
         // Детальное логирование создания агентов
-        printf("  [SPAWN Day %u] Creating AC %u (idx %u), state=serviceable, intent=2 (wants operations)\\n",
+        printf("  [SPAWN Day %u] Creating AC %u (idx %u), state=serviceable, intent=3 (holding)\\n",
                day, acn, idx);
         
         if (ticket == 0u) {
@@ -170,7 +170,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("repair_days", 0u);
         
         // 5. Intent (ИЗМЕНЕНО: intent_flag → intent_state)
-        FLAMEGPU->agent_out.setVariable<unsigned int>("intent_state", 2u);       // operations
+        FLAMEGPU->agent_out.setVariable<unsigned int>("intent_state", 3u);       // holding in serviceable
         
         // 6. Нормативы из Environment constants
         FLAMEGPU->agent_out.setVariable<unsigned int>("ll", 

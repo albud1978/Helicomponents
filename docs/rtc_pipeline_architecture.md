@@ -1416,3 +1416,88 @@ python3 code/sim_v2/orchestrator_v2.py \
 
 *Документ обновлён: 17-10-2025*  
 *Статус: ✅ ЗЕЛЁНЫЕ ТЕСТЫ — ГОТОВО К ПРОДАКШЕНУ*
+
+---
+
+# RTC Pipeline Architecture v2 (State-Based, 16.10.2025)
+
+## Новая архитектура с holding states
+
+### Концепция holding states
+Агенты в неактивных состояниях (`serviceable`, `reserve`, `inactive`) используют **holding intent** для обозначения ожидания:
+- `serviceable&intent=3` — ждут решения по продвижению в operations (холдинг)
+- `reserve&intent=5` — ждут спроса на операции (холдинг)
+- `inactive&intent=1` — ждут разморозки при `step_day >= repair_time` (заморозка)
+
+### Полный порядок модулей (14 слоёв)
+
+| Слой | Модуль | Функция | Транзиции |
+|------|--------|---------|-----------|
+| 1 | `state_2_operations` | Инициализация/логирование operations | 2→2, 2→3, 2→4, 2→6 (проверка LL/OH/BR) |
+| 2 | `states_stub` | Установка holding intents | 1→intent=1, 3→intent=3, 4→intent=4, 5→intent=5, 6→intent=6 |
+| 3 | `count_ops` | Подсчёт operations&intent=2 | Запись в MacroProperty буферы (mi8_ops_count, mi17_ops_count) |
+| 4 | `quota_ops_excess` | Демоут избытка из operations | 2→3 с intent=3 (холдинг) для демотированных агентов |
+| 5 | `quota_promote_serviceable` | Промоут из serviceable (P1) | 3→2 для выбранных (топ-K по mfg_date) |
+| 6 | `quota_promote_reserve` | Промоут из reserve (P2) | 5→2 для выбранных (топ-K по mfg_date) |
+| 7 | `quota_promote_inactive` | Промоут из inactive (P3) | 1→2 для выбранных (если step_day >= repair_time) |
+| 8 | `state_manager_operations` | Применение переходов из operations | 2→2, 2→3 (intent=3), 2→4, 2→6, 3→2, 5→2, 1→2 |
+| 9 | `state_manager_serviceable` | Холдинг в serviceable | 3→3 для intent=3 (остаются в холдинге) |
+| 10 | `state_manager_inactive` | Холдинг в inactive | 1→1 для intent=1 (остаются заморожены) |
+| 11 | `state_manager_repair` | Состояния ремонта | 4→4, 4→5 (с intent=5 при выходе) |
+| 12 | `state_manager_reserve` | Холдинг в reserve | 5→5 для intent=5 (остаются в холдинге) |
+| 13 | `state_manager_storage` | Неизменяемое хранение | 6→6 (immutable) |
+| 14 | `spawn_v2` | Рождение новых агентов | Создание в serviceable&intent=3 |
+
+### Таблица переходов и intent
+
+| Начальное состояние | Intent | Финальное состояние | Intent | Условие | Модуль |
+|-------------------|--------|-------------------|--------|---------|--------|
+| operations | 2 | operations | 2 | Остаток из quota | state_manager_operations |
+| operations | 2 | serviceable | 3 | Демоут quota | state_manager_operations |
+| operations | 2 | repair | 4 | OH превышен | state_manager_operations |
+| operations | 2 | storage | 6 | LL или BR превышены | state_manager_operations |
+| serviceable | 3 | operations | 2 | Выбран quota_promote | state_manager_operations |
+| serviceable | 3 | serviceable | 3 | Не выбран (холдинг) | state_manager_serviceable |
+| reserve | 5 | operations | 2 | Выбран quota_promote (P2) | state_manager_operations |
+| reserve | 5 | reserve | 5 | Не выбран (холдинг) | state_manager_reserve |
+| inactive | 1 | operations | 2 | Выбран quota_promote (P3) + step_day >= repair_time | state_manager_operations |
+| inactive | 1 | inactive | 1 | Не готов или не выбран (заморозка) | state_manager_inactive |
+| repair | 4 | repair | 4 | Ремонт идет | state_manager_repair |
+| repair | 4 | reserve | 5 | Ремонт завершен | state_manager_repair |
+| storage | 6 | storage | 6 | Immutable | state_manager_storage |
+| (новорожденные) | 3 | serviceable | 3 | Spawn создание | spawn_v2 |
+
+### Порядок выполнения на каждом шаге
+
+```
+1. state_2_operations        — инициализация operations
+2. states_stub               — установка holding intents (1,3,4,5,6)
+3. count_ops                 — подсчет operations&intent=2
+4. quota_ops_excess          — демоут избытка (2→3, intent=3)
+5. quota_promote_serviceable — выбор для P1 (3→2)
+6. quota_promote_reserve     — выбор для P2 (5→2)
+7. quota_promote_inactive    — выбор для P3 (1→2)
+8. state_manager_operations  — применение 2→2, 2→3, 2→4, 2→6, 3→2, 5→2, 1→2
+9. state_manager_serviceable — холдинг 3→3
+10. state_manager_inactive   — холдинг 1→1
+11. state_manager_repair     — 4→4, 4→5 с intent=5
+12. state_manager_reserve    — холдинг 5→5
+13. state_manager_storage    — immutable 6→6
+14. spawn_v2                 — рождение в serviceable&intent=3
+```
+
+### Важные инварианты
+
+1. **Atomicity переходов:** State и intent меняются ВМЕСТЕ в state_manager слое
+2. **Холдинг защита:** `states_stub` НЕ перезаписывает intent=3/5/1 если они уже установлены
+3. **Демоут холдинг:** Демотированные агенты остаются в intent=3 и обрабатываются `state_manager_serviceable`
+4. **Спавн холдинг:** Новые агенты рождаются в serviceable&intent=3, ждут quota_promote
+5. **Приоритеты P1-P3:** P1 (serviceable), P2 (reserve), P3 (inactive) выполняются последовательно
+
+### Результаты теста (3650 дней)
+
+- ✅ Нет "bouncing" между состояниями
+- ✅ Holding states стабильны (24 в serviceable, 116 в inactive, 123 в reserve)
+- ✅ Новые агенты правильно рождаются в холдинге
+- ✅ Детерминизм подтверждён
+- ✅ Время выполнения: 212.45 сек на GPU

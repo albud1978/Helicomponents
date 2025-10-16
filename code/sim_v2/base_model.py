@@ -299,6 +299,14 @@ class V2BaseModel:
                 import rtc_state_manager_repair
                 rtc_state_manager_repair.register_state_manager_repair(self.model, self.agent)
             
+            elif module_name == "state_manager_inactive":
+                import rtc_state_manager_inactive
+                rtc_state_manager_inactive.register_state_manager_inactive(self.model, self.agent)
+            
+            elif module_name == "state_manager_reserve":
+                import rtc_state_manager_reserve
+                rtc_state_manager_reserve.register_state_manager_reserve(self.model, self.agent)
+            
             elif module_name == "state_manager_storage":
                 import rtc_state_manager_storage
                 rtc_state_manager_storage.register_state_manager_storage(self.model, self.agent)
