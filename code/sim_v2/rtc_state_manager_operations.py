@@ -124,8 +124,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_3, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-    printf("  [TRANSITION 2→3 Day %u] AC %u (idx %u): operations -> serviceable (DEMOUNT), sne=%u, ppr=%u\\n", 
+    printf("  [TRANSITION 2→3 Day %u] AC %u (idx %u): operations -> serviceable (DEMOUNT), sne=%u, ppr=%u, intent 3→2\\n", 
            step_day, aircraft_number, idx, sne, ppr);
+    
+    // ✅ При демоуте: state меняется на serviceable, intent меняется на 2
+    // Агент хочет остаться в эксплуатации (intent=2), но временно отправляется на техническое обслуживание
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
     return flamegpu::ALIVE;
 }
 """
