@@ -1212,7 +1212,7 @@ Used = 0  // Первый слой
 Deficit = Target - (Curr + Used)
 if (Deficit > 0) {
     K = Deficit
-    // Ранжирование: youngest first (по mfg_date)
+    // Ранжирование: youngest first (по mfg_date) 
     if (rank < K) {
         intent_state = 2u;  // Промоут в operations
         approve_s3[idx] = 1u;  // Помечаем для P2
@@ -1361,3 +1361,13 @@ python3 code/sim_v2/orchestrator_v2.py \
 
 *Документ обновлён: 10-10-2025*  
 *Автор: V2 Refactoring Team + Variant B Implementation*
+
+#### Следующие этапы валидации
+
+1. ✅ state_2_operations — ПРОВЕРЕНО (13.10.2025)
+2. ✅ states_stub — ПРОВЕРЕНО (14.10.2025)
+3. ✅ count_ops — ПРОВЕРЕНО (15.10.2025)
+4. ⏳ quota_ops_excess — следующий для проверки
+5. ⏳ quota_promote_* — подключить и проверить промоут
+6. ⏳ state_manager_* — подключить и проверить переходы
+7. ⏳ Полный пайплайн — интеграционный тест всех модулей
