@@ -69,10 +69,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
     // ШАГ 2: Расчёт дефицита (сколько не хватает до target)
     // ═══════════════════════════════════════════════════════════
     const int deficit = (int)target - (int)curr;
-    if (deficit <= 0) {{
+    if (deficit <= 0) {
         // Уже достаточно агентов в operations или target=0 → выход
         return flamegpu::ALIVE;  // ✅ Оптимизация
-    }}
+    }
     
     // ═══════════════════════════════════════════════════════════
     // ШАГ 3: Промоут готовых агентов (каскадное квотирование P1)
