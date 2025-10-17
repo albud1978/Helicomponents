@@ -181,11 +181,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::Mes
     RTC_LOG_MP4_TARGETS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_log_mp4_targets, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int day = FLAMEGPU->getStepCounter();
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    
-    // Только первый агент каждого типа логирует (чтобы не писать многократно)
-    if (idx != 0u) return flamegpu::ALIVE;
     
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
@@ -205,7 +201,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_log_mp4_targets, flamegpu::MessageNone, flamegpu::Me
 """
     
     rtc_log_mp4 = agent.newRTCFunction("rtc_log_mp4_targets", RTC_LOG_MP4_TARGETS)
-    # Запускаем для всех агентов (но логирует только idx=0 каждого типа)
+    # Запускаем для ВСЕХ агентов (exchange атомарна, поэтому безопасна многократная запись)
     
     layer_log_mp4 = model.newLayer("log_mp4_targets")
     layer_log_mp4.addAgentFunction(rtc_log_mp4)

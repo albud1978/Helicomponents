@@ -44,54 +44,53 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
     unsigned int curr = 0u;
     unsigned int target = 0u;
     
-    if (group_by == 1u) {
-        // Mi-8: считаем текущих в operations
+    if (group_by == 1u) {{
+        /* Mi-8: считаем текущих в operations */
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
-        for (unsigned int i = 0u; i < frames; ++i) {
+        for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
-        }
+        }}
         
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
-    } else if (group_by == 2u) {
-        // Mi-17: аналогично
+    }} else if (group_by == 2u) {{
+        /* Mi-17: аналогично */
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
-        for (unsigned int i = 0u; i < frames; ++i) {
+        for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
-        }
+        }}
         
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
-    } else {
-        return flamegpu::ALIVE;  // Неизвестный group_by
-    }
+    }} else {{
+        return flamegpu::ALIVE;
+    }}
     
-    // ═══════════════════════════════════════════════════════════
-    // ШАГ 2: Расчёт дефицита (сколько не хватает до target)
-    // ═══════════════════════════════════════════════════════════
+    /* ════════════════════════════════════════════════════════════ */
+    /* ШАГ 2: Расчёт дефицита (сколько не хватает до target) */
+    /* ════════════════════════════════════════════════════════════ */
     const int deficit = (int)target - (int)curr;
-    if (deficit <= 0) {
-        // Уже достаточно агентов в operations или target=0 → выход
-        return flamegpu::ALIVE;  // ✅ Оптимизация
-    }
+    if (deficit <= 0) {{
+        /* Уже достаточно агентов в operations или target=0 */
+        return flamegpu::ALIVE;
+    }}
     
-    // ═══════════════════════════════════════════════════════════
-    // ШАГ 3: Промоут готовых агентов (каскадное квотирование P1)
-    // Поднимаем ровно deficit агентов (не больше, чтобы остаток шёл в P2)
-    // ═══════════════════════════════════════════════════════════
-    const unsigned int K = (unsigned int)deficit;  // ✅ Каскадная логика
+    /* ════════════════════════════════════════════════════════════ */
+    /* ШАГ 3: Промоут готовых агентов (каскадное квотирование P1) */
+    /* ════════════════════════════════════════════════════════════ */
+    const unsigned int K = (unsigned int)deficit;
     
-    // Ранжирование: youngest first среди РЕАЛЬНЫХ агентов в serviceable
+    /* Ранжирование: youngest first среди РЕАЛЬНЫХ агентов в serviceable */
     const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
     unsigned int rank = 0u;
     
-    // Используем svc_count буфер для фильтрации
+    /* Используем svc_count буфер для фильтрации */
     if (group_by == 1u) {{
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_svc_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (i == idx) continue;
-            if (svc_count[i] != 1u) continue;  // ✅ Только агенты в serviceable
+            if (svc_count[i] != 1u) continue;
             
             const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            // Youngest first: rank растёт если other МОЛОЖЕ меня
+            /* Youngest first: rank растёт если other МОЛОЖЕ меня */
             if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
                 ++rank;
             }}
@@ -100,10 +99,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_svc_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (i == idx) continue;
-            if (svc_count[i] != 1u) continue;  // ✅ Только агенты в serviceable
+            if (svc_count[i] != 1u) continue;
             
             const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            // Youngest first: rank растёт если other МОЛОЖЕ меня
+            /* Youngest first: rank растёт если other МОЛОЖЕ меня */
             if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
                 ++rank;
             }}
@@ -111,25 +110,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
     }}
     
     if (rank < K) {{
-        // Я в числе K первых → промоут, меняю intent=5 на intent=2
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Изменяем: 5→2 (одобрены на операции)
+        /* Я в числе K первых → промоут, меняю intent=3 на intent=2 */
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
         
-        // Записываем в ОТДЕЛЬНЫЙ буфер для serviceable (избегаем race condition)
+        /* Записываем в ОТДЕЛЬНЫЙ буфер для serviceable (избегаем race condition) */
         if (group_by == 1u) {{
             auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s3");
-            approve_s3[idx].exchange(1u);  // ✅ Помечаем в отдельном буфере
+            approve_s3[idx].exchange(1u);
         }} else if (group_by == 2u) {{
             auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s3");
             approve_s3[idx].exchange(1u);
         }}
-        
-
-        
     }} else {{
-        // Не вошёл в квоту → intent остаётся 3 (холдинг, ждёт следующего дня)
-        // НЕ меняем intent! Агент остаётся в serviceable на следующий день
-        
-
+        /* Не вошёл в квоту → intent остаётся 3 (холдинг, ждёт следующего дня) */
     }}
     
     return flamegpu::ALIVE;
