@@ -349,6 +349,11 @@ class V2BaseModel:
                 rtc_spawn_v2.register_rtc(self.model, self.agent, self.env_data)
                 print("  RTC модуль spawn_v2 зарегистрирован")
                 
+            elif module_name == "quota_debug":
+                import rtc_quota_debug
+                rtc_quota_debug.create_quota_debug_layer(self.model, self.agent, self.model.Environment().getPropertyUInt("frames_total"))
+                print("  RTC модуль quota_debug зарегистрирован")
+            
             else:
                 # Стандартная обработка для других модулей
                 module = __import__(f'rtc_{module_name}', fromlist=['register_rtc'])
