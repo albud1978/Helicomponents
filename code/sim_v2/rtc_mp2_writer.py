@@ -148,6 +148,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     
     mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
     
+    // Квотирование - читаем значения заполненные в слое count_ops
+    auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
+    auto mp2_quota_target = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_target_ops");
+    auto mp2_quota_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_svc_count");
+    auto mp2_quota_deficit = FLAMEGPU->environment.getMacroProperty<int, {MP2_SIZE}u>("mp2_quota_deficit");
+    
+    // Просто копируем значения (или 0 если не заполнено)
+    unsigned int quota_curr = mp2_quota_curr[pos];
+    unsigned int quota_target = mp2_quota_target[pos];
+    unsigned int quota_svc = mp2_quota_svc[pos];
+    int quota_deficit = mp2_quota_deficit[pos];
+    
     return flamegpu::ALIVE;
 }}
 """)
@@ -236,6 +248,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
+    
+    // Квотирование - читаем значения заполненные в слое count_ops
+    auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
+    auto mp2_quota_target = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_target_ops");
+    auto mp2_quota_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_svc_count");
+    auto mp2_quota_deficit = FLAMEGPU->environment.getMacroProperty<int, {MP2_SIZE}u>("mp2_quota_deficit");
+    
+    // Просто копируем значения (или 0 если не заполнено)
+    unsigned int quota_curr = mp2_quota_curr[pos];
+    unsigned int quota_target = mp2_quota_target[pos];
+    unsigned int quota_svc = mp2_quota_svc[pos];
+    int quota_deficit = mp2_quota_deficit[pos];
     
     return flamegpu::ALIVE;
 }}
@@ -326,6 +350,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     
     mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
     
+    // Квотирование - читаем значения заполненные в слое count_ops
+    auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
+    auto mp2_quota_target = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_target_ops");
+    auto mp2_quota_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_svc_count");
+    auto mp2_quota_deficit = FLAMEGPU->environment.getMacroProperty<int, {MP2_SIZE}u>("mp2_quota_deficit");
+    
+    // Просто копируем значения (или 0 если не заполнено)
+    unsigned int quota_curr = mp2_quota_curr[pos];
+    unsigned int quota_target = mp2_quota_target[pos];
+    unsigned int quota_svc = mp2_quota_svc[pos];
+    int quota_deficit = mp2_quota_deficit[pos];
+    
     return flamegpu::ALIVE;
 }}
 """)
@@ -414,6 +450,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
+    
+    // Квотирование - читаем значения заполненные в слое count_ops
+    auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
+    auto mp2_quota_target = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_target_ops");
+    auto mp2_quota_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_svc_count");
+    auto mp2_quota_deficit = FLAMEGPU->environment.getMacroProperty<int, {MP2_SIZE}u>("mp2_quota_deficit");
+    
+    // Просто копируем значения (или 0 если не заполнено)
+    unsigned int quota_curr = mp2_quota_curr[pos];
+    unsigned int quota_target = mp2_quota_target[pos];
+    unsigned int quota_svc = mp2_quota_svc[pos];
+    int quota_deficit = mp2_quota_deficit[pos];
     
     return flamegpu::ALIVE;
 }}
@@ -504,6 +552,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     
     mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
     
+    // Квотирование - читаем значения заполненные в слое count_ops
+    auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
+    auto mp2_quota_target = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_target_ops");
+    auto mp2_quota_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_svc_count");
+    auto mp2_quota_deficit = FLAMEGPU->environment.getMacroProperty<int, {MP2_SIZE}u>("mp2_quota_deficit");
+    
+    // Просто копируем значения (или 0 если не заполнено)
+    unsigned int quota_curr = mp2_quota_curr[pos];
+    unsigned int quota_target = mp2_quota_target[pos];
+    unsigned int quota_svc = mp2_quota_svc[pos];
+    int quota_deficit = mp2_quota_deficit[pos];
+    
     return flamegpu::ALIVE;
 }}
 """)
@@ -592,6 +652,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
+    
+    // Квотирование - читаем значения заполненные в слое count_ops
+    auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
+    auto mp2_quota_target = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_target_ops");
+    auto mp2_quota_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_svc_count");
+    auto mp2_quota_deficit = FLAMEGPU->environment.getMacroProperty<int, {MP2_SIZE}u>("mp2_quota_deficit");
+    
+    // Просто копируем значения (или 0 если не заполнено)
+    unsigned int quota_curr = mp2_quota_curr[pos];
+    unsigned int quota_target = mp2_quota_target[pos];
+    unsigned int quota_svc = mp2_quota_svc[pos];
+    int quota_deficit = mp2_quota_deficit[pos];
     
     return flamegpu::ALIVE;
 }}
