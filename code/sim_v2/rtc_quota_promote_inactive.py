@@ -50,95 +50,110 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 1: Подсчёт curr + used (curr из operations + одобренные в P1 и P2)
+    // ШАГ 1: Подсчёт curr + учёт одобренных из P1 и P2
     // ═══════════════════════════════════════════════════════════
     unsigned int curr = 0u;
-    unsigned int used = 0u;
     unsigned int target = 0u;
+    unsigned int used = 0u;  // Сколько уже одобрено из P1 + P2
     
     if (group_by == 1u) {{
-        // Mi-8: считаем текущих в operations
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
         }}
         
-        // Считаем одобренных в P1 (serviceable) + P2 (reserve)
+        // Считаем сколько уже одобрено из serviceable (P1)
         auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s3");
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            if (approve_s3[i] == 1u) ++used;
+        }}
+        
+        // Считаем сколько одобрено из reserve (P2)
         auto approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s5");
         for (unsigned int i = 0u; i < frames; ++i) {{
-            if (approve_s3[i] == 1u) ++used;   // Serviceable
-            if (approve_s5[i] == 1u) ++used;   // Reserve
+            if (approve_s5[i] == 1u) ++used;
         }}
+        
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
         
     }} else if (group_by == 2u) {{
-        // Mi-17
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
         }}
         
         auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s3");
-        auto approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s5");
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (approve_s3[i] == 1u) ++used;
+        }}
+        
+        auto approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s5");
+        for (unsigned int i = 0u; i < frames; ++i) {{
             if (approve_s5[i] == 1u) ++used;
         }}
+        
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
     }} else {{
-        return flamegpu::ALIVE;  // Неизвестный group_by
+        return flamegpu::ALIVE;
     }}
     
-    const int deficit = (int)target - (int)(curr + used);
-    
-    // Диагностика на ключевых днях (ПЕРЕД early exit)
-    if ((day == 180u || day == 181u || day == 182u || day == 226u || day == 227u) && idx == 0u) {{
+    // Диагностика на ключевых днях
+    if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
         if (group_by == 1u) {{
-            printf("  [PROMOTE P3 DEFICIT Day %u] Mi-8: Curr=%u, Used=%u, Target=%u, Deficit=%d\\n", day, curr, used, target, deficit);
+            printf("  [PROMOTE P3 TARGET Day %u] Mi-8: Curr=%u, Used(P1+P2)=%u, Target=%u\\n", day, curr, used, target);
         }} else if (group_by == 2u) {{
-            printf("  [PROMOTE P3 DEFICIT Day %u] Mi-17: Curr=%u, Used=%u, Target=%u, Deficit=%d\\n", day, curr, used, target, deficit);
+            printf("  [PROMOTE P3 TARGET Day %u] Mi-17: Curr=%u, Used(P1+P2)=%u, Target=%u\\n", day, curr, used, target);
         }}
     }}
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 2: Early exit при отсутствии дефицита
+    // ШАГ 2: Early exit при отсутствии спроса
     // ═══════════════════════════════════════════════════════════
-    if (deficit <= 0) {{
-        // Дефицит закрыт → все агенты выходят
-        return flamegpu::ALIVE;  // ✅ Оптимизация
+    if (target <= 0) {{
+        // Нет спроса или исчерпаны возможности → выход
+        return flamegpu::ALIVE;
     }}
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 3: Проверка условия для inactive (из sim_master)
+    // ШАГ 3: Промоут готовых агентов (proactive logic)
+    // Поднимаем K = target (из них used уже в operations, остаток поднимаем)
     // ═══════════════════════════════════════════════════════════
-    // TODO: Добавить условие из sim_master:
-    // repair_time - repair_days > assembly_time
-    // Пока упрощение: промоут без условия
+    const unsigned int K = target;  // Поднимаем ДО target (proactive)
     
-    const unsigned int K = (unsigned int)deficit;
-    
-    // Ранжирование: youngest first по mfg_date (как в serviceable/reserve)
+    // Ранжирование: youngest first среди РЕАЛЬНЫХ агентов в inactive (которые ГОТОВЫ)
     const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
     unsigned int rank = 0u;
     
-    for (unsigned int i = 0u; i < frames; ++i) {{
-        if (i == idx) continue;
-        
-        const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-        if (other_mfg == 0u) continue;  // Агент не существует
-        
-        // TODO: проверить что i в inactive (state=1, intent=2)
-        
-        // Youngest first: rank растёт если other МОЛОЖЕ меня
-        if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
-            ++rank;
+    // ✅ ВАЖНО: Фильтруем по inactive state используя буфер (state=1, intent=1, но готовы: step_day >= repair_time)
+    if (group_by == 1u) {{
+        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_inactive_count");
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            if (i == idx) continue;
+            if (inactive_count[i] != 1u) continue;  // ✅ Только агенты в inactive
+            
+            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
+            // Youngest first: rank растёт если other МОЛОЖЕ меня
+            if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
+                ++rank;
+            }}
+        }}
+    }} else if (group_by == 2u) {{
+        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_inactive_count");
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            if (i == idx) continue;
+            if (inactive_count[i] != 1u) continue;  // ✅ Только агенты в inactive
+            
+            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
+            // Youngest first: rank растёт если other МОЛОЖЕ меня
+            if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
+                ++rank;
+            }}
         }}
     }}
     
     if (rank < K) {{
-        // Я в числе K первых → промоут, меняю intent=3 на intent=2
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Изменяем: 3→2 (одобрены на операции)
+        // Я в числе K первых → промоут, меняю intent=1 на intent=2
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Изменяем: 1→2 (одобрены на операции)
         
         // Записываем в ОТДЕЛЬНЫЙ буфер для inactive (избегаем race condition)
         if (group_by == 1u) {{
@@ -152,11 +167,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
         // Диагностика
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         if (aircraft_number >= 100000u || day == 226u || day == 227u || day == 228u || day == 229u || day == 230u) {{
-            printf("  [PROMOTE P3→2 Day %u] AC %u (idx %u): rank=%u/%u inactive->operations, deficit=%d\\n", 
-                   day, aircraft_number, idx, rank, K, deficit);
+            printf("  [PROMOTE P3→2 Day %u] AC %u (idx %u): rank=%u/%u inactive->operations\\n", 
+                   day, aircraft_number, idx, rank, K);
         }}
     }} else {{
-        // Не вошёл в квоту → intent остаётся 3 (холдинг, ждёт следующего дня)
+        // Не вошёл в квоту → intent остаётся 1 (замороженное, ждёт следующего дня)
         // НЕ меняем intent! Агент остаётся в inactive на следующий день
         
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");

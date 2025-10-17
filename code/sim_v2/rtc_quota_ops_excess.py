@@ -26,14 +26,10 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     RTC_QUOTA_DEMOUNT = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 0: Фильтрация (исключаем технологические переходы)
+    // ШАГ 0: Фильтр intent (работаем ТОЛЬКО с intent=2)
+    // ВХОДЯЩАЯ ПАРА: (ops, 2) по матрице переходов
     // ═══════════════════════════════════════════════════════════
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-    if (intent == 4u || intent == 6u) {{
-        return flamegpu::ALIVE;  // Технологические переходы не участвуют
-    }}
-    
-    // ✅ ВАЖНО: Работаем ТОЛЬКО с intent=2 (хотят в operations)
     if (intent != 2u) {{
         return flamegpu::ALIVE;  // Любые другие intent - пропускаем
     }}
