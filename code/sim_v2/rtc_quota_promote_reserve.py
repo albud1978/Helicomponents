@@ -85,18 +85,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
     }}
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 2: Early exit при отсутствии спроса
+    // ШАГ 2: Расчёт дефицита (сколько не хватает до target с учётом P1)
     // ═══════════════════════════════════════════════════════════
-    if (target <= 0) {{
-        // Нет спроса → выход
+    const int deficit = (int)target - (int)curr - (int)used;
+    if (deficit <= 0) {{
+        // Уже достаточно (curr + P1 одобрено) или target=0 → выход
         return flamegpu::ALIVE;
     }}
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 3: Промоут готовых агентов (proactive logic)
-    // Поднимаем K = target (из них used уже в operations, остаток поднимаем)
+    // ШАГ 3: Промоут готовых агентов (каскадное квотирование P2)
+    // Поднимаем ровно deficit агентов (остаток идёт в P3)
     // ═══════════════════════════════════════════════════════════
-    const unsigned int K = target;  // Поднимаем ДО target (proactive)
+    const unsigned int K = (unsigned int)deficit;  // ✅ Каскадная логика
     
     // Ранжирование: youngest first среди РЕАЛЬНЫХ агентов в reserve
     const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);

@@ -39,9 +39,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_5, flamegpu::MessageNone, flamegpu::Messa
     printf("  [TRANSITION 4→5 Day %u] AC %u (idx %u): repair -> reserve, repair_days=%u/%u\\n", 
            step_day, aircraft_number, idx, repair_days, repair_time);
     
-    // ✅ Устанавливаем intent=5 (reserve) - это сигнал что из ремонта вышли
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
-    
     // Сбрасываем счетчики при переходе в резерв
     FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
     FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 0u);

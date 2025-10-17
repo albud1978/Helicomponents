@@ -66,17 +66,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
     }}
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 2: Early exit при отсутствии спроса
+    // ШАГ 2: Расчёт дефицита (сколько не хватает до target)
     // ═══════════════════════════════════════════════════════════
-    if (target <= 0) {{
-        // Нет спроса или исчерпаны возможности → выход
+    const int deficit = (int)target - (int)curr;
+    if (deficit <= 0) {{
+        // Уже достаточно агентов в operations или target=0 → выход
         return flamegpu::ALIVE;  // ✅ Оптимизация
     }}
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 3: Промоут готовых агентов (proactive logic)
+    // ШАГ 3: Промоут готовых агентов (каскадное квотирование P1)
+    // Поднимаем ровно deficit агентов (не больше, чтобы остаток шёл в P2)
     // ═══════════════════════════════════════════════════════════
-    const unsigned int K = target;  // Поднимаем ДО target (proactive)
+    const unsigned int K = (unsigned int)deficit;  // ✅ Каскадная логика
     
     // Ранжирование: youngest first среди РЕАЛЬНЫХ агентов в serviceable
     const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
