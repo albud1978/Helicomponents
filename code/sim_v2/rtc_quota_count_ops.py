@@ -171,6 +171,45 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::Mes
     layer_count_ina = model.newLayer("count_inactive")
     layer_count_ina.addAgentFunction(rtc_func_ina)
     
-    print("  RTC модуль count_ops зарегистрирован (обнуление + подсчёт operations/serviceable/reserve/inactive)")
+    # =========================================================================
+    # Слой 6: Логирование MP4 целевых значений в MacroProperty для экспорта
+    # =========================================================================
+    # Создаем буферы для хранения целевых значений по дням
+    model.Environment().newMacroPropertyUInt32("mp2_mp4_target_mi8", max_days + 1)
+    model.Environment().newMacroPropertyUInt32("mp2_mp4_target_mi17", max_days + 1)
+    
+    RTC_LOG_MP4_TARGETS = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_log_mp4_targets, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    
+    // Только первый агент каждого типа логирует (чтобы не писать многократно)
+    if (idx != 0u) return flamegpu::ALIVE;
+    
+    const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+    
+    if (group_by == 1u) {{
+        auto mp2_target = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days + 1}u>("mp2_mp4_target_mi8");
+        unsigned int target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+        mp2_target[day].exchange(target);
+    }} else if (group_by == 2u) {{
+        auto mp2_target = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days + 1}u>("mp2_mp4_target_mi17");
+        unsigned int target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+        mp2_target[day].exchange(target);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    rtc_log_mp4 = agent.newRTCFunction("rtc_log_mp4_targets", RTC_LOG_MP4_TARGETS)
+    # Запускаем для всех агентов (но логирует только idx=0 каждого типа)
+    
+    layer_log_mp4 = model.newLayer("log_mp4_targets")
+    layer_log_mp4.addAgentFunction(rtc_log_mp4)
+    
+    print("  RTC модуль count_ops зарегистрирован (обнуление + подсчёт + логирование MP4 целей)")
 
 

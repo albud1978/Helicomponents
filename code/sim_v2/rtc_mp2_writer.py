@@ -60,10 +60,13 @@ def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, 
     model.Environment().newMacroPropertyUInt("event_value2", MP2_EVENT_SIZE)
     
     # Квотирование (отладка)
-    model.Environment().newMacroPropertyUInt("mp2_quota_curr_ops", MP2_SIZE)    # Текущее кол-во в operations
-    model.Environment().newMacroPropertyUInt("mp2_quota_target_ops", MP2_SIZE)  # Целевое кол-во
-    model.Environment().newMacroPropertyUInt("mp2_quota_svc_count", MP2_SIZE)   # Кол-во в serviceable
+    model.Environment().newMacroPropertyUInt32("mp2_quota_curr_ops", MP2_SIZE)    # Текущее кол-во в operations
+    model.Environment().newMacroPropertyUInt32("mp2_quota_target_ops", MP2_SIZE)  # Целевое кол-во
+    model.Environment().newMacroPropertyUInt32("mp2_quota_svc_count", MP2_SIZE)   # Кол-во в serviceable
     model.Environment().newMacroPropertyInt("mp2_quota_deficit", MP2_SIZE)      # Дефицит (может быть <0)
+    
+    # MP4 целевые значения (для верификации логики квот)
+    # Note: эти буферы создаются в rtc_quota_count_ops.py как mp2_mp4_target_mi8/mi17
 
     # inactive (state=1)
     rtc_write_inactive = agent.newRTCFunction("rtc_mp2_write_inactive", f"""
