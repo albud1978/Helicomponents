@@ -112,8 +112,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
     }}
     
     if (rank < K) {{
-        // Я в числе K первых → промоут, меняю intent=3 на intent=2
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Изменяем: 3→2 (одобрены на операции)
+        // Я в числе K первых → промоут, меняю intent=5 на intent=2
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Изменяем: 5→2 (одобрены на операции)
         
         // Записываем в ОТДЕЛЬНЫЙ буфер для serviceable (избегаем race condition)
         if (group_by == 1u) {{
@@ -124,9 +124,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
             approve_s3[idx].exchange(1u);
         }}
         
+
+        
     }} else {{
         // Не вошёл в квоту → intent остаётся 3 (холдинг, ждёт следующего дня)
         // НЕ меняем intent! Агент остаётся в serviceable на следующий день
+        
+
     }}
     
     return flamegpu::ALIVE;
