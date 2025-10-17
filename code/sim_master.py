@@ -31,7 +31,7 @@ from sim_env_setup import (
 
 from model_build import HeliSimModel
 from model_build import build_model_for_quota_smoke
-from model_build import MAX_FRAMES, MAX_DAYS, MAX_SIZE, set_max_frames_from_data
+from model_build import MAX_FRAMES, MAX_DAYS, MAX_SIZE
 
 try:
     import pyflamegpu
@@ -123,10 +123,6 @@ def main():
     mp4 = preload_mp4_by_day(client)
     # Подготовка Env Property/MacroProperty (MP1/MP3/MP4/MP5, скаляры)
     env_data = prepare_env_arrays(client)
-    
-    # Устанавливаем MAX_FRAMES из реальных данных
-    frames_from_data = int(env_data['frames_total_u16'])
-    set_max_frames_from_data(frames_from_data)
 
     # === Spawn smoke (GPU-only RTC спавн) ===
     if a.spawn_smoke_real:
