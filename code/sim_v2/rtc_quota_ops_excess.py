@@ -72,15 +72,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
     
     const int balance = (int)curr - (int)target;
     
-    // Диагностика на ключевых днях (ПЕРЕД early exit)
-    if ((day == 180u || day == 181u || day == 182u || day == 226u || day == 227u) && idx == 0u) {{
-        if (group_by == 1u) {{
-            printf("  [DEMOUNT BALANCE Day %u] Mi-8: Curr=%u, Target=%u, Balance=%d\\n", day, curr, target, balance);
-        }} else if (group_by == 2u) {{
-            printf("  [DEMOUNT BALANCE Day %u] Mi-17: Curr=%u, Target=%u, Balance=%d\\n", day, curr, target, balance);
-        }}
-    }}
-    
     // ═══════════════════════════════════════════════════════════
     // ШАГ 2: Early exit при отсутствии избытка
     // ═══════════════════════════════════════════════════════════
