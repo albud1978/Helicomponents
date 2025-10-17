@@ -35,6 +35,25 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_3) {
 }
 """
 
+# Фильтр intent=2 из serviceable (проверяет ТОЛЬКО intent, state проверяется через setInitialState)
+RTC_COND_SERVICEABLE_INTENT_2 = """
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_serviceable_intent_2) {
+    return FLAMEGPU->getVariable<unsigned int>("intent_state") == 2u;
+}
+"""
+
+RTC_COND_RESERVE_INTENT_2 = """
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_reserve_intent_2) {
+    return FLAMEGPU->getVariable<unsigned int>("intent_state") == 2u;
+}
+"""
+
+RTC_COND_INACTIVE_INTENT_2 = """
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_inactive_intent_2) {
+    return FLAMEGPU->getVariable<unsigned int>("intent_state") == 2u;
+}
+"""
+
 # Функция для перехода 2→2 (остаемся в operations)
 RTC_APPLY_2_TO_2 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
@@ -147,6 +166,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_3_to_2, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
+    // ✅ SAFETY CHECK: Проверяем что мы действительно в serviceable (не нужно, setInitialState уже фильтрует)
+    // но добавляем для отладки в случае если что-то пошло не так
+    
     // Логирование переходов promocode→operations
     if (aircraft_number >= 100000u || step_day == 226u || step_day == 227u || step_day == 228u) {
         printf("  [TRANSITION 3→2 Day %u] AC %u (idx %u): serviceable -> operations (PROMOTE)\\n", 
@@ -158,11 +180,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_3_to_2, flamegpu::MessageNone, flamegpu::Messa
 """
     
     # Фильтр: только intent=2 из serviceable
-    RTC_COND_SERVICEABLE_INTENT_2 = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_serviceable_intent_2) {
-    return FLAMEGPU->getVariable<unsigned int>("intent_state") == 2u;
-}
-"""
+    # RTC_COND_SERVICEABLE_INTENT_2 = """
+    # FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_serviceable_intent_2) {
+    #     return FLAMEGPU->getVariable<unsigned int>("intent_state") == 2u;
+    # }
+    # """
     
     layer_3_to_2 = model.newLayer("transition_3_to_2")
     rtc_func_3_to_2 = agent.newRTCFunction("rtc_apply_3_to_2", RTC_APPLY_3_TO_2)
@@ -189,7 +211,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_2, flamegpu::MessageNone, flamegpu::Messa
     
     layer_5_to_2 = model.newLayer("transition_5_to_2")
     rtc_func_5_to_2 = agent.newRTCFunction("rtc_apply_5_to_2", RTC_APPLY_5_TO_2)
-    rtc_func_5_to_2.setRTCFunctionCondition(RTC_COND_SERVICEABLE_INTENT_2)  # Тот же фильтр (intent=2)
+    rtc_func_5_to_2.setRTCFunctionCondition(RTC_COND_RESERVE_INTENT_2)  # Тот же фильтр (intent=2)
     rtc_func_5_to_2.setInitialState("reserve")
     rtc_func_5_to_2.setEndState("operations")
     layer_5_to_2.addAgentFunction(rtc_func_5_to_2)
@@ -212,7 +234,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::Messa
     
     layer_1_to_2 = model.newLayer("transition_1_to_2")
     rtc_func_1_to_2 = agent.newRTCFunction("rtc_apply_1_to_2", RTC_APPLY_1_TO_2)
-    rtc_func_1_to_2.setRTCFunctionCondition(RTC_COND_SERVICEABLE_INTENT_2)  # Тот же фильтр (intent=2)
+    rtc_func_1_to_2.setRTCFunctionCondition(RTC_COND_INACTIVE_INTENT_2)  # Тот же фильтр (intent=2)
     rtc_func_1_to_2.setInitialState("inactive")
     rtc_func_1_to_2.setEndState("operations")
     layer_1_to_2.addAgentFunction(rtc_func_1_to_2)

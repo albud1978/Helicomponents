@@ -39,11 +39,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 1: Подсчёт curr (реальное количество в operations) + учёт одобренных промоутов
+    // ШАГ 1: Подсчёт curr (реальное количество в operations)
     // ═══════════════════════════════════════════════════════════
     unsigned int curr = 0u;
     unsigned int target = 0u;
-    unsigned int used = 0u;  // Сколько уже одобрено к промоуту в предыдущих слоях
     
     if (group_by == 1u) {{
         // Mi-8: считаем текущих в operations
@@ -51,10 +50,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
         }}
-        
-        // Учитываем уже одобренных к промоуту (из предыдущих приоритетов)
-        // В serviceable (P1) это будет 0, т.к. мы первые
-        used = 0u;
         
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
         
@@ -65,35 +60,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
             if (ops_count[i] == 1u) ++curr;
         }}
         
-        used = 0u;
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
     }} else {{
         return flamegpu::ALIVE;  // Неизвестный group_by
     }}
     
-    const int deficit = (int)target - (int)(curr + used);
-    
-    // Диагностика на ключевых днях (ПЕРЕД early exit)
-    if ((day == 180u || day == 181u || day == 182u || day == 226u || day == 227u) && idx == 0u) {{
-        if (group_by == 1u) {{
-            printf("  [PROMOTE P1 DEFICIT Day %u] Mi-8: Curr=%u, Used=%u, Target=%u, Deficit=%d\\n", day, curr, used, target, deficit);
-        }} else if (group_by == 2u) {{
-            printf("  [PROMOTE P1 DEFICIT Day %u] Mi-17: Curr=%u, Used=%u, Target=%u, Deficit=%d\\n", day, curr, used, target, deficit);
-        }}
-    }}
-    
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 2: Early exit при отсутствии дефицита
+    // ШАГ 2: Early exit при отсутствии спроса
     // ═══════════════════════════════════════════════════════════
-    if (deficit <= 0) {{
-        // Дефицит закрыт → все агенты выходят
+    if (target <= 0) {{
+        // Нет спроса или исчерпаны возможности → выход
         return flamegpu::ALIVE;  // ✅ Оптимизация
     }}
     
     // ═══════════════════════════════════════════════════════════
-    // ШАГ 3: Промоут deficit агентов (youngest first по mfg_date)
+    // ШАГ 3: Промоут готовых агентов (proactive logic)
     // ═══════════════════════════════════════════════════════════
-    const unsigned int K = (unsigned int)deficit;
+    const unsigned int K = target;  // Поднимаем ДО target (proactive)
     
     // Ранжирование: youngest first среди РЕАЛЬНЫХ агентов в serviceable
     const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
@@ -139,22 +122,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
             approve_s3[idx].exchange(1u);
         }}
         
-        // Диагностика (для новых агентов ACN >= 100000 всегда, для остальных в дни около spawn)
-        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        if (aircraft_number >= 100000u || day == 226u || day == 227u || day == 228u || day == 229u || day == 230u) {{
-            printf("  [PROMOTE P1→2 Day %u] AC %u (idx %u): rank=%u/%u serviceable->operations, deficit=%d\\n", 
-                   day, aircraft_number, idx, rank, K, deficit);
-        }}
     }} else {{
         // Не вошёл в квоту → intent остаётся 3 (холдинг, ждёт следующего дня)
         // НЕ меняем intent! Агент остаётся в serviceable на следующий день
-        
-        // Логирование для новых агентов, которые НЕ прошли квоту
-        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        if (aircraft_number >= 100000u || day == 226u || day == 227u || day == 228u || day == 229u || day == 230u) {{
-            printf("  [PROMOTE P1 REJECT Day %u] AC %u (idx %u): rank=%u >= K=%u, staying in serviceable\\n", 
-                   day, aircraft_number, idx, rank, K);
-        }}
     }}
     
     return flamegpu::ALIVE;

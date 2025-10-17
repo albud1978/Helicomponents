@@ -136,6 +136,10 @@ class V2BaseModel:
         self.env.newMacroPropertyUInt32("mi17_ops_count", MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi8_svc_count", MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi17_svc_count", MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi8_reserve_count", MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_reserve_count", MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi8_inactive_count", MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_inactive_count", MAX_FRAMES)
         
         # Демоут (operations → serviceable)
         self.env.newMacroPropertyUInt32("mi8_approve", MAX_FRAMES)

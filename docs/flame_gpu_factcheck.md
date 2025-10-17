@@ -229,3 +229,4 @@ include/flamegpu/runtime/environment/DeviceMacroProperty.cuh
 **Статус:** Первичная проверка завершена
 
 
+

@@ -28,6 +28,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto mi17_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_ops_count");
         auto mi8_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_svc_count");
         auto mi17_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_svc_count");
+        auto mi8_res = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_reserve_count");
+        auto mi17_res = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_reserve_count");
+        auto mi8_ina = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_inactive_count");
+        auto mi17_ina = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_inactive_count");
         for (unsigned int i = 0u; i < 286u; ++i) {
             mi8_ops[i].exchange(0u);
             mi17_ops[i].exchange(0u);
@@ -108,5 +112,62 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_serviceable, flamegpu::MessageNone, flamegpu::
     layer_count_svc = model.newLayer("count_serviceable")
     layer_count_svc.addAgentFunction(rtc_func_svc)
     
-    print("  RTC модуль count_ops зарегистрирован (обнуление + подсчёт operations + serviceable)")
+# =========================================================================
+    # Слой 4: Подсчёт агентов в reserve
+    # =========================================================================
+    RTC_COUNT_RESERVE = """
+FLAMEGPU_AGENT_FUNCTION(rtc_count_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    
+    // Записываем флаг что этот агент в reserve
+    if (group_by == 1u) {
+        auto reserve_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_reserve_count");
+        reserve_count[idx].exchange(1u);
+    } else if (group_by == 2u) {
+        auto reserve_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_reserve_count");
+        reserve_count[idx].exchange(1u);
+    }
+    
+    return flamegpu::ALIVE;
+}
+"""
+    
+    rtc_func_res = agent.newRTCFunction("rtc_count_reserve", RTC_COUNT_RESERVE)
+    rtc_func_res.setInitialState("reserve")
+    rtc_func_res.setEndState("reserve")
+    
+    layer_count_res = model.newLayer("count_reserve")
+    layer_count_res.addAgentFunction(rtc_func_res)
+    
+    # =========================================================================
+    # Слой 5: Подсчёт агентов в inactive
+    # =========================================================================
+    RTC_COUNT_INACTIVE = """
+FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    
+    // Записываем флаг что этот агент в inactive
+    if (group_by == 1u) {
+        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_inactive_count");
+        inactive_count[idx].exchange(1u);
+    } else if (group_by == 2u) {
+        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_inactive_count");
+        inactive_count[idx].exchange(1u);
+    }
+    
+    return flamegpu::ALIVE;
+}
+"""
+    
+    rtc_func_ina = agent.newRTCFunction("rtc_count_inactive", RTC_COUNT_INACTIVE)
+    rtc_func_ina.setInitialState("inactive")
+    rtc_func_ina.setEndState("inactive")
+    
+    layer_count_ina = model.newLayer("count_inactive")
+    layer_count_ina.addAgentFunction(rtc_func_ina)
+    
+    print("  RTC модуль count_ops зарегистрирован (обнуление + подсчёт operations/serviceable/reserve/inactive)")
+
 

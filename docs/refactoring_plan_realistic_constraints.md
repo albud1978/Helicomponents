@@ -541,3 +541,4 @@ other_layer.addAgentFunction(rtc_6_to_6)
 **Версия:** 2.0 (Реалистичная с учётом FLAME GPU ограничений)
 
 
+
