@@ -87,6 +87,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             -- Квоты (опционально, может быть NULL)
             ops_ticket       UInt8,
             
+            -- MP4 целевые значения (для анализа квотирования)
+            quota_target_mi8    UInt16,
+            quota_target_mi17   UInt16,
+            
             -- Временная метка записи
             export_timestamp DateTime DEFAULT now(),
             
@@ -187,6 +191,16 @@ class MP2DrainHostFunction(fg.HostFunction):
         
         mp2_ops_ticket = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ops_ticket")
         
+        # MP4 целевые значения (читаем из буферов, заполненных rtc_log_mp4_targets)
+        try:
+            mp2_mp4_target_mi8 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_mp4_target_mi8")
+        except:
+            mp2_mp4_target_mi8 = None
+        try:
+            mp2_mp4_target_mi17 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_mp4_target_mi17")
+        except:
+            mp2_mp4_target_mi17 = None
+        
         rows_count = 0
         # day_date вычисляется в ClickHouse (MATERIALIZED), в Python не считаем
         
@@ -229,7 +243,10 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_mfg_date[pos]),
                         int(mp2_dt[pos]),
                         int(mp2_dn[pos]),
-                        int(mp2_ops_ticket[pos])
+                        int(mp2_ops_ticket[pos]),
+                        # MP4 целевые значения по дню
+                        int(mp2_mp4_target_mi8[day]) if mp2_mp4_target_mi8 is not None else 0,
+                        int(mp2_mp4_target_mi17[day]) if mp2_mp4_target_mi17 is not None else 0
                     )
                     self.batch.append(row)
                     rows_count += 1
@@ -287,6 +304,16 @@ class MP2DrainHostFunction(fg.HostFunction):
         mp2_dn = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dn")
         
         mp2_ops_ticket = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ops_ticket")
+        
+        # MP4 целевые значения (читаем из буферов, заполненных rtc_log_mp4_targets)
+        try:
+            mp2_mp4_target_mi8 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_mp4_target_mi8")
+        except:
+            mp2_mp4_target_mi8 = None
+        try:
+            mp2_mp4_target_mi17 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_mp4_target_mi17")
+        except:
+            mp2_mp4_target_mi17 = None
         
         rows_count = 0
         day = max(0, int(start_day_inclusive))
@@ -358,10 +385,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             self.max_batch_rows = batch_rows
         t_start = time.perf_counter()
         # MATERIALIZED day_date вычисляется на стороне ClickHouse, не вставляем её явно
-        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,s6_started,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s6_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,ops_ticket"
+        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,s6_started,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s6_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,ops_ticket,quota_target_mi8,quota_target_mi17"
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES"
         # Подаём данные в колоннарном формате для уменьшения накладных расходов драйвера
-        num_cols = 28
+        num_cols = 30
         cols = [[] for _ in range(num_cols)]
         for r in self.batch:
             for i, v in enumerate(r):
