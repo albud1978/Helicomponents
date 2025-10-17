@@ -44,26 +44,25 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
     unsigned int curr = 0u;
     unsigned int target = 0u;
     
-    if (group_by == 1u) {{
+    if (group_by == 1u) {
         // Mi-8: считаем текущих в operations
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
+        for (unsigned int i = 0u; i < frames; ++i) {
             if (ops_count[i] == 1u) ++curr;
-        }}
+        }
         
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
-        
-    }} else if (group_by == 2u) {{
+    } else if (group_by == 2u) {
         // Mi-17: аналогично
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
+        for (unsigned int i = 0u; i < frames; ++i) {
             if (ops_count[i] == 1u) ++curr;
-        }}
+        }
         
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
-    }} else {{
+    } else {
         return flamegpu::ALIVE;  // Неизвестный group_by
-    }}
+    }
     
     // ═══════════════════════════════════════════════════════════
     // ШАГ 2: Расчёт дефицита (сколько не хватает до target)
