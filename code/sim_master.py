@@ -29,9 +29,9 @@ from sim_env_setup import (
     apply_env_to_sim,
 )
 
-from model_build import HeliSimModel
-from model_build import build_model_for_quota_smoke
-from model_build import MAX_FRAMES, MAX_DAYS, MAX_SIZE
+from model_build_old import HeliSimModel
+from model_build_old import build_model_for_quota_smoke
+from model_build_old import MAX_FRAMES, MAX_DAYS, MAX_SIZE
 
 try:
     import pyflamegpu
@@ -164,7 +164,7 @@ def main():
             sim.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", _seed.tolist())
             sim.setEnvironmentPropertyArrayUInt32("month_first_u32", _m1.tolist())
         except Exception:
-            sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", [int(x) for x in list(env_data['mp4_ops_counter_mi8'])[:DAYS]])
+            sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi8", [int(x) for x in list(env_data['mp4_ops_counter_mi8')][:DAYS]])
             sim.setEnvironmentPropertyArrayUInt32("mp4_ops_counter_mi17", [int(x) for x in list(env_data['mp4_ops_counter_mi17'])[:DAYS]])
             sim.setEnvironmentPropertyArrayUInt32("mp4_new_counter_mi17_seed", [int(x) for x in list(env_data['mp4_new_counter_mi17_seed'])[:DAYS]])
             sim.setEnvironmentPropertyArrayUInt32("month_first_u32", [int(x) for x in list(env_data['month_first_u32'])[:DAYS]])
