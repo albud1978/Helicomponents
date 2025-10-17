@@ -91,8 +91,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_ops, flamegpu::MessageNone, flamegpu::MessageN
 FLAMEGPU_AGENT_FUNCTION(rtc_count_serviceable, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     
-    // Записываем флаг что этот агент в serviceable
     if (group_by == 1u) {
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_svc_count");
         svc_count[idx].exchange(1u);
