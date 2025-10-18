@@ -5,6 +5,10 @@ RTC модуль для записи в MP2 (device-side export) - ПОЛНАЯ 
 
 import pyflamegpu as fg
 
+def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
+    """Регистрирует RTC модуль mp2_writer (совместимо с orchestrator_v2)"""
+    register_mp2_writer(model, agent)
+
 def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, clickhouse_client=None):
     """Регистрирует RTC функции для записи в MP2 и host функцию для дренажа"""
     
@@ -13,63 +17,81 @@ def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, 
     MAX_DAYS = model.Environment().getPropertyUInt("days_total")
     MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Плотная матрица с D+1 паддингом
     
-    # Основные колонки MP2 (ВСЕ агентные переменные)
-    model.Environment().newMacroPropertyUInt("mp2_day_u16", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_idx", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_aircraft_number", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_partseqno", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_group_by", MP2_SIZE)
+    # Проверяем, был ли уже вызван register_mp2_writer (например, если mp2_writer в списке модулей)
+    # Если mp2_day_u16 уже существует, то выходим
+    try:
+        model.Environment().getMacroPropertyDescription("mp2_day_u16")
+        print("  ⚠️  MP2 MacroProperties уже зарегистрированы, пропускаем")
+        return None
+    except:
+        pass  # MacroProperty не существует, продолжаем создание
     
-    model.Environment().newMacroPropertyUInt("mp2_state", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_intent_state", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_s6_started", MP2_SIZE)
-    
-    model.Environment().newMacroPropertyUInt("mp2_sne", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_ppr", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_cso", MP2_SIZE)
-    
-    model.Environment().newMacroPropertyUInt("mp2_ll", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_oh", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_br", MP2_SIZE)
-    
-    model.Environment().newMacroPropertyUInt("mp2_repair_time", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_assembly_time", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_partout_time", MP2_SIZE)
-    
-    model.Environment().newMacroPropertyUInt("mp2_repair_days", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_s6_days", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_assembly_trigger", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_active_trigger", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_partout_trigger", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_mfg_date_days", MP2_SIZE)
-    
-    model.Environment().newMacroPropertyUInt("mp2_dt", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_dn", MP2_SIZE)
-    
-    model.Environment().newMacroPropertyUInt("mp2_ops_ticket", MP2_SIZE)
-    
-    # Буфер событий
-    MP2_EVENT_SIZE = 10000
-    model.Environment().newMacroPropertyUInt("mp2_event_counter")  # Атомарный счетчик (скаляр)
-    model.Environment().newMacroPropertyUInt("event_day", MP2_EVENT_SIZE)
-    model.Environment().newMacroPropertyUInt("event_idx", MP2_EVENT_SIZE)
-    model.Environment().newMacroPropertyUInt("event_type", MP2_EVENT_SIZE)
-    model.Environment().newMacroPropertyUInt("event_from_state", MP2_EVENT_SIZE)
-    model.Environment().newMacroPropertyUInt("event_to_state", MP2_EVENT_SIZE)
-    model.Environment().newMacroPropertyUInt("event_value1", MP2_EVENT_SIZE)
-    model.Environment().newMacroPropertyUInt("event_value2", MP2_EVENT_SIZE)
-    
-    # Квотирование (отладка)
-    model.Environment().newMacroPropertyUInt32("mp2_quota_curr_ops", MP2_SIZE)    # Текущее кол-во в operations
-    model.Environment().newMacroPropertyUInt32("mp2_quota_target_ops", MP2_SIZE)  # Целевое кол-во
-    model.Environment().newMacroPropertyUInt32("mp2_quota_svc_count", MP2_SIZE)   # Кол-во в serviceable
-    model.Environment().newMacroPropertyInt("mp2_quota_deficit", MP2_SIZE)      # Дефицит (может быть <0)
-    
-    # MP4 целевые значения (для верификации логики квот)
-    # Note: эти буферы создаются в rtc_quota_count_ops.py как mp2_mp4_target_mi8/mi17
+    # Обёртываем создание MacroProperties в try-except для безопасности
+    try:
+        # Основные колонки MP2 (ВСЕ агентные переменные)
+        model.Environment().newMacroPropertyUInt("mp2_day_u16", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_idx", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_aircraft_number", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_partseqno", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_group_by", MP2_SIZE)
+        
+        model.Environment().newMacroPropertyUInt("mp2_state", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_intent_state", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_s6_started", MP2_SIZE)
+        
+        model.Environment().newMacroPropertyUInt("mp2_sne", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_ppr", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_cso", MP2_SIZE)
+        
+        model.Environment().newMacroPropertyUInt("mp2_ll", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_oh", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_br", MP2_SIZE)
+        
+        model.Environment().newMacroPropertyUInt("mp2_repair_time", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_assembly_time", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_partout_time", MP2_SIZE)
+        
+        model.Environment().newMacroPropertyUInt("mp2_repair_days", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_s6_days", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_assembly_trigger", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_active_trigger", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_partout_trigger", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_mfg_date_days", MP2_SIZE)
+        
+        model.Environment().newMacroPropertyUInt("mp2_dt", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_dn", MP2_SIZE)
+        
+        # ops_ticket удален (никогда не устанавливается)
+        # model.Environment().newMacroPropertyUInt("mp2_ops_ticket", MP2_SIZE)
+        
+        # Буфер событий
+        MP2_EVENT_SIZE = 10000
+        model.Environment().newMacroPropertyUInt("mp2_event_counter")  # Атомарный счетчик (скаляр)
+        model.Environment().newMacroPropertyUInt("event_day", MP2_EVENT_SIZE)
+        model.Environment().newMacroPropertyUInt("event_idx", MP2_EVENT_SIZE)
+        model.Environment().newMacroPropertyUInt("event_type", MP2_EVENT_SIZE)
+        model.Environment().newMacroPropertyUInt("event_from_state", MP2_EVENT_SIZE)
+        model.Environment().newMacroPropertyUInt("event_to_state", MP2_EVENT_SIZE)
+        model.Environment().newMacroPropertyUInt("event_value1", MP2_EVENT_SIZE)
+        model.Environment().newMacroPropertyUInt("event_value2", MP2_EVENT_SIZE)
+        
+        # Квотирование (отладка)
+        model.Environment().newMacroPropertyUInt32("mp2_quota_curr_ops", MP2_SIZE)    # Текущее кол-во в operations
+        model.Environment().newMacroPropertyUInt32("mp2_quota_target_ops", MP2_SIZE)  # Целевое кол-во
+        model.Environment().newMacroPropertyUInt32("mp2_quota_svc_count", MP2_SIZE)   # Кол-во в serviceable
+        model.Environment().newMacroPropertyInt("mp2_quota_deficit", MP2_SIZE)      # Дефицит (может быть <0)
+        
+        # Флаги квотирования (per-agent per-day)
+        model.Environment().newMacroPropertyUInt("mp2_quota_demount", MP2_SIZE)      # Флаг демоута (1 бит)
+        model.Environment().newMacroPropertyUInt("mp2_quota_promote_p1", MP2_SIZE)   # Флаг промоута P1 (serviceable)
+        model.Environment().newMacroPropertyUInt("mp2_quota_promote_p2", MP2_SIZE)   # Флаг промоута P2 (reserve)
+        model.Environment().newMacroPropertyUInt("mp2_quota_promote_p3", MP2_SIZE)   # Флаг промоута P3 (inactive)
+        
+        # MP4 целевые значения (для верификации логики квот)
+        # Note: эти буферы создаются в rtc_quota_count_ops.py как mp2_mp4_target_mi8/mi17
 
-    # inactive (state=1)
-    rtc_write_inactive = agent.newRTCFunction("rtc_mp2_write_inactive", f"""
+        # inactive (state=1)
+        rtc_write_inactive = agent.newRTCFunction("rtc_mp2_write_inactive", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Пропускаем агентов с aircraft_number=0 (запас под спавн)
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -114,7 +136,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    auto mp2_ops_ticket = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ops_ticket");
     
     // Записываем ВСЕ поля
     mp2_day[pos].exchange(step_day);
@@ -149,7 +170,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
-    mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
     
     // Квотирование - читаем значения заполненные в слое count_ops
     auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
@@ -163,14 +183,59 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     unsigned int quota_svc = mp2_quota_svc[pos];
     int quota_deficit = mp2_quota_deficit[pos];
     
+    // ═══════════════════════════════════════════════════════════════════
+    // Логирование флагов квотирования
+    // ═══════════════════════════════════════════════════════════════════
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    // Читаем флаги из MacroProperty буферов
+    unsigned int demount_flag = 0u;
+    unsigned int promote_p1_flag = 0u;
+    unsigned int promote_p2_flag = 0u;
+    unsigned int promote_p3_flag = 0u;
+    
+    if (group_by == 1u) {{
+        auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+        auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
+        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
+        
+        demount_flag = mi8_approve[idx];
+        promote_p1_flag = mi8_approve_s3[idx];
+        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p3_flag = mi8_approve_s1[idx];
+    }} else if (group_by == 2u) {{
+        auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+        auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
+        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
+        
+        demount_flag = mi17_approve[idx];
+        promote_p1_flag = mi17_approve_s3[idx];
+        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p3_flag = mi17_approve_s1[idx];
+    }}
+    
+    // Логируем флаги в MP2
+    auto mp2_demount = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_demount");
+    auto mp2_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p1");
+    auto mp2_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p2");
+    auto mp2_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p3");
+    
+    mp2_demount[pos].exchange(demount_flag);
+    mp2_p1[pos].exchange(promote_p1_flag);
+    mp2_p2[pos].exchange(promote_p2_flag);
+    mp2_p3[pos].exchange(promote_p3_flag);
+    
     return flamegpu::ALIVE;
 }}
 """)
-    rtc_write_inactive.setInitialState("inactive")
-    rtc_write_inactive.setEndState("inactive")
+        rtc_write_inactive.setInitialState("inactive")
+        rtc_write_inactive.setEndState("inactive")
 
-    # operations (state=2)
-    rtc_write_operations = agent.newRTCFunction("rtc_mp2_write_operations", f"""
+        # operations (state=2)
+        rtc_write_operations = agent.newRTCFunction("rtc_mp2_write_operations", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Пропускаем агентов с aircraft_number=0 (запас под спавн)
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -215,7 +280,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    auto mp2_ops_ticket = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ops_ticket");
     
     // Записываем ВСЕ поля
     mp2_day[pos].exchange(step_day);
@@ -250,7 +314,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
-    mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
     
     // Квотирование - читаем значения заполненные в слое count_ops
     auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
@@ -267,11 +330,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     return flamegpu::ALIVE;
 }}
 """)
-    rtc_write_operations.setInitialState("operations")
-    rtc_write_operations.setEndState("operations")
+        rtc_write_operations.setInitialState("operations")
+        rtc_write_operations.setEndState("operations")
 
-    # serviceable (state=3)
-    rtc_write_serviceable = agent.newRTCFunction("rtc_mp2_write_serviceable", f"""
+        # serviceable (state=3)
+        rtc_write_serviceable = agent.newRTCFunction("rtc_mp2_write_serviceable", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Пропускаем агентов с aircraft_number=0 (запас под спавн)
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -316,7 +379,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    auto mp2_ops_ticket = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ops_ticket");
     
     // Записываем ВСЕ поля
     mp2_day[pos].exchange(step_day);
@@ -351,7 +413,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
-    mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
     
     // Квотирование - читаем значения заполненные в слое count_ops
     auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
@@ -368,11 +429,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     return flamegpu::ALIVE;
 }}
 """)
-    rtc_write_serviceable.setInitialState("serviceable")
-    rtc_write_serviceable.setEndState("serviceable")
+        rtc_write_serviceable.setInitialState("serviceable")
+        rtc_write_serviceable.setEndState("serviceable")
 
-    # repair (state=4)
-    rtc_write_repair = agent.newRTCFunction("rtc_mp2_write_repair", f"""
+        # repair (state=4)
+        rtc_write_repair = agent.newRTCFunction("rtc_mp2_write_repair", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Пропускаем агентов с aircraft_number=0 (запас под спавн)
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -417,7 +478,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    auto mp2_ops_ticket = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ops_ticket");
     
     // Записываем ВСЕ поля
     mp2_day[pos].exchange(step_day);
@@ -452,7 +512,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
-    mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
     
     // Квотирование - читаем значения заполненные в слое count_ops
     auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
@@ -469,11 +528,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     return flamegpu::ALIVE;
 }}
 """)
-    rtc_write_repair.setInitialState("repair")
-    rtc_write_repair.setEndState("repair")
+        rtc_write_repair.setInitialState("repair")
+        rtc_write_repair.setEndState("repair")
 
-    # reserve (state=5)
-    rtc_write_reserve = agent.newRTCFunction("rtc_mp2_write_reserve", f"""
+        # reserve (state=5)
+        rtc_write_reserve = agent.newRTCFunction("rtc_mp2_write_reserve", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Пропускаем агентов с aircraft_number=0 (запас под спавн)
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -518,7 +577,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    auto mp2_ops_ticket = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ops_ticket");
     
     // Записываем ВСЕ поля
     mp2_day[pos].exchange(step_day);
@@ -553,7 +611,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
-    mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
     
     // Квотирование - читаем значения заполненные в слое count_ops
     auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
@@ -570,11 +627,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     return flamegpu::ALIVE;
 }}
 """)
-    rtc_write_reserve.setInitialState("reserve")
-    rtc_write_reserve.setEndState("reserve")
+        rtc_write_reserve.setInitialState("reserve")
+        rtc_write_reserve.setEndState("reserve")
 
-    # storage (state=6)
-    rtc_write_storage = agent.newRTCFunction("rtc_mp2_write_storage", f"""
+        # storage (state=6)
+        rtc_write_storage = agent.newRTCFunction("rtc_mp2_write_storage", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Пропускаем агентов с aircraft_number=0 (запас под спавн)
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -619,7 +676,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     auto mp2_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dt");
     auto mp2_dn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_dn");
     
-    auto mp2_ops_ticket = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ops_ticket");
     
     // Записываем ВСЕ поля
     mp2_day[pos].exchange(step_day);
@@ -654,7 +710,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
-    mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
     
     // Квотирование - читаем значения заполненные в слое count_ops
     auto mp2_quota_curr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_curr_ops");
@@ -671,32 +726,36 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     return flamegpu::ALIVE;
 }}
 """)
-    rtc_write_storage.setInitialState("storage")
-    rtc_write_storage.setEndState("storage")
+        rtc_write_storage.setInitialState("storage")
+        rtc_write_storage.setEndState("storage")
 
-    # Создаем layer для записи снимков (все states)
-    layer_snapshot = model.newLayer("mp2_write_snapshot")
-    layer_snapshot.addAgentFunction(rtc_write_inactive)
-    layer_snapshot.addAgentFunction(rtc_write_operations)
-    layer_snapshot.addAgentFunction(rtc_write_serviceable)
-    layer_snapshot.addAgentFunction(rtc_write_repair)
-    layer_snapshot.addAgentFunction(rtc_write_reserve)
-    layer_snapshot.addAgentFunction(rtc_write_storage)
-    
-    # Host функция для дренажа (если нужна)
-    if clickhouse_client:
-        from mp2_drain_host import MP2DrainHostFunction
-        drain_func = MP2DrainHostFunction(
-            clickhouse_client,
-            table_name='sim_masterv2',
-            batch_size=250000,
-            simulation_steps=MAX_DAYS
-        )
+        # Создаем layer для записи снимков (все states)
+        layer_snapshot = model.newLayer("mp2_write_snapshot")
+        layer_snapshot.addAgentFunction(rtc_write_inactive)
+        layer_snapshot.addAgentFunction(rtc_write_operations)
+        layer_snapshot.addAgentFunction(rtc_write_serviceable)
+        layer_snapshot.addAgentFunction(rtc_write_repair)
+        layer_snapshot.addAgentFunction(rtc_write_reserve)
+        layer_snapshot.addAgentFunction(rtc_write_storage)
         
-        # Регистрируем host функцию в отдельном слое ПОСЛЕ всех RTC функций
-        layer_drain = model.newLayer("mp2_drain_to_db")
-        layer_drain.addHostFunction(drain_func)
+        # Host функция для дренажа (если нужна)
+        if clickhouse_client:
+            from mp2_drain_host import MP2DrainHostFunction
+            drain_func = MP2DrainHostFunction(
+                clickhouse_client,
+                table_name='sim_masterv2',
+                batch_size=250000,
+                simulation_steps=MAX_DAYS
+            )
+            
+            # Регистрируем host функцию в отдельном слое ПОСЛЕ всех RTC функций
+            layer_drain = model.newLayer("mp2_drain_to_db")
+            layer_drain.addHostFunction(drain_func)
+            
+            return drain_func
         
-        return drain_func
-    
-    return None
+        return None
+    except Exception as e:
+        # MacroProperties уже созданы (вероятно, register_mp2_writer вызван дважды)
+        print(f"  ⚠️  Ошибка при создании MP2 MacroProperties (вероятно, уже созданы): {str(e)[:80]}")
+        return None

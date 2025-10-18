@@ -81,7 +81,11 @@ class V2Orchestrator:
         if self.enable_mp2:
             print("  Подключение MP2 device-side export")
             import rtc_mp2_writer
-            self.mp2_drain_func = rtc_mp2_writer.register_mp2_writer(self.model, self.base_model.agent, self.clickhouse_client)
+            # Проверяем, не был ли mp2_writer уже подключен как модуль
+            if "mp2_writer" not in rtc_modules:
+                self.mp2_drain_func = rtc_mp2_writer.register_mp2_writer(self.model, self.base_model.agent, self.clickhouse_client)
+            else:
+                print("  ⚠️  mp2_writer уже подключен в списке модулей, пропускаем повторное подключение")
         
         return self.model
     

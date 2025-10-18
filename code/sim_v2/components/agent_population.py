@@ -99,6 +99,8 @@ class AgentPopulationBuilder:
             if gb in [1, 2]:
                 ac = int(ac_list[j] or 0)
                 if ac > 0 and ac in frames_index:
+                    mfg_list = mp3.get('mp3_mfg_date_days', [])
+                    mfg_val = int(mfg_list[j] or 0) if j < len(mfg_list) else 0
                     plane_records.append({
                         'idx': j,
                         'aircraft_number': ac,
@@ -108,7 +110,8 @@ class AgentPopulationBuilder:
                         'ppr': int(ppr_list[j] or 0) if j < len(ppr_list) else 0,
                         'repair_days': int(repair_days_list[j] or 0) if j < len(repair_days_list) else 0,
                         'group_by': gb,
-                        'partseqno_i': int(pseq_list[j] or 0) if j < len(pseq_list) else 0
+                        'partseqno_i': int(pseq_list[j] or 0) if j < len(pseq_list) else 0,
+                        'mfg_date': mfg_val
                     })
         
         # Группируем по frame_idx и берем первую запись для каждого
@@ -118,23 +121,42 @@ class AgentPopulationBuilder:
             if frame_idx not in records_by_frame:
                 records_by_frame[frame_idx] = rec
         
+        # ════════════════════════════════════════════════════════════════════
+        # НОВАЯ ЛОГИКА: Разделяем на Mi-8 и Mi-17, сортируем по mfg_date
+        # ════════════════════════════════════════════════════════════════════
+        records_mi8 = []
+        records_mi17 = []
+        
+        for frame_idx, rec in sorted(records_by_frame.items()):
+            if rec['group_by'] == 1:
+                records_mi8.append((frame_idx, rec))
+            elif rec['group_by'] == 2:
+                records_mi17.append((frame_idx, rec))
+        
+        # Сортируем каждую группу по mfg_date (старые первые)
+        records_mi8.sort(key=lambda x: (x[1]['mfg_date'], x[0]))  # tie-break по frame_idx
+        records_mi17.sort(key=lambda x: (x[1]['mfg_date'], x[0]))
+        
+        print(f"  Сортировка по возрасту: Mi-8={len(records_mi8)}, Mi-17={len(records_mi17)}")
+        
+        # Объединяем в один список: сначала Mi-8, потом Mi-17
+        sorted_records = records_mi8 + records_mi17
+        
+        # Сохраняем границу между типами
+        n_mi8 = len(records_mi8)
+        self.env_data['n_mi8'] = n_mi8
+        self.env_data['n_mi17'] = len(records_mi17)
+        
         # Получаем информацию о зарезервированных слотах
         first_reserved_idx = self.env_data.get('first_reserved_idx', self.frames)
         
         # Заполняем агентов и распределяем по состояниям
         # Создаем только реальных агентов, пропускаем зарезервированные слоты
-        for i in range(self.frames):
+        for new_idx, (frame_idx, agent_data) in enumerate(sorted_records):
             # Пропускаем зарезервированные слоты для будущего спавна
-            if i >= first_reserved_idx:
+            if frame_idx >= first_reserved_idx:
                 continue
                 
-            # Пропускаем индексы без реальных агентов
-            if i not in records_by_frame:
-                continue
-                
-            # Берем данные для этого frame_idx
-            agent_data = records_by_frame[i]
-            
             # Определяем состояние и добавляем агента
             status_id = agent_data['status_id']
             state_name = status_to_state.get(status_id, 'inactive')
@@ -142,8 +164,8 @@ class AgentPopulationBuilder:
             pop.push_back()
             agent = pop[len(pop) - 1]
             
-            # Базовые переменные
-            agent.setVariableUInt("idx", i)
+            # Базовые переменные (NEW_IDX вместо frame_idx)
+            agent.setVariableUInt("idx", new_idx)
             agent.setVariableUInt("aircraft_number", agent_data['aircraft_number'])
             # FIX 2: status_id НЕ используется - переведено на States
             agent.setVariableUInt("sne", agent_data['sne'])
@@ -155,7 +177,7 @@ class AgentPopulationBuilder:
             agent.setVariableUInt("partseqno_i", partseqno)
             
             # OH берём из MP1 по типу вертолёта
-            oh_value = oh_by_frame[i]  # Значение по умолчанию
+            oh_value = oh_by_frame[frame_idx]  # Значение по умолчанию
             
             # Используем mp1_index как в sim_master
             mp1_index = self.env_data.get('mp1_index', {})
@@ -180,42 +202,38 @@ class AgentPopulationBuilder:
             if mp3_idx >= 0 and mp3_idx < len(ll_list):
                 ll_value = int(ll_list[mp3_idx] or 0)
                 if ll_value == 0:  # Если 0, используем значение по умолчанию
-                    ll_value = ll_by_frame[i]
+                    ll_value = ll_by_frame[frame_idx]
             else:
-                ll_value = ll_by_frame[i]  # значение по умолчанию
+                ll_value = ll_by_frame[frame_idx]  # значение по умолчанию
             
             agent.setVariableUInt("ll", ll_value)
             agent.setVariableUInt("oh", oh_value)
-            agent.setVariableUInt("br", br_by_frame[i])
+            agent.setVariableUInt("br", br_by_frame[frame_idx])
 
             # mfg_date для приоритизации квот (ord days от 1970-01-01)
-            mfg_list = mp3.get('mp3_mfg_date_days', [])
-            if mp3_idx >= 0 and mp3_idx < len(mfg_list):
-                mfg_val = int(mfg_list[mp3_idx] or 0)
-            else:
-                mfg_val = 0
+            mfg_val = agent_data.get('mfg_date', 0)
             agent.setVariableUInt("mfg_date", mfg_val)
             
             # Времена ремонта из констант БЕЗ FALLBACK
             # FIX 3: Чтение из env_data, НЕ simulation (триггерит NVRTC!)
             if gb == 1:
                 if 'mi8_repair_time_const' not in self.env_data:
-                    raise KeyError(f"❌ 'mi8_repair_time_const' отсутствует в env_data для агента idx={idx}, group_by=1")
+                    raise KeyError(f"❌ 'mi8_repair_time_const' отсутствует в env_data для агента idx={new_idx}, group_by=1")
                 if 'mi8_assembly_time_const' not in self.env_data:
-                    raise KeyError(f"❌ 'mi8_assembly_time_const' отсутствует в env_data для агента idx={idx}, group_by=1")
+                    raise KeyError(f"❌ 'mi8_assembly_time_const' отсутствует в env_data для агента idx={new_idx}, group_by=1")
                 if 'mi8_partout_time_const' not in self.env_data:
-                    raise KeyError(f"❌ 'mi8_partout_time_const' отсутствует в env_data для агента idx={idx}, group_by=1")
+                    raise KeyError(f"❌ 'mi8_partout_time_const' отсутствует в env_data для агента idx={new_idx}, group_by=1")
                 
                 agent.setVariableUInt("repair_time", int(self.env_data['mi8_repair_time_const']))
                 agent.setVariableUInt("assembly_time", int(self.env_data['mi8_assembly_time_const']))
                 agent.setVariableUInt("partout_time", int(self.env_data['mi8_partout_time_const']))
             elif gb == 2:
                 if 'mi17_repair_time_const' not in self.env_data:
-                    raise KeyError(f"❌ 'mi17_repair_time_const' отсутствует в env_data для агента idx={idx}, group_by=2")
+                    raise KeyError(f"❌ 'mi17_repair_time_const' отсутствует в env_data для агента idx={new_idx}, group_by=2")
                 if 'mi17_assembly_time_const' not in self.env_data:
-                    raise KeyError(f"❌ 'mi17_assembly_time_const' отсутствует в env_data для агента idx={idx}, group_by=2")
+                    raise KeyError(f"❌ 'mi17_assembly_time_const' отсутствует в env_data для агента idx={new_idx}, group_by=2")
                 if 'mi17_partout_time_const' not in self.env_data:
-                    raise KeyError(f"❌ 'mi17_partout_time_const' отсутствует в env_data для агента idx={idx}, group_by=2")
+                    raise KeyError(f"❌ 'mi17_partout_time_const' отсутствует в env_data для агента idx={new_idx}, group_by=2")
                 
                 agent.setVariableUInt("repair_time", int(self.env_data['mi17_repair_time_const']))
                 agent.setVariableUInt("assembly_time", int(self.env_data['mi17_assembly_time_const']))

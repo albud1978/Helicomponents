@@ -240,8 +240,8 @@ class V2BaseModel:
         # Временные счетчики для state_6
         agent.newVariableUInt("s6_days", 0)
         
-        # Квоты (всегда для MP2 логирования)
-        agent.newVariableUInt("ops_ticket", 0)
+        # ops_ticket был зарезервирован, но никогда не использовался
+        # agent.newVariableUInt("ops_ticket", 0)  # УДАЛЕНО
         
         return agent
     
