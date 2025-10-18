@@ -178,6 +178,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::Mes
     model.Environment().newMacroPropertyUInt32("mp2_mp4_target_mi8", max_days + 1)
     model.Environment().newMacroPropertyUInt32("mp2_mp4_target_mi17", max_days + 1)
     
+    # =========================================================================
+    # Логирование баланса (gap) по типам (per-day агрегированный показатель)
+    # =========================================================================
+    model.Environment().newMacroPropertyInt32("mp2_quota_gap_mi8", max_days + 1)
+    model.Environment().newMacroPropertyInt32("mp2_quota_gap_mi17", max_days + 1)
+
     RTC_LOG_MP4_TARGETS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_log_mp4_targets, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int day = FLAMEGPU->getStepCounter();
@@ -200,12 +206,69 @@ FLAMEGPU_AGENT_FUNCTION(rtc_log_mp4_targets, flamegpu::MessageNone, flamegpu::Me
 }}
 """
     
+    # =========================================================================
+    # Слой 7: Логирование gap (баланс = curr - target) по типам
+    # =========================================================================
+    RTC_LOG_GAP = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_log_quota_gap, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+    
+    if (group_by == 1u) {{
+        // Подсчитываем curr (агентов в operations)
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
+        unsigned int curr = 0u;
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            if (ops_count[i] == 1u) ++curr;
+        }}
+        
+        // Читаем target
+        unsigned int target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+        
+        // Расчитываем gap = curr - target
+        int gap = (int)curr - (int)target;
+        
+        // Логируем gap в MacroProperty (будет затерт на следующей итерации, но это нормально)
+        auto mp2_gap = FLAMEGPU->environment.getMacroProperty<int, {max_days + 1}u>("mp2_quota_gap_mi8");
+        mp2_gap[day].exchange(gap);
+        
+    }} else if (group_by == 2u) {{
+        // То же для Mi-17
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
+        unsigned int curr = 0u;
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            if (ops_count[i] == 1u) ++curr;
+        }}
+        
+        unsigned int target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+        int gap = (int)curr - (int)target;
+        
+        auto mp2_gap = FLAMEGPU->environment.getMacroProperty<int, {max_days + 1}u>("mp2_quota_gap_mi17");
+        mp2_gap[day].exchange(gap);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
     rtc_log_mp4 = agent.newRTCFunction("rtc_log_mp4_targets", RTC_LOG_MP4_TARGETS)
     # Запускаем для ВСЕХ агентов (exchange атомарна, поэтому безопасна многократная запись)
     
     layer_log_mp4 = model.newLayer("log_mp4_targets")
     layer_log_mp4.addAgentFunction(rtc_log_mp4)
     
-    print("  RTC модуль count_ops зарегистрирован (обнуление + подсчёт + логирование MP4 целей)")
+    # =========================================================================
+    # Регистрация слоя для логирования gap
+    # =========================================================================
+    rtc_log_gap = agent.newRTCFunction("rtc_log_quota_gap", RTC_LOG_GAP)
+    
+    layer_log_gap = model.newLayer("log_quota_gap")
+    layer_log_gap.addAgentFunction(rtc_log_gap)
+    
+    print("  RTC модуль count_ops зарегистрирован (обнуление + подсчёт + логирование MP4 целей + gap)")
 
 
