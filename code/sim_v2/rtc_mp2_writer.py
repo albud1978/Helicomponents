@@ -327,6 +327,51 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     unsigned int quota_svc = mp2_quota_svc[pos];
     int quota_deficit = mp2_quota_deficit[pos];
     
+    // ═══════════════════════════════════════════════════════════════════
+    // Логирование флагов квотирования
+    // ═══════════════════════════════════════════════════════════════════
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    // Читаем флаги из MacroProperty буферов
+    unsigned int demount_flag = 0u;
+    unsigned int promote_p1_flag = 0u;
+    unsigned int promote_p2_flag = 0u;
+    unsigned int promote_p3_flag = 0u;
+    
+    if (group_by == 1u) {{
+        auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+        auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
+        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
+        
+        demount_flag = mi8_approve[idx];
+        promote_p1_flag = mi8_approve_s3[idx];
+        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p3_flag = mi8_approve_s1[idx];
+    }} else if (group_by == 2u) {{
+        auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+        auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
+        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
+        
+        demount_flag = mi17_approve[idx];
+        promote_p1_flag = mi17_approve_s3[idx];
+        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p3_flag = mi17_approve_s1[idx];
+    }}
+    
+    // Логируем флаги в MP2
+    auto mp2_demount = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_demount");
+    auto mp2_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p1");
+    auto mp2_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p2");
+    auto mp2_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p3");
+    
+    mp2_demount[pos].exchange(demount_flag);
+    mp2_p1[pos].exchange(promote_p1_flag);
+    mp2_p2[pos].exchange(promote_p2_flag);
+    mp2_p3[pos].exchange(promote_p3_flag);
+
     return flamegpu::ALIVE;
 }}
 """)
@@ -426,6 +471,51 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     unsigned int quota_svc = mp2_quota_svc[pos];
     int quota_deficit = mp2_quota_deficit[pos];
     
+    // ═══════════════════════════════════════════════════════════════════
+    // Логирование флагов квотирования
+    // ═══════════════════════════════════════════════════════════════════
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    // Читаем флаги из MacroProperty буферов
+    unsigned int demount_flag = 0u;
+    unsigned int promote_p1_flag = 0u;
+    unsigned int promote_p2_flag = 0u;
+    unsigned int promote_p3_flag = 0u;
+    
+    if (group_by == 1u) {{
+        auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+        auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
+        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
+        
+        demount_flag = mi8_approve[idx];
+        promote_p1_flag = mi8_approve_s3[idx];
+        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p3_flag = mi8_approve_s1[idx];
+    }} else if (group_by == 2u) {{
+        auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+        auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
+        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
+        
+        demount_flag = mi17_approve[idx];
+        promote_p1_flag = mi17_approve_s3[idx];
+        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p3_flag = mi17_approve_s1[idx];
+    }}
+    
+    // Логируем флаги в MP2
+    auto mp2_demount = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_demount");
+    auto mp2_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p1");
+    auto mp2_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p2");
+    auto mp2_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p3");
+    
+    mp2_demount[pos].exchange(demount_flag);
+    mp2_p1[pos].exchange(promote_p1_flag);
+    mp2_p2[pos].exchange(promote_p2_flag);
+    mp2_p3[pos].exchange(promote_p3_flag);
+
     return flamegpu::ALIVE;
 }}
 """)
@@ -525,6 +615,51 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     unsigned int quota_svc = mp2_quota_svc[pos];
     int quota_deficit = mp2_quota_deficit[pos];
     
+    // ═══════════════════════════════════════════════════════════════════
+    // Логирование флагов квотирования
+    // ═══════════════════════════════════════════════════════════════════
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    // Читаем флаги из MacroProperty буферов
+    unsigned int demount_flag = 0u;
+    unsigned int promote_p1_flag = 0u;
+    unsigned int promote_p2_flag = 0u;
+    unsigned int promote_p3_flag = 0u;
+    
+    if (group_by == 1u) {{
+        auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+        auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
+        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
+        
+        demount_flag = mi8_approve[idx];
+        promote_p1_flag = mi8_approve_s3[idx];
+        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p3_flag = mi8_approve_s1[idx];
+    }} else if (group_by == 2u) {{
+        auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+        auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
+        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
+        
+        demount_flag = mi17_approve[idx];
+        promote_p1_flag = mi17_approve_s3[idx];
+        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p3_flag = mi17_approve_s1[idx];
+    }}
+    
+    // Логируем флаги в MP2
+    auto mp2_demount = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_demount");
+    auto mp2_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p1");
+    auto mp2_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p2");
+    auto mp2_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p3");
+    
+    mp2_demount[pos].exchange(demount_flag);
+    mp2_p1[pos].exchange(promote_p1_flag);
+    mp2_p2[pos].exchange(promote_p2_flag);
+    mp2_p3[pos].exchange(promote_p3_flag);
+
     return flamegpu::ALIVE;
 }}
 """)
@@ -624,6 +759,51 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     unsigned int quota_svc = mp2_quota_svc[pos];
     int quota_deficit = mp2_quota_deficit[pos];
     
+    // ═══════════════════════════════════════════════════════════════════
+    // Логирование флагов квотирования
+    // ═══════════════════════════════════════════════════════════════════
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    // Читаем флаги из MacroProperty буферов
+    unsigned int demount_flag = 0u;
+    unsigned int promote_p1_flag = 0u;
+    unsigned int promote_p2_flag = 0u;
+    unsigned int promote_p3_flag = 0u;
+    
+    if (group_by == 1u) {{
+        auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+        auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
+        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
+        
+        demount_flag = mi8_approve[idx];
+        promote_p1_flag = mi8_approve_s3[idx];
+        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p3_flag = mi8_approve_s1[idx];
+    }} else if (group_by == 2u) {{
+        auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+        auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
+        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
+        
+        demount_flag = mi17_approve[idx];
+        promote_p1_flag = mi17_approve_s3[idx];
+        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p3_flag = mi17_approve_s1[idx];
+    }}
+    
+    // Логируем флаги в MP2
+    auto mp2_demount = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_demount");
+    auto mp2_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p1");
+    auto mp2_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p2");
+    auto mp2_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p3");
+    
+    mp2_demount[pos].exchange(demount_flag);
+    mp2_p1[pos].exchange(promote_p1_flag);
+    mp2_p2[pos].exchange(promote_p2_flag);
+    mp2_p3[pos].exchange(promote_p3_flag);
+
     return flamegpu::ALIVE;
 }}
 """)
@@ -723,6 +903,51 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     unsigned int quota_svc = mp2_quota_svc[pos];
     int quota_deficit = mp2_quota_deficit[pos];
     
+    // ═══════════════════════════════════════════════════════════════════
+    // Логирование флагов квотирования
+    // ═══════════════════════════════════════════════════════════════════
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    // Читаем флаги из MacroProperty буферов
+    unsigned int demount_flag = 0u;
+    unsigned int promote_p1_flag = 0u;
+    unsigned int promote_p2_flag = 0u;
+    unsigned int promote_p3_flag = 0u;
+    
+    if (group_by == 1u) {{
+        auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
+        auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
+        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
+        
+        demount_flag = mi8_approve[idx];
+        promote_p1_flag = mi8_approve_s3[idx];
+        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p3_flag = mi8_approve_s1[idx];
+    }} else if (group_by == 2u) {{
+        auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
+        auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
+        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
+        
+        demount_flag = mi17_approve[idx];
+        promote_p1_flag = mi17_approve_s3[idx];
+        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p3_flag = mi17_approve_s1[idx];
+    }}
+    
+    // Логируем флаги в MP2
+    auto mp2_demount = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_demount");
+    auto mp2_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p1");
+    auto mp2_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p2");
+    auto mp2_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_quota_promote_p3");
+    
+    mp2_demount[pos].exchange(demount_flag);
+    mp2_p1[pos].exchange(promote_p1_flag);
+    mp2_p2[pos].exchange(promote_p2_flag);
+    mp2_p3[pos].exchange(promote_p3_flag);
+
     return flamegpu::ALIVE;
 }}
 """)
