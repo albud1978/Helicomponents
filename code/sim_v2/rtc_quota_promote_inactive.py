@@ -97,14 +97,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
         return flamegpu::ALIVE;
     }}
     
-    // Диагностика на ключевых днях
-    if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
-        if (group_by == 1u) {{
-            printf("  [PROMOTE P3 TARGET Day %u] Mi-8: Curr=%u, Used(P1+P2)=%u, Target=%u\\n", day, curr, used, target);
-        }} else if (group_by == 2u) {{
-            printf("  [PROMOTE P3 TARGET Day %u] Mi-17: Curr=%u, Used(P1+P2)=%u, Target=%u\\n", day, curr, used, target);
-        }}
-    }}
+    // Диагностика на ключевых днях (УБРАНО — избыточное логирование)
     
     // ═══════════════════════════════════════════════════════════
     // ШАГ 2: Расчёт дефицита (сколько не хватает до target с учётом P1+P2)

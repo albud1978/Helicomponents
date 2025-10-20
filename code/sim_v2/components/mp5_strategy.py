@@ -54,6 +54,9 @@ class MP5Strategy:
         
         Raises:
             ValueError: если размер данных недостаточен
+        
+        Note:
+            Сортировка по mfg_date УЖЕ выполнена в build_frames_index() на этапе ETL
         """
         mp5_data = list(self.env_data['mp5_daily_hours_linear'])
         need = (self.days + 1) * self.frames  # D+1 для безопасного чтения daily_next

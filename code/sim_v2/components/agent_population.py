@@ -122,37 +122,26 @@ class AgentPopulationBuilder:
                 records_by_frame[frame_idx] = rec
         
         # ════════════════════════════════════════════════════════════════════
-        # НОВАЯ ЛОГИКА: Разделяем на Mi-8 и Mi-17, сортируем по mfg_date
+        # Сортировка по frame_idx УЖЕ СДЕЛАНА в build_frames_index (по mfg_date)
+        # Просто берём записи в порядке frame_idx
         # ════════════════════════════════════════════════════════════════════
-        records_mi8 = []
-        records_mi17 = []
+        sorted_records = sorted(records_by_frame.items(), key=lambda x: x[0])  # по frame_idx
         
-        for frame_idx, rec in sorted(records_by_frame.items()):
-            if rec['group_by'] == 1:
-                records_mi8.append((frame_idx, rec))
-            elif rec['group_by'] == 2:
-                records_mi17.append((frame_idx, rec))
+        # Подсчитываем Mi-8 и Mi-17 для статистики
+        n_mi8 = sum(1 for _, rec in sorted_records if rec['group_by'] == 1)
+        n_mi17 = sum(1 for _, rec in sorted_records if rec['group_by'] == 2)
         
-        # Сортируем каждую группу по mfg_date (старые первые)
-        records_mi8.sort(key=lambda x: (x[1]['mfg_date'], x[0]))  # tie-break по frame_idx
-        records_mi17.sort(key=lambda x: (x[1]['mfg_date'], x[0]))
-        
-        print(f"  Сортировка по возрасту: Mi-8={len(records_mi8)}, Mi-17={len(records_mi17)}")
-        
-        # Объединяем в один список: сначала Mi-8, потом Mi-17
-        sorted_records = records_mi8 + records_mi17
-        
-        # Сохраняем границу между типами
-        n_mi8 = len(records_mi8)
         self.env_data['n_mi8'] = n_mi8
-        self.env_data['n_mi17'] = len(records_mi17)
+        self.env_data['n_mi17'] = n_mi17
+        
+        print(f"  Агенты по типам: Mi-8={n_mi8}, Mi-17={n_mi17}")
         
         # Получаем информацию о зарезервированных слотах
         first_reserved_idx = self.env_data.get('first_reserved_idx', self.frames)
         
         # Заполняем агентов и распределяем по состояниям
-        # Создаем только реальных агентов, пропускаем зарезервированные слоты
-        for new_idx, (frame_idx, agent_data) in enumerate(sorted_records):
+        # Используем frame_idx как idx агента (сортировка уже сделана в ETL)
+        for frame_idx, agent_data in sorted_records:
             # Пропускаем зарезервированные слоты для будущего спавна
             if frame_idx >= first_reserved_idx:
                 continue
@@ -164,8 +153,8 @@ class AgentPopulationBuilder:
             pop.push_back()
             agent = pop[len(pop) - 1]
             
-            # Базовые переменные (NEW_IDX вместо frame_idx)
-            agent.setVariableUInt("idx", new_idx)
+            # Базовые переменные (используем frame_idx из build_frames_index)
+            agent.setVariableUInt("idx", frame_idx)
             agent.setVariableUInt("aircraft_number", agent_data['aircraft_number'])
             # FIX 2: status_id НЕ используется - переведено на States
             agent.setVariableUInt("sne", agent_data['sne'])

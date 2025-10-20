@@ -194,29 +194,73 @@ def build_daily_arrays(mp3_rows, mp3_fields: List[str], mp1_br_rt_map: Dict[int,
 # === Full‑GPU подготовка окружения (Этап 0) ===
 
 def build_frames_index(mp3_rows, mp3_fields: List[str]) -> Tuple[Dict[int, int], int]:
+    """
+    Строит frames_index с сортировкой по mfg_date (старые первые)
+    Разделяет на Mi-8 и Mi-17: сначала все Mi-8 по возрасту, потом все Mi-17
+    """
+    from datetime import date as _date
+    epoch = _date(1970, 1, 1)
+    
     idx = {name: i for i, name in enumerate(mp3_fields)}
-    ac_set = set()
+    
+    # Собираем планеры с метаданными
+    planes_mi8 = []  # (aircraft_number, mfg_date_days)
+    planes_mi17 = []
+    
     for r in mp3_rows:
-        # Отбираем только планеры: group_by ∈ {1,2} ИЛИ маска типа с битами 32/64
         ac = int(r[idx['aircraft_number']] or 0)
         if ac <= 0:
             continue
-        is_plane = False
+        
+        # Определяем тип и фильтруем
+        gb = None
         if 'group_by' in idx:
             gb = int(r[idx['group_by']] or 0)
-            is_plane = gb in (1, 2)
+            if gb not in (1, 2):
+                continue  # Пропускаем не-планеры
         elif 'ac_type_mask' in idx:
             m = int(r[idx['ac_type_mask']] or 0)
-            is_plane = (m & (32 | 64)) != 0
+            if m & 32:  # Mi-8
+                gb = 1
+            elif m & 64:  # Mi-17
+                gb = 2
+            else:
+                continue  # Не планер
         else:
-            # Если нет признаков — консервативно исключаем
-            is_plane = False
-        if is_plane:
-            ac_set.add(ac)
-    # 0 как «нет борта» исключаем
-    ac_list = sorted([ac for ac in ac_set if ac > 0])
-    frames_index = {ac: i for i, ac in enumerate(ac_list)}
-    return frames_index, len(ac_list)
+            continue  # Нет признаков типа — пропускаем
+        
+        # Получаем mfg_date
+        mfg_date_days = 0
+        if 'mfg_date' in idx:
+            md = r[idx['mfg_date']]
+            if md:
+                try:
+                    mfg_date_days = max(0, int((md - epoch).days))
+                except Exception:
+                    mfg_date_days = 0
+        
+        # Добавляем в соответствующий список
+        if gb == 1:
+            planes_mi8.append((ac, mfg_date_days))
+        elif gb == 2:
+            planes_mi17.append((ac, mfg_date_days))
+    
+    # Убираем дубликаты и сортируем по mfg_date (старые первые)
+    planes_mi8_unique = {ac: mfg for ac, mfg in planes_mi8}
+    planes_mi17_unique = {ac: mfg for ac, mfg in planes_mi17}
+    
+    sorted_mi8 = sorted(planes_mi8_unique.items(), key=lambda x: (x[1], x[0]))  # (mfg_date, ac)
+    sorted_mi17 = sorted(planes_mi17_unique.items(), key=lambda x: (x[1], x[0]))
+    
+    # Объединяем: сначала Mi-8, потом Mi-17
+    ac_list_sorted = [ac for ac, _ in sorted_mi8] + [ac for ac, _ in sorted_mi17]
+    
+    # Создаём frames_index
+    frames_index = {ac: i for i, ac in enumerate(ac_list_sorted)}
+    
+    print(f"  build_frames_index: Mi-8={len(sorted_mi8)}, Mi-17={len(sorted_mi17)}, total={len(ac_list_sorted)}")
+    
+    return frames_index, len(ac_list_sorted)
 
 
 def get_days_sorted_union(mp4_by_day: Dict[date, Dict[str, int]], mp5_by_day: Dict[date, Dict[int,int]]) -> List[date]:
