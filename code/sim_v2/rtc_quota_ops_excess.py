@@ -82,7 +82,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
     const unsigned int K = (unsigned int)balance;
     
     // Ранжирование по mfg_date (oldest_first) среди агентов в operations
-    const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
+    // ✅ КРИТИЧНО: idx УЖЕ отсортирован по mfg_date (старые первые)!
+    // Для "oldest first": меньший idx = старше!
     unsigned int rank = 0u;
     
     if (group_by == 1u) {{
@@ -91,8 +92,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
             if (i == idx) continue;
             if (ops_count[i] != 1u) continue;  // ✅ Только агенты в operations
             
-            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            if (other_mfg < my_mfg || (other_mfg == my_mfg && i < idx)) {{
+            // Oldest first: rank растёт если other (i) СТАРШЕ меня (меньший idx)
+            if (i < idx) {{
                 ++rank;
             }}
         }}
@@ -102,8 +103,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
             if (i == idx) continue;
             if (ops_count[i] != 1u) continue;  // ✅ Только агенты в operations
             
-            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            if (other_mfg < my_mfg || (other_mfg == my_mfg && i < idx)) {{
+            // Oldest first: rank растёт если other (i) СТАРШЕ меня (меньший idx)
+            if (i < idx) {{
                 ++rank;
             }}
         }}
@@ -125,8 +126,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
         // Диагностика
         if (day == 180u || day == 181u || day == 182u) {{
             const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-            printf("  [DEMOUNT Day %u] AC %u: rank=%u/%u (mfg=%u, balance=%d)\\n", 
-                   day, aircraft_number, rank, K, my_mfg, balance);
+            const unsigned int mfg = FLAMEGPU->getVariable<unsigned int>("mfg_date");
+            printf("  [DEMOUNT Day %u] AC %u: rank=%u/%u (idx=%u, mfg=%u, balance=%d)\\n", 
+                   day, aircraft_number, rank, K, idx, mfg, balance);
         }}
     }}
     // Иначе intent остаётся = 2 (остаюсь в operations)
