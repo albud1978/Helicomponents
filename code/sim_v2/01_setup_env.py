@@ -51,6 +51,7 @@ def main() -> int:
     DAYS = len(days_sorted)
 
     # Плотный индекс по планёрам: MP3 → доп. из MP5
+    # Используем build_frames_index для фильтрации и сортировки по mfg_date
     frames_index_mp3, _ = build_frames_index(mp3_rows, mp3_fields)
     ac_mp3_ordered = [ac for ac, _ in sorted(frames_index_mp3.items(), key=lambda kv: kv[1])]
     ac_mp5_set = set()
@@ -76,6 +77,7 @@ def main() -> int:
 
     # FRAMES = |MP3 ∪ MP5| на этапе 01 (без будущих)
     FRAMES = frames_union_no_future
+    
     mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
     mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, FRAMES)
 
