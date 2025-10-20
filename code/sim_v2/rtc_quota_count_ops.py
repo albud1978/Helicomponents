@@ -28,6 +28,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
     
     // Только первый агент (idx=0) обнуляет буферы
     if (idx == 0u) {
+        // Буферы подсчёта по состояниям
         auto mi8_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_ops_count");
         auto mi17_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_ops_count");
         auto mi8_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_svc_count");
@@ -36,11 +37,38 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto mi17_res = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_reserve_count");
         auto mi8_ina = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_inactive_count");
         auto mi17_ina = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_inactive_count");
+        
+        // Буферы approve для квотирования (демоут + промоуты P1/P2/P3)
+        auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_approve");
+        auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_approve");
+        auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_approve_s3");
+        auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_approve_s3");
+        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_approve_s5");
+        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_approve_s5");
+        auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_approve_s1");
+        auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_approve_s1");
+        
+        // Сброс ВСЕХ буферов
         for (unsigned int i = 0u; i < 286u; ++i) {
+            // Подсчёт по состояниям
             mi8_ops[i].exchange(0u);
             mi17_ops[i].exchange(0u);
             mi8_svc[i].exchange(0u);
             mi17_svc[i].exchange(0u);
+            mi8_res[i].exchange(0u);
+            mi17_res[i].exchange(0u);
+            mi8_ina[i].exchange(0u);
+            mi17_ina[i].exchange(0u);
+            
+            // Approve флаги (демоут + промоуты)
+            mi8_approve[i].exchange(0u);
+            mi17_approve[i].exchange(0u);
+            mi8_approve_s3[i].exchange(0u);
+            mi17_approve_s3[i].exchange(0u);
+            mi8_approve_s5[i].exchange(0u);
+            mi17_approve_s5[i].exchange(0u);
+            mi8_approve_s1[i].exchange(0u);
+            mi17_approve_s1[i].exchange(0u);
         }
     }
     

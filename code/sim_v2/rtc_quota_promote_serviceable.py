@@ -79,7 +79,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
     const unsigned int K = (unsigned int)deficit;
     
     /* Ранжирование: youngest first среди РЕАЛЬНЫХ агентов в serviceable */
-    const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
+    /* ✅ КРИТИЧНО: idx УЖЕ отсортирован по mfg_date (старые первые)! */
+    /* Для "youngest first": больший idx = моложе! */
     unsigned int rank = 0u;
     
     /* Используем svc_count буфер для фильтрации */
@@ -89,9 +90,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
             if (i == idx) continue;
             if (svc_count[i] != 1u) continue;
             
-            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            /* Youngest first: rank растёт если other МОЛОЖЕ меня */
-            if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
+            /* Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx) */
+            if (i > idx) {{
                 ++rank;
             }}
         }}
@@ -101,9 +101,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
             if (i == idx) continue;
             if (svc_count[i] != 1u) continue;
             
-            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            /* Youngest first: rank растёт если other МОЛОЖЕ меня */
-            if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
+            /* Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx) */
+            if (i > idx) {{
                 ++rank;
             }}
         }}

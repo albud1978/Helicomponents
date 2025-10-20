@@ -115,7 +115,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
     const unsigned int K = (unsigned int)deficit;  // ✅ Каскадная логика
     
     // Ранжирование: youngest first среди РЕАЛЬНЫХ агентов в inactive (которые ГОТОВЫ)
-    const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
+    // ✅ КРИТИЧНО: idx УЖЕ отсортирован по mfg_date (старые первые)!
+    // Для "youngest first": больший idx = моложе!
     unsigned int rank = 0u;
     
     // ✅ ВАЖНО: Фильтруем по inactive state используя буфер (state=1, intent=1, но готовы: step_day >= repair_time)
@@ -125,9 +126,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
             if (i == idx) continue;
             if (inactive_count[i] != 1u) continue;  // ✅ Только агенты в inactive
             
-            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            // Youngest first: rank растёт если other МОЛОЖЕ меня
-            if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
+            // Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx)
+            if (i > idx) {{
                 ++rank;
             }}
         }}
@@ -137,9 +137,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
             if (i == idx) continue;
             if (inactive_count[i] != 1u) continue;  // ✅ Только агенты в inactive
             
-            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            // Youngest first: rank растёт если other МОЛОЖЕ меня
-            if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
+            // Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx)
+            if (i > idx) {{
                 ++rank;
             }}
         }}

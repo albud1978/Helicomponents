@@ -100,34 +100,46 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
     const unsigned int K = (unsigned int)deficit;  // ✅ Каскадная логика
     
     // Ранжирование: youngest first среди РЕАЛЬНЫХ агентов в reserve
-    const unsigned int my_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", idx);
+    // ✅ КРИТИЧНО: idx УЖЕ отсортирован по mfg_date (старые первые)!
+    // Для Mi-8: idx 0-162 (0=самый старый, 162=самый молодой)
+    // Для Mi-17: idx 163-278 (163=самый старый, 278=самый молодой)
+    // Поэтому для "youngest first": больший idx = моложе!
+    
     unsigned int rank = 0u;
+    unsigned int total_in_reserve = 0u;  // Диагностика: сколько всего в reserve
     
     // ✅ ВАЖНО: Фильтруем по reserve state используя буфер (state=5, intent=5)
     if (group_by == 1u) {{
         auto reserve_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_reserve_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
+            if (reserve_count[i] == 1u) ++total_in_reserve;  // Диагностика
             if (i == idx) continue;
             if (reserve_count[i] != 1u) continue;  // ✅ Только агенты в reserve
             
-            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            // Youngest first: rank растёт если other МОЛОЖЕ меня
-            if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
+            // Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx)
+            if (i > idx) {{
                 ++rank;
             }}
         }}
     }} else if (group_by == 2u) {{
         auto reserve_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_reserve_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
+            if (reserve_count[i] == 1u) ++total_in_reserve;  // Диагностика
             if (i == idx) continue;
             if (reserve_count[i] != 1u) continue;  // ✅ Только агенты в reserve
             
-            const unsigned int other_mfg = FLAMEGPU->environment.getProperty<unsigned int>("mp3_mfg_date_days", i);
-            // Youngest first: rank растёт если other МОЛОЖЕ меня
-            if (other_mfg > my_mfg || (other_mfg == my_mfg && i < idx)) {{
+            // Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx)
+            if (i > idx) {{
                 ++rank;
             }}
         }}
+    }}
+    
+    // Диагностика на день 149 для Mi-17
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    if (day == 149u && group_by == 2u) {{
+        printf("  [P2 RANK Day %u] AC %u (idx %u): rank=%u/%u, K=%u, total_in_reserve=%u\\n", 
+               day, aircraft_number, idx, rank, total_in_reserve, K, total_in_reserve);
     }}
     
     if (rank < K) {{

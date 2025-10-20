@@ -238,6 +238,7 @@ class MP2DrainHostFunction(fg.HostFunction):
         except:
             mp2_quota_promote_p3 = None
         
+        
         rows_count = 0
         # day_date вычисляется в ClickHouse (MATERIALIZED), в Python не считаем
         
