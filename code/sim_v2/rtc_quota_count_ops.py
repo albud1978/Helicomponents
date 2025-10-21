@@ -212,24 +212,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::Mes
     model.Environment().newMacroPropertyInt32("mp2_quota_gap_mi8", max_days + 1)
     model.Environment().newMacroPropertyInt32("mp2_quota_gap_mi17", max_days + 1)
 
+    # ✅ УСТАРЕЛО: RTC функция для логирования MP4 целей больше не используется
+    # Целевые значения теперь читаются напрямую из mp4_ops_counter на стороне Python
+    # при дренаже в базу (см. mp2_drain_host.py::_get_mp4_target)
+    # 
+    # Причина: RTC функция вызывается только для существующих агентов, что приводило
+    # к пропускам дней когда все агенты определённого типа меняли состояние.
     RTC_LOG_MP4_TARGETS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_log_mp4_targets, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    const unsigned int day = FLAMEGPU->getStepCounter();
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    
-    const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
-    
-    if (group_by == 1u) {{
-        auto mp2_target = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days + 1}u>("mp2_mp4_target_mi8");
-        unsigned int target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
-        mp2_target[day].exchange(target);
-    }} else if (group_by == 2u) {{
-        auto mp2_target = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days + 1}u>("mp2_mp4_target_mi17");
-        unsigned int target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
-        mp2_target[day].exchange(target);
-    }}
-    
+    // ⚠️ DEPRECATED: Эта функция больше не используется для записи mp2_mp4_target_*
+    // Целевые значения читаются напрямую из mp4_ops_counter при дренаже
     return flamegpu::ALIVE;
 }}
 """
