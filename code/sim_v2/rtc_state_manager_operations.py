@@ -58,6 +58,15 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_inactive_intent_2) {
 RTC_APPLY_2_TO_2 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
     // Агент остается в operations (без логирования — не является переходом)
+    
+    // ✅ КРИТИЧНО: Сброс active_trigger после первого дня в operations
+    // Это должно происходить ЗДЕСЬ, а не в state_2_operations, т.к. агент может
+    // сразу перейти в repair (2→4) и пропустить сброс
+    unsigned int active_trigger = FLAMEGPU->getVariable<unsigned int>("active_trigger");
+    if (active_trigger == 1u) {
+        FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
+    }
+    
     return flamegpu::ALIVE;
 }
 """
@@ -74,6 +83,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_4, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
     
+    // ✅ КРИТИЧНО: Сброс active_trigger при переходе из operations
+    unsigned int active_trigger = FLAMEGPU->getVariable<unsigned int>("active_trigger");
+    if (active_trigger == 1u) {
+        FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
+    }
+    
     // Логирование перехода (2→4) с типом вертолёта
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
     printf("  [TRANSITION 2→4 Day %u] AC %u (idx %u, %s): operations -> repair, sne=%u, ppr=%u, oh=%u, br=%u\\n", 
@@ -88,6 +103,12 @@ RTC_APPLY_2_TO_6 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_6, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    
+    // ✅ КРИТИЧНО: Сброс active_trigger при переходе из operations
+    unsigned int active_trigger = FLAMEGPU->getVariable<unsigned int>("active_trigger");
+    if (active_trigger == 1u) {
+        FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
+    }
     
     // При переходе в хранение фиксируем день начала
     FLAMEGPU->setVariable<unsigned int>("s6_started", step_day);
@@ -139,6 +160,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_3, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     
+    // ✅ КРИТИЧНО: Сброс active_trigger при переходе из operations
+    unsigned int active_trigger = FLAMEGPU->getVariable<unsigned int>("active_trigger");
+    if (active_trigger == 1u) {
+        FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
+    }
+    
     // Логирование перехода (2→3) с типом вертолёта
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
     printf("  [TRANSITION 2→3 Day %u] AC %u (idx %u, %s): operations -> serviceable (DEMOUNT), sne=%u, ppr=%u\\n", 
@@ -163,9 +190,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_3_to_2, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    
-    // ✅ SAFETY CHECK: Проверяем что мы действительно в serviceable (не нужно, setInitialState уже фильтрует)
-    // но добавляем для отладки в случае если что-то пошло не так
     
     // Логирование переходов promocode→operations
     if (aircraft_number >= 100000u || step_day == 226u || step_day == 227u || step_day == 228u) {
@@ -220,6 +244,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    
+    // ✅ КРИТИЧНО: Устанавливаем active_trigger=1 при переходе inactive → operations
+    FLAMEGPU->setVariable<unsigned int>("active_trigger", 1u);
     
     if (aircraft_number >= 100000u || step_day == 226u || step_day == 227u || step_day == 228u) {
         printf("  [TRANSITION 1→2 Day %u] AC %u (idx %u): inactive -> operations (PROMOTE P3)\\n", 
