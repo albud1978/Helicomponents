@@ -148,6 +148,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
         // Я в числе K первых → промоут, меняю intent=1 на intent=2
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Изменяем: 1→2 (одобрены на операции)
         
+        /* Логирование выбора для P3 */
+        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        printf("  [PROMOTE P3→2 Day %u] AC %u (idx %u): rank=%u/%u inactive->operations\\n", 
+               day, aircraft_number, idx, rank, K);
+        
         // Записываем в ОТДЕЛЬНЫЙ буфер для inactive (избегаем race condition)
         if (group_by == 1u) {{
             auto approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
@@ -156,22 +161,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
             auto approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
             approve_s1[idx].exchange(1u);
         }}
-        
-        // Диагностика
-        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        if (aircraft_number >= 100000u || day == 226u || day == 227u || day == 228u || day == 229u || day == 230u) {{
-            printf("  [PROMOTE P3→2 Day %u] AC %u (idx %u): rank=%u/%u inactive->operations\\n", 
-                   day, aircraft_number, idx, rank, K);
-        }}
     }} else {{
         // Не вошёл в квоту → intent остаётся 1 (замороженное, ждёт следующего дня)
-        // НЕ меняем intent! Агент остаётся в inactive на следующий день
-        
-        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        if (aircraft_number >= 100000u || day == 226u || day == 227u || day == 228u || day == 229u || day == 230u) {{
-            printf("  [PROMOTE P3 REJECT Day %u] AC %u (idx %u): rank=%u >= K=%u, staying in inactive\\n", 
-                   day, aircraft_number, idx, rank, K);
-        }}
+        // REJECT логирование убрано - оставляем только PROMOTE логи для чистоты
     }}
     
     return flamegpu::ALIVE;
