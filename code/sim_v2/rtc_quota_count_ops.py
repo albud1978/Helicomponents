@@ -18,38 +18,41 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     # =========================================================================
     # Слой 1: Обнуление буферов (выполняет только первый агент)
     # =========================================================================
+    # ✅ КРИТИЧНО: Читаем MAX_FRAMES из environment, а не из глобальной переменной!
+    # Это гарантирует, что RTC код компилируется с правильным размером
     max_frames = model.Environment().getPropertyUInt("frames_total")
     max_days = model.Environment().getPropertyUInt("days_total")
     MP2_SIZE = max_frames * (max_days + 1)
+    print(f"  🔍 DEBUG count_ops: max_frames={max_frames}, max_days={max_days}")
     
-    RTC_RESET_BUFFERS = """
-FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu::MessageNone) {
+    RTC_RESET_BUFFERS = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
     // Только первый агент (idx=0) обнуляет буферы
-    if (idx == 0u) {
+    if (idx == 0u) {{
         // Буферы подсчёта по состояниям
-        auto mi8_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_ops_count");
-        auto mi17_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_ops_count");
-        auto mi8_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_svc_count");
-        auto mi17_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_svc_count");
-        auto mi8_res = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_reserve_count");
-        auto mi17_res = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_reserve_count");
-        auto mi8_ina = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_inactive_count");
-        auto mi17_ina = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_inactive_count");
+        auto mi8_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
+        auto mi17_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
+        auto mi8_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_svc_count");
+        auto mi17_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_svc_count");
+        auto mi8_res = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_reserve_count");
+        auto mi17_res = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_reserve_count");
+        auto mi8_ina = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_inactive_count");
+        auto mi17_ina = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_inactive_count");
         
         // Буферы approve для квотирования (демоут + промоуты P1/P2/P3)
-        auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_approve");
-        auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_approve");
-        auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_approve_s3");
-        auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_approve_s3");
-        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_approve_s5");
-        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_approve_s5");
-        auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_approve_s1");
-        auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_approve_s1");
+        auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
+        auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
+        auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s3");
+        auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s3");
+        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s5");
+        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s5");
+        auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
+        auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
         
         // Сброс ВСЕХ буферов
-        for (unsigned int i = 0u; i < 286u; ++i) {
+        for (unsigned int i = 0u; i < {max_frames}u; ++i) {{
             // Подсчёт по состояниям
             mi8_ops[i].exchange(0u);
             mi17_ops[i].exchange(0u);
@@ -69,11 +72,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             mi17_approve_s5[i].exchange(0u);
             mi8_approve_s1[i].exchange(0u);
             mi17_approve_s1[i].exchange(0u);
-        }
-    }
+        }}
+    }}
     
     return flamegpu::ALIVE;
-}
+}}
 """
     
     rtc_reset = agent.newRTCFunction("rtc_reset_quota_buffers", RTC_RESET_BUFFERS)
@@ -88,25 +91,25 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
     # =========================================================================
     # Слой 2: Подсчёт агентов в operations с intent=2
     # =========================================================================
-    RTC_COUNT_OPS = """
-FLAMEGPU_AGENT_FUNCTION(rtc_count_ops, flamegpu::MessageNone, flamegpu::MessageNone) {
+    RTC_COUNT_OPS = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_ops, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
     
     // ✅ ВАРИАНТ B: Считаем только агентов с intent=2 (хотят быть в operations)
-    if (intent == 2u) {
-        if (group_by == 1u) {
-            auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_ops_count");
+    if (intent == 2u) {{
+        if (group_by == 1u) {{
+            auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
             ops_count[idx].exchange(1u);
-        } else if (group_by == 2u) {
-            auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_ops_count");
+        }} else if (group_by == 2u) {{
+            auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
             ops_count[idx].exchange(1u);
-        }
-    }
+        }}
+    }}
     
     return flamegpu::ALIVE;
-}
+}}
 """
     
     rtc_func = agent.newRTCFunction("rtc_count_ops", RTC_COUNT_OPS)
@@ -119,21 +122,21 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_ops, flamegpu::MessageNone, flamegpu::MessageN
     # =========================================================================
     # Слой 3: Подсчёт агентов в serviceable
     # =========================================================================
-    RTC_COUNT_SVC = """
-FLAMEGPU_AGENT_FUNCTION(rtc_count_serviceable, flamegpu::MessageNone, flamegpu::MessageNone) {
+    RTC_COUNT_SVC = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_serviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
-    if (group_by == 1u) {
-        auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_svc_count");
+    if (group_by == 1u) {{
+        auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_svc_count");
         svc_count[idx].exchange(1u);
-    } else if (group_by == 2u) {
-        auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_svc_count");
+    }} else if (group_by == 2u) {{
+        auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_svc_count");
         svc_count[idx].exchange(1u);
-    }
+    }}
     
     return flamegpu::ALIVE;
-}
+}}
 """
     
     rtc_func_svc = agent.newRTCFunction("rtc_count_serviceable", RTC_COUNT_SVC)
@@ -146,22 +149,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_serviceable, flamegpu::MessageNone, flamegpu::
     # =========================================================================
     # Слой 4: Подсчёт агентов в reserve
     # =========================================================================
-    RTC_COUNT_RESERVE = """
-FLAMEGPU_AGENT_FUNCTION(rtc_count_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {
+    RTC_COUNT_RESERVE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
     // Записываем флаг что этот агент в reserve
-    if (group_by == 1u) {
-        auto reserve_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_reserve_count");
+    if (group_by == 1u) {{
+        auto reserve_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_reserve_count");
         reserve_count[idx].exchange(1u);
-    } else if (group_by == 2u) {
-        auto reserve_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_reserve_count");
+    }} else if (group_by == 2u) {{
+        auto reserve_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_reserve_count");
         reserve_count[idx].exchange(1u);
-    }
+    }}
     
     return flamegpu::ALIVE;
-}
+}}
 """
     
     rtc_func_res = agent.newRTCFunction("rtc_count_reserve", RTC_COUNT_RESERVE)
@@ -174,22 +177,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_reserve, flamegpu::MessageNone, flamegpu::Mess
     # =========================================================================
     # Слой 5: Подсчёт агентов в inactive
     # =========================================================================
-    RTC_COUNT_INACTIVE = """
-FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {
+    RTC_COUNT_INACTIVE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
     // Записываем флаг что этот агент в inactive
-    if (group_by == 1u) {
-        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi8_inactive_count");
+    if (group_by == 1u) {{
+        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_inactive_count");
         inactive_count[idx].exchange(1u);
-    } else if (group_by == 2u) {
-        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 286u>("mi17_inactive_count");
+    }} else if (group_by == 2u) {{
+        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_inactive_count");
         inactive_count[idx].exchange(1u);
-    }
+    }}
     
     return flamegpu::ALIVE;
-}
+}}
 """
     
     rtc_func_ina = agent.newRTCFunction("rtc_count_inactive", RTC_COUNT_INACTIVE)

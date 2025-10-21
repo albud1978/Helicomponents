@@ -1151,6 +1151,10 @@ print(telemetry.get_summary())
 
 ### Порядок модулей в пайплайне
 
+⚠️ **КРИТИЧНО: spawn_v2 ДОЛЖЕН быть последним модулем перед MP2 export!**
+
+Новые агенты создаются в конце дня и начинают участвовать в симуляции со следующего дня.
+
 ```
 1. state_2_operations        — инкременты sne/ppr + установка intent=2
 2. states_stub               — установка intent для остальных состояний (активирует serviceable → intent=2)
@@ -1161,10 +1165,23 @@ print(telemetry.get_summary())
 7. quota_promote_inactive    — промоут P3 (inactive → operations, youngest first)
 8. state_manager_serviceable — переход 3→2 (serviceable → operations)
 9. state_manager_operations  — переходы из operations (2→2, 2→3, 2→4, 2→6)
-10. state_manager_repair     — переходы из repair (4→4, 4→5)
-11. state_manager_storage    — переход 6→6 (storage → storage)
-12. spawn_v2                 — создание новых агентов (в конце!)
-13. MP2 export               — выгрузка в СУБД (если --enable-mp2)
+10. state_manager_inactive   — переход 1→1 (inactive → inactive)
+11. state_manager_repair     — переходы из repair (4→4, 4→5)
+12. state_manager_reserve    — переход 5→5 (reserve → reserve)
+13. state_manager_storage    — переход 6→6 (storage → storage)
+14. spawn_v2                 — ⚠️ создание новых агентов (ОБЯЗАТЕЛЬНО В КОНЦЕ!)
+15. MP2 export               — выгрузка в СУБД (если --enable-mp2)
+```
+
+**Команда запуска:**
+```bash
+python3 orchestrator_v2.py \
+  --modules state_2_operations states_stub count_ops \
+            quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
+            state_manager_operations state_manager_serviceable state_manager_inactive \
+            state_manager_repair state_manager_reserve state_manager_storage \
+            spawn_v2 \
+  --steps 3650 --enable-mp2 --drop-table
 ```
 
 ### Ключевые принципы архитектуры

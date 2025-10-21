@@ -10,9 +10,12 @@ except ImportError:
         class ModelDescription: pass
         class AgentDescription: pass
 
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from model_build import MAX_FRAMES, MAX_DAYS
+
 # Константы
-MAX_DAYS = 4000
-MAX_FRAMES = 286
 MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
 
 
