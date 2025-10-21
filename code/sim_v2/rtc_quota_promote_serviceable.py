@@ -112,6 +112,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
         /* Я в числе K первых → промоут, меняю intent=3 на intent=2 */
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
         
+        /* Логирование выбора для P1 */
+        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        printf("  [PROMOTE P1→2 Day %u] AC %u (idx %u): rank=%u/%u serviceable->operations\\n", 
+               day, aircraft_number, idx, rank, K);
+        
         /* Записываем в ОТДЕЛЬНЫЙ буфер для serviceable (избегаем race condition) */
         if (group_by == 1u) {{
             auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s3");
@@ -122,6 +127,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
         }}
     }} else {{
         /* Не вошёл в квоту → intent остаётся 3 (холдинг, ждёт следующего дня) */
+        // REJECT логирование убрано - оставляем только PROMOTE логи для чистоты
     }}
     
     return flamegpu::ALIVE;

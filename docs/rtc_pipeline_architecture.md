@@ -1334,9 +1334,10 @@ if (intent == 4u) {
 python3 code/sim_v2/orchestrator_v2.py \
   --modules state_2_operations count_ops quota_ops_excess \
             quota_promote_serviceable quota_promote_reserve \
-            quota_promote_inactive states_stub \
-            state_manager_serviceable state_manager_operations \
-            state_manager_repair state_manager_storage spawn_v2 \
+            quota_promote_inactive \
+            state_manager_operations state_manager_serviceable state_manager_inactive \
+            state_manager_repair state_manager_reserve state_manager_storage \
+            spawn_v2 \
   --steps 3650 \
   --enable-mp2 \
   --drop-table
