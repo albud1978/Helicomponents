@@ -200,15 +200,17 @@ class MP2DrainHostFunction(fg.HostFunction):
         mp2_dn = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dn")
         
         
-        # MP4 целевые значения (читаем из буферов, заполненных rtc_log_mp4_targets)
+        # MP4 целевые значения (читаем НАПРЯМУЮ из mp4_ops_counter, т.к. это глобальные значения)
+        # ✅ КРИТИЧНО: НЕ используем mp2_mp4_target_* MacroProperty, т.к. они заполняются через RTC,
+        #    который вызывается только для существующих агентов! Это приводит к пропускам дней.
         try:
-            mp2_mp4_target_mi8 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_mp4_target_mi8")
+            mp4_ops_counter_mi8 = FLAMEGPU.environment.getPropertyArrayUInt32("mp4_ops_counter_mi8")
         except:
-            mp2_mp4_target_mi8 = None
+            mp4_ops_counter_mi8 = None
         try:
-            mp2_mp4_target_mi17 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_mp4_target_mi17")
+            mp4_ops_counter_mi17 = FLAMEGPU.environment.getPropertyArrayUInt32("mp4_ops_counter_mi17")
         except:
-            mp2_mp4_target_mi17 = None
+            mp4_ops_counter_mi17 = None
         
         # Баланс квот (gap = curr - target по типам)
         try:
@@ -238,6 +240,8 @@ class MP2DrainHostFunction(fg.HostFunction):
         except:
             mp2_quota_promote_p3 = None
         
+        # Получаем days_total для safe_day логики
+        days_total = FLAMEGPU.environment.getPropertyUInt32("days_total")
         
         rows_count = 0
         # day_date вычисляется в ClickHouse (MATERIALIZED), в Python не считаем
@@ -281,9 +285,9 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_mfg_date[pos]),
                         int(mp2_dt[pos]),
                         int(mp2_dn[pos]),
-                        # MP4 целевые значения по дню
-                        int(mp2_mp4_target_mi8[day]) if mp2_mp4_target_mi8 is not None else 0,
-                        int(mp2_mp4_target_mi17[day]) if mp2_mp4_target_mi17 is not None else 0,
+                        # MP4 целевые значения по дню (читаем из mp4_ops_counter с safe_day логикой)
+                        self._get_mp4_target(mp4_ops_counter_mi8, day, days_total),
+                        self._get_mp4_target(mp4_ops_counter_mi17, day, days_total),
                         int(mp2_quota_gap_mi8[day]) if mp2_quota_gap_mi8 is not None else 0,
                         int(mp2_quota_gap_mi17[day]) if mp2_quota_gap_mi17 is not None else 0,
                         int(mp2_quota_demount[pos]) if mp2_quota_demount is not None else 0,
@@ -425,9 +429,9 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_mfg_date[pos]),
                         int(mp2_dt[pos]),
                         int(mp2_dn[pos]),
-                        # MP4 целевые значения по дню
-                        int(mp2_mp4_target_mi8[day]) if mp2_mp4_target_mi8 is not None else 0,
-                        int(mp2_mp4_target_mi17[day]) if mp2_mp4_target_mi17 is not None else 0,
+                        # MP4 целевые значения по дню (читаем из mp4_ops_counter с safe_day логикой)
+                        self._get_mp4_target(mp4_ops_counter_mi8, day, days_total),
+                        self._get_mp4_target(mp4_ops_counter_mi17, day, days_total),
                         int(mp2_quota_gap_mi8[day]) if mp2_quota_gap_mi8 is not None else 0,
                         int(mp2_quota_gap_mi17[day]) if mp2_quota_gap_mi17 is not None else 0,
                         int(mp2_quota_demount[pos]) if mp2_quota_demount is not None else 0,
@@ -487,6 +491,13 @@ class MP2DrainHostFunction(fg.HostFunction):
             6: 'storage'
         }
         return mapping.get(state_id, f'unknown_{state_id}')
+    
+    def _get_mp4_target(self, mp4_array, day: int, days_total: int) -> int:
+        """Получает целевое значение из mp4_ops_counter с safe_day логикой"""
+        if mp4_array is None:
+            return 0
+        safe_day = (day + 1) if (day + 1) < days_total else (days_total - 1 if days_total > 0 else 0)
+        return int(mp4_array[safe_day])
         
     def get_summary(self) -> str:
         """Возвращает сводку по дренажу"""
