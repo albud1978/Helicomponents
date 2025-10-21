@@ -99,15 +99,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     // Агент работает И хочет продолжать работать → участвует в квотировании
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
     
-    // Логирование агентов, остающихся в operations, отключено
-    
-    // Побочные эффекты (side effects)
-    // Если active_trigger=1, сбрасываем в 0 (факт активации зафиксирован)
-    unsigned int active_trigger = FLAMEGPU->getVariable<unsigned int>("active_trigger");
-    if (active_trigger == 1u) {{
-        FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
-    }}
-    
     return flamegpu::ALIVE;
 }}
 """)
