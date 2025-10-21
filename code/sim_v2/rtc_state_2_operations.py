@@ -4,8 +4,6 @@ RTC функция для state_2 (operations) с установкой intent_st
 
 # Константы из sim_env_setup
 MAX_DAYS = 4000
-MAX_FRAMES = 286  # Будет переопределено динамически
-MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
 
 # Проверка импорта
 try:
@@ -23,6 +21,10 @@ else:
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует RTC функцию для state_2 с установкой intent_state"""
     
+    # Получаем динамические значения из environment
+    max_frames = model.Environment().getPropertyUInt("frames_total")
+    max_size = max_frames * (MAX_DAYS + 1)
+    
     # Одна функция для всех агентов в operations
     rtc_func = agent.newRTCFunction("rtc_state_2_operations", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -30,11 +32,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     
     // Получаем суточный налёт из MP5 (всегда, даже на шаге 0)
-    const unsigned int base = step_day * {MAX_FRAMES} + idx;
-    const unsigned int base_next = base + {MAX_FRAMES};
-    auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_SIZE}>("mp5_lin");
+    const unsigned int base = step_day * {max_frames}u + idx;
+    const unsigned int base_next = base + {max_frames}u;
+    auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_size}u>("mp5_lin");
     const unsigned int dt = mp5[base];
-    const unsigned int dn = (step_day < {MAX_DAYS} - 1u) ? mp5[base_next] : 0u;
+    const unsigned int dn = (step_day < {MAX_DAYS}u - 1u) ? mp5[base_next] : 0u;
     
     // Обновляем MP5 в агенте
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);

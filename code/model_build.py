@@ -26,9 +26,9 @@ def set_max_frames_from_data(frames_count: int):
     """Устанавливает MAX_FRAMES из реальных данных MP3/MP5"""
     global MAX_FRAMES, MAX_SIZE
     if MAX_FRAMES != frames_count:
-        print(f"ВНИМАНИЕ: MAX_FRAMES={MAX_FRAMES} в коде, но из данных получено {frames_count}")
-        # TODO: раскомментировать когда будет готово динамическое определение
-        # raise ValueError(f"MAX_FRAMES уже установлен как {MAX_FRAMES}, но получено новое значение {frames_count}")
+        print(f"✅ Обновление MAX_FRAMES: {MAX_FRAMES} → {frames_count}")
+        MAX_FRAMES = frames_count
+        MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
     print(f"Размеры MacroProperty: MAX_FRAMES={MAX_FRAMES}, MAX_DAYS={MAX_DAYS}, MAX_SIZE={MAX_SIZE}")
 
 
