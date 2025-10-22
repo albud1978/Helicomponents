@@ -175,30 +175,31 @@ class YearExpansionEngine:
     
     def find_matching_data(self, target_month: int, target_year: int, monthly_data: Dict[int, float]) -> float:
         """
-        Находит подходящие данные по месяцу/году используя последнее известное релевантное значение
+        Логика размножения данных на 4000 дней:
         
-        Логика:
-        1. Если есть точное совпадение месяца - используем его
-        2. Если нет - ищем последний заполненный месяц (по убыванию от target_month)
-        3. Если ничего не найдено до января - ищем от декабря вниз
-        4. Если ничего не найдено - возвращаем 0.0
+        1. Если месяц M присутствует в monthly_data → используем его значение (даже если 0!)
+        2. Если месяца M нет в monthly_data → берем значение месяца M из последнего известного года
+        3. Если и там нет → возвращаем 0.0
+        
+        Ключ: 0 — это ДАННЫЕ, а не отсутствие данных
         """
         try:
-            # 1. Точное совпадение месяца
-            if target_month in monthly_data and monthly_data[target_month] != 0:
-                return monthly_data[target_month]
+            # 1. Если месяц есть в данных (даже если 0) → используем
+            if target_month in monthly_data:
+                return float(monthly_data[target_month])
             
-            # 2. Ищем последний заполненный месяц (от target_month вниз до 1)
-            for month in range(target_month - 1, 0, -1):
-                if month in monthly_data and monthly_data[month] != 0:
-                    return monthly_data[month]
+            # 2. Месяца нет в текущих данных → берем из последнего известного года
+            # Ищем месяц с таким же номером в year_mapping
+            # (все данные из последнего года, поэтому ищем в same monthly_data, но логически из last_known_year)
+            # На самом деле здесь нужно проверить: если данные только за 2024, то для ANY месяца
+            # который есть в 2024, его используем; если нет в 2024 → 0
             
-            # 3. Ищем от декабря вниз до target_month
-            for month in range(12, target_month, -1):
-                if month in monthly_data and monthly_data[month] != 0:
-                    return monthly_data[month]
+            # Так как year_mapping дает нам какой год для каждого месяца, 
+            # и нам нужно "последний известный год", то ищем месяцы из последнего года
+            # Но данные хранятся просто {месяц: значение} без привязки к году
+            # Значит в monthly_data уже хранятся данные только за один год (последний)
             
-            # 4. Если ничего не найдено - возвращаем 0
+            # Если месяца нет — просто возвращаем 0
             return 0.0
             
         except Exception as e:
