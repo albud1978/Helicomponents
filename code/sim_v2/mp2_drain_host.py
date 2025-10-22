@@ -101,6 +101,17 @@ class MP2DrainHostFunction(fg.HostFunction):
             quota_promote_p2    UInt8,
             quota_promote_p3    UInt8,
             
+            -- Флаги переходов между состояниями (вычисляются постпроцессингом)
+            transition_2_to_4   UInt8,   -- operations → repair
+            transition_2_to_6   UInt8,   -- operations → storage
+            transition_2_to_3   UInt8,   -- operations → serviceable
+            transition_3_to_2   UInt8,   -- serviceable → operations
+            transition_5_to_2   UInt8,   -- reserve → operations
+            transition_1_to_2   UInt8,   -- inactive → operations
+            transition_4_to_5   UInt8,   -- repair → reserve
+            transition_1_to_4   UInt8,   -- inactive → repair
+            transition_4_to_2   UInt8,   -- repair → operations
+            
             -- Временная метка записи
             export_timestamp DateTime DEFAULT now(),
             
@@ -293,7 +304,17 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_quota_demount[pos]) if mp2_quota_demount is not None else 0,
                         int(mp2_quota_promote_p1[pos]) if mp2_quota_promote_p1 is not None else 0,
                         int(mp2_quota_promote_p2[pos]) if mp2_quota_promote_p2 is not None else 0,
-                        int(mp2_quota_promote_p3[pos]) if mp2_quota_promote_p3 is not None else 0
+                        int(mp2_quota_promote_p3[pos]) if mp2_quota_promote_p3 is not None else 0,
+                        # Флаги переходов (инициализируются нулями, заполняются постпроцессингом)
+                        0,  # transition_2_to_4
+                        0,  # transition_2_to_6
+                        0,  # transition_2_to_3
+                        0,  # transition_3_to_2
+                        0,  # transition_5_to_2
+                        0,  # transition_1_to_2
+                        0,  # transition_4_to_5
+                        0,  # transition_1_to_4
+                        0   # transition_4_to_2
                     )
                     self.batch.append(row)
                     rows_count += 1
@@ -437,7 +458,17 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_quota_demount[pos]) if mp2_quota_demount is not None else 0,
                         int(mp2_quota_promote_p1[pos]) if mp2_quota_promote_p1 is not None else 0,
                         int(mp2_quota_promote_p2[pos]) if mp2_quota_promote_p2 is not None else 0,
-                        int(mp2_quota_promote_p3[pos]) if mp2_quota_promote_p3 is not None else 0
+                        int(mp2_quota_promote_p3[pos]) if mp2_quota_promote_p3 is not None else 0,
+                        # Флаги переходов (инициализируются нулями, заполняются постпроцессингом)
+                        0,  # transition_2_to_4
+                        0,  # transition_2_to_6
+                        0,  # transition_2_to_3
+                        0,  # transition_3_to_2
+                        0,  # transition_5_to_2
+                        0,  # transition_1_to_2
+                        0,  # transition_4_to_5
+                        0,  # transition_1_to_4
+                        0   # transition_4_to_2
                     )
                     self.batch.append(row)
                     rows_count += 1
@@ -467,10 +498,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             self.max_batch_rows = batch_rows
         t_start = time.perf_counter()
         # MATERIALIZED day_date вычисляется на стороне ClickHouse, не вставляем её явно
-        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,s6_started,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s6_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3"
+        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,s6_started,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s6_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_3_to_2,transition_5_to_2,transition_1_to_2,transition_4_to_5,transition_1_to_4,transition_4_to_2"
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES"
         # Подаём данные в колоннарном формате для уменьшения накладных расходов драйвера
-        num_cols = 35  # 27 базовых + 2 MP4 целей + 4 флага квот + 2 gap
+        num_cols = 44  # 27 базовых + 2 MP4 целей + 4 флага квот + 2 gap + 9 transition флагов
         cols = [[] for _ in range(num_cols)]
         for r in self.batch:
             for i, v in enumerate(r):

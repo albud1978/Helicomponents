@@ -333,18 +333,23 @@ LOG_LEVEL=DEBUG python3 code/extract_master.py
 
 ```bash
 # 🎯 ОСНОВНАЯ КОМАНДА: Полный 10-летний прогон с каскадным квотированием, spawn и выгрузкой в СУБД
+# ⚠️ ПОРЯДОК МОДУЛЕЙ: см. docs/rtc_pipeline_architecture.md (раздел "Порядок модулей в пайплайне")
 cd "/home/budnik_an/cube linux/cube" && \
 rm -rf code/sim_v2/__pycache__ code/sim_v2/rtc_modules/__pycache__ code/sim_v2/components/__pycache__ && \
 export CUDA_PATH=/usr/local/cuda-12.8 CUBE_CONFIG_PATH="/home/budnik_an/cube linux/cube" && \
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations states_stub count_ops quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive state_manager_serviceable state_manager_operations state_manager_repair state_manager_storage spawn_v2 \
+  --modules state_2_operations states_stub count_ops \
+            quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
+            state_manager_operations state_manager_serviceable state_manager_inactive \
+            state_manager_repair state_manager_reserve state_manager_storage \
+            spawn_v2 \
   --steps 3650 \
   --enable-mp2 \
   --drop-table \
   2>&1 | cat
 
-# ✅ ОБНОВЛЕНО (10-10-2025): Вариант B - count_ops по intent=2, state_2_operations → states_stub
-#   Порядок модулей:
+# ✅ ОБНОВЛЕНО (22-10-2025): 14-слойный пайплайн с state_manager_inactive, state_manager_reserve
+#   Порядок модулей (см. rtc_pipeline_architecture.md 1257-1277):
 #   1. state_2_operations (логика operations: intent=2/4/6 + инкременты)
 #   2. states_stub (устанавливает БАЗОВЫЙ intent для остальных состояний)
 #   3. count_ops (считает агентов с intent=2 в operations)
@@ -352,26 +357,42 @@ python3 code/sim_v2/orchestrator_v2.py \
 #   5. quota_promote_serviceable (промоут P1: serviceable → operations, youngest first)
 #   6. quota_promote_reserve (промоут P2: reserve → operations, youngest first)
 #   7. quota_promote_inactive (промоут P3: inactive → operations, youngest first)
-#   8. state managers (применяют переходы на основе intent)
-#   9. spawn_v2 (в конце - новые агенты в serviceable на день рождения)
+#   8. state_manager_operations (переходы: 2→2, 2→3, 2→4, 2→6, 3→2, 5→2, 1→2)
+#   9. state_manager_serviceable (холдинг: 3→3)
+#   10. state_manager_inactive (холдинг: 1→1)
+#   11. state_manager_repair (переходы: 4→4, 4→5)
+#   12. state_manager_reserve (холдинг: 5→5)
+#   13. state_manager_storage (неизменяемое: 6→6)
+#   14. spawn_v2 (в конце - новые агенты в serviceable на день рождения)
 #
-#   Результаты (старые, до Варианта B):
-#   - Со spawn: 43.17с GPU, 11.1мс/шаг, 1,042,318 строк MP2, 286 агентов
-#   - Без spawn: 37.94с GPU, 9.7мс/шаг, 1,018,350 строк MP2, 279 агентов
+#   Результаты (3650 дней, актуальные):
+#   - Со spawn: ~55с GPU, 13-14мс/шаг, ~1M строк MP2, 286 агентов
+#   - Без spawn: ~50с GPU, 12-13мс/шаг, ~1M строк MP2, 279 агентов
 
 # Краткая версия (без очистки кэша):
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations states_stub count_ops quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive state_manager_serviceable state_manager_operations state_manager_repair state_manager_storage spawn_v2 \
+  --modules state_2_operations states_stub count_ops \
+            quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
+            state_manager_operations state_manager_serviceable state_manager_inactive \
+            state_manager_repair state_manager_reserve state_manager_storage \
+            spawn_v2 \
   --steps 3650 --enable-mp2 --drop-table
 
 # Тест на 300 дней (для проверки spawn на день 226):
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations states_stub count_ops quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive state_manager_serviceable state_manager_operations state_manager_repair state_manager_storage spawn_v2 \
+  --modules state_2_operations states_stub count_ops \
+            quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
+            state_manager_operations state_manager_serviceable state_manager_inactive \
+            state_manager_repair state_manager_reserve state_manager_storage \
+            spawn_v2 \
   --steps 300 --enable-mp2 --drop-table
 
 # Без spawn (базовый пайплайн):
 python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations states_stub count_ops quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive state_manager_serviceable state_manager_operations state_manager_repair state_manager_storage \
+  --modules state_2_operations states_stub count_ops \
+            quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
+            state_manager_operations state_manager_serviceable state_manager_inactive \
+            state_manager_repair state_manager_reserve state_manager_storage \
   --steps 3650 --enable-mp2 --drop-table
 ```
 

@@ -86,6 +86,17 @@ class V2Orchestrator:
                 self.mp2_drain_func = rtc_mp2_writer.register_mp2_writer(self.model, self.base_model.agent, self.clickhouse_client)
             else:
                 print("  ⚠️  mp2_writer уже подключен в списке модулей, пропускаем повторное подключение")
+            
+            # Добавляем детектор переходов для постпроцессинга после дренажа MP2
+            print("  Подключение transition_detector для постпроцессинга переходов")
+            try:
+                from rtc_transition_detector import register_mp2_transition_detector
+                self.transition_detector = register_mp2_transition_detector(self.model, self.clickhouse_client)
+            except ImportError as e:
+                print(f"  ⚠️  Не удалось подключить transition_detector: {e}")
+                self.transition_detector = None
+        else:
+            self.transition_detector = None
         
         return self.model
     
