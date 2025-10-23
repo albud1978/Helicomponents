@@ -128,17 +128,31 @@ class MP2DrainHostFunction(fg.HostFunction):
     def run(self, FLAMEGPU):
         """HostFunction слой - вызывается каждый шаг, но дренаж только на финальном"""
         step = FLAMEGPU.getStepCounter()
+        env = FLAMEGPU.environment
+        export_phase = env.getPropertyUInt("export_phase")
+        
+        # Дренажим ТОЛЬКО на финальном шаге И ТОЛЬКО при export_phase=0
+        # Логика: если включён постпроцессинг, он выполнится на шаге N с export_phase=2,
+        # затем на шаге N+1 сработает дренаж с export_phase=0
+        
+        # Пропускаем если export_phase != 0 (постпроцессинг или другие фазы)
+        if export_phase != 0:
+            return  # Не дренажим во время постпроцессинга
+        
+        # Дренажим когда step >= simulation_steps - 1
+        # (может быть steps-1 если без постпроцессинга, или steps если с постпроцессингом)
         end_day = self.simulation_steps - 1
-        is_final = (step == end_day)
+        if step < end_day:
+            return  # Ещё не время дренажа
         
-        # Дренажим ТОЛЬКО на финальном шаге - проверка очень дешева (~1 мкс)
-        if not is_final:
-            return  # На шагах 0..end_day-1 - instant return
+        # Дренажим данные за все дни (0..end_day-1) - основная симуляция
+        # Не включаем день постпроцессинга (если он был)
+        actual_end_day = end_day - 1 if step > end_day else end_day
         
-        print(f"  Начинаем финальный дренаж MP2: дни 0..{end_day} ({self.simulation_steps} дней)")
+        print(f"  Начинаем финальный дренаж MP2: дни 0..{actual_end_day} ({actual_end_day + 1} дней)")
         
         t_start = time.perf_counter()
-        rows = self._drain_mp2_range(FLAMEGPU, 0, end_day)
+        rows = self._drain_mp2_range(FLAMEGPU, 0, actual_end_day)
         self.total_rows_written += rows
         self.total_drain_time += (time.perf_counter() - t_start)
         
@@ -146,7 +160,7 @@ class MP2DrainHostFunction(fg.HostFunction):
         
         # Transition флаги уже вычислены на GPU (слой compute_transitions)
         # и записаны в MP2 напрямую - постобработка НЕ НУЖНА
-        self._last_drained_day = end_day + 1
+        self._last_drained_day = actual_end_day + 1
         self._pending = False
         return
         

@@ -61,6 +61,10 @@ class V2BaseModel:
         self.env.newPropertyUInt("frames_total", int(env_data['frames_total_u16']))
         self.env.newPropertyUInt("days_total", int(env_data['days_total_u16']))
         
+        # Фазовый флаг для постпроцессинга MP2
+        # 0 = обычная симуляция, 2 = постпроцессинг active_trigger
+        self.env.newPropertyUInt("export_phase", 0)
+        
         # Константы нормативов из MP1
         # БЕЗ FALLBACK! Если ключа нет → ошибка
         if 'mi8_repair_time_const' not in env_data:
