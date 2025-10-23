@@ -101,7 +101,7 @@ class MP2DrainHostFunction(fg.HostFunction):
             quota_promote_p2    UInt8,
             quota_promote_p3    UInt8,
             
-            -- Флаги переходов между состояниями (вычисляются постпроцессингом)
+            -- Флаги переходов между состояниями (вычисляются на GPU слоем compute_transitions)
             transition_2_to_4   UInt8,   -- operations → repair
             transition_2_to_6   UInt8,   -- operations → storage
             transition_2_to_3   UInt8,   -- operations → serviceable
@@ -126,54 +126,38 @@ class MP2DrainHostFunction(fg.HostFunction):
         self.client.execute(ddl)
         
     def run(self, FLAMEGPU):
-        """Выполняет финальный дренаж MP2 в конце симуляции"""
+        """HostFunction слой - вызывается каждый шаг, но дренаж только на финальном"""
         step = FLAMEGPU.getStepCounter()
-        # Инициализация новой порции дренажа по интервалу/финалу
-        do_interval = (self.interval_days > 0 and (step + 1) % self.interval_days == 0)
-        is_final = (step == self.simulation_steps - 1)
-
-        # Режим: без инкрементов — финальный дренаж целиком батчами batch_size
-        if is_final and self.interval_days == 0:
-            t_start = time.perf_counter()
-            rows = self._drain_mp2_range(FLAMEGPU, self._last_drained_day, step)
-            self.total_rows_written += rows
-            self.total_drain_time += (time.perf_counter() - t_start)
-            
-            # Вычисляем transition флаги через SQL ПОСЛЕ дренажа всех данных
-            print("  🔄 Вычисление transition флагов через SQL...")
-            self._compute_transitions_sql()
-            self._last_drained_day = step + 1
-            self._pending = False
-            return
-        if (do_interval or is_final) and not self._pending and (self._last_drained_day <= step):
-            self._pending = True
-            self._pend_start_day = self._last_drained_day
-            self._pend_end_day = step
-            self._pend_day_cursor = self._pend_start_day
-            self._pend_idx_cursor = 0
+        end_day = self.simulation_steps - 1
+        is_final = (step == end_day)
         
-        # Если есть незавершённый дренаж — обрабатываем с лимитом по строкам, без длинной паузы
-        if self._pending:
-            t_start = time.perf_counter()
-            rows_drained, finished = self._drain_mp2_budgeted(FLAMEGPU, 
-                self._pend_day_cursor, self._pend_end_day, self._pend_idx_cursor, self.drain_rows_per_step)
-            t_elapsed = time.perf_counter() - t_start
-            self.total_drain_time += t_elapsed
-            self.total_rows_written += rows_drained
-            if finished:
-                # Продвинули последнюю слитую дату
-                self._last_drained_day = self._pend_end_day + 1
-                self._pending = False
-            else:
-                # Продолжаем со следующей позиции на следующем шаге
-                self._pend_day_cursor, self._pend_idx_cursor = finished  # type: ignore
-            
+        # Дренажим ТОЛЬКО на финальном шаге - проверка очень дешева (~1 мкс)
+        if not is_final:
+            return  # На шагах 0..end_day-1 - instant return
+        
+        print(f"  Начинаем финальный дренаж MP2: дни 0..{end_day} ({self.simulation_steps} дней)")
+        
+        t_start = time.perf_counter()
+        rows = self._drain_mp2_range(FLAMEGPU, 0, end_day)
+        self.total_rows_written += rows
+        self.total_drain_time += (time.perf_counter() - t_start)
+        
+        print(f"  ✅ Выгружено {rows} строк MP2 за {self.total_drain_time:.2f}с")
+        
+        # Transition флаги уже вычислены на GPU (слой compute_transitions)
+        # и записаны в MP2 напрямую - постобработка НЕ НУЖНА
+        self._last_drained_day = end_day + 1
+        self._pending = False
+        return
+        
     def _drain_mp2_range(self, FLAMEGPU, start_day_inclusive: int, end_day_inclusive: int) -> int:
         """Выгружает MP2 данные с GPU за диапазон дней [start..end]"""
-        # В Host функции доступ к environment через FLAMEGPU.environment
-        frames = FLAMEGPU.environment.getPropertyUInt("frames_total")
-        version_date = FLAMEGPU.environment.getPropertyUInt("version_date")
-        version_id = FLAMEGPU.environment.getPropertyUInt("version_id")
+        # HostFunction контекст - FLAMEGPU.environment доступен напрямую
+        env = FLAMEGPU.environment
+        
+        frames = env.getPropertyUInt("frames_total")
+        version_date = env.getPropertyUInt("version_date")
+        version_id = env.getPropertyUInt("version_id")
         
         # Диапазон
         start_day = max(0, int(start_day_inclusive))
@@ -182,121 +166,121 @@ class MP2DrainHostFunction(fg.HostFunction):
         # Читаем MacroProperty массивы
         
         # Получаем данные с GPU через environment
-        mp2_day = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_day_u16")
-        mp2_idx = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_idx")
-        mp2_aircraft = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_aircraft_number")
-        mp2_partseqno = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_partseqno")
-        mp2_group_by = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_group_by")
+        mp2_day = env.getMacroPropertyUInt32("mp2_day_u16")
+        mp2_idx = env.getMacroPropertyUInt32("mp2_idx")
+        mp2_aircraft = env.getMacroPropertyUInt32("mp2_aircraft_number")
+        mp2_partseqno = env.getMacroPropertyUInt32("mp2_partseqno")
+        mp2_group_by = env.getMacroPropertyUInt32("mp2_group_by")
         
-        mp2_state = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_state")
-        mp2_intent = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_intent_state")
-        mp2_s6_started = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_s6_started")
+        mp2_state = env.getMacroPropertyUInt32("mp2_state")
+        mp2_intent = env.getMacroPropertyUInt32("mp2_intent_state")
+        mp2_s6_started = env.getMacroPropertyUInt32("mp2_s6_started")
         
-        mp2_sne = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_sne")
-        mp2_ppr = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ppr")
-        mp2_cso = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_cso")
+        mp2_sne = env.getMacroPropertyUInt32("mp2_sne")
+        mp2_ppr = env.getMacroPropertyUInt32("mp2_ppr")
+        mp2_cso = env.getMacroPropertyUInt32("mp2_cso")
         
-        mp2_ll = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_ll")
-        mp2_oh = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_oh")
-        mp2_br = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_br")
+        mp2_ll = env.getMacroPropertyUInt32("mp2_ll")
+        mp2_oh = env.getMacroPropertyUInt32("mp2_oh")
+        mp2_br = env.getMacroPropertyUInt32("mp2_br")
         
-        mp2_repair_time = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_repair_time")
-        mp2_assembly_time = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_assembly_time")
-        mp2_partout_time = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_partout_time")
+        mp2_repair_time = env.getMacroPropertyUInt32("mp2_repair_time")
+        mp2_assembly_time = env.getMacroPropertyUInt32("mp2_assembly_time")
+        mp2_partout_time = env.getMacroPropertyUInt32("mp2_partout_time")
         
-        mp2_repair_days = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_repair_days")
-        mp2_s6_days = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_s6_days")
-        mp2_assembly_trigger = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_assembly_trigger")
-        mp2_active_trigger = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_active_trigger")
-        mp2_partout_trigger = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_partout_trigger")
-        mp2_mfg_date = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_mfg_date_days")
+        mp2_repair_days = env.getMacroPropertyUInt32("mp2_repair_days")
+        mp2_s6_days = env.getMacroPropertyUInt32("mp2_s6_days")
+        mp2_assembly_trigger = env.getMacroPropertyUInt32("mp2_assembly_trigger")
+        mp2_active_trigger = env.getMacroPropertyUInt32("mp2_active_trigger")
+        mp2_partout_trigger = env.getMacroPropertyUInt32("mp2_partout_trigger")
+        mp2_mfg_date = env.getMacroPropertyUInt32("mp2_mfg_date_days")
         
-        mp2_dt = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dt")
-        mp2_dn = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_dn")
+        mp2_dt = env.getMacroPropertyUInt32("mp2_dt")
+        mp2_dn = env.getMacroPropertyUInt32("mp2_dn")
         
         
         # MP4 целевые значения (читаем НАПРЯМУЮ из mp4_ops_counter, т.к. это глобальные значения)
         # ✅ КРИТИЧНО: НЕ используем mp2_mp4_target_* MacroProperty, т.к. они заполняются через RTC,
         #    который вызывается только для существующих агентов! Это приводит к пропускам дней.
         try:
-            mp4_ops_counter_mi8 = FLAMEGPU.environment.getPropertyArrayUInt32("mp4_ops_counter_mi8")
+            mp4_ops_counter_mi8 = env.getPropertyArrayUInt32("mp4_ops_counter_mi8")
         except:
             mp4_ops_counter_mi8 = None
         try:
-            mp4_ops_counter_mi17 = FLAMEGPU.environment.getPropertyArrayUInt32("mp4_ops_counter_mi17")
+            mp4_ops_counter_mi17 = env.getPropertyArrayUInt32("mp4_ops_counter_mi17")
         except:
             mp4_ops_counter_mi17 = None
         
         # Баланс квот (gap = curr - target по типам)
         try:
-            mp2_quota_gap_mi8 = FLAMEGPU.environment.getMacroPropertyInt32("mp2_quota_gap_mi8")
+            mp2_quota_gap_mi8 = env.getMacroPropertyInt32("mp2_quota_gap_mi8")
         except:
             mp2_quota_gap_mi8 = None
         try:
-            mp2_quota_gap_mi17 = FLAMEGPU.environment.getMacroPropertyInt32("mp2_quota_gap_mi17")
+            mp2_quota_gap_mi17 = env.getMacroPropertyInt32("mp2_quota_gap_mi17")
         except:
             mp2_quota_gap_mi17 = None
         
         # Флаги квотирования (per-agent per-day)
         try:
-            mp2_quota_demount = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_quota_demount")
+            mp2_quota_demount = env.getMacroPropertyUInt32("mp2_quota_demount")
         except:
             mp2_quota_demount = None
         try:
-            mp2_quota_promote_p1 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_quota_promote_p1")
+            mp2_quota_promote_p1 = env.getMacroPropertyUInt32("mp2_quota_promote_p1")
         except:
             mp2_quota_promote_p1 = None
         try:
-            mp2_quota_promote_p2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_quota_promote_p2")
+            mp2_quota_promote_p2 = env.getMacroPropertyUInt32("mp2_quota_promote_p2")
         except:
             mp2_quota_promote_p2 = None
         try:
-            mp2_quota_promote_p3 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_quota_promote_p3")
+            mp2_quota_promote_p3 = env.getMacroPropertyUInt32("mp2_quota_promote_p3")
         except:
             mp2_quota_promote_p3 = None
         
         # Флаги переходов (вычисляются GPU post-processing слоем compute_transitions)
         try:
-            mp2_transition_2_to_4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_4")
+            mp2_transition_2_to_4 = env.getMacroPropertyUInt32("mp2_transition_2_to_4")
             print(f"  ✅ Получена mp2_transition_2_to_4")
         except Exception as e:
             print(f"  ⚠️ Не удалось получить mp2_transition_2_to_4: {e}")
             mp2_transition_2_to_4 = None
         try:
-            mp2_transition_2_to_6 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_6")
+            mp2_transition_2_to_6 = env.getMacroPropertyUInt32("mp2_transition_2_to_6")
         except:
             mp2_transition_2_to_6 = None
         try:
-            mp2_transition_2_to_3 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_3")
+            mp2_transition_2_to_3 = env.getMacroPropertyUInt32("mp2_transition_2_to_3")
         except:
             mp2_transition_2_to_3 = None
         try:
-            mp2_transition_3_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_3_to_2")
+            mp2_transition_3_to_2 = env.getMacroPropertyUInt32("mp2_transition_3_to_2")
         except:
             mp2_transition_3_to_2 = None
         try:
-            mp2_transition_5_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_5_to_2")
+            mp2_transition_5_to_2 = env.getMacroPropertyUInt32("mp2_transition_5_to_2")
         except:
             mp2_transition_5_to_2 = None
         try:
-            mp2_transition_1_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_1_to_2")
+            mp2_transition_1_to_2 = env.getMacroPropertyUInt32("mp2_transition_1_to_2")
         except:
             mp2_transition_1_to_2 = None
         try:
-            mp2_transition_4_to_5 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_4_to_5")
+            mp2_transition_4_to_5 = env.getMacroPropertyUInt32("mp2_transition_4_to_5")
         except:
             mp2_transition_4_to_5 = None
         try:
-            mp2_transition_1_to_4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_1_to_4")
+            mp2_transition_1_to_4 = env.getMacroPropertyUInt32("mp2_transition_1_to_4")
         except:
             mp2_transition_1_to_4 = None
         try:
-            mp2_transition_4_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_4_to_2")
+            mp2_transition_4_to_2 = env.getMacroPropertyUInt32("mp2_transition_4_to_2")
         except:
             mp2_transition_4_to_2 = None
         
         # Получаем days_total для safe_day логики
-        days_total = FLAMEGPU.environment.getPropertyUInt32("days_total")
+        days_total = env.getPropertyUInt32("days_total")
         
         rows_count = 0
         # day_date вычисляется в ClickHouse (MATERIALIZED), в Python не считаем
@@ -349,7 +333,7 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_quota_promote_p1[pos]) if mp2_quota_promote_p1 is not None else 0,
                         int(mp2_quota_promote_p2[pos]) if mp2_quota_promote_p2 is not None else 0,
                         int(mp2_quota_promote_p3[pos]) if mp2_quota_promote_p3 is not None else 0,
-                        # Флаги переходов (инициализируются нулями, заполняются постпроцессингом)
+                        # Флаги переходов (записываются на GPU слоем compute_transitions)
                         int(mp2_transition_2_to_4[pos]) if mp2_transition_2_to_4 is not None else 0,
                         int(mp2_transition_2_to_6[pos]) if mp2_transition_2_to_6 is not None else 0,
                         int(mp2_transition_2_to_3[pos]) if mp2_transition_2_to_3 is not None else 0,

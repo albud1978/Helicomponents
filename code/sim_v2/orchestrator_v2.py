@@ -88,7 +88,7 @@ class V2Orchestrator:
                 print("  ⚠️  mp2_writer уже подключен в списке модулей, пропускаем повторное подключение")
             
             # Post-processing transition флагов теперь происходит в Python (mp2_drain_host.py)
-            print("  ℹ️  Transition флаги будут вычислены Python post-processing после дренажа MP2")
+            print("  ✅ Transition флаги вычисляются на GPU (слой compute_transitions → MacroProperty)")
             
             # Создаём финальный MP2 drain который работает только в конце
             if self.enable_mp2:
@@ -101,7 +101,9 @@ class V2Orchestrator:
                     batch_size=500000,
                     simulation_steps=self.days
                 )
-                # Добавляем в основную цепь слоёв
+                # Добавляем в слой модели - будет вызывать run() на каждом шаге
+                # но дренаж происходит только когда step == simulation_steps - 1 (финальный шаг)
+                # На шагах 0..simulation_steps-2 проверка if is_final очень дешева
                 layer_drain = self.model.newLayer("mp2_final_drain")
                 layer_drain.addHostFunction(self.mp2_drain_func)
         else:
@@ -175,7 +177,7 @@ class V2Orchestrator:
                 serv_pop = fg.AgentVector(self.base_model.agent)
                 self.simulation.getPopulationData(serv_pop, 'serviceable')
                 print(f"  [Day {step}] serviceable={len(serv_pop)}")
-    
+        
     def get_results(self):
         """Извлекает результаты симуляции из всех состояний"""
         results = []
@@ -299,8 +301,8 @@ def main():
     print(f"\n=== Тайминги выполнения ===")
     print(f"Загрузка модели и данных: {t_data_load:.2f}с")
     print(f"Обработка на GPU: {t_gpu_total:.2f}с")
-    if args.enable_mp2:
-        print(f"  - в т.ч. выгрузка в СУБД: {t_db_total:.2f}с (параллельно)")
+    if args.enable_mp2 and t_db_total > 0:
+        print(f"  - в т.ч. дренаж MP2 в СУБД: {t_db_total:.2f}с")
     print(f"Общее время выполнения: {t_total:.2f}с")
     
     # Статистика шагов из телеметрии

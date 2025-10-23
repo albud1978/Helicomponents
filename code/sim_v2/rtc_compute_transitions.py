@@ -6,8 +6,13 @@ RTC модуль для вычисления переходов между со�
 Логика:
 - current state = текущее состояние (день D-1, из StateName)
 - intent_state = желаемое состояние (день D, установлено intent слоями)
-- Если state ≠ intent_state → вычисляем и записываем переход в агента
+- Если state ≠ intent_state → вычисляем переход и записываем напрямую в MP2
 - После этого state_managers применит intent → state
+
+Архитектура:
+- Записывает transition флаги НАПРЯМУЮ в MacroProperty (mp2_transition_X_to_Y)
+- НЕ использует agent variables (transition_X_to_Y не нужны)
+- Флаг ставится однократно в день перехода (день D)
 """
 
 import pyflamegpu as fg
@@ -17,6 +22,11 @@ def register_compute_transitions(model, agent):
     """Регистрирует RTC модуль compute_transitions в модель - отдельные функции для каждого состояния"""
     
     print("  Подключение модуля: compute_transitions")
+    
+    # Получаем размеры для MP2
+    MAX_FRAMES = model.Environment().getPropertyUInt("frames_total")
+    MAX_DAYS = model.Environment().getPropertyUInt("days_total")
+    MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
     
     # Создаём функции для каждого состояния (это упрощает работу со StateName)
     state_map = {
@@ -50,36 +60,41 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_transitions_{state_name}, flamegpu::MessageN
         return flamegpu::ALIVE;
     }}
     
-    // Инициализируем все флаги в 0
-    FLAMEGPU->setVariable<unsigned int>("transition_2_to_4", 0u);
-    FLAMEGPU->setVariable<unsigned int>("transition_2_to_6", 0u);
-    FLAMEGPU->setVariable<unsigned int>("transition_2_to_3", 0u);
-    FLAMEGPU->setVariable<unsigned int>("transition_3_to_2", 0u);
-    FLAMEGPU->setVariable<unsigned int>("transition_5_to_2", 0u);
-    FLAMEGPU->setVariable<unsigned int>("transition_1_to_2", 0u);
-    FLAMEGPU->setVariable<unsigned int>("transition_4_to_5", 0u);
-    FLAMEGPU->setVariable<unsigned int>("transition_1_to_4", 0u);
-    FLAMEGPU->setVariable<unsigned int>("transition_4_to_2", 0u);
+    // Вычисляем позицию в MP2 (плотная матрица day × frames)
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
-    // Затем устанавливаем нужный флаг в зависимости от (state, intent)
+    // Получаем MacroProperty для transition флагов
+    auto mp2_transition_2_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_4");
+    auto mp2_transition_2_to_6 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_6");
+    auto mp2_transition_2_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_3");
+    auto mp2_transition_3_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_3_to_2");
+    auto mp2_transition_5_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_5_to_2");
+    auto mp2_transition_1_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_1_to_2");
+    auto mp2_transition_4_to_5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_4_to_5");
+    auto mp2_transition_1_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_1_to_4");
+    auto mp2_transition_4_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_4_to_2");
+    
+    // Записываем нужный флаг в зависимости от (state, intent)
     if (state == 2u && intent == 4u) {{  // operations → repair
-        FLAMEGPU->setVariable<unsigned int>("transition_2_to_4", 1u);
+        mp2_transition_2_to_4[pos].exchange(1u);
     }} else if (state == 2u && intent == 6u) {{  // operations → storage
-        FLAMEGPU->setVariable<unsigned int>("transition_2_to_6", 1u);
+        mp2_transition_2_to_6[pos].exchange(1u);
     }} else if (state == 2u && intent == 3u) {{  // operations → serviceable
-        FLAMEGPU->setVariable<unsigned int>("transition_2_to_3", 1u);
+        mp2_transition_2_to_3[pos].exchange(1u);
     }} else if (state == 3u && intent == 2u) {{  // serviceable → operations
-        FLAMEGPU->setVariable<unsigned int>("transition_3_to_2", 1u);
+        mp2_transition_3_to_2[pos].exchange(1u);
     }} else if (state == 5u && intent == 2u) {{  // reserve → operations
-        FLAMEGPU->setVariable<unsigned int>("transition_5_to_2", 1u);
+        mp2_transition_5_to_2[pos].exchange(1u);
     }} else if (state == 1u && intent == 2u) {{  // inactive → operations
-        FLAMEGPU->setVariable<unsigned int>("transition_1_to_2", 1u);
+        mp2_transition_1_to_2[pos].exchange(1u);
     }} else if (state == 4u && intent == 5u) {{  // repair → reserve
-        FLAMEGPU->setVariable<unsigned int>("transition_4_to_5", 1u);
+        mp2_transition_4_to_5[pos].exchange(1u);
     }} else if (state == 1u && intent == 4u) {{  // inactive → repair
-        FLAMEGPU->setVariable<unsigned int>("transition_1_to_4", 1u);
+        mp2_transition_1_to_4[pos].exchange(1u);
     }} else if (state == 4u && intent == 2u) {{  // repair → operations
-        FLAMEGPU->setVariable<unsigned int>("transition_4_to_2", 1u);
+        mp2_transition_4_to_2[pos].exchange(1u);
     }}
     
     return flamegpu::ALIVE;

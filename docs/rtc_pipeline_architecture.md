@@ -1755,5 +1755,93 @@ if (active_trigger == 1u) {
 
 ---
 
-*Документ обновлён: 21-10-2025*  
-*Тип: Архитектурное описание детерминированной системы переходов + критические багфиксы*
+## ⚡ Критическая оптимизация: Transition Detection (23.10.2025)
+
+### 3. compute_transitions: Устранение Python постобработки (ускорение 4.6x)
+
+**Проблема:** Transition флаги (переходы между состояниями) вычислялись через Python постобработку ПОСЛЕ выгрузки MP2 в ClickHouse. Это приводило к:
+- 987 UPDATE запросов к ClickHouse
+- ~203 секунды дополнительного времени (на 3650 дней)
+- Общее время: ~518 секунд (314с GPU + 203с постобработка + дренаж)
+
+**Решение: GPU-side вычисление с прямой записью в MacroProperty**
+
+RTC слой `compute_transitions` выполняется **ПЕРЕД** `state_managers` и записывает transition флаги напрямую в MacroProperty:
+
+```cpp
+// Вычисляем позицию в MP2
+const unsigned int pos = step_day * MAX_FRAMES + idx;
+
+// Получаем MacroProperty для transition флагов
+auto mp2_transition_2_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_2_to_4");
+// ... еще 8 MacroProperty для всех типов переходов
+
+// Если state ≠ intent → записываем переход
+if (state == 2u && intent == 4u) {  // operations → repair
+    mp2_transition_2_to_4[pos].exchange(1u);
+}
+```
+
+**Архитектурный принцип:**
+
+> **Transition detection должен происходить ПЕРЕД state_managers, используя разницу между `state` и `intent_state`!**
+> 
+> - `state` = текущее состояние (день D-1, из StateName)
+> - `intent_state` = будущее состояние (день D, из agent variable)
+> - Если `state ≠ intent` → записываем переход в MP2
+> - Затем `state_managers` применяют `intent → state`
+> 
+> Если бы `compute_transitions` был ПОСЛЕ state_managers, то `state` уже изменился бы и разницы не было бы!
+
+**Порядок слоёв (критично важен):**
+```
+quota_modules → compute_transitions → state_managers → mp2_writer
+```
+
+**Изменения:**
+
+1. **`code/sim_v2/rtc_compute_transitions.py`:**
+   - Убраны `setVariable("transition_X_to_Y", ...)` (agent variables не нужны)
+   - Добавлено чтение 9 MacroProperty: `mp2_transition_2_to_4`, и т.д.
+   - Прямая запись через `.exchange(1u)`
+   - Вычисление позиции: `pos = step_day * MAX_FRAMES + idx`
+
+2. **`code/sim_v2/mp2_drain_host.py`:**
+   - **Удалён** метод `_compute_transitions_sql()` (целиком, ~100 строк)
+   - **Удалён** вызов постобработки из `run()`
+   - Transition флаги читаются из MacroProperty (код уже был готов)
+
+3. **`code/sim_v2/components/base_model.py`:**
+   - Agent variables `transition_X_to_Y` не определены (не требуются)
+
+**Результаты (3650 дней, 1,039,632 строк):**
+
+- **Старая версия:** ~518 секунд (314с GPU + 203с Python + дренаж)
+- **Новая версия:** 112 секунд (111.88с GPU+дренаж)
+- **УСКОРЕНИЕ: 4.6x (462%!)**
+
+**Transition флаги (корректность):**
+- 2→4 (ops→repair): 194
+- 2→6 (ops→storage): 32  
+- 2→3 (ops→serviceable): 173
+- 3→2 (serviceable→ops): 179
+- 5→2 (reserve→ops): 188
+- 4→5 (repair→reserve): 198
+- **Всего переходов: 987** ✅
+
+**Валидация:**
+- ✅ Тест 50 дней: 11 переходов
+- ✅ Тест 300 дней: 63 перехода
+- ✅ Тест 3650 дней: 987 переходов
+- ✅ Все типы переходов детектируются корректно
+- ✅ Соответствие с консольными логами TRANSITION
+
+**Файлы:**
+- `code/sim_v2/rtc_compute_transitions.py` — RTC модуль (GPU-side вычисление)
+- `code/sim_v2/mp2_drain_host.py` — удалена Python постобработка
+- `code/sim_v2/rtc_mp2_writer.py` — создание MacroProperty (уже было)
+
+---
+
+*Документ обновлён: 23-10-2025*  
+*Тип: Архитектурное описание детерминированной системы переходов + критические багфиксы + оптимизации*
