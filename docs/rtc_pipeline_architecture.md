@@ -1826,6 +1826,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active_operations, ...) {
    - `rtc_mp2_postprocess_active_storage`
    
    > **ВАЖНО:** FLAME GPU не вызывает агентные функции без привязки к состояниям через `setInitialState/setEndState`!
+   
+   > **НЮАНС:** Агент с `active_trigger=1` НИКОГДА не возвращается в inactive, поэтому функция `rtc_mp2_postprocess_active_inactive` технически избыточна. Но оставлена для полноты (все 6 состояний) и минимального overhead (~0.001с). Можно оптимизировать до 5 функций (без inactive).
 
 2. **Сброс PPR при переходе 1→2:**
    В `rtc_state_manager_operations.py` (функция `rtc_apply_1_to_2`):
