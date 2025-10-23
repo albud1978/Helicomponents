@@ -214,6 +214,17 @@ class V2BaseModel:
         # Новая переменная для intent-based архитектуры
         agent.newVariableUInt("intent_state", 0)
         
+        # Флаги переходов между состояниями (устанавливаются compute_transitions перед state_managers)
+        agent.newVariableUInt("transition_2_to_4", 0)   # operations → repair
+        agent.newVariableUInt("transition_2_to_6", 0)   # operations → storage
+        agent.newVariableUInt("transition_2_to_3", 0)   # operations → serviceable
+        agent.newVariableUInt("transition_3_to_2", 0)   # serviceable → operations
+        agent.newVariableUInt("transition_5_to_2", 0)   # reserve → operations
+        agent.newVariableUInt("transition_1_to_2", 0)   # inactive → operations
+        agent.newVariableUInt("transition_4_to_5", 0)   # repair → reserve
+        agent.newVariableUInt("transition_1_to_4", 0)   # inactive → repair
+        agent.newVariableUInt("transition_4_to_2", 0)   # repair → operations
+        
         # Наработки
         agent.newVariableUInt("sne", 0)
         agent.newVariableUInt("ppr", 0)
@@ -332,6 +343,10 @@ class V2BaseModel:
                 import rtc_quota_promote_inactive
                 rtc_quota_promote_inactive.register_rtc(self.model, self.agent)
                 print("  RTC модуль quota_promote_inactive зарегистрирован (1 слой, приоритет 3)")
+            
+            elif module_name == "compute_transitions":
+                import rtc_compute_transitions
+                rtc_compute_transitions.register_compute_transitions(self.model, self.agent)
             
             elif module_name == "spawn":
                 # Спавн новых агентов (Mi-17)
