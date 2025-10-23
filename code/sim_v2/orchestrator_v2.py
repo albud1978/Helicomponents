@@ -26,7 +26,8 @@ except ImportError as e:
 class V2Orchestrator:
     """Оркестратор для управления модульной симуляцией"""
     
-    def __init__(self, env_data: Dict[str, object], enable_mp2: bool = False, clickhouse_client = None):
+    def __init__(self, env_data: Dict[str, object], enable_mp2: bool = False, 
+                 enable_mp2_postprocess: bool = False, clickhouse_client = None):
         self.env_data = env_data
         self.base_model = V2BaseModel()
         self.model = None
@@ -41,6 +42,7 @@ class V2Orchestrator:
         
         # MP2 параметры
         self.enable_mp2 = enable_mp2
+        self.enable_mp2_postprocess = enable_mp2_postprocess
         self.clickhouse_client = clickhouse_client
         self.mp2_drain_func = None
         
@@ -87,8 +89,15 @@ class V2Orchestrator:
             else:
                 print("  ⚠️  mp2_writer уже подключен в списке модулей, пропускаем повторное подключение")
             
-            # Post-processing transition флагов теперь происходит в Python (mp2_drain_host.py)
+            # Transition флаги вычисляются на GPU
             print("  ✅ Transition флаги вычисляются на GPU (слой compute_transitions → MacroProperty)")
+            
+            # Добавляем постпроцессинг active_trigger (если включен)
+            if self.enable_mp2_postprocess:
+                print("  Подключение GPU постпроцессинга MP2 (active_trigger → repair history)")
+                import rtc_mp2_postprocess_active
+                rtc_mp2_postprocess_active.register_mp2_postprocess_active(self.model, self.base_model.agent)
+                print("  ⚠️  Слой mp2_postprocess_active будет активен ТОЛЬКО при export_phase=2")
             
             # Создаём финальный MP2 drain который работает только в конце
             if self.enable_mp2:
@@ -157,8 +166,10 @@ class V2Orchestrator:
         print(f"Запуск симуляции на {steps} шагов")
         
         # Обновляем количество шагов в MP2 drain функции
+        # Если включён постпроцессинг, дренаж будет на шаге steps+1
+        actual_drain_step = steps + 1 if self.enable_mp2_postprocess else steps
         if self.mp2_drain_func:
-            self.mp2_drain_func.simulation_steps = steps
+            self.mp2_drain_func.simulation_steps = actual_drain_step
         
         # Инициализация телеметрии
         if self.telemetry:
@@ -177,6 +188,32 @@ class V2Orchestrator:
                 serv_pop = fg.AgentVector(self.base_model.agent)
                 self.simulation.getPopulationData(serv_pop, 'serviceable')
                 print(f"  [Day {step}] serviceable={len(serv_pop)}")
+        
+        # ═══════════════════════════════════════════════════════════════════════════
+        # GPU ПОСТПРОЦЕССИНГ MP2 (если включен)
+        # ═══════════════════════════════════════════════════════════════════════════
+        if self.enable_mp2_postprocess:
+            print("  🔄 Запуск GPU постпроцессинга MP2 (active_trigger → repair history)...")
+            import time
+            t_post_start = time.perf_counter()
+            
+            # Устанавливаем export_phase=2 для активации постпроцессинга
+            self.simulation.setEnvironmentPropertyUInt("export_phase", 2)
+            
+            # Один фиктивный шаг для выполнения RTC постпроцессинга
+            # MP2 drain НЕ сработает т.к. export_phase != 0
+            self.simulation.step()
+            
+            # Сбрасываем export_phase обратно в 0
+            self.simulation.setEnvironmentPropertyUInt("export_phase", 0)
+            
+            t_post = time.perf_counter() - t_post_start
+            print(f"  ✅ Постпроцессинг завершён за {t_post:.2f}с")
+            
+            # Теперь выполняем финальный дренаж вручную (ещё один шаг с export_phase=0)
+            # Этот шаг сработает на mp2_final_drain т.к. step == simulation_steps - 1
+            print("  📤 Финальный дренаж MP2 после постпроцессинга...")
+            self.simulation.step()
         
     def get_results(self):
         """Извлекает результаты симуляции из всех состояний"""
@@ -237,6 +274,8 @@ def main():
                       help='Количество шагов симуляции (по умолчанию из HL_V2_STEPS)')
     parser.add_argument('--enable-mp2', action='store_true',
                       help='Включить MP2 device-side export')
+    parser.add_argument('--enable-mp2-postprocess', action='store_true',
+                      help='Включить GPU постпроцессинг MP2 (active_trigger → repair history)')
     parser.add_argument('--mp2-drain-interval', type=int, default=0,
                       help='Интервал дренажа MP2 (шаги). 0 = только финальный дренаж')
     parser.add_argument('--drop-table', action='store_true',
@@ -265,7 +304,9 @@ def main():
     print(f"  Данные загружены за {t_data_load:.2f}с")
     
     # Создаем оркестратор с поддержкой MP2
-    orchestrator = V2Orchestrator(env_data, enable_mp2=args.enable_mp2,
+    orchestrator = V2Orchestrator(env_data, 
+                                  enable_mp2=args.enable_mp2,
+                                  enable_mp2_postprocess=args.enable_mp2_postprocess,
                                   clickhouse_client=client if args.enable_mp2 else None)
     
     # Строим модель с указанными модулями

@@ -248,8 +248,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::Messa
     // ✅ КРИТИЧНО: Устанавливаем active_trigger=1 при переходе inactive → operations
     FLAMEGPU->setVariable<unsigned int>("active_trigger", 1u);
     
+    // ✅ КРИТИЧНО: Обнуляем PPR при переходе inactive → operations
+    // Агент "только что из ремонта" (repair_time дней), PPR сбрасывается
+    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+    
     if (aircraft_number >= 100000u || step_day == 226u || step_day == 227u || step_day == 228u) {
-        printf("  [TRANSITION 1→2 Day %u] AC %u (idx %u): inactive -> operations (PROMOTE P3)\\n", 
+        printf("  [TRANSITION 1→2 Day %u] AC %u (idx %u): inactive -> operations (PROMOTE P3), ppr сброшен\\n", 
                step_day, aircraft_number, idx);
     }
     

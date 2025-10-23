@@ -13,6 +13,13 @@ RTC модуль для вычисления переходов между со�
 - Записывает transition флаги НАПРЯМУЮ в MacroProperty (mp2_transition_X_to_Y)
 - НЕ использует agent variables (transition_X_to_Y не нужны)
 - Флаг ставится однократно в день перехода (день D)
+
+⚠️ ИСКЛЮЧЕНИЯ:
+- transition_1_to_2 (inactive→operations) — заполняется ПОСТПРОЦЕССИНГОМ (mp2_postprocess_active)
+- transition_1_to_4 (inactive→repair) — заполняется ПОСТПРОЦЕССИНГОМ (mp2_postprocess_active)
+- transition_4_to_2 (repair→operations) — заполняется ПОСТПРОЦЕССИНГОМ (mp2_postprocess_active)
+
+Эти переходы НЕ происходят напрямую в симуляции, а восстанавливаются по active_trigger.
 """
 
 import pyflamegpu as fg
@@ -71,10 +78,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_transitions_{state_name}, flamegpu::MessageN
     auto mp2_transition_2_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_3");
     auto mp2_transition_3_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_3_to_2");
     auto mp2_transition_5_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_5_to_2");
-    auto mp2_transition_1_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_1_to_2");
     auto mp2_transition_4_to_5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_4_to_5");
-    auto mp2_transition_1_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_1_to_4");
-    auto mp2_transition_4_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_4_to_2");
+    // ⚠️ transition_1_to_2, transition_1_to_4, transition_4_to_2 НЕ обрабатываются здесь
+    // Они заполняются ПОСТПРОЦЕССИНГОМ (mp2_postprocess_active)
     
     // Записываем нужный флаг в зависимости от (state, intent)
     if (state == 2u && intent == 4u) {{  // operations → repair
@@ -87,15 +93,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_transitions_{state_name}, flamegpu::MessageN
         mp2_transition_3_to_2[pos].exchange(1u);
     }} else if (state == 5u && intent == 2u) {{  // reserve → operations
         mp2_transition_5_to_2[pos].exchange(1u);
-    }} else if (state == 1u && intent == 2u) {{  // inactive → operations
-        mp2_transition_1_to_2[pos].exchange(1u);
     }} else if (state == 4u && intent == 5u) {{  // repair → reserve
         mp2_transition_4_to_5[pos].exchange(1u);
-    }} else if (state == 1u && intent == 4u) {{  // inactive → repair
-        mp2_transition_1_to_4[pos].exchange(1u);
-    }} else if (state == 4u && intent == 2u) {{  // repair → operations
-        mp2_transition_4_to_2[pos].exchange(1u);
     }}
+    // НЕ обрабатываем:
+    // - state==1 && intent==2 (inactive→operations) - заполняется как transition_4_to_2 постпроцессингом
+    // - state==1 && intent==4 (inactive→repair) - не происходит в симуляции
+    // - state==4 && intent==2 (repair→operations) - заполняется постпроцессингом
     
     return flamegpu::ALIVE;
 }}
