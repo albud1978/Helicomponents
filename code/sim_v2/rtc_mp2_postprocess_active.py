@@ -47,9 +47,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active, flamegpu::MessageNone, flame
     if (aircraft_number == 0u) return flamegpu::ALIVE;
     
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int R = FLAMEGPU->getVariable<unsigned int>("repair_time");
     const unsigned int A = FLAMEGPU->getVariable<unsigned int>("assembly_time");
+    
     
     // Получаем MP2 MacroProperty для чтения и модификации
     auto mp2_active_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_active_trigger");
@@ -70,9 +72,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active, flamegpu::MessageNone, flame
         if (act_flag == 1u) {{
             // Нашли день перехода 1→2!
             // Реально агент прошёл через ремонт: 1→4 (день s) → 4→2 (день d_event)
-            
-            printf("[POSTPROCESS] AC %u (idx %u): found active_trigger=1 at day %u, R=%u, A=%u\\n",
-                   aircraft_number, idx, d_event, R, A);
             
             // ═══════════════════════════════════════════════════════════════════
             // Вычисление окна ремонта [s..e]
@@ -132,13 +131,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active, flamegpu::MessageNone, flame
 """
     
     try:
-        fn = agent.newRTCFunction("rtc_mp2_postprocess_active", rtc_code)
-        # НЕ привязываем к состояниям - работает для всех агентов
-        
         layer = model.newLayer("mp2_postprocess_active")
-        layer.addAgentFunction(fn)
         
-        print("  RTC модуль mp2_postprocess_active зарегистрирован")
+        # ✅ КРИТИЧНО: Создаём функции для КАЖДОГО состояния
+        # FLAME GPU не вызывает агентные функции без привязки к состояниям!
+        states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage']
+        
+        for state_name in states:
+            fn = agent.newRTCFunction(f"rtc_mp2_postprocess_active_{state_name}", rtc_code)
+            fn.setInitialState(state_name)
+            fn.setEndState(state_name)  # Остаются в том же состоянии
+            layer.addAgentFunction(fn)
+        
+        print(f"  RTC модуль mp2_postprocess_active зарегистрирован (6 функций для всех состояний)")
         return layer
         
     except Exception as e:

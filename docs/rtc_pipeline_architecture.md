@@ -1755,6 +1755,122 @@ if (active_trigger == 1u) {
 
 ---
 
+## 🔧 GPU Постпроцессинг: active_trigger → repair history (23.10.2025)
+
+### 4. mp2_postprocess_active: Заполнение истории ремонта задним числом
+
+**Проблема:** При переходе inactive → operations (1→2) агент переходит "мгновенно", но реально он прошёл через ремонт длиной `repair_time` дней. Нужно заполнить историю в MP2 задним числом.
+
+**Решение: GPU постпроцессинг через export_phase механизм**
+
+После завершения основной симуляции (3650 шагов) выполняется **один фиктивный шаг** с `export_phase=2`, на котором активируется RTC модуль `mp2_postprocess_active`.
+
+**Архитектура:**
+
+```cpp
+// RTC функция (создаётся для КАЖДОГО состояния отдельно)
+FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active_operations, ...) {
+    // Работает ТОЛЬКО при export_phase=2
+    const unsigned int phase = FLAMEGPU->environment.getProperty<unsigned int>("export_phase");
+    if (phase != 2u) return flamegpu::ALIVE;
+    
+    // Получаем параметры агента
+    const unsigned int R = FLAMEGPU->getVariable<unsigned int>("repair_time");
+    const unsigned int A = FLAMEGPU->getVariable<unsigned int>("assembly_time");
+    
+    // Получаем MP2 MacroProperty для модификации
+    auto mp2_active_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_active_trigger");
+    auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_state");
+    auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_repair_days");
+    auto mp2_assembly_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_assembly_trigger");
+    auto mp2_transition_1_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_1_to_4");
+    auto mp2_transition_4_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_4_to_2");
+    
+    // Поиск события active_trigger=1
+    for (unsigned int d_event = 0; d_event < days_total; d_event++) {
+        if (mp2_active_trigger[d_event * MAX_FRAMES + idx] == 1u) {
+            // Вычисляем окно ремонта [s..e]
+            unsigned int s = max(0, d_event - R);
+            unsigned int e = d_event - 1;
+            
+            // Заполняем окно
+            for (unsigned int d = s; d <= e; d++) {
+                unsigned int pos = d * MAX_FRAMES + idx;
+                mp2_state[pos].exchange(4u);  // state = repair
+                mp2_repair_days[pos].exchange(d - s + 1);  // 1..R
+            }
+            
+            // Устанавливаем assembly_trigger
+            if (d_event >= A) {
+                mp2_assembly_trigger[(d_event - A) * MAX_FRAMES + idx].exchange(1u);
+            }
+            
+            // Устанавливаем transition флаги
+            mp2_transition_1_to_4[s * MAX_FRAMES + idx].exchange(1u);  // Начало ремонта
+            mp2_transition_4_to_2[d_event * MAX_FRAMES + idx].exchange(1u);  // Выход
+            
+            break;  // Один агент может иметь только одно событие
+        }
+    }
+}
+```
+
+**Критичные детали:**
+
+1. **6 RTC функций** (по одной для каждого состояния):
+   - `rtc_mp2_postprocess_active_inactive`
+   - `rtc_mp2_postprocess_active_operations`
+   - `rtc_mp2_postprocess_active_serviceable`
+   - `rtc_mp2_postprocess_active_repair`
+   - `rtc_mp2_postprocess_active_reserve`
+   - `rtc_mp2_postprocess_active_storage`
+   
+   > **ВАЖНО:** FLAME GPU не вызывает агентные функции без привязки к состояниям через `setInitialState/setEndState`!
+
+2. **Сброс PPR при переходе 1→2:**
+   В `rtc_state_manager_operations.py` (функция `rtc_apply_1_to_2`):
+   ```cpp
+   FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+   ```
+   Без этого агент сразу уходил бы в ремонт, т.к. PPR был накоплен до перехода.
+
+3. **export_phase механизм:**
+   - `0` = обычная симуляция
+   - `2` = постпроцессинг MP2
+   - Контролируется через `simulation.setEnvironmentPropertyUInt("export_phase", 2)`
+
+4. **Модификация прошлых дней:**
+   RTC функция может обращаться к **любому дню** в MP2 через индекс `pos = day * MAX_FRAMES + idx`.
+
+**Интеграция в orchestrator_v2.py:**
+
+```python
+# После основной симуляции
+if self.enable_mp2_postprocess:
+    # Устанавливаем export_phase=2
+    self.simulation.setEnvironmentPropertyUInt("export_phase", 2)
+    # Один шаг для постпроцессинга
+    self.simulation.step()
+    # Сбрасываем обратно
+    self.simulation.setEnvironmentPropertyUInt("export_phase", 0)
+    # Финальный дренаж
+    self.simulation.step()
+```
+
+**Результаты (3650 дней):**
+- 23 события `active_trigger=1` обработано
+- 23 окна ремонта заполнено (по 180 дней каждое)
+- 23 `assembly_trigger` установлено
+- 46 transition флагов (23×1→4 + 23×4→2)
+- Время постпроцессинга: **0.02с** (overhead ~0.02%)
+
+**Файлы:**
+- `code/sim_v2/rtc_mp2_postprocess_active.py` — реализация постпроцессинга
+- `code/sim_v2/rtc_state_manager_operations.py` — сброс PPR
+- `code/sim_v2/mp2_drain_host.py` — проверка export_phase
+
+---
+
 ## ⚡ Критическая оптимизация: Transition Detection (23.10.2025)
 
 ### 3. compute_transitions: Устранение Python постобработки (ускорение 4.6x)
@@ -1844,4 +1960,4 @@ quota_modules → compute_transitions → state_managers → mp2_writer
 ---
 
 *Документ обновлён: 23-10-2025*  
-*Тип: Архитектурное описание детерминированной системы переходов + критические багфиксы + оптимизации*
+*Тип: Архитектурное описание детерминированной системы переходов + критические багфиксы + оптимизации + GPU постпроцессинг*
