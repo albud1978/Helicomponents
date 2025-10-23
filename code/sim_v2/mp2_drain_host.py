@@ -136,8 +136,12 @@ class MP2DrainHostFunction(fg.HostFunction):
         if is_final and self.interval_days == 0:
             t_start = time.perf_counter()
             rows = self._drain_mp2_range(FLAMEGPU, self._last_drained_day, step)
-            self.total_drain_time += (time.perf_counter() - t_start)
             self.total_rows_written += rows
+            self.total_drain_time += (time.perf_counter() - t_start)
+            
+            # Вычисляем transition флаги через SQL ПОСЛЕ дренажа всех данных
+            print("  🔄 Вычисление transition флагов через SQL...")
+            self._compute_transitions_sql()
             self._last_drained_day = step + 1
             self._pending = False
             return
@@ -251,6 +255,46 @@ class MP2DrainHostFunction(fg.HostFunction):
         except:
             mp2_quota_promote_p3 = None
         
+        # Флаги переходов (вычисляются GPU post-processing слоем compute_transitions)
+        try:
+            mp2_transition_2_to_4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_4")
+            print(f"  ✅ Получена mp2_transition_2_to_4")
+        except Exception as e:
+            print(f"  ⚠️ Не удалось получить mp2_transition_2_to_4: {e}")
+            mp2_transition_2_to_4 = None
+        try:
+            mp2_transition_2_to_6 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_6")
+        except:
+            mp2_transition_2_to_6 = None
+        try:
+            mp2_transition_2_to_3 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_3")
+        except:
+            mp2_transition_2_to_3 = None
+        try:
+            mp2_transition_3_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_3_to_2")
+        except:
+            mp2_transition_3_to_2 = None
+        try:
+            mp2_transition_5_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_5_to_2")
+        except:
+            mp2_transition_5_to_2 = None
+        try:
+            mp2_transition_1_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_1_to_2")
+        except:
+            mp2_transition_1_to_2 = None
+        try:
+            mp2_transition_4_to_5 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_4_to_5")
+        except:
+            mp2_transition_4_to_5 = None
+        try:
+            mp2_transition_1_to_4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_1_to_4")
+        except:
+            mp2_transition_1_to_4 = None
+        try:
+            mp2_transition_4_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_4_to_2")
+        except:
+            mp2_transition_4_to_2 = None
+        
         # Получаем days_total для safe_day логики
         days_total = FLAMEGPU.environment.getPropertyUInt32("days_total")
         
@@ -306,15 +350,15 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_quota_promote_p2[pos]) if mp2_quota_promote_p2 is not None else 0,
                         int(mp2_quota_promote_p3[pos]) if mp2_quota_promote_p3 is not None else 0,
                         # Флаги переходов (инициализируются нулями, заполняются постпроцессингом)
-                        0,  # transition_2_to_4
-                        0,  # transition_2_to_6
-                        0,  # transition_2_to_3
-                        0,  # transition_3_to_2
-                        0,  # transition_5_to_2
-                        0,  # transition_1_to_2
-                        0,  # transition_4_to_5
-                        0,  # transition_1_to_4
-                        0   # transition_4_to_2
+                        int(mp2_transition_2_to_4[pos]) if mp2_transition_2_to_4 is not None else 0,
+                        int(mp2_transition_2_to_6[pos]) if mp2_transition_2_to_6 is not None else 0,
+                        int(mp2_transition_2_to_3[pos]) if mp2_transition_2_to_3 is not None else 0,
+                        int(mp2_transition_3_to_2[pos]) if mp2_transition_3_to_2 is not None else 0,
+                        int(mp2_transition_5_to_2[pos]) if mp2_transition_5_to_2 is not None else 0,
+                        int(mp2_transition_1_to_2[pos]) if mp2_transition_1_to_2 is not None else 0,
+                        int(mp2_transition_4_to_5[pos]) if mp2_transition_4_to_5 is not None else 0,
+                        int(mp2_transition_1_to_4[pos]) if mp2_transition_1_to_4 is not None else 0,
+                        int(mp2_transition_4_to_2[pos]) if mp2_transition_4_to_2 is not None else 0
                     )
                     self.batch.append(row)
                     rows_count += 1
@@ -410,6 +454,57 @@ class MP2DrainHostFunction(fg.HostFunction):
         except:
             mp2_quota_promote_p3 = None
         
+        # Флаги переходов (вычисляются GPU post-processing слоем compute_transitions)
+        try:
+            mp2_transition_2_to_4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_4")
+        except:
+            mp2_transition_2_to_4 = None
+        try:
+            mp2_transition_2_to_6 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_6")
+        except:
+            mp2_transition_2_to_6 = None
+        try:
+            mp2_transition_2_to_3 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_3")
+        except:
+            mp2_transition_2_to_3 = None
+        try:
+            mp2_transition_3_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_3_to_2")
+        except:
+            mp2_transition_3_to_2 = None
+        try:
+            mp2_transition_5_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_5_to_2")
+        except:
+            mp2_transition_5_to_2 = None
+        try:
+            mp2_transition_1_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_1_to_2")
+        except:
+            mp2_transition_1_to_2 = None
+        try:
+            mp2_transition_4_to_5 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_4_to_5")
+        except:
+            mp2_transition_4_to_5 = None
+        try:
+            mp2_transition_1_to_4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_1_to_4")
+        except:
+            mp2_transition_1_to_4 = None
+        try:
+            mp2_transition_4_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_4_to_2")
+        except:
+            mp2_transition_4_to_2 = None
+        
+        # MP4 целевые значения (читаем НАПРЯМУЮ из mp4_ops_counter, т.к. это глобальные значения)
+        try:
+            mp4_ops_counter_mi8 = FLAMEGPU.environment.getPropertyArrayUInt32("mp4_ops_counter_mi8")
+        except:
+            mp4_ops_counter_mi8 = None
+        try:
+            mp4_ops_counter_mi17 = FLAMEGPU.environment.getPropertyArrayUInt32("mp4_ops_counter_mi17")
+        except:
+            mp4_ops_counter_mi17 = None
+        
+        # Получаем days_total для safe_day логики
+        days_total = FLAMEGPU.environment.getPropertyUInt32("days_total")
+        
         rows_count = 0
         day = max(0, int(start_day_inclusive))
         end_day = int(end_day_inclusive)
@@ -459,16 +554,16 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_quota_promote_p1[pos]) if mp2_quota_promote_p1 is not None else 0,
                         int(mp2_quota_promote_p2[pos]) if mp2_quota_promote_p2 is not None else 0,
                         int(mp2_quota_promote_p3[pos]) if mp2_quota_promote_p3 is not None else 0,
-                        # Флаги переходов (инициализируются нулями, заполняются постпроцессингом)
-                        0,  # transition_2_to_4
-                        0,  # transition_2_to_6
-                        0,  # transition_2_to_3
-                        0,  # transition_3_to_2
-                        0,  # transition_5_to_2
-                        0,  # transition_1_to_2
-                        0,  # transition_4_to_5
-                        0,  # transition_1_to_4
-                        0   # transition_4_to_2
+                        # Флаги переходов (вычисляются GPU post-processing слоем)
+                        int(mp2_transition_2_to_4[pos]) if mp2_transition_2_to_4 is not None else 0,
+                        int(mp2_transition_2_to_6[pos]) if mp2_transition_2_to_6 is not None else 0,
+                        int(mp2_transition_2_to_3[pos]) if mp2_transition_2_to_3 is not None else 0,
+                        int(mp2_transition_3_to_2[pos]) if mp2_transition_3_to_2 is not None else 0,
+                        int(mp2_transition_5_to_2[pos]) if mp2_transition_5_to_2 is not None else 0,
+                        int(mp2_transition_1_to_2[pos]) if mp2_transition_1_to_2 is not None else 0,
+                        int(mp2_transition_4_to_5[pos]) if mp2_transition_4_to_5 is not None else 0,
+                        int(mp2_transition_1_to_4[pos]) if mp2_transition_1_to_4 is not None else 0,
+                        int(mp2_transition_4_to_2[pos]) if mp2_transition_4_to_2 is not None else 0
                     )
                     self.batch.append(row)
                     rows_count += 1
@@ -534,6 +629,74 @@ class MP2DrainHostFunction(fg.HostFunction):
         """Возвращает сводку по дренажу"""
         return (f"MP2 Drain Summary: {self.total_rows_written} rows written "
                 f"in {self.total_drain_time:.2f}s total")
+
+    def _compute_transitions_sql(self):
+        """Вычисляет transition флаги через SQL window функции после дренажа"""
+        try:
+            version_date = self.client.execute("SELECT max(version_date) FROM sim_masterv2")[0][0]
+            
+            # Получаем уникальные самолеты и дни для вычисления переходов
+            # Используем JOIN с предыдущим днем
+            sql_updates = [
+                f"ALTER TABLE {self.table_name} UPDATE transition_2_to_4 = 1 WHERE version_date = {version_date} AND aircraft_number IN (SELECT DISTINCT prev.aircraft_number FROM {self.table_name} AS curr ASOF LEFT JOIN {self.table_name} AS prev ON curr.aircraft_number = prev.aircraft_number AND prev.day_u16 + 1 = curr.day_u16 AND prev.version_date = {version_date} WHERE curr.state = 'repair' AND prev.state = 'operations' AND curr.version_date = {version_date})",
+            ]
+            
+            # На самом деле это не сработает. Давайте используем более простой подход:
+            # Для каждого уникального aircraft - SELECT все дни, проверить переходы в Python
+            
+            print(f"  ℹ️  Вычисление transition флагов: используем Python для window logic")
+            
+            # SELECT все записи отсортированные по aircraft и дню
+            query = f"SELECT aircraft_number, day_u16, state FROM {self.table_name} WHERE version_date = {version_date} ORDER BY aircraft_number, day_u16"
+            rows = self.client.execute(query)
+            
+            updates_list = []
+            prev_row = None
+            
+            for row in rows:
+                curr_aircraft = row[0]
+                curr_day = row[1]
+                curr_state = row[2]
+                
+                if prev_row and prev_row[0] == curr_aircraft:  # Same aircraft, consecutive check
+                    prev_state = prev_row[2]
+                    
+                    if prev_state != curr_state:
+                        # Вычисляем какой переход произошел
+                        transition_field = None
+                        if prev_state == 'operations' and curr_state == 'repair':
+                            transition_field = 'transition_2_to_4'
+                        elif prev_state == 'operations' and curr_state == 'storage':
+                            transition_field = 'transition_2_to_6'
+                        elif prev_state == 'operations' and curr_state == 'serviceable':
+                            transition_field = 'transition_2_to_3'
+                        elif prev_state == 'serviceable' and curr_state == 'operations':
+                            transition_field = 'transition_3_to_2'
+                        elif prev_state == 'reserve' and curr_state == 'operations':
+                            transition_field = 'transition_5_to_2'
+                        elif prev_state == 'inactive' and curr_state == 'operations':
+                            transition_field = 'transition_1_to_2'
+                        elif prev_state == 'repair' and curr_state == 'reserve':
+                            transition_field = 'transition_4_to_5'
+                        elif prev_state == 'inactive' and curr_state == 'repair':
+                            transition_field = 'transition_1_to_4'
+                        elif prev_state == 'repair' and curr_state == 'operations':
+                            transition_field = 'transition_4_to_2'
+                        
+                        if transition_field:
+                            updates_list.append((transition_field, curr_aircraft, curr_day, version_date))
+                
+                prev_row = row
+            
+            # Выполняем UPDATE для каждого найденного перехода
+            for transition_field, aircraft, day, vdate in updates_list:
+                sql = f"ALTER TABLE {self.table_name} UPDATE {transition_field} = 1 WHERE version_date = {vdate} AND aircraft_number = {aircraft} AND day_u16 = {day}"
+                self.client.execute(sql)
+            
+            print(f"  ✅ Transition флаги вычислены ({len(updates_list)} переходов)")
+            
+        except Exception as e:
+            print(f"  ⚠️ Ошибка при вычислении transition флагов: {e}")
 
 
 class MP2EventDrainHostFunction(fg.HostFunction):

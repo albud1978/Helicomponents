@@ -90,6 +90,18 @@ def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, 
         # MP4 целевые значения (для верификации логики квот)
         # Note: эти буферы создаются в rtc_quota_count_ops.py как mp2_mp4_target_mi8/mi17
 
+        # Флаги переходов между состояниями (вычисляются GPU post-processing слоем)
+        model.Environment().newMacroPropertyUInt("mp2_transition_2_to_4", MP2_SIZE)   # operations → repair
+        model.Environment().newMacroPropertyUInt("mp2_transition_2_to_6", MP2_SIZE)   # operations → storage
+        model.Environment().newMacroPropertyUInt("mp2_transition_2_to_3", MP2_SIZE)   # operations → serviceable
+        model.Environment().newMacroPropertyUInt("mp2_transition_3_to_2", MP2_SIZE)   # serviceable → operations
+        model.Environment().newMacroPropertyUInt("mp2_transition_5_to_2", MP2_SIZE)   # reserve → operations
+        model.Environment().newMacroPropertyUInt("mp2_transition_1_to_2", MP2_SIZE)   # inactive → operations
+        model.Environment().newMacroPropertyUInt("mp2_transition_4_to_5", MP2_SIZE)   # repair → reserve
+        model.Environment().newMacroPropertyUInt("mp2_transition_1_to_4", MP2_SIZE)   # inactive → repair
+        model.Environment().newMacroPropertyUInt("mp2_transition_4_to_2", MP2_SIZE)   # repair → operations
+        print("  ✅ Transition MacroProperty созданы для MP2")
+
         # inactive (state=1)
         rtc_write_inactive = agent.newRTCFunction("rtc_mp2_write_inactive", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -964,20 +976,21 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
         layer_snapshot.addAgentFunction(rtc_write_storage)
         
         # Host функция для дренажа (если нужна)
-        if clickhouse_client:
-            from mp2_drain_host import MP2DrainHostFunction
-            drain_func = MP2DrainHostFunction(
-                clickhouse_client,
-                table_name='sim_masterv2',
-                batch_size=250000,
-                simulation_steps=MAX_DAYS
-            )
-            
-            # Регистрируем host функцию в отдельном слое ПОСЛЕ всех RTC функций
-            layer_drain = model.newLayer("mp2_drain_to_db")
-            layer_drain.addHostFunction(drain_func)
-            
-            return drain_func
+        # ⚠️ ОТКЛЮЧЕНО: дренаж теперь происходит в конце симуляции одним батчем
+        # if clickhouse_client:
+        #     from mp2_drain_host import MP2DrainHostFunction
+        #     drain_func = MP2DrainHostFunction(
+        #         clickhouse_client,
+        #         table_name='sim_masterv2',
+        #         batch_size=250000,
+        #         simulation_steps=MAX_DAYS
+        #     )
+        #     
+        #     # Регистрируем host функцию в отдельном слое ПОСЛЕ всех RTC функций
+        #     layer_drain = model.newLayer("mp2_drain_to_db")
+        #     layer_drain.addHostFunction(drain_func)
+        #     
+        #     return drain_func
         
         return None
     except Exception as e:

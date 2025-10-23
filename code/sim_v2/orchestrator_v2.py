@@ -87,16 +87,25 @@ class V2Orchestrator:
             else:
                 print("  ⚠️  mp2_writer уже подключен в списке модулей, пропускаем повторное подключение")
             
-            # Добавляем детектор переходов для постпроцессинга после дренажа MP2
-            print("  Подключение transition_detector для постпроцессинга переходов")
-            try:
-                from rtc_transition_detector import register_mp2_transition_detector
-                self.transition_detector = register_mp2_transition_detector(self.model, self.clickhouse_client)
-            except ImportError as e:
-                print(f"  ⚠️  Не удалось подключить transition_detector: {e}")
-                self.transition_detector = None
+            # Post-processing transition флагов теперь происходит в Python (mp2_drain_host.py)
+            print("  ℹ️  Transition флаги будут вычислены Python post-processing после дренажа MP2")
+            
+            # Создаём финальный MP2 drain который работает только в конце
+            if self.enable_mp2:
+                print("  Подключение финального дренажа MP2 (батчи в конце симуляции)")
+                from mp2_drain_host import MP2DrainHostFunction
+                # interval_days=0 (по умолчанию) означает дренаж ТОЛЬКО в конце
+                self.mp2_drain_func = MP2DrainHostFunction(
+                    self.clickhouse_client,
+                    table_name='sim_masterv2',
+                    batch_size=500000,
+                    simulation_steps=self.days
+                )
+                # Добавляем в основную цепь слоёв
+                layer_drain = self.model.newLayer("mp2_final_drain")
+                layer_drain.addHostFunction(self.mp2_drain_func)
         else:
-            self.transition_detector = None
+            pass
         
         return self.model
     
