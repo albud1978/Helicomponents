@@ -213,7 +213,9 @@ class V2BaseModel:
         agent.newVariableUInt("group_by", 0)
         
         # Состояние (только для state_6)
-        agent.newVariableUInt("s6_started", 0)
+        
+        # Служебное поле для BI (всегда = 1)
+        agent.newVariableUInt("bi_counter", 1)
         
         # Новая переменная для intent-based архитектуры
         agent.newVariableUInt("intent_state", 0)
@@ -253,8 +255,9 @@ class V2BaseModel:
         agent.newVariableUInt("daily_today_u32", 0)
         agent.newVariableUInt("daily_next_u32", 0)
         
-        # Временные счетчики для state_6
-        agent.newVariableUInt("s6_days", 0)
+        # Счётчик дней в repair + reserve (накопительный)
+        # s4_days: начинается с 1 при переходе 2→4, инкрементируется в состояниях 4 и 5, сбрасывается при 2→2
+        agent.newVariableUInt("s4_days", 0)
         
         # ops_ticket был зарезервирован, но никогда не использовался
         # agent.newVariableUInt("ops_ticket", 0)  # УДАЛЕНО

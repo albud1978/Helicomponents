@@ -67,6 +67,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_2, flamegpu::MessageNone, flamegpu::Messa
         FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
     }
     
+    // ✅ Сброс s4_days (агент в операциях, счётчик repair+reserve обнуляется)
+    FLAMEGPU->setVariable<unsigned int>("s4_days", 0u);
+    
     return flamegpu::ALIVE;
 }
 """
@@ -89,6 +92,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_4, flamegpu::MessageNone, flamegpu::Messa
         FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
     }
     
+    // ✅ Начало отсчёта s4_days (repair+reserve)
+    FLAMEGPU->setVariable<unsigned int>("s4_days", 1u);
+    
     // Логирование перехода (2→4) с типом вертолёта
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
     printf("  [TRANSITION 2→4 Day %u] AC %u (idx %u, %s): operations -> repair, sne=%u, ppr=%u, oh=%u, br=%u\\n", 
@@ -109,9 +115,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_6, flamegpu::MessageNone, flamegpu::Messa
     if (active_trigger == 1u) {
         FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
     }
-    
-    // При переходе в хранение фиксируем день начала
-    FLAMEGPU->setVariable<unsigned int>("s6_started", step_day);
     
     // Логирование перехода с указанием причины
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");

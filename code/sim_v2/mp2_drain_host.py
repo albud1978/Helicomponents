@@ -55,7 +55,7 @@ class MP2DrainHostFunction(fg.HostFunction):
             -- V2 State информация
             state            String,
             intent_state     UInt8,
-            s6_started       UInt16,
+            bi_counter       UInt8,  -- Служебное поле для BI счётчиков (всегда 1)
             
             -- Наработки
             sne              UInt32,
@@ -74,7 +74,7 @@ class MP2DrainHostFunction(fg.HostFunction):
             
             -- Временные характеристики (текущие значения и триггеры)
             repair_days      UInt16,
-            s6_days          UInt16,
+            s4_days          UInt16,  -- Счётчик дней в repair+reserve (накопительный)
             assembly_trigger UInt8,
             active_trigger   UInt8,
             partout_trigger  UInt8,
@@ -188,7 +188,7 @@ class MP2DrainHostFunction(fg.HostFunction):
         
         mp2_state = env.getMacroPropertyUInt32("mp2_state")
         mp2_intent = env.getMacroPropertyUInt32("mp2_intent_state")
-        mp2_s6_started = env.getMacroPropertyUInt32("mp2_s6_started")
+        mp2_bi_counter = env.getMacroPropertyUInt32("mp2_bi_counter")
         
         mp2_sne = env.getMacroPropertyUInt32("mp2_sne")
         mp2_ppr = env.getMacroPropertyUInt32("mp2_ppr")
@@ -203,7 +203,7 @@ class MP2DrainHostFunction(fg.HostFunction):
         mp2_partout_time = env.getMacroPropertyUInt32("mp2_partout_time")
         
         mp2_repair_days = env.getMacroPropertyUInt32("mp2_repair_days")
-        mp2_s6_days = env.getMacroPropertyUInt32("mp2_s6_days")
+        mp2_s4_days = env.getMacroPropertyUInt32("mp2_s4_days")
         mp2_assembly_trigger = env.getMacroPropertyUInt32("mp2_assembly_trigger")
         mp2_active_trigger = env.getMacroPropertyUInt32("mp2_active_trigger")
         mp2_partout_trigger = env.getMacroPropertyUInt32("mp2_partout_trigger")
@@ -320,7 +320,7 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_group_by[pos]),
                         self._map_state_to_string(int(mp2_state[pos])),
                         int(mp2_intent[pos]),
-                        int(mp2_s6_started[pos]),
+                        int(mp2_bi_counter[pos]),
                         int(mp2_sne[pos]),
                         int(mp2_ppr[pos]),
                         int(mp2_cso[pos]),
@@ -331,7 +331,7 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_assembly_time[pos]),
                         int(mp2_partout_time[pos]),
                         int(mp2_repair_days[pos]),
-                        int(mp2_s6_days[pos]),
+                        int(mp2_s4_days[pos]),
                         int(mp2_assembly_trigger[pos]),
                         int(mp2_active_trigger[pos]),
                         int(mp2_partout_trigger[pos]),
@@ -525,7 +525,7 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_group_by[pos]),
                         self._map_state_to_string(int(mp2_state[pos])),
                         int(mp2_intent[pos]),
-                        int(mp2_s6_started[pos]),
+                        int(mp2_bi_counter[pos]),
                         int(mp2_sne[pos]),
                         int(mp2_ppr[pos]),
                         int(mp2_cso[pos]),
@@ -536,7 +536,7 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_assembly_time[pos]),
                         int(mp2_partout_time[pos]),
                         int(mp2_repair_days[pos]),
-                        int(mp2_s6_days[pos]),
+                        int(mp2_s4_days[pos]),
                         int(mp2_assembly_trigger[pos]),
                         int(mp2_active_trigger[pos]),
                         int(mp2_partout_trigger[pos]),
@@ -591,7 +591,7 @@ class MP2DrainHostFunction(fg.HostFunction):
             self.max_batch_rows = batch_rows
         t_start = time.perf_counter()
         # MATERIALIZED day_date вычисляется на стороне ClickHouse, не вставляем её явно
-        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,s6_started,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s6_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_3_to_2,transition_5_to_2,transition_1_to_2,transition_4_to_5,transition_1_to_4,transition_4_to_2"
+        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,bi_counter,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s4_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_3_to_2,transition_5_to_2,transition_1_to_2,transition_4_to_5,transition_1_to_4,transition_4_to_2"
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES"
         # Подаём данные в колоннарном формате для уменьшения накладных расходов драйвера
         num_cols = 44  # 27 базовых + 2 MP4 целей + 4 флага квот + 2 gap + 9 transition флагов
