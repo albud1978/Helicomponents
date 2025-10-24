@@ -33,7 +33,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_{state_name}, flamegpu::MessageNone, flame
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {{{MP2_SIZE}}}u>("mp2_state");
     auto mp2_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {{{MP2_SIZE}}}u>("mp2_intent_state");
     auto mp2_prev_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {{{MP2_SIZE}}}u>("mp2_prev_intent_state");
-    auto mp2_s6_started = FLAMEGPU->environment.getMacroProperty<unsigned int, {{{MP2_SIZE}}}u>("mp2_s6_started");
+    auto mp2_bi_counter = FLAMEGPU->environment.getMacroProperty<unsigned int, {{{MP2_SIZE}}}u>("mp2_bi_counter");
     
     auto mp2_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {{{MP2_SIZE}}}u>("mp2_sne");
     auto mp2_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {{{MP2_SIZE}}}u>("mp2_ppr");
@@ -69,7 +69,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_{state_name}, flamegpu::MessageNone, flame
     mp2_state[pos].exchange({state_id}u); // state_id
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
     mp2_prev_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("prev_intent_state"));
-    mp2_s6_started[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_started"));
+    mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
     mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
     mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));

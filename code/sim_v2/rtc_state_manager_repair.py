@@ -46,6 +46,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_5, flamegpu::MessageNone, flamegpu::Messa
     FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
     FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 0u);
     
+    // ✅ Инкремент s4_days (продолжаем счёт repair+reserve)
+    unsigned int s4_days = FLAMEGPU->getVariable<unsigned int>("s4_days");
+    s4_days++;
+    FLAMEGPU->setVariable<unsigned int>("s4_days", s4_days);
+    
     return flamegpu::ALIVE;
 }
 """

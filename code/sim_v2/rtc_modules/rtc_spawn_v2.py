@@ -189,9 +189,9 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("assembly_trigger", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("partout_trigger", 0u);
         
-        // 9. S6 счётчики
-        FLAMEGPU->agent_out.setVariable<unsigned int>("s6_days", 0u);
-        FLAMEGPU->agent_out.setVariable<unsigned int>("s6_started", 0u);
+        // 9. Счётчик s4_days и служебное поле BI
+        FLAMEGPU->agent_out.setVariable<unsigned int>("s4_days", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("bi_counter", 1u);  // Служебное поле для BI
         
         // ops_ticket НЕ устанавливаем (создаётся условно в base_model)
         

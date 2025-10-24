@@ -54,6 +54,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
     repair_days++;
     FLAMEGPU->setVariable<unsigned int>("repair_days", repair_days);
     
+    // Увеличиваем счётчик дней в repair+reserve (s4_days)
+    unsigned int s4_days = FLAMEGPU->getVariable<unsigned int>("s4_days");
+    s4_days++;
+    FLAMEGPU->setVariable<unsigned int>("s4_days", s4_days);
+    
     // Обработка assembly_trigger: срабатывает ОДИН РАЗ, затем автоматически сбрасывается
     unsigned int assembly_trigger = FLAMEGPU->getVariable<unsigned int>("assembly_trigger");
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
@@ -100,6 +105,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_5_reserve, flamegpu::MessageNone, flamegpu::Me
     // ✅ Все агенты в резерве ставят intent=5 (холдинг, ожидание решения)
     // Только quota_promote_reserve будет менять на intent=2 для избранных
     FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
+    
+    // Увеличиваем счётчик дней в repair+reserve (s4_days)
+    unsigned int s4_days = FLAMEGPU->getVariable<unsigned int>("s4_days");
+    s4_days++;
+    FLAMEGPU->setVariable<unsigned int>("s4_days", s4_days);
     
     return flamegpu::ALIVE;
 }}

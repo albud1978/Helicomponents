@@ -37,7 +37,7 @@ def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, 
         
         model.Environment().newMacroPropertyUInt("mp2_state", MP2_SIZE)
         model.Environment().newMacroPropertyUInt("mp2_intent_state", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_s6_started", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_bi_counter", MP2_SIZE)  # Служебное поле для BI (всегда 1)
         
         model.Environment().newMacroPropertyUInt("mp2_sne", MP2_SIZE)
         model.Environment().newMacroPropertyUInt("mp2_ppr", MP2_SIZE)
@@ -52,7 +52,7 @@ def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, 
         model.Environment().newMacroPropertyUInt("mp2_partout_time", MP2_SIZE)
         
         model.Environment().newMacroPropertyUInt("mp2_repair_days", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_s6_days", MP2_SIZE)
+        model.Environment().newMacroPropertyUInt("mp2_s4_days", MP2_SIZE)  # Счётчик дней в repair+reserve
         model.Environment().newMacroPropertyUInt("mp2_assembly_trigger", MP2_SIZE)
         model.Environment().newMacroPropertyUInt("mp2_active_trigger", MP2_SIZE)
         model.Environment().newMacroPropertyUInt("mp2_partout_trigger", MP2_SIZE)
@@ -124,7 +124,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
     auto mp2_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_intent_state");
-    auto mp2_s6_started = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_started");
+    auto mp2_bi_counter = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_bi_counter");
     
     auto mp2_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_sne");
     auto mp2_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ppr");
@@ -139,7 +139,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     auto mp2_partout_time = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_time");
     
     auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_repair_days");
-    auto mp2_s6_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_days");
+    auto mp2_s4_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s4_days");
     auto mp2_assembly_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_assembly_trigger");
     auto mp2_active_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_active_trigger");
     auto mp2_partout_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_trigger");
@@ -158,7 +158,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     
     mp2_state[pos].exchange(1u); // state_id
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_s6_started[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_started"));
+    mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
     mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
     mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
@@ -173,7 +173,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     mp2_partout_time[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_time"));
     
     mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_s6_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_days"));
+    mp2_s4_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s4_days"));
     mp2_assembly_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_trigger"));
     mp2_active_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("active_trigger"));
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
@@ -268,7 +268,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
     auto mp2_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_intent_state");
-    auto mp2_s6_started = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_started");
+    auto mp2_bi_counter = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_bi_counter");
     
     auto mp2_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_sne");
     auto mp2_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ppr");
@@ -283,7 +283,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     auto mp2_partout_time = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_time");
     
     auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_repair_days");
-    auto mp2_s6_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_days");
+    auto mp2_s4_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s4_days");
     auto mp2_assembly_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_assembly_trigger");
     auto mp2_active_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_active_trigger");
     auto mp2_partout_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_trigger");
@@ -302,7 +302,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     
     mp2_state[pos].exchange(2u); // state_id
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_s6_started[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_started"));
+    mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
     mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
     mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
@@ -317,7 +317,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     mp2_partout_time[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_time"));
     
     mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_s6_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_days"));
+    mp2_s4_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s4_days"));
     mp2_assembly_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_trigger"));
     mp2_active_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("active_trigger"));
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
@@ -412,7 +412,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
     auto mp2_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_intent_state");
-    auto mp2_s6_started = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_started");
+    auto mp2_bi_counter = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_bi_counter");
     
     auto mp2_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_sne");
     auto mp2_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ppr");
@@ -427,7 +427,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     auto mp2_partout_time = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_time");
     
     auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_repair_days");
-    auto mp2_s6_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_days");
+    auto mp2_s4_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s4_days");
     auto mp2_assembly_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_assembly_trigger");
     auto mp2_active_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_active_trigger");
     auto mp2_partout_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_trigger");
@@ -446,7 +446,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     
     mp2_state[pos].exchange(3u); // state_id
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_s6_started[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_started"));
+    mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
     mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
     mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
@@ -461,7 +461,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     mp2_partout_time[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_time"));
     
     mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_s6_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_days"));
+    mp2_s4_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s4_days"));
     mp2_assembly_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_trigger"));
     mp2_active_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("active_trigger"));
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
@@ -556,7 +556,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
     auto mp2_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_intent_state");
-    auto mp2_s6_started = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_started");
+    auto mp2_bi_counter = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_bi_counter");
     
     auto mp2_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_sne");
     auto mp2_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ppr");
@@ -571,7 +571,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     auto mp2_partout_time = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_time");
     
     auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_repair_days");
-    auto mp2_s6_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_days");
+    auto mp2_s4_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s4_days");
     auto mp2_assembly_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_assembly_trigger");
     auto mp2_active_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_active_trigger");
     auto mp2_partout_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_trigger");
@@ -590,7 +590,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     
     mp2_state[pos].exchange(4u); // state_id
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_s6_started[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_started"));
+    mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
     mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
     mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
@@ -605,7 +605,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     mp2_partout_time[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_time"));
     
     mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_s6_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_days"));
+    mp2_s4_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s4_days"));
     mp2_assembly_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_trigger"));
     mp2_active_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("active_trigger"));
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
@@ -700,7 +700,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
     auto mp2_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_intent_state");
-    auto mp2_s6_started = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_started");
+    auto mp2_bi_counter = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_bi_counter");
     
     auto mp2_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_sne");
     auto mp2_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ppr");
@@ -715,7 +715,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     auto mp2_partout_time = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_time");
     
     auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_repair_days");
-    auto mp2_s6_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_days");
+    auto mp2_s4_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s4_days");
     auto mp2_assembly_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_assembly_trigger");
     auto mp2_active_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_active_trigger");
     auto mp2_partout_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_trigger");
@@ -734,7 +734,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     
     mp2_state[pos].exchange(5u); // state_id
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_s6_started[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_started"));
+    mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
     mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
     mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
@@ -749,7 +749,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     mp2_partout_time[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_time"));
     
     mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_s6_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_days"));
+    mp2_s4_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s4_days"));
     mp2_assembly_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_trigger"));
     mp2_active_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("active_trigger"));
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
@@ -844,7 +844,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
     auto mp2_intent = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_intent_state");
-    auto mp2_s6_started = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_started");
+    auto mp2_bi_counter = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_bi_counter");
     
     auto mp2_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_sne");
     auto mp2_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_ppr");
@@ -859,7 +859,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     auto mp2_partout_time = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_time");
     
     auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_repair_days");
-    auto mp2_s6_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s6_days");
+    auto mp2_s4_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_s4_days");
     auto mp2_assembly_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_assembly_trigger");
     auto mp2_active_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_active_trigger");
     auto mp2_partout_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_partout_trigger");
@@ -878,7 +878,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     
     mp2_state[pos].exchange(6u); // state_id
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
-    mp2_s6_started[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_started"));
+    mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
     mp2_sne[pos].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
     mp2_ppr[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
@@ -893,7 +893,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     mp2_partout_time[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_time"));
     
     mp2_repair_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("repair_days"));
-    mp2_s6_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s6_days"));
+    mp2_s4_days[pos].exchange(FLAMEGPU->getVariable<unsigned int>("s4_days"));
     mp2_assembly_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_trigger"));
     mp2_active_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("active_trigger"));
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
