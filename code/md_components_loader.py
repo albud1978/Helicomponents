@@ -16,10 +16,22 @@ from datetime import datetime
 import yaml
 import openpyxl
 import os
+import math
+import numpy as np
 
 # Конфигурация теперь загружается через utils.config_loader
 
 # Функция extract_version_date_from_excel удалена - используется общая utils.version_utils.extract_unified_version_date()
+
+def to_int_or_none(v):
+    """Преобразует значение в int или None для Nullable полей"""
+    if v is None:
+        return None
+    if isinstance(v, float) and math.isnan(v):
+        return None
+    if isinstance(v, (np.floating,)) and pd.isna(v):
+        return None
+    return int(v)
 
 def load_md_components():
     """Загружает MD_Components.xlsx"""
@@ -138,12 +150,16 @@ def prepare_md_data(df, version_date, version_id=1):
                 print(f"   🔧 {col}: Float32 (GPU-оптимизированный)")
         
         # Обработка UInt32 полей для sne_new, ppr_new (оптимизированы Float64→UInt32)
+        # ⚠️ ВАЖНО: Сохраняем NULL для sne_new/ppr_new (признак "агрегат не выпускается")
         for col in uint32_sne_ppr_columns:
             if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-                df[col] = df[col].clip(lower=0, upper=4294967295)  # Валидация диапазона UInt32
-                df[col] = df[col].fillna(0).astype('int64')  # Стандартный паттерн как в dual_loader.py
-                print(f"   🔧 {col}: UInt32 (оптимизировано Float64→UInt32)")
+                # Конвертация в числовой формат
+                s = pd.to_numeric(df[col], errors='coerce')
+                # Клипуем только непустые значения
+                s = s.clip(lower=0, upper=4294967295)
+                # Применяем функцию преобразования к каждому элементу
+                df[col] = s.map(to_int_or_none).astype('object')
+                print(f"   🔧 {col}: UInt32 Nullable (NULL сохранён для устаревших типов)")
 
         # Добавляем дополнительные поля для совместимости с полной схемой таблицы
         if 'br_mi8' not in df.columns:
@@ -317,11 +333,60 @@ def insert_md_data(client, df):
     try:
         print(f"🚀 Загружаем {len(df):,} записей в md_components...")
         
-        # Конвертируем в список кортежей
-        data_tuples = [tuple(row) for row in df.values]
+        # Диагностика sne_new/ppr_new перед вставкой
+        if 'sne_new' in df.columns:
+            print(f"🔍 sne_new dtype: {df['sne_new'].dtype}")
+            print(f"🔍 sne_new примеры: {df['sne_new'].head(3).tolist()}")
+            print(f"🔍 sne_new null count: {df['sne_new'].isnull().sum()}")
         
-        # Загружаем
-        client.execute('INSERT INTO md_components VALUES', data_tuples)
+        # Конвертируем в список кортежей с явной обработкой None/NaN
+        data_tuples = []
+        for _, row in df.iterrows():
+            row_list = []
+            for val in row:
+                # Проверяем на NaN/None для всех типов
+                if pd.isna(val):
+                    row_list.append(None)
+                else:
+                    row_list.append(val)
+            data_tuples.append(tuple(row_list))
+        
+        # Проверим первый кортеж
+        if data_tuples and 'sne_new' in df.columns:
+            sne_idx = list(df.columns).index('sne_new')
+            print(f"🔍 Первый tuple[sne_new]: {data_tuples[0][sne_idx]} (type: {type(data_tuples[0][sne_idx])})")
+        
+        # Подготавливаем данные для вставки, заменяя None на специальный NULL для ClickHouse
+        prepared_data = []
+        for row in data_tuples:
+            prepared_row = []
+            for i, val in enumerate(row):
+                col_name = df.columns[i]
+                # Для Nullable полей используем None, для остальных - значения как есть
+                if val is None and col_name in ['sne_new', 'ppr_new', 'br_mi8', 'br_mi17', 'partno_comp']:
+                    prepared_row.append(None)
+                else:
+                    prepared_row.append(val)
+            prepared_data.append(tuple(prepared_row))
+        
+        # Загружаем с явным указанием столбцов
+        columns = list(df.columns)
+        insert_query = f"INSERT INTO md_components ({', '.join(columns)}) VALUES"
+        
+        try:
+            client.execute(insert_query, prepared_data)
+        except Exception as e:
+            # Если ошибка, пробуем альтернативный метод
+            print(f"⚠️ Первая попытка не удалась: {e}")
+            print(f"🔄 Пробуем альтернативный метод вставки...")
+            
+            # Альтернатива: вставка через DataFrame напрямую
+            from clickhouse_driver import Client as CHClient
+            client.insert_dataframe(
+                'INSERT INTO md_components VALUES',
+                df,
+                settings={'use_numpy': True}
+            )
         
         print(f"✅ Загружено {len(data_tuples):,} записей в md_components")
         return len(data_tuples)
