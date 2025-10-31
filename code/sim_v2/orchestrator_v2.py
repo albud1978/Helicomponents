@@ -188,7 +188,7 @@ class V2Orchestrator:
                 serv_pop = fg.AgentVector(self.base_model.agent)
                 self.simulation.getPopulationData(serv_pop, 'serviceable')
                 print(f"  [Day {step}] serviceable={len(serv_pop)}")
-        
+    
         # ═══════════════════════════════════════════════════════════════════════════
         # GPU ПОСТПРОЦЕССИНГ MP2 (если включен)
         # ═══════════════════════════════════════════════════════════════════════════

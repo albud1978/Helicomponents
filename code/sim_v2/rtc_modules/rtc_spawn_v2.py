@@ -141,15 +141,6 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("partseqno_i", spawn_psn);
         FLAMEGPU->agent_out.setVariable<unsigned int>("group_by", spawn_gb);
         
-        // Детальное логирование создания агентов
-        printf("  [SPAWN Day %u] Creating AC %u (idx %u), state=serviceable, intent=3 (holding)\\n",
-               day, acn, idx);
-        
-        if (ticket == 0u) {
-            printf("  [SPAWN Day %u] Creating %u agents Mi-17: idx %u-%u, acn %u-%u\\n",
-                   day, need, base_idx, base_idx + need - 1u, base_acn, base_acn + need - 1u);
-        }
-        
         // 2. Времена из Environment constants
         FLAMEGPU->agent_out.setVariable<unsigned int>("repair_time", 
             FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const"));
@@ -163,11 +154,21 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         const unsigned int mfg_date = version_date + day;
         FLAMEGPU->agent_out.setVariable<unsigned int>("mfg_date", mfg_date);
         
-        // 4. Наработки (БЕЗ status_id, intent_flag; ДОБАВЛЕНО cso)
-        FLAMEGPU->agent_out.setVariable<unsigned int>("sne", 0u);
-        FLAMEGPU->agent_out.setVariable<unsigned int>("ppr", 0u);
-        FLAMEGPU->agent_out.setVariable<unsigned int>("cso", 0u);  // +НОВАЯ
+        // 4. Наработки из MP1 (начальная наработка новых агентов)
+        // Читаем из Environment constants (уже извлечено из mp1_sne_new[pidx] и mp1_ppr_new[pidx])
+        const unsigned int sne_initial = FLAMEGPU->environment.getProperty<unsigned int>("mi17_sne_new_const");
+        const unsigned int ppr_initial = FLAMEGPU->environment.getProperty<unsigned int>("mi17_ppr_new_const");
+        
+        FLAMEGPU->agent_out.setVariable<unsigned int>("sne", sne_initial);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("ppr", ppr_initial);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("cso", 0u);  // CSO всегда 0 для новых
         FLAMEGPU->agent_out.setVariable<unsigned int>("repair_days", 0u);
+        
+        // Логирование начальной наработки (только для первого агента в батче)
+        if (ticket == 0u) {
+            printf("  [SPAWN Day %u] Creating %u agents Mi-17: idx %u-%u, acn %u-%u, sne=%u, ppr=%u\\n",
+                   day, need, base_idx, base_idx + need - 1u, base_acn, base_acn + need - 1u, sne_initial, ppr_initial);
+        }
         
         // 5. Intent (ИЗМЕНЕНО: intent_flag → intent_state)
         FLAMEGPU->agent_out.setVariable<unsigned int>("intent_state", 3u);       // holding in serviceable
