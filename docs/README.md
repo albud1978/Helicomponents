@@ -101,7 +101,8 @@ python3 code/utils/database_cleanup.py
 - **[count_ops_detailed_10-10-2025.md](count_ops_detailed_10-10-2025.md)** - Полный разбор модуля подсчёта агентов в operations/serviceable
 
 ### Архитектура симуляции
-- **[rtc_pipeline_architecture.md](rtc_pipeline_architecture.md)** - 🆕 **Архитектура RTC пайплайна + V2 Refactoring (30-09-2025)** + ✅ **Детальная логика state_2_operations, states_stub (14.10.2025) и count_ops (15.10.2025)**
+- **[rtc_pipeline_architecture.md](rtc_pipeline_architecture.md)** - 🆕 **Архитектура RTC пайплайна планеров (V2, обновлено 23.10.2025)**
+- **[rtc_components.md](rtc_components.md)** - 🔧 **Архитектура агрегатов (компонентов) - в разработке (30.10.2025)**
 - **[quota_architecture_analysis_06-10-2025.md](quota_architecture_analysis_06-10-2025.md)** - 🔍 **Анализ архитектуры квотирования (06-10-2025)**
 - **[refactoring_summary_30-09-2025.md](refactoring_summary_30-09-2025.md)** - 🎉 **Итоговая сводка рефакторинга V2 Orchestrator**
 - **[v2_rtc_modules_map.md](v2_rtc_modules_map.md)** - 📋 **Карта распределения RTC модулей и ядер**
@@ -363,7 +364,7 @@ python3 code/sim_v2/orchestrator_v2.py \
 #   11. state_manager_repair (переходы: 4→4, 4→5)
 #   12. state_manager_reserve (холдинг: 5→5)
 #   13. state_manager_storage (неизменяемое: 6→6)
-#   14. spawn_v2 (в конце - новые агенты в serviceable на день рождения)
+#   14. spawn_v2 (в конце - новые агенты в serviceable согласно MP4)
 #
 #   Результаты (3650 дней, актуальные):
 #   - Со spawn: ~55с GPU, 13-14мс/шаг, ~1M строк MP2, 286 агентов
@@ -378,7 +379,7 @@ python3 code/sim_v2/orchestrator_v2.py \
             spawn_v2 \
   --steps 3650 --enable-mp2 --drop-table
 
-# Тест на 300 дней (для проверки spawn на день 226):
+# Тест на 300 дней (быстрая проверка):
 python3 code/sim_v2/orchestrator_v2.py \
   --modules state_2_operations states_stub count_ops \
             quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
