@@ -163,7 +163,7 @@ class MP2DrainHostFunction(fg.HostFunction):
         self._last_drained_day = actual_end_day + 1
         self._pending = False
         return
-        
+            
     def _drain_mp2_range(self, FLAMEGPU, start_day_inclusive: int, end_day_inclusive: int) -> int:
         """Выгружает MP2 данные с GPU за диапазон дней [start..end]"""
         # HostFunction контекст - FLAMEGPU.environment доступен напрямую

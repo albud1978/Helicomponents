@@ -120,6 +120,28 @@ class V2BaseModel:
         self.env.newPropertyUInt("mi17_oh_const", mi17_oh)
         self.env.newPropertyUInt("mi17_br_const", mi17_br)
         
+        # sne_new и ppr_new для spawn (начальная наработка новых агентов)
+        # SENTINEL = 0xFFFFFFFF (4294967295) означает NULL (агрегат не выпускается)
+        arr_sne_new = env_data.get('mp1_sne_new', [])
+        arr_ppr_new = env_data.get('mp1_ppr_new', [])
+        
+        mi17_sne_new = 0  # По умолчанию 0 (новый агент)
+        mi17_ppr_new = 0
+        
+        if pidx_mi17 < len(arr_sne_new) and pidx_mi17 < len(arr_ppr_new):
+            mi17_sne_new = int(arr_sne_new[pidx_mi17])
+            mi17_ppr_new = int(arr_ppr_new[pidx_mi17])
+            
+            # Если sentinel (NULL), используем 0
+            SENTINEL = 4294967295
+            if mi17_sne_new == SENTINEL:
+                mi17_sne_new = 0
+            if mi17_ppr_new == SENTINEL:
+                mi17_ppr_new = 0
+        
+        self.env.newPropertyUInt("mi17_sne_new_const", mi17_sne_new)
+        self.env.newPropertyUInt("mi17_ppr_new_const", mi17_ppr_new)
+        
         # Partseqno и group_by для spawn (читаем из env_data)
         self.env.newPropertyUInt("spawn_partseqno_mi17", spawn_partseqno_mi17)
         self.env.newPropertyUInt("spawn_group_by_mi17", int(env_data.get('spawn_group_by_mi17', 2)))
@@ -193,6 +215,15 @@ class V2BaseModel:
             mp4_new = [0] * model_build.MAX_DAYS
         mp4_new = (mp4_new + [0] * model_build.MAX_DAYS)[:model_build.MAX_DAYS]
         self.env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", mp4_new)
+        
+        # MP1 sne_new и ppr_new для spawn агрегатов
+        # SENTINEL = 0xFFFFFFFF (4294967295) означает NULL (агрегат не выпускается)
+        mp1_sne_new = list(env_data.get('mp1_sne_new', []))
+        mp1_ppr_new = list(env_data.get('mp1_ppr_new', []))
+        if mp1_sne_new:
+            self.env.newPropertyArrayUInt32("mp1_sne_new", mp1_sne_new)
+        if mp1_ppr_new:
+            self.env.newPropertyArrayUInt32("mp1_ppr_new", mp1_ppr_new)
     
     def _setup_agent(self) -> fg.AgentDescription:
         """Создание и настройка агента HELI"""

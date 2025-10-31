@@ -123,6 +123,44 @@ def fetch_mp1_ll(client) -> Dict[int, int]:
     return {int(p): int(ll or 0) for p, ll in rows}
 
 
+def fetch_mp1_sne_ppr_new(client) -> Dict[int, Tuple[int, int]]:
+    """
+    Возвращает карту partseq → (sne_new, ppr_new).
+    
+    ⚠️ ВАЖНО: NULL значения преобразуются в sentinel value 0xFFFFFFFF (4294967295)
+    для совместимости с FLAME GPU (не поддерживает Nullable типы).
+    
+    Интерпретация значений:
+    - 0xFFFFFFFF (4294967295): агрегат не выпускается (было NULL в СУБД)
+    - 0: новый агрегат с нулевой наработкой
+    - > 0 и < 4294967295: агрегат с начальной наработкой
+    """
+    SENTINEL = 4294967295  # 0xFFFFFFFF - максимальное значение UInt32
+    
+    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
+    rows = []
+    last_err: Exception | None = None
+    for col in candidates:
+        try:
+            sql = (
+                "SELECT\n"
+                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
+                f"  CASE WHEN sne_new IS NULL THEN {SENTINEL} ELSE toUInt32OrZero(toString(sne_new)) END AS sne_new,\n"
+                f"  CASE WHEN ppr_new IS NULL THEN {SENTINEL} ELSE toUInt32OrZero(toString(ppr_new)) END AS ppr_new\n"
+                "FROM md_components"
+            )
+            rows = client.execute(sql)
+            if rows:
+                break
+        except Exception as e:
+            last_err = e
+            rows = []
+            continue
+    if not rows and last_err is not None:
+        raise last_err
+    return {int(p): (int(sne), int(ppr)) for p, sne, ppr in rows}
+
+
 def fetch_mp3(client, vdate: date, vid: int):
     fields = [
         'partseqno_i','psn','aircraft_number','ac_type_mask','group_by','status_id',
@@ -383,6 +421,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     mp1_map = fetch_mp1_br_rt(client)
     mp1_oh_map = fetch_mp1_oh(client)
     mp1_ll_map = fetch_mp1_ll(client)
+    mp1_sne_ppr_map = fetch_mp1_sne_ppr_new(client)
     mp4_by_day = preload_mp4_by_day(client)
     mp5_by_day = preload_mp5_maps(client)
 
@@ -448,6 +487,17 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     for k in keys_sorted:
         llv = mp1_ll_map.get(k, 0)
         mp1_ll17_arr.append(int(llv or 0))
+    
+    # Соберём массивы sne_new и ppr_new по индексу MP1
+    # SENTINEL = 0xFFFFFFFF (4294967295) для NULL значений
+    SENTINEL = 4294967295
+    mp1_sne_new_arr: List[int] = []
+    mp1_ppr_new_arr: List[int] = []
+    for k in keys_sorted:
+        sne, ppr = mp1_sne_ppr_map.get(k, (SENTINEL, SENTINEL))
+        mp1_sne_new_arr.append(int(sne))
+        mp1_ppr_new_arr.append(int(ppr))
+    
     mp3_arrays = build_mp3_arrays(mp3_rows, mp3_fields)
 
     # month_first_u32: ordinal первого дня месяца для каждого дня симуляции
@@ -468,6 +518,8 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'oh_mi17': mp1_oh17_arr,
         'll_mi8': [0] * len(keys_sorted),  # TODO: добавить загрузку ll_mi8
         'll_mi17': mp1_ll17_arr,
+        'sne_new': mp1_sne_new_arr,
+        'ppr_new': mp1_ppr_new_arr,
     }
 
     # Извлекаем константы для Mi-8 (partseqno_i=70387, МИ-8Т, group_by=1) и Mi-17 (partseqno_i=70386, МИ-8АМТ, group_by=2)
@@ -544,6 +596,8 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mp1_oh_mi8': mp1_oh8_arr,
         'mp1_oh_mi17': mp1_oh17_arr,
         'mp1_ll_mi17': mp1_ll17_arr,
+        'mp1_sne_new': mp1_sne_new_arr,
+        'mp1_ppr_new': mp1_ppr_new_arr,
         'mp1_index': mp1_index,
         'mp1_arrays': mp1_arrays,  # Добавляем сгруппированные mp1 данные
         'mp3_arrays': mp3_arrays,
@@ -603,6 +657,10 @@ def apply_env_to_sim(sim, env_data: Dict[str, object]):
             sim.setEnvironmentPropertyArrayUInt32("mp1_oh_mi8", list(env_data['mp1_oh_mi8']))
         if 'mp1_oh_mi17' in env_data:
             sim.setEnvironmentPropertyArrayUInt32("mp1_oh_mi17", list(env_data['mp1_oh_mi17']))
+        if 'mp1_sne_new' in env_data:
+            sim.setEnvironmentPropertyArrayUInt32("mp1_sne_new", list(env_data['mp1_sne_new']))
+        if 'mp1_ppr_new' in env_data:
+            sim.setEnvironmentPropertyArrayUInt32("mp1_ppr_new", list(env_data['mp1_ppr_new']))
     # MP3 (SoA)
     if 'mp3_arrays' in env_data:
         a = env_data['mp3_arrays']
