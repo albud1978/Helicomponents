@@ -3,7 +3,9 @@
 ## Связи документации
 - **Источник правил**: `.cursorrules` (корень проекта)
 - **Архитектура**: `docs/rtc_pipeline_architecture.md`
+- **Архитектура агрегатов**: `docs/rtc_components.md`
 - **Команды запуска**: `docs/README.md`
+- **История изменений**: `docs/changelog.md`
 
 ## Правила валидации (обновлено 13.10.2025)
 
@@ -1672,4 +1674,115 @@ LIMIT 10;
 - `docs/changelog.md` — добавлена запись о багфиксе
 - `docs/validation.md` — добавлен раздел с описанием проблемы и решения
 - `docs/README.md` — обновлены ссылки на исправленные проблемы
+
+---
+
+## [31-10-2025] Интеграция sne_new/ppr_new для spawn агрегатов
+
+### Контекст
+Для spawn новых агрегатов требуется начальная наработка из справочника `md_components` (поля `sne_new`, `ppr_new`). Значения в Excel хранятся в **часах**, симуляция работает в **минутах**.
+
+### Проблема
+1. **Конвертация единиц:** Excel (часы) → СУБД (минуты) → Симуляция (минуты)
+2. **Обработка NULL:** Пустые значения = "агрегат не выпускается"
+3. **FLAME GPU ограничения:** Environment не поддерживает `Nullable` типы
+4. **Хардкод в RTC:** Spawn использовал `sne=0u, ppr=0u` вместо значений из MP1
+
+### Решение
+
+**Этап 1: ETL (Extract)**
+- Файл: `code/md_components_loader.py`
+- Конвертация `sne_new` и `ppr_new`: часы × 60 → минуты
+- Сохранение `NULL` через `Nullable(UInt32)` в ClickHouse
+- Корректная обработка `None`/`NaN` при вставке
+
+**Этап 2: Симуляция (Transform)**
+- Файл: `code/sim_env_setup.py`
+  - Новая функция `fetch_mp1_sne_ppr_new()` — загрузка из СУБД
+  - Конвертация `NULL` → `SENTINEL` (0xFFFFFFFF) для FLAME GPU
+  - Добавление массивов `mp1_sne_new`, `mp1_ppr_new` в Environment
+
+- Файл: `code/sim_v2/base_model.py`
+  - Объявление Environment Property Arrays
+  - Создание Environment constants: `mi17_sne_new_const`, `mi17_ppr_new_const`
+  - Конвертация `SENTINEL` → `0` для RTC использования
+
+- Файл: `code/sim_v2/rtc_modules/rtc_spawn_v2.py`
+  - Замена хардкода на чтение из Environment constants
+  - Логирование начальной наработки при spawn
+
+### Архитектурные решения
+
+**Обработка NULL значений:**
+- **СУБД:** `Nullable(UInt32)` — NULL означает "агрегат не выпускается"
+- **FLAME GPU Environment:** Sentinel value `0xFFFFFFFF` (4294967295)
+- **RTC код:** Sentinel автоматически конвертируется в `0` (новый агрегат без наработки)
+
+**Конвертация единиц измерения:**
+- **Excel источник:** часы (4500-7500)
+- **ClickHouse СУБД:** минуты (270000-450000)
+- **Симуляция:** минуты (все расчеты в минутах)
+
+### Валидация
+
+**Проверка в СУБД:**
+```sql
+SELECT partno, sne_new, ppr_new
+FROM md_components
+WHERE sne_new IS NOT NULL AND sne_new > 0
+ORDER BY sne_new
+LIMIT 10;
+```
+
+**Результаты:**
+- ТВ2-117А: 270000 минут (4500 часов) ✅
+- ТВ3-117ВМ: 270000 минут (4500 часов) ✅
+- АИ-9В: 360000 минут (6000 часов) ✅
+- ВР-8А: 450000 минут (7500 часов) ✅
+
+**Проверка симуляции:**
+- Полный прогон 3650 дней: ✅ Успешно
+- Spawn планеров (Mi-17): `sne=0, ppr=0` ✅ (правильно для планеров)
+- Выгрузка MP2: 1039632 строк за 21.71с ✅
+- Детерминизм повторных прогонов: ✅
+
+### Инварианты
+
+**INV-SNE-PPR-1:** Значения `sne_new` и `ppr_new` в СУБД всегда в минутах
+```sql
+-- Проверка: все значения должны быть кратны 60 (конвертированы из часов)
+SELECT partno, sne_new, ppr_new
+FROM md_components
+WHERE sne_new IS NOT NULL 
+  AND sne_new > 0 
+  AND sne_new % 60 != 0;
+-- Ожидаемый результат: 0 строк
+```
+
+**INV-SNE-PPR-2:** NULL значения корректно обрабатываются на всех этапах
+```sql
+-- Проверка: NULL значения сохранены (не заменены на 0)
+SELECT COUNT(*) as null_count
+FROM md_components
+WHERE sne_new IS NULL OR ppr_new IS NULL;
+-- Ожидаемый результат: > 0 (есть агрегаты, которые не выпускаются)
+```
+
+**INV-SNE-PPR-3:** Spawn агентов использует правильные значения из MP1
+- Для планеров (group_by=1,2): `sne=0, ppr=0` (новый планер)
+- Для агрегатов (group_by≥3): `sne=mp1_sne_new[pidx], ppr=mp1_ppr_new[pidx]`
+- Если `sne_new` или `ppr_new` = NULL → используется `0`
+
+### Файлы изменены
+1. `code/md_components_loader.py` — конвертация часов→минуты, обработка NULL
+2. `code/sim_env_setup.py` — загрузка sne_new/ppr_new в MP1 arrays
+3. `code/sim_v2/base_model.py` — Environment arrays и constants
+4. `code/sim_v2/rtc_modules/rtc_spawn_v2.py` — чтение из Environment вместо хардкода
+5. `docs/rtc_components.md` — раздел 6 (документация интеграции)
+6. `docs/changelog.md` — запись о реализации
+7. `docs/validation.md` — инварианты и проверки
+
+### Связанные документы
+- `docs/rtc_components.md` — полная архитектура агрегатов
+- `.cursorrules` — правила работы с типами данных (запрет Float64, предпочтение UInt32)
 
