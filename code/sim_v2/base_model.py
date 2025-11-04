@@ -403,6 +403,12 @@ class V2BaseModel:
                 from rtc_modules import rtc_spawn_v2
                 rtc_spawn_v2.register_rtc(self.model, self.agent, self.env_data)
                 print("  RTC модуль spawn_v2 зарегистрирован")
+            
+            elif module_name == "spawn_dynamic":
+                # Динамический spawn для покрытия дефицита после P3
+                from rtc_modules import rtc_spawn_dynamic
+                self.spawn_dynamic_result = rtc_spawn_dynamic.register_rtc(self.model, self.agent, self.env_data)
+                print("  RTC модуль spawn_dynamic зарегистрирован (слой 7.5)")
                 
             else:
                 # Стандартная обработка для других модулей
