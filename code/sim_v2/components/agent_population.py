@@ -314,11 +314,11 @@ class AgentPopulationBuilder:
         
         # Индекс кадров
         frames_index = self.env_data.get('frames_index', {})
-        # Начало зарезервированной области под будущий спавн — эти кадры пропускаем
-        first_reserved_idx = int(self.env_data.get('first_reserved_idx', self.frames))
+        # Количество РЕАЛЬНЫХ агентов (без резерва для spawn)
+        frames_total_base = int(self.env_data.get('frames_total_base', self.frames))
         
         # Заполняем нормативы только для реальных кадров (без зарезервированных)
-        for i in range(first_reserved_idx):
+        for i in range(frames_total_base):
             # Находим aircraft_number для этого frame
             ac = 0
             gb = 0

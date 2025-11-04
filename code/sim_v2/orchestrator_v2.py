@@ -146,6 +146,12 @@ class V2Orchestrator:
                 from rtc_modules import rtc_spawn_integration
                 rtc_spawn_integration.initialize_spawn_population(self.simulation, self.env_data)
         
+        # Инициализируем динамический spawn если включен
+        if 'spawn_dynamic' in self.modules:
+            from rtc_modules import rtc_spawn_dynamic
+            rtc_spawn_dynamic.init_population(self.simulation, self.model, self.env_data)
+            print("  ✅ Динамический spawn инициализирован")
+        
         # Инициализируем телеметрию (по умолчанию включена)
         self.telemetry = TelemetryCollector(
             simulation=self.simulation,
@@ -188,6 +194,29 @@ class V2Orchestrator:
                 serv_pop = fg.AgentVector(self.base_model.agent)
                 self.simulation.getPopulationData(serv_pop, 'serviceable')
                 print(f"  [Day {step}] serviceable={len(serv_pop)}")
+            
+            # ОТЛАДКА: Логирование после динамического spawn (день 301)
+            if step == 302:
+                print("\n" + "="*60)
+                print("ОТЛАДКА: Проверка агентов после динамического spawn (день 302)")
+                print("="*60)
+                for state_name in ['operations', 'serviceable', 'inactive', 'repair', 'reserve', 'storage']:
+                    pop = fg.AgentVector(self.base_model.agent)
+                    self.simulation.getPopulationData(pop, state_name)
+                    
+                    # Считаем агентов с ACN >= 100006 (динамический spawn)
+                    dynamic_count = 0
+                    for i in range(len(pop)):
+                        acn = pop[i].getVariableUInt("aircraft_number")
+                        if acn >= 100006:
+                            dynamic_count += 1
+                            if dynamic_count <= 5:  # Первые 5
+                                idx = pop[i].getVariableUInt("idx")
+                                intent = pop[i].getVariableUInt("intent_state")
+                                print(f"  {state_name}: ACN={acn}, idx={idx}, intent={intent}")
+                    
+                    print(f"  {state_name}: всего={len(pop)}, динамических (ACN>=100006)={dynamic_count}")
+                print("="*60 + "\n")
     
         # ═══════════════════════════════════════════════════════════════════════════
         # GPU ПОСТПРОЦЕССИНГ MP2 (если включен)
@@ -215,6 +244,48 @@ class V2Orchestrator:
             print("  📤 Финальный дренаж MP2 после постпроцессинга...")
             self.simulation.step()
         
+        # ═══════════════════════════════════════════════════════════════════════════
+        # ПРОВЕРКА ИСЧЕРПАНИЯ РЕЗЕРВА ДИНАМИЧЕСКОГО SPAWN
+        # ═══════════════════════════════════════════════════════════════════════════
+        if 'spawn_dynamic' in self.modules:
+            self._check_spawn_dynamic_exhaustion()
+        
+    def _check_spawn_dynamic_exhaustion(self):
+        """Проверяет исчерпание резерва динамического spawn и выводит WARNING"""
+        try:
+            # Получаем данные spawn_dynamic_mgr
+            mgr_pop = fg.AgentVector(self.model.Agent("spawn_dynamic_mgr"))
+            self.simulation.getPopulationData(mgr_pop, 'default')
+            
+            if len(mgr_pop) == 0:
+                return  # Нет менеджера — ничего не проверяем
+            
+            mgr_agent = mgr_pop[0]
+            exhausted_day = mgr_agent.getVariableUInt("exhausted_day")
+            total_spawned = mgr_agent.getVariableUInt("total_spawned")
+            dynamic_reserve = self.env_data.get('dynamic_reserve_mi17', 50)
+            
+            if exhausted_day > 0:
+                # Резерв был исчерпан!
+                print("\n" + "="*80)
+                print("⚠️  WARNING: РЕЗЕРВ ДИНАМИЧЕСКОГО SPAWN ИСЧЕРПАН!")
+                print("="*80)
+                print(f"  • День исчерпания: {exhausted_day}")
+                print(f"  • Всего создано агентов: {total_spawned}")
+                print(f"  • Максимальный резерв: {dynamic_reserve}")
+                print(f"  • Дефицит НЕ покрывается полностью после дня {exhausted_day}")
+                print("\n  Рекомендации:")
+                print("  1. Увеличить резерв (изменить параметры формулы расчёта)")
+                print("  2. Проверить корректность LL и среднего налёта")
+                print("  3. Проверить целевые квоты (mp4_ops_counter_mi17)")
+                print("="*80 + "\n")
+            else:
+                # Резерв НЕ исчерпан
+                print(f"\n✅ Динамический spawn: резерв достаточен ({total_spawned}/{dynamic_reserve} использовано)\n")
+                
+        except Exception as e:
+            print(f"⚠️  Ошибка при проверке spawn_dynamic: {e}")
+    
     def get_results(self):
         """Извлекает результаты симуляции из всех состояний"""
         results = []

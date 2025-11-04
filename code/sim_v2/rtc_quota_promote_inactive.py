@@ -10,8 +10,16 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует RTC функции для промоута inactive → operations (приоритет 3)"""
     print("  Регистрация модуля квотирования: промоут inactive (приоритет 3)")
     
-    # Получаем MAX_FRAMES из модели
+    # Получаем MAX_FRAMES и MAX_DAYS из модели
     max_frames = model.Environment().getPropertyUInt("frames_total")
+    
+    # Импортируем MAX_DAYS для MacroProperty deficit
+    from model_build import MAX_DAYS
+    
+    # Создаём MacroProperty для публикации deficit (для динамического spawn)
+    env = model.Environment()
+    env.newMacroPropertyUInt("quota_deficit_mi8_u32", MAX_DAYS)
+    env.newMacroPropertyUInt("quota_deficit_mi17_u32", MAX_DAYS)
     
     # ═══════════════════════════════════════════════════════════════
     # ПРОМОУТ ПРИОРИТЕТ 3: inactive → operations
@@ -27,6 +35,7 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     
     RTC_QUOTA_PROMOTE_INACTIVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // MAX_DAYS = {MAX_DAYS} (для MacroProperty deficit)
     // Фильтр: только агенты с intent=1 (замороженные в inactive)
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
     if (intent != 1u) {{
@@ -103,6 +112,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
     // ШАГ 2: Расчёт дефицита (сколько не хватает до target с учётом P1+P2)
     // ═══════════════════════════════════════════════════════════
     const int deficit = (int)target - (int)curr - (int)used;
+    
+    // Публикуем deficit в MacroProperty для динамического spawn (слой 7.5)
+    // ВАЖНО: Публикуем ВСЕГДА (даже если deficit <= 0), чтобы spawn_dynamic знал
+    const unsigned int deficit_u = (deficit > 0) ? (unsigned int)deficit : 0u;
+    if (group_by == 1u) {{
+        auto deficit_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("quota_deficit_mi8_u32");
+        deficit_mp[safe_day].exchange(deficit_u);
+    }} else if (group_by == 2u) {{
+        auto deficit_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("quota_deficit_mi17_u32");
+        deficit_mp[safe_day].exchange(deficit_u);
+    }}
+    
     if (deficit <= 0) {{
         // Уже достаточно (curr + P1+P2 одобрено) или target=0 → выход
         return flamegpu::ALIVE;

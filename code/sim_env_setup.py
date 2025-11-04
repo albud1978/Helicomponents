@@ -307,11 +307,19 @@ def get_days_sorted_union(mp4_by_day: Dict[date, Dict[str, int]], mp5_by_day: Di
     return sorted(days)
 
 
-def build_mp5_linear(mp5_by_day: Dict[date, Dict[int, int]], days_sorted: List[date], frames_index: Dict[int, int], frames_total: int) -> List[int]:
+def build_mp5_linear(mp5_by_day: Dict[date, Dict[int, int]], days_sorted: List[date], frames_index: Dict[int, int], frames_total: int, frames_total_base: int = None) -> List[int]:
+    """
+    Строит линейный массив MP5 для всех агентов.
+    
+    Для существующих агентов (idx < frames_total_base) берёт данные из mp5_by_day.
+    Для зарезервированных слотов (idx >= frames_total_base) заполняет средним налётом по всем агентам.
+    """
     days_total = len(days_sorted)
     # Паддинг D+1 в конце
     size = (days_total + 1) * frames_total
     arr = [0] * size
+    
+    # Заполняем для существующих агентов
     for d_idx, D in enumerate(days_sorted):
         by_ac = mp5_by_day.get(D, {})
         base = d_idx * frames_total
@@ -319,6 +327,23 @@ def build_mp5_linear(mp5_by_day: Dict[date, Dict[int, int]], days_sorted: List[d
             fi = frames_index.get(int(ac), -1)
             if fi >= 0:
                 arr[base + fi] = int(hours or 0)
+    
+    # Для зарезервированных слотов (новорожденные) заполняем средним налётом
+    if frames_total_base is not None and frames_total_base < frames_total:
+        for d_idx, D in enumerate(days_sorted):
+            by_ac = mp5_by_day.get(D, {})
+            # Считаем средний налёт за этот день по всем агентам
+            if by_ac:
+                avg_hours = sum(by_ac.values()) / len(by_ac)
+                avg_hours_int = int(round(avg_hours))
+            else:
+                avg_hours_int = 0
+            
+            # Заполняем зарезервированные слоты средним значением
+            base = d_idx * frames_total
+            for fi in range(frames_total_base, frames_total):
+                arr[base + fi] = avg_hours_int
+    
     # Последний день (паддинг) оставляем нулями
     return arr
 
@@ -414,6 +439,47 @@ def days_to_epoch_u16(d: date) -> int:
     return max(0, int(diff))
 
 
+def calculate_dynamic_spawn_reserve_mi17(
+    avg_fleet_size: float,
+    ll_minutes: int,
+    avg_daily_minutes: float,
+    simulation_days: int = 4000
+) -> int:
+    """
+    Расчёт резерва для динамического spawn Mi-17 по формуле агрегатов.
+    
+    Формула (уточнённая):
+    1. Средний налёт в день × Среднее количество бортов × Дни / LL
+    2. Запас прочности 20%
+    3. Округление до целых (без хардкода)
+    
+    Args:
+        avg_fleet_size: Среднее количество бортов в программе (из MP4)
+        ll_minutes: Life Limit в минутах (из MP1)
+        avg_daily_minutes: Средний суточный налёт в минутах (из MP5)
+        simulation_days: Горизонт симуляции (по умолчанию 4000 дней)
+    
+    Returns:
+        Количество резервных слотов (округлено до целых)
+    """
+    if ll_minutes <= 0 or avg_daily_minutes <= 0 or avg_fleet_size <= 0:
+        return 0  # Защита от некорректных данных
+    
+    # 1. Суммарный налёт за период
+    total_flight_minutes = avg_fleet_size * simulation_days * avg_daily_minutes
+    
+    # 2. Количество планеров, которые выработают ресурс
+    planers_consumed = total_flight_minutes / ll_minutes
+    
+    # 3. С запасом прочности 20%
+    planers_needed = planers_consumed * 1.2
+    
+    # 4. Резервные слоты (округление до целых)
+    reserve_slots = int(round(planers_needed))
+    
+    return reserve_slots
+
+
 def prepare_env_arrays(client) -> Dict[str, object]:
     """Формирует все Env массивы/скаляры для full‑GPU окружения (без применения к модели)."""
     vdate, vid = fetch_versions(client)
@@ -465,14 +531,76 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     # Зарезервированные слоты под MP5-only планёры (без стартовых агентов): займём их спавном
     reserved_slots_count = len(extra_from_mp5)
     first_reserved_idx = max(0, frames_union_no_future - reserved_slots_count)
+    # ═══════════════════════════════════════════════════════════════════════════
+    # РАСЧЁТ ДИНАМИЧЕСКОГО РЕЗЕРВА ДЛЯ SPAWN (по формуле агрегатов)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    # 1. Подсчёт существующих Mi-17 из MP3 (group_by=2)
+    initial_mi17_count = sum(1 for row in mp3_rows if row[mp3_fields.index('group_by')] == 2)
+    
+    # 2. Расчёт среднего налёта Mi-17 из MP5
+    # Используем прямой запрос к ClickHouse для получения среднего налёта Mi-17
+    try:
+        avg_query = """
+        SELECT AVG(daily_hours) as avg_minutes
+        FROM flight_program_fl
+        WHERE ac_type_mask = 64  -- Mi-17
+          AND daily_hours > 0
+        """
+        avg_result = client.execute(avg_query)
+        avg_daily_minutes_mi17 = float(avg_result[0][0]) if avg_result and avg_result[0][0] else 110.5
+    except Exception as e:
+        print(f"⚠️  Ошибка при расчёте среднего налёта Mi-17: {e}")
+        avg_daily_minutes_mi17 = 110.5  # fallback
+    
+    # 3. Получаем LL для Mi-17 из mp1_ll_map (partseqno=70386, МИ-8АМТ, group_by=2)
+    SPAWN_PARTSEQNO_MI17 = 70386
+    ll_mi17_minutes = mp1_ll_map.get(SPAWN_PARTSEQNO_MI17, 1080000)  # fallback = 18000 часов
+    
     # Будущие ACN не включаем в FRAMES: индексация стабильна по |MP3 ∪ MP5|
     frames_index = {ac: i for i, ac in enumerate(ac_union)}
-    frames_total = len(frames_index)
+    # frames_total_base — количество РЕАЛЬНЫХ агентов из MP3 (без будущих из MP5)
+    frames_total_base = len(frames_index_mp3)
+    
+    # Сначала создаём MP4 массивы (нужны для расчёта среднего количества бортов)
+    mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
+    
+    # 4. Расчёт детерминированного spawn из MP4
+    deterministic_spawn_mi17 = sum(mp4_new_counter_mi17_seed)
+    
+    # 5. Расчёт среднего количества бортов Mi-17 в программе (из MP4)
+    # Среднее значение mp4_ops_counter_mi17 за весь период
+    avg_fleet_size_mi17 = sum(mp4_ops17) / len(mp4_ops17) if len(mp4_ops17) > 0 else float(initial_mi17_count)
+    
+    # 6. Расчёт динамического резерва по формуле агрегатов
+    # Формула: avg_daily_minutes × avg_fleet_size × 4000 / ll × 1.2
+    dynamic_reserve_mi17 = calculate_dynamic_spawn_reserve_mi17(
+        avg_fleet_size=avg_fleet_size_mi17,
+        ll_minutes=ll_mi17_minutes,
+        avg_daily_minutes=avg_daily_minutes_mi17,
+        simulation_days=4000  # Максимальный горизонт для расчёта резерва
+    )
+    
+    # 7. Добавляем резервные слоты к frames_total
+    # ВАЖНО: Резервируем слоты для ОБОИХ типов spawn (детерминированный + динамический)
+    # Они будут использовать общий диапазон ACN (100000+), начиная с последнего свободного idx
+    total_spawn_reserve = deterministic_spawn_mi17 + dynamic_reserve_mi17
+    
+    # Расширяем frames_total с учётом резерва для spawn
+    frames_total = frames_total_base + total_spawn_reserve
+    
+    # 8. Индексы для spawn
+    # first_reserved_idx — для детерминированного spawn (начинается сразу после существующих)
+    first_reserved_idx = frames_total_base
+    
+    # first_dynamic_idx — для динамического spawn (начинается после детерминированного)
+    first_dynamic_idx = frames_total_base + deterministic_spawn_mi17
+    
     # Индекс первого будущего борта (если присутствует в MP5/union)
     first_future_idx = int(frames_index.get(base_acn_spawn, frames_union_no_future))
-    # Построение MP5 на расширенном FRAMES (для новых кадров часы = 0)
-    mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total)
-    mp4_ops8, mp4_ops17 = build_mp4_arrays(mp4_by_day, days_sorted)
+    
+    # Построение MP5 на расширенном FRAMES (для новых кадров заполняем средним налётом)
+    mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total, frames_total_base)
     mp1_br8, mp1_br17, mp1_rt, mp1_pt, mp1_at, mp1_index = build_mp1_arrays(mp1_map)
     # Соберём массивы OH по индексу MP1
     keys_sorted = sorted(mp1_index.keys(), key=lambda k: mp1_index[k])
@@ -568,6 +696,25 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         raise ValueError(f"❌ Mi-17 partout_time={mi17_partout_time_const} <= 0 в справочнике md_components!")
     if mi17_assembly_time_const <= 0:
         raise ValueError(f"❌ Mi-17 assembly_time={mi17_assembly_time_const} <= 0 в справочнике md_components!")
+    
+    # Извлекаем начальную наработку и нормативы для Mi-17
+    # Используем индекс в mp1_index для получения данных из массивов
+    mi17_pidx = mp1_index.get(SPAWN_PARTSEQNO_MI17, -1)
+    if mi17_pidx < 0:
+        raise ValueError(f"❌ partseqno={SPAWN_PARTSEQNO_MI17} (Mi-17) не найден в mp1_index!")
+    
+    mi17_sne_new, mi17_ppr_new = mp1_sne_ppr_map.get(SPAWN_PARTSEQNO_MI17, (0, 0))
+    mi17_ll_const = mp1_ll17_arr[mi17_pidx] if mi17_pidx < len(mp1_ll17_arr) else 0
+    mi17_oh_const = mp1_oh17_arr[mi17_pidx] if mi17_pidx < len(mp1_oh17_arr) else 0
+    mi17_br_const = int(mi17_tuple[1])  # br_mi17 из mp1_map
+    
+    # Валидация: нормативы Mi-17 должны быть > 0
+    if mi17_ll_const <= 0:
+        raise ValueError(f"❌ Mi-17 ll={mi17_ll_const} <= 0 в справочнике md_components!")
+    if mi17_oh_const <= 0:
+        raise ValueError(f"❌ Mi-17 oh={mi17_oh_const} <= 0 в справочнике md_components!")
+    if mi17_br_const <= 0:
+        raise ValueError(f"❌ Mi-17 br={mi17_br_const} <= 0 в справочнике md_components!")
 
     env_data = {
         'version_date_u16': days_to_epoch_u16(vdate),
@@ -614,6 +761,22 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mi17_repair_time_const': mi17_repair_time_const,
         'mi17_partout_time_const': mi17_partout_time_const,
         'mi17_assembly_time_const': mi17_assembly_time_const,
+        # Начальная наработка и нормативы для Mi-17 (для spawn)
+        'mi17_sne_new_const': int(mi17_sne_new),
+        'mi17_ppr_new_const': int(mi17_ppr_new),
+        'mi17_ll_const': int(mi17_ll_const),
+        'mi17_oh_const': int(mi17_oh_const),
+        'mi17_br_const': int(mi17_br_const),
+        # Параметры динамического spawn (расчёт по формуле агрегатов)
+        'initial_mi17_count': int(initial_mi17_count),
+        'deterministic_spawn_mi17': int(deterministic_spawn_mi17),
+        'dynamic_reserve_mi17': int(dynamic_reserve_mi17),
+        'total_spawn_reserve': int(total_spawn_reserve),
+        'first_dynamic_idx': int(first_dynamic_idx),
+        'avg_daily_minutes_mi17': float(avg_daily_minutes_mi17),
+        'avg_fleet_size_mi17': float(avg_fleet_size_mi17),
+        'll_mi17_minutes': int(ll_mi17_minutes),
+        'frames_total_base': int(frames_total_base),  # Количество РЕАЛЬНЫХ агентов (без резерва)
     }
     # Валидации форм и размеров (жёсткие assert'ы для раннего обнаружения ошибок)
     dt = int(env_data['days_total_u16'])
