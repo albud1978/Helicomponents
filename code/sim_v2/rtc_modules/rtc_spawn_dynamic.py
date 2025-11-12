@@ -6,7 +6,7 @@ RTC Spawn Dynamic для orchestrator_v2
 ОТЛИЧИЯ от rtc_spawn_v2 (детерминированный):
 - Триггер: deficit > 0 после P3 (НЕ MP4 seed)
 - Условие активации: day >= repair_time (аналогично P3)
-- Состояние: serviceable&intent=2 (одобрены на operations, НЕ holding)
+- Состояние: operations (НЕМЕДЛЕННОЕ покрытие дефицита)
 - Момент: Слой 7.5 (после P3, до state_manager)
 - ACN: Общий диапазон 100000+, начинается с last свободного idx
 """
@@ -27,7 +27,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     Логика:
     1. spawn_dynamic_mgr читает deficit после P3 из MacroProperty
     2. Если deficit > 0 AND day >= repair_time → создаёт тикеты
-    3. spawn_dynamic_ticket создаёт новых агентов в serviceable&intent=2
+    3. spawn_dynamic_ticket создаёт новых агентов СРАЗУ в operations (немедленное покрытие дефицита)
     """
     
     env = model.Environment()
@@ -70,7 +70,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr, flamegpu::MessageNone, flamegpu::MessageNone) {
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-        const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
+        // ВАЖНО: Читаем target для D+1 (как в демоуте и промоутах)
+        const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
         
         // Условие активации: day >= repair_time
         const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("repair_time_mi17");
@@ -109,11 +110,31 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
             if (approve_s1[i] == 1u) ++used;
         }
         
+        // Считаем pending агентов из динамического spawn (ещё не появились в operations)
+        // ВАЖНО: spawn_pending сбрасывается в count_ops в начале дня!
+        auto spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_spawn_pending");
+        for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
+            if (spawn_pending[i] == 1u) ++used;
+        }
+        
         // Читаем целевое значение из MP4
         const unsigned int target_ops = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
         
-        // Дефицит = target - curr - used (каскадная логика)
+        // Дефицит = target - curr - used (каскадная логика + pending spawn)
         const int deficit_signed = static_cast<int>(target_ops) - static_cast<int>(curr) - static_cast<int>(used);
+        
+        // DEBUG для дней 824-826 (проблемные дни)
+        if (day >= 824u && day <= 826u) {
+            printf("[DEBUG Day %u SPAWN] target[%u]=%u, curr=%u, used=%u, deficit=%d\\n", 
+                   day, safe_day, target_ops, curr, used, deficit_signed);
+            
+            // Проверяем агента 100006 (idx=285)
+            if (ops_count[285u] == 1u) {
+                printf("[DEBUG Day %u] Agent idx=285 (100006) IS in ops_count!\\n", day);
+            } else {
+                printf("[DEBUG Day %u] Agent idx=285 (100006) NOT in ops_count!\\n", day);
+            }
+        }
         
         if (deficit_signed <= 0) {
             // Нет дефицита или избыток — ничего не делаем
@@ -265,9 +286,14 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("partout_trigger", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("s4_days", 0u);
         
-        // Квоты (создаём в serviceable с intent=2, чтобы state_manager применил переход)
-        FLAMEGPU->agent_out.setVariable<unsigned int>("intent_state", 2u);  // approved для operations
+        // Квоты (создаём СРАЗУ в operations для немедленного покрытия дефицита)
+        // ВАЖНО: intent=2 означает "хочу продолжать работать" → будет учтён в count_ops!
+        FLAMEGPU->agent_out.setVariable<unsigned int>("intent_state", 2u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("mfg_date", mfg_date);
+        
+        // Устанавливаем флаг pending для этого агента (будет сброшен когда появится в operations)
+        auto spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_spawn_pending");
+        spawn_pending[new_idx].exchange(1u);
         
         // Transitions (все 0)
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_1_to_2", 0u);
@@ -297,7 +323,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         return;
     }
-    """).substitute(MAX_DAYS=MAX_DAYS)
+    """).substitute(MAX_DAYS=MAX_DAYS, MAX_FRAMES=MAX_FRAMES)
     
     # Регистрация функций
     spawn_dynamic_mgr_fn = spawn_dynamic_mgr.newRTCFunction("rtc_spawn_dynamic_mgr", RTC_SPAWN_DYNAMIC_MGR)
@@ -305,7 +331,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     spawn_dynamic_mgr_fn.setEndState("default")
     
     spawn_dynamic_ticket_fn = spawn_dynamic_ticket.newRTCFunction("rtc_spawn_dynamic_ticket", RTC_SPAWN_DYNAMIC_TICKET)
-    spawn_dynamic_ticket_fn.setAgentOutput(agent, "serviceable")  # Создаём в serviceable с intent=2
+    spawn_dynamic_ticket_fn.setAgentOutput(agent, "operations")  # Создаём СРАЗУ в operations для немедленного покрытия дефицита
     spawn_dynamic_ticket_fn.setInitialState("default")
     spawn_dynamic_ticket_fn.setEndState("default")
     

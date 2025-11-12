@@ -179,6 +179,10 @@ class V2BaseModel:
         self.env.newMacroPropertyUInt32("mi17_approve_s5", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi8_approve_s1", model_build.MAX_FRAMES)   # inactive → operations
         self.env.newMacroPropertyUInt32("mi17_approve_s1", model_build.MAX_FRAMES)
+        
+        # Динамический spawn (pending агенты, которые ещё не появились в operations)
+        self.env.newMacroPropertyUInt32("mi8_spawn_pending", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_spawn_pending", model_build.MAX_FRAMES)
 
         # MP4 квоты (если включены)
         if os.environ.get('HL_ENABLE_QUOTAS', '0') == '1':
