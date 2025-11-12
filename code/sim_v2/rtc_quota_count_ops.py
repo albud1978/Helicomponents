@@ -51,6 +51,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
         
+        // Spawn pending флаги
+        auto mi8_spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_spawn_pending");
+        auto mi17_spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_spawn_pending");
+        
         // Сброс ВСЕХ буферов
         for (unsigned int i = 0u; i < {max_frames}u; ++i) {{
             // Подсчёт по состояниям
@@ -72,6 +76,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             mi17_approve_s5[i].exchange(0u);
             mi8_approve_s1[i].exchange(0u);
             mi17_approve_s1[i].exchange(0u);
+            
+            // Spawn pending флаги
+            mi8_spawn_pending[i].exchange(0u);
+            mi17_spawn_pending[i].exchange(0u);
         }}
     }}
     
@@ -96,6 +104,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_ops, flamegpu::MessageNone, flamegpu::MessageN
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    
+    // DEBUG для агента 100006 (idx=285) в дни 824-826
+    if ((step_day >= 824u && step_day <= 826u) && idx == 285u && group_by == 2u) {{
+        const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        printf("[DEBUG Day %u COUNT_OPS] Agent idx=%u (ACN=%u): intent=%u, group_by=%u\\n", 
+               step_day, idx, acn, intent, group_by);
+    }}
     
     // ✅ ВАРИАНТ B: Считаем только агентов с intent=2 (хотят быть в operations)
     if (intent == 2u) {{
@@ -105,6 +121,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_ops, flamegpu::MessageNone, flamegpu::MessageN
         }} else if (group_by == 2u) {{
             auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
             ops_count[idx].exchange(1u);
+            
+            // DEBUG для агента 100006
+            if (step_day == 824u && idx == 285u) {{
+                printf("[DEBUG Day %u COUNT_OPS] Agent idx=%u SET in ops_count!\\n", step_day, idx);
+            }}
         }}
     }}
     

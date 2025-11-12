@@ -31,6 +31,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     
+    // DEBUG для агента 100006 (idx=285) в день 824
+    if (step_day == 824u && idx == 285u) {{
+        const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+        printf("[DEBUG Day %u STATE_2] Agent idx=%u (ACN=%u): intent=%u (BEFORE setting)\\n", 
+               step_day, idx, acn, intent);
+    }}
+    
     // Получаем суточный налёт из MP5 (всегда, даже на шаге 0)
     const unsigned int base = step_day * {max_frames}u + idx;
     const unsigned int base_next = base + {max_frames}u;
