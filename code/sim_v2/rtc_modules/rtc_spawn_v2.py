@@ -28,6 +28,10 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     
     env = model.Environment()
     
+    # Вычисляем MP2_SIZE для MacroProperty transition
+    MAX_FRAMES = env_data.get('frames_total', 340)
+    MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
+    
     # frames_initial для spawn (ПРАВИЛЬНО: first_reserved_idx!)
     frames_initial = env_data.get('first_reserved_idx', 279)
     env.newPropertyUInt("frames_initial", frames_initial)
@@ -194,11 +198,30 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("s4_days", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("bi_counter", 1u);  // Служебное поле для BI
         
+        // 10. Transition флаги (инициализация как у других transition)
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_0_to_2", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_0_to_3", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_2_to_4", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_2_to_6", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_2_to_3", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_3_to_2", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_1_to_2", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_5", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_1_to_4", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_2", 0u);
+        
+        // 11. Запись флага spawn в MacroProperty (детерминированный spawn → serviceable)
+        const unsigned int max_frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+        const unsigned int pos = day * max_frames + idx;
+        auto mp2_transition_0_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MP2_SIZE}u>("mp2_transition_0_to_3");
+        mp2_transition_0_to_3[pos].exchange(1u);
+        
         // ops_ticket НЕ устанавливаем (создаётся условно в base_model)
         
         return flamegpu::ALIVE;
     }
-    """).substitute(MAX_DAYS=str(MAX_DAYS))
+    """).substitute(MAX_DAYS=str(MAX_DAYS), MP2_SIZE=str(MP2_SIZE))
 
     fn_mgr = spawn_mgr.newRTCFunction("rtc_spawn_mgr_v2", RTC_SPAWN_MGR)
     fn_mgr.setInitialState("default")
