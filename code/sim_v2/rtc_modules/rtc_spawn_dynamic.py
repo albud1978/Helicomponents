@@ -37,6 +37,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     repair_time_mi17 = env_data.get('mi17_repair_time_const', 180)  # Условие активации
     dynamic_reserve_mi17 = env_data.get('dynamic_reserve_mi17', 50)  # Максимальный резерв
     MAX_FRAMES = env_data.get('frames_total', 340)  # Для пересчёта дефицита
+    MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Размер MacroProperty для transition
     
     env.newPropertyUInt("first_dynamic_idx", first_dynamic_idx)
     env.newPropertyUInt("repair_time_mi17", repair_time_mi17)
@@ -70,8 +71,11 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr, flamegpu::MessageNone, flamegpu::MessageNone) {
         const unsigned int day = FLAMEGPU->getStepCounter();
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-        // ВАЖНО: Читаем target для D+1 (как в демоуте и промоутах)
-        const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+        // ИСПРАВЛЕНИЕ: Разделяем индексы для чтения target и записи параметров
+        // target_day = D+1 (читаем целевую квоту на завтра, как в P1/P2/P3)
+        // write_day = D (пишем параметры спавна в текущий день, чтобы тикет их прочитал сегодня)
+        const unsigned int target_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+        const unsigned int write_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
         
         // Условие активации: day >= repair_time
         const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("repair_time_mi17");
@@ -117,8 +121,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
             if (spawn_pending[i] == 1u) ++used;
         }
         
-        // Читаем целевое значение из MP4
-        const unsigned int target_ops = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+        // Читаем целевое значение из MP4 для D+1
+        const unsigned int target_ops = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
         
         // Дефицит = target - curr - used (каскадная логика + pending spawn)
         const int deficit_signed = static_cast<int>(target_ops) - static_cast<int>(curr) - static_cast<int>(used);
@@ -126,7 +130,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         // DEBUG для дней 824-826 (проблемные дни)
         if (day >= 824u && day <= 826u) {
             printf("[DEBUG Day %u SPAWN] target[%u]=%u, curr=%u, used=%u, deficit=%d\\n", 
-                   day, safe_day, target_ops, curr, used, deficit_signed);
+                   day, target_day, target_ops, curr, used, deficit_signed);
             
             // Проверяем агента 100006 (idx=285)
             if (ops_count[285u] == 1u) {
@@ -185,15 +189,16 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         }
         
         // Публикуем в MacroProperty МАССИВЫ
+        // ИСПРАВЛЕНИЕ: Пишем в write_day (текущий день), а не target_day (D+1)
         auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_need_u32");
         auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_idx_u32");
         auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_acn_u32");
         auto bpsn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_psn_u32");
         
-        need_mp[safe_day].exchange(need);
-        bidx_mp[safe_day].exchange(next_idx);
-        bacn_mp[safe_day].exchange(next_acn);
-        bpsn_mp[safe_day].exchange(next_psn);
+        need_mp[write_day].exchange(need);
+        bidx_mp[write_day].exchange(next_idx);
+        bacn_mp[write_day].exchange(next_acn);
+        bpsn_mp[write_day].exchange(next_psn);
         
         // Логирование
         printf("  [SPAWN DYNAMIC Day %u] deficit=%u, need=%u, next_idx=%u->%u, next_acn=%u->%u\\n",
@@ -296,6 +301,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         spawn_pending[new_idx].exchange(1u);
         
         // Transitions (все 0)
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_0_to_2", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_0_to_3", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_1_to_2", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_1_to_4", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_2_to_3", 0u);
@@ -305,6 +312,11 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_2", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_5", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 0u);
+        
+        // Запись флага spawn в MacroProperty (динамический spawn → operations)
+        const unsigned int pos = day * ${MAX_FRAMES}u + new_idx;
+        auto mp2_transition_0_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MP2_SIZE}u>("mp2_transition_0_to_2");
+        mp2_transition_0_to_2[pos].exchange(1u);
         
         // BI counter
         FLAMEGPU->agent_out.setVariable<unsigned int>("bi_counter", 1u);
@@ -323,7 +335,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         return;
     }
-    """).substitute(MAX_DAYS=MAX_DAYS, MAX_FRAMES=MAX_FRAMES)
+    """).substitute(MAX_DAYS=MAX_DAYS, MAX_FRAMES=MAX_FRAMES, MP2_SIZE=MP2_SIZE)
     
     # Регистрация функций
     spawn_dynamic_mgr_fn = spawn_dynamic_mgr.newRTCFunction("rtc_spawn_dynamic_mgr", RTC_SPAWN_DYNAMIC_MGR)

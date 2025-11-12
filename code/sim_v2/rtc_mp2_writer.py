@@ -91,6 +91,8 @@ def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, 
         # Note: эти буферы создаются в rtc_quota_count_ops.py как mp2_mp4_target_mi8/mi17
 
         # Флаги переходов между состояниями (вычисляются GPU post-processing слоем)
+        model.Environment().newMacroPropertyUInt("mp2_transition_0_to_2", MP2_SIZE)   # spawn → operations (динамический)
+        model.Environment().newMacroPropertyUInt("mp2_transition_0_to_3", MP2_SIZE)   # spawn → serviceable (детерминированный)
         model.Environment().newMacroPropertyUInt("mp2_transition_2_to_4", MP2_SIZE)   # operations → repair
         model.Environment().newMacroPropertyUInt("mp2_transition_2_to_6", MP2_SIZE)   # operations → storage
         model.Environment().newMacroPropertyUInt("mp2_transition_2_to_3", MP2_SIZE)   # operations → serviceable

@@ -256,6 +256,8 @@ class V2BaseModel:
         agent.newVariableUInt("intent_state", 0)
         
         # Флаги переходов между состояниями (устанавливаются compute_transitions перед state_managers)
+        agent.newVariableUInt("transition_0_to_2", 0)   # spawn → operations (динамический)
+        agent.newVariableUInt("transition_0_to_3", 0)   # spawn → serviceable (детерминированный)
         agent.newVariableUInt("transition_2_to_4", 0)   # operations → repair
         agent.newVariableUInt("transition_2_to_6", 0)   # operations → storage
         agent.newVariableUInt("transition_2_to_3", 0)   # operations → serviceable

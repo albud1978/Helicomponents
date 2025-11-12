@@ -102,6 +102,8 @@ class MP2DrainHostFunction(fg.HostFunction):
             quota_promote_p3    UInt8,
             
             -- Флаги переходов между состояниями (вычисляются на GPU слоем compute_transitions)
+            transition_0_to_2   UInt8,   -- spawn → operations (динамический)
+            transition_0_to_3   UInt8,   -- spawn → serviceable (детерминированный)
             transition_2_to_4   UInt8,   -- operations → repair
             transition_2_to_6   UInt8,   -- operations → storage
             transition_2_to_3   UInt8,   -- operations → serviceable
@@ -255,6 +257,14 @@ class MP2DrainHostFunction(fg.HostFunction):
         
         # Флаги переходов (вычисляются GPU post-processing слоем compute_transitions)
         try:
+            mp2_transition_0_to_2 = env.getMacroPropertyUInt32("mp2_transition_0_to_2")
+        except:
+            mp2_transition_0_to_2 = None
+        try:
+            mp2_transition_0_to_3 = env.getMacroPropertyUInt32("mp2_transition_0_to_3")
+        except:
+            mp2_transition_0_to_3 = None
+        try:
             mp2_transition_2_to_4 = env.getMacroPropertyUInt32("mp2_transition_2_to_4")
             print(f"  ✅ Получена mp2_transition_2_to_4")
         except Exception as e:
@@ -347,7 +357,9 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_quota_promote_p1[pos]) if mp2_quota_promote_p1 is not None else 0,
                         int(mp2_quota_promote_p2[pos]) if mp2_quota_promote_p2 is not None else 0,
                         int(mp2_quota_promote_p3[pos]) if mp2_quota_promote_p3 is not None else 0,
-                        # Флаги переходов (записываются на GPU слоем compute_transitions)
+                        # Флаги переходов (записываются на GPU слоем compute_transitions + spawn)
+                        int(mp2_transition_0_to_2[pos]) if mp2_transition_0_to_2 is not None else 0,
+                        int(mp2_transition_0_to_3[pos]) if mp2_transition_0_to_3 is not None else 0,
                         int(mp2_transition_2_to_4[pos]) if mp2_transition_2_to_4 is not None else 0,
                         int(mp2_transition_2_to_6[pos]) if mp2_transition_2_to_6 is not None else 0,
                         int(mp2_transition_2_to_3[pos]) if mp2_transition_2_to_3 is not None else 0,
@@ -452,7 +464,15 @@ class MP2DrainHostFunction(fg.HostFunction):
         except:
             mp2_quota_promote_p3 = None
         
-        # Флаги переходов (вычисляются GPU post-processing слоем compute_transitions)
+        # Флаги переходов (вычисляются GPU post-processing слоем compute_transitions + spawn)
+        try:
+            mp2_transition_0_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_0_to_2")
+        except:
+            mp2_transition_0_to_2 = None
+        try:
+            mp2_transition_0_to_3 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_0_to_3")
+        except:
+            mp2_transition_0_to_3 = None
         try:
             mp2_transition_2_to_4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_4")
         except:
@@ -553,6 +573,8 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_quota_promote_p2[pos]) if mp2_quota_promote_p2 is not None else 0,
                         int(mp2_quota_promote_p3[pos]) if mp2_quota_promote_p3 is not None else 0,
                         # Флаги переходов (вычисляются GPU post-processing слоем)
+                        int(mp2_transition_0_to_2[pos]) if mp2_transition_0_to_2 is not None else 0,
+                        int(mp2_transition_0_to_3[pos]) if mp2_transition_0_to_3 is not None else 0,
                         int(mp2_transition_2_to_4[pos]) if mp2_transition_2_to_4 is not None else 0,
                         int(mp2_transition_2_to_6[pos]) if mp2_transition_2_to_6 is not None else 0,
                         int(mp2_transition_2_to_3[pos]) if mp2_transition_2_to_3 is not None else 0,
@@ -591,10 +613,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             self.max_batch_rows = batch_rows
         t_start = time.perf_counter()
         # MATERIALIZED day_date вычисляется на стороне ClickHouse, не вставляем её явно
-        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,bi_counter,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s4_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_3_to_2,transition_5_to_2,transition_1_to_2,transition_4_to_5,transition_1_to_4,transition_4_to_2"
+        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,bi_counter,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s4_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_0_to_2,transition_0_to_3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_3_to_2,transition_5_to_2,transition_1_to_2,transition_4_to_5,transition_1_to_4,transition_4_to_2"
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES"
         # Подаём данные в колоннарном формате для уменьшения накладных расходов драйвера
-        num_cols = 44  # 27 базовых + 2 MP4 целей + 4 флага квот + 2 gap + 9 transition флагов
+        num_cols = 46  # 27 базовых + 2 MP4 целей + 4 флага квот + 2 gap + 11 transition флагов (включая 0_to_2 и 0_to_3)
         cols = [[] for _ in range(num_cols)]
         for r in self.batch:
             for i, v in enumerate(r):
