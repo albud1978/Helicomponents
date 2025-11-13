@@ -96,6 +96,9 @@ def prepare_md_data(df, version_date, version_id=1):
             'trigger_interval', 'partout_time', 'assembly_time', 'ac_type_mask'
         ]
         
+        # UInt8 Nullable поля (0-255, NULL сохраняется)
+        uint8_nullable_columns = ['repair_number']
+        
         # UInt16 поля (0-65535)
         uint16_columns = ['repair_time']
         
@@ -115,6 +118,16 @@ def prepare_md_data(df, version_date, version_id=1):
                 df[col] = df[col].clip(lower=0, upper=255)  # Валидация диапазона UInt8
                 df[col] = df[col].fillna(0).astype('int64')  # Стандартный паттерн как в dual_loader.py
                 print(f"   🔧 {col}: UInt8 (0-255)")
+        
+        # Обработка UInt8 Nullable полей (NULL сохраняется)
+        for col in uint8_nullable_columns:
+            if col in df.columns:
+                s = pd.to_numeric(df[col], errors='coerce')
+                # Клипуем только непустые значения
+                s = s.clip(lower=0, upper=255)
+                # Применяем функцию преобразования к каждому элементу
+                df[col] = s.map(to_int_or_none).astype('object')
+                print(f"   🔧 {col}: UInt8 Nullable (NULL сохранён)")
         
         # Обработка UInt16 полей
         for col in uint16_columns:
@@ -208,7 +221,7 @@ def prepare_md_data(df, version_date, version_id=1):
             'partno',
             'comp_number', 'group_by', 'ac_type_mask',
             'type_restricted', 'common_restricted1', 'common_restricted2',
-            'trigger_interval', 'partout_time', 'assembly_time', 'repair_time',
+            'trigger_interval', 'partout_time', 'assembly_time', 'repair_number', 'repair_time',
             'll_mi8', 'oh_mi8', 'oh_threshold_mi8',
             'll_mi17', 'oh_mi17',
             'repair_price', 'purchase_price',
@@ -261,6 +274,7 @@ def create_md_table(client):
             `trigger_interval` Nullable(UInt8),     -- Интервал срабатывания (было Float64 → uint8)
             `partout_time` Nullable(UInt8),         -- Время снятия (было Float64 → uint8)
             `assembly_time` Nullable(UInt8),        -- Время установки (было Float64 → uint8)
+            `repair_number` Nullable(UInt8),        -- Объем ремонта (номер квоты, NULL сохраняется)
             `repair_time` Nullable(UInt16),         -- Время ремонта (было Float64 → uint16)
             
             -- Ресурсы МИ-8 (оптимизированы для GPU)
@@ -375,7 +389,7 @@ def insert_md_data(client, df):
             for i, val in enumerate(row):
                 col_name = df.columns[i]
                 # Для Nullable полей используем None, для остальных - значения как есть
-                if val is None and col_name in ['sne_new', 'ppr_new', 'br_mi8', 'br_mi17', 'partno_comp']:
+                if val is None and col_name in ['sne_new', 'ppr_new', 'br_mi8', 'br_mi17', 'partno_comp', 'repair_number']:
                     prepared_row.append(None)
                 else:
                     prepared_row.append(val)
