@@ -123,6 +123,51 @@ def fetch_mp1_ll(client) -> Dict[int, int]:
     return {int(p): int(ll or 0) for p, ll in rows}
 
 
+def fetch_mp1_repair_number(client) -> Dict[int, int]:
+    """
+    Возвращает карту partseq → repair_number.
+    
+    ⚠️ ВАЖНО: NULL значения преобразуются в sentinel value 0xFF (255)
+    для совместимости с FLAME GPU (не поддерживает Nullable типы).
+    
+    Интерпретация значений:
+    - 0xFF (255): квота ремонта не задана (было NULL в СУБД)
+    - 0-254: номер квоты ремонта для группировки агрегатов
+    """
+    SENTINEL = 255  # 0xFF - максимальное значение UInt8
+    
+    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
+    rows = []
+    last_err: Exception | None = None
+    for col in candidates:
+        try:
+            sql = (
+                "SELECT\n"
+                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
+                "  repair_number\n"
+                "FROM md_components"
+            )
+            rows = client.execute(sql)
+            if rows:
+                break
+        except Exception as e:
+            last_err = e
+            rows = []
+            continue
+    if not rows and last_err is not None:
+        raise last_err
+    
+    # Преобразуем NULL → SENTINEL (255)
+    result = {}
+    for p, rn in rows:
+        if rn is None:
+            result[int(p)] = SENTINEL
+        else:
+            result[int(p)] = int(rn)
+    
+    return result
+
+
 def fetch_mp1_sne_ppr_new(client) -> Dict[int, Tuple[int, int]]:
     """
     Возвращает карту partseq → (sne_new, ppr_new).
@@ -488,6 +533,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     mp1_oh_map = fetch_mp1_oh(client)
     mp1_ll_map = fetch_mp1_ll(client)
     mp1_sne_ppr_map = fetch_mp1_sne_ppr_new(client)
+    mp1_repair_number_map = fetch_mp1_repair_number(client)
     mp4_by_day = preload_mp4_by_day(client)
     mp5_by_day = preload_mp5_maps(client)
 
@@ -621,10 +667,14 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     SENTINEL = 4294967295
     mp1_sne_new_arr: List[int] = []
     mp1_ppr_new_arr: List[int] = []
+    mp1_repair_number_arr: List[int] = []
+    SENTINEL_U8 = 255  # Sentinel для repair_number (UInt8)
     for k in keys_sorted:
         sne, ppr = mp1_sne_ppr_map.get(k, (SENTINEL, SENTINEL))
         mp1_sne_new_arr.append(int(sne))
         mp1_ppr_new_arr.append(int(ppr))
+        rn = mp1_repair_number_map.get(k, SENTINEL_U8)
+        mp1_repair_number_arr.append(int(rn))
     
     mp3_arrays = build_mp3_arrays(mp3_rows, mp3_fields)
 
@@ -648,6 +698,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'll_mi17': mp1_ll17_arr,
         'sne_new': mp1_sne_new_arr,
         'ppr_new': mp1_ppr_new_arr,
+        'repair_number': mp1_repair_number_arr,
     }
 
     # Извлекаем константы для Mi-8 (partseqno_i=70387, МИ-8Т, group_by=1) и Mi-17 (partseqno_i=70386, МИ-8АМТ, group_by=2)
@@ -745,6 +796,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mp1_ll_mi17': mp1_ll17_arr,
         'mp1_sne_new': mp1_sne_new_arr,
         'mp1_ppr_new': mp1_ppr_new_arr,
+        'mp1_repair_number': mp1_repair_number_arr,
         'mp1_index': mp1_index,
         'mp1_arrays': mp1_arrays,  # Добавляем сгруппированные mp1 данные
         'mp3_arrays': mp3_arrays,
@@ -824,6 +876,8 @@ def apply_env_to_sim(sim, env_data: Dict[str, object]):
             sim.setEnvironmentPropertyArrayUInt32("mp1_sne_new", list(env_data['mp1_sne_new']))
         if 'mp1_ppr_new' in env_data:
             sim.setEnvironmentPropertyArrayUInt32("mp1_ppr_new", list(env_data['mp1_ppr_new']))
+        if 'mp1_repair_number' in env_data:
+            sim.setEnvironmentPropertyArrayUInt8("mp1_repair_number", list(env_data['mp1_repair_number']))
     # MP3 (SoA)
     if 'mp3_arrays' in env_data:
         a = env_data['mp3_arrays']
