@@ -1961,5 +1961,44 @@ quota_modules → compute_transitions → state_managers → mp2_writer
 
 ---
 
-*Документ обновлён: 23-10-2025*  
-*Тип: Архитектурное описание детерминированной системы переходов + критические багфиксы + оптимизации + GPU постпроцессинг*
+## Порядок слоёв (Layers Order) - КРИТИЧНО ВАЖЕН!
+
+**Правильный порядок модулей (слева направо в матрице состояний):**
+
+```bash
+python3 orchestrator_v2.py --modules \
+  state_2_operations \          # 1. Установка intent для operations
+  states_stub \                  # 2. Установка intent для остальных состояний
+  count_ops \                    # 3. Подсчёт агентов в operations
+  quota_ops_excess \             # 4. Демоут (2→3)
+  quota_promote_serviceable \    # 5. Промоут P1 (3→2)
+  quota_promote_reserve \        # 6. Промоут P2 (5→2)
+  quota_promote_inactive \       # 7. Промоут P3 (1→2)
+  spawn_dynamic \                # 8. Динамический спавн (0→2)
+  state_manager_serviceable \    # 9. Холдинг serviceable (3→3)
+  state_manager_operations \     # 10. Переходы из operations (2→*,3→2,5→2,1→2)
+  state_manager_repair \         # 11. Переходы из repair (4→4,4→5)
+  state_manager_storage \        # 12. Холдинг storage (6→6)
+  state_manager_reserve \        # 13. Холдинг reserve (5→5)
+  state_manager_inactive \       # 14. Холдинг inactive (1→1)
+  spawn_v2 \                     # 15. Детерминированный спавн (0→3)
+  --steps 3650 --enable-mp2 --drop-table
+```
+
+**Критические правила:**
+
+1. **spawn_v2 ВСЕГДА В КОНЦЕ** - новые агенты должны пройти всю логику на следующем шаге
+2. **state_manager_serviceable ПЕРЕД state_manager_operations** - холдинг до промоута
+3. **Порядок state_manager:** serviceable → operations → repair → storage → reserve → inactive
+
+**Последствия нарушения порядка:**
+- spawn_v2 в начале → новые агенты пропускают установку intent
+- state_manager_serviceable после operations → race conditions в переходах
+- Неправильный порядок холдингов → нарушение логики матрицы состояний
+
+**Источник:** `data_input/analytics/state-intent matrix.xlsx`
+
+---
+
+*Документ обновлён: 16-11-2025*  
+*Тип: Архитектурное описание детерминированной системы переходов + критические багфиксы + оптимизации + GPU постпроцессинг + порядок слоёв*

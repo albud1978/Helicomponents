@@ -224,10 +224,13 @@ class V2BaseModel:
         # SENTINEL = 0xFFFFFFFF (4294967295) означает NULL (агрегат не выпускается)
         mp1_sne_new = list(env_data.get('mp1_sne_new', []))
         mp1_ppr_new = list(env_data.get('mp1_ppr_new', []))
+        mp1_repair_number = list(env_data.get('mp1_repair_number', []))
         if mp1_sne_new:
             self.env.newPropertyArrayUInt32("mp1_sne_new", mp1_sne_new)
         if mp1_ppr_new:
             self.env.newPropertyArrayUInt32("mp1_ppr_new", mp1_ppr_new)
+        if mp1_repair_number:
+            self.env.newPropertyArrayUInt8("mp1_repair_number", mp1_repair_number)
     
     def _setup_agent(self) -> fg.AgentDescription:
         """Создание и настройка агента HELI"""

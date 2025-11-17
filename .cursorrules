@@ -28,6 +28,7 @@
 - **Разделение логики**: RTC функции состояний НЕ меняют state, только устанавливают intent флаги.
 - **Централизованное квотирование**: Единый менеджер квот с приоритетами без атомарных операций.
 - **Атомарные переходы**: Все смены состояний в единой RTC функции `rtc_state_transitions`.
+- **КРИТИЧНО: Порядок слоёв (layers)**: Модули ДОЛЖНЫ выполняться в строгом порядке согласно матрице состояний (`data_input/analytics/state-intent matrix.xlsx`). См. детали в `docs/rtc_pipeline_architecture.md`.
 
 ## Тестирование и валидации (обновлено 13.10.2025)
 
@@ -89,5 +90,40 @@
 - Каждая ошибка — улучшение процесса анализа для будущих задач.
 - Примечание: правило добавлено 19.10.2025 после неправильного анализа deficit расчёта в P1.
 
+## Команда запуска симуляции (обновлено 16.11.2025)
 
+**ПРАВИЛЬНЫЙ порядок модулей (КРИТИЧНО!):**
+
+```bash
+cd "/home/budnik_an/cube linux/cube" && \
+source config/load_env.sh && \
+export CUDA_PATH=/usr/local/cuda && \
+export CUBE_CONFIG_PATH="/home/budnik_an/cube linux/cube/config" && \
+cd code/sim_v2 && \
+python3 orchestrator_v2.py --modules \
+  state_2_operations \
+  states_stub \
+  count_ops \
+  quota_ops_excess \
+  quota_promote_serviceable \
+  quota_promote_reserve \
+  quota_promote_inactive \
+  spawn_dynamic \
+  state_manager_serviceable \
+  state_manager_operations \
+  state_manager_repair \
+  state_manager_storage \
+  state_manager_reserve \
+  state_manager_inactive \
+  spawn_v2 \
+  --steps 3650 --enable-mp2 --drop-table
+```
+
+**Ключевые правила порядка:**
+1. `spawn_v2` ВСЕГДА в конце (новые агенты проходят логику на следующем шаге)
+2. `state_manager_serviceable` ПЕРЕД `state_manager_operations` (холдинг до промоута)
+3. Порядок state_manager: serviceable → operations → repair → storage → reserve → inactive
+
+**Источник:** Матрица состояний `data_input/analytics/state-intent matrix.xlsx`  
+**Детали:** `docs/rtc_pipeline_architecture.md` (секция "Порядок слоёв")
 
