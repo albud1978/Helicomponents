@@ -104,6 +104,7 @@ python3 orchestrator_v2.py --modules \
   state_2_operations \
   states_stub \
   count_ops \
+  quota_repair \
   quota_ops_excess \
   quota_promote_serviceable \
   quota_promote_reserve \
