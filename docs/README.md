@@ -103,6 +103,7 @@ python3 code/utils/database_cleanup.py
 ### Архитектура симуляции
 - **[rtc_pipeline_architecture.md](rtc_pipeline_architecture.md)** - 🆕 **Архитектура RTC пайплайна планеров (V2, обновлено 23.10.2025)**
 - **[rtc_components.md](rtc_components.md)** - 🔧 **Архитектура агрегатов (компонентов) - в разработке (30.10.2025)**
+- **[spawn_dynamic_architecture.md](spawn_dynamic_architecture.md)** - 🚀 **Архитектура динамического спавна (актуально)**
 - **[quota_architecture_analysis_06-10-2025.md](quota_architecture_analysis_06-10-2025.md)** - 🔍 **Анализ архитектуры квотирования (06-10-2025)**
 - **[refactoring_summary_30-09-2025.md](refactoring_summary_30-09-2025.md)** - 🎉 **Итоговая сводка рефакторинга V2 Orchestrator**
 - **[v2_rtc_modules_map.md](v2_rtc_modules_map.md)** - 📋 **Карта распределения RTC модулей и ядер**
