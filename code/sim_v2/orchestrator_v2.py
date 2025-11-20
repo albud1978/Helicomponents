@@ -67,6 +67,10 @@ class V2Orchestrator:
         # MP5 всегда инициализируется, так как используется в функциях состояний
         self.mp5_strategy.register(self.model)
         
+        # Инициализация repair_number_by_idx для quota_repair
+        if 'quota_repair' in self.modules:
+            self._init_repair_number_buffer()
+        
         # Создаем слой для обработки состояний
         state_layer = self.model.newLayer('state_processing')
         
@@ -162,6 +166,147 @@ class V2Orchestrator:
         )
         
         return self.simulation
+    
+    def _init_repair_number_buffer(self):
+        """Инициализирует MacroProperty repair_number_by_idx для quota_repair"""
+        print("  Инициализация repair_number_by_idx для quota_repair...")
+
+        # Подготавливаем данные: для каждого frame_idx получаем repair_number
+        mp1_index = self.env_data.get('mp1_index', {})
+        mp1_repair_number = self.env_data.get('mp1_repair_number', [])
+        mp3 = self.env_data.get('mp3_arrays', {})
+        mp3_partseqno = mp3.get('mp3_partseqno_i', [])
+        mp3_aircraft_number = mp3.get('mp3_aircraft_number', [])
+        mp3_group_by = mp3.get('mp3_group_by', [])
+        frames_index = self.env_data.get('frames_index', {})
+        
+        frames_total = int(self.env_data['frames_total_u16'])
+        
+        # Диагностика данных
+        glider_count_mp3 = sum(1 for gb in mp3_group_by if gb == 1 or gb == 2)
+        unique_gb = set(mp3_group_by) if mp3_group_by else set()
+        
+        print(f"  📋 Диагностика входных данных:")
+        print(f"     - mp1_index size: {len(mp1_index)}")
+        print(f"     - mp1_repair_number size: {len(mp1_repair_number)}")
+        print(f"     - mp3_partseqno size: {len(mp3_partseqno)}")
+        print(f"     - mp3_group_by size: {len(mp3_group_by)}")
+        print(f"     - frames_index size: {len(frames_index)}")
+        print(f"     - Планеров в MP3 (group_by=1,2): {glider_count_mp3}")
+        print(f"     - Уникальные group_by в MP3: {sorted(unique_gb)}")
+        print(f"     - frames_total: {frames_total}")
+        
+        # Строим маппинг frame_idx → partseqno_i для планеров
+        frame_to_partseqno = {}
+        for j in range(len(mp3_aircraft_number)):
+            if j < len(mp3_group_by):
+                gb = mp3_group_by[j]
+                if gb in [1, 2]:  # Только планеры
+                    ac = mp3_aircraft_number[j]
+                    if ac in frames_index:
+                        frame_idx = frames_index[ac]
+                        partseqno = mp3_partseqno[j] if j < len(mp3_partseqno) else 0
+                        frame_to_partseqno[frame_idx] = partseqno
+        
+        print(f"     - Построен маппинг frame_idx → partseqno для {len(frame_to_partseqno)} планеров")
+        
+        # Проверка ненулевых значений в mp1_repair_number
+        non_zero_in_mp1 = sum(1 for x in mp1_repair_number if x > 0 and x != 255)
+        print(f"     - mp1_repair_number с значениями > 0 (не 255): {non_zero_in_mp1}")
+        if non_zero_in_mp1 > 0:
+            unique_rn = set(x for x in mp1_repair_number if x > 0 and x != 255)
+            print(f"     - Уникальные repair_number: {sorted(unique_rn)}")
+            # Покажем первые 10 partseqno с repair_number > 0
+            partseqno_list = list(mp1_index.keys())
+            sample = []
+            for psn in partseqno_list[:50]:
+                pidx = mp1_index.get(psn, -1)
+                if 0 <= pidx < len(mp1_repair_number):
+                    rn = mp1_repair_number[pidx]
+                    if rn > 0 and rn != 255:
+                        sample.append((psn, pidx, rn))
+                        if len(sample) >= 10:
+                            break
+            if sample:
+                print(f"     - Образцы (partseqno, pidx, repair_number):")
+                for psn, pidx, rn in sample:
+                    print(f"         partseqno={psn}, pidx={pidx}, repair_number={rn}")
+        
+        # Создаём массив repair_number по idx (frame_idx)
+        repair_number_by_idx = []
+        non_zero_count = 0
+        repair_numbers_found = set()
+        missing_count = 0
+        sample_mismatches = []
+        glider_samples = []  # Для планеров
+        
+        for frame_idx in range(frames_total):
+            # Используем маппинг frame_idx → partseqno
+            partseqno = frame_to_partseqno.get(frame_idx, 0)
+            
+            if partseqno > 0:
+                pidx = mp1_index.get(partseqno, -1)
+                
+                if pidx >= 0 and pidx < len(mp1_repair_number):
+                    rn = mp1_repair_number[pidx]
+                    # 0 означает отсутствие квоты (или SENTINEL 255)
+                    value = 0 if rn == 255 else int(rn)
+                    repair_number_by_idx.append(value)
+                    if value > 0:
+                        non_zero_count += 1
+                        repair_numbers_found.add(value)
+                    
+                    # Собираем образцы планеров для диагностики
+                    if len(glider_samples) < 10:
+                        glider_samples.append((frame_idx, partseqno, pidx, rn, value))
+                else:
+                    repair_number_by_idx.append(0)
+                    missing_count += 1
+                    if len(sample_mismatches) < 10:
+                        sample_mismatches.append((frame_idx, partseqno, pidx))
+            else:
+                # Будущий слот для spawn или не найдено
+                repair_number_by_idx.append(0)
+        
+        print(f"  📊 Статистика repair_number:")
+        print(f"     - Агентов с repair_number > 0: {non_zero_count}/{frames_total}")
+        print(f"     - Уникальные значения: {sorted(repair_numbers_found)}")
+        print(f"     - Агентов БЕЗ соответствия в mp1_index: {missing_count}/{frames_total}")
+        if sample_mismatches:
+            print(f"     - Образцы несоответствий (frame_idx, partseqno, pidx):")
+            for fi, psn, pi in sample_mismatches[:5]:
+                print(f"         frame_idx={fi}, partseqno={psn}, pidx={pi} (НЕ найден в mp1_index)")
+        
+        # Показываем планеры
+        print(f"     - Количество планеров в выборке: {len(glider_samples)}")
+        if glider_samples:
+            print(f"     - Образцы ПЛАНЕРОВ (frame_idx, partseqno, pidx, rn_raw, rn_final):")
+            for fi, psn, pi, rn_raw, rn_final in glider_samples:
+                print(f"         frame={fi}, psn={psn}, pidx={pi}, rn={rn_raw}, final={rn_final}")
+        
+        # Создаём HostFunction для инициализации
+        class HF_InitRepairNumber(fg.HostFunction):
+            def __init__(self, data):
+                super().__init__()
+                self.data = data
+                self.initialized = False
+            
+            def run(self, FLAMEGPU):
+                if self.initialized:
+                    return
+                
+                mp = FLAMEGPU.environment.getMacroPropertyUInt8("repair_number_by_idx")
+                for i, val in enumerate(self.data):
+                    mp[i] = int(val)
+                
+                self.initialized = True
+        
+        # Добавляем HostFunction в первый слой модели
+        hf = HF_InitRepairNumber(repair_number_by_idx)
+        init_layer = self.model.newLayer()
+        init_layer.addHostFunction(hf)
+        
+        print(f"  ✅ repair_number_by_idx инициализирован ({len(repair_number_by_idx)} элементов)")
     
     def _populate_agents(self):
         """Загружает агентов через AgentPopulationBuilder (делегирование)"""

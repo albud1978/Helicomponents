@@ -159,11 +159,20 @@ def fetch_mp1_repair_number(client) -> Dict[int, int]:
     
     # Преобразуем NULL → SENTINEL (255)
     result = {}
+    non_null_count = 0
     for p, rn in rows:
         if rn is None:
             result[int(p)] = SENTINEL
         else:
             result[int(p)] = int(rn)
+            if int(rn) > 0:
+                non_null_count += 1
+    
+    print(f"  📊 fetch_mp1_repair_number: загружено {len(result)} записей, из них {non_null_count} с repair_number > 0")
+    if non_null_count > 0:
+        sample = [(k, v) for k, v in list(result.items())[:20] if v > 0 and v != 255]
+        if sample:
+            print(f"     Образцы (partseq, repair_number): {sample[:5]}")
     
     return result
 
@@ -675,6 +684,14 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         mp1_ppr_new_arr.append(int(ppr))
         rn = mp1_repair_number_map.get(k, SENTINEL_U8)
         mp1_repair_number_arr.append(int(rn))
+    
+    # Диагностика repair_number после преобразования в массив
+    rn_non_sentinel = sum(1 for x in mp1_repair_number_arr if x > 0 and x != 255)
+    print(f"  📊 mp1_repair_number_arr: размер={len(mp1_repair_number_arr)}, значений > 0 (не 255): {rn_non_sentinel}")
+    if rn_non_sentinel > 0:
+        sample_indices = [(i, mp1_repair_number_arr[i], keys_sorted[i]) for i in range(min(20, len(mp1_repair_number_arr))) if mp1_repair_number_arr[i] > 0 and mp1_repair_number_arr[i] != 255]
+        if sample_indices:
+            print(f"     Образцы (idx, repair_number, partseqno): {sample_indices[:5]}")
     
     mp3_arrays = build_mp3_arrays(mp3_rows, mp3_fields)
 

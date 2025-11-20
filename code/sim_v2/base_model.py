@@ -183,6 +183,12 @@ class V2BaseModel:
         # Динамический spawn (pending агенты, которые ещё не появились в operations)
         self.env.newMacroPropertyUInt32("mi8_spawn_pending", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi17_spawn_pending", model_build.MAX_FRAMES)
+        
+        # Квотирование ремонтов (repair quota)
+        self.env.newMacroPropertyUInt32("repair_state_buffer", model_build.MAX_FRAMES)  # Агенты в repair
+        self.env.newMacroPropertyUInt32("reserve_queue_buffer", model_build.MAX_FRAMES)  # reserve & intent=0
+        self.env.newMacroPropertyUInt32("ops_repair_buffer", model_build.MAX_FRAMES)  # operations & intent=4
+        self.env.newMacroPropertyUInt8("repair_number_by_idx", model_build.MAX_FRAMES)  # repair_number для каждого idx
 
         # MP4 квоты (если включены)
         if os.environ.get('HL_ENABLE_QUOTAS', '0') == '1':
@@ -225,6 +231,13 @@ class V2BaseModel:
         mp1_sne_new = list(env_data.get('mp1_sne_new', []))
         mp1_ppr_new = list(env_data.get('mp1_ppr_new', []))
         mp1_repair_number = list(env_data.get('mp1_repair_number', []))
+        mp1_index = list(env_data.get('mp1_index', {}).values()) if isinstance(env_data.get('mp1_index', {}), dict) else list(env_data.get('mp1_index', []))
+        
+        # Записываем размер MP1 для использования в RTC
+        mp1_size = len(mp1_index) if mp1_index else len(mp1_repair_number) if mp1_repair_number else 0
+        if mp1_size > 0:
+            self.env.newPropertyUInt("mp1_size", mp1_size)
+        
         if mp1_sne_new:
             self.env.newPropertyArrayUInt32("mp1_sne_new", mp1_sne_new)
         if mp1_ppr_new:
@@ -390,6 +403,10 @@ class V2BaseModel:
                 import rtc_quota_promote_inactive
                 rtc_quota_promote_inactive.register_rtc(self.model, self.agent)
                 print("  RTC модуль quota_promote_inactive зарегистрирован (1 слой, приоритет 3)")
+            
+            elif module_name == "quota_repair":
+                from rtc_modules import rtc_quota_repair
+                rtc_quota_repair.register_rtc(self.model, self.agent)
             
             elif module_name == "compute_transitions":
                 import rtc_compute_transitions

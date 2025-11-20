@@ -168,9 +168,12 @@ LIMIT 10;  -- Должно быть ПУСТО
 
 ## 📚 Связанные документы
 
+- **\`docs/quota_system_full_cycle.md\`** — **полный цикл работы квотирования (загрузка данных, создание массивов, логирование)**
+- **\`docs/baseline_no_quota_repair.md\`** — baseline для сравнения (симуляция без quota_repair)
 - \`docs/rtc_pipeline_architecture.md\` — общая архитектура, секция repair_number
 - \`docs/validation.md\` — инварианты repair_number (секция INV-REPAIR-NUMBER-*)
 - \`data_input/analytics/state-intent matrix.xlsx\` — визуализация переходов
-- \`code/sim_env_setup.py\` — загрузка mp1_repair_number в Environment
+- \`code/sim_v2/base_model.py\` — загрузка mp1_repair_number в Environment
+- \`code/sim_v2/rtc_quota_*.py\` — существующие модули квотирования (примеры)
 - \`data_input/master_data/MD_Сomponents.xlsx\` — источник данных (колонка "Объем ремонта")
 
