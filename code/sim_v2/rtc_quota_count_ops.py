@@ -55,6 +55,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto mi8_spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_spawn_pending");
         auto mi17_spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_spawn_pending");
         
+        // Буферы для квотирования ремонтов
+        auto repair_state_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_state_buffer");
+        auto reserve_queue_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("reserve_queue_buffer");
+        auto ops_repair_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("ops_repair_buffer");
+        
         // Сброс ВСЕХ буферов
         for (unsigned int i = 0u; i < {max_frames}u; ++i) {{
             // Подсчёт по состояниям
@@ -80,6 +85,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             // Spawn pending флаги
             mi8_spawn_pending[i].exchange(0u);
             mi17_spawn_pending[i].exchange(0u);
+            
+            // Буферы квотирования ремонтов
+            repair_state_buffer[i].exchange(0u);
+            reserve_queue_buffer[i].exchange(0u);
+            ops_repair_buffer[i].exchange(0u);
         }}
     }}
     
@@ -224,7 +234,79 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::Mes
     layer_count_ina.addAgentFunction(rtc_func_ina)
     
     # =========================================================================
-    # Слой 6: Логирование MP4 целевых значений в MacroProperty для экспорта
+    # Слой 6: Подсчёт агентов в repair (для квотирования ремонтов)
+    # =========================================================================
+    RTC_COUNT_REPAIR = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    
+    // Записываем флаг что этот агент в repair
+    auto repair_state_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_state_buffer");
+    repair_state_buffer[idx].exchange(1u);
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    rtc_func_rep = agent.newRTCFunction("rtc_count_repair", RTC_COUNT_REPAIR)
+    rtc_func_rep.setInitialState("repair")
+    rtc_func_rep.setEndState("repair")
+    
+    layer_count_rep = model.newLayer("count_repair")
+    layer_count_rep.addAgentFunction(rtc_func_rep)
+    
+    # =========================================================================
+    # Слой 7: Подсчёт кандидатов в очереди на ремонт (reserve & intent=0)
+    # =========================================================================
+    RTC_COUNT_RESERVE_QUEUE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_reserve_queue, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+    
+    // Только агенты с intent=0 (в очереди на ремонт)
+    if (intent == 0u) {{
+        auto reserve_queue_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("reserve_queue_buffer");
+        reserve_queue_buffer[idx].exchange(1u);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    rtc_func_rq = agent.newRTCFunction("rtc_count_reserve_queue", RTC_COUNT_RESERVE_QUEUE)
+    rtc_func_rq.setInitialState("reserve")
+    rtc_func_rq.setEndState("reserve")
+    
+    layer_count_rq = model.newLayer("count_reserve_queue")
+    layer_count_rq.addAgentFunction(rtc_func_rq)
+    
+    # =========================================================================
+    # Слой 8: Подсчёт запросов на ремонт (operations & intent=4)
+    # =========================================================================
+    RTC_COUNT_OPS_REPAIR = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_ops_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+    
+    // Только агенты с intent=4 (запрос на ремонт)
+    if (intent == 4u) {{
+        auto ops_repair_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("ops_repair_buffer");
+        ops_repair_buffer[idx].exchange(1u);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    rtc_func_or = agent.newRTCFunction("rtc_count_ops_repair", RTC_COUNT_OPS_REPAIR)
+    rtc_func_or.setInitialState("operations")
+    rtc_func_or.setEndState("operations")
+    
+    layer_count_or = model.newLayer("count_ops_repair")
+    layer_count_or.addAgentFunction(rtc_func_or)
+    
+    # =========================================================================
+    # Слой 9: Логирование MP4 целевых значений в MacroProperty для экспорта
     # =========================================================================
     # Создаем буферы для хранения целевых значений по дням
     model.Environment().newMacroPropertyUInt32("mp2_mp4_target_mi8", max_days + 1)
@@ -313,6 +395,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_log_quota_gap, flamegpu::MessageNone, flamegpu::Mess
     layer_log_gap = model.newLayer("log_quota_gap")
     layer_log_gap.addAgentFunction(rtc_log_gap)
     
-    print("  RTC модуль count_ops зарегистрирован (обнуление + подсчёт + логирование MP4 целей + gap)")
+    print("  RTC модуль count_ops зарегистрирован (обнуление + подсчёт ops/svc/reserve/inactive/repair/queue + логирование MP4 целей + gap)")
 
 

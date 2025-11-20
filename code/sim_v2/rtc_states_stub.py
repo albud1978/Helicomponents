@@ -102,9 +102,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
 # RTC функция для state_5 (reserve)
 RTC_STATE_5_RESERVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_5_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // ✅ Все агенты в резерве ставят intent=5 (холдинг, ожидание решения)
-    // Только quota_promote_reserve будет менять на intent=2 для избранных
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
+    // ✅ КРИТИЧНО: НЕ трогаем intent=0 (очередь на ремонт)!
+    // Только агенты с другими intent переходят в intent=5 (общий резерв)
+    const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+    if (intent != 0u) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
+    }}
+    // intent=0 остаётся без изменений (агент в очереди на ремонт)
     
     // Увеличиваем счётчик дней в repair+reserve (s4_days)
     unsigned int s4_days = FLAMEGPU->getVariable<unsigned int>("s4_days");
