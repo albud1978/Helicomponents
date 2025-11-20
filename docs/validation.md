@@ -1542,10 +1542,8 @@ LIMIT 5;
 
 **Вывод:** Квота 18 достаточна для текущего профиля нагрузки. Модуль работает корректно, пики ограничены.
 
-### Связанные документы
-- `docs/quota_repair_test_results.md` - полный отчёт о тестировании
-- `docs/repair_quota_design.md` - архитектура модуля
-- `docs/quota_system_full_cycle.md` - полный цикл квотирования
+### Примечание
+Все материалы по тестам и архитектуре `quota_repair` консолидированы в основных файлах: `validation.md`, `rtc_pipeline_architecture.md`, `changelog.md`, `README.md`.
 
 4. **Ранжирование:**
    - Демоут: `oldest_first` (минимальная mfg_date)
