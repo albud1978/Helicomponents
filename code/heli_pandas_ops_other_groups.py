@@ -78,12 +78,13 @@ def fetch_plane_meta(client, version: VersionInfo) -> Dict[int, Tuple[Optional[i
             aircraft_number,
             any(ac_type_mask) AS ac_type_mask,
             formatDateTime(
-                maxIf(mfg_date, mfg_date IS NOT NULL),
+                minIf(mfg_date, mfg_date IS NOT NULL),
                 '%%Y-%%m-%%d'
             ) AS mfg_date
         FROM heli_pandas
         WHERE status_id = 2
           AND aircraft_number != 0
+          AND group_by IN (1, 2)
           AND version_date = %(version_date)s
           AND version_id = %(version_id)s
         GROUP BY aircraft_number
