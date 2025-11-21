@@ -103,7 +103,7 @@ def prepare_md_data(df, version_date, version_id=1):
         uint16_columns = ['repair_time']
         
         # UInt32 поля (0-4294967295)
-        uint32_columns = ['ll_mi8', 'oh_mi8', 'oh_threshold_mi8', 'll_mi17', 'oh_mi17']
+        uint32_columns = ['ll_mi8', 'oh_mi8', 'oh_threshold_mi8', 'll_mi17', 'oh_mi17', 'second_ll']
         
         # Float32 поля (денежные поля оптимизированы для GPU)  
         float32_columns = ['repair_price', 'purchase_price']
@@ -139,7 +139,7 @@ def prepare_md_data(df, version_date, version_id=1):
         
         # Конвертация часов → минут для ресурсных полей (требование проекта)
         # Поля источника в часах: ll_mi8, ll_mi17, oh_mi8, oh_mi17, sne_new, ppr_new → в Env храним в минутах
-        hours_to_minutes_cols = ['ll_mi8', 'll_mi17', 'oh_mi8', 'oh_mi17']
+        hours_to_minutes_cols = ['ll_mi8', 'll_mi17', 'oh_mi8', 'oh_mi17', 'second_ll']
         for col in hours_to_minutes_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -223,7 +223,7 @@ def prepare_md_data(df, version_date, version_id=1):
             'type_restricted', 'common_restricted1', 'common_restricted2',
             'trigger_interval', 'partout_time', 'assembly_time', 'repair_number', 'repair_time',
             'll_mi8', 'oh_mi8', 'oh_threshold_mi8',
-            'll_mi17', 'oh_mi17',
+            'll_mi17', 'oh_mi17', 'second_ll',
             'repair_price', 'purchase_price',
             'sne_new', 'ppr_new',
             'version_date', 'version_id',
@@ -285,6 +285,7 @@ def create_md_table(client):
             -- Ресурсы МИ-17 (оптимизированы для GPU)
             `ll_mi17` Nullable(UInt32),             -- LL МИ-17 (было Float64 → uint32)
             `oh_mi17` Nullable(UInt32),             -- OH МИ-17 (было Float64 → uint32)
+            `second_ll` Nullable(UInt32),           -- Дополнительный ресурс (часы→минуты)
             
             -- Стоимостные характеристики (оптимизированы для GPU)
             `repair_price` Nullable(Float32),       -- Цена ремонта (было Float64 → float32)
