@@ -21,11 +21,24 @@ sys.path.append(str(Path(__file__).parent / 'utils'))
 from config_loader import get_clickhouse_client  # type: ignore
 
 
-BASE_CONDITION = """
+PLANE_FILTER = """
+    SELECT DISTINCT aircraft_number
+    FROM heli_pandas
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND toUInt8(ifNull(status_id, 0)) = 2
+      AND toUInt32(ifNull(aircraft_number, 0)) > 0
+      AND toUInt32(ifNull(group_by, 0)) IN (1, 2)
+"""
+
+BASE_CONDITION = f"""
     version_date = %(version_date)s
     AND version_id = %(version_id)s
     AND toUInt32(ifNull(group_by, 0)) > 2
     AND toUInt32(ifNull(aircraft_number, 0)) > 0
+    AND aircraft_number IN (
+        {PLANE_FILTER}
+    )
     AND upperUTF8(
         replaceRegexpAll(ifNull(condition, ''), '^\\s+|\\s+$', '')
     ) = 'ИСПРАВНЫЙ'
