@@ -27,6 +27,7 @@ dist/
 .Trashes
 ehthumbs.db
 Thumbs.db
+~$*.xls*
 
 # Downloaded libraries and dependencies (not needed on other computers)
 # GPU libraries downloads
