@@ -19,6 +19,16 @@ from typing import Dict, List, Optional, Sequence, Tuple
 sys.path.append(str(Path(__file__).resolve().parent / "utils"))
 from config_loader import get_clickhouse_client  # type: ignore
 
+OPTIONAL_GROUPS = {32, 33, 34}
+ALLOW_EXTRA_GROUPS = {32, 33, 34, 35}
+MI8_CORE_TARGET = 33
+
+
+def _mask_applies(group_mask: int, plane_mask: Optional[int]) -> bool:
+    if group_mask == 0 or plane_mask is None:
+        return True
+    return bool(group_mask & plane_mask)
+
 
 @dataclass(frozen=True)
 class VersionInfo:
@@ -35,6 +45,8 @@ class PlaneAggregation:
     required_components: int
     delta: int
     shortage_groups: List[str]
+    core_components: int
+    core_missing_groups: List[str]
 
 
 def decode_ac_type(ac_type_mask: Optional[int]) -> str:
@@ -124,12 +136,13 @@ def fetch_group_counts(client, version: VersionInfo) -> Dict[int, Dict[int, int]
     return result
 
 
-def fetch_group_requirements(client, version: VersionInfo) -> Dict[int, int]:
+def fetch_group_requirements(client, version: VersionInfo) -> Dict[int, Dict[str, int]]:
     rows = client.execute(
         """
         SELECT
             group_by,
-            max(comp_number) AS required_count
+            max(comp_number) AS required_count,
+            groupBitOr(toUInt16(coalesce(ac_type_mask, 0))) AS ac_type_mask
         FROM md_components
         WHERE version_date = %(version_date)s
           AND version_id = %(version_id)s
@@ -138,7 +151,13 @@ def fetch_group_requirements(client, version: VersionInfo) -> Dict[int, int]:
         """,
         {"version_date": version.version_date, "version_id": version.version_id},
     )
-    return {int(group_by): int(required_count) for group_by, required_count in rows}
+    return {
+        int(group_by): {
+            "required": int(required_count) if required_count is not None else 0,
+            "mask": int(ac_type_mask) if ac_type_mask is not None else 0,
+        }
+        for group_by, required_count, ac_type_mask in rows
+    }
 
 
 def fetch_requirement_details(client, version: VersionInfo) -> Dict[int, List[str]]:
@@ -168,7 +187,6 @@ def fetch_aggregations(client, version: VersionInfo) -> List[PlaneAggregation]:
     counts = fetch_group_counts(client, version)
     requirements = fetch_group_requirements(client, version)
     requirement_details = fetch_requirement_details(client, version)
-    exempt_groups = {33, 34, 35}
 
     aggregations: List[PlaneAggregation] = []
     for aircraft_number, (ac_type_mask, mfg_date) in plane_meta.items():
@@ -177,27 +195,41 @@ def fetch_aggregations(client, version: VersionInfo) -> List[PlaneAggregation]:
         required_components = 0
         shortages: List[str] = []
         allowed_extra = 0
-        for group, installed in group_counts.items():
-            required = requirements.get(group, installed)
+        core_components = 0
+        core_missing: List[str] = []
+        relevant_groups = set(group_counts.keys())
+        for group, info in requirements.items():
+            if _mask_applies(info["mask"], ac_type_mask):
+                relevant_groups.add(group)
+
+        for group in sorted(relevant_groups):
+            installed = group_counts.get(group, 0)
+            req_info = requirements.get(group)
+            required = req_info["required"] if req_info else installed
+            comp_desc = ";".join(requirement_details.get(group, []))
+            entry_plain = f"{group}:{installed}/{required}"
+            if comp_desc:
+                entry_plain += f"({comp_desc})"
+
+            if group in OPTIONAL_GROUPS:
+                # Полностью опциональные группы: считаем только фактическую установку,
+                # чтобы исключить их из нормы и не штрафовать за отсутствие.
+                allowed_extra += installed
+                continue
+
             required_components += required
+            core_components += installed
+
             if installed < required:
-                comp_desc = ";".join(requirement_details.get(group, []))
-                entry = f"{group}:{installed}/{required}"
-                if comp_desc:
-                    entry += f"({comp_desc})"
-                if group not in {33, 34, 35}:
-                    entry = f"**{entry}**"
+                entry = f"**{entry_plain}**"
                 shortages.append(entry)
+                core_missing.append(entry_plain)
             elif installed > required:
-                comp_desc = ";".join(requirement_details.get(group, []))
-                entry = f"{group}:{installed}/{required}"
-                if comp_desc:
-                    entry += f"({comp_desc})"
-                if group not in {33, 34, 35}:
-                    entry = f"**{entry}**"
-                shortages.append(entry)
-                if group in exempt_groups:
+                if group in ALLOW_EXTRA_GROUPS:
                     allowed_extra += installed - required
+                else:
+                    entry = f"**{entry_plain}**"
+                    shortages.append(entry)
         delta = total_components - required_components - allowed_extra
         aggregations.append(
             PlaneAggregation(
@@ -208,6 +240,8 @@ def fetch_aggregations(client, version: VersionInfo) -> List[PlaneAggregation]:
                 required_components=required_components,
                 delta=delta,
                 shortage_groups=shortages,
+                core_components=core_components,
+                core_missing_groups=core_missing,
             )
         )
     return aggregations
@@ -262,6 +296,22 @@ def build_markdown(version: VersionInfo, rows: Sequence[PlaneAggregation]) -> st
     if mixed:
         append_section("Mixed/Unknown", mixed)
 
+    mi8_core_alerts = [row for row in mi8 if row.core_components < MI8_CORE_TARGET]
+    if mi8_core_alerts:
+        sections.append("### Mi-8T < 33 агрегатов (без групп 33/34/35)")
+        sections.append(
+            "| aircraft_number | inst_core | target | дефицит | отсутствуют группы |"
+        )
+        sections.append("| ---: | ---: | ---: | ---: | --- |")
+        for row in mi8_core_alerts:
+            deficit = MI8_CORE_TARGET - row.core_components
+            sections.append(
+                f"| {row.aircraft_number} | {row.core_components} | "
+                f"{MI8_CORE_TARGET} | {deficit} | "
+                f"{', '.join(row.core_missing_groups) if row.core_missing_groups else ''} |"
+            )
+        sections.append("")
+
     lines = sections
     return "\n".join(lines)
 
@@ -308,6 +358,24 @@ def main() -> int:
             )
 
     print_group("Mi-8T", mi8)
+    mi8_core_alerts = [row for row in mi8 if row.core_components < MI8_CORE_TARGET]
+    if mi8_core_alerts:
+        print(
+            f"\nMi-8T < {MI8_CORE_TARGET} агрегатов (без групп 33/34/35): "
+            f"{len(mi8_core_alerts)} шт."
+        )
+        print(
+            f"{'aircraft':>8}  {'inst_core':>9}  {'target':>6}  {'дефицит':>7}  "
+            f"{'нужны группы':<30}"
+        )
+        print("-" * 80)
+        for row in mi8_core_alerts:
+            deficit = MI8_CORE_TARGET - row.core_components
+            print(
+                f"{row.aircraft_number:>8}  {row.core_components:>9}  "
+                f"{MI8_CORE_TARGET:>6}  {deficit:>7}  "
+                f"{', '.join(row.core_missing_groups) if row.core_missing_groups else ''}"
+            )
     print_group("Mi-17", mi17)
     if mixed:
         print_group("Mixed/Unknown", mixed)

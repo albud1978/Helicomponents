@@ -148,13 +148,6 @@ class ExtractMaster:
             'critical': False
         },
         {
-            'script': 'md_components_enricher.py',
-            'description': 'Обогащение MD Components',
-            'dependencies': ['md_components', 'heli_pandas'],
-            'result_table': 'md_components',
-            'critical': False
-        },
-        {
             'script': 'dictionary_creator.py',
             'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
             'dependencies': ['heli_pandas', 'md_components'],
@@ -163,6 +156,13 @@ class ExtractMaster:
             # На этом шаге словарь может быть временно пуст (до генерации новых ВС в AC/FL)
             # Предупреждение валидации для пустой таблицы по текущей версии подавляем осознанно
             'allow_empty': True
+        },
+        {
+            'script': 'md_components_enricher.py',
+            'description': 'Обогащение MD Components',
+            'dependencies': ['md_components', 'heli_pandas'],
+            'result_table': 'md_components',
+            'critical': False
         },
         # === ТЕНЗОРЫ (в самом конце, когда все данные готовы) ===
         {
