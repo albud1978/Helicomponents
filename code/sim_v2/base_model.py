@@ -291,6 +291,7 @@ class V2BaseModel:
         
         # Нормативы
         agent.newVariableUInt("ll", 0)
+        agent.newVariableUInt("second_ll", 0)
         agent.newVariableUInt("oh", 0)
         agent.newVariableUInt("br", 0)
         

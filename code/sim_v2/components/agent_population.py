@@ -17,6 +17,8 @@ import pyflamegpu as fg
 from typing import Dict, List, Tuple, Union
 from .data_adapters import EnvDataAdapter
 
+SECOND_LL_SENTINEL = 0xFFFFFFFF
+
 
 class AgentPopulationBuilder:
     """Строитель популяций агентов"""
@@ -64,6 +66,8 @@ class AgentPopulationBuilder:
         # OH берём из верхнего уровня env_data как в sim_master
         mp1_oh_mi8 = self.env_data.get('mp1_oh_mi8', [])
         mp1_oh_mi17 = self.env_data.get('mp1_oh_mi17', [])
+        mp1_second_ll = self.env_data.get('mp1_second_ll', [])
+        second_ll_sentinel = int(self.env_data.get('second_ll_sentinel', SECOND_LL_SENTINEL))
         
         # Индекс кадров
         frames_index = self.env_data.get('frames_index', {})
@@ -196,6 +200,11 @@ class AgentPopulationBuilder:
                 ll_value = ll_by_frame[frame_idx]  # значение по умолчанию
             
             agent.setVariableUInt("ll", ll_value)
+            if 0 <= pidx < len(mp1_second_ll):
+                second_ll_value = int(mp1_second_ll[pidx])
+            else:
+                second_ll_value = second_ll_sentinel
+            agent.setVariableUInt("second_ll", second_ll_value)
             agent.setVariableUInt("oh", oh_value)
             agent.setVariableUInt("br", br_by_frame[frame_idx])
 
@@ -293,6 +302,7 @@ class AgentPopulationBuilder:
         mp1_partseqno = mp1_arrays.get('partseqno_i', [])
         mp1_ll_mi8 = mp1_arrays.get('ll_mi8', [])
         mp1_ll_mi17 = mp1_arrays.get('ll_mi17', [])
+        mp1_second_ll = mp1_arrays.get('second_ll', [])
         # OH берём из верхнего уровня env_data как в sim_master
         mp1_oh_mi8 = self.env_data.get('mp1_oh_mi8', [])
         mp1_oh_mi17 = self.env_data.get('mp1_oh_mi17', [])
@@ -310,6 +320,7 @@ class AgentPopulationBuilder:
                     'oh_mi17': mp1_oh_mi17[i] if i < len(mp1_oh_mi17) else 0,
                     'br_mi8': mp1_br_mi8[i] if i < len(mp1_br_mi8) else 0,
                     'br_mi17': mp1_br_mi17[i] if i < len(mp1_br_mi17) else 0,
+                    'second_ll': mp1_second_ll[i] if i < len(mp1_second_ll) else SECOND_LL_SENTINEL,
                 }
         
         # Индекс кадров

@@ -14,6 +14,20 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 from config_loader import get_clickhouse_client
 
+SECOND_LL_SENTINEL = 0xFFFFFFFF
+def _to_uint(value) -> int:
+    """Безопасное преобразование значения к UInt (NULL/NaN → 0)."""
+    if value is None:
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return 0
+
 
 def get_client():
     return get_clickhouse_client()
@@ -67,7 +81,19 @@ def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int]]:
             break
     if not rows and last_err is not None:
         raise last_err
-    return {int(p): (int(b8 or 0), int(b17 or 0), int(rt or 0), int(pt or 0), int(at or 0)) for p, b8, b17, rt, pt, at in rows}
+    result: Dict[int, Tuple[int, int, int, int, int]] = {}
+    for p, b8, b17, rt, pt, at in rows:
+        partseq = _to_uint(p)
+        if partseq == 0:
+            continue
+        result[partseq] = (
+            int(b8 or 0),
+            int(b17 or 0),
+            int(rt or 0),
+            int(pt or 0),
+            int(at or 0),
+        )
+    return result
 
 
 def fetch_mp1_oh(client) -> Dict[int, Tuple[int, int]]:
@@ -95,7 +121,13 @@ def fetch_mp1_oh(client) -> Dict[int, Tuple[int, int]]:
             continue
     if not rows and last_err is not None:
         raise last_err
-    return {int(p): (int(oh8 or 0), int(oh17 or 0)) for p, oh8, oh17 in rows}
+    result: Dict[int, Tuple[int, int]] = {}
+    for p, oh8, oh17 in rows:
+        partseq = _to_uint(p)
+        if partseq == 0:
+            continue
+        result[partseq] = (int(oh8 or 0), int(oh17 or 0))
+    return result
 
 
 def fetch_mp1_ll(client) -> Dict[int, int]:
@@ -120,7 +152,48 @@ def fetch_mp1_ll(client) -> Dict[int, int]:
             continue
     if not rows and last_err is not None:
         raise last_err
-    return {int(p): int(ll or 0) for p, ll in rows}
+    result: Dict[int, int] = {}
+    for p, ll in rows:
+        partseq = _to_uint(p)
+        if partseq == 0:
+            continue
+        result[partseq] = int(ll or 0)
+    return result
+
+
+def fetch_mp1_second_ll(client) -> Dict[int, int]:
+    """Возвращает карту partseq → second_ll (минуты) c поддержкой sentinel для NULL."""
+    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
+    rows = []
+    last_err: Exception | None = None
+    for col in candidates:
+        try:
+            sql = (
+                "SELECT\n"
+                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
+                "  second_ll\n"
+                "FROM md_components"
+            )
+            rows = client.execute(sql)
+            if rows:
+                break
+        except Exception as e:
+            last_err = e
+            rows = []
+            continue
+    if not rows and last_err is not None:
+        raise last_err
+    
+    result: Dict[int, int] = {}
+    for partseq, value in rows:
+        p = _to_uint(partseq)
+        if p == 0:
+            continue
+        if value is None:
+            result[p] = SECOND_LL_SENTINEL
+        else:
+            result[p] = int(value)
+    return result
 
 
 def fetch_mp1_repair_number(client) -> Dict[int, int]:
@@ -161,11 +234,15 @@ def fetch_mp1_repair_number(client) -> Dict[int, int]:
     result = {}
     non_null_count = 0
     for p, rn in rows:
+        partseq = _to_uint(p)
+        if partseq == 0:
+            continue
         if rn is None:
-            result[int(p)] = SENTINEL
+            result[partseq] = SENTINEL
         else:
-            result[int(p)] = int(rn)
-            if int(rn) > 0:
+            value = int(rn)
+            result[partseq] = value
+            if value > 0:
                 non_null_count += 1
     
     print(f"  📊 fetch_mp1_repair_number: загружено {len(result)} записей, из них {non_null_count} с repair_number > 0")
@@ -212,7 +289,13 @@ def fetch_mp1_sne_ppr_new(client) -> Dict[int, Tuple[int, int]]:
             continue
     if not rows and last_err is not None:
         raise last_err
-    return {int(p): (int(sne), int(ppr)) for p, sne, ppr in rows}
+    result = {}
+    for p, sne, ppr in rows:
+        partseq = _to_uint(p)
+        if partseq == 0:
+            continue
+        result[partseq] = (int(sne), int(ppr))
+    return result
 
 
 def fetch_mp3(client, vdate: date, vid: int):
@@ -541,6 +624,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
     mp1_map = fetch_mp1_br_rt(client)
     mp1_oh_map = fetch_mp1_oh(client)
     mp1_ll_map = fetch_mp1_ll(client)
+    mp1_second_ll_map = fetch_mp1_second_ll(client)
     mp1_sne_ppr_map = fetch_mp1_sne_ppr_new(client)
     mp1_repair_number_map = fetch_mp1_repair_number(client)
     mp4_by_day = preload_mp4_by_day(client)
@@ -667,9 +751,12 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         mp1_oh17_arr.append(int(oh17 or 0))
     # Соберём массив LL по индексу MP1 (для mi17)
     mp1_ll17_arr: List[int] = []
+    mp1_second_ll_arr: List[int] = []
     for k in keys_sorted:
         llv = mp1_ll_map.get(k, 0)
         mp1_ll17_arr.append(int(llv or 0))
+        second_ll_val = mp1_second_ll_map.get(k, SECOND_LL_SENTINEL)
+        mp1_second_ll_arr.append(int(second_ll_val))
     
     # Соберём массивы sne_new и ppr_new по индексу MP1
     # SENTINEL = 0xFFFFFFFF (4294967295) для NULL значений
@@ -713,6 +800,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'oh_mi17': mp1_oh17_arr,
         'll_mi8': [0] * len(keys_sorted),  # TODO: добавить загрузку ll_mi8
         'll_mi17': mp1_ll17_arr,
+        'second_ll': mp1_second_ll_arr,
         'sne_new': mp1_sne_new_arr,
         'ppr_new': mp1_ppr_new_arr,
         'repair_number': mp1_repair_number_arr,
@@ -810,6 +898,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mp1_assembly_time': mp1_at,
         'mp1_oh_mi8': mp1_oh8_arr,
         'mp1_oh_mi17': mp1_oh17_arr,
+        'mp1_second_ll': mp1_second_ll_arr,
         'mp1_ll_mi17': mp1_ll17_arr,
         'mp1_sne_new': mp1_sne_new_arr,
         'mp1_ppr_new': mp1_ppr_new_arr,
@@ -836,6 +925,7 @@ def prepare_env_arrays(client) -> Dict[str, object]:
         'mi17_ll_const': int(mi17_ll_const),
         'mi17_oh_const': int(mi17_oh_const),
         'mi17_br_const': int(mi17_br_const),
+        'second_ll_sentinel': SECOND_LL_SENTINEL,
         # Параметры динамического spawn (расчёт по формуле агрегатов)
         'initial_mi17_count': int(initial_mi17_count),
         'deterministic_spawn_mi17': int(deterministic_spawn_mi17),
@@ -889,6 +979,8 @@ def apply_env_to_sim(sim, env_data: Dict[str, object]):
             sim.setEnvironmentPropertyArrayUInt32("mp1_oh_mi8", list(env_data['mp1_oh_mi8']))
         if 'mp1_oh_mi17' in env_data:
             sim.setEnvironmentPropertyArrayUInt32("mp1_oh_mi17", list(env_data['mp1_oh_mi17']))
+        if 'mp1_second_ll' in env_data:
+            sim.setEnvironmentPropertyArrayUInt32("mp1_second_ll", list(env_data['mp1_second_ll']))
         if 'mp1_sne_new' in env_data:
             sim.setEnvironmentPropertyArrayUInt32("mp1_sne_new", list(env_data['mp1_sne_new']))
         if 'mp1_ppr_new' in env_data:

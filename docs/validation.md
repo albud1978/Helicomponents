@@ -54,6 +54,7 @@
 
 - MP5: линейный массив (DAYS+1)*FRAMES с паддингом, MacroProperty mp5_lin.
 - MP3 пороги: ll, oh, br — сопоставлены по frames_index.
+- MP1 нормы: `mp1_br_*`, `mp1_oh_*`, `mp1_ll_mi17`, `mp1_second_ll` (UInt32, минуты) — загружаются через `sim_env_setup`, проверяются по `partseqno_i` и передаются агентам как `ll`/`second_ll`. Пустые `second_ll` получают sentinel `0xFFFFFFFF`, чтобы RTC различали NULL и реальный 0.
 
 ## Инварианты
 

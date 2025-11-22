@@ -75,6 +75,7 @@ class MP1Data:
     oh_mi17: List[int]           # Overhaul Hours для Mi-17
     ll_mi8: List[int]            # Life Limit для Mi-8
     ll_mi17: List[int]           # Life Limit для Mi-17
+    second_ll: List[int]         # Дополнительный ресурс
     repair_time: List[int]       # Время ремонта
     partout_time: List[int]      # Время разборки
     assembly_time: List[int]     # Время сборки
@@ -111,6 +112,13 @@ class MP1Data:
         elif group_by == 2:  # Mi-17
             return self.ll_mi17[idx] if idx < len(self.ll_mi17) else 0
         return 0
+    
+    def get_second_ll(self, partseqno: int) -> int:
+        """Получить second_ll по partseqno"""
+        idx = self.index.get(partseqno, -1)
+        if idx < 0:
+            return 0
+        return self.second_ll[idx] if idx < len(self.second_ll) else 0
 
 
 @dataclass
@@ -223,6 +231,7 @@ class EnvDataAdapter:
                 oh_mi17=list(self._raw_data.get('mp1_oh_mi17', [])),
                 ll_mi8=list(mp1_arrays.get('ll_mi8', [])),
                 ll_mi17=list(mp1_arrays.get('ll_mi17', [])),
+                second_ll=list(self._raw_data.get('mp1_second_ll', [])),
                 repair_time=list(mp1_arrays.get('repair_time', [])),
                 partout_time=list(mp1_arrays.get('partout_time', [])),
                 assembly_time=list(mp1_arrays.get('assembly_time', []))
