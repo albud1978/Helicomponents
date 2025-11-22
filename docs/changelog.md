@@ -16,10 +16,12 @@
    - `docs/README.md` — зафиксирован новый микросервис в перечне ETL шагов.
    - `docs/rtc_pipeline_architecture.md` — в блоке MP3 добавлено требование по статусам агрегатов.
    - `docs/validation.md` — новая проверка «heli_pandas installed → status_id=2» (SQL-инвариант для Extract).
+5. **Extract оркестратор:** `md_components_enricher.py` теперь выполняется сразу после `dictionary_creator.py`, поэтому `md_components.partno_comp` получает актуальные `partseqno_i` уже в том же прогоне (новые партномера больше не требуют повторного Extract).
 
 ### Тесты
 - `python3 code/heli_pandas_component_status.py --dry-run` — убедились в количестве кандидатов до обновления.
 - `python3 code/heli_pandas_component_status.py` — выполнено обновление, зафиксировано 6 084 модификаций (все кандидаты получили статус 2).
+- `printf "1\\n" | python3 code/extract_master.py` — тест подтвердил обновлённый порядок шагов и заполнение `partno_comp` для новых партномеров.
 
 ---
 
