@@ -109,6 +109,7 @@ class HeliSimModel:
             # Новые массивы OH по типам (минуты)
             env.newPropertyArrayUInt32("mp1_oh_mi8", [0] * max(1, mp1_len))
             env.newPropertyArrayUInt32("mp1_oh_mi17", [0] * max(1, mp1_len))
+            env.newPropertyArrayUInt32("mp1_second_ll", [0] * max(1, mp1_len))
         if not minimal_env or enable_mp3:
             # MP3 SoA
             env.newPropertyArrayUInt32("mp3_psn", [0] * max(1, mp3_count))

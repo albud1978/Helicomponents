@@ -465,6 +465,7 @@ class V2Orchestrator:
                     'intent_state': agent.getVariableUInt("intent_state"),
                     'repair_days': agent.getVariableUInt("repair_days"),
                     'll': agent.getVariableUInt("ll"),
+                    'second_ll': agent.getVariableUInt("second_ll"),
                     'oh': agent.getVariableUInt("oh"),
                     'br': agent.getVariableUInt("br")
                 })

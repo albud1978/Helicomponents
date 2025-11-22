@@ -1195,7 +1195,7 @@ class EnvDataAdapter:
 - `VersionInfo` — версия снапшота (date_ordinal, version_id)
 - `FramesInfo` — информация о кадрах с методами (`is_reserved`, `get_aircraft_number`)
 - `SimulationDimensions` — размерности с валидацией
-- `MP1Data` — нормативы компонентов с методами (`get_oh`, `get_br`, `get_ll`)
+- `MP1Data` — нормативы компонентов с методами (`get_oh`, `get_br`, `get_ll`, `get_second_ll`); с 21-11-2025 хранит массив `second_ll` (минуты) и предоставляет доступ через Env array `mp1_second_ll`.
 - `MP3Data`, `MP4Data`, `MP5Data` — типизированные данные
 
 **Ключевые особенности**:
