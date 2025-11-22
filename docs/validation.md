@@ -61,6 +61,9 @@
 - Длины массивов соответствуют DAYS/FRAMES.
 - Индексация row = day*FRAMES + idx; row_next = row + FRAMES.
 - Типы согласованы: UInt32 для MP5 и агентных накопителей.
+- **heli_pandas (установленные компоненты)**: для текущей версии `heli_pandas` выполняется проверка  
+  `SELECT count() FROM heli_pandas WHERE version_date=? AND version_id=? AND aircraft_number>0 AND group_by>2 AND upperUTF8(replaceRegexpAll(ifNull(condition,''), '^\\s+|\\s+$', ''))='ИСПРАВНЫЙ' AND status_id!=2`.  
+  Ожидаемый результат — `0`. Проверка выполняется автоматически скриптом `heli_pandas_component_status.py` (Extract-пайплайн, шаг после `heli_pandas_group_by_enricher`).
 
 ## Правило источников данных (строго)
 
