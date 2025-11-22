@@ -187,6 +187,13 @@ class ExtractMaster:
             'critical': False,
             'args': ['--apply']
         },
+        {
+            'script': 'heli_pandas_component_status.py',
+            'description': 'Проставление status_id=2 для компонентов на планерах',
+            'dependencies': ['heli_pandas'],
+            'result_table': 'heli_pandas',
+            'critical': True
+        },
         # === МЕТА-СЛОВАРЬ (финальный этап после всех таблиц) ===
         {
             'script': 'digital_values_dictionary_creator.py',

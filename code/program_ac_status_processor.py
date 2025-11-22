@@ -10,6 +10,16 @@ import pandas as pd
 from datetime import datetime, date
 
 
+PLANER_PARTNOS = {
+    'МИ-8Т',
+    'МИ-8П',
+    'МИ-8ПС',
+    'МИ-8ТП',
+    'МИ-8АМТ',
+    'МИ-8МТВ',
+}
+
+
 def load_dict_status_flat():
     """Возвращает словарь статусов с правильной нумерацией"""
     return {
@@ -129,8 +139,10 @@ def process_aircraft_operation_status(pandas_df, client):
         aircraft_serialnos = set(program_dict.keys())
         aircraft_mask = pandas_df['serialno'].isin(aircraft_serialnos)
         
+        # Дополнительно фильтруем только планеры по partno (агрегаты могут иметь такой же serialno)
         aircraft_rows = pandas_df[aircraft_mask].copy()
-        print(f"🚁 Найдено {len(aircraft_rows)} компонентов с serialno = ac_registr для обработки")
+        aircraft_rows = aircraft_rows[aircraft_rows['partno'].isin(PLANER_PARTNOS)]
+        print(f"🚁 Найдено {len(aircraft_rows)} планеров с serialno = ac_registr для обработки")
         
         if len(aircraft_rows) == 0:
             print("ℹ️ Не найдено компонентов с serialno = ac_registr - обработка не требуется")
@@ -157,7 +169,7 @@ def process_aircraft_operation_status(pandas_df, client):
                 serialno_normalized = str(serialno).zfill(5)
                 
                 # ПРЯМОЕ СРАВНЕНИЕ: ac_registr = serialno
-                if serialno_normalized in program_dict:
+                if serialno_normalized in program_dict and row['partno'] in PLANER_PARTNOS:
                     program_data = program_dict[serialno_normalized]
                     
                     # КРИТИЧНО: НЕ ПЕРЕЗАПИСЫВАЕМ уже установленные статусы
