@@ -481,6 +481,7 @@ def build_markdown(version: VersionInfo, rows: Sequence[PlaneAggregation]) -> st
     def append_section(title: str, items: Sequence[PlaneAggregation]) -> None:
         sections.append(f"## {title}")
         sections.append(f"Всего планеров: **{len(items)}**")
+        sections.append("")
         sections.append(
             "| aircraft_number | variant | mfg_date | агрегаты | норма | опциональное | Δ | отклонения по группам |"
         )
