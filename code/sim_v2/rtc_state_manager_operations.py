@@ -281,17 +281,34 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     
     // ✅ КРИТИЧНО: Устанавливаем active_trigger=1 при переходе inactive → operations
     FLAMEGPU->setVariable<unsigned int>("active_trigger", 1u);
     
-    // ✅ КРИТИЧНО: Обнуляем PPR при переходе inactive → operations
-    // Агент "только что из ремонта" (repair_time дней), PPR сбрасывается
-    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+    // Запас до ремонта (OH - PPR)
+    const unsigned int margin = (oh > ppr) ? (oh - ppr) : 0u;
+    const unsigned int MIN_MARGIN = 6000u;  // 100 часов = 6000 минут
+    
+    // Логика обнуления PPR:
+    // Mi-8: всегда обнуляем (реальный ремонт планера)
+    // Mi-17: обнуляем только если запас < 100 часов (иначе комплектация без ремонта)
+    if (group_by == 1u) {
+        // Mi-8: реальный ремонт → PPR = 0
+        FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+    } else if (group_by == 2u && margin < MIN_MARGIN) {
+        // Mi-17 с малым запасом (< 100 час): обнуляем PPR
+        FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+    }
+    // Mi-17 с запасом >= 100 час: PPR сохраняется (комплектация)
     
     if (aircraft_number >= 100000u || step_day == 226u || step_day == 227u || step_day == 228u) {
-        printf("  [TRANSITION 1→2 Day %u] AC %u (idx %u): inactive -> operations (PROMOTE P3), ppr сброшен\\n", 
-               step_day, aircraft_number, idx);
+        const unsigned int ppr_new = FLAMEGPU->getVariable<unsigned int>("ppr");
+        const char* action = (ppr_new == 0u) ? "ppr=0 (ремонт)" : "ppr сохранён (комплектация)";
+        printf("  [TRANSITION 1→2 Day %u] AC %u (group_by=%u): margin=%u, %s, ppr=%u\\n", 
+               step_day, aircraft_number, group_by, margin, action, ppr_new);
     }
     
     return flamegpu::ALIVE;
