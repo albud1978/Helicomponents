@@ -338,66 +338,70 @@ LOG_LEVEL=DEBUG python3 code/extract_master.py
 ```bash
 # 🎯 ОСНОВНАЯ КОМАНДА: Полный 10-летний прогон с каскадным квотированием, spawn и выгрузкой в СУБД
 # ⚠️ ПОРЯДОК МОДУЛЕЙ: см. docs/rtc_pipeline_architecture.md (раздел "Порядок модулей в пайплайне")
+# ⚠️ ОБЯЗАТЕЛЬНО: --enable-mp2-postprocess для записи transition флагов (1→4, 4→2)
 cd "/home/budnik_an/cube linux/cube" && \
-rm -rf code/sim_v2/__pycache__ code/sim_v2/rtc_modules/__pycache__ code/sim_v2/components/__pycache__ && \
-export CUDA_PATH=/usr/local/cuda-12.8 CUBE_CONFIG_PATH="/home/budnik_an/cube linux/cube" && \
-python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations states_stub count_ops \
-            quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
-            state_manager_operations state_manager_serviceable state_manager_inactive \
-            state_manager_repair state_manager_reserve state_manager_storage \
-            spawn_v2 \
-  --steps 3650 \
-  --enable-mp2 \
-  --drop-table \
-  2>&1 | cat
+source config/load_env.sh && \
+export CUDA_PATH=/usr/local/cuda && \
+export CUBE_CONFIG_PATH="/home/budnik_an/cube linux/cube/config" && \
+cd code/sim_v2 && \
+python3 orchestrator_v2.py --modules \
+  state_2_operations \
+  states_stub \
+  count_ops \
+  quota_repair \
+  quota_ops_excess \
+  quota_promote_serviceable \
+  quota_promote_reserve \
+  quota_promote_inactive \
+  spawn_dynamic \
+  state_manager_serviceable \
+  state_manager_operations \
+  state_manager_repair \
+  state_manager_storage \
+  state_manager_reserve \
+  state_manager_inactive \
+  spawn_v2 \
+  --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 
-# ✅ ОБНОВЛЕНО (22-10-2025): 14-слойный пайплайн с state_manager_inactive, state_manager_reserve
-#   Порядок модулей (см. rtc_pipeline_architecture.md 1257-1277):
+# ✅ ОБНОВЛЕНО (01-12-2025): 17-слойный пайплайн с quota_repair, spawn_dynamic, постпроцессингом
+#   Порядок модулей:
 #   1. state_2_operations (логика operations: intent=2/4/6 + инкременты)
 #   2. states_stub (устанавливает БАЗОВЫЙ intent для остальных состояний)
 #   3. count_ops (считает агентов с intent=2 в operations)
-#   4. quota_ops_excess (демоут operations → serviceable, oldest first)
-#   5. quota_promote_serviceable (промоут P1: serviceable → operations, youngest first)
-#   6. quota_promote_reserve (промоут P2: reserve → operations, youngest first)
-#   7. quota_promote_inactive (промоут P3: inactive → operations, youngest first)
-#   8. state_manager_operations (переходы: 2→2, 2→3, 2→4, 2→6, 3→2, 5→2, 1→2)
-#   9. state_manager_serviceable (холдинг: 3→3)
-#   10. state_manager_inactive (холдинг: 1→1)
-#   11. state_manager_repair (переходы: 4→4, 4→5)
-#   12. state_manager_reserve (холдинг: 5→5)
+#   4. quota_repair (квотирование ремонтов)
+#   5. quota_ops_excess (демоут operations → serviceable, oldest first)
+#   6. quota_promote_serviceable (промоут P1: serviceable → operations, youngest first)
+#   7. quota_promote_reserve (промоут P2: reserve → operations, youngest first)
+#   8. quota_promote_inactive (промоут P3: inactive → operations, youngest first)
+#   9. spawn_dynamic (динамический spawn при дефиците)
+#   10. state_manager_serviceable (холдинг: 3→3)
+#   11. state_manager_operations (переходы: 2→2, 2→3, 2→4, 2→6, 3→2, 5→2, 1→2)
+#   12. state_manager_repair (переходы: 4→4, 4→5)
 #   13. state_manager_storage (неизменяемое: 6→6)
-#   14. spawn_v2 (в конце - новые агенты в serviceable согласно MP4)
+#   14. state_manager_reserve (холдинг: 5→5)
+#   15. state_manager_inactive (холдинг: 1→1)
+#   16. spawn_v2 (в конце - новые агенты в serviceable согласно MP4)
+#   + mp2_postprocess_active (постпроцессинг: заполнение истории ремонта для inactive→operations)
 #
-#   Результаты (3650 дней, актуальные):
-#   - Со spawn: ~55с GPU, 13-14мс/шаг, ~1M строк MP2, 286 агентов
-#   - Без spawn: ~50с GPU, 12-13мс/шаг, ~1M строк MP2, 279 агентов
-
-# Краткая версия (без очистки кэша):
-python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations states_stub count_ops \
-            quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
-            state_manager_operations state_manager_serviceable state_manager_inactive \
-            state_manager_repair state_manager_reserve state_manager_storage \
-            spawn_v2 \
-  --steps 3650 --enable-mp2 --drop-table
+#   Результаты (3650 дней, 01-12-2025):
+#   - 322 агента (279 начальных + 43 spawn)
+#   - ~165с GPU, ~43мс/шаг, ~1.1M строк MP2
+#   - Mi-17 из inactive: PPR сохраняется (комплектация)
+#   - Transition флаги: 1→4=23, 4→2=23
 
 # Тест на 300 дней (быстрая проверка):
-python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations states_stub count_ops \
-            quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
-            state_manager_operations state_manager_serviceable state_manager_inactive \
-            state_manager_repair state_manager_reserve state_manager_storage \
-            spawn_v2 \
-  --steps 300 --enable-mp2 --drop-table
-
-# Без spawn (базовый пайплайн):
-python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations states_stub count_ops \
-            quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
-            state_manager_operations state_manager_serviceable state_manager_inactive \
-            state_manager_repair state_manager_reserve state_manager_storage \
-  --steps 3650 --enable-mp2 --drop-table
+cd "/home/budnik_an/cube linux/cube" && \
+source config/load_env.sh && \
+export CUDA_PATH=/usr/local/cuda && \
+export CUBE_CONFIG_PATH="/home/budnik_an/cube linux/cube/config" && \
+cd code/sim_v2 && \
+python3 orchestrator_v2.py --modules \
+  state_2_operations states_stub count_ops quota_repair \
+  quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
+  spawn_dynamic state_manager_serviceable state_manager_operations \
+  state_manager_repair state_manager_storage state_manager_reserve state_manager_inactive \
+  spawn_v2 \
+  --steps 300 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
 
 **Результаты успешного прогона (3650 дней, обновлено 08-10-2025):**

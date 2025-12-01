@@ -90,7 +90,7 @@
 - Каждая ошибка — улучшение процесса анализа для будущих задач.
 - Примечание: правило добавлено 19.10.2025 после неправильного анализа deficit расчёта в P1.
 
-## Команда запуска симуляции (обновлено 16.11.2025)
+## Команда запуска симуляции (обновлено 01.12.2025)
 
 **ПРАВИЛЬНЫЙ порядок модулей (КРИТИЧНО!):**
 
@@ -117,13 +117,14 @@ python3 orchestrator_v2.py --modules \
   state_manager_reserve \
   state_manager_inactive \
   spawn_v2 \
-  --steps 3650 --enable-mp2 --drop-table
+  --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
 
 **Ключевые правила порядка:**
 1. `spawn_v2` ВСЕГДА в конце (новые агенты проходят логику на следующем шаге)
 2. `state_manager_serviceable` ПЕРЕД `state_manager_operations` (холдинг до промоута)
 3. Порядок state_manager: serviceable → operations → repair → storage → reserve → inactive
+4. `--enable-mp2-postprocess` ОБЯЗАТЕЛЕН для записи transition флагов (1→4, 4→2)
 
 **Источник:** Матрица состояний `data_input/analytics/state-intent matrix.xlsx`  
 **Детали:** `docs/rtc_pipeline_architecture.md` (секция "Порядок слоёв")
