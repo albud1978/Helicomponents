@@ -136,3 +136,6 @@ debug_*.xlsx
 *.whl
 .cache/pip/
 FLAMEGPU2/
+
+# RTC ядра FLAME GPU (кэш компиляции)
+.rtc_cache/

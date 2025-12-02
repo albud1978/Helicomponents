@@ -81,7 +81,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("repair_time_mi17");
         if (day < repair_time) {
             // Ещё не активирован
-            return;
+            return flamegpu::ALIVE;
         }
         
         // ВАЖНО: Используем КАСКАДНУЮ логику как в P1/P2/P3!
@@ -142,7 +142,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         if (deficit_signed <= 0) {
             // Нет дефицита или избыток — ничего не делаем
-            return;
+            return flamegpu::ALIVE;
         }
         
         const unsigned int deficit = static_cast<unsigned int>(deficit_signed);
@@ -185,7 +185,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         if (need == 0u) {
             // Нечего создавать
-            return;
+            return flamegpu::ALIVE;
         }
         
         // Публикуем в MacroProperty МАССИВЫ
@@ -216,7 +216,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->setVariable<unsigned int>("total_spawned", total_spawned);
         FLAMEGPU->setVariable<unsigned int>("exhausted_day", exhausted_day);
         
-        return;
+        return flamegpu::ALIVE;
     }
     """).substitute(MAX_DAYS=MAX_DAYS, MAX_FRAMES=MAX_FRAMES)
     
@@ -241,13 +241,13 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         if (ticket >= need) {
             // Тикет вне диапазона
-            return;
+            return flamegpu::ALIVE;
         }
         
         // Создаём нового агента
         const unsigned int new_idx = base_idx + ticket;
         const unsigned int new_acn = base_acn + ticket;
-        const unsigned int new_psn = base_psn + ticket;
+        // new_psn не используется - partseqno_i одинаков для всех Mi-17 (base_psn)
         
         // Дата производства = version_date + day
         const unsigned int version_date = FLAMEGPU->environment.getProperty<unsigned int>("version_date");
@@ -333,7 +333,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
             printf("    bi_counter=%u\\n", 1u);
         }
         
-        return;
+        return flamegpu::ALIVE;
     }
     """).substitute(MAX_DAYS=MAX_DAYS, MAX_FRAMES=MAX_FRAMES, MP2_SIZE=MP2_SIZE)
     

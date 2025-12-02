@@ -41,3 +41,13 @@ else
     echo "Создайте файл .env с необходимыми переменными или укажите путь через CUBE_CONFIG_PATH"
     exit 1
 fi
+
+# Кэширование скомпилированных RTC ядер FLAME GPU
+# Ускоряет повторные запуски симуляции (компиляция только при изменении кода)
+RTC_CACHE_DIR="/home/budnik_an/cube linux/cube/.rtc_cache"
+if [ ! -d "$RTC_CACHE_DIR" ]; then
+    mkdir -p "$RTC_CACHE_DIR"
+    echo "📁 Создана директория кэша RTC: $RTC_CACHE_DIR"
+fi
+export FLAMEGPU_RTC_EXPORT_CACHE_PATH="$RTC_CACHE_DIR"
+echo "⚡ RTC кэш: $FLAMEGPU_RTC_EXPORT_CACHE_PATH"
