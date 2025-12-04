@@ -1,0 +1,3488 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Сравнение файлов ATI vs Status Components</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Сравнение файлов ATI vs Status Components</h1>
+</header>
+<h1 id="сравнение-файлов-status_components.xlsx-vs-ati_251203.xlsx">Сравнение файлов: Status_Components.xlsx vs ATI_251203.xlsx</h1>
+<p><strong>Дата анализа:</strong> 04-12-2025</p>
+<hr />
+<h2 id="сводная-таблица">1. Сводная таблица</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Параметр</th>
+<th style="text-align: right;">Status_Components.xlsx</th>
+<th style="text-align: right;">ATI_251203.xlsx</th>
+<th style="text-align: right;">Δ</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Строк</strong></td>
+<td style="text-align: right;">166,571</td>
+<td style="text-align: right;">200,219</td>
+<td style="text-align: right;"><strong>+33,648</strong></td>
+</tr>
+<tr class="even">
+<td><strong>Столбцов</strong></td>
+<td style="text-align: right;">22</td>
+<td style="text-align: right;">20</td>
+<td style="text-align: right;">-2</td>
+</tr>
+<tr class="odd">
+<td><strong>Уникальных partno</strong></td>
+<td style="text-align: right;">3,590</td>
+<td style="text-align: right;">3,853</td>
+<td style="text-align: right;"><strong>+263</strong></td>
+</tr>
+<tr class="even">
+<td><strong>Общих partno</strong></td>
+<td style="text-align: right;">3,559</td>
+<td style="text-align: right;">3,559</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr class="odd">
+<td><strong>Уникальных (только в файле)</strong></td>
+<td style="text-align: right;">31</td>
+<td style="text-align: right;">294</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr class="even">
+<td><strong>Уникальных owner</strong></td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">121</td>
+<td style="text-align: right;"><strong>+113</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="структура-колонок">2. Структура колонок</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Колонка</th>
+<th style="text-align: center;">Status_Components</th>
+<th style="text-align: center;">ATI_251203</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>partno, partseqno_i, serialno, psn</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr class="even">
+<td>ac_typ, ac_type_i, location, ll, oh</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr class="odd">
+<td>oh_threshold, sne, ppr, mfg_date</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr class="even">
+<td>oh_at_date, shop_visit_counter</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr class="odd">
+<td>owner, address_i, condition</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr class="even">
+<td>removal_date, target_date</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr class="odd">
+<td><strong>lease_restricted</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+</tr>
+<tr class="even">
+<td><strong>Счет</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="номенклатура-только-в-status_components.xlsx-31-шт">3. Номенклатура: Только в Status_Components.xlsx (31 шт)</h2>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: right;">№</th>
+<th>partno</th>
+<th style="text-align: right;">Строк</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">1</td>
+<td>МП-95 -1,5;+1,5</td>
+<td style="text-align: right;">134</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">2</td>
+<td>МП-95 -1;+3</td>
+<td style="text-align: right;">131</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">3</td>
+<td>15.5303.010.006А</td>
+<td style="text-align: right;">63</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">4</td>
+<td>МП95 6Л2.775.001 -3;+3 МП95-3+3</td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">5</td>
+<td>СП-0,03 8Е4670010</td>
+<td style="text-align: right;">15</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">6</td>
+<td>Р-855УМ ВАРИАНТ “С” 2.000.098</td>
+<td style="text-align: right;">14</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">7</td>
+<td>VX-7R</td>
+<td style="text-align: right;">13</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">8</td>
+<td>РАМПЫ МИ-8АМТ (МИ-8МТВ)</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">9</td>
+<td>РМО-16</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">10</td>
+<td>КП-9 КП-9-02</td>
+<td style="text-align: right;">7</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">11</td>
+<td>15.5303.010.006</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">12</td>
+<td>4575А-У16-1020</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">13</td>
+<td>010-00412-01</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">14</td>
+<td>105-317261</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">15</td>
+<td>153070-000016</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">16</td>
+<td>2ИА-7А</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">17</td>
+<td>350A37-1018-00</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">18</td>
+<td>355A32-0700-02</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">19</td>
+<td>4569А-У20-1360</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">20</td>
+<td>4569А-У25-1140</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">21</td>
+<td>731920A0K3</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">22</td>
+<td>8-1930-011А</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">23</td>
+<td>8АТ-5912-025-007</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">24</td>
+<td>8Д0.447.018-90-120</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">25</td>
+<td>D105102</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">26</td>
+<td>D20543</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">27</td>
+<td>S1840509-01</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">28</td>
+<td>ДПТ-УГ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">29</td>
+<td>КПА-72 РБ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">30</td>
+<td>ПКД-15 (КПА ДИСС-15) ГР2.702.039</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">31</td>
+<td>ЭМТ-503А 6Б3.254.073</td>
+<td style="text-align: right;">1</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>⚠️ Видны дубликаты номенклатуры с разным написанием: <code>МП-95 -1,5;+1,5</code> → <code>МП-95 -1.5+1.5</code></p>
+</blockquote>
+<hr />
+<h2 id="номенклатура-только-в-ati_251203.xlsx-294-шт">4. Номенклатура: Только в ATI_251203.xlsx (294 шт)</h2>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: right;">№</th>
+<th>partno</th>
+<th style="text-align: right;">Строк</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">1</td>
+<td>МП-95 -1.5+1.5</td>
+<td style="text-align: right;">196</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">2</td>
+<td>МП-95 -1+3</td>
+<td style="text-align: right;">137</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">3</td>
+<td>140-5200-110-53</td>
+<td style="text-align: right;">122</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">4</td>
+<td>140-5200-110-47</td>
+<td style="text-align: right;">120</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">5</td>
+<td>140-5200-110-49</td>
+<td style="text-align: right;">120</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">6</td>
+<td>140-5200-110-51</td>
+<td style="text-align: right;">120</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">7</td>
+<td>8А-5200-110-119</td>
+<td style="text-align: right;">61</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">8</td>
+<td>8А-5200-110-121</td>
+<td style="text-align: right;">61</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">9</td>
+<td>8А-5200-110-123</td>
+<td style="text-align: right;">61</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">10</td>
+<td>8А-5200-110-125</td>
+<td style="text-align: right;">61</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">11</td>
+<td>Б1-ЯР11-1А</td>
+<td style="text-align: right;">31</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">12</td>
+<td>АПРС-15-2 8ЮЗ.229.006-02</td>
+<td style="text-align: right;">24</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">13</td>
+<td>Р-855УМ ВАРИАНТ С</td>
+<td style="text-align: right;">22</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">14</td>
+<td>СП-0.03 8Е4670010</td>
+<td style="text-align: right;">22</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">15</td>
+<td>Б1-ПРМ</td>
+<td style="text-align: right;">18</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">16</td>
+<td>Б8К2-ПРМ</td>
+<td style="text-align: right;">17</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">17</td>
+<td>МП-95 -3+3</td>
+<td style="text-align: right;">17</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">18</td>
+<td>500.5930.0750.012</td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">19</td>
+<td>БМП СЕРИЯ 2 6С2.399.021</td>
+<td style="text-align: right;">16</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">20</td>
+<td>8АТ-5104-350</td>
+<td style="text-align: right;">14</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">21</td>
+<td>АКБ ZALA T-16</td>
+<td style="text-align: right;">12</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">22</td>
+<td>41МД</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">23</td>
+<td>ЗГР-802</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">24</td>
+<td>ПРИМА-МВ ЛНВК.464415.004</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">25</td>
+<td>8Ю2.426.001</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">26</td>
+<td>АМР-0,38БН ЛНВК.464641.001-01</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">27</td>
+<td>БР-1А ЛНВК.468731.007</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">28</td>
+<td>ДП-М КМВИ.402211.010</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">29</td>
+<td>ДСМК-10-10</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">30</td>
+<td>ИТЭ-2ТБ</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">31</td>
+<td>ПРИМА-МВ ЛНВК.464415.004-03</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">32</td>
+<td>ЭВ-5,6-3660</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">33</td>
+<td>CH-USB-2 ИСУЯ.467379.001</td>
+<td style="text-align: right;">7</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">34</td>
+<td>8039.6102.040</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">35</td>
+<td>8039.6102.050</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">36</td>
+<td>8А-4101-00Б</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">37</td>
+<td>8А-4102-100-002</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">38</td>
+<td>TB65</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">39</td>
+<td>АГБ-96К-В 6Ш2.511.018-04</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">40</td>
+<td>Б7А-35 ЛНВК.468381.017-09</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">41</td>
+<td>БИС-4АН</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">42</td>
+<td>ВНД-94 РШПИ.464429.002-01</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">43</td>
+<td>ГЕОСКАН 201 5S</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">44</td>
+<td>ПИЛТ.301569.002</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">45</td>
+<td>ПУЛЬТ ДГ-64М</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">46</td>
+<td>ТА14.021.000.04</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">47</td>
+<td>ТА14.031.012.000.03</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">48</td>
+<td>ТБН-К-4 СЕРИЯ 2</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">49</td>
+<td>8А.5300.070-01</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">50</td>
+<td>FB-3850</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">51</td>
+<td>VIM-02</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">52</td>
+<td>VIM-95-10</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">53</td>
+<td>АМВ-002</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">54</td>
+<td>АРК-35-1 ФМБИ.461531.022-04</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">55</td>
+<td>АРК-35-1-1 ФМБИ.464344.007</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">56</td>
+<td>АРК-35-1-2 ФМБИ.464629.009</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">57</td>
+<td>АРК-35-1-7 ФМБИ.468381.003-02ЭТ</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">58</td>
+<td>ВБЭ-СВС-ЦМ</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">59</td>
+<td>ВНД-94</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">60</td>
+<td>ИНП-1А</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">61</td>
+<td>ИСД-3 РШПИ.467848.001-13</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">62</td>
+<td>МУ-615А</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">63</td>
+<td>П-104М 6Ю2.821.073</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">64</td>
+<td>ПУ-95-03</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">65</td>
+<td>РУ-19А-300</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">66</td>
+<td>РШПИ.301229.019</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">67</td>
+<td>СМА-2012С</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">68</td>
+<td>СПУ 17159-7105-10</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">69</td>
+<td>УНОП АНВК.468731.006</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">70</td>
+<td>1-4-4</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">71</td>
+<td>695000-1</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">72</td>
+<td>8АТ-5104-317-9</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">73</td>
+<td>TB60</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">74</td>
+<td>АМР-0,38БВ ЛНВК.464641.001</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">75</td>
+<td>Б1Г-ПРД ЛНВК.464424.001-04</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">76</td>
+<td>ИМ-16М-4НЛ КИВШ.467846.103</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">77</td>
+<td>КАУ-115А</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">78</td>
+<td>КОНТУР-10М А813М-380-20</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">79</td>
+<td>МГУ-1 004.354</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">80</td>
+<td>МП-100Б1-2С</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">81</td>
+<td>П8У 226.3235.852-007</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">82</td>
+<td>ПАМ-6К ПИЛТ.462639.001</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">83</td>
+<td>ПИЛТ.301569.004</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">84</td>
+<td>ПРИМА-ДМВ-1</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">85</td>
+<td>РУС-2 8Ю4.252.007-2</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">86</td>
+<td>ТА-12</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">87</td>
+<td>ТЭР-1М</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">88</td>
+<td>172.5104.000</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">89</td>
+<td>549-6102-400</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">90</td>
+<td>549-6102-500</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">91</td>
+<td>55МЭ БАСК.403484.003</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">92</td>
+<td>704A34-4122-27</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">93</td>
+<td>8А-4102-00</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">94</td>
+<td>R-84 СКБВ.301228.101</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">95</td>
+<td>RN7D</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">96</td>
+<td>TDS-84 СКБВ.467846.101</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">97</td>
+<td>АЕ817-120-1</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">98</td>
+<td>Б7А-1-ПРД ЛНВК.468381.048-01.01</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">99</td>
+<td>БАК ПЛ</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">100</td>
+<td>БИ-84 СКБВ.467846.107</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">101</td>
+<td>БПСН-2 ТДЦК.461513.063</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">102</td>
+<td>В1-0488-10276</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">103</td>
+<td>ЛНВК.301229.005 ЭТ</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">104</td>
+<td>С-84 СКБВ.304312.101</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">105</td>
+<td>СКБВ.301433.101-03</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">106</td>
+<td>СКЭС-2027И</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">107</td>
+<td>СКЭС-2027И ВАР.1 6Т1.430.065-01</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">108</td>
+<td>СО-2010 НГТК.462632.001-03</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">109</td>
+<td>СО-96</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">110</td>
+<td>СО-96 (БЛОК)</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">111</td>
+<td>300КЗ-3 ЛНВК.467283.001</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">112</td>
+<td>350A12-1368-03</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">113</td>
+<td>350A34-1012-06</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">114</td>
+<td>41ММ1.1</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">115</td>
+<td>500.5320.0754.000</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">116</td>
+<td>50541009</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">117</td>
+<td>6-4-1-1100 ОСТ 1 13814-81</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">118</td>
+<td>6В4.287.003-1</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">119</td>
+<td>704A34416099</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">120</td>
+<td>8А-5202-110А-15</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">121</td>
+<td>8АМТ-5901-130</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">122</td>
+<td>8АМТ-5901-140</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">123</td>
+<td>8АТ-6201-100-02</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">124</td>
+<td>8Д2.966.016-2</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">125</td>
+<td>90-0500-00</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">126</td>
+<td>HAWKER 20FP25H1CT-R</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">127</td>
+<td>SB200</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">128</td>
+<td>SD5Н09</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">129</td>
+<td>А-037-1Г ВР0.206.003</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">130</td>
+<td>А101П</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">131</td>
+<td>АСВП-1</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">132</td>
+<td>Б27-35 ЛНВК.468369.012</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">133</td>
+<td>Б27А-СГУ ЛНВК.468731.029</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">134</td>
+<td>Б7-226 ЛНВК.468381.016-09</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">135</td>
+<td>БПВ</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">136</td>
+<td>БТТ40ПТ</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">137</td>
+<td>В90-1516-250</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">138</td>
+<td>ВВС-В1 6Э3.031.023</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">139</td>
+<td>ВМ-01 ИРАН.469577.001</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">140</td>
+<td>ВО-022 2.243.404</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">141</td>
+<td>ВР-10К</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">142</td>
+<td>ВУП-У-8 СЕР.2 КМВИ.468332.159-07</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">143</td>
+<td>Д-36 СЕР.2А</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">144</td>
+<td>Д-36 СЕР1/2АП</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">145</td>
+<td>ДИСС-32-90А</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">146</td>
+<td>КЭС-2097Б</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">147</td>
+<td>ЛФСМ 28-600+180-1</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">148</td>
+<td>МА-60К</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">149</td>
+<td>МА-78</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">150</td>
+<td>МП-750ТВ 004.256</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">151</td>
+<td>МСНВО-2010 НГТК.464311.005</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">152</td>
+<td>МСНВО-2010 НГТК.464311.006</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">153</td>
+<td>МТ-3000-3С</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">154</td>
+<td>П-104 6Ю2.821.059</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">155</td>
+<td>ПВД-200К-0 8Е2.940.044</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">156</td>
+<td>ПВН КМВИ.685671.003-02</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">157</td>
+<td>ПНП-72-14</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">158</td>
+<td>ПНП-72-14 6Д2.338.005-12</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">159</td>
+<td>РПА-500 АВПД.461531.001</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">160</td>
+<td>РШПИ.461535.004-05</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">161</td>
+<td>СВС-В1-1 КИВШ.402136.002</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">162</td>
+<td>СГУ-600 ЛНВК.468731.015</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">163</td>
+<td>СО-121ВМ</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">164</td>
+<td>ТВ3-117ВМА СЕРИЯ 02</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">165</td>
+<td>УМШ-РФС</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">166</td>
+<td>ЦНС-02 ИРАН.466226.002</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">167</td>
+<td>0292862890</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">168</td>
+<td>060-0016-00</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">169</td>
+<td>1-2-3-210 БМП-6601-00</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">170</td>
+<td>11ТФ30СТ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">171</td>
+<td>1327-82 AMDT A</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">172</td>
+<td>140.6201.200.002</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">173</td>
+<td>171-6104-500</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">174</td>
+<td>17115-0500-00</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">175</td>
+<td>184.5104.021</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">176</td>
+<td>184.5104.031</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">177</td>
+<td>212000-3</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">178</td>
+<td>2500-203</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">179</td>
+<td>3407</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">180</td>
+<td>350-607-445</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">181</td>
+<td>350A32-3121-03</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">182</td>
+<td>350A33-1058-03</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">183</td>
+<td>350A33-1090-01</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">184</td>
+<td>350A35013101</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">185</td>
+<td>350A37-1290-02</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">186</td>
+<td>355A12-0050-04</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">187</td>
+<td>355A32-0210-04</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">188</td>
+<td>355A32-0600-04</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">189</td>
+<td>355A32-3151-23</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">190</td>
+<td>38А813Ц (СЕР 4) АВ1.000.179-52</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">191</td>
+<td>451</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">192</td>
+<td>4815А-У20-710</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">193</td>
+<td>5035Р2-Р42</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">194</td>
+<td>55С</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">195</td>
+<td>6799915621</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">196</td>
+<td>700-00167-105</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">197</td>
+<td>704A33651190</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">198</td>
+<td>704A44831161</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">199</td>
+<td>74-00</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">200</td>
+<td>8-1932-000</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">201</td>
+<td>847-5301-00</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">202</td>
+<td>8А-4701-00</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">203</td>
+<td>8А-5104-210</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">204</td>
+<td>8А.5104.340-05</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">205</td>
+<td>8А.5200.110.003</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">206</td>
+<td>8А.5200.110.005</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">207</td>
+<td>8А.5200.110.019</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">208</td>
+<td>8АМТ-5104-200</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">209</td>
+<td>8АМТ.7655.020.901</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">210</td>
+<td>8АМТ.7655.020.902</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">211</td>
+<td>8АТ-5901-140</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">212</td>
+<td>8АТ-6201-100-01</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">213</td>
+<td>8АТ-9600-00</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">214</td>
+<td>8АТ.7103.030-01</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">215</td>
+<td>9580113830</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">216</td>
+<td>CI-120G/S</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">217</td>
+<td>CLN 14-2.0</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">218</td>
+<td>D350-607-541</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">219</td>
+<td>GPSMAP-295</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">220</td>
+<td>HNR-0.7 255.001-001</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">221</td>
+<td>N97047 ВА8.047.7500.0000.00</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">222</td>
+<td>QB0977</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">223</td>
+<td>QB0978</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">224</td>
+<td>R0372A123</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">225</td>
+<td>S1130-021-089</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">226</td>
+<td>SAFIR 5K/G MI 48815401</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">227</td>
+<td>TDC-17-M СКБВ.468361.001-10</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">228</td>
+<td>TI 1202</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">229</td>
+<td>TMG-17 СКБВ.467849.001-07</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">230</td>
+<td>А-034-4-24</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">231</td>
+<td>А-053-08.20</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">232</td>
+<td>А813-0408.1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">233</td>
+<td>АВ1.000.179-07</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">234</td>
+<td>АГРЕГАТЫ АН74</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">235</td>
+<td>АПВ.4008.100.001</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">236</td>
+<td>АПВ.4008.100.002</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">237</td>
+<td>АПП-1М-5</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">238</td>
+<td>АПШ-3М</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">239</td>
+<td>АШС-УМ 74.00.7103-001</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">240</td>
+<td>Б5А-ЯРII</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">241</td>
+<td>Б7А1-ЯРII</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">242</td>
+<td>БДПИ-09 СЕР.2 6А2.781.017-10</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">243</td>
+<td>БИ-037Д</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">244</td>
+<td>БКП-3-2-210</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">245</td>
+<td>БН-М</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">246</td>
+<td>БР-1А ЛНВК.468731.007-01</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">247</td>
+<td>БСА-8 СЕР.2 КМВИ.46364.022-02</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">248</td>
+<td>БСГ БЛОК</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">249</td>
+<td>БУР-4-1-07 8И1.582.017-02-07</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">250</td>
+<td>БУР-СЛ-1 СЕР.9</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">251</td>
+<td>БЭ-09</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">252</td>
+<td>ГА163Т/16</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">253</td>
+<td>Д-2МТ2-Э ОМ1.141.012-01</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">254</td>
+<td>Д-36 СЕР.1Э</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">255</td>
+<td>ДАТЧИК ВК</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">256</td>
+<td>ДСЛ-40Т</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">257</td>
+<td>Е7-5502-00</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">258</td>
+<td>ИЖ2.000.099-06</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">259</td>
+<td>ИПБ-45-1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">260</td>
+<td>ИСД-1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">261</td>
+<td>К12-51 6Л2.766.000</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">262</td>
+<td>КП-58</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">263</td>
+<td>КТ76С 066-01156-0201</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">264</td>
+<td>КЭ93</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">265</td>
+<td>МЛП-23-3</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">266</td>
+<td>МПК-32А 8Б4.030.170-02</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">267</td>
+<td>НЭЛ-1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">268</td>
+<td>ОСТ111373-73</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">269</td>
+<td>П-503М1 ПИЛТ.795541.003-01</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">270</td>
+<td>ПВ-2 КМВИ.468332.184</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">271</td>
+<td>ПДУ-36Д (БЛОК 4)</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">272</td>
+<td>ПИЛТ.467542.003 ПС</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">273</td>
+<td>ПИЛТ.467649.002</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">274</td>
+<td>ПИЛТ.468382.002</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">275</td>
+<td>ПКВ-8 СЕР.2 КМВИ.461231.017-02</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">276</td>
+<td>ПУ-8 СЕР.2 КМВИ.468332.160-02</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">277</td>
+<td>ПУЛЬСАР НКПГ.464211.002</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">278</td>
+<td>Р-2 СКБВ.301222.115</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">279</td>
+<td>РД-58-7</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">280</td>
+<td>РД-58-8</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">281</td>
+<td>РМ-8Б СЕР.2 КМВИ.468363.012-04</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">282</td>
+<td>САП.4011.000-21</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">283</td>
+<td>САП.4011.000-31</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">284</td>
+<td>САП.4011.100-03</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">285</td>
+<td>САП.4011.100-04</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">286</td>
+<td>СД-75 1.247.221-27</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">287</td>
+<td>СД-75М</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">288</td>
+<td>СРЗО-2 ГР3.624.007</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">289</td>
+<td>ТО-5/0,2 8Е4.712.036</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">290</td>
+<td>УБС</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">291</td>
+<td>УСС-4-2М</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">292</td>
+<td>ХРОН ОСН.</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">293</td>
+<td>ШЭДСМ-8 8Е2.940.033-03</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">294</td>
+<td>ЭЦН91Б</td>
+<td style="text-align: right;">1</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="детали-по-топ-3-новым-partno-в-ati">5. Детали по ТОП-3 новым partno в ATI</h2>
+<h3 id="мп-95--1.51.5-196-записей">5.1. МП-95 -1.5+1.5 (196 записей)</h3>
+<table>
+<thead>
+<tr class="header">
+<th>location</th>
+<th>serialno</th>
+<th>mfg_date</th>
+<th>condition</th>
+<th>owner</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>RA-24144</td>
+<td>01000856</td>
+<td>29.01.1990</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>RA-24521</td>
+<td>01000868</td>
+<td>29.01.1990</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="odd">
+<td>АТИ_ХБР ХБР ИСП</td>
+<td>01100063</td>
+<td>28.02.2011</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>RA-24742</td>
+<td>01151676</td>
+<td>20.05.1991</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="odd">
+<td>06145</td>
+<td>01200002</td>
+<td>22.03.2022</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЯМАЛ</td>
+</tr>
+<tr class="even">
+<td>КОРЗИНА ТЮМ ИСП</td>
+<td>01200026</td>
+<td>31.01.2012</td>
+<td>ИСПРАВНЫЙ</td>
+<td>UTE</td>
+</tr>
+<tr class="odd">
+<td>RA-25421</td>
+<td>01200027</td>
+<td>31.01.2012</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>АРК ТЮМ Ц4 ПРИБ</td>
+<td>*01200027</td>
+<td>21.03.2022</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЯМАЛ</td>
+</tr>
+<tr class="odd">
+<td>РЕМФОНД ТЮМ U/S</td>
+<td>01261762</td>
+<td>unknown</td>
+<td>НЕИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>25142</td>
+<td>01261888</td>
+<td>03.02.1992</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЯМАЛ</td>
+</tr>
+<tr class="odd">
+<td>RA-24157</td>
+<td>01261930</td>
+<td>06.02.2001</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>RA-25139</td>
+<td>01261950</td>
+<td>07.02.2001</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="odd">
+<td>RA-24206</td>
+<td>01455544</td>
+<td>02.02.1984</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>RA-24592</td>
+<td>01457384</td>
+<td>01.01.1997</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="odd">
+<td>RA-24539</td>
+<td>01648088</td>
+<td>12.06.1986</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+</tr>
+</tbody>
+</table>
+<p><em>… и ещё 166 записей</em></p>
+<h3 id="мп-95--13-137-записей">5.2. МП-95 -1+3 (137 записей)</h3>
+<table>
+<thead>
+<tr class="header">
+<th>location</th>
+<th>serialno</th>
+<th>mfg_date</th>
+<th>condition</th>
+<th>owner</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>РЕМФОНД ТЮМ C-0</td>
+<td>01100056</td>
+<td>unknown</td>
+<td>НЕИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>RA-24742</td>
+<td>01151539</td>
+<td>04.02.1991</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="odd">
+<td>RA-24579</td>
+<td>01151540</td>
+<td>04.02.1991</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>RA-24206</td>
+<td>01151582</td>
+<td>30.01.1991</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="odd">
+<td>РЕМФОНД ТЮМ РЕМ</td>
+<td>01200044</td>
+<td>unknown</td>
+<td>НЕИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>RA-25139</td>
+<td>01261950</td>
+<td>07.02.2001</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="odd">
+<td>RA-22884</td>
+<td>01648240</td>
+<td>18.03.2006</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>RA-22607</td>
+<td>01785816</td>
+<td>01.01.1972</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="odd">
+<td>RA-24106</td>
+<td>01801292</td>
+<td>28.01.1988</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>АТИ_ХБР ХБР U/S</td>
+<td>01937067</td>
+<td>30.01.1989</td>
+<td>НЕИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="odd">
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+</tr>
+</tbody>
+</table>
+<p><em>… и ещё 107 записей</em></p>
+<h3 id="записи">5.3. 140-5200-110-53 (122 записи)</h3>
+<table>
+<thead>
+<tr class="header">
+<th>location</th>
+<th>serialno</th>
+<th>mfg_date</th>
+<th>condition</th>
+<th>owner</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>RA-22171</td>
+<td>221712723</td>
+<td>unknown</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ГТЛК</td>
+</tr>
+<tr class="even">
+<td>RA-22172</td>
+<td>221722723</td>
+<td>unknown</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ГТЛК</td>
+</tr>
+<tr class="odd">
+<td>RA-22179</td>
+<td>221792723</td>
+<td>unknown</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ГТЛК</td>
+</tr>
+<tr class="even">
+<td>RA-22210</td>
+<td>222102719</td>
+<td>unknown</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="odd">
+<td>RA-22215</td>
+<td>222152725</td>
+<td>28.08.2025</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ЮТ-ВУ</td>
+</tr>
+<tr class="even">
+<td>RA-22221</td>
+<td>222212723</td>
+<td>unknown</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ГТЛК</td>
+</tr>
+<tr class="odd">
+<td>RA-22242</td>
+<td>222422723</td>
+<td>unknown</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ГТЛК</td>
+</tr>
+<tr class="even">
+<td>RA-22245</td>
+<td>222452723</td>
+<td>unknown</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ГТЛК</td>
+</tr>
+<tr class="odd">
+<td>RA-22249</td>
+<td>222492723</td>
+<td>unknown</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ГТЛК</td>
+</tr>
+<tr class="even">
+<td>RA-22250</td>
+<td>222502723</td>
+<td>unknown</td>
+<td>ИСПРАВНЫЙ</td>
+<td>ГТЛК</td>
+</tr>
+<tr class="odd">
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+</tr>
+</tbody>
+</table>
+<p><em>… и ещё 92 записи</em></p>
+<hr />
+<h2 id="сравнение-owner">6. Сравнение Owner</h2>
+<h3 id="статистика">6.1. Статистика</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Параметр</th>
+<th style="text-align: right;">Status_Components</th>
+<th style="text-align: right;">ATI_251203</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Уникальных owner</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">121</td>
+</tr>
+<tr class="even">
+<td>Общих owner</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr class="odd">
+<td>Только в этом файле</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">113</td>
+</tr>
+</tbody>
+</table>
+<h3 id="owner-в-status_components.xlsx-все-8">6.2. Owner в Status_Components.xlsx (все 8)</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Owner</th>
+<th style="text-align: right;">Строк</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>ЮТ-ВУ</td>
+<td style="text-align: right;">135,505</td>
+</tr>
+<tr class="even">
+<td>ГТЛК</td>
+<td style="text-align: right;">16,533</td>
+</tr>
+<tr class="odd">
+<td>UTE</td>
+<td style="text-align: right;">14,339</td>
+</tr>
+<tr class="even">
+<td>АК ЮТЭЙР</td>
+<td style="text-align: right;">49</td>
+</tr>
+<tr class="odd">
+<td>ВТК-АВИА</td>
+<td style="text-align: right;">45</td>
+</tr>
+<tr class="even">
+<td>РЕГ ЛИЗИНГ</td>
+<td style="text-align: right;">44</td>
+</tr>
+<tr class="odd">
+<td>PL PANORAMA</td>
+<td style="text-align: right;">44</td>
+</tr>
+<tr class="even">
+<td>СБЕР ЛИЗИНГ</td>
+<td style="text-align: right;">12</td>
+</tr>
+</tbody>
+</table>
+<h3 id="топ-20-owner-в-ati_251203.xlsx">6.3. ТОП-20 Owner в ATI_251203.xlsx</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Owner</th>
+<th style="text-align: right;">Строк</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>ЮТ-ВУ</td>
+<td style="text-align: right;">138,769</td>
+</tr>
+<tr class="even">
+<td>ГТЛК</td>
+<td style="text-align: right;">20,337</td>
+</tr>
+<tr class="odd">
+<td>UTE</td>
+<td style="text-align: right;">12,763</td>
+</tr>
+<tr class="even">
+<td>ЯМАЛ</td>
+<td style="text-align: right;">6,657</td>
+</tr>
+<tr class="odd">
+<td>АРТ АВИА</td>
+<td style="text-align: right;">4,288</td>
+</tr>
+<tr class="even">
+<td>АЛРОСА</td>
+<td style="text-align: right;">1,787</td>
+</tr>
+<tr class="odd">
+<td>АК АРГО</td>
+<td style="text-align: right;">1,643</td>
+</tr>
+<tr class="even">
+<td>АПК ВЗЛЕТ</td>
+<td style="text-align: right;">1,093</td>
+</tr>
+<tr class="odd">
+<td>АК ЯМАЛ</td>
+<td style="text-align: right;">1,037</td>
+</tr>
+<tr class="even">
+<td>СЕВЕРАВИА</td>
+<td style="text-align: right;">1,020</td>
+</tr>
+<tr class="odd">
+<td>НОРИЛЬСК</td>
+<td style="text-align: right;">972</td>
+</tr>
+<tr class="even">
+<td>ВИТЯЗЬ-АЭРО</td>
+<td style="text-align: right;">957</td>
+</tr>
+<tr class="odd">
+<td>КАЗАВИАПРЕД</td>
+<td style="text-align: right;">874</td>
+</tr>
+<tr class="even">
+<td>ФГБОУВОУИГА</td>
+<td style="text-align: right;">765</td>
+</tr>
+<tr class="odd">
+<td>РЕГИОН ФОНД</td>
+<td style="text-align: right;">644</td>
+</tr>
+<tr class="even">
+<td>НОВ-ЮРХГАЗ</td>
+<td style="text-align: right;">595</td>
+</tr>
+<tr class="odd">
+<td>ТУЛПАР ЭЙР</td>
+<td style="text-align: right;">562</td>
+</tr>
+<tr class="even">
+<td>ЛУКОЙЛ-АВИА</td>
+<td style="text-align: right;">530</td>
+</tr>
+<tr class="odd">
+<td>ЕЛЬЦОВКА</td>
+<td style="text-align: right;">514</td>
+</tr>
+<tr class="even">
+<td>АВИАТЕХСНАБ</td>
+<td style="text-align: right;">506</td>
+</tr>
+</tbody>
+</table>
+<h3 id="новые-owner-в-ati_251203.xlsx-113-шт">6.4. Новые Owner в ATI_251203.xlsx (113 шт)</h3>
+<details>
+<p><summary>Показать полный список</summary></p>
+<table>
+<thead>
+<tr class="header">
+<th>Owner</th>
+<th style="text-align: right;">Строк</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>ЯМАЛ</td>
+<td style="text-align: right;">6,657</td>
+</tr>
+<tr class="even">
+<td>АРТ АВИА</td>
+<td style="text-align: right;">4,288</td>
+</tr>
+<tr class="odd">
+<td>АЛРОСА</td>
+<td style="text-align: right;">1,787</td>
+</tr>
+<tr class="even">
+<td>АК АРГО</td>
+<td style="text-align: right;">1,643</td>
+</tr>
+<tr class="odd">
+<td>АПК ВЗЛЕТ</td>
+<td style="text-align: right;">1,093</td>
+</tr>
+<tr class="even">
+<td>АК ЯМАЛ</td>
+<td style="text-align: right;">1,037</td>
+</tr>
+<tr class="odd">
+<td>СЕВЕРАВИА</td>
+<td style="text-align: right;">1,020</td>
+</tr>
+<tr class="even">
+<td>НОРИЛЬСК</td>
+<td style="text-align: right;">972</td>
+</tr>
+<tr class="odd">
+<td>ВИТЯЗЬ-АЭРО</td>
+<td style="text-align: right;">957</td>
+</tr>
+<tr class="even">
+<td>КАЗАВИАПРЕД</td>
+<td style="text-align: right;">874</td>
+</tr>
+<tr class="odd">
+<td>ФГБОУВОУИГА</td>
+<td style="text-align: right;">765</td>
+</tr>
+<tr class="even">
+<td>РЕГИОН ФОНД</td>
+<td style="text-align: right;">644</td>
+</tr>
+<tr class="odd">
+<td>НОВ-ЮРХГАЗ</td>
+<td style="text-align: right;">595</td>
+</tr>
+<tr class="even">
+<td>ТУЛПАР ЭЙР</td>
+<td style="text-align: right;">562</td>
+</tr>
+<tr class="odd">
+<td>ЛУКОЙЛ-АВИА</td>
+<td style="text-align: right;">530</td>
+</tr>
+<tr class="even">
+<td>ЕЛЬЦОВКА</td>
+<td style="text-align: right;">514</td>
+</tr>
+<tr class="odd">
+<td>АВИАТЕХСНАБ</td>
+<td style="text-align: right;">506</td>
+</tr>
+<tr class="even">
+<td>АГАТ</td>
+<td style="text-align: right;">477</td>
+</tr>
+<tr class="odd">
+<td>БЕРКУТ</td>
+<td style="text-align: right;">462</td>
+</tr>
+<tr class="even">
+<td>БАРКОЛ</td>
+<td style="text-align: right;">432</td>
+</tr>
+<tr class="odd">
+<td>ГЕЛИКС</td>
+<td style="text-align: right;">424</td>
+</tr>
+<tr class="even">
+<td>СКОЛ</td>
+<td style="text-align: right;">396</td>
+</tr>
+<tr class="odd">
+<td>ДЛЧ</td>
+<td style="text-align: right;">307</td>
+</tr>
+<tr class="even">
+<td>УРАЛ АВИА</td>
+<td style="text-align: right;">287</td>
+</tr>
+<tr class="odd">
+<td>ДАЛЬНЕРЕЧАВИ</td>
+<td style="text-align: right;">108</td>
+</tr>
+<tr class="even">
+<td>AVIATECH</td>
+<td style="text-align: right;">106</td>
+</tr>
+<tr class="odd">
+<td>TUM</td>
+<td style="text-align: right;">90</td>
+</tr>
+<tr class="even">
+<td>HELICOP DEL</td>
+<td style="text-align: right;">83</td>
+</tr>
+<tr class="odd">
+<td>КРАСАВИА</td>
+<td style="text-align: right;">40</td>
+</tr>
+<tr class="even">
+<td>ТРАНСНЕФТЬ</td>
+<td style="text-align: right;">36</td>
+</tr>
+<tr class="odd">
+<td>Б1-ЯР11-1А</td>
+<td style="text-align: right;">31</td>
+</tr>
+<tr class="even">
+<td>ТУЛПАР</td>
+<td style="text-align: right;">28</td>
+</tr>
+<tr class="odd">
+<td>HEL</td>
+<td style="text-align: right;">23</td>
+</tr>
+<tr class="even">
+<td>СКАЙ-ЛАЙН</td>
+<td style="text-align: right;">21</td>
+</tr>
+<tr class="odd">
+<td>URSAKARGO</td>
+<td style="text-align: right;">19</td>
+</tr>
+<tr class="even">
+<td>РОСВЕРТОЛ</td>
+<td style="text-align: right;">18</td>
+</tr>
+<tr class="odd">
+<td>КАЗАВИАСПАС</td>
+<td style="text-align: right;">18</td>
+</tr>
+<tr class="even">
+<td>АВИАИНЖИНИР</td>
+<td style="text-align: right;">14</td>
+</tr>
+<tr class="odd">
+<td>CHOPPER LL</td>
+<td style="text-align: right;">12</td>
+</tr>
+<tr class="even">
+<td>КВЗ</td>
+<td style="text-align: right;">12</td>
+</tr>
+<tr class="odd">
+<td>ОООНОРД-АВИА</td>
+<td style="text-align: right;">11</td>
+</tr>
+<tr class="even">
+<td>АВИАТЕХН</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr class="odd">
+<td>АВИАХЭЛП</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr class="even">
+<td>ЗГР-802</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr class="odd">
+<td>РДА</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr class="even">
+<td>НОРДСТАР</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr class="odd">
+<td>ГАЗПРОМ</td>
+<td style="text-align: right;">9</td>
+</tr>
+<tr class="even">
+<td>АПК ВЕКТОР</td>
+<td style="text-align: right;">9</td>
+</tr>
+<tr class="odd">
+<td>БУРЭН</td>
+<td style="text-align: right;">9</td>
+</tr>
+<tr class="even">
+<td>НИЖ.АВИА</td>
+<td style="text-align: right;">9</td>
+</tr>
+<tr class="odd">
+<td>ASG</td>
+<td style="text-align: right;">7</td>
+</tr>
+<tr class="even">
+<td>АКТАЙГА</td>
+<td style="text-align: right;">7</td>
+</tr>
+<tr class="odd">
+<td>АМУР</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="even">
+<td>OLTKГАФГБОУВ</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="odd">
+<td>SAFRANHELI</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="even">
+<td>MIL LL</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td>АТС</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td>КОНВЕРС</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td>ЛИОН</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td>АВИАТЕХ-М</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="odd">
+<td>АК КУРС-С</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td>АНОДПОЦПК</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td>ДАСЦ</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td>MIR TRADING</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="odd">
+<td>СИБИА</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr class="even">
+<td>А/К ТУРУХАН</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td>АВИАСЕР ГРУЗ</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td>АК РОСТВЕРАВ</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td>АТЛАНТИК</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td>АЭРОГЕО</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td>АО “810 АРЗ”</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td>ПОЛЯРНЫЕ</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td>РН-АЭРОКРАФТ</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td>УЛАН-УАЗ</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td>УХТИНСКИЙ</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td>ХЕЛИСНАБ</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td>АЭРОТРАСТ</td>
+<td style="text-align: right;">12</td>
+</tr>
+<tr class="even">
+<td>БИЛИБИН</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td>БУРАЛ</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td>ГАЗПРОМ САМ</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td>ЗАОСПАРК</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td>ПАБЛИСИТИ</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td>ПРИАМУРЬЕ</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td>СИБАВИАСЕРВ</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td>ТУРУХАН</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td>UTAIR SA</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td>АВИАТЕХС72</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td>АЭРОБРАТСК</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td>1</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr class="even">
+<td>1А</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>AEM LIMITED</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>NAMPA</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>WSC (КИПР)</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>АВИА-ТРЕЙД</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>АТЛАС</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>БИЛИБИНОАВИА</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>ВЕРТИКАЛЬ-Т</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>ВОСТОК</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>ГАЗПРОМ ПЕР</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>ГАЗПРОМ ТОМ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>ГУПАЛТАЙАВ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>З-Д КАЗАНЬ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>ЗОДИАКГРУПП</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>КОГАЛЫМАВИА</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>НПК ПАНХ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>ОАО РСТВРТЛ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>ОДККЛИМОВ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>ТЕХПРИБОР</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>ТМФ АОН</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>УТУ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>ЧАД</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>ЧУКОТАВИА</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>ЭЛ.СИГНАЛ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td>ЮТ-ЛИЗ</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="odd">
+<td>ЮТЭЙР-ЭКС</td>
+<td style="text-align: right;">1</td>
+</tr>
+</tbody>
+</table>
+</details>
+<hr />
+<h2 id="детальное-сравнение-по-owner-из-старого-файла">7. Детальное сравнение по Owner из старого файла</h2>
+<h3 id="сравнение-количества-строк">7.1. Сравнение количества строк</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Owner</th>
+<th style="text-align: right;">Status_Components</th>
+<th style="text-align: right;">ATI (filtered)</th>
+<th style="text-align: right;">Δ</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>PL PANORAMA</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">71</td>
+<td style="text-align: right;"><strong>+27</strong></td>
+</tr>
+<tr class="even">
+<td>UTE</td>
+<td style="text-align: right;">14,339</td>
+<td style="text-align: right;">12,763</td>
+<td style="text-align: right;"><strong>-1,576</strong></td>
+</tr>
+<tr class="odd">
+<td>АК ЮТЭЙР</td>
+<td style="text-align: right;">49</td>
+<td style="text-align: right;">46</td>
+<td style="text-align: right;">-3</td>
+</tr>
+<tr class="even">
+<td>ВТК-АВИА</td>
+<td style="text-align: right;">45</td>
+<td style="text-align: right;">53</td>
+<td style="text-align: right;"><strong>+8</strong></td>
+</tr>
+<tr class="odd">
+<td>ГТЛК</td>
+<td style="text-align: right;">16,533</td>
+<td style="text-align: right;">20,337</td>
+<td style="text-align: right;"><strong>+3,804</strong></td>
+</tr>
+<tr class="even">
+<td>РЕГ ЛИЗИНГ</td>
+<td style="text-align: right;">44</td>
+<td style="text-align: right;">48</td>
+<td style="text-align: right;">+4</td>
+</tr>
+<tr class="odd">
+<td>СБЕР ЛИЗИНГ</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td>ЮТ-ВУ</td>
+<td style="text-align: right;">135,505</td>
+<td style="text-align: right;">138,769</td>
+<td style="text-align: right;"><strong>+3,264</strong></td>
+</tr>
+<tr class="odd">
+<td><strong>ИТОГО</strong></td>
+<td style="text-align: right;"><strong>166,571</strong></td>
+<td style="text-align: right;"><strong>172,099</strong></td>
+<td style="text-align: right;"><strong>+5,528</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="статистика-по-уникальным-serialnopartno">7.2. Статистика по уникальным serialno+partno</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Метрика</th>
+<th>Значение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>В Status_Components</td>
+<td>166,072</td>
+</tr>
+<tr class="even">
+<td>В ATI (filtered)</td>
+<td>171,580</td>
+</tr>
+<tr class="odd">
+<td>Общих</td>
+<td>162,540</td>
+</tr>
+<tr class="even">
+<td><strong>УБЫЛИ</strong> (только в старом)</td>
+<td><strong>3,532</strong></td>
+</tr>
+<tr class="odd">
+<td><strong>ПРИБЫЛИ</strong> (только в новом)</td>
+<td><strong>9,040</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="баланс-по-owner">7.3. Баланс по Owner</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Owner</th>
+<th style="text-align: right;">Убыло</th>
+<th style="text-align: right;">Прибыло</th>
+<th style="text-align: right;">Баланс</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>PL PANORAMA</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">31</td>
+<td style="text-align: right;"><strong>+27</strong></td>
+</tr>
+<tr class="even">
+<td>UTE</td>
+<td style="text-align: right;">644</td>
+<td style="text-align: right;">1,004</td>
+<td style="text-align: right;"><strong>+360</strong></td>
+</tr>
+<tr class="odd">
+<td>АК ЮТЭЙР</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">-1</td>
+</tr>
+<tr class="even">
+<td>ВТК-АВИА</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;"><strong>+8</strong></td>
+</tr>
+<tr class="odd">
+<td>ГТЛК</td>
+<td style="text-align: right;">116</td>
+<td style="text-align: right;">3,920</td>
+<td style="text-align: right;"><strong>+3,804</strong></td>
+</tr>
+<tr class="even">
+<td>РЕГ ЛИЗИНГ</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">+4</td>
+</tr>
+<tr class="odd">
+<td>СБЕР ЛИЗИНГ</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td>ЮТ-ВУ</td>
+<td style="text-align: right;">2,771</td>
+<td style="text-align: right;">4,085</td>
+<td style="text-align: right;"><strong>+1,314</strong></td>
+</tr>
+<tr class="odd">
+<td><strong>ИТОГО</strong></td>
+<td style="text-align: right;"><strong>3,536</strong></td>
+<td style="text-align: right;"><strong>9,052</strong></td>
+<td style="text-align: right;"><strong>+5,516</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="топ-30-убывших-partno">8. ТОП-30 убывших partno</h2>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: right;">№</th>
+<th>partno</th>
+<th style="text-align: right;">Кол-во</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">1</td>
+<td>15-5303-10-6</td>
+<td style="text-align: right;">155</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">2</td>
+<td>МП-95 -1,5;+1,5</td>
+<td style="text-align: right;">134</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">3</td>
+<td>МП-95 -1;+3</td>
+<td style="text-align: right;">131</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">4</td>
+<td>12-САМ-28П</td>
+<td style="text-align: right;">79</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">5</td>
+<td>ИД-3</td>
+<td style="text-align: right;">79</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">6</td>
+<td>4568А-У4-530</td>
+<td style="text-align: right;">72</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">7</td>
+<td>15.5303.010.006А</td>
+<td style="text-align: right;">63</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">8</td>
+<td>8А-5301-540-000-003</td>
+<td style="text-align: right;">41</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">9</td>
+<td>140-5200-110-053</td>
+<td style="text-align: right;">41</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">10</td>
+<td>140-5200-110-051</td>
+<td style="text-align: right;">40</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">11</td>
+<td>140-5200-110-049</td>
+<td style="text-align: right;">40</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">12</td>
+<td>140-5200-110-047</td>
+<td style="text-align: right;">39</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">13</td>
+<td>ПРИБОЙ-2С</td>
+<td style="text-align: right;">34</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">14</td>
+<td>8А-5301-540-000-005</td>
+<td style="text-align: right;">32</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">15</td>
+<td>8АТ-2710-00</td>
+<td style="text-align: right;">28</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">16</td>
+<td>ПР-15.875-2300-1-67</td>
+<td style="text-align: right;">28</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">17</td>
+<td>8А-5200-110/А-3</td>
+<td style="text-align: right;">27</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">18</td>
+<td>П-9Т 3ПМ.844.006</td>
+<td style="text-align: right;">27</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">19</td>
+<td>8А-5200-110/А-15А</td>
+<td style="text-align: right;">25</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">20</td>
+<td>8А-5301-200-1</td>
+<td style="text-align: right;">24</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">21</td>
+<td>1-6-2-700 ОСТ 1.10853-72</td>
+<td style="text-align: right;">24</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">22</td>
+<td>8АМТ-5301-200-1</td>
+<td style="text-align: right;">23</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">23</td>
+<td>865Х280 МОДЕЛЬ 1А</td>
+<td style="text-align: right;">23</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">24</td>
+<td>8А-5301-540-000-007</td>
+<td style="text-align: right;">20</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">25</td>
+<td>8А-5200-110/А-5</td>
+<td style="text-align: right;">20</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">26</td>
+<td>0319308380</td>
+<td style="text-align: right;">20</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">27</td>
+<td>8АТ-5104-305</td>
+<td style="text-align: right;">20</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">28</td>
+<td>1-6-2-700 ОСТ 1.10853-85</td>
+<td style="text-align: right;">20</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">29</td>
+<td>595Х185 МОДЕЛЬ 14А</td>
+<td style="text-align: right;">19</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">30</td>
+<td>8А-5200-110/А-17А</td>
+<td style="text-align: right;">18</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Всего уникальных partno убыло: 792</strong></p>
+<hr />
+<h2 id="топ-30-прибывших-partno">9. ТОП-30 прибывших partno</h2>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: right;">№</th>
+<th>partno</th>
+<th style="text-align: right;">Кол-во</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">1</td>
+<td>8А-5200-110-3</td>
+<td style="text-align: right;">156</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">2</td>
+<td>8А-5200-110-5</td>
+<td style="text-align: right;">155</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">3</td>
+<td>8А-5200-110-15</td>
+<td style="text-align: right;">153</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">4</td>
+<td>8А-5200-110-17</td>
+<td style="text-align: right;">152</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">5</td>
+<td>8А.5104.317.009</td>
+<td style="text-align: right;">144</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">6</td>
+<td>МП-95 -1.5+1.5</td>
+<td style="text-align: right;">134</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">7</td>
+<td>МП-95 -1+3</td>
+<td style="text-align: right;">131</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">8</td>
+<td>140-5200-110-53</td>
+<td style="text-align: right;">117</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">9</td>
+<td>140-5200-110-47</td>
+<td style="text-align: right;">115</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">10</td>
+<td>140-5200-110-51</td>
+<td style="text-align: right;">115</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">11</td>
+<td>140-5200-110-49</td>
+<td style="text-align: right;">115</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">12</td>
+<td>ЭЛ-РП27-1270</td>
+<td style="text-align: right;">113</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">13</td>
+<td>ПР-15.875-2300-1-67</td>
+<td style="text-align: right;">105</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">14</td>
+<td>1-4-1-395 ОСТ 1.13814-81</td>
+<td style="text-align: right;">95</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">15</td>
+<td>8АТ.2710.000</td>
+<td style="text-align: right;">95</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">16</td>
+<td>ИД-3 6Ж2.320.003</td>
+<td style="text-align: right;">90</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">17</td>
+<td>12-САМ-28П</td>
+<td style="text-align: right;">81</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">18</td>
+<td>РЭП-8Т</td>
+<td style="text-align: right;">76</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">19</td>
+<td>600400М</td>
+<td style="text-align: right;">72</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">20</td>
+<td>800600-1</td>
+<td style="text-align: right;">70</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">21</td>
+<td>8А-5200-110-119</td>
+<td style="text-align: right;">61</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">22</td>
+<td>8А-5200-110-121</td>
+<td style="text-align: right;">61</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">23</td>
+<td>8А-5200-110-125</td>
+<td style="text-align: right;">61</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">24</td>
+<td>8А-5200-110-123</td>
+<td style="text-align: right;">61</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">25</td>
+<td>ПГК-Р 9Г4.090.002</td>
+<td style="text-align: right;">57</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">26</td>
+<td>МУ-615А СЕР.1 ИВКЛ.401261.001</td>
+<td style="text-align: right;">56</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">27</td>
+<td>8А.5104.319.005</td>
+<td style="text-align: right;">56</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">28</td>
+<td>4568А-У4-395</td>
+<td style="text-align: right;">55</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">29</td>
+<td>АПШ-3М 8Ю3.619.269</td>
+<td style="text-align: right;">46</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">30</td>
+<td>4568А-У4-536</td>
+<td style="text-align: right;">45</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Всего уникальных partno прибыло: 1,222</strong></p>
+<hr />
+<h2 id="переименования-partno-один-serialno-разный-partno">10. Переименования partno (один serialno, разный partno)</h2>
+<p><strong>Найдено 138 serialno с изменённым partno</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>serialno</th>
+<th>Было</th>
+<th>Стало</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>93178</td>
+<td>8А-4101-00Б-2</td>
+<td>8А-4101-00Б-1</td>
+</tr>
+<tr class="even">
+<td>04700254</td>
+<td>МП-95 -1;+3</td>
+<td>МП-95 -1+3</td>
+</tr>
+<tr class="odd">
+<td>180178</td>
+<td>ИД-3</td>
+<td>ИД-3 6Ж2.320.003</td>
+</tr>
+<tr class="even">
+<td>08157616</td>
+<td>МП-95 -1,5;+1,5</td>
+<td>МП-95 -1.5+1.5</td>
+</tr>
+<tr class="odd">
+<td>11967219</td>
+<td>МП-95 -1,5;+1,5</td>
+<td>МП-95 -1.5+1.5</td>
+</tr>
+<tr class="even">
+<td>03500262</td>
+<td>МП95 6Л2.775.001 -3;+3 МП95-3+3</td>
+<td>МП-95 -3+3</td>
+</tr>
+<tr class="odd">
+<td>02805258</td>
+<td>МП-95 -1,5;+1,5</td>
+<td>МП-95 -1.5+1.5</td>
+</tr>
+<tr class="even">
+<td>22509-2</td>
+<td>140-5200-110-049</td>
+<td>140-5200-110-49</td>
+</tr>
+<tr class="odd">
+<td>01200044</td>
+<td>МП-95 -1;+3</td>
+<td>МП-95 -1+3</td>
+</tr>
+<tr class="even">
+<td>09158483</td>
+<td>МП-95 -1,5;+1,5</td>
+<td>МП-95 -1.5+1.5</td>
+</tr>
+<tr class="odd">
+<td>11160072</td>
+<td>МП95 6Л2.775.001 -3;+3 МП95-3+3</td>
+<td>МП-95 -3+3</td>
+</tr>
+<tr class="even">
+<td>112007</td>
+<td>СП-0,03 8Е4670010</td>
+<td>СП-0.03 8Е4670010</td>
+</tr>
+<tr class="odd">
+<td>08900465</td>
+<td>МП-95 -1;+3</td>
+<td>МП-95 -1+3</td>
+</tr>
+<tr class="even">
+<td>0490827</td>
+<td>1-2-4-150 АПС-6601-00</td>
+<td>1-2-4-210</td>
+</tr>
+<tr class="odd">
+<td>08820898</td>
+<td>МП-95 -1,5;+1,5</td>
+<td>МП-95 -1.5+1.5</td>
+</tr>
+<tr class="even">
+<td>9972</td>
+<td>Р-855УМ ВАРИАНТ “С” 2.000.098</td>
+<td>Р-855А1 ЯЕ1.100.009</td>
+</tr>
+<tr class="odd">
+<td>08900463</td>
+<td>МП-95 -1;+3</td>
+<td>МП-95 -1+3</td>
+</tr>
+<tr class="even">
+<td>04945819</td>
+<td>МП-95 -1,5;+1,5</td>
+<td>МП-95 -1.5+1.5</td>
+</tr>
+<tr class="odd">
+<td>08821404</td>
+<td>МП-95 -1,5;+1,5</td>
+<td>МП-95 -1.5+1.5</td>
+</tr>
+<tr class="even">
+<td>2113</td>
+<td>МВ-03-01</td>
+<td>ПУ-25-1 ИСУЯ.797312.002</td>
+</tr>
+</tbody>
+</table>
+<h3 id="типовые-паттерны-переименований">Типовые паттерны переименований</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Паттерн</th>
+<th>Было</th>
+<th>Стало</th>
+<th>Количество</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Точка вместо запятой</td>
+<td><code>-1,5;+1,5</code></td>
+<td><code>-1.5+1.5</code></td>
+<td>~50</td>
+</tr>
+<tr class="even">
+<td>Убрана точка с запятой</td>
+<td><code>-1;+3</code></td>
+<td><code>-1+3</code></td>
+<td>~30</td>
+</tr>
+<tr class="odd">
+<td>Убраны ведущие нули</td>
+<td><code>110-053</code></td>
+<td><code>110-53</code></td>
+<td>~40</td>
+</tr>
+<tr class="even">
+<td>Добавлен чертёжный номер</td>
+<td><code>ИД-3</code></td>
+<td><code>ИД-3 6Ж2.320.003</code></td>
+<td>~10</td>
+</tr>
+<tr class="odd">
+<td>Сокращение названия</td>
+<td><code>МП95 6Л2.775.001 -3;+3 МП95-3+3</code></td>
+<td><code>МП-95 -3+3</code></td>
+<td>~5</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="итого">11. ИТОГО</h2>
+<h3 id="общее-сравнение-файлов">Общее сравнение файлов</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Метрика</th>
+<th>Значение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Прирост строк (всего)</strong></td>
+<td>+33,648 (+20.2%)</td>
+</tr>
+<tr class="even">
+<td><strong>Прирост строк (по старым owner)</strong></td>
+<td>+5,528 (+3.3%)</td>
+</tr>
+<tr class="odd">
+<td><strong>Новых partno</strong></td>
+<td>+263 позиций</td>
+</tr>
+<tr class="even">
+<td><strong>Удалённых partno</strong></td>
+<td>31 позиция</td>
+</tr>
+<tr class="odd">
+<td><strong>Пересечение номенклатуры</strong></td>
+<td>92.4%</td>
+</tr>
+<tr class="even">
+<td><strong>Новых owner</strong></td>
+<td>+113 организаций</td>
+</tr>
+<tr class="odd">
+<td><strong>Удалённые колонки</strong></td>
+<td><code>lease_restricted</code>, <code>Счет</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="по-старым-owner-детально">По старым Owner (детально)</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Метрика</th>
+<th>Значение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Убыло записей (serialno+partno)</strong></td>
+<td>3,532</td>
+</tr>
+<tr class="even">
+<td><strong>Прибыло записей (serialno+partno)</strong></td>
+<td>9,040</td>
+</tr>
+<tr class="odd">
+<td><strong>Чистый прирост</strong></td>
+<td>+5,508</td>
+</tr>
+<tr class="even">
+<td><strong>Уникальных убывших partno</strong></td>
+<td>792</td>
+</tr>
+<tr class="odd">
+<td><strong>Уникальных прибывших partno</strong></td>
+<td>1,222</td>
+</tr>
+<tr class="even">
+<td><strong>Переименований partno</strong></td>
+<td>138</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ключевые-наблюдения">Ключевые наблюдения</h3>
+<ol type="1">
+<li><p><strong>Переименования номенклатуры:</strong></p>
+<ul>
+<li><code>МП-95 -1,5;+1,5</code> → <code>МП-95 -1.5+1.5</code> (точка вместо запятой, убрана <code>;</code>)</li>
+<li><code>140-5200-110-053</code> → <code>140-5200-110-53</code> (убраны ведущие нули)</li>
+<li><code>СП-0,03 8Е4670010</code> → <code>СП-0.03 8Е4670010</code> (запятая → точка)</li>
+<li><code>ИД-3</code> → <code>ИД-3 6Ж2.320.003</code> (добавлен чертёжный номер)</li>
+</ul></li>
+<li><p><strong>Крупнейшие изменения по owner:</strong></p>
+<ul>
+<li><strong>ГТЛК</strong>: +3,804 записей (основной прирост)</li>
+<li><strong>ЮТ-ВУ</strong>: +1,314 записей</li>
+<li><strong>UTE</strong>: -1,576 записей (но прирост новых +360)</li>
+</ul></li>
+<li><p><strong>Новые owner</strong> — ATI содержит данные по всему рынку (121 организация), а не только по группе компаний (8 организаций в Status_Components)</p></li>
+<li><p><strong>Отсутствующие колонки</strong> в ATI: <code>lease_restricted</code> и <code>Счет</code> — требуют добавления при ETL</p></li>
+</ol>
+<h3 id="рекомендации-для-etl">Рекомендации для ETL</h3>
+<ol type="1">
+<li><p><strong>Нормализация partno</strong> — привести к единому формату:</p>
+<ul>
+<li>Заменять <code>,</code> на <code>.</code> в числах</li>
+<li>Убирать ведущие нули в кодах</li>
+<li>Унифицировать разделители</li>
+</ul></li>
+<li><p><strong>Добавить колонки</strong> <code>lease_restricted</code> и <code>Счет</code> в ATI или исключить из старого</p></li>
+<li><p><strong>Маппинг owner</strong> — если нужны данные только по группе компаний</p></li>
+</ol>
+</body>
+</html>
