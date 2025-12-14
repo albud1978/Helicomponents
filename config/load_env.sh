@@ -44,10 +44,42 @@ fi
 
 # Кэширование скомпилированных RTC ядер FLAME GPU
 # Ускоряет повторные запуски симуляции (компиляция только при изменении кода)
-RTC_CACHE_DIR="/home/budnik_an/cube linux/cube/.rtc_cache"
+# Определяем корень проекта относительно расположения этого скрипта
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+RTC_CACHE_DIR="$PROJECT_ROOT/.rtc_cache"
 if [ ! -d "$RTC_CACHE_DIR" ]; then
     mkdir -p "$RTC_CACHE_DIR"
     echo "📁 Создана директория кэша RTC: $RTC_CACHE_DIR"
 fi
 export FLAMEGPU_RTC_EXPORT_CACHE_PATH="$RTC_CACHE_DIR"
-echo "⚡ RTC кэш: $FLAMEGPU_RTC_EXPORT_CACHE_PATH"
+
+# FLAMEGPU использует /tmp/flamegpu/jitifycache — создаём симлинк на персистентный кэш
+if [ ! -L "/tmp/flamegpu/jitifycache" ]; then
+    rm -rf /tmp/flamegpu/jitifycache 2>/dev/null
+    mkdir -p /tmp/flamegpu
+    ln -sf "$RTC_CACHE_DIR" /tmp/flamegpu/jitifycache
+fi
+echo "⚡ RTC кэш: $RTC_CACHE_DIR ($(ls "$RTC_CACHE_DIR" 2>/dev/null | wc -l) файлов)"
+
+# CUDA configuration (универсальный — автоопределение)
+# Приоритет: 1) conda с cuda-toolkit, 2) /usr/local/cuda, 3) системный nvcc
+# Для машинно-специфичных настроек создайте load_env.local.sh (в gitignore)
+
+if [ -f "$SCRIPT_DIR/load_env.local.sh" ]; then
+    source "$SCRIPT_DIR/load_env.local.sh"
+    echo "🔧 Локальные настройки загружены из load_env.local.sh"
+elif [ -d "$HOME/miniconda3/targets/x86_64-linux/include" ]; then
+    # Conda с CUDA toolkit (например, для RTX 5090 + CUDA 13)
+    source "$HOME/miniconda3/etc/profile.d/conda.sh" 2>/dev/null
+    conda activate base 2>/dev/null
+    export CUDA_PATH="$HOME/miniconda3/targets/x86_64-linux"
+    export LD_LIBRARY_PATH="$HOME/miniconda3/lib:$LD_LIBRARY_PATH"
+    echo "🚀 CUDA (conda): $CUDA_PATH"
+elif [ -d "/usr/local/cuda" ]; then
+    export CUDA_PATH="/usr/local/cuda"
+    export LD_LIBRARY_PATH="$CUDA_PATH/lib64:$LD_LIBRARY_PATH"
+    echo "🚀 CUDA (system): $CUDA_PATH"
+else
+    echo "⚠️ CUDA не найден. Установите CUDA Toolkit или укажите CUDA_PATH вручную"
+fi

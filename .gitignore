@@ -139,3 +139,5 @@ FLAMEGPU2/
 
 # RTC ядра FLAME GPU (кэш компиляции)
 .rtc_cache/
+config/load_env.local.sh
+activate.sh
