@@ -108,8 +108,18 @@ anaconda*/
 credentials.*
 db_config.local
 
-# Archive project with hardcoded passwords (SECURITY)
+# ============================================================
+# Симлинки на Nextcloud (23-12-2025)
+# Эти папки хранятся в Nextcloud и привязаны симлинками.
+# Путь на WSL: /mnt/c/Users/Budnik_AN/Nextcloud/Helicomponents/
+# ============================================================
+archive_vnv_cpu_project
 archive_vnv_cpu_project/
+archive_spawn_modules_02-10-2025/
+data_input
+data_input/
+output
+output/
 
 
 

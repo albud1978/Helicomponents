@@ -10,8 +10,8 @@
 
 Выход:
 - Консольный отчёт
-- Markdown: docs/lease_restricted_analysis_<version>.md
-- Excel: docs/lease_restricted_analysis_<version>.xlsx
+- Markdown: output/lease_restricted_analysis_<version>.md
+- Excel: output/lease_restricted_analysis_<version>.xlsx
 """
 
 from __future__ import annotations
@@ -702,14 +702,14 @@ def main() -> int:
     # Markdown
     if not args.skip_md:
         md_content = build_markdown(version, planes, mismatched, uninstalled, stats, plane_stats)
-        md_path = Path(args.md_path) if args.md_path else Path(f"docs/lease_restricted_analysis_{version.version_date}.md")
+        md_path = Path(args.md_path) if args.md_path else Path(f"output/lease_restricted_analysis_{version.version_date}.md")
         md_path.parent.mkdir(parents=True, exist_ok=True)
         md_path.write_text(md_content, encoding="utf-8")
         print(f"\n📝 Markdown-отчёт сохранён: {md_path}")
     
     # Excel
     if not args.skip_xlsx:
-        xlsx_path = Path(args.xlsx_path) if args.xlsx_path else Path(f"docs/lease_restricted_analysis_{version.version_date}.xlsx")
+        xlsx_path = Path(args.xlsx_path) if args.xlsx_path else Path(f"output/lease_restricted_analysis_{version.version_date}.xlsx")
         xlsx_path.parent.mkdir(parents=True, exist_ok=True)
         save_excel(version, planes, mismatched, uninstalled, stats, plane_stats, restricted_misplaced, xlsx_path)
         print(f"📊 Excel-отчёт сохранён: {xlsx_path}")
