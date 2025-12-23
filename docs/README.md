@@ -58,6 +58,27 @@
 
 ## 🚀 Быстрый старт
 
+### **Настройка симлинков на Nextcloud (обязательно!)**
+
+Папки `archive_vnv_cpu_project/`, `data_input/`, `output/` хранятся в Nextcloud и привязываются симлинками:
+
+```bash
+cd "/home/budnik_an/cube linux/cube"
+
+# Удалить локальные папки (если есть)
+rm -rf archive_vnv_cpu_project data_input output
+
+# Создать симлинки на Nextcloud
+ln -s "/mnt/c/Users/Budnik_AN/Nextcloud/Helicomponents/archive_vnv_cpu_project" archive_vnv_cpu_project
+ln -s "/mnt/c/Users/Budnik_AN/Nextcloud/Helicomponents/data_input" data_input
+ln -s "/mnt/c/Users/Budnik_AN/Nextcloud/Helicomponents/output" output
+
+# Проверить
+ls -la | grep -E "archive_vnv|data_input|output"
+```
+
+> ⚠️ **Для другого ПК:** замените путь `/mnt/c/Users/Budnik_AN/Nextcloud/Helicomponents/` на свой.
+
 ### **Первый запуск проекта**
 ```bash
 # 1. Автоматическая настройка окружения (выполнить один раз)
@@ -142,7 +163,7 @@ python3 code/heli_pandas_ops_other_groups.py
 
 #### Анализ лизинговых ограничений (lease_restricted)
 ```bash
-# Полный отчёт (md + xlsx)
+# Полный отчёт (md + xlsx) → output/
 python3 code/heli_pandas_lease_restricted.py
 
 # Только Excel
@@ -151,6 +172,8 @@ python3 code/heli_pandas_lease_restricted.py --skip-md
 # Тихий режим (без консольного вывода)
 python3 code/heli_pandas_lease_restricted.py --quiet
 ```
+
+**Выходные файлы:** `output/lease_restricted_analysis_<version>.{md,xlsx}`
 
 **Что выводит:**
 | № | Раздел | Описание |
