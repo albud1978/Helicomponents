@@ -167,6 +167,13 @@ def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name
             if col in df.columns:
                 required_columns.append(col)
         
+        # Дополнительные поля из Excel (только для heli_raw - полный архив)
+        if table_name == 'heli_raw':
+            extra_raw_columns = ['oh_at_date', 'shop_visit_counter']
+            for col in extra_raw_columns:
+                if col in df.columns:
+                    required_columns.append(col)
+        
         # Дополнительные поля status_id и aircraft_number добавляются отдельными скриптами
         # Здесь работаем только с базовыми полями из Excel
         if 'status_id' in df.columns:
@@ -217,7 +224,7 @@ def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name
         # Дополнительные поля (status, aircraft_number) будут добавлены отдельными скриптами
         
         # Обработка дат для ClickHouse - как в рабочем архивном проекте
-        date_columns = ['mfg_date', 'removal_date', 'target_date']
+        date_columns = ['mfg_date', 'removal_date', 'target_date', 'oh_at_date']
         for col in date_columns:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce').dt.date
@@ -271,6 +278,14 @@ def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name
                 non_null_count = df[col].notna().sum()
                 null_count = df[col].isnull().sum()
                 print(f"   {col}: {non_null_count} валидных ID, {null_count} None")
+
+        # Обработка shop_visit_counter (только для heli_raw)
+        if 'shop_visit_counter' in df.columns:
+            print(f"🔧 Обрабатываем shop_visit_counter...")
+            df['shop_visit_counter'] = pd.to_numeric(df['shop_visit_counter'], errors='coerce')
+            df['shop_visit_counter'] = df['shop_visit_counter'].clip(lower=0, upper=65535)
+            # Для Nullable UInt16: fillna(0) чтобы избежать ошибки формата
+            df['shop_visit_counter'] = df['shop_visit_counter'].fillna(0).astype('int64')
 
         # Обработка lease_restricted - ИСПРАВЛЯЕМ ПРОБЛЕМУ С NaN
         if 'lease_restricted' in df.columns:
@@ -331,7 +346,17 @@ def create_tables(client):
             
             -- Метаданные файла
             `version_date` Date DEFAULT today(),
-            `version_id` UInt8 DEFAULT 1
+            `version_id` UInt8 DEFAULT 1,
+            
+            -- Встроенные ID поля из Excel
+            `partseqno_i` Nullable(UInt32),
+            `psn` Nullable(UInt32),
+            `address_i` Nullable(UInt16),
+            `ac_type_i` Nullable(UInt16),
+            
+            -- Дополнительные поля из Excel
+            `oh_at_date` Nullable(Date),
+            `shop_visit_counter` Nullable(UInt16)
             
         ) ENGINE = MergeTree()
         ORDER BY (version_date, version_id)
@@ -390,11 +415,18 @@ def create_tables(client):
         
         client.execute(create_raw_sql)
         client.execute(create_pandas_sql)
-        # Гарантируем наличие колонки group_by (для существующих таблиц)
+        # Миграция: добавляем колонки для существующих таблиц
         try:
             client.execute("ALTER TABLE heli_pandas ADD COLUMN IF NOT EXISTS group_by UInt8 DEFAULT 0")
+            # heli_raw: новые колонки из Excel
+            client.execute("ALTER TABLE heli_raw ADD COLUMN IF NOT EXISTS partseqno_i Nullable(UInt32)")
+            client.execute("ALTER TABLE heli_raw ADD COLUMN IF NOT EXISTS psn Nullable(UInt32)")
+            client.execute("ALTER TABLE heli_raw ADD COLUMN IF NOT EXISTS address_i Nullable(UInt16)")
+            client.execute("ALTER TABLE heli_raw ADD COLUMN IF NOT EXISTS ac_type_i Nullable(UInt16)")
+            client.execute("ALTER TABLE heli_raw ADD COLUMN IF NOT EXISTS oh_at_date Nullable(Date)")
+            client.execute("ALTER TABLE heli_raw ADD COLUMN IF NOT EXISTS shop_visit_counter Nullable(UInt16)")
         except Exception as e:
-            print(f"⚠️ ALTER ADD COLUMN group_by пропущен: {e}")
+            print(f"⚠️ ALTER ADD COLUMN пропущен: {e}")
         print("✅ Таблицы heli_raw и heli_pandas готовы")
         
     except Exception as e:
@@ -470,15 +502,6 @@ def insert_data(client, df, table_name, description):
         
     except Exception as e:
         print(f"❌ Ошибка загрузки в {table_name}: {e}")
-        
-        # Минимальная диагностика при ошибке
-        if "sne" in str(e) and data_tuples:
-            print(f"🔍 ПЕРВАЯ ПРОБЛЕМНАЯ ЗАПИСЬ:")
-            sne_col_index = list(df.columns).index('sne') if 'sne' in df.columns else -1
-            if sne_col_index >= 0:
-                sne_value = data_tuples[0][sne_col_index]
-                print(f"   sne = {sne_value} ({type(sne_value)})")
-        
         return 0
 
 def validate_data_counts(client, version_date, version_id, original_count, raw_count, pandas_count, filtered_partnos_count):
@@ -599,22 +622,23 @@ def main(version_date=None, version_id=None):
         raw_df = prepare_data(df.copy(), version_date, version_id=version_id, table_name='heli_raw')
         print(f"✅ [ЭТАП 7a] heli_raw подготовлен за {time.time() - raw_start:.2f}с: {len(raw_df):,} записей")
         
-        # КРИТИЧНО: Упорядочиваем колонки для heli_raw согласно схеме (17 полей)
+        # КРИТИЧНО: Упорядочиваем колонки для heli_raw согласно схеме
         raw_column_order = [
             'partno', 'serialno', 'ac_typ', 'location',
             'mfg_date', 'removal_date', 'target_date',
             'condition', 'owner', 'lease_restricted',
             'oh', 'oh_threshold', 'll', 'sne', 'ppr',
-            'version_date', 'version_id'
+            'version_date', 'version_id',
+            # Встроенные ID поля
+            'partseqno_i', 'psn', 'address_i', 'ac_type_i',
+            # Дополнительные поля
+            'oh_at_date', 'shop_visit_counter'
         ]
         
-        # Проверяем и упорядочиваем колонки для raw
-        missing_raw_columns = [col for col in raw_column_order if col not in raw_df.columns]
-        if missing_raw_columns:
-            print(f"❌ Отсутствующие колонки в heli_raw: {missing_raw_columns}")
-        else:
-            raw_df = raw_df[raw_column_order]
-            print(f"✅ heli_raw: порядок колонок установлен ({len(raw_df.columns)} полей)")
+        # Проверяем и упорядочиваем колонки для raw (пропускаем отсутствующие)
+        available_raw_columns = [col for col in raw_column_order if col in raw_df.columns]
+        raw_df = raw_df[available_raw_columns]
+        print(f"✅ heli_raw: порядок колонок установлен ({len(raw_df.columns)} полей)")
         
         # Фильтрованные данные для PANDAS (САМЫЙ ТЯЖЕЛЫЙ ЭТАП!)
         print(f"🔧 [ЭТАП 7b] Подготовка данных для heli_pandas (фильтрация)...")
