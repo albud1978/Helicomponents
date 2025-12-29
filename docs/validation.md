@@ -91,9 +91,11 @@
 - Длины массивов соответствуют DAYS/FRAMES.
 - Индексация row = day*FRAMES + idx; row_next = row + FRAMES.
 - Типы согласованы: UInt32 для MP5 и агентных накопителей.
-- **heli_pandas (установленные компоненты)**: для текущей версии `heli_pandas` выполняется проверка  
-  `SELECT count() FROM heli_pandas WHERE version_date=? AND version_id=? AND aircraft_number>0 AND group_by>2 AND upperUTF8(replaceRegexpAll(ifNull(condition,''), '^\\s+|\\s+$', ''))='ИСПРАВНЫЙ' AND status_id!=2`.  
-  Ожидаемый результат — `0`. Проверка выполняется автоматически скриптом `heli_pandas_component_status.py` (Extract-пайплайн, шаг после `heli_pandas_group_by_enricher`).
+- **heli_pandas (агрегаты на ВС в эксплуатации)**: для текущей версии `heli_pandas` выполняется проверка  
+  `SELECT count() FROM heli_pandas WHERE version_date=? AND version_id=? AND aircraft_number>0 AND group_by>2 AND upperUTF8(replaceRegexpAll(ifNull(condition,''), '^\\s+|\\s+$', ''))='ИСПРАВНЫЙ' AND status_id NOT IN (2, 3)`.  
+  Ожидаемый результат — `0`. Проверка выполняется автоматически скриптами:
+  - `heli_pandas_component_status.py` — устанавливает `status_id=2` для агрегатов на ВС в эксплуатации
+  - `heli_pandas_serviceable_status.py` — устанавливает `status_id=3` для остальных исправных агрегатов
 
 ## Правило источников данных (строго)
 

@@ -232,7 +232,10 @@ if (intent == 0u) {
 
 **Экспорт**: `flame_macroproperty3_export` | **Записей**: 7,113
 
-> 22-11-2025 — **ETL-инвариант:** микросервис `heli_pandas_component_status.py` (выполняется сразу после `heli_pandas_group_by_enricher`) гарантирует, что все компоненты, установленные на планеры (`aircraft_number>0`, `group_by>2`, `condition='ИСПРАВНЫЙ'`), имеют `status_id=2` уже в ClickHouse. Это устраняет «нулевые» статусы в MP3 и обеспечивает корректную инициализацию RTC состояний.
+> 30-12-2025 — **ETL-инвариант:** два микросервиса после `heli_pandas_group_by_enricher`:
+> - `heli_pandas_component_status.py`: агрегаты на ВС в эксплуатации получают `status_id=2`
+> - `heli_pandas_serviceable_status.py`: остальные исправные агрегаты получают `status_id=3`
+> Это устраняет «нулевые» статусы в MP3 и обеспечивает корректную инициализацию RTC состояний.
 
 #### MacroProperty4 (flight_program_ac) - 8/8 полей ✅
 

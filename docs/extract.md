@@ -293,19 +293,26 @@ python3 code/utils/database_cleanup.py
 11) heli_pandas_group_by_enricher.py (Этап 11)
 - Читает: `md_components.partno_comp`, `heli_pandas.partseqno_i`
 - Пишет: `heli_pandas.group_by`
-- Инварианты: group_by требуется precheck (фильтр 1/2)
+- Инварианты: group_by требуется для фильтрации планеров/агрегатов
 
-12) program_ac_precheck_runner.py (Этап 12)
-- Читает: `heli_pandas` (status_id, ll/oh/sne/ppr, partseqno_i, ac_typ, aircraft_number, group_by), `md_components.br_mi8/br_mi17`, `flight_program_fl` (D1 daily_hours)
-- Пишет: `heli_pandas.status_id` (точечные UPDATE по serialno)
-- Инварианты: запускается только после FL и group_by; при отсутствии зависимостей — пропуск шага
+12) heli_pandas_component_status.py (Этап 12)
+- Читает: `heli_pandas` (group_by, aircraft_number, condition, status_id)
+- Пишет: `heli_pandas.status_id = 2` для агрегатов на ВС в эксплуатации
+- Условия: group_by > 2, aircraft_number > 0, condition = 'ИСПРАВНЫЙ', связанный планер имеет status_id = 2
+- Инварианты: выполняется после group_by_enricher; требует status_id планеров (из dual_loader)
 
-13) digital_values_dictionary_creator.py (Этап 13)
+13) heli_pandas_serviceable_status.py (Этап 13)
+- Читает: `heli_pandas` (group_by, condition, status_id)
+- Пишет: `heli_pandas.status_id = 3` для исправных агрегатов НЕ на ВС в эксплуатации
+- Условия: group_by > 2, condition = 'ИСПРАВНЫЙ', status_id = 0
+- Инварианты: выполняется ПОСЛЕ heli_pandas_component_status; обрабатывает остаток
+
+14) digital_values_dictionary_creator.py (Этап 14)
 - Читает: `DESCRIBE` всех таблиц Extract, включая `flight_program_*`
 - Пишет: `dict_digital_values_flat` + Dictionary `digital_values_dict_flat`
 - Инварианты: выполняется после формирования всех таблиц
 
-14) repair_days_calculator.py (Этап 14)
+15) repair_days_calculator.py (Этап 15)
 - Читает: `md_components.repair_time`, `heli_pandas` (status_id=4, target_date), `status_overhaul`
 - Пишет: `heli_pandas.repair_days`
 - Инварианты: финальный расчёт после всех обогащений
@@ -1114,10 +1121,11 @@ repair_days = repair_time - (sched_end_date - version_date)
 | 8 | `dictionary_creator.py` | `heli_pandas`; `md_components` | `dict_*` таблицы | Словари для join/dictGet |
 | 9 | `program_fl_direct_loader.py` | `dict_aircraft_number_flat`; Excel Program.xlsx | `flight_program_fl` | Нужен для precheck |
 | 10 | `program_ac_direct_loader.py` | `heli_pandas`; `md_components`; Excel Program_heli.xlsx | `flight_program_ac` | Независим от precheck |
-| 11 | `heli_pandas_group_by_enricher.py` | `md_components`; `heli_pandas` | `heli_pandas.group_by` | Требуется precheck |
-| 12 | `program_ac_precheck_runner.py` | `heli_pandas`; `md_components.br*`; `flight_program_fl` | `heli_pandas.status_id` (UPDATE) | Пропуск при отсутствии зависимостей |
-| 13 | `digital_values_dictionary_creator.py` | DESCRIBE всех таблиц Extract | `dict_digital_values_flat` (+Dictionary) | После всех таблиц |
-| 14 | `repair_days_calculator.py` | `md_components.repair_time`; `heli_pandas`; `status_overhaul` | `heli_pandas.repair_days` | Финальный расчёт |
+| 11 | `heli_pandas_group_by_enricher.py` | `md_components`; `heli_pandas` | `heli_pandas.group_by` | Для фильтрации планеров/агрегатов |
+| 12 | `heli_pandas_component_status.py` | `heli_pandas` (group_by, aircraft_number, condition) | `heli_pandas.status_id=2` (агрегаты на ВС) | После group_by |
+| 13 | `heli_pandas_serviceable_status.py` | `heli_pandas` (group_by, condition, status_id) | `heli_pandas.status_id=3` (исправные агрегаты) | После component_status |
+| 14 | `digital_values_dictionary_creator.py` | DESCRIBE всех таблиц Extract | `dict_digital_values_flat` (+Dictionary) | После всех таблиц |
+| 15 | `repair_days_calculator.py` | `md_components.repair_time`; `heli_pandas`; `status_overhaul` | `heli_pandas.repair_days` | Финальный расчёт |
 
 ## СВОДКА ВЕРСИОННОСТИ ТАБЛИЦ СУБД
 

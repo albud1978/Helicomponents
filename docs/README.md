@@ -31,7 +31,10 @@
   - RTC функции для преобразования данных
   - GPU-side логирование (MP2) для экспорта результатов
   - **Примечание:** Transform и Load объединены в один GPU оркестратор (Flame GPU симуляция)
-> 22-11-2025: После `heli_pandas_group_by_enricher` Extract-пайплайн запускает микросервис `code/heli_pandas_component_status.py`, который проставляет `status_id=2` всем компонентам, установленным на планеры (`aircraft_number>0`, `group_by>2`, `condition='ИСПРАВНЫЙ'`). Без него MP3 содержит «нулевые» статусы и симуляция не получает корректный вход.
+> 30-12-2025: После `heli_pandas_group_by_enricher` Extract-пайплайн запускает два микросервиса статусов агрегатов:
+> - `heli_pandas_component_status.py` — `status_id=2` для агрегатов на ВС в эксплуатации (`aircraft_number>0`, `group_by>2`, `condition='ИСПРАВНЫЙ'`, планер имеет `status_id=2`)
+> - `heli_pandas_serviceable_status.py` — `status_id=3` для исправных агрегатов НЕ на ВС в эксплуатации (`group_by>2`, `condition='ИСПРАВНЫЙ'`, `status_id=0`)
+> Без них MP3 содержит «нулевые» статусы и симуляция не получает корректный вход.
 
 ### 5️⃣ **Трекинг работ**
 - **`docs/Tasktracker.md`** — Текущие и активные задачи
