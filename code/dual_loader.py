@@ -704,6 +704,7 @@ def main(version_date=None, version_id=None):
         print(f"📊 Обработка статусов и repair_days через систему процессоров...")
         try:
             # ЭТАП 1: Обработка статусов капремонта (status_overhaul) + repair_days
+            # Фильтрация по PLANER_PARTNOS (как в других процессорах, не по group_by)
             print(f"🔧 Этап 1: Статусы капремонта + repair_days...")
             from overhaul_status_processor import process_status_field
             pandas_df = process_status_field(pandas_df, client)
