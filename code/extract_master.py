@@ -194,6 +194,13 @@ class ExtractMaster:
             'result_table': 'heli_pandas',
             'critical': True
         },
+        {
+            'script': 'heli_pandas_serviceable_status.py',
+            'description': 'Проставление status_id=3 для исправных агрегатов (не на ВС в эксплуатации)',
+            'dependencies': ['heli_pandas'],
+            'result_table': 'heli_pandas',
+            'critical': True
+        },
         # === МЕТА-СЛОВАРЬ (финальный этап после всех таблиц) ===
         {
             'script': 'digital_values_dictionary_creator.py',
