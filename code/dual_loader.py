@@ -84,9 +84,16 @@ def get_md_partnos(client):
         sys.exit(1)
 
 def load_status_components():
-    """Загружает Status_Components.xlsx"""
+    """Загружает Status_Components.xlsx из текущего датасета"""
     try:
-        status_path = Path('data_input/source_data/Status_Components.xlsx')
+        # Получаем путь к датасету из version_utils
+        from utils.version_utils import get_dataset_path
+        dataset_path = get_dataset_path()
+        
+        if dataset_path:
+            status_path = dataset_path / 'Status_Components.xlsx'
+        else:
+            status_path = Path('data_input/source_data/Status_Components.xlsx')
         
         if not status_path.exists():
             print(f"❌ Файл {status_path} не найден")
@@ -271,13 +278,13 @@ def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name
                 df[col] = pd.to_numeric(df[col], errors='coerce')
                 # ID поля не могут быть отрицательными
                 df[col] = df[col].clip(lower=0)
-                # Для Nullable полей оставляем None вместо fillna(0) чтобы сохранить информацию об отсутствии
-                df[col] = df[col].where(df[col].notna(), None)
+                # Заменяем NaN на 0 и конвертируем в int для ClickHouse
+                df[col] = df[col].fillna(0).astype('int64')
                 
                 # Статистика
-                non_null_count = df[col].notna().sum()
-                null_count = df[col].isnull().sum()
-                print(f"   {col}: {non_null_count} валидных ID, {null_count} None")
+                non_null_count = (df[col] > 0).sum()
+                zero_count = (df[col] == 0).sum()
+                print(f"   {col}: {non_null_count} валидных ID, {zero_count} нулевых")
 
         # Обработка shop_visit_counter (только для heli_raw)
         if 'shop_visit_counter' in df.columns:
@@ -433,8 +440,15 @@ def create_tables(client):
         print(f"❌ Ошибка создания таблиц: {e}")
         sys.exit(1)
 
-def check_version_conflicts(client, version_date, version_id):
-    """Проверяет конфликты версий с улучшенной логикой"""
+def check_version_conflicts(client, version_date, version_id, auto_replace=False):
+    """Проверяет конфликты версий с улучшенной логикой
+    
+    Args:
+        client: ClickHouse client
+        version_date: Дата версии
+        version_id: ID версии
+        auto_replace: Если True, автоматически заменяет данные без диалога (ETL-режим)
+    """
     try:
         # Проверяем обе таблицы на точное совпадение версии
         raw_count = client.execute(f"SELECT COUNT(*) FROM heli_raw WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
@@ -445,6 +459,19 @@ def check_version_conflicts(client, version_date, version_id):
             print(f"   Дата версии: {version_date}, version_id: {version_id}")
             print(f"   heli_raw: {raw_count:,} записей")
             print(f"   heli_pandas: {pandas_count:,} записей")
+            
+            # В ETL-режиме автоматически заменяем
+            if auto_replace:
+                print(f"🔄 [AUTO] Автоматическая замена данных (ETL-режим)...")
+                if raw_count > 0:
+                    client.execute(f"DELETE FROM heli_raw WHERE version_date = '{version_date}' AND version_id = {version_id}")
+                    print(f"✅ Удалено {raw_count:,} записей из heli_raw")
+                if pandas_count > 0:
+                    client.execute(f"DELETE FROM heli_pandas WHERE version_date = '{version_date}' AND version_id = {version_id}")
+                    print(f"✅ Удалено {pandas_count:,} записей из heli_pandas")
+                return True
+            
+            # Интерактивный режим
             print(f"\nВыберите действие:")
             print(f"   1. ЗАМЕНИТЬ существующие данные (DELETE + INSERT)")
             print(f"   2. ОТМЕНИТЬ загрузку")
@@ -478,9 +505,26 @@ def check_version_conflicts(client, version_date, version_id):
         return False
 
 def insert_data(client, df, table_name, description):
-    """Загружает данные в указанную таблицу"""
+    """Загружает данные в указанную таблицу с защитой от дублей"""
     try:
         print(f"🚀 Загружаем {len(df):,} записей в {table_name} ({description})...")
+        
+        # === ЗАЩИТА ОТ ДУБЛЕЙ ===
+        # Извлекаем version_date из данных
+        if 'version_date' in df.columns:
+            version_date = df['version_date'].iloc[0]
+            
+            # Проверяем есть ли уже данные с такой version_date
+            existing_count = client.execute(
+                f"SELECT COUNT(*) FROM {table_name} WHERE version_date = '{version_date}'"
+            )[0][0]
+            
+            if existing_count > 0:
+                print(f"🧹 Удаляем {existing_count:,} существующих записей с version_date={version_date}...")
+                client.execute(f"ALTER TABLE {table_name} DELETE WHERE version_date = '{version_date}'")
+                # Ждём завершения мутации
+                time.sleep(1)
+                print(f"✅ Старые данные удалены")
         
         # Простая диагностика ресурсных полей (как в рабочих загрузчиках)
         resource_cols = ['oh', 'oh_threshold', 'll', 'sne', 'ppr']
@@ -559,6 +603,9 @@ def main(version_date=None, version_id=None):
     print("🚀 === ДВОЙНОЙ ЗАГРУЗЧИК STATUS_COMPONENTS ===")
     start_time = time.time()
     
+    # Определяем ETL-режим (автоматическая замена без диалогов)
+    etl_mode = version_date is not None
+    
     try:
         # 1. Подключение к ClickHouse через безопасную систему
         print(f"🔗 [ЭТАП 1] Подключение к ClickHouse...")
@@ -596,10 +643,10 @@ def main(version_date=None, version_id=None):
             version_id = 1
         print(f"✅ [ЭТАП 4] Завершен за {time.time() - step_start:.2f}с")
         
-        # 5. Проверка конфликтов версий с диалогом
+        # 5. Проверка конфликтов версий (в ETL-режиме автозамена без диалога)
         print(f"🔍 [ЭТАП 5] Проверка конфликтов версий...")
         step_start = time.time()
-        if not check_version_conflicts(client, version_date, version_id):
+        if not check_version_conflicts(client, version_date, version_id, auto_replace=etl_mode):
             return
         print(f"✅ [ЭТАП 5] Конфликты проверены за {time.time() - step_start:.2f}с")
         
@@ -837,8 +884,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Dual Loader для Helicopter Component Lifecycle')
     parser.add_argument('--version-date', type=str, help='Дата версии (YYYY-MM-DD)')
     parser.add_argument('--version-id', type=int, help='ID версии')
+    parser.add_argument('--dataset-path', type=str, help='Путь к папке датасета (v_YYYY-MM-DD)')
     
     args = parser.parse_args()
+    
+    # Устанавливаем путь к датасету если передан
+    if args.dataset_path:
+        from utils.version_utils import set_dataset_path
+        set_dataset_path(args.dataset_path)
     
     # Передаем параметры версионирования в main, если они заданы
     if args.version_date and args.version_id:

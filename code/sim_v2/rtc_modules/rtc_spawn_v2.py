@@ -29,7 +29,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     env = model.Environment()
     
     # Вычисляем MP2_SIZE для MacroProperty transition
-    MAX_FRAMES = env_data.get('frames_total', 340)
+    MAX_FRAMES = int(env_data.get('frames_total_u16', env_data.get('frames_total', 340)))
     MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
     
     # frames_initial для spawn (ПРАВИЛЬНО: first_reserved_idx!)

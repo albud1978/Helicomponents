@@ -489,6 +489,8 @@ def main():
                       help='Список RTC модулей для подключения')
     parser.add_argument('--steps', type=int, default=None,
                       help='Количество шагов симуляции (по умолчанию из HL_V2_STEPS)')
+    parser.add_argument('--version-date', type=str, default=None,
+                      help='Дата версии данных (YYYY-MM-DD). Если не указана - интерактивный выбор')
     parser.add_argument('--enable-mp2', action='store_true',
                       help='Включить MP2 device-side export')
     parser.add_argument('--enable-mp2-postprocess', action='store_true',
@@ -506,6 +508,36 @@ def main():
     print("Загрузка данных из ClickHouse...")
     t_data_start = time.perf_counter()
     client = get_client()
+    
+    # Определяем версию данных
+    from datetime import datetime as dt
+    from sim_env_setup import list_available_versions, select_version_interactive
+    
+    version_date = None
+    if args.version_date:
+        # Версия указана в командной строке
+        try:
+            version_date = dt.strptime(args.version_date, '%Y-%m-%d').date()
+            print(f"📅 Версия данных (из CLI): {version_date}")
+        except ValueError:
+            print(f"❌ Неверный формат даты: {args.version_date}. Используйте YYYY-MM-DD")
+            return 1
+    else:
+        # Интерактивный выбор версии
+        versions = list_available_versions(client)
+        if len(versions) > 1:
+            try:
+                version_date, _ = select_version_interactive(client)
+            except KeyboardInterrupt:
+                print("\n❌ Отменено пользователем")
+                return 1
+        elif len(versions) == 1:
+            version_date = versions[0][0]
+            print(f"📅 Единственная версия данных: {version_date}")
+        else:
+            print("❌ Нет доступных версий данных!")
+            return 1
+    
     # Опционально дропаем таблицу проекта перед запуском
     if args.drop_table:
         try:
@@ -516,7 +548,7 @@ def main():
             print(f"  Ошибка удаления таблицы sim_masterv2: {e}")
             raise
 
-    env_data = prepare_env_arrays(client)
+    env_data = prepare_env_arrays(client, version_date)
     t_data_load = time.perf_counter() - t_data_start
     print(f"  Данные загружены за {t_data_load:.2f}с")
     

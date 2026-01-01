@@ -3,7 +3,7 @@
 ETL Version Manager - централизованное управление версиями данных
 
 Обеспечивает синхронное управление version_id для всех ETL таблиц:
-- heli_pandas, heli_raw, md_components, flight_program, program_ac
+- heli_pandas, heli_raw, md_components, status_overhaul, program_ac, flight_program_ac, flight_program_fl
 
 Логика версионирования:
 - Новая дата = новый счетчик version_id с 1
@@ -25,8 +25,10 @@ class ETLVersionManager:
         'heli_pandas',
         'heli_raw', 
         'md_components',
-        'flight_program',
-        'program_ac'
+        'status_overhaul',
+        'program_ac',
+        'flight_program_ac',
+        'flight_program_fl'
     ]
     
     def __init__(self, client):

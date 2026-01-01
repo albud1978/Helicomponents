@@ -36,7 +36,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     first_dynamic_idx = env_data.get('first_dynamic_idx', 122)  # Начало динамического резерва
     repair_time_mi17 = env_data.get('mi17_repair_time_const', 180)  # Условие активации
     dynamic_reserve_mi17 = env_data.get('dynamic_reserve_mi17', 50)  # Максимальный резерв
-    MAX_FRAMES = env_data.get('frames_total', 340)  # Для пересчёта дефицита
+    MAX_FRAMES = int(env_data.get('frames_total_u16', env_data.get('frames_total', 340)))  # Для пересчёта дефицита
     MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Размер MacroProperty для transition
     
     env.newPropertyUInt("first_dynamic_idx", first_dynamic_idx)

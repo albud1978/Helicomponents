@@ -626,12 +626,21 @@ class FlightProgramDirectLoader:
             self.logger.error(f"❌ Ошибка валидации: {e}")
             return False
     
-    def create_final_tensor(self, excel_path: str = 'data_input/source_data/Program.xlsx',
+    def create_final_tensor(self, excel_path: str = None,
                           version_date: Optional[date] = None, version_id: int = 1) -> bool:
         """Главная функция создания финального тензора"""
         try:
+            # Определяем путь к Excel
+            if excel_path is None:
+                from utils.version_utils import get_dataset_path
+                dataset_path = get_dataset_path()
+                if dataset_path:
+                    excel_path = str(dataset_path / 'Program.xlsx')
+                else:
+                    excel_path = 'data_input/source_data/Program.xlsx'
+            
             self.logger.info("🚀 === PROGRAM FL DIRECT LOADER ===")
-            self.logger.info("Создание тензора flight_program_fl напрямую из Excel")
+            self.logger.info(f"Создание тензора flight_program_fl из {excel_path}")
             self.logger.info("Размер: ~279 планеров × 4000 дней = ~1.1M записей")
             
             # 1. Анализ Excel структуры
@@ -731,8 +740,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Program FL Direct Loader для Helicopter Component Lifecycle')
     parser.add_argument('--version-date', type=str, help='Дата версии (YYYY-MM-DD)')
     parser.add_argument('--version-id', type=int, help='ID версии')
+    parser.add_argument('--dataset-path', type=str, help='Путь к папке датасета (v_YYYY-MM-DD)')
     
     args = parser.parse_args()
+    
+    # Устанавливаем путь к датасету если передан
+    if args.dataset_path:
+        from utils.version_utils import set_dataset_path
+        set_dataset_path(args.dataset_path)
     
     success = main(version_date=args.version_date, version_id=args.version_id)
     sys.exit(0 if success else 1) 
