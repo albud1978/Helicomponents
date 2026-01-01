@@ -117,6 +117,19 @@ def load_status_components():
         print(f"❌ Ошибка загрузки Status_Components: {e}")
         sys.exit(1)
 
+# Разрешённые owner (эталон из датасета v_2025-07-04)
+ALLOWED_OWNERS = {
+    'ЮТ-ВУ',
+    'UTE',
+    'ГТЛК',
+    'ВТК-АВИА',
+    'РЕГ ЛИЗИНГ',
+    'СБЕР ЛИЗИНГ',
+    'АК ЮТЭЙР',
+    'PL PANORAMA'
+}
+
+
 def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name='heli_raw'):
     """Подготавливает данные для ClickHouse"""
     try:
@@ -156,7 +169,70 @@ def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name
             copy_time = time.time() - copy_start
             print(f"   ✅ Копирование завершено за {copy_time:.2f} сек")
             
-            print(f"📊 После фильтрации: {len(df):,} из {original_count:,} записей")
+            print(f"📊 После фильтрации по partno: {len(df):,} из {original_count:,} записей")
+            
+            # === ФИЛЬТР ПО OWNER (только для heli_pandas) ===
+            # Логика:
+            # 1. Сначала фильтруем ПЛАНЕРЫ (МИ-8*) строго по owner + location=RA-* → получаем "наши" борта
+            # 2. Потом оставляем ВСЕ агрегаты на "наших" бортах (независимо от owner)
+            # 3. Агрегаты на складе — только с owner в ALLOWED_OWNERS
+            if table_name == 'heli_pandas':
+                before_owner_filter = len(df)
+                
+                # Определяем планеры и агрегаты
+                is_aircraft = df['partno'].str.startswith('МИ-8', na=False)
+                is_component = ~is_aircraft
+                
+                # ШАГ 1: Определяем "наши" борта — планеры с owner в ALLOWED_OWNERS И location=RA-*
+                # Планеры без RA-* регистрации (иностранные, без номера) исключаются
+                has_ra_registration = df['location'].str.startswith('RA-', na=False)
+                our_aircraft_mask = is_aircraft & df['owner'].isin(ALLOWED_OWNERS) & has_ra_registration
+                our_aircraft_locations = set(df.loc[our_aircraft_mask, 'location'].dropna().unique())
+                our_ra_numbers = our_aircraft_locations  # Все уже RA-*
+                
+                print(f"🛩️  Найдено {len(our_ra_numbers)} 'наших' бортов (планеры с owner в ALLOWED_OWNERS и RA-* регистрацией)")
+                
+                # Статистика по исключённым планерам
+                excluded_aircraft = is_aircraft & ~(df['owner'].isin(ALLOWED_OWNERS) & has_ra_registration)
+                if excluded_aircraft.sum() > 0:
+                    excluded_df = df.loc[excluded_aircraft, ['owner', 'location', 'serialno']]
+                    print(f"🚫 Исключено {excluded_aircraft.sum()} планеров:")
+                    # Группируем по причине
+                    foreign_owner = is_aircraft & ~df['owner'].isin(ALLOWED_OWNERS)
+                    no_ra = is_aircraft & df['owner'].isin(ALLOWED_OWNERS) & ~has_ra_registration
+                    if foreign_owner.sum() > 0:
+                        print(f"      • Чужой owner: {foreign_owner.sum()}")
+                    if no_ra.sum() > 0:
+                        no_ra_list = df.loc[no_ra, ['serialno', 'location', 'owner']].values.tolist()
+                        print(f"      • Без RA-* регистрации: {no_ra.sum()}")
+                        for sn, loc, own in no_ra_list[:5]:  # Показываем первые 5
+                            print(f"        - {sn} (location={loc}, owner={own})")
+                
+                # ШАГ 2: Маска для агрегатов — на "наших" бортах ИЛИ свой owner
+                # Агрегат на "нашем" борту — location содержит один из наших RA-номеров
+                component_on_our_aircraft = is_component & df['location'].isin(our_ra_numbers)
+                # Агрегат на складе с нашим owner
+                component_our_owner = is_component & df['owner'].isin(ALLOWED_OWNERS)
+                
+                # Итоговая маска:
+                # - Наши планеры (owner в ALLOWED_OWNERS)
+                # - ИЛИ агрегаты на наших бортах (любой owner)
+                # - ИЛИ агрегаты с нашим owner (на складе)
+                combined_mask = our_aircraft_mask | component_on_our_aircraft | component_our_owner
+                
+                # Статистика
+                excluded_total = before_owner_filter - combined_mask.sum()
+                components_on_our_aircraft = component_on_our_aircraft.sum()
+                foreign_components_on_our_aircraft = (component_on_our_aircraft & ~df['owner'].isin(ALLOWED_OWNERS)).sum()
+                
+                if excluded_total > 0 or foreign_components_on_our_aircraft > 0:
+                    print(f"🔒 Фильтр по owner:")
+                    print(f"   Исключено {excluded_total:,} записей (чужие планеры + агрегаты чужих owner не на наших бортах)")
+                    if foreign_components_on_our_aircraft > 0:
+                        print(f"   ✅ Оставлено {foreign_components_on_our_aircraft:,} агрегатов чужих owner на НАШИХ бортах")
+                
+                df = df[combined_mask].copy()
+                print(f"📊 После фильтрации по owner: {len(df):,} записей")
         
         print(f"🔧 Продолжаю обработку колонок...")
         
