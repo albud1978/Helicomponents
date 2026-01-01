@@ -124,6 +124,30 @@ class BeyondRepairCalculator:
                 """
             )
 
+            # Неремонтопригодные компоненты: ll = oh → br = 0
+            # Такие компоненты не ремонтируются, при поломке сразу в хранение
+            self.logger.info("🔧 Обработка неремонтопригодных компонентов (ll = oh)...")
+            
+            # Ми-8: если ll = oh и br ещё не заполнен → br = 0
+            self.client.execute(
+                """
+                ALTER TABLE md_components UPDATE
+                  br_mi8 = 0
+                WHERE ll_mi8 > 0 AND ll_mi8 = oh_mi8 AND br_mi8 IS NULL
+                """
+            )
+            
+            # Ми-17: если ll = oh и br ещё не заполнен → br = 0
+            self.client.execute(
+                """
+                ALTER TABLE md_components UPDATE
+                  br_mi17 = 0
+                WHERE ll_mi17 > 0 AND ll_mi17 = oh_mi17 AND br_mi17 IS NULL
+                """
+            )
+            
+            self.logger.info("✅ Неремонтопригодные компоненты обработаны (br = 0)")
+
             self.logger.info("✅ Массовое обновление br_mi8/br_mi17 выполнено (единицы: минуты)")
             return True
         except Exception as e:
