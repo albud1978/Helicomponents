@@ -33,10 +33,96 @@ def get_client():
     return get_clickhouse_client()
 
 
-def fetch_versions(client) -> Tuple[date, int]:
-    rows = client.execute(
-        "SELECT version_date, version_id FROM heli_pandas ORDER BY version_date DESC, version_id DESC LIMIT 1"
-    )
+def list_available_versions(client) -> List[Tuple[date, int, int]]:
+    """
+    Возвращает список доступных версий данных.
+    
+    Returns:
+        List[(version_date, version_id, record_count)]
+    """
+    rows = client.execute("""
+        SELECT version_date, version_id, count(*) as cnt
+        FROM heli_pandas
+        GROUP BY version_date, version_id
+        ORDER BY version_date DESC, version_id DESC
+    """)
+    return [(row[0], int(row[1]), int(row[2])) for row in rows]
+
+
+def select_version_interactive(client) -> Tuple[date, int]:
+    """
+    Интерактивный выбор версии данных для симуляции.
+    
+    Returns:
+        (version_date, version_id)
+    """
+    versions = list_available_versions(client)
+    
+    if not versions:
+        raise ValueError("❌ Нет доступных версий данных в heli_pandas!")
+    
+    if len(versions) == 1:
+        vd, vid, cnt = versions[0]
+        print(f"📅 Единственная версия данных: {vd} (v{vid}, {cnt:,} записей)")
+        return vd, vid
+    
+    print("\n" + "=" * 60)
+    print("📅 ВЫБОР ВЕРСИИ ДАННЫХ ДЛЯ СИМУЛЯЦИИ")
+    print("=" * 60)
+    
+    for i, (vd, vid, cnt) in enumerate(versions, 1):
+        print(f"  {i}. {vd} (version_id={vid}, {cnt:,} записей)")
+    
+    print("  0. ❌ Отмена")
+    print("=" * 60)
+    
+    while True:
+        try:
+            choice = input(f"\nВыберите версию (0-{len(versions)}): ").strip()
+            if choice == '0':
+                raise KeyboardInterrupt("Отменено пользователем")
+            idx = int(choice) - 1
+            if 0 <= idx < len(versions):
+                vd, vid, cnt = versions[idx]
+                print(f"✅ Выбрана версия: {vd} (v{vid}, {cnt:,} записей)")
+                return vd, vid
+            else:
+                print(f"❌ Неверный выбор. Введите число от 0 до {len(versions)}")
+        except ValueError:
+            print("❌ Введите число")
+        except KeyboardInterrupt:
+            raise
+
+
+def fetch_versions(client, target_version_date: date = None) -> Tuple[date, int]:
+    """
+    Получает версию данных.
+    
+    Args:
+        client: ClickHouse client
+        target_version_date: Конкретная дата версии (опционально). 
+                             Если None — берёт самую последнюю.
+    
+    Returns:
+        (version_date, version_id)
+    """
+    if target_version_date is not None:
+        # Ищем конкретную версию
+        rows = client.execute(f"""
+            SELECT version_date, version_id 
+            FROM heli_pandas 
+            WHERE version_date = '{target_version_date}'
+            ORDER BY version_id DESC 
+            LIMIT 1
+        """)
+        if not rows:
+            raise ValueError(f"❌ Версия {target_version_date} не найдена в heli_pandas!")
+    else:
+        # Берём последнюю версию
+        rows = client.execute(
+            "SELECT version_date, version_id FROM heli_pandas ORDER BY version_date DESC, version_id DESC LIMIT 1"
+        )
+    
     vd, vid = rows[0]
     return vd, int(vid)
 
@@ -617,9 +703,15 @@ def calculate_dynamic_spawn_reserve_mi17(
     return reserve_slots
 
 
-def prepare_env_arrays(client) -> Dict[str, object]:
-    """Формирует все Env массивы/скаляры для full‑GPU окружения (без применения к модели)."""
-    vdate, vid = fetch_versions(client)
+def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
+    """
+    Формирует все Env массивы/скаляры для full‑GPU окружения (без применения к модели).
+    
+    Args:
+        client: ClickHouse client
+        version_date: Конкретная дата версии (опционально). Если None — берёт последнюю.
+    """
+    vdate, vid = fetch_versions(client, version_date)
     mp3_rows, mp3_fields = fetch_mp3(client, vdate, vid)
     mp1_map = fetch_mp1_br_rt(client)
     mp1_oh_map = fetch_mp1_oh(client)

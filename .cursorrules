@@ -99,37 +99,64 @@
 - Каждая ошибка — улучшение процесса анализа для будущих задач.
 - Примечание: правило добавлено 19.10.2025 после неправильного анализа deficit расчёта в P1.
 
-## Команда запуска симуляции (обновлено 01.12.2025)
+## Загрузка данных (Extract) — обновлено 01.01.2026
 
-**ПРАВИЛЬНЫЙ порядок модулей (КРИТИЧНО!):**
+**Extract запускается ТОЛЬКО целиком через extract_master.py:**
 
 ```bash
-cd "/home/budnik_an/cube linux/cube" && \
+cd /media/albud/8C327EB0327E9F40/Projects/Heli/Helicomponents && \
+source .venv/bin/activate && \
+python3 code/extract_master.py
+```
+
+- Интерактивный выбор датасета из папок `data_input/source_data/v_YYYY-MM-DD/`
+- Интерактивный выбор режима: ТЕСТ (полная очистка) или ПРОД (версионирование)
+- **ЗАПРЕЩЕНО** запускать отдельные loader-ы вручную без extract_master.py
+
+**Структура датасетов:**
+- Каждый датасет в отдельной папке: `v_2025-07-04/`, `v_2025-12-30/` и т.д.
+- Обязательные файлы: `Status_Components.xlsx`, `Status_Overhaul.xlsx`, `Program_AC.xlsx`
+- Статические файлы (Program_heli.xlsx, Program.xlsx) копируются из первого датасета
+
+## Команда запуска симуляции (обновлено 01.01.2026)
+
+**ОБЯЗАТЕЛЬНЫЙ параметр `--version-date`:**
+
+```bash
+cd /media/albud/8C327EB0327E9F40/Projects/Heli/Helicomponents && \
 source config/load_env.sh && \
 export CUDA_PATH=/usr/local/cuda && \
-export CUBE_CONFIG_PATH="/home/budnik_an/cube linux/cube/config" && \
 cd code/sim_v2 && \
-python3 orchestrator_v2.py --modules \
-  state_2_operations \
-  states_stub \
-  count_ops \
-  quota_repair \
-  quota_ops_excess \
-  quota_promote_serviceable \
-  quota_promote_reserve \
-  quota_promote_inactive \
-  spawn_dynamic \
-  state_manager_serviceable \
-  state_manager_operations \
-  state_manager_repair \
-  state_manager_storage \
-  state_manager_reserve \
-  state_manager_inactive \
-  spawn_v2 \
+python3 orchestrator_v2.py \
+  --version-date 2025-07-04 \
+  --modules \
+    state_2_operations \
+    states_stub \
+    count_ops \
+    quota_repair \
+    quota_ops_excess \
+    quota_promote_serviceable \
+    quota_promote_reserve \
+    quota_promote_inactive \
+    spawn_dynamic \
+    state_manager_serviceable \
+    state_manager_operations \
+    state_manager_repair \
+    state_manager_storage \
+    state_manager_reserve \
+    state_manager_inactive \
+    spawn_v2 \
   --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
 
-**Ключевые правила порядка:**
+**Аргументы симуляции:**
+- `--version-date YYYY-MM-DD` — **ОБЯЗАТЕЛЬНО** указать дату датасета
+- `--steps N` — количество дней симуляции (по умолчанию 3650 = 10 лет)
+- `--enable-mp2` — экспорт результатов в СУБД
+- `--enable-mp2-postprocess` — постпроцессинг transition флагов
+- `--drop-table` — очистка таблицы sim_masterv2 перед записью
+
+**Ключевые правила порядка модулей:**
 1. `spawn_v2` ВСЕГДА в конце (новые агенты проходят логику на следующем шаге)
 2. `state_manager_serviceable` ПЕРЕД `state_manager_operations` (холдинг до промоута)
 3. Порядок state_manager: serviceable → operations → repair → storage → reserve → inactive

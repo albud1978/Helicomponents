@@ -4,7 +4,7 @@ Extract Master - Оркестратор Extract этапа
 Микросервисная архитектура: Extract → Transform → Load (этап Extract)
 
 Дата создания: 19-07-2025  
-Последнее обновление: 24-07-2025
+Последнее обновление: 01-01-2026
 
 Роль: Координация всех Extract процессов
 - Загрузка Excel данных  
@@ -12,6 +12,11 @@ Extract Master - Оркестратор Extract этапа
 - Создание словарей
 - Обработка статусов
 - Подготовка данных для Transform
+
+Мультизагрузка v1.0:
+- Поддержка выбора датасета из папок v_YYYY-MM-DD
+- Передача пути датасета загрузчикам через --dataset-path
+- md_components универсальна для всех датасетов
 """
 
 import subprocess
@@ -26,6 +31,7 @@ from typing import List, Dict, Optional
 sys.path.append(str(Path(__file__).parent / 'utils'))
 from config_loader import get_clickhouse_client
 from etl_version_manager import ETLVersionManager
+from dataset_manager import DatasetManager, DatasetInfo
 import openpyxl
 import os
 
@@ -41,22 +47,48 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def extract_unified_version_date():
+def extract_unified_version_date(dataset_path: str = None):
     """
-    КОСТЫЛЬ: Извлекает единую version_date из Status_Components.xlsx
-    для использования всеми загрузчиками (чтобы избежать разброса дат)
+    Извлекает единую version_date для датасета.
+    
+    Приоритет:
+    0. Дата из имени папки датасета (v_YYYY-MM-DD) — ГЛАВНЫЙ ИСТОЧНИК
+    1. Дата создания Excel файла
+    2. Дата модификации Excel файла
+    3. Время модификации файла в ОС
+    
+    Args:
+        dataset_path: Путь к папке датасета (v_YYYY-MM-DD)
     """
+    import re
+    
     try:
-        status_path = Path('data_input/source_data/Status_Components.xlsx')
-        logger.info(f"📅 Извлечение единой version_date из {status_path.name}...")
+        version_source = "unknown"
+        version_date = date.today()
+        
+        # Приоритет 0: Дата из имени папки датасета (v_YYYY-MM-DD)
+        if dataset_path:
+            folder_name = Path(dataset_path).name
+            match = re.match(r'v_(\d{4}-\d{2}-\d{2})', folder_name)
+            if match:
+                version_date = datetime.strptime(match.group(1), '%Y-%m-%d').date()
+                version_source = "folder name"
+                logger.info(f"📅 Версия из имени папки: {version_date}")
+                logger.info(f"✅ Единая version_date для всех загрузчиков: {version_date}")
+                return version_date
+        
+        # Fallback: метаданные Excel
+        if dataset_path:
+            status_path = Path(dataset_path) / 'Status_Components.xlsx'
+        else:
+            status_path = Path('data_input/source_data/Status_Components.xlsx')
+        logger.info(f"📅 Извлечение единой version_date из {status_path}...")
         
         # Открываем Excel файл для чтения метаданных
         workbook = openpyxl.load_workbook(status_path, read_only=True)
         props = workbook.properties
         
         current_year = datetime.now().year
-        version_source = "unknown"
-        version_date = date.today()
         
         # Приоритет 1: дата создания файла (с проверкой года)
         if props.created:
@@ -242,6 +274,8 @@ class ExtractMaster:
         self.version_date = None
         self.version_id = None
         self.mode = None  # 'test' или 'prod'
+        self.dataset: DatasetInfo = None  # Выбранный датасет
+        self.dataset_path: str = None  # Путь к папке датасета
         
     def initialize(self) -> bool:
         """Инициализация подключений и менеджеров"""
@@ -262,11 +296,46 @@ class ExtractMaster:
             logger.error(f"❌ Ошибка инициализации: {e}")
             return False
     
+    def select_dataset(self) -> bool:
+        """Выбор датасета для загрузки"""
+        print("\n" + "="*70)
+        print("📂 ВЫБОР ДАТАСЕТА")
+        print("="*70)
+        
+        # Обнаруживаем датасеты
+        manager = DatasetManager()
+        datasets = manager.discover_datasets()
+        
+        if not datasets:
+            logger.error("❌ Не найдено ни одного комплектного датасета")
+            logger.info("💡 Создайте папку v_YYYY-MM-DD в data_input/source_data/")
+            logger.info("   с файлами: Status_Components.xlsx, Status_Overhaul.xlsx, Program_AC.xlsx")
+            return False
+        
+        # Интерактивный выбор
+        selected = manager.select_dataset_interactive()
+        
+        if not selected:
+            return False
+        
+        self.dataset = selected
+        self.dataset_path = str(selected.path)
+        
+        # Устанавливаем глобальный путь для всех микросервисов
+        from utils.version_utils import set_dataset_path
+        set_dataset_path(self.dataset_path)
+        
+        logger.info(f"✅ Выбран датасет: {selected.name}")
+        logger.info(f"📁 Путь: {self.dataset_path}")
+        
+        return True
+    
     def select_mode(self) -> bool:
         """Выбор режима работы: тест или прод"""
         print("\n" + "="*70)
         print("🎯 EXTRACT MASTER - HELICOPTER COMPONENT LIFECYCLE")
         print("="*70)
+        print(f"\n📂 Датасет: {self.dataset.name if self.dataset else 'не выбран'}")
         print("\n🔧 Выберите режим работы:")
         print("1. 🧪 ТЕСТ - удалить ВСЕ таблицы и создать заново (быстро)")
         print("2. 🏭 ПРОД - дополнить существующие данные (версионирование)")
@@ -372,8 +441,8 @@ class ExtractMaster:
                     logger.warning(f"⚠️ Ошибка удаления {table}: {e}")
             
             # В тестовом режиме всегда version_id = 1
-            # КОСТЫЛЬ: используем единую дату из Status_Components.xlsx для всех загрузчиков
-            self.version_date = extract_unified_version_date()
+            # Используем единую дату из Status_Components.xlsx выбранного датасета
+            self.version_date = extract_unified_version_date(self.dataset_path)
             self.version_id = 1
             
             logger.info(f"✅ Тестовый режим подготовлен: удалено {deleted_count} таблиц")
@@ -394,8 +463,8 @@ class ExtractMaster:
                 logger.error("❌ Ошибка добавления полей version_id")
                 return False
             
-            # Определяем дату версии (можно задать параметром или взять текущую)
-            self.version_date = date.today()
+            # Определяем дату версии из датасета
+            self.version_date = extract_unified_version_date(self.dataset_path)
             
             # Обрабатываем политику версионирования
             policy, version_id = self.version_manager.handle_version_policy(self.version_date)
@@ -439,12 +508,26 @@ class ExtractMaster:
             
             # Формируем команду с параметрами версионирования и доп. аргументами шага (если есть)
             extra_args = step.get('args', [])
+            
+            # Базовые параметры
             cmd_with_params = [
                 sys.executable, str(script_path),
                 '--version-date', str(self.version_date),
                 '--version-id', str(self.version_id),
-                *extra_args
             ]
+            
+            # Добавляем путь к датасету для скриптов которые его поддерживают
+            # md_components_loader НЕ использует датасет (мастер-данные универсальны)
+            if self.dataset_path and script_name not in ['md_components_loader.py', 'calculate_beyond_repair.py', 
+                                                          'md_components_enricher.py', 'enrich_heli_pandas.py',
+                                                          'dictionary_creator.py', 'digital_values_dictionary_creator.py',
+                                                          'heli_pandas_group_by_enricher.py', 'heli_pandas_component_status.py',
+                                                          'heli_pandas_serviceable_status.py', 'heli_pandas_repair_status.py',
+                                                          'heli_pandas_storage_status.py', 'repair_days_calculator.py']:
+                cmd_with_params.extend(['--dataset-path', self.dataset_path])
+            
+            # Добавляем дополнительные аргументы шага
+            cmd_with_params.extend(extra_args)
             
             # Сначала пробуем с параметрами версионирования
             result = subprocess.run(
@@ -688,6 +771,10 @@ def main():
     master = ExtractMaster()
     
     try:
+        # Выбор датасета
+        if not master.select_dataset():
+            sys.exit(0)
+        
         # Инициализация
         if not master.initialize():
             sys.exit(1)

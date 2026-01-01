@@ -35,9 +35,17 @@ from excel_utils import clean_excel_data
 # Функция extract_version_date_from_excel удалена - используется общая utils.version_utils.extract_unified_version_date()
 
 def load_program_ac_data():
-    """Загружает данные реестра вертолетов в эксплуатации"""
+    """Загружает данные реестра вертолетов в эксплуатации из текущего датасета"""
     try:
-        file_path = Path('data_input/source_data/Program_AC.xlsx')
+        # Получаем путь к датасету из version_utils
+        from utils.version_utils import get_dataset_path
+        dataset_path = get_dataset_path()
+        
+        if dataset_path:
+            file_path = dataset_path / 'Program_AC.xlsx'
+        else:
+            file_path = Path('data_input/source_data/Program_AC.xlsx')
+        
         print(f"📖 Загружаем {file_path}...")
         
         if not file_path.exists():
@@ -442,8 +450,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Program AC Loader для Helicopter Component Lifecycle')
     parser.add_argument('--version-date', type=str, help='Дата версии (YYYY-MM-DD)')
     parser.add_argument('--version-id', type=int, help='ID версии')
+    parser.add_argument('--dataset-path', type=str, help='Путь к папке датасета (v_YYYY-MM-DD)')
     
     args = parser.parse_args()
+    
+    # Устанавливаем путь к датасету если передан
+    if args.dataset_path:
+        from utils.version_utils import set_dataset_path
+        set_dataset_path(args.dataset_path)
     
     # Передаем параметры версионирования в main, если они заданы
     if args.version_date and args.version_id:
