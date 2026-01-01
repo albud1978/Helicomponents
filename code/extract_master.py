@@ -201,6 +201,20 @@ class ExtractMaster:
             'result_table': 'heli_pandas',
             'critical': True
         },
+        {
+            'script': 'heli_pandas_repair_status.py',
+            'description': 'Проставление status_id для агрегатов с target_date (4=ремонт или 2=вернулся)',
+            'dependencies': ['heli_pandas', 'md_components'],
+            'result_table': 'heli_pandas',
+            'critical': True
+        },
+        {
+            'script': 'heli_pandas_storage_status.py',
+            'description': 'Проставление status_id=6 для неисправных агрегатов beyond repair (sne > br)',
+            'dependencies': ['heli_pandas', 'md_components'],
+            'result_table': 'heli_pandas',
+            'critical': True
+        },
         # === МЕТА-СЛОВАРЬ (финальный этап после всех таблиц) ===
         {
             'script': 'digital_values_dictionary_creator.py',
