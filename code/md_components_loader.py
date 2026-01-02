@@ -251,14 +251,22 @@ def prepare_md_data(df, version_date, version_id=1):
         sys.exit(1)
 
 def create_md_table(client):
-    """Создает таблицу md_components в ClickHouse с обновленной схемой"""
+    """Создает таблицу md_components в ClickHouse (если не существует)
+    
+    ВАЖНО: В PROD режиме таблица НЕ удаляется — md_components является
+    универсальным справочником номенклатур для всех датасетов.
+    """
     try:
-        # Удаляем старую таблицу для пересоздания с новыми полями
-        print("🗑️ Удаление старой таблицы md_components...")
-        client.execute("DROP TABLE IF EXISTS md_components")
+        # Проверяем существует ли таблица
+        table_exists = client.execute("EXISTS TABLE md_components")[0][0]
         
+        if table_exists:
+            print("✅ Таблица md_components уже существует, пропускаем создание")
+            return
+        
+        print("📝 Создание таблицы md_components...")
         create_sql = """
-        CREATE TABLE md_components (
+        CREATE TABLE IF NOT EXISTS md_components (
             -- Основные идентификаторы
             `partno` Nullable(String),              -- Чертежный номер
             `comp_number` Nullable(UInt8),          -- Количество на ВС (было Float64 → uint8)
@@ -319,46 +327,62 @@ def create_md_table(client):
         sys.exit(1)
 
 def check_version_conflicts(client, version_date, version_id):
-    """Проверяет конфликты версий"""
+    """Проверяет состояние справочника md_components
+    
+    ВАЖНО: md_components — ЕДИНЫЙ справочник номенклатур.
+    Нет дублирования по version_date — проверка конфликтов не нужна.
+    Возвращаем True всегда (добавление новых partno обрабатывается в insert_md_data).
+    """
     try:
-        count = client.execute(f"SELECT COUNT(*) FROM md_components WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
+        total_count = client.execute("SELECT COUNT(*) FROM md_components")[0][0]
+        unique_partnos = client.execute("SELECT COUNT(DISTINCT partno) FROM md_components")[0][0]
         
-        if count > 0:
-            print(f"\n🚨 НАЙДЕНЫ ДАННЫЕ С ИДЕНТИЧНОЙ ВЕРСИЕЙ!")
-            print(f"   Дата версии: {version_date}, version_id: {version_id}")
-            print(f"   md_components: {count:,} записей")
-            print(f"\nВыберите действие:")
-            print(f"   1. ЗАМЕНИТЬ существующие данные (DELETE + INSERT)")
-            print(f"   2. ОТМЕНИТЬ загрузку")
-            
-            while True:
-                try:
-                    choice = input(f"\nВаш выбор (1-2): ").strip()
-                    if choice == '1':
-                        print(f"🔄 Удаляем существующие данные за {version_date} v{version_id}...")
-                        client.execute(f"DELETE FROM md_components WHERE version_date = '{version_date}' AND version_id = {version_id}")
-                        print(f"✅ Удалено {count:,} записей из md_components")
-                        return True
-                    elif choice == '2':
-                        print(f"❌ Загрузка отменена пользователем")
-                        return False
-                    else:
-                        print("❌ Неверный выбор. Введите 1 или 2.")
-                except KeyboardInterrupt:
-                    print(f"\n❌ Загрузка отменена пользователем")
-                    return False
-        else:
-            print(f"✅ Новая версия данных - продолжаем загрузку")
-            return True
+        print(f"📚 Справочник md_components: {total_count} записей, {unique_partnos} уникальных partno")
+        print(f"   ℹ️ При загрузке будут добавлены только НОВЫЕ номенклатуры")
+        return True
             
     except Exception as e:
-        print(f"❌ Ошибка проверки версий: {e}")
+        print(f"❌ Ошибка проверки md_components: {e}")
         return False
 
 def insert_md_data(client, df):
-    """Загружает данные MD_Components в таблицу"""
+    """Загружает данные MD_Components в таблицу (ЕДИНЫЙ СПРАВОЧНИК)
+    
+    md_components — универсальный справочник номенклатур БЕЗ дублирования.
+    
+    Логика:
+    1. Получаем список существующих partno
+    2. Фильтруем df — оставляем только НОВЫЕ partno
+    3. Вставляем только новые записи
+    4. version_date используется как "дата первого добавления" (created_at)
+    
+    При повторных загрузках данные НЕ дублируются!
+    """
     try:
-        print(f"🚀 Загружаем {len(df):,} записей в md_components...")
+        print(f"📚 Проверяем md_components на дубли...")
+        
+        # === ПРОВЕРКА СУЩЕСТВУЮЩИХ PARTNO ===
+        existing_partnos = set()
+        result = client.execute("SELECT DISTINCT partno FROM md_components WHERE partno IS NOT NULL")
+        existing_partnos = {row[0] for row in result}
+        print(f"   📋 В таблице уже есть {len(existing_partnos)} уникальных partno")
+        
+        # Фильтруем — оставляем только НОВЫЕ partno
+        if 'partno' in df.columns:
+            df_new = df[~df['partno'].isin(existing_partnos)].copy()
+            skipped = len(df) - len(df_new)
+            
+            if skipped > 0:
+                print(f"   ⏭️ Пропускаем {skipped} существующих номенклатур")
+            
+            if len(df_new) == 0:
+                print(f"✅ Все {len(df)} номенклатур уже есть в справочнике, ничего не добавляем")
+                return len(df)  # Возвращаем общее кол-во для валидации
+            
+            df = df_new
+            print(f"🚀 Добавляем {len(df):,} НОВЫХ номенклатур в md_components...")
+        else:
+            print(f"🚀 Загружаем {len(df):,} записей в md_components...")
         
         # Диагностика sne_new/ppr_new перед вставкой
         if 'sne_new' in df.columns:
@@ -423,43 +447,44 @@ def insert_md_data(client, df):
         return 0
 
 def validate_md_data(client, version_date, version_id, original_count):
-    """Проверка качества загруженных данных MD_Components"""
+    """Проверка качества ЕДИНОГО справочника MD_Components
+    
+    md_components — единый справочник без дублей.
+    Проверяем общее состояние, не по version_date.
+    """
     print(f"\n🔍 === ПРОВЕРКА КАЧЕСТВА MD_COMPONENTS ===")
     
-    # Проверяем в БД
-    db_count = client.execute(f"SELECT COUNT(*) FROM md_components WHERE version_date = '{version_date}' AND version_id = {version_id}")[0][0]
+    # Проверяем ОБЩЕЕ количество в БД (единый справочник)
+    db_count = client.execute("SELECT COUNT(*) FROM md_components")[0][0]
+    unique_partnos = client.execute("SELECT COUNT(DISTINCT partno) FROM md_components")[0][0]
     
-    print(f"📊 Исходный Excel файл: {original_count:,} записей")
-    print(f"📊 md_components: {db_count:,} записей")
+    print(f"📊 Исходный Excel файл: {original_count:,} номенклатур")
+    print(f"📊 md_components ВСЕГО: {db_count:,} записей, {unique_partnos} уникальных partno")
     
     # Проверки качества
     issues = []
     
-    if db_count != original_count:
-        issues.append(f"❌ Количество записей: ожидали {original_count:,}, получили {db_count:,}")
-    
-    # Проверяем уникальные партномера
-    unique_partnos_result = client.execute(f"SELECT COUNT(DISTINCT partno) FROM md_components WHERE version_date = '{version_date}' AND version_id = {version_id}")
-    unique_partnos = unique_partnos_result[0][0]
-    
-    print(f"📦 Уникальных партномеров: {unique_partnos}")
+    # Справочник должен содержать не меньше записей чем в Excel
+    if unique_partnos < original_count:
+        issues.append(f"⚠️ В справочнике меньше номенклатур ({unique_partnos}) чем в Excel ({original_count})")
     
     # Проверяем заполненность ключевых полей
-    key_fields_check = client.execute(f"""
+    key_fields_check = client.execute("""
         SELECT 
             SUM(CASE WHEN partno IS NOT NULL AND partno != '' THEN 1 ELSE 0 END) as filled_partno,
             SUM(CASE WHEN comp_number IS NOT NULL THEN 1 ELSE 0 END) as filled_comp_number
-        FROM md_components WHERE version_date = '{version_date}' AND version_id = {version_id}
+        FROM md_components
     """)
     
     filled_partno, filled_comp_number = key_fields_check[0]
     
-    print(f"📋 Заполненность ключевых полей:")
-    print(f"   partno: {filled_partno}/{db_count} ({filled_partno/db_count*100:.1f}%)")
-    print(f"   comp_number: {filled_comp_number}/{db_count} ({filled_comp_number/db_count*100:.1f}%)")
-    
-    if filled_partno < db_count * 0.9:  # Менее 90% заполненности
-        issues.append(f"❌ Низкая заполненность partno: {filled_partno/db_count*100:.1f}%")
+    if db_count > 0:
+        print(f"📋 Заполненность ключевых полей:")
+        print(f"   partno: {filled_partno}/{db_count} ({filled_partno/db_count*100:.1f}%)")
+        print(f"   comp_number: {filled_comp_number}/{db_count} ({filled_comp_number/db_count*100:.1f}%)")
+        
+        if filled_partno < db_count * 0.9:  # Менее 90% заполненности
+            issues.append(f"❌ Низкая заполненность partno: {filled_partno/db_count*100:.1f}%")
     
     # Результат проверки
     if issues:
@@ -469,7 +494,7 @@ def validate_md_data(client, version_date, version_id, original_count):
         return False
     else:
         print(f"\n✅ Все проверки пройдены успешно!")
-        print(f"✅ Уникальных компонентов: {unique_partnos}")
+        print(f"✅ Справочник содержит {unique_partnos} уникальных номенклатур")
         print(f"✅ Качество данных: высокое")
         return True
 

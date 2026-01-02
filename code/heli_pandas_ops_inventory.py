@@ -5,7 +5,7 @@
 - Использует версионность `heli_pandas`/`md_components`
 - Сводит количество установленных агрегатов по каждому борту
 - Дополнительно выводит расхождения с требуемым `comp_number`
-- По умолчанию сохраняет отчёт в docs/heli_pandas_ops_inventory_<version>.md
+- По умолчанию сохраняет отчёт в output/heli_pandas_ops_inventory_<version>.md
 """
 
 from __future__ import annotations
@@ -279,7 +279,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--md-path",
         type=str,
-        help="Путь к Markdown-отчёту. По умолчанию docs/heli_pandas_ops_inventory_<version>.md",
+        help="Путь к Markdown-отчёту. По умолчанию output/heli_pandas_ops_inventory_<version>.md",
     )
     parser.add_argument(
         "--skip-md",
@@ -306,7 +306,7 @@ def main() -> int:
     if not args.skip_md:
         md_content = build_markdown(version, summary, rows, args.detail_limit)
         default_path = Path(
-            f"docs/heli_pandas_ops_inventory_{version.version_date}.md"
+            f"output/heli_pandas_ops_inventory_{version.version_date}.md"
         )
         target_path = Path(args.md_path) if args.md_path else default_path
         target_path.parent.mkdir(parents=True, exist_ok=True)
