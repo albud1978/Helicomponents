@@ -552,13 +552,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--md-path",
         type=str,
-        help="Путь к Markdown-отчёту (по умолчанию docs/heli_pandas_ops_other_groups_<version>.md)",
+        help="Путь к Markdown-отчёту (по умолчанию output/heli_pandas_ops_other_groups_<version>.md)",
     )
     parser.add_argument("--skip-md", action="store_true", help="Не сохранять Markdown")
     parser.add_argument(
         "--pdf-path",
         type=str,
-        help="Путь к PDF-отчёту (по умолчанию docs/heli_pandas_ops_other_groups_<version>.pdf)",
+        help="Путь к PDF-отчёту (по умолчанию output/heli_pandas_ops_other_groups_<version>.pdf)",
     )
     parser.add_argument("--skip-pdf", action="store_true", help="Не сохранять PDF")
     return parser.parse_args()
@@ -622,7 +622,7 @@ def main() -> int:
         md_path = (
             Path(args.md_path)
             if args.md_path
-            else Path(f"docs/heli_pandas_ops_other_groups_{version.version_date}.md")
+            else Path(f"output/heli_pandas_ops_other_groups_{version.version_date}.md")
         )
         md_path.write_text(markdown, encoding="utf-8")
         print(f"\n📝 Markdown-отчёт сохранён в {md_path}")
@@ -631,7 +631,7 @@ def main() -> int:
         pdf_path = (
             Path(args.pdf_path)
             if args.pdf_path
-            else Path(f"docs/heli_pandas_ops_other_groups_{version.version_date}.pdf")
+            else Path(f"output/heli_pandas_ops_other_groups_{version.version_date}.pdf")
         )
         try:
             render_pdf(markdown, pdf_path)

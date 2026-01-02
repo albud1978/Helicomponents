@@ -629,7 +629,10 @@ class ExtractMaster:
                 WHERE table = '{result_table}' AND name = 'version_id'
             """)[0][0] > 0
             
-            if has_version_id:
+            # Аддитивные таблицы (единые справочники) - считаем общее количество, не по версии
+            ADDITIVE_TABLES = ['md_components']
+            
+            if has_version_id and result_table not in ADDITIVE_TABLES:
                 # Таблица поддерживает версионирование - считаем для конкретной версии
                 count_sql = f"""
                 SELECT count() 
@@ -646,6 +649,17 @@ class ExtractMaster:
                     return {'success': False, 'message': f'Нет данных в {result_table} для версии {self.version_date}v{self.version_id}'}
                 
                 return {'success': True, 'message': f'{result_table}: {count:,} записей (версия {self.version_id})'}
+            elif result_table in ADDITIVE_TABLES:
+                # Аддитивная таблица — единый справочник, считаем ВСЁ
+                count_sql = f"SELECT count() FROM {result_table}"
+                count = self.client.execute(count_sql)[0][0]
+                
+                if count == 0:
+                    if step.get('allow_empty'):
+                        return {'success': True, 'message': f'{result_table}: 0 записей (допустимо для этого шага)'}
+                    return {'success': False, 'message': f'Нет данных в {result_table}'}
+                
+                return {'success': True, 'message': f'{result_table}: {count:,} записей (единый справочник)'}
             else:
                 # Таблица еще не поддерживает версионирование - считаем общее количество
                 count_sql = f"SELECT count() FROM {result_table}"

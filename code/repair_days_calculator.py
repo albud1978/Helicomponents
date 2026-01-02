@@ -124,25 +124,15 @@ class RepairDaysCalculator:
             # Получаем уникальные partseqno_i
             partseqno_list = list(set([aircraft['partseqno_i'] for aircraft in repair_aircraft]))
             
-            if self.version_date and self.version_id:
-                placeholders = ','.join(['%s'] * len(partseqno_list))
-                query = f"""
-                SELECT partno_comp, repair_time
-                FROM md_components 
-                WHERE partno_comp IN ({placeholders})
-                    AND version_date = %s 
-                    AND version_id = %s
-                """
-                params = partseqno_list + [self.version_date, self.version_id]
-                result = self.client.query(query, params)
-            else:
-                placeholders = ','.join(['%s'] * len(partseqno_list))
-                query = f"""
-                SELECT partno_comp, repair_time
-                FROM md_components 
-                WHERE partno_comp IN ({placeholders})
-                """
-                result = self.client.query(query, partseqno_list)
+            # md_components — ЕДИНЫЙ справочник без версионности
+            # НЕ фильтруем по version_date/version_id
+            placeholders = ','.join(['%s'] * len(partseqno_list))
+            query = f"""
+            SELECT partno_comp, repair_time
+            FROM md_components 
+            WHERE partno_comp IN ({placeholders})
+            """
+            result = self.client.query(query, partseqno_list)
             
             repair_times = {}
             for row in result.result_rows:
