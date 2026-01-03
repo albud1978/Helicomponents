@@ -9,12 +9,16 @@ RTC Spawn для orchestrator_v2
 - State для новорожденных: serviceable&intent=3 (holding, ожидание решения по операциям)
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import model_build
+
 try:
     import pyflamegpu as fg
 except ImportError as e:
     raise RuntimeError(f"pyflamegpu не установлен: {e}")
 
-from model_build import MAX_DAYS
 from string import Template
 
 
@@ -28,8 +32,9 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     
     env = model.Environment()
     
-    # Вычисляем MP2_SIZE для MacroProperty transition
-    MAX_FRAMES = int(env_data.get('frames_total_u16', env_data.get('frames_total', 340)))
+    # ФИКСИРОВАННЫЕ размеры для RTC кэширования
+    MAX_FRAMES = model_build.RTC_MAX_FRAMES
+    MAX_DAYS = model_build.MAX_DAYS
     MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
     
     # frames_initial для spawn (ПРАВИЛЬНО: first_reserved_idx!)

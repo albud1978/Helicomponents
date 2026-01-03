@@ -2,6 +2,10 @@
 RTC модуль для записи в MP2 (device-side export) - ПОЛНАЯ ВЕРСИЯ
 Все 27 агентных переменных логируются в СУБД
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import model_build
 
 import pyflamegpu as fg
 
@@ -12,9 +16,9 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
 def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, clickhouse_client=None):
     """Регистрирует RTC функции для записи в MP2 и host функцию для дренажа"""
     
-    # Получаем MAX_FRAMES и DAYS из модели
-    MAX_FRAMES = model.Environment().getPropertyUInt("frames_total")
-    MAX_DAYS = model.Environment().getPropertyUInt("days_total")
+    # ФИКСИРОВАННЫЕ размеры для RTC кэширования
+    MAX_FRAMES = model_build.RTC_MAX_FRAMES
+    MAX_DAYS = model_build.MAX_DAYS
     MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Плотная матрица с D+1 паддингом
     
     # Проверяем, был ли уже вызван register_mp2_writer (например, если mp2_writer в списке модулей)
