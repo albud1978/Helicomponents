@@ -1,6 +1,10 @@
 """
 Host функция для дренажа MP2 в ClickHouse
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import model_build
 
 import pyflamegpu as fg
 from datetime import datetime, timedelta
@@ -171,7 +175,8 @@ class MP2DrainHostFunction(fg.HostFunction):
         # HostFunction контекст - FLAMEGPU.environment доступен напрямую
         env = FLAMEGPU.environment
         
-        frames = env.getPropertyUInt("frames_total")
+        # ВАЖНО: используем фиксированный RTC_MAX_FRAMES для совместимости с MP2 Writer
+        frames = model_build.RTC_MAX_FRAMES
         version_date = env.getPropertyUInt("version_date")
         version_id = env.getPropertyUInt("version_id")
         
@@ -387,7 +392,8 @@ class MP2DrainHostFunction(fg.HostFunction):
                              start_idx: int, max_rows: int):
         """Дренаж с ограничением по количеству строк за вызов. Возвращает (rows, finished),
         где finished либо True (если диапазон завершён), либо (day_cursor, idx_cursor) для продолжения."""
-        frames = FLAMEGPU.environment.getPropertyUInt("frames_total")
+        # ВАЖНО: используем фиксированный RTC_MAX_FRAMES для совместимости с MP2 Writer
+        frames = model_build.RTC_MAX_FRAMES
         version_date = FLAMEGPU.environment.getPropertyUInt("version_date")
         version_id = FLAMEGPU.environment.getPropertyUInt("version_id")
         # day_date вычисляется в ClickHouse (MATERIALIZED), в Python не считаем
