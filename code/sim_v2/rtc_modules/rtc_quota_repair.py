@@ -36,9 +36,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
         return flamegpu::ALIVE;
     }
     
-    // ✅ Читаем repair_number из MacroProperty по idx
-    auto repair_number_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned char, $MAX_FRAMES>("repair_number_by_idx");
-    const unsigned char repair_number = repair_number_by_idx[idx];
+    // ✅ Читаем repair_number из MacroProperty по idx (UInt32 для выравнивания)
+    auto repair_number_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, $MAX_FRAMES>("repair_number_by_idx");
+    const unsigned int repair_number = repair_number_by_idx[idx];
     
     // 0 означает отсутствие квоты
     if (repair_number == 0u) {
@@ -56,7 +56,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
         if (repair_state_buffer[i] != 1u) continue;  // Только агенты в repair
         
         // Проверяем repair_number агента i
-        const unsigned char rn_i = repair_number_by_idx[i];
+        const unsigned int rn_i = repair_number_by_idx[i];
         if (rn_i == repair_number) {
             ++curr_in_repair;
         }
@@ -88,7 +88,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
         if (!is_candidate) continue;
         
         // ✅ ТОЧНАЯ ФИЛЬТРАЦИЯ: проверяем что repair_number совпадает
-        const unsigned char rn_i = repair_number_by_idx[i];
+        const unsigned int rn_i = repair_number_by_idx[i];
         if (rn_i != repair_number) continue;
         
         // Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx)

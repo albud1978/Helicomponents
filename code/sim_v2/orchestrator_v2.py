@@ -295,7 +295,7 @@ class V2Orchestrator:
                 if self.initialized:
                     return
                 
-                mp = FLAMEGPU.environment.getMacroPropertyUInt8("repair_number_by_idx")
+                mp = FLAMEGPU.environment.getMacroPropertyUInt32("repair_number_by_idx")
                 for i, val in enumerate(self.data):
                     mp[i] = int(val)
                 

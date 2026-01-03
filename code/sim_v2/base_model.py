@@ -188,7 +188,7 @@ class V2BaseModel:
         self.env.newMacroPropertyUInt32("repair_state_buffer", model_build.MAX_FRAMES)  # Агенты в repair
         self.env.newMacroPropertyUInt32("reserve_queue_buffer", model_build.MAX_FRAMES)  # reserve & intent=0
         self.env.newMacroPropertyUInt32("ops_repair_buffer", model_build.MAX_FRAMES)  # operations & intent=4
-        self.env.newMacroPropertyUInt8("repair_number_by_idx", model_build.MAX_FRAMES)  # repair_number для каждого idx
+        self.env.newMacroPropertyUInt32("repair_number_by_idx", model_build.MAX_FRAMES)  # repair_number для каждого idx (UInt32 для выравнивания)
 
         # MP4 квоты (если включены)
         if os.environ.get('HL_ENABLE_QUOTAS', '0') == '1':
