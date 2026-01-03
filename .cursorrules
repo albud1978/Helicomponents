@@ -1,4 +1,4 @@
-# Правила проекта (консолидировано, 02-01-2026)
+# Правила проекта (консолидировано, 03-01-2026)
 
 ## Принципы разработки
 
@@ -38,7 +38,8 @@
 - **Фильтрация планеров**: Из ~7113 строк MP3 агентами становятся только планеры с group_by ∈ {1,2} (~286 бортов).
 - MP5 держать в `MacroProperty mp5_lin[MAX_SIZE]` с фиксированным MAX_SIZE; инициализация ТОЛЬКО через HostFunction до первых RTC.
 - Запрет записи в `mp5_lin` после начала чтения агентами. RTC копирование запрещено.
-- Размеры MacroProperty: MAX_FRAMES определяется из данных MP3/MP5, MAX_DAYS=4000, MAX_SIZE=MAX_FRAMES*(MAX_DAYS+1).
+- Размеры MacroProperty: **RTC_MAX_FRAMES=400** (фиксированный для кэширования ядер), MAX_DAYS=4000, MAX_SIZE=400*4001=1,600,400.
+- Runtime `frames_total` передаётся через Environment для индексации внутри ядер (реальное количество агентов).
 - **OH при создании**: Значения oh (overhaul hours) определять при создании агентов из MP1 по group_by, НЕ в RTC. OH в MP1 уже хранится в минутах, умножать на 60 НЕ НАДО!
   - Использовать `mp1_index` для получения индекса: `pidx = mp1_index.get(partseqno, -1)`
   - Для Mi-8 (group_by=1): брать из `mp1_oh_mi8[pidx]`
@@ -133,13 +134,22 @@
 - Каждая ошибка — улучшение процесса анализа для будущих задач.
 - Примечание: правило добавлено 19.10.2025 после неправильного анализа deficit расчёта в P1.
 
+## Настройка окружения — ОБЯЗАТЕЛЬНО перед любыми командами
+
+```bash
+cd /media/albud/8C327EB0327E9F40/Projects/Heli/Helicomponents
+source .venv/bin/activate
+source config/load_env.sh
+export CUBE_CONFIG_PATH="/media/albud/8C327EB0327E9F40/Projects/Heli/Helicomponents/config"
+```
+
+---
+
 ## Загрузка данных (Extract) — обновлено 01.01.2026
 
 **Extract запускается ТОЛЬКО целиком через extract_master.py:**
 
 ```bash
-# Из корня проекта (Helicomponents/)
-source .venv/bin/activate
 python3 code/extract_master.py
 ```
 
@@ -152,71 +162,72 @@ python3 code/extract_master.py
 - Обязательные файлы: `Status_Components.xlsx`, `Status_Overhaul.xlsx`, `Program_AC.xlsx`
 - Статические файлы (Program_heli.xlsx, Program.xlsx) копируются из первого датасета
 
-## Команда запуска симуляции (обновлено 01.01.2026)
+---
 
-**ОБЯЗАТЕЛЬНЫЙ параметр `--version-date`:**
+## Симуляция (FLAME GPU) — обновлено 03.01.2026
+
+### RTC кэширование ядер
+- **RTC_MAX_FRAMES = 400** — фиксированный размер MacroProperty для всех датасетов
+- Ядра компилируются ОДИН раз при первом запуске (~70 сек), далее используется кэш (~6-7 сек)
+- Кэш: `.rtc_cache/` (~250 файлов после полного прогона с MP2)
+- При смене датасета перекомпиляция НЕ требуется (размеры одинаковые)
+
+### Полная команда симуляции
 
 ```bash
-# Из корня проекта (Helicomponents/)
-source config/load_env.sh
-export CUDA_PATH=/usr/local/cuda
-cd code/sim_v2
-
-python3 orchestrator_v2.py \
+cd code/sim_v2 && python3 orchestrator_v2.py \
   --version-date 2025-07-04 \
-  --modules \
-    state_2_operations \
-    states_stub \
-    count_ops \
-    quota_repair \
-    quota_ops_excess \
-    quota_promote_serviceable \
-    quota_promote_reserve \
-    quota_promote_inactive \
-    spawn_dynamic \
-    state_manager_serviceable \
-    state_manager_operations \
-    state_manager_repair \
-    state_manager_storage \
-    state_manager_reserve \
-    state_manager_inactive \
-    spawn_v2 \
+  --modules state_2_operations states_stub count_ops quota_repair quota_ops_excess \
+    quota_promote_serviceable quota_promote_reserve quota_promote_inactive spawn_dynamic \
+    state_manager_serviceable state_manager_operations state_manager_repair \
+    state_manager_storage state_manager_reserve state_manager_inactive spawn_v2 \
   --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
 
-**Аргументы симуляции:**
+### Аргументы симуляции
 - `--version-date YYYY-MM-DD` — **ОБЯЗАТЕЛЬНО** указать дату датасета
-- `--steps N` — количество дней симуляции (по умолчанию 3650 = 10 лет)
-- `--enable-mp2` — экспорт результатов в СУБД
-- `--enable-mp2-postprocess` — постпроцессинг transition флагов
-- `--drop-table` — очистка таблицы sim_masterv2 перед записью
+- `--steps N` — количество дней симуляции (3650 = 10 лет)
+- `--enable-mp2` — экспорт результатов в СУБД (sim_masterv2)
+- `--enable-mp2-postprocess` — постпроцессинг transition флагов (1→4, 4→2)
+- `--drop-table` — очистка таблицы sim_masterv2 перед записью (для первого датасета)
 
-**Ключевые правила порядка модулей:**
+### Ключевые правила порядка модулей
 1. `spawn_v2` ВСЕГДА в конце (новые агенты проходят логику на следующем шаге)
 2. `state_manager_serviceable` ПЕРЕД `state_manager_operations` (холдинг до промоута)
 3. Порядок state_manager: serviceable → operations → repair → storage → reserve → inactive
-4. `--enable-mp2-postprocess` ОБЯЗАТЕЛЕН для записи transition флагов (1→4, 4→2)
+4. `--enable-mp2-postprocess` ОБЯЗАТЕЛЕН для записи transition флагов
+
+### Очистка RTC кэша (только при изменении RTC кода!)
+```bash
+rm -rf .rtc_cache/* ~/.cache/flamegpu/* /tmp/flamegpu/*
+```
 
 **Источник:** Матрица состояний `data_input/analytics/state-intent matrix.xlsx`  
-**Детали:** `docs/rtc_pipeline_architecture.md` (секция "Порядок слоёв")
+**Детали:** `docs/rtc_pipeline_architecture.md`, `docs/validation.md` (секция MAX_FRAMES)
 
-## Штатные процедуры проверки данных
+---
 
-### Проверка комплектности вертолётов
+## Проверка комплектности вертолётов
 
 **Документация:** `docs/extract.md` (секция "Проверка комплектности вертолётов")
 
-**Основная проверка** (какие вертолёты с некомплектом):
+### Основная проверка (какие вертолёты с некомплектом)
 ```bash
-python3 code/heli_pandas_ops_other_groups.py --version-date YYYY-MM-DD --version-id 1 --skip-pdf
+python3 code/heli_pandas_ops_other_groups.py --version-date 2025-07-04 --version-id 1 --skip-pdf
 ```
 
-**Детальная инвентаризация** (каждый агрегат на каждом планере):
+### Детальная инвентаризация (каждый агрегат на каждом планере)
 ```bash
-python3 code/heli_pandas_ops_inventory.py --version-date YYYY-MM-DD --version-id 1
+python3 code/heli_pandas_ops_inventory.py --version-date 2025-07-04 --version-id 1
 ```
 
-**Результаты:** 
+### Результаты
 - `output/heli_pandas_ops_other_groups_YYYY-MM-DD.md`
 - `output/heli_pandas_ops_inventory_YYYY-MM-DD.md`
+
+---
+
+## Доступные датасеты (январь 2026)
+- `v_2025-07-04` — 279 планеров, 154 в ops, 2 дефицита
+- `v_2025-12-30` — 285 планеров (+6 новых), 158 в ops, 0 дефицитов
 
