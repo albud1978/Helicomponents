@@ -149,13 +149,27 @@ def update_error_flags(client):
          "(condition != 'ИСПРАВНЫЙ' AND sne = 0)"),
         
         (FLAG_OVER_LIMIT, "Status 13: превышение ресурса",
-         "(ll_mi8 IS NOT NULL AND ll_mi8 > 0 AND (sne > ll_mi8 OR ppr > oh_mi8))"),
+         """(
+            (ac_type_mask = 32 AND (
+                (ll_mi8 > 0 AND sne > ll_mi8) OR 
+                (oh_mi8 > 0 AND ppr > oh_mi8 AND group_by != 6)
+            ))
+            OR
+            (ac_type_mask = 64 AND (
+                (ll_mi17 > 0 AND sne > ll_mi17) OR 
+                (oh_mi17 > 0 AND ppr > oh_mi17 AND group_by != 6)
+            ))
+         )"""),
         
         (FLAG_BAD_COND, "Status 14: некорректный condition",
          "(condition NOT IN ('ИСПРАВНЫЙ', 'НЕИСПРАВНЫЙ', 'ДОНОР', 'ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР'))"),
         
         (FLAG_EARLY_DONOR, "Status 15: донор при ремонтопригодном",
-         "(condition = 'ДОНОР' AND br_mi8 IS NOT NULL AND br_mi8 > 0 AND sne < br_mi8)"),
+         """(condition = 'ДОНОР' AND (
+            (ac_type_mask = 32 AND br_mi8 > 0 AND sne < br_mi8)
+            OR
+            (ac_type_mask = 64 AND br_mi17 > 0 AND sne < br_mi17)
+         ))"""),
     ]
     
     for flag_value, description, condition in flags:
@@ -249,24 +263,33 @@ def run_validation_analysis(client):
     for cond, cnt in client.execute(query):
         print(f"  {cond}: {cnt}")
     
-    # Status 13: По причине
+    # Status 13: По причине и типу ВС
     print("\n" + "=" * 80)
-    print("STATUS 13: Превышение ресурса по типу")
+    print("STATUS 13: Превышение ресурса по типу ВС")
     print("=" * 80)
-    query = f"""
-    SELECT 
-        CASE 
-            WHEN sne > ll_mi8 AND ppr > oh_mi8 THEN 'sne>ll И ppr>oh'
-            WHEN sne > ll_mi8 THEN 'sne > ll'
-            ELSE 'ppr > oh'
-        END as reason,
-        count(*) as cnt
-    FROM heli_pandas 
-    WHERE group_by >= 1 AND bitAnd(error_flags, {FLAG_OVER_LIMIT}) > 0
-    GROUP BY reason ORDER BY cnt DESC
-    """
-    for reason, cnt in client.execute(query):
-        print(f"  {reason}: {cnt}")
+    
+    # Ми-8 (mask=32)
+    mi8_sne = client.execute(f"""
+        SELECT count(*) FROM heli_pandas 
+        WHERE group_by >= 1 AND ac_type_mask = 32 AND ll_mi8 > 0 AND sne > ll_mi8
+    """)[0][0]
+    mi8_ppr = client.execute(f"""
+        SELECT count(*) FROM heli_pandas 
+        WHERE group_by >= 1 AND ac_type_mask = 32 AND oh_mi8 > 0 AND ppr > oh_mi8
+    """)[0][0]
+    
+    # Ми-17 (mask=64)
+    mi17_sne = client.execute(f"""
+        SELECT count(*) FROM heli_pandas 
+        WHERE group_by >= 1 AND ac_type_mask = 64 AND ll_mi17 > 0 AND sne > ll_mi17
+    """)[0][0]
+    mi17_ppr = client.execute(f"""
+        SELECT count(*) FROM heli_pandas 
+        WHERE group_by >= 1 AND ac_type_mask = 64 AND oh_mi17 > 0 AND ppr > oh_mi17
+    """)[0][0]
+    
+    print(f"  Ми-8 (mask=32): sne>ll_mi8={mi8_sne}, ppr>oh_mi8={mi8_ppr}")
+    print(f"  Ми-17 (mask=64): sne>ll_mi17={mi17_sne}, ppr>oh_mi17={mi17_ppr}")
     
     # Status 14: Некорректные condition
     if counts.get("14", 0) > 0:
