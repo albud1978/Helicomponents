@@ -284,15 +284,12 @@ class FlightProgramDirectLoader:
             self.logger.error(f"❌ Ошибка получения списка планеров: {e}")
             return []
     
-    def create_flight_program_fl_table(self) -> bool:
-        """Создание таблицы flight_program_fl"""
+    def create_flight_program_fl_table(self, version_date: date) -> bool:
+        """Создание таблицы flight_program_fl (если не существует) и очистка данных для version_date"""
         try:
-            # Удаляем таблицу если существует
-            self.client.execute("DROP TABLE IF EXISTS flight_program_fl")
-            
-            # Создаем новую таблицу
+            # Создаем таблицу если не существует (не удаляем!)
             create_table_sql = """
-            CREATE TABLE flight_program_fl (
+            CREATE TABLE IF NOT EXISTS flight_program_fl (
                 aircraft_number UInt32,
                 dates Date,
                 daily_hours UInt32,
@@ -300,12 +297,18 @@ class FlightProgramDirectLoader:
                 version_date Date DEFAULT today(),
                 version_id UInt8 DEFAULT 1
             ) ENGINE = MergeTree()
-            ORDER BY (aircraft_number, dates)
+            ORDER BY (version_date, aircraft_number, dates)
             SETTINGS index_granularity = 8192
             """
             
             self.client.execute(create_table_sql)
-            self.logger.info("✅ Таблица flight_program_fl создана")
+            
+            # Удаляем только записи с текущим version_date (rewrite policy)
+            delete_sql = f"ALTER TABLE flight_program_fl DELETE WHERE version_date = '{version_date}'"
+            self.client.execute(delete_sql)
+            # Ждём завершения мутации
+            self.client.execute("OPTIMIZE TABLE flight_program_fl FINAL")
+            self.logger.info(f"✅ Таблица flight_program_fl: удалены записи для version_date={version_date}")
             return True
             
         except Exception as e:
@@ -662,8 +665,8 @@ class FlightProgramDirectLoader:
                 self.logger.error("❌ Нет данных о планерах")
                 return False
             
-            # 5. Создание таблицы
-            if not self.create_flight_program_fl_table():
+            # 5. Создание таблицы (и очистка данных для текущей version_date)
+            if not self.create_flight_program_fl_table(version_date):
                 return False
             
             # 6. Применение логики приоритетов и создание данных
