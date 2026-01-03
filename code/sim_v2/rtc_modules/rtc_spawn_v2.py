@@ -217,8 +217,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_2", 0u);
         
         // 11. Запись флага spawn в MacroProperty (детерминированный spawn → serviceable)
-        const unsigned int max_frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
-        const unsigned int pos = day * max_frames + idx;
+        // ВАЖНО: используем фиксированный MAX_FRAMES для согласованности с MP2 Writer/Drain
+        const unsigned int pos = day * ${MAX_FRAMES}u + idx;
         auto mp2_transition_0_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MP2_SIZE}u>("mp2_transition_0_to_3");
         mp2_transition_0_to_3[pos].exchange(1u);
         
@@ -226,7 +226,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         return flamegpu::ALIVE;
     }
-    """).substitute(MAX_DAYS=str(MAX_DAYS), MP2_SIZE=str(MP2_SIZE))
+    """).substitute(MAX_DAYS=str(MAX_DAYS), MP2_SIZE=str(MP2_SIZE), MAX_FRAMES=str(MAX_FRAMES))
 
     fn_mgr = spawn_mgr.newRTCFunction("rtc_spawn_mgr_v2", RTC_SPAWN_MGR)
     fn_mgr.setInitialState("default")
