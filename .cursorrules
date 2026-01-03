@@ -191,6 +191,7 @@ cd code/sim_v2 && python3 orchestrator_v2.py \
   --version-date 2025-07-04 \
   --modules state_2_operations states_stub count_ops quota_repair quota_ops_excess \
     quota_promote_serviceable quota_promote_reserve quota_promote_inactive spawn_dynamic \
+    compute_transitions \
     state_manager_serviceable state_manager_operations state_manager_repair \
     state_manager_storage state_manager_reserve state_manager_inactive spawn_v2 \
   --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
