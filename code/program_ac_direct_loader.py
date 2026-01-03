@@ -432,15 +432,12 @@ class ProgramACDirectLoader:
             self.logger.error(f"❌ Ошибка получения типов ВС: {e}")
             return []
     
-    def create_flight_program_ac_table(self) -> bool:
-        """Создание оптимизированной таблицы flight_program_ac"""
+    def create_flight_program_ac_table(self, version_date: date) -> bool:
+        """Создание таблицы flight_program_ac (если не существует) и очистка данных для version_date"""
         try:
-            # Удаляем таблицу если существует
-            self.client.execute("DROP TABLE IF EXISTS flight_program_ac")
-            
-            # Создаем новую оптимизированную таблицу (flat structure)
+            # Создаем таблицу если не существует (не удаляем!)
             create_table_sql = """
-            CREATE TABLE flight_program_ac (
+            CREATE TABLE IF NOT EXISTS flight_program_ac (
                 dates Date,                        -- переименовано из flight_date
                 ops_counter_mi8 UInt16,            -- счетчики операций: 0-65535 достаточно
                 ops_counter_mi17 UInt16,           -- счетчики операций: 0-65535 достаточно
@@ -452,12 +449,18 @@ class ProgramACDirectLoader:
                 version_date Date DEFAULT today(),
                 version_id UInt8 DEFAULT 1
             ) ENGINE = MergeTree()
-            ORDER BY dates
+            ORDER BY (version_date, dates)
             SETTINGS index_granularity = 8192
             """
             
             self.client.execute(create_table_sql)
-            self.logger.info("✅ Оптимизированная таблица flight_program_ac создана")
+            
+            # Удаляем только записи с текущим version_date (rewrite policy)
+            delete_sql = f"ALTER TABLE flight_program_ac DELETE WHERE version_date = '{version_date}'"
+            self.client.execute(delete_sql)
+            # Ждём завершения мутации
+            self.client.execute("OPTIMIZE TABLE flight_program_ac FINAL")
+            self.logger.info(f"✅ Таблица flight_program_ac: удалены записи для version_date={version_date}")
             return True
             
         except Exception as e:
@@ -657,25 +660,28 @@ class ProgramACDirectLoader:
             self.logger.error(f"❌ Ошибка валидации: {e}")
             return False
     
-    def add_calculated_fields(self) -> bool:
-        """Обновляет вычисляемые поля в оптимизированной таблице flight_program_ac"""
+    def add_calculated_fields(self, version_date: date) -> bool:
+        """Обновляет вычисляемые поля для конкретного version_date в flight_program_ac"""
         try:
-            self.logger.info("🔄 === ПОСТПРОЦЕССИНГ: РАСЧЁТ ВЫЧИСЛЯЕМЫХ ПОЛЕЙ ===")
+            self.logger.info(f"🔄 === ПОСТПРОЦЕССИНГ для version_date={version_date} ===")
             
             # 1. ops_counter_total = ops_counter_mi8 + ops_counter_mi17 (простое UPDATE)
             self.logger.info("📊 Расчёт ops_counter_total...")
-            total_update = """
+            total_update = f"""
             ALTER TABLE flight_program_ac
             UPDATE ops_counter_total = ops_counter_mi8 + ops_counter_mi17
-            WHERE 1 = 1
+            WHERE version_date = '{version_date}'
             """
             self.client.execute(total_update)
             
-            # 2. Trigger поля вычисляем через временную таблицу и замену
+            # 2. Trigger поля вычисляем через временную таблицу
             self.logger.info("📊 Расчёт trigger полей через временную таблицу...")
             
-            # Создаем временную таблицу с вычисленными trigger полями (с правильной структурой MergeTree)
-            temp_calc_sql = """
+            # Удаляем временную таблицу если осталась
+            self.client.execute("DROP TABLE IF EXISTS flight_program_ac_temp")
+            
+            # Создаем временную таблицу ТОЛЬКО для текущего version_date
+            temp_calc_sql = f"""
             CREATE TABLE flight_program_ac_temp (
                 dates Date,
                 ops_counter_mi8 UInt16,
@@ -688,7 +694,7 @@ class ProgramACDirectLoader:
                 version_date Date,
                 version_id UInt8
             ) ENGINE = MergeTree()
-            ORDER BY dates
+            ORDER BY (version_date, dates)
             AS
                 SELECT 
                 dates,
@@ -697,13 +703,14 @@ class ProgramACDirectLoader:
                 ops_counter_total,
                 new_counter_mi17,
                 toInt8(ops_counter_mi8 - lagInFrame(ops_counter_mi8, 1, 0) 
-                    OVER (ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi8,
+                    OVER (PARTITION BY version_date ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi8,
                 toInt8(ops_counter_mi17 - lagInFrame(ops_counter_mi17, 1, 0)
-                    OVER (ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi17,
-                toInt8(0) as trigger_program,  -- временное значение, будет пересчитано
+                    OVER (PARTITION BY version_date ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi17,
+                toInt8(0) as trigger_program,
                 version_date,
                 version_id
             FROM flight_program_ac
+            WHERE version_date = '{version_date}'
             ORDER BY dates
             """
             self.client.execute(temp_calc_sql)
@@ -715,15 +722,18 @@ class ProgramACDirectLoader:
             WHERE 1 = 1
             """
             self.client.execute(update_trigger_total_sql)
+            self.client.execute("OPTIMIZE TABLE flight_program_ac_temp FINAL")
             
-            # Заменяем исходную таблицу
-            self.logger.info("📊 Замена таблицы с обновленными данными...")
-            self.client.execute("DROP TABLE flight_program_ac")
-            self.client.execute("RENAME TABLE flight_program_ac_temp TO flight_program_ac")
+            # Удаляем данные текущего version_date из основной таблицы и вставляем обновленные
+            self.logger.info("📊 Замена данных в основной таблице...")
+            self.client.execute(f"ALTER TABLE flight_program_ac DELETE WHERE version_date = '{version_date}'")
+            self.client.execute("OPTIMIZE TABLE flight_program_ac FINAL")
+            self.client.execute("INSERT INTO flight_program_ac SELECT * FROM flight_program_ac_temp")
+            self.client.execute("DROP TABLE flight_program_ac_temp")
             
             # Проверяем результаты расчётов
             self.logger.info("🔍 Проверка результатов постпроцессинга...")
-            stats_query = """
+            stats_query = f"""
             SELECT 
                 COUNT(*) as total_records,
                 toInt64(SUM(ops_counter_total)) as sum_total,
@@ -731,6 +741,7 @@ class ProgramACDirectLoader:
                 COUNT(CASE WHEN ops_counter_total > 0 THEN 1 END) as non_zero_total,
                 COUNT(CASE WHEN trigger_program != 0 THEN 1 END) as non_zero_trigger
             FROM flight_program_ac 
+            WHERE version_date = '{version_date}'
             """
             
             stats_result = self.client.execute(stats_query)
@@ -903,8 +914,8 @@ class ProgramACDirectLoader:
             tensor_engine = ACTensorEngine(excel_data['year_mapping'])
             calendar = tensor_engine.generate_4000_day_calendar(version_date)
             
-            # 4. Создание таблицы
-            if not self.create_flight_program_ac_table():
+            # 4. Создание таблицы (и очистка данных для текущей version_date)
+            if not self.create_flight_program_ac_table(version_date):
                 return False
             
             # 5. Генерация данных тензора
@@ -919,7 +930,7 @@ class ProgramACDirectLoader:
                 return False
             
             # 7. Постпроцессинг - добавление вычисляемых полей
-            if not self.add_calculated_fields():
+            if not self.add_calculated_fields(version_date):
                 self.logger.warning("⚠️ Ошибка постпроцессинга, но основные данные загружены")
             
             # 8. Корректировка первых значений trigger полей (ПОСЛЕ загрузки heli_pandas)
