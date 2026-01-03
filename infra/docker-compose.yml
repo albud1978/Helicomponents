@@ -21,9 +21,9 @@ services:
       context: ./gpu
       dockerfile: Dockerfile
       args:
-        - PY_VERSION=3.10
-        - CUDA_VERSION=12.2.0
-        # Optional: provide a direct URL to pyflamegpu wheel or copy wheel into gpu/ and set ARG
+        - PY_VERSION=3.12
+        - CUDA_VERSION=13.0.0
+        # Optional: provide a direct URL to pyflamegpu wheel or leave empty for auto-install
         - PYFLAMEGPU_WHEEL_URL=
     container_name: flamegpu
     depends_on:
@@ -35,14 +35,13 @@ services:
       - CLICKHOUSE_USER=default
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
       - CLICKHOUSE_DATABASE=default
+      - FLAMEGPU_RTC_EXPORT_CACHE_PATH=/app/.rtc_cache
     # Requires: Docker with GPU support (Docker 20.10+, compose v2.0+, nvidia-container-toolkit)
     deploy:
       resources:
         reservations:
           devices:
             - capabilities: [gpu]
-    # For classic docker compose, this is also supported:
-    # gpus: all
     volumes:
       - ../:/app:rw
     working_dir: /app
@@ -53,7 +52,7 @@ services:
       context: ./dev
       dockerfile: Dockerfile
       args:
-        - PY_VERSION=3.10
+        - PY_VERSION=3.12
     container_name: etl-dev
     depends_on:
       - clickhouse

@@ -2,13 +2,34 @@
 
 Этот набор инфраструктуры разворачивает:
 - ClickHouse (9000/8123)
-- GPU-контейнер для Flame GPU/cuDF (требует NVIDIA GPU)
+- GPU-контейнер для FLAME GPU 2 / cuDF (требует NVIDIA GPU)
 - Dev-контейнер для ETL (без GPU)
 
+## Версии (обновлено 03-01-2026)
+
+| Компонент | Версия | Примечание |
+|-----------|--------|------------|
+| Python | 3.12 | |
+| CUDA | 13.0 | Поддерживает RTX 30xx/40xx/50xx |
+| pandas | 2.3.3 | |
+| numpy | 2.2.6 | |
+| cudf-cu12 | 25.12.0 | GPU-ускоренный pandas |
+| pyflamegpu | 2.0.0rc4+cuda130 | Agent-Based моделирование |
+| clickhouse-driver | 0.2.10 | |
+| clickhouse-connect | 0.10.0 | |
+| PyYAML | 6.0.3 | |
+
 ## Требования
+
 - Docker 20.10+
 - Docker Compose v2+
-- (GPU) NVIDIA драйвер + nvidia-container-toolkit (`sudo apt install nvidia-container-toolkit && sudo nvidia-ctk runtime configure && sudo systemctl restart docker`)
+- (GPU) NVIDIA драйвер 550+ для CUDA 13.0
+- (GPU) nvidia-container-toolkit:
+  ```bash
+  sudo apt install nvidia-container-toolkit
+  sudo nvidia-ctk runtime configure
+  sudo systemctl restart docker
+  ```
 
 ## Быстрый старт
 
@@ -22,38 +43,57 @@ docker compose up -d clickhouse etl-dev
 # Логи ClickHouse
 docker logs -f clickhouse
 
-# Войти в dev контейнер и запустить dry-run предсимуляции
+# Войти в dev контейнер и запустить ETL
 docker exec -it etl-dev bash
-python3 code/utils/mp3_group_by_filler.py           # печатает SQL
-python3 code/pre_simulation_status_change.py        # печатает SQL + генерирует temp_data/*.sql
+python3 code/extract_master.py
 ```
 
 ## GPU контейнер
 
 ```bash
-# Построить GPU-образ (укажите URL колеса pyflamegpu при необходимости)
-PYFLAMEGPU_WHEEL_URL=<wheel_url> docker compose build gpu-sim
+# Построить GPU-образ
+docker compose build gpu-sim
 
 # Запуск GPU контейнера (требует GPU)
 docker compose up -d gpu-sim
 
 # Войти в GPU контейнер
 docker exec -it flamegpu bash
-python3 code/flame_gpu_helicopter_model.py   # каркас, безопасный запуск без симуляции
+
+# Запуск симуляции
+cd code/sim_v2 && python3 orchestrator_v2.py \
+  --version-date 2025-07-04 \
+  --modules state_2_operations states_stub count_ops quota_repair quota_ops_excess \
+    quota_promote_serviceable quota_promote_reserve quota_promote_inactive spawn_dynamic \
+    compute_transitions \
+    state_manager_serviceable state_manager_operations state_manager_repair \
+    state_manager_storage state_manager_reserve state_manager_inactive spawn_v2 \
+  --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
 
 ## Параметры
-- env: `CLICKHOUSE_PASSWORD` обязателен.
-- GPU образ требует `PIP_EXTRA_INDEX_URL=https://pypi.nvidia.com` (уже задано) для cuDF.
-- Для Flame GPU передайте `PYFLAMEGPU_WHEEL_URL` (или установите вручную в контейнере).
+
+- `CLICKHOUSE_PASSWORD` — обязателен в `.env`
+- `PYFLAMEGPU_WHEEL_URL` — опционально, прямая ссылка на wheel если автоустановка не работает
+- `FLAMEGPU_RTC_EXPORT_CACHE_PATH` — путь к RTC-кэшу (по умолчанию `/app/.rtc_cache`)
+
+## RTC кэширование
+
+GPU-контейнер монтирует `.rtc_cache/` из проекта. При первом запуске симуляции ядра компилируются (~8 мин), затем используется кэш.
+
+```bash
+# Очистка кэша (только при изменении RTC кода!)
+rm -rf .rtc_cache/* ~/.cache/flamegpu/* /tmp/flamegpu/*
+```
 
 ## Безопасность и изоляция
-- Инфраструктура не изменяет ваш код; том `../:/app` монтируется только для удобства разработки.
-- Все предсимуляционные скрипты работают в режиме dry-run по умолчанию (без изменения данных).
+
+- Том `../:/app` монтируется для удобства разработки
+- Все ETL скрипты работают с реальными данными из ClickHouse
+- Предсимуляционные скрипты безопасны (dry-run по умолчанию)
 
 ## V2 Pipeline (RTC)
 
-- Оркестрация шагов через конфиг (пример: `config/rtc_pipeline.yml`).
-- Первый шаг: `setup_env` — загрузка Env из ClickHouse, построение `frames_index`, проверка размерностей.
-- Поэтапное подключение RTC-потребителей: добавляем массивы/скаляры Env только когда они нужны (MP5, S1, spawn и т.д.).
-- См. `docs/rtc_pipeline_architecture.md` — раздел V2.
+- Оркестрация через `code/sim_v2/orchestrator_v2.py`
+- Конфиг модулей в порядке согласно матрице состояний
+- См. `docs/rtc_pipeline_architecture.md` — полная архитектура
