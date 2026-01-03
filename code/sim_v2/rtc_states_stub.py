@@ -7,7 +7,10 @@ import os
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from model_build import MAX_FRAMES, MAX_DAYS, MAX_SIZE
+from model_build import RTC_MAX_FRAMES, MAX_DAYS, MAX_SIZE
+
+# Алиас для совместимости
+MAX_FRAMES = RTC_MAX_FRAMES
 
 try:
     import pyflamegpu as fg

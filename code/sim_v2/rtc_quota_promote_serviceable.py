@@ -2,6 +2,10 @@
 RTC модуль для промоута serviceable → operations (приоритет 1)
 Каскадная архитектура: использует mi8_approve/mi17_approve для подсчёта used
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import model_build
 
 import pyflamegpu as fg
 
@@ -9,8 +13,8 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует RTC функции для промоута serviceable → operations (приоритет 1)"""
     print("  Регистрация модуля квотирования: промоут serviceable (приоритет 1)")
     
-    # Получаем MAX_FRAMES из модели
-    max_frames = model.Environment().getPropertyUInt("frames_total")
+    # ФИКСИРОВАННЫЙ MAX_FRAMES для RTC кэширования
+    max_frames = model_build.RTC_MAX_FRAMES
     
     # ═══════════════════════════════════════════════════════════════
     # ПРОМОУТ ПРИОРИТЕТ 1: serviceable → operations

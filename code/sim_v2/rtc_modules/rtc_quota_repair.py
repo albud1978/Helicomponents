@@ -3,6 +3,10 @@ RTC модуль для квотирования ремонтов (repairs quota
 Каскадная архитектура: сначала очередь (reserve&intent=0), затем новые запросы (operations&intent=4)
 Приоритизация: youngest first (больший idx = моложе)
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import model_build
 
 import pyflamegpu as fg
 from string import Template
@@ -11,10 +15,10 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует RTC функции для квотирования ремонтов"""
     print("  Регистрация модуля квотирования: ремонты (repair quota)")
     
-    # Получаем MAX_FRAMES из модели
-    max_frames = model.Environment().getPropertyUInt("frames_total")
+    # ФИКСИРОВАННЫЙ MAX_FRAMES для RTC кэширования
+    max_frames = model_build.RTC_MAX_FRAMES
     
-    print(f"  📊 MAX_FRAMES = {max_frames} (для буферов quota_repair)")
+    print(f"  📊 MAX_FRAMES = {max_frames} (фиксированный для RTC кэширования)")
     
     # RTC код с использованием Template для подстановки
     RTC_QUOTA_REPAIR_TEMPLATE = Template("""

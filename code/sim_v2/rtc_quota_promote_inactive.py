@@ -3,6 +3,10 @@ RTC модуль для промоута inactive → operations (приорит
 Каскадная архитектура: использует mi8_approve/mi17_approve для подсчёта used
 ВАЖНО: Может остаться deficit > 0 (допустимо по бизнес-логике)
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import model_build
 
 import pyflamegpu as fg
 
@@ -10,11 +14,11 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует RTC функции для промоута inactive → operations (приоритет 3)"""
     print("  Регистрация модуля квотирования: промоут inactive (приоритет 3)")
     
-    # Получаем MAX_FRAMES и MAX_DAYS из модели
-    max_frames = model.Environment().getPropertyUInt("frames_total")
+    # ФИКСИРОВАННЫЙ MAX_FRAMES для RTC кэширования
+    max_frames = model_build.RTC_MAX_FRAMES
     
-    # Импортируем MAX_DAYS для MacroProperty deficit
-    from model_build import MAX_DAYS
+    # MAX_DAYS для MacroProperty deficit
+    MAX_DAYS = model_build.MAX_DAYS
     
     # Создаём MacroProperty для публикации deficit (для динамического spawn)
     env = model.Environment()

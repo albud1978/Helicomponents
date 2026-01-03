@@ -9,6 +9,10 @@ RTC модуль для подсчёта агентов в operations и service
 
 ВАЖНО: Первый агент (idx=0) сбрасывает ВСЕ буферы перед подсчётом!
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import model_build
 
 import pyflamegpu as fg
 
@@ -18,10 +22,10 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     # =========================================================================
     # Слой 1: Обнуление буферов (выполняет только первый агент)
     # =========================================================================
-    # ✅ КРИТИЧНО: Читаем MAX_FRAMES из environment, а не из глобальной переменной!
-    # Это гарантирует, что RTC код компилируется с правильным размером
-    max_frames = model.Environment().getPropertyUInt("frames_total")
-    max_days = model.Environment().getPropertyUInt("days_total")
+    # ✅ ФИКСИРОВАННЫЙ MAX_FRAMES для RTC кэширования
+    # Runtime frames_total передаётся через Environment для индексации
+    max_frames = model_build.RTC_MAX_FRAMES
+    max_days = model_build.MAX_DAYS
     MP2_SIZE = max_frames * (max_days + 1)
     print(f"  🔍 DEBUG count_ops: max_frames={max_frames}, max_days={max_days}")
     

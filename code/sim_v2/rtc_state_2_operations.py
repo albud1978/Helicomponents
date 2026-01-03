@@ -1,9 +1,14 @@
 """
 RTC функция для state_2 (operations) с установкой intent_state
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+import model_build
 
-# Константы из sim_env_setup
-MAX_DAYS = 4000
+# Константы из model_build (фиксированные для RTC кэширования)
+MAX_DAYS = model_build.MAX_DAYS
+RTC_MAX_FRAMES = model_build.RTC_MAX_FRAMES  # Фиксированный размер для компиляции RTC
 
 # Проверка импорта
 try:
@@ -21,15 +26,18 @@ else:
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует RTC функцию для state_2 с установкой intent_state"""
     
-    # Получаем динамические значения из environment
-    max_frames = model.Environment().getPropertyUInt("frames_total")
-    max_size = max_frames * (MAX_DAYS + 1)
+    # ФИКСИРОВАННЫЕ размеры для RTC (для кэширования ядер)
+    rtc_max_frames = RTC_MAX_FRAMES
+    rtc_max_size = rtc_max_frames * (MAX_DAYS + 1)
     
     # Одна функция для всех агентов в operations
+    # Используем ФИКСИРОВАННЫЕ размеры для RTC кэширования
     rtc_func = agent.newRTCFunction("rtc_state_2_operations", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
+    // Runtime frames_total из Environment (для индексации)
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     
     // DEBUG для агента 100006 (idx=285) в день 824
     if (step_day == 824u && idx == 285u) {{
@@ -40,9 +48,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     }}
     
     // Получаем суточный налёт из MP5 (всегда, даже на шаге 0)
-    const unsigned int base = step_day * {max_frames}u + idx;
-    const unsigned int base_next = base + {max_frames}u;
-    auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_size}u>("mp5_lin");
+    // ВАЖНО: base использует runtime frames, но mp5 объявлен с фиксированным RTC размером
+    const unsigned int base = step_day * frames + idx;
+    const unsigned int base_next = base + frames;
+    auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {rtc_max_size}u>("mp5_lin");
     const unsigned int dt = mp5[base];
     const unsigned int dn = (step_day < {MAX_DAYS}u - 1u) ? mp5[base_next] : 0u;
     

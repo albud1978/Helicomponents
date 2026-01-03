@@ -21,6 +21,10 @@ RTC модуль для вычисления переходов между со�
 
 Эти переходы НЕ происходят напрямую в симуляции, а восстанавливаются по active_trigger.
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import model_build
 
 import pyflamegpu as fg
 
@@ -30,9 +34,9 @@ def register_compute_transitions(model, agent):
     
     print("  Подключение модуля: compute_transitions")
     
-    # Получаем размеры для MP2
-    MAX_FRAMES = model.Environment().getPropertyUInt("frames_total")
-    MAX_DAYS = model.Environment().getPropertyUInt("days_total")
+    # ФИКСИРОВАННЫЕ размеры для RTC кэширования
+    MAX_FRAMES = model_build.RTC_MAX_FRAMES
+    MAX_DAYS = model_build.MAX_DAYS
     MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
     
     # Создаём функции для каждого состояния (это упрощает работу со StateName)

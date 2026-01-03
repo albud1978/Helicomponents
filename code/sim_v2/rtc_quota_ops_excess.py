@@ -2,6 +2,10 @@
 RTC модуль для обработки избытка операций (2->3 демоут)
 Однослойная архитектура с early exit и каскадным буфером
 """
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import model_build
 
 import pyflamegpu as fg
 
@@ -9,8 +13,8 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует RTC функции для демоута operations → serviceable"""
     print("  Регистрация модуля квотирования: демоут (operations → serviceable)")
     
-    # Получаем MAX_FRAMES из модели
-    max_frames = model.Environment().getPropertyUInt("frames_total")
+    # ФИКСИРОВАННЫЙ MAX_FRAMES для RTC кэширования
+    max_frames = model_build.RTC_MAX_FRAMES
     
     # ═══════════════════════════════════════════════════════════════
     # ОДНОСЛОЙНЫЙ ДЕМОУТ С EARLY EXIT
