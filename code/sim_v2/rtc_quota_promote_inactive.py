@@ -46,17 +46,34 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
         return flamegpu::ALIVE;
     }}
     
-    // ✅ ВАЖНО: Только агенты, у которых пришло время (step_day >= repair_time)
-    // Остальные остаются в frozen состоянии (intent=1) в состоянии inactive
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
-    if (step_day < repair_time) {{
-        // Ещё не готовы - пропускаем
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // ЛОГИКА br2_mi17: Mi-17 с низким ppr НЕ ждут ремонта (комплектация)
+    // ═══════════════════════════════════════════════════════════════════════
+    // Mi-8 (group_by=1): всегда ждут repair_time (реальный ремонт)
+    // Mi-17 (group_by=2):
+    //   - ppr < br2_mi17 (3500ч) → комплектация БЕЗ ремонта, сразу готовы
+    //   - ppr >= br2_mi17 → ждут repair_time (ремонт с обнулением ppr)
+    const unsigned int br2_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mi17_br2_const");
+    
+    bool skip_repair = false;
+    if (group_by == 2u && ppr < br2_mi17) {{
+        // Mi-17 с ppr < порога → комплектация без ремонта, сразу готовы
+        skip_repair = true;
+    }}
+    
+    // ✅ Проверка готовности: пришло время (step_day >= repair_time) ИЛИ skip_repair
+    if (!skip_repair && step_day < repair_time) {{
+        // Ещё не готовы - пропускаем (ждём ремонта)
         return flamegpu::ALIVE;
     }}
     
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    // group_by уже определён выше
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
@@ -173,10 +190,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
         // Я в числе K первых → промоут, меняю intent=1 на intent=2
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Изменяем: 1→2 (одобрены на операции)
         
-        /* Логирование выбора для P3 */
+        /* Логирование выбора для P3 с информацией о br2_mi17 */
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [PROMOTE P3→2 Day %u] AC %u (idx %u): rank=%u/%u inactive->operations\\n", 
-               day, aircraft_number, idx, rank, K);
+        const char* repair_mode = skip_repair ? "КОМПЛЕКТАЦИЯ (ppr<br2)" : "РЕМОНТ (ppr>=br2)";
+        printf("  [PROMOTE P3→2 Day %u] AC %u (group=%u, ppr=%u, br2=%u): rank=%u/%u %s\\n", 
+               day, aircraft_number, group_by, ppr, br2_mi17, rank, K, repair_mode);
         
         // Записываем в ОТДЕЛЬНЫЙ буфер для inactive (избегаем race condition)
         if (group_by == 1u) {{
