@@ -45,16 +45,25 @@ class QuotaValidator:
         """Получает данные ops_count vs quota_target по дням"""
         
         # Получаем quota_target из flight_program_ac
-        # Колонки: dates (Date), ops_counter_mi8, ops_counter_mi17
-        # version_date в sim_masterv2 хранится как UInt16 (дни с 1970-01-01)
-        # version_date в flight_program_ac хранится как Date
+        # ВАЖНО: Симуляция использует target СЛЕДУЮЩЕГО дня (D+1) для демоута!
+        # Поэтому для корректного сравнения используем min(target[D], target[D+1])
+        # Это учитывает превентивное квотирование на границах периодов
         quota_query = f"""
+            WITH base AS (
+                SELECT 
+                    toInt32(dates - version_date) as day_index,
+                    ops_counter_mi8 as t8,
+                    ops_counter_mi17 as t17,
+                    leadInFrame(ops_counter_mi8) OVER (ORDER BY dates) as t8_next,
+                    leadInFrame(ops_counter_mi17) OVER (ORDER BY dates) as t17_next
+                FROM flight_program_ac
+                WHERE version_date = toDate({self.version_date})
+            )
             SELECT 
-                toInt32(dates - version_date) as day_index,
-                ops_counter_mi8 as quota_mi8,
-                ops_counter_mi17 as quota_mi17
-            FROM flight_program_ac
-            WHERE version_date = toDate({self.version_date})
+                day_index,
+                least(t8, coalesce(t8_next, t8)) as quota_mi8,
+                least(t17, coalesce(t17_next, t17)) as quota_mi17
+            FROM base
             ORDER BY day_index
         """
         
