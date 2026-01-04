@@ -762,7 +762,7 @@ if (intent == 4u) {
 
 ### rtc_states_stub — Установка базового intent для остальных состояний
 
-**Назначение:** Временный модуль-заглушка для установки базового intent_state у агентов в состояниях inactive, serviceable, repair, reserve, storage. Выполняется **после** state_2_operations, чтобы не перезаписать его intent.
+**Назначение:** Модуль для установки базового intent_state у агентов в состояниях inactive, serviceable, repair, reserve, storage. Выполняется **после** state_2_operations, чтобы не перезаписать его intent.
 
 **Поддерживаемые состояния:**
 1. state_1 (inactive) — "Железный ряд"
@@ -770,6 +770,12 @@ if (intent == 4u) {
 3. state_4 (repair) — В ремонте
 4. state_5 (reserve) — Резерв после ремонта
 5. state_6 (storage) — Хранение/утилизация
+
+> **Важно (05-01-2026):** Все RTC функции в states_stub обнуляют `daily_today_u32 = 0`.
+> Это обеспечивает корректную запись dt в MP2:
+> - Агенты в НЕ-operations: dt = 0 (нет налёта)
+> - Агенты, перешедшие ИЗ operations: dt сохраняет налёт за день перехода
+>   (т.к. state_2_operations выполняется ДО states_stub и устанавливает dt = налёт)
 
 ---
 

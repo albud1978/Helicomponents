@@ -25,6 +25,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_1_inactive, flamegpu::MessageNone, flamegpu::M
     // Логика проверки step_day >= repair_time находится в quota_promote_inactive
     FLAMEGPU->setVariable<unsigned int>("intent_state", 1u);
     
+    // Обнуляем daily_today_u32 (нет налёта в inactive)
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+    
     return flamegpu::ALIVE;
 }}
 """
@@ -36,6 +39,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_3_serviceable, flamegpu::MessageNone, flamegpu
     // Только избранные (выбранные quota_promote_serviceable) получат intent=2 и перейдут
     FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
     
+    // Обнуляем daily_today_u32 (нет налёта в serviceable)
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+    
     return flamegpu::ALIVE;
 }}
 """
@@ -45,6 +51,9 @@ RTC_STATE_4_REPAIR = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Агенты в ремонте
     const unsigned int step_day = FLAMEGPU->getStepCounter();
+    
+    // Обнуляем daily_today_u32 (нет налёта в repair)
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
     
     // На шаге 0 не выполняем переходы, но intent должен быть задан явно
     if (step_day == 0u) {{
@@ -113,6 +122,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_5_reserve, flamegpu::MessageNone, flamegpu::Me
     }}
     // intent=0 остаётся без изменений (агент в очереди на ремонт)
     
+    // Обнуляем daily_today_u32 (нет налёта в reserve)
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+    
     // Увеличиваем счётчик дней в repair+reserve (s4_days)
     unsigned int s4_days = FLAMEGPU->getVariable<unsigned int>("s4_days");
     s4_days++;
@@ -127,6 +139,9 @@ RTC_STATE_6_STORAGE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_6_storage, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Агенты в хранении остаются там навсегда (S6 immutable)
     FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
+    
+    // Обнуляем daily_today_u32 (нет налёта в storage)
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
     
     return flamegpu::ALIVE;
 }}

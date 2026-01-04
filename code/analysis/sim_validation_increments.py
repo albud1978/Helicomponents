@@ -84,24 +84,12 @@ class IncrementsValidator:
             }
             
             # Проверка инварианта
-            # ПРИМЕЧАНИЕ: Это ИЗВЕСТНАЯ ОСОБЕННОСТЬ записи — mp2_dt записывает daily_today_u32
-            # без проверки состояния. Это WARNING, не ERROR, т.к. реальная симуляция корректна,
-            # а dt = MP5 налёт записывается для аналитики независимо от state.
+            # dt > 0 в НЕ-operations — это ОЖИДАЕМОЕ поведение в дни перехода ИЗ operations.
+            # Агент был в operations в начале дня, получил налёт, потом перешёл в другое состояние.
+            # dt записывается корректно = налёт в день перехода.
             if state != 'operations' and with_dt > 0:
-                results['violations'].append({
-                    'state': state,
-                    'group_by': gb,
-                    'count': with_dt,
-                    'sum_dt': sum_dt
-                })
-                status = "⚠️ WARN"
-                self.warnings.append({
-                    'type': 'DT_INVARIANT_WARNING',
-                    'state': state,
-                    'group_by': gb,
-                    'count': with_dt,
-                    'message': f"{state} ({ac_type}): {with_dt} записей с dt>0 (известная особенность записи MP2)"
-                })
+                # Это не ошибка — информационное сообщение о днях перехода
+                status = f"📝 ({with_dt} дн. перех.)"
             else:
                 status = "✅"
             
@@ -160,7 +148,7 @@ class IncrementsValidator:
                     JOIN bounds b ON s.aircraft_number = b.aircraft_number AND s.day_u16 = b.last_day
                     WHERE s.version_date = {self.version_date}
                 ),
-                -- Сумма dt по каждому борту
+                -- Сумма dt по каждому борту (исключая день 0, т.к. sne[0] ещё не инкрементирована)
                 dt_sum AS (
                     SELECT 
                         aircraft_number,
@@ -169,6 +157,7 @@ class IncrementsValidator:
                     FROM sim_masterv2
                     WHERE version_date = {self.version_date}
                       AND group_by IN (1, 2)
+                      AND day_u16 > 0  -- dt[0] ещё не отражён в Δsne
                     GROUP BY aircraft_number, group_by
                 )
             SELECT 
