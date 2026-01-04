@@ -162,7 +162,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     mp2_partseqno[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partseqno_i"));
     mp2_group_by[pos].exchange(FLAMEGPU->getVariable<unsigned int>("group_by"));
     
-    mp2_state[pos].exchange(1u); // state_id
+    mp2_state[pos].exchange(1u); // state_id = inactive
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
     mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
@@ -185,7 +185,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
     mp2_mfg_date[pos].exchange(FLAMEGPU->getVariable<unsigned int>("mfg_date"));
     
-    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    // dt=0 для inactive (налёт только в operations)
+    mp2_dt[pos].exchange(0u);
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     
@@ -459,7 +460,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     mp2_partseqno[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partseqno_i"));
     mp2_group_by[pos].exchange(FLAMEGPU->getVariable<unsigned int>("group_by"));
     
-    mp2_state[pos].exchange(3u); // state_id
+    mp2_state[pos].exchange(3u); // state_id = serviceable
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
     mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
@@ -482,7 +483,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
     mp2_mfg_date[pos].exchange(FLAMEGPU->getVariable<unsigned int>("mfg_date"));
     
-    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    // dt=0 для serviceable (налёт только в operations)
+    mp2_dt[pos].exchange(0u);
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     
@@ -603,7 +605,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     mp2_partseqno[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partseqno_i"));
     mp2_group_by[pos].exchange(FLAMEGPU->getVariable<unsigned int>("group_by"));
     
-    mp2_state[pos].exchange(4u); // state_id
+    mp2_state[pos].exchange(4u); // state_id = repair
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
     mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
@@ -626,7 +628,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
     mp2_mfg_date[pos].exchange(FLAMEGPU->getVariable<unsigned int>("mfg_date"));
     
-    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    // dt=0 для repair (налёт только в operations)
+    mp2_dt[pos].exchange(0u);
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     
@@ -747,7 +750,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     mp2_partseqno[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partseqno_i"));
     mp2_group_by[pos].exchange(FLAMEGPU->getVariable<unsigned int>("group_by"));
     
-    mp2_state[pos].exchange(5u); // state_id
+    mp2_state[pos].exchange(5u); // state_id = reserve
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
     mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
@@ -770,7 +773,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
     mp2_mfg_date[pos].exchange(FLAMEGPU->getVariable<unsigned int>("mfg_date"));
     
-    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    // dt=0 для reserve (налёт только в operations)
+    mp2_dt[pos].exchange(0u);
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     
@@ -891,7 +895,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     mp2_partseqno[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partseqno_i"));
     mp2_group_by[pos].exchange(FLAMEGPU->getVariable<unsigned int>("group_by"));
     
-    mp2_state[pos].exchange(6u); // state_id
+    mp2_state[pos].exchange(6u); // state_id = storage
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
     mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
@@ -914,7 +918,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
     mp2_mfg_date[pos].exchange(FLAMEGPU->getVariable<unsigned int>("mfg_date"));
     
-    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
+    // dt=0 для storage (налёт только в operations)
+    mp2_dt[pos].exchange(0u);
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     
