@@ -45,7 +45,11 @@ def load_md_components():
         print(f"📖 Загружаем {md_path}...")
         
         # Загружаем с правильным header (вторая строка)
-        df = pd.read_excel(md_path, sheet_name='Агрегаты', header=1, engine='openpyxl')
+        # Пробуем сначала лист 'Агрегаты', если нет — первый лист
+        try:
+            df = pd.read_excel(md_path, sheet_name='Агрегаты', header=1, engine='openpyxl')
+        except ValueError:
+            df = pd.read_excel(md_path, sheet_name=0, header=1, engine='openpyxl')
         print("📖 Загружен Excel файл")
         
         # Удаляем служебную колонку "Счет" если она присутствует
@@ -103,7 +107,7 @@ def prepare_md_data(df, version_date, version_id=1):
         uint16_columns = ['repair_time']
         
         # UInt32 поля (0-4294967295)
-        uint32_columns = ['ll_mi8', 'oh_mi8', 'oh_threshold_mi8', 'll_mi17', 'oh_mi17', 'second_ll']
+        uint32_columns = ['ll_mi8', 'oh_mi8', 'oh_threshold_mi8', 'll_mi17', 'oh_mi17', 'second_ll', 'br2_mi17']
         
         # Float32 поля (денежные поля оптимизированы для GPU)  
         float32_columns = ['repair_price', 'purchase_price']
@@ -139,7 +143,8 @@ def prepare_md_data(df, version_date, version_id=1):
         
         # Конвертация часов → минут для ресурсных полей (требование проекта)
         # Поля источника в часах: ll_mi8, ll_mi17, oh_mi8, oh_mi17, sne_new, ppr_new → в Env храним в минутах
-        hours_to_minutes_cols = ['ll_mi8', 'll_mi17', 'oh_mi8', 'oh_mi17', 'second_ll']
+        # br2_mi17 - порог для межремонтного ресурса (breakeven для ppr/oh)
+        hours_to_minutes_cols = ['ll_mi8', 'll_mi17', 'oh_mi8', 'oh_mi17', 'second_ll', 'br2_mi17']
         for col in hours_to_minutes_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -195,6 +200,13 @@ def prepare_md_data(df, version_date, version_id=1):
             df['br_mi17'] = None  # BR для МИ-17 будет вычислен позже
             print("➕ Добавлено поле br_mi17 = None (будет вычислено позже)")
 
+        # br2_mi17 - порог межремонтного для подъёма из inactive
+        # Если поле есть в Excel - оно уже обработано выше (часы→минуты)
+        # Если нет - добавляем как None
+        if 'br2_mi17' not in df.columns:
+            df['br2_mi17'] = None
+            print("➕ Добавлено поле br2_mi17 = None")
+
         if 'partno_comp' not in df.columns:
             df['partno_comp'] = None  # Компонентные ID будут добавлены позже
             print("➕ Добавлено поле partno_comp = None (будет вычислено позже)")
@@ -227,7 +239,7 @@ def prepare_md_data(df, version_date, version_id=1):
             'repair_price', 'purchase_price',
             'sne_new', 'ppr_new',
             'version_date', 'version_id',
-            'br_mi8', 'br_mi17',
+            'br_mi8', 'br_mi17', 'br2_mi17',
             'partno_comp', 'restrictions_mask'
         ]
 
@@ -308,8 +320,9 @@ def create_md_table(client):
             `version_id` UInt8 DEFAULT 1,           -- ID версии
             
             -- Дополнительные поля (обогащенные с GPU-оптимизацией)
-            `br_mi8` Nullable(UInt32) DEFAULT NULL,     -- Beyond Repair для МИ-8 (UInt32)
-            `br_mi17` Nullable(UInt32) DEFAULT NULL,    -- Beyond Repair для МИ-17 (UInt32)
+            `br_mi8` Nullable(UInt32) DEFAULT NULL,     -- Beyond Repair для МИ-8 (sne/ll breakeven)
+            `br_mi17` Nullable(UInt32) DEFAULT NULL,    -- Beyond Repair для МИ-17 (sne/ll breakeven)
+            `br2_mi17` Nullable(UInt32) DEFAULT NULL,   -- Порог межремонтного для МИ-17 (ppr/oh breakeven, 3500ч)
             `partno_comp` Nullable(UInt32) DEFAULT NULL,  -- Component ID (md_components_enricher.py)
             `restrictions_mask` UInt8 DEFAULT 0     -- Битовая маска всех ограничений (multihot[u8])
             
@@ -414,7 +427,7 @@ def insert_md_data(client, df):
             for i, val in enumerate(row):
                 col_name = df.columns[i]
                 # Для Nullable полей используем None, для остальных - значения как есть
-                if val is None and col_name in ['sne_new', 'ppr_new', 'br_mi8', 'br_mi17', 'partno_comp', 'repair_number']:
+                if val is None and col_name in ['sne_new', 'ppr_new', 'br_mi8', 'br_mi17', 'br2_mi17', 'partno_comp', 'repair_number']:
                     prepared_row.append(None)
                 else:
                     prepared_row.append(val)

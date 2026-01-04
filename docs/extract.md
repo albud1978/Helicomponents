@@ -375,8 +375,9 @@ python3 code/utils/database_cleanup.py
 - **comp_number** Nullable(UInt8) - количество на ВС
 - **group_by** Nullable(UInt8) - группировка (1-МИ8, 2-МИ17)
 - **repair_time** Nullable(UInt16) - время ремонта в днях
-- **ll_mi8**, **ll_mi17**, **oh_mi8**, **oh_mi17** — ресурсы из Excel конвертируются из часов в МИНУТЫ при загрузке (`md_components_loader.py`).
+- **ll_mi8**, **ll_mi17**, **oh_mi8**, **oh_mi17**, **br2_mi17** — ресурсы из Excel конвертируются из часов в МИНУТЫ при загрузке (`md_components_loader.py`).
 - **br_mi8** Nullable(UInt32), **br_mi17** Nullable(UInt32) — Beyond Repair (экономический порог списания), ЕДИНИЦЫ: МИНУТЫ; расчёт в `calculate_beyond_repair.py` выполняется в минутах (без дополнительного ×60), инвариант: `br <= ll`.
+- **br2_mi17** Nullable(UInt32) — порог межремонтного ресурса для подъёма из inactive (минуты). Используется в симуляции: если `ppr >= br2_mi17`, выполняется ремонт с обнулением ppr; иначе — комплектация без ремонта (ppr сохраняется).
 - **partno_comp** Nullable(UInt32) - component ID для связи с heli_pandas
 
 ### Справочные таблицы
@@ -690,8 +691,9 @@ df_new = df[~df['partno'].isin(existing_partnos)]  # Только новые
 | 21 | `version_date` | `Date` | `Date` | ❌ | Метаданные | Дата версии |
 | 22 | `version_id` | `UInt8` | `uint8` | ❌ | Метаданные | ID версии |
 | 23 | `br_mi8`/`br_mi17` | `Nullable(UInt32)` | `uint32` | ✅ | **Обогащение** | Beyond Repair по типам (минуты, calculate_beyond_repair.py) |
-| 24 | `partno_comp` | `Nullable(UInt32)` | `uint32` | ✅ | **Обогащение** | Component ID (md_components_enricher.py) |
-| 25 | `restrictions_mask` | `UInt8` | `multihot[u8]` | ✅ | **Расчет** | Битовая маска ограничений (type_restricted*1+common_restricted1*2+common_restricted2*4+trigger_interval*8) |
+| 24 | `br2_mi17` | `Nullable(UInt32)` | `uint32` | ✅ | Excel | **Порог межремонтного ресурса для подъёма из inactive (минуты, для Mi-17)** |
+| 25 | `partno_comp` | `Nullable(UInt32)` | `uint32` | ✅ | **Обогащение** | Component ID (md_components_enricher.py) |
+| 26 | `restrictions_mask` | `UInt8` | `multihot[u8]` | ✅ | **Расчет** | Битовая маска ограничений (type_restricted*1+common_restricted1*2+common_restricted2*4+trigger_interval*8) |
 
 ### СКРИПТ 2: `status_overhaul_loader.py`
 

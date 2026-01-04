@@ -10,7 +10,7 @@
 - repair_time берётся из md_components через связь partseqno_i = partno_comp
 
 Условия:
-- group_by > 2 (только агрегаты)
+- group_by >= 1 (планеры и агрегаты)
 - status_id = 0 (ещё не обработан)
 - target_date IS NOT NULL и != 1970-01-01
 
@@ -81,7 +81,7 @@ def count_past_target_date(client, version_date: date, version_id: int) -> int:
     FROM heli_pandas
     WHERE version_date = %(version_date)s
       AND version_id = %(version_id)s
-      AND toUInt32(ifNull(group_by, 0)) > 2
+      AND toUInt32(ifNull(group_by, 0)) >= 1
       AND toUInt8(ifNull(status_id, 0)) = 0
       AND target_date IS NOT NULL
       AND target_date != toDate('1970-01-01')
@@ -98,7 +98,7 @@ def count_future_target_date(client, version_date: date, version_id: int) -> int
     FROM heli_pandas
     WHERE version_date = %(version_date)s
       AND version_id = %(version_id)s
-      AND toUInt32(ifNull(group_by, 0)) > 2
+      AND toUInt32(ifNull(group_by, 0)) >= 1
       AND toUInt8(ifNull(status_id, 0)) = 0
       AND target_date IS NOT NULL
       AND target_date != toDate('1970-01-01')
@@ -109,8 +109,13 @@ def count_future_target_date(client, version_date: date, version_id: int) -> int
 
 
 def update_past_to_operations(client, version_date: date, version_id: int) -> int:
-    """target_date в прошлом → status_id=2 (ремонт завершился)"""
-    query = """
+    """target_date в прошлом → status_id=2 (ремонт завершился)
+    
+    ВАЖНО: Для планеров (group_by IN 1,2) принудительно ставим status_id=2
+    даже если текущий status_id=4 (были ошибочно помечены как "в ремонте")
+    """
+    # Сначала обрабатываем агрегаты (status_id=0)
+    query_aggregates = """
     ALTER TABLE heli_pandas
     UPDATE status_id = 2
     WHERE version_date = %(version_date)s
@@ -122,7 +127,21 @@ def update_past_to_operations(client, version_date: date, version_id: int) -> in
       AND target_date < %(version_date)s
     """
     client.execute("SET mutations_sync = 1")
-    client.execute(query, {"version_date": version_date, "version_id": version_id})
+    client.execute(query_aggregates, {"version_date": version_date, "version_id": version_id})
+    
+    # Затем ПРИНУДИТЕЛЬНО обрабатываем планеры (status_id любой, т.к. ремонт завершён)
+    query_planers = """
+    ALTER TABLE heli_pandas
+    UPDATE status_id = 2
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND toUInt32(ifNull(group_by, 0)) IN (1, 2)
+      AND target_date IS NOT NULL
+      AND target_date != toDate('1970-01-01')
+      AND target_date < %(version_date)s
+    """
+    client.execute("SET mutations_sync = 1")
+    client.execute(query_planers, {"version_date": version_date, "version_id": version_id})
     
     # Проверяем сколько осталось
     remaining = count_past_target_date(client, version_date, version_id)
@@ -141,7 +160,7 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
     UPDATE status_id = 4
     WHERE version_date = %(version_date)s
       AND version_id = %(version_id)s
-      AND toUInt32(ifNull(group_by, 0)) > 2
+      AND toUInt32(ifNull(group_by, 0)) >= 1
       AND toUInt8(ifNull(status_id, 0)) = 0
       AND target_date IS NOT NULL
       AND target_date != toDate('1970-01-01')
@@ -162,7 +181,7 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
     )
     WHERE hp.version_date = %(version_date)s
       AND hp.version_id = %(version_id)s
-      AND toUInt32(ifNull(hp.group_by, 0)) > 2
+      AND toUInt32(ifNull(hp.group_by, 0)) >= 1
       AND hp.status_id = 4
       AND hp.target_date IS NOT NULL
       AND hp.target_date != toDate('1970-01-01')
@@ -173,7 +192,7 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
           INNER JOIN md_components md ON hp2.partseqno_i = md.partno_comp
           WHERE hp2.version_date = %(version_date)s
             AND hp2.version_id = %(version_id)s
-            AND toUInt32(ifNull(hp2.group_by, 0)) > 2
+            AND toUInt32(ifNull(hp2.group_by, 0)) >= 1
             AND hp2.status_id = 4
       )
     """
@@ -187,7 +206,7 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
     LEFT JOIN md_components md ON hp.partseqno_i = md.partno_comp
     WHERE hp.version_date = %(version_date)s
       AND hp.version_id = %(version_id)s
-      AND toUInt32(ifNull(hp.group_by, 0)) > 2
+      AND toUInt32(ifNull(hp.group_by, 0)) >= 1
       AND hp.status_id = 4
       AND hp.target_date IS NOT NULL
       AND hp.target_date != toDate('1970-01-01')

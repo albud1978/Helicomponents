@@ -105,6 +105,7 @@ class V2BaseModel:
         arr_ll17 = env_data.get('mp1_ll_mi17', [])
         arr_oh17 = env_data.get('mp1_oh_mi17', [])
         arr_br17 = env_data.get('mp1_br_mi17', [])
+        arr_br2_17 = env_data.get('mp1_br2_mi17', [])
         
         if pidx_mi17 >= len(arr_ll17) or pidx_mi17 >= len(arr_oh17) or pidx_mi17 >= len(arr_br17):
             raise RuntimeError(f"MP1 массивы недостаточной длины для pidx={pidx_mi17}")
@@ -112,6 +113,7 @@ class V2BaseModel:
         mi17_ll = int(arr_ll17[pidx_mi17])
         mi17_oh = int(arr_oh17[pidx_mi17])
         mi17_br = int(arr_br17[pidx_mi17])
+        mi17_br2 = int(arr_br2_17[pidx_mi17]) if pidx_mi17 < len(arr_br2_17) else 0
         
         if mi17_ll == 0 or mi17_oh == 0 or mi17_br == 0:
             raise RuntimeError(f"Mi-17 нормативы = 0! ll={mi17_ll}, oh={mi17_oh}, br={mi17_br}. Проверьте MP1 данные.")
@@ -119,6 +121,7 @@ class V2BaseModel:
         self.env.newPropertyUInt("mi17_ll_const", mi17_ll)
         self.env.newPropertyUInt("mi17_oh_const", mi17_oh)
         self.env.newPropertyUInt("mi17_br_const", mi17_br)
+        self.env.newPropertyUInt("mi17_br2_const", mi17_br2)  # Порог межремонтного для подъёма из inactive
         
         # sne_new и ppr_new для spawn (начальная наработка новых агентов)
         # SENTINEL = 0xFFFFFFFF (4294967295) означает NULL (агрегат не выпускается)
