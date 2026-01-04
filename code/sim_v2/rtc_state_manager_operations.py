@@ -288,27 +288,28 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::Messa
     // ✅ КРИТИЧНО: Устанавливаем active_trigger=1 при переходе inactive → operations
     FLAMEGPU->setVariable<unsigned int>("active_trigger", 1u);
     
-    // Запас до ремонта (OH - PPR)
-    const unsigned int margin = (oh > ppr) ? (oh - ppr) : 0u;
-    const unsigned int MIN_MARGIN = 6000u;  // 100 часов = 6000 минут
+    // br2_mi17 — порог межремонтного для подъёма из inactive
+    // Если ppr >= br2_mi17 → обнуляем ppr (ремонт)
+    // Если ppr < br2_mi17 → сохраняем ppr (комплектация без ремонта)
+    const unsigned int br2_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mi17_br2_const");
     
     // Логика обнуления PPR:
     // Mi-8: всегда обнуляем (реальный ремонт планера)
-    // Mi-17: обнуляем только если запас < 100 часов (иначе комплектация без ремонта)
+    // Mi-17: обнуляем только если ppr >= br2_mi17 (иначе комплектация без ремонта)
     if (group_by == 1u) {
         // Mi-8: реальный ремонт → PPR = 0
         FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
-    } else if (group_by == 2u && margin < MIN_MARGIN) {
-        // Mi-17 с малым запасом (< 100 час): обнуляем PPR
+    } else if (group_by == 2u && ppr >= br2_mi17) {
+        // Mi-17 с ppr >= порога (3500ч): обнуляем PPR (ремонт)
         FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
     }
-    // Mi-17 с запасом >= 100 час: PPR сохраняется (комплектация)
+    // Mi-17 с ppr < порога: PPR сохраняется (комплектация без ремонта)
     
     if (aircraft_number >= 100000u || step_day == 226u || step_day == 227u || step_day == 228u) {
         const unsigned int ppr_new = FLAMEGPU->getVariable<unsigned int>("ppr");
         const char* action = (ppr_new == 0u) ? "ppr=0 (ремонт)" : "ppr сохранён (комплектация)";
-        printf("  [TRANSITION 1→2 Day %u] AC %u (group_by=%u): margin=%u, %s, ppr=%u\\n", 
-               step_day, aircraft_number, group_by, margin, action, ppr_new);
+        printf("  [TRANSITION 1→2 Day %u] AC %u (group_by=%u): ppr_old=%u, br2=%u, %s, ppr_new=%u\\n", 
+               step_day, aircraft_number, group_by, ppr, br2_mi17, action, ppr_new);
     }
     
     return flamegpu::ALIVE;

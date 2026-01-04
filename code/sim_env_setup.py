@@ -128,8 +128,9 @@ def fetch_versions(client, target_version_date: date = None) -> Tuple[date, int]
     return vd, int(vid)
 
 
-def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int]]:
-    """Возвращает карту partseq → (br_mi8, br_mi17, repair_time, partout_time, assembly_time). BR в минутах.
+def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int, int]]:
+    """Возвращает карту partseq → (br_mi8, br_mi17, br2_mi17, repair_time, partout_time, assembly_time). BR в минутах.
+    br2_mi17 - порог межремонтного для подъёма из inactive (3500ч = 210000 мин).
     Подбирает: идентификатор (partseq) и имя колонок нормативов по нескольким вариантам.
     """
     id_candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
@@ -148,6 +149,7 @@ def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int]]:
                     f"  toUInt32OrZero(toString({id_col})) AS partseq,\n"
                     "  toUInt32OrZero(toString(br_mi8))  AS br_mi8,\n"
                     "  toUInt32OrZero(toString(br_mi17)) AS br_mi17,\n"
+                    "  toUInt32OrZero(toString(ifNull(br2_mi17, 0))) AS br2_mi17,\n"
                     f"  toUInt32OrZero(toString({rt_col})) AS repair_time,\n"
                     f"  toUInt32OrZero(toString({pt_col})) AS partout_time,\n"
                     f"  toUInt32OrZero(toString({at_col})) AS assembly_time\n"
@@ -168,14 +170,15 @@ def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int]]:
             break
     if not rows and last_err is not None:
         raise last_err
-    result: Dict[int, Tuple[int, int, int, int, int]] = {}
-    for p, b8, b17, rt, pt, at in rows:
+    result: Dict[int, Tuple[int, int, int, int, int, int]] = {}
+    for p, b8, b17, b2_17, rt, pt, at in rows:
         partseq = _to_uint(p)
         if partseq == 0:
             continue
         result[partseq] = (
             int(b8 or 0),
             int(b17 or 0),
+            int(b2_17 or 0),
             int(rt or 0),
             int(pt or 0),
             int(at or 0),
@@ -478,8 +481,8 @@ def build_daily_arrays(mp3_rows, mp3_fields: List[str], mp1_br_rt_map: Dict[int,
         daily_today.append(int(daily_today_map.get(ac, 0)))
         daily_next.append(int(daily_next_map.get(ac, 0)))
         partseq = int(r[idx['partseqno_i']] or 0)
-        # карта теперь (br_mi8, br_mi17, repair_time, partout_time, assembly_time)
-        _, _, _, pt, at = mp1_br_rt_map.get(partseq, (0,0,0,0,0))
+        # карта теперь (br_mi8, br_mi17, br2_mi17, repair_time, partout_time, assembly_time)
+        _, _, _, _, pt, at = mp1_br_rt_map.get(partseq, (0,0,0,0,0,0))
         partout_arr.append(int(pt))
         assembly_arr.append(int(at))
     return daily_today, daily_next, partout_arr, assembly_arr
@@ -604,23 +607,29 @@ def build_mp5_linear(mp5_by_day: Dict[date, Dict[int, int]], days_sorted: List[d
     return arr
 
 
-def build_mp1_arrays(mp1_map: Dict[int, Tuple[int, int, int, int, int]]) -> Tuple[List[int], List[int], List[int], List[int], List[int], Dict[int,int]]:
-    """Строит SoA массивы MP1 и индекс partseqno_i->idx."""
+def build_mp1_arrays(mp1_map: Dict[int, Tuple[int, int, int, int, int, int]]) -> Tuple[List[int], List[int], List[int], List[int], List[int], List[int], Dict[int,int]]:
+    """Строит SoA массивы MP1 и индекс partseqno_i->idx.
+    
+    mp1_map: partseq → (br_mi8, br_mi17, br2_mi17, repair_time, partout_time, assembly_time)
+    br2_mi17 - порог межремонтного для подъёма из inactive (3500ч = 210000 мин)
+    """
     keys = sorted(mp1_map.keys())
     idx_map: Dict[int,int] = {k: i for i, k in enumerate(keys)}
     br8: List[int] = []
     br17: List[int] = []
+    br2_17: List[int] = []
     rt: List[int] = []
     pt: List[int] = []
     at: List[int] = []
     for k in keys:
-        b8, b17, rti, pti, ati = mp1_map.get(k, (0,0,0,0,0))
+        b8, b17, b2_17, rti, pti, ati = mp1_map.get(k, (0,0,0,0,0,0))
         br8.append(int(b8 or 0))
         br17.append(int(b17 or 0))
+        br2_17.append(int(b2_17 or 0))
         rt.append(int(rti or 0))
         pt.append(int(pti or 0))
         at.append(int(ati or 0))
-    return br8, br17, rt, pt, at, idx_map
+    return br8, br17, br2_17, rt, pt, at, idx_map
 
 
 def build_mp3_arrays(mp3_rows, mp3_fields: List[str]) -> Dict[str, List[int]]:
@@ -866,7 +875,7 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
     
     # Построение MP5 на расширенном FRAMES (для новых кадров заполняем средним налётом)
     mp5_linear = build_mp5_linear(mp5_by_day, days_sorted, frames_index, frames_total, frames_total_base)
-    mp1_br8, mp1_br17, mp1_rt, mp1_pt, mp1_at, mp1_index = build_mp1_arrays(mp1_map)
+    mp1_br8, mp1_br17, mp1_br2_17, mp1_rt, mp1_pt, mp1_at, mp1_index = build_mp1_arrays(mp1_map)
     # Соберём массивы OH по индексу MP1
     keys_sorted = sorted(mp1_index.keys(), key=lambda k: mp1_index[k])
     mp1_oh8_arr: List[int] = []
@@ -919,6 +928,7 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         'partseqno_i': keys_sorted,  # Отсортированные partseqno_i из mp1_index
         'br_mi8': mp1_br8,
         'br_mi17': mp1_br17,
+        'br2_mi17': mp1_br2_17,  # Порог межремонтного для подъёма из inactive
         'repair_time': mp1_rt,
         'partout_time': mp1_pt,
         'assembly_time': mp1_at,
@@ -946,10 +956,10 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
             "Проверьте данные в таблице md_components."
         )
     
-    mi8_tuple = mp1_map[SPAWN_PARTSEQNO_MI8]  # (br_mi8, br_mi17, repair_time, partout_time, assembly_time)
-    mi8_repair_time_const = int(mi8_tuple[2])
-    mi8_partout_time_const = int(mi8_tuple[3])
-    mi8_assembly_time_const = int(mi8_tuple[4])
+    mi8_tuple = mp1_map[SPAWN_PARTSEQNO_MI8]  # (br_mi8, br_mi17, br2_mi17, repair_time, partout_time, assembly_time)
+    mi8_repair_time_const = int(mi8_tuple[3])
+    mi8_partout_time_const = int(mi8_tuple[4])
+    mi8_assembly_time_const = int(mi8_tuple[5])
     
     # Валидация: константы Mi-8 должны быть > 0
     if mi8_repair_time_const <= 0:
@@ -966,10 +976,11 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
             "Проверьте данные в таблице md_components."
         )
     
-    mi17_tuple = mp1_map[SPAWN_PARTSEQNO_MI17]  # (br_mi8, br_mi17, repair_time, partout_time, assembly_time)
-    mi17_repair_time_const = int(mi17_tuple[2])
-    mi17_partout_time_const = int(mi17_tuple[3])
-    mi17_assembly_time_const = int(mi17_tuple[4])
+    mi17_tuple = mp1_map[SPAWN_PARTSEQNO_MI17]  # (br_mi8, br_mi17, br2_mi17, repair_time, partout_time, assembly_time)
+    mi17_repair_time_const = int(mi17_tuple[3])
+    mi17_partout_time_const = int(mi17_tuple[4])
+    mi17_assembly_time_const = int(mi17_tuple[5])
+    mi17_br2_const = int(mi17_tuple[2])  # br2_mi17 - порог межремонтного для подъёма из inactive
     
     # Валидация: константы Mi-17 должны быть > 0
     if mi17_repair_time_const <= 0:
@@ -1019,6 +1030,7 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         'mp1_map': mp1_map,  # Добавляем mp1_map для прямого доступа (как в sim_master.py)
         'mp1_br_mi8': mp1_br8,
         'mp1_br_mi17': mp1_br17,
+        'mp1_br2_mi17': mp1_br2_17,  # Порог межремонтного для подъёма из inactive
         'mp1_repair_time': mp1_rt,
         'mp1_partout_time': mp1_pt,
         'mp1_assembly_time': mp1_at,
@@ -1051,6 +1063,7 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         'mi17_ll_const': int(mi17_ll_const),
         'mi17_oh_const': int(mi17_oh_const),
         'mi17_br_const': int(mi17_br_const),
+        'mi17_br2_const': int(mi17_br2_const),  # Порог межремонтного для подъёма из inactive
         'second_ll_sentinel': SECOND_LL_SENTINEL,
         # Параметры динамического spawn (расчёт по формуле агрегатов)
         'initial_mi17_count': int(initial_mi17_count),
