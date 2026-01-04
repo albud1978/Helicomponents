@@ -90,8 +90,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_{state_name}, flamegpu::MessageNone, flame
     mp2_partout_trigger[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partout_trigger"));
     mp2_mfg_date[pos].exchange(FLAMEGPU->getVariable<unsigned int>("mfg_date"));
     
-    // dt записывается только для operations (state=2), иначе 0
-    mp2_dt[pos].exchange({{"FLAMEGPU->getVariable<unsigned int>(\\"daily_today_u32\\")" if state_id == 2 else "0u"}});
+    // dt из daily_today_u32 (обнуляется в states_stub для НЕ-operations)
+    mp2_dt[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_today_u32"));
     mp2_dn[pos].exchange(FLAMEGPU->getVariable<unsigned int>("daily_next_u32"));
     
     mp2_ops_ticket[pos].exchange(FLAMEGPU->getVariable<unsigned int>("ops_ticket"));
