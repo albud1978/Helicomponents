@@ -174,9 +174,9 @@ class RepairDaysCalculator:
                     self.logger.warning(f"⚠️ ВС {serialno}: отсутствуют даты target_date={target_date}, version_date={version_date}")
                     continue
                 
-                # Формула: repair_days = repair_time - (target_date - version_date)
+                # Формула: repair_days = max(0, repair_time - (target_date - version_date))
                 days_remaining = (target_date - version_date).days
-                repair_days = repair_time - days_remaining
+                repair_days = max(0, repair_time - days_remaining)
                 
                 self.logger.info(f"✅ {serialno}: repair_days = {repair_time} - ({target_date} - {version_date}) = {repair_time} - {days_remaining} = {repair_days}")
                 
