@@ -316,6 +316,14 @@ class V2Orchestrator:
         """Запускает симуляцию на указанное количество шагов"""
         print(f"Запуск симуляции на {steps} шагов")
         
+        # Отладка (по умолчанию выключена):
+        # - ORCH_DEBUG_SPAWN=1 включает логирование "после динамического spawn"
+        # - Параметры можно тонко настроить переменными окружения ниже
+        debug_spawn = os.getenv("ORCH_DEBUG_SPAWN") == "1"
+        debug_spawn_day = int(os.getenv("ORCH_DEBUG_SPAWN_DAY", "302"))
+        debug_acn_min = int(os.getenv("ORCH_DEBUG_ACN_MIN", "100006"))
+        debug_limit = int(os.getenv("ORCH_DEBUG_LIMIT", "5"))
+        
         # Обновляем количество шагов в MP2 drain функции
         # Если включён постпроцессинг, дренаж будет на шаге steps+1
         actual_drain_step = steps + 1 if self.enable_mp2_postprocess else steps
@@ -340,27 +348,27 @@ class V2Orchestrator:
                 self.simulation.getPopulationData(serv_pop, 'serviceable')
                 print(f"  [Day {step}] serviceable={len(serv_pop)}")
             
-            # ОТЛАДКА: Логирование после динамического spawn (день 301)
-            if step == 302:
+            # ОТЛАДКА: Логирование после динамического spawn (выключено по умолчанию)
+            if debug_spawn and step == debug_spawn_day:
                 print("\n" + "="*60)
-                print("ОТЛАДКА: Проверка агентов после динамического spawn (день 302)")
+                print(f"ОТЛАДКА: Проверка агентов после динамического spawn (день {debug_spawn_day})")
                 print("="*60)
                 for state_name in ['operations', 'serviceable', 'inactive', 'repair', 'reserve', 'storage']:
                     pop = fg.AgentVector(self.base_model.agent)
                     self.simulation.getPopulationData(pop, state_name)
                     
-                    # Считаем агентов с ACN >= 100006 (динамический spawn)
+                    # Считаем агентов с ACN >= debug_acn_min (динамический spawn)
                     dynamic_count = 0
                     for i in range(len(pop)):
                         acn = pop[i].getVariableUInt("aircraft_number")
-                        if acn >= 100006:
+                        if acn >= debug_acn_min:
                             dynamic_count += 1
-                            if dynamic_count <= 5:  # Первые 5
+                            if dynamic_count <= debug_limit:  # Первые N
                                 idx = pop[i].getVariableUInt("idx")
                                 intent = pop[i].getVariableUInt("intent_state")
                                 print(f"  {state_name}: ACN={acn}, idx={idx}, intent={intent}")
                     
-                    print(f"  {state_name}: всего={len(pop)}, динамических (ACN>=100006)={dynamic_count}")
+                    print(f"  {state_name}: всего={len(pop)}, динамических (ACN>={debug_acn_min})={dynamic_count}")
                 print("="*60 + "\n")
     
         # ═══════════════════════════════════════════════════════════════════════════
