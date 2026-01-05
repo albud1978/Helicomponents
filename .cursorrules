@@ -138,11 +138,14 @@
 ## Настройка окружения — ОБЯЗАТЕЛЬНО перед любыми командами
 
 ```bash
-cd /media/albud/8C327EB0327E9F40/Projects/Heli/Helicomponents
+cd /path/to/Helicomponents
 source .venv/bin/activate
 source config/load_env.sh
-export CUBE_CONFIG_PATH="/media/albud/8C327EB0327E9F40/Projects/Heli/Helicomponents/config"
+export CUBE_CONFIG_PATH="$PWD/config"
 ```
+
+Примечание: ранее в проекте встречались абсолютные пути вида `/media/albud/...` (часто из-за Nextcloud).
+Сейчас ориентируемся на относительность внутри репозитория: достаточно корректно перейти в корень проекта.
 
 ---
 
@@ -207,6 +210,9 @@ cd code/sim_v2 && python3 orchestrator_v2.py \
     state_manager_storage state_manager_reserve state_manager_inactive spawn_v2 \
   --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
+
+⚠️ `--drop-table` **обязателен** для первого тестового прогона DS1 (2025-07-04) в режиме полной перезаливки (TEST),
+чтобы гарантировать чистую таблицу `sim_masterv2`. Для повторных прогонов и для DS2 обычно **не используйте** его без явной необходимости.
 
 ### Аргументы симуляции
 - `--version-date YYYY-MM-DD` — **ОБЯЗАТЕЛЬНО** указать дату датасета
