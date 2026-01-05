@@ -62,6 +62,7 @@ class UnitsOrchestrator:
         self.base_model: Optional[V2BaseModelUnits] = None
         self.simulation: Optional[fg.CUDASimulation] = None
         self.env_data: Dict = {}
+        self.mp2_drain_fn = None  # HostFunction для дренажа MP2
         
         # Тайминги
         self.timing = {
@@ -169,14 +170,15 @@ class UnitsOrchestrator:
             print(f"  ❌ units_state_repair: {e}")
             modules_failed += 1
         
-        # 4. count — подсчёт агентов
-        try:
-            import rtc_units_count
-            rtc_units_count.register_rtc(model, agent)
-            modules_ok += 1
-        except Exception as e:
-            print(f"  ❌ units_count: {e}")
-            modules_failed += 1
+        # 4. count — подсчёт агентов (ОТКЛЮЧЕН для отладки)
+        # try:
+        #     import rtc_units_count
+        #     rtc_units_count.register_rtc(model, agent)
+        #     modules_ok += 1
+        # except Exception as e:
+        #     print(f"  ❌ units_count: {e}")
+        #     modules_failed += 1
+        print("  ⚠️ units_count: ОТКЛЮЧЕН для отладки")
         
         # 5-6. FIFO модули — семифазная архитектура
         try:
@@ -187,15 +189,14 @@ class UnitsOrchestrator:
             print(f"  ❌ units_fifo: {e}")
             modules_failed += 1
         
-        # 6b. spawn — динамический spawn (TODO: требует резервных слотов)
-        # Пока отключен — дефицит будет отслеживаться через накопление запросов
-        # try:
-        #     import rtc_units_spawn
-        #     rtc_units_spawn.register_rtc(model, agent)
-        #     modules_ok += 1
-        # except Exception as e:
-        #     print(f"  ❌ units_spawn: {e}")
-        #     modules_failed += 1
+        # 6b. spawn — динамический spawn (активация резервных агентов)
+        try:
+            import rtc_units_spawn
+            rtc_units_spawn.register_rtc(model, agent)
+            modules_ok += 1
+        except Exception as e:
+            print(f"  ❌ units_spawn: {e}")
+            modules_failed += 1
         
         # 7. transition_ops — переходы из operations
         try:
@@ -229,14 +230,36 @@ class UnitsOrchestrator:
         
         # 11. return_to_pool — включён в fifo_phase2 (reserve → serviceable)
         
-        # 12. mp2_writer — запись результатов
+        # 12. mp2_writer — запись результатов в MacroProperty (циклический буфер)
+        drain_interval = 10  # Буфер на 10 дней (ограничение HostMacroProperty)
         try:
             import rtc_units_mp2_writer
-            rtc_units_mp2_writer.register_rtc(model, agent, max_frames, max_days)
+            rtc_units_mp2_writer.register_rtc(model, agent, max_frames, max_days, drain_interval)
             modules_ok += 1
         except Exception as e:
             print(f"  ❌ units_mp2_writer: {e}")
             modules_failed += 1
+        
+        # 13. mp2_drain — HostFunction для дренажа MP2 в СУБД
+        try:
+            from mp2_drain_units import MP2DrainUnitsHostFunction
+            from utils.config_loader import get_clickhouse_client
+            
+            client = get_clickhouse_client()
+            self.mp2_drain_fn = MP2DrainUnitsHostFunction(
+                client=client,
+                table_name='sim_units_v2',
+                batch_size=500000,
+                simulation_steps=max_days,
+                version_date=self.version_date,
+                version_id=self.version_id
+            )
+            # Регистрируем как StepFunction (вызывается после каждого step)
+            model.addStepFunction(self.mp2_drain_fn)
+            print(f"  RTC модуль mp2_drain зарегистрирован (drain каждые 100 дней)")
+            modules_ok += 1
+        except Exception as e:
+            print(f"  ⚠️ mp2_drain: {e} (история будет только финальная)")
         
         self.timing['build'] = time.time() - t0
         print(f"✅ Модель построена за {self.timing['build']:.2f}с")
@@ -378,23 +401,33 @@ def main():
         orchestrator.run(args.steps)
         orchestrator.print_summary()
         
-        # Экспорт в ClickHouse
+        # Экспорт в ClickHouse (полная история через HostFunction)
         if args.export:
             print("\n" + "=" * 60)
-            print("📤 ЭКСПОРТ В CLICKHOUSE")
+            print("📤 ФИНАЛЬНЫЙ DRAIN MP2 В CLICKHOUSE")
             print("=" * 60)
-            try:
-                from mp2_exporter_units import export_mp2_to_clickhouse
-                export_mp2_to_clickhouse(
-                    orchestrator.simulation,
-                    orchestrator.env_data,
-                    version_date,
-                    args.version_id,
-                    drop_table=args.drop_table,
-                    agent_desc=orchestrator.base_model.agent
-                )
-            except Exception as e:
-                print(f"   ⚠️ Ошибка экспорта: {e}")
+            
+            if orchestrator.mp2_drain_fn is not None:
+                # Финальный дренаж уже должен был сработать на последнем step
+                # Но для надёжности запускаем ещё один step
+                print("   🔄 Запуск финального drain step...")
+                orchestrator.simulation.step()  # Это вызовет HostFunction.run()
+                print(f"   ✅ Итого записей: {orchestrator.mp2_drain_fn.total_rows_written:,}")
+                print(f"   ⏱️ Время drain: {orchestrator.mp2_drain_fn.total_drain_time:.2f}с")
+            else:
+                # Fallback: старый метод экспорта
+                try:
+                    from mp2_exporter_units import export_mp2_to_clickhouse
+                    export_mp2_to_clickhouse(
+                        orchestrator.simulation,
+                        orchestrator.env_data,
+                        version_date,
+                        args.version_id,
+                        drop_table=args.drop_table,
+                        agent_desc=orchestrator.base_model.agent
+                    )
+                except Exception as e:
+                    print(f"   ⚠️ Ошибка экспорта: {e}")
         
         return 0
         
