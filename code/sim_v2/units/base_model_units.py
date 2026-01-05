@@ -113,19 +113,29 @@ class V2BaseModelUnits:
         # Маппинг aircraft_number → planer_idx (для агрегатов)
         self.env.newMacroPropertyUInt32("mp_ac_to_idx", 2000000)  # MAX aircraft_number
         
-        # === MP2 для агрегатов (линейные массивы) ===
-        max_size = max_frames * (max_days + 1)
-        print(f"  MP2 Units: max_frames={max_frames}, max_days={max_days}, max_size={max_size}")
+        # === MP2 для агрегатов (циклический буфер на DRAIN_INTERVAL дней) ===
+        # Полная история слишком большая (140M), используем буфер на 10 дней
+        # Ограничение: HostMacroProperty плохо работает с большими массивами
+        DRAIN_INTERVAL = 10
+        mp2_buffer_size = max_frames * (DRAIN_INTERVAL + 1)  # ~400K элементов
+        self._mp2_drain_interval = DRAIN_INTERVAL
+        print(f"  MP2 Units: max_frames={max_frames}, buffer_days={DRAIN_INTERVAL}, buffer_size={mp2_buffer_size:,}")
         
-        # Основные поля
-        self.env.newMacroPropertyUInt32("mp2_units_psn", max_size)
-        self.env.newMacroPropertyUInt32("mp2_units_group_by", max_size)
-        self.env.newMacroPropertyUInt32("mp2_units_sne", max_size)
-        self.env.newMacroPropertyUInt32("mp2_units_ppr", max_size)
-        self.env.newMacroPropertyUInt32("mp2_units_state", max_size)
-        self.env.newMacroPropertyUInt32("mp2_units_ac", max_size)
-        self.env.newMacroPropertyUInt32("mp2_units_repair_days", max_size)
-        self.env.newMacroPropertyUInt32("mp2_units_queue_pos", max_size)
+        # Основные поля (используем newMacroPropertyUInt как у планеров)
+        self.env.newMacroPropertyUInt("mp2_units_psn", mp2_buffer_size)
+        self.env.newMacroPropertyUInt("mp2_units_group_by", mp2_buffer_size)
+        self.env.newMacroPropertyUInt("mp2_units_sne", mp2_buffer_size)
+        self.env.newMacroPropertyUInt("mp2_units_ppr", mp2_buffer_size)
+        self.env.newMacroPropertyUInt("mp2_units_state", mp2_buffer_size)
+        self.env.newMacroPropertyUInt("mp2_units_ac", mp2_buffer_size)
+        self.env.newMacroPropertyUInt("mp2_units_repair_days", mp2_buffer_size)
+        self.env.newMacroPropertyUInt("mp2_units_queue_pos", mp2_buffer_size)
+        # Дополнительные поля для полной истории
+        self.env.newMacroPropertyUInt("mp2_units_partseqno", mp2_buffer_size)
+        self.env.newMacroPropertyUInt("mp2_units_active", mp2_buffer_size)
+        
+        # Сохраняем для RTC и drain
+        self.env.newPropertyUInt("mp2_drain_interval", DRAIN_INTERVAL)
     
     def _setup_property_arrays(self, env_data: Dict[str, object]):
         """Настройка PropertyArray для небольших массивов"""

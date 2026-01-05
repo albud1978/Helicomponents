@@ -493,7 +493,7 @@ class V2Orchestrator:
 def main():
     """Главная функция оркестратора"""
     parser = argparse.ArgumentParser(description='V2 Orchestrator с модульной архитектурой')
-    parser.add_argument('--modules', nargs='+', default=['mp5_probe', 'status_246'],
+    parser.add_argument('--modules', nargs='+', default=['mp5_probe'],
                       help='Список RTC модулей для подключения')
     parser.add_argument('--steps', type=int, default=None,
                       help='Количество шагов симуляции (по умолчанию из HL_V2_STEPS)')
