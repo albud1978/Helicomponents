@@ -534,3 +534,217 @@ if (group_by == 1u) {
 | 22378 | 435 | 7 | Пропуск | Комплектация ✅ |
 | Остальные | ≥ 210,000 | ≥ 3,500 | repair_time | Ремонт ✅ |
 
+---
+
+## 8. АРХИТЕКТУРА ЗАМЕНЫ АГРЕГАТОВ (FIFO-ОЧЕРЕДЬ)
+
+**Дата добавления:** 05.01.2026
+
+### 8.1. Проблема
+
+При выходе агрегата из строя (ppr ≥ oh или sne ≥ ll) необходимо:
+1. Найти замену на складе исправных
+2. Передать сигнал от неисправного агрегата к замене
+3. Изменить `aircraft_number` (location) у обоих агрегатов
+4. Гарантировать уникальность замены (1:1)
+
+**Ограничение:** Host-функции нарушают GPU-симуляцию, поэтому всё должно работать на GPU через RTC.
+
+### 8.2. Решение: FIFO-очередь на GPU
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  СКЛАД ИСПРАВНЫХ (reserve + serviceable)                    │
+│                                                             │
+│  queue_position:  0    1    2    3    4    ...   N         │
+│                   ▲                              ▲          │
+│               старые                          новые         │
+│               (первые на выдачу)            (последние)     │
+│                   │                              │          │
+│              queue_head                     queue_tail      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Принцип FIFO:**
+- Самые старые агрегаты (по mfg_date или порядку прибытия) выдаются первыми
+- Новые агрегаты получают следующий индекс `queue_tail + 1`
+- UInt32 достаточно для индексов (4 млрд > 10 лет × 365 дней × 10,000 агрегатов)
+
+### 8.3. Новые переменные
+
+**Агент:**
+| Переменная | Тип | Описание |
+|------------|-----|----------|
+| `queue_position` | UInt32 | Позиция в FIFO очереди внутри group_by |
+
+**MacroProperty:**
+| Переменная | Размер | Описание |
+|------------|--------|----------|
+| `mp_queue_head[25]` | UInt32 × 25 | Голова очереди по group_by (следующий на выдачу) |
+| `mp_queue_tail[25]` | UInt32 × 25 | Хвост очереди по group_by (следующий индекс для новых) |
+| `mp_replacement_request[MAX_FRAMES]` | UInt32 | aircraft_number для замены (0 = нет запроса) |
+
+### 8.4. Алгоритм
+
+**Инициализация (setup_env):**
+```python
+# Сортировка по mfg_date внутри каждой group_by
+for group_by in range(3, 25):
+    pool_agents = [a for a in agents if a.group_by == group_by and a.state in [reserve, serviceable]]
+    pool_agents.sort(key=lambda a: a.mfg_date)
+    
+    for i, agent in enumerate(pool_agents):
+        agent.queue_position = i
+    
+    mp_queue_head[group_by] = 0                # Первый на выдачу
+    mp_queue_tail[group_by] = len(pool_agents) # Следующий индекс для новых
+```
+
+**RTC: Неисправный агрегат запрашивает замену:**
+```cuda
+FLAMEGPU_AGENT_FUNCTION(rtc_request_replacement, ...) {
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+    const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
+    
+    // Условие замены: ppr >= oh ИЛИ sne >= ll
+    if (ppr >= oh || sne >= ll) {
+        const unsigned int my_idx = FLAMEGPU->getVariable<unsigned int>("idx");
+        const unsigned int my_ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        
+        // Пишем запрос в MacroProperty
+        auto& requests = FLAMEGPU->environment.getMacroProperty<unsigned int, MAX_FRAMES>("mp_replacement_request");
+        requests[my_idx] = my_ac;  // Запрос: нужна замена для этого борта
+    }
+    
+    return flamegpu::ALIVE;
+}
+```
+
+**RTC: Агрегат из пула проверяет FIFO-очередь:**
+```cuda
+FLAMEGPU_AGENT_FUNCTION(rtc_check_fifo_assignment, ...) {
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int my_position = FLAMEGPU->getVariable<unsigned int>("queue_position");
+    const unsigned int state = cycleVariable...  // reserve или serviceable
+    
+    // Только агенты в пуле участвуют
+    if (state != STATE_RESERVE && state != STATE_SERVICEABLE) {
+        return flamegpu::ALIVE;
+    }
+    
+    auto& queue_head = FLAMEGPU->environment.getMacroProperty<unsigned int, 25>("mp_queue_head");
+    
+    // Читаем текущую голову очереди для моей группы
+    unsigned int current_head = queue_head[group_by];
+    
+    // Если моя позиция == голова — я следующий на выдачу
+    if (my_position == current_head) {
+        // Атомарно пытаюсь "занять" слот
+        unsigned int expected = current_head;
+        unsigned int result = queue_head[group_by].compare_exchange(expected, current_head + 1);
+        
+        if (result == expected) {
+            // Я выиграл! Ищу запрос для моей группы в mp_replacement_request
+            // ... (чтение запроса, установка aircraft_number, переход в operations)
+        }
+    }
+    
+    return flamegpu::ALIVE;
+}
+```
+
+**RTC: Агрегат возвращается в пул (из ремонта):**
+```cuda
+FLAMEGPU_AGENT_FUNCTION(rtc_return_to_pool, ...) {
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    
+    // Атомарно получаем следующий индекс в очереди
+    auto& queue_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, 25>("mp_queue_tail");
+    unsigned int my_position = queue_tail[group_by].exchange(queue_tail[group_by] + 1);
+    
+    FLAMEGPU->setVariable<unsigned int>("queue_position", my_position);
+    FLAMEGPU->setVariable<unsigned int>("aircraft_number", 0u);  // Снят с борта
+    // state → reserve
+    
+    return flamegpu::ALIVE;
+}
+```
+
+### 8.5. Полный цикл замены
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  День D: Обнаружение неисправности                          │
+├─────────────────────────────────────────────────────────────┤
+│  Агрегат A (на борту 25434):                                │
+│  ├── ppr = 271,000 >= oh = 270,000                          │
+│  ├── intent_state = 4 (ремонт)                              │
+│  └── Пишет: mp_replacement_request[A.idx] = 25434           │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  День D: FIFO-выбор замены                                  │
+├─────────────────────────────────────────────────────────────┤
+│  Агрегат B (в пуле, group_by=4):                            │
+│  ├── queue_position = 0 (самый старый)                      │
+│  ├── queue_head[4] = 0 → B == head → B выигрывает           │
+│  ├── atomicCAS → queue_head[4] = 1                          │
+│  └── Читает запрос → aircraft_number = 25434                │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  День D+1: Применение замены                                │
+├─────────────────────────────────────────────────────────────┤
+│  Агрегат A:                                                 │
+│  ├── aircraft_number = 0 (снят)                             │
+│  ├── state = repair (в ремонт)                              │
+│  └── location = "СКЛАД"                                     │
+│                                                             │
+│  Агрегат B:                                                 │
+│  ├── aircraft_number = 25434 (установлен)                   │
+│  ├── state = operations                                     │
+│  └── location = "RA-25434"                                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 8.6. Связь с assembly_trigger планера
+
+**assembly_trigger** — сигнал от планера на комплектацию:
+- Планер переходит в `repair` → устанавливается `assembly_trigger = 1`
+- Агрегаты на планере **остаются на месте** (location = планер, без наработки dt=0)
+- По завершении ремонта планера агрегаты проверяются на ресурс
+- Если агрегат исчерпал ресурс → замена по FIFO-очереди
+- Если агрегат исправен → остаётся на планере
+
+**Блокировка снятия:**
+- Агрегаты на планере в `repair` НЕ могут быть сняты до завершения ремонта
+- Это контролируется через статус планера (не через отдельный флаг агрегата)
+
+### 8.7. Преимущества архитектуры
+
+| Плюс | Описание |
+|------|----------|
+| **Без Host** | Всё на GPU, нет синхронизации с CPU |
+| **FIFO гарантирован** | Самые старые агрегаты уходят первыми |
+| **Атомарность** | `compare_exchange` исключает дубли замен |
+| **UInt32 хватит** | 4 млрд операций на весь горизонт симуляции |
+| **Децентрализовано** | Каждый агрегат отвечает за себя |
+| **Простая отладка** | queue_position записывается в MP2 |
+
+### 8.8. Статус реализации
+
+| Компонент | Статус | Примечание |
+|-----------|--------|------------|
+| `queue_position` в агенте | 🔲 TODO | Добавить переменную |
+| `mp_queue_head/tail` | 🔲 TODO | MacroProperty по group_by |
+| `mp_replacement_request` | 🔲 TODO | Массив запросов |
+| Инициализация FIFO | 🔲 TODO | Сортировка по mfg_date |
+| RTC rtc_request_replacement | 🔲 TODO | Запрос замены |
+| RTC rtc_check_fifo_assignment | 🔲 TODO | FIFO-выбор |
+| RTC rtc_return_to_pool | 🔲 TODO | Возврат в очередь |
+| Интеграция с assembly_trigger | 🔲 TODO | Связь с ремонтом планера |
+
+**Дата добавления:** 05.01.2026
+
