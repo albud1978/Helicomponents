@@ -1,0 +1,27 @@
+# Pinned versions for reproducible installs.
+#
+# Usage:
+#   pip install -r requirements.txt -c constraints.txt
+#
+# Notes:
+# - GPU stack (cudf/pyflamegpu/CUDA) can require platform-specific installation steps.
+# - Keep this file aligned with the "verified" venv versions noted in requirements.txt / README.
+
+# Data processing
+pandas==2.3.3
+numpy==2.2.6
+openpyxl==3.1.5
+
+# ClickHouse clients
+clickhouse-driver==0.2.10
+clickhouse-connect==0.10.0
+
+# Config/YAML
+PyYAML==6.0.3
+
+# Misc
+pathlib2==2.3.7.post1
+
+# Optional GPU dependencies (install separately as described in requirements.txt / docs)
+# cudf-cu12==25.12.0
+# pyflamegpu==2.0.0rc4+cuda130
