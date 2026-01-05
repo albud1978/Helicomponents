@@ -722,7 +722,33 @@ FLAMEGPU_AGENT_FUNCTION(rtc_return_to_pool, ...) {
 - Агрегаты на планере в `repair` НЕ могут быть сняты до завершения ремонта
 - Это контролируется через статус планера (не через отдельный флаг агрегата)
 
-### 8.7. Преимущества архитектуры
+### 8.7. Реализованная 7-фазная архитектура
+
+**Проблема:** FLAMEGPU не позволяет смешивать read и atomic write MacroProperty в одном слое.
+
+**Решение:** Разбиение на 7 фаз (отдельные слои):
+
+| Фаза | Название | Состояние | Операция | MacroProperty |
+|------|----------|-----------|----------|---------------|
+| P1 | write_request | operations | WRITE | mp_replacement_request/group |
+| P2 | read_head | serviceable | READ | mp_queue_head → bi_counter |
+| P3a | increment_head | serviceable | WRITE | mp_queue_head += 1 |
+| P3b | find_request | serviceable | READ | mp_replacement_request → repair_days |
+| P3c | clear_assign | serviceable | WRITE | requests[idx]=0, aircraft_number |
+| RetA | read_tail | reserve | READ | mp_queue_tail → repair_days |
+| RetB | write_tail | reserve | WRITE | mp_queue_tail += 1, queue_position |
+
+**Передача данных между фазами через агентные переменные:**
+- `bi_counter`: маркер текущей фазы (1, 2, 3, 10)
+- `repair_days`: временное хранилище (found_idx или saved_tail)
+- `intent_state`: target_aircraft (в Phase 3c) или next_state
+
+**Производительность:**
+- 10 лет (3650 дней): **4.59с**
+- Среднее время шага: **1.26мс**
+- 10634 агрегатов + 27853 резерв = 38487 frames
+
+### 8.8. Преимущества архитектуры
 
 | Плюс | Описание |
 |------|----------|
@@ -737,14 +763,142 @@ FLAMEGPU_AGENT_FUNCTION(rtc_return_to_pool, ...) {
 
 | Компонент | Статус | Примечание |
 |-----------|--------|------------|
-| `queue_position` в агенте | 🔲 TODO | Добавить переменную |
-| `mp_queue_head/tail` | 🔲 TODO | MacroProperty по group_by |
-| `mp_replacement_request` | 🔲 TODO | Массив запросов |
-| Инициализация FIFO | 🔲 TODO | Сортировка по mfg_date |
-| RTC rtc_request_replacement | 🔲 TODO | Запрос замены |
-| RTC rtc_check_fifo_assignment | 🔲 TODO | FIFO-выбор |
-| RTC rtc_return_to_pool | 🔲 TODO | Возврат в очередь |
+| `queue_position` в агенте | ✅ DONE | base_model_units.py |
+| `mp_queue_head/tail` | ✅ DONE | MacroProperty по group_by |
+| `mp_replacement_request` | ✅ DONE | Массив запросов MAX_FRAMES |
+| Инициализация FIFO | ✅ DONE | Сортировка по mfg_date |
+| Резервирование spawn | ✅ DONE | Формула оборота +20% |
+| RTC FIFO Phase 1 (write requests) | ✅ DONE | operations → mp_replacement_request |
+| RTC FIFO Phase 2 (read head) | ✅ DONE | serviceable → bi_counter |
+| RTC FIFO Phase 3a (increment head) | ✅ DONE | serviceable → mp_queue_head |
+| RTC FIFO Phase 3b (find request) | ✅ DONE | serviceable → repair_days/intent |
+| RTC FIFO Phase 3c (clear & assign) | ✅ DONE | serviceable → aircraft_number |
+| RTC FIFO Return A (read tail) | ✅ DONE | reserve → repair_days |
+| RTC FIFO Return B (write tail) | ✅ DONE | reserve → queue_position |
 | Интеграция с assembly_trigger | 🔲 TODO | Связь с ремонтом планера |
 
+### 8.9. Формула резервирования spawn
+
+**Принцип:** Оборот определяет среднее значение восполнения +20%.
+
+```python
+# Формула оборота (потребность в замене агрегатов за 10 лет):
+# 1. aggregates_consumed = flight_by_type / ll_aggregate
+# 2. aggregates_needed = aggregates_consumed × 1.2 (+20% запас)
+# 3. reserve_slots = max(10, aggregates_needed - existing_count)
+# 4. CAP: group_reserve ≤ existing_count (защита от аномально низких LL)
+
+DAYS_10_YEARS = 3650
+AVG_DAILY_FLIGHT_MIN = 90  # средний налёт в минутах/день
+SAFETY_MARGIN = 1.2  # +20% запас
+
+# Налёт за 10 лет по типам ВС
+flight_mi8_10y = n_mi8 × DAYS_10_YEARS × AVG_DAILY_FLIGHT_MIN
+flight_mi17_10y = n_mi17 × DAYS_10_YEARS × AVG_DAILY_FLIGHT_MIN
+
+for group_by, existing_count in group_counts.items():
+    ll_group, ac_mask = get_ll_and_mask_for_group(group_by)
+    
+    # Выбор налёта по ac_type_mask:
+    # - 32 (0x20) → только Mi-8
+    # - 64 (0x40) → только Mi-17
+    # - 96 (0x60) → среднее от обоих
+    
+    if ll_group > 0:
+        aggregates_consumed = flight_10y / ll_group
+        aggregates_needed = aggregates_consumed × SAFETY_MARGIN
+        group_reserve = max(10, int(aggregates_needed - existing_count))
+        
+        # CAP: максимум 100% от существующих (защита от аномально низких LL)
+        max_reserve = max(50, existing_count)
+        group_reserve = min(group_reserve, max_reserve)
+    else:
+        group_reserve = max(10, int(existing_count * 0.20))
+    
+    total_reserve += group_reserve
+
+reserve_slots = max(500, total_reserve)
+```
+
+**Пример (датасет 2025-07-04):**
+- 10634 существующих агрегатов
+- 27853 резервных слотов (~20% по формуле оборота)
+- 38487 итого frames
+
+**Примечание:** Агрегаты разные — CAP не применяется.
+group_by=33 (LL=40ч) получает 26625 резервных слотов по формуле оборота.
+
+**Производительность:**
+- 10 лет симуляции: **5.12с** (1.40мс/шаг) — с модулями increment и check_limits
+- FIFO архитектура: 7 фаз (read/write separation)
+
+### 8.10. Интеграция dt планеров с агрегатами
+
+Агрегаты получают `dt` (дневной налёт) от планеров через СУБД:
+
+| Источник | Приоритет | Описание |
+|----------|-----------|----------|
+| `sim_masterv2.dt` | 1 | Результаты симуляции планеров (569K записей, 972K часов) |
+| `flight_program_fl` | 2 | Нормативный налёт (fallback) |
+| Fallback | 3 | Константа 90 мин/день |
+
+**Архитектура интеграции (последовательная):**
+```
+[Симуляция планеров] → sim_masterv2 (ClickHouse)
+                            ↓
+              planer_dt_loader.py (загрузка dt + state)
+                            ↓
+              Блокировка: if state != 2 → dt = 0
+                            ↓
+         mp_planer_dt[day * 400 + idx] (MacroProperty)
+                            ↓
+               rtc_units_increment.py (GPU)
+                            ↓
+              sne += dt, ppr += dt для агрегатов
+```
+
+**Блокировка dt при ремонте:**
+- Загружается `intent_state` из sim_masterv2
+- Если планер не в operations (state ≠ 2) → dt обнуляется
+- Пример: заблокировано 489 записей (813 часов)
+
+**Модули:**
+- `planer_dt_loader.py` — загрузка dt из ClickHouse
+- `rtc_units_increment.py` — RTC функция инкремента sne/ppr
+- `rtc_units_increment.py::rtc_units_check_limits` — проверка ppr >= oh, sne >= ll
+
+**Инкремент:**
+```cuda
+sne += dt;
+ppr += dt;
+```
+
+**Проверка лимитов:**
+```cuda
+if (oh > 0 && ppr >= oh) intent_state = 4;  // → ремонт
+if (ll > 0 && sne >= ll) intent_state = 6;  // → списание
+if (br > 0 && sne >= br) intent_state = 6;  // → breakeven
+```
+
+### 8.11. Экспорт результатов в ClickHouse
+
+Результаты симуляции агрегатов экспортируются в таблицу `sim_units_v2`:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| version_date | UInt32 | Дата версии (дни от epoch) |
+| day_u16 | UInt16 | День симуляции |
+| psn | UInt32 | PRIMARY KEY агрегата |
+| group_by | UInt8 | Тип агрегата |
+| sne, ppr | UInt32 | Наработки |
+| state | UInt8 | Состояние (2-6) |
+| aircraft_number | UInt32 | Номер планера |
+
+**Использование:**
+```bash
+python3 orchestrator_units.py --version-date 2025-07-04 --steps 3650 --export
+```
+
 **Дата добавления:** 05.01.2026
+**Дата обновления:** 05.01.2026 (интеграция dt, блокировка, экспорт)
 

@@ -241,6 +241,19 @@ cd code/sim_v2 && python3 orchestrator_v2.py \
 3. Порядок state_manager: serviceable → operations → repair → storage → reserve → inactive
 4. `--enable-mp2-postprocess` ОБЯЗАТЕЛЕН для записи transition флагов
 
+### Симуляция агрегатов
+
+```bash
+cd code/sim_v2/units && python3 orchestrator_units.py \
+  --version-date 2025-07-04 \
+  --steps 3650 \
+  --export
+```
+
+**Требования:**
+- Симуляция планеров должна быть выполнена ранее (dt читается из sim_masterv2)
+- `--export` — экспорт результатов в sim_units_v2
+
 ### Очистка RTC кэша (только при изменении RTC кода!)
 ```bash
 rm -rf .rtc_cache/* ~/.cache/flamegpu/* /tmp/flamegpu/*
