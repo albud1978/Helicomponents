@@ -18,9 +18,17 @@ import argparse
 import sys
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List
 
-sys.path.insert(0, '/media/albud/8C327EB0327E9F40/Projects/Heli/Helicomponents/code')
+# Портируемость: не привязываемся к Nextcloud/локальным абсолютным путям.
+# Корень репозитория вычисляем относительно расположения этого файла:
+#   <repo>/code/analysis/sim_validation_runner.py
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CODE_DIR = PROJECT_ROOT / "code"
+if str(CODE_DIR) not in sys.path:
+    sys.path.insert(0, str(CODE_DIR))
+
 from utils.config_loader import get_clickhouse_client
 
 # Импорт валидаторов
@@ -29,7 +37,7 @@ from analysis.sim_validation_transitions import TransitionsValidator
 from analysis.sim_validation_increments import IncrementsValidator
 
 
-OUTPUT_DIR = '/media/albud/8C327EB0327E9F40/Projects/Heli/Helicomponents/output'
+OUTPUT_DIR = str(PROJECT_ROOT / "output")
 
 
 def generate_report(version_date_str: str, results: Dict) -> str:
