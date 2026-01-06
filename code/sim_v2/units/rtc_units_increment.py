@@ -58,10 +58,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_increment_sne, flamegpu::MessageNone, flamegpu
         dt = mp_planer_dt[dt_pos];
     }}
     
-    // Fallback: если dt == 0 и агрегат на планере — используем средний dt
-    if (dt == 0u && aircraft_number > 0u) {{
-        dt = 90u;  // Средний налёт 90 минут/день (хардкод)
-    }}
+    // Если dt == 0, агрегат не летает (планер не в operations)
+    // НЕ используем fallback - sne не должен расти без полётов
     
     // Инкрементируем наработку
     unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
@@ -105,6 +103,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_check_limits, flamegpu::MessageNone, flamegpu:
     if (needs_storage) {{
         // Списание в хранение
         FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
+        // Debug: логируем все переходы в storage
+        const unsigned int psn = FLAMEGPU->getVariable<unsigned int>("psn");
+        const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+        const unsigned int step_day = FLAMEGPU->getStepCounter();
+        if (psn < 100000u || group_by == 6u) {{
+            printf("  [CHECK_LIMITS Day %u] PSN %u (group %u): sne=%u >= ll=%u -> STORAGE\\n", 
+                   step_day, psn, group_by, sne, ll);
+        }}
     }} else if (needs_repair) {{
         // В ремонт
         FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);

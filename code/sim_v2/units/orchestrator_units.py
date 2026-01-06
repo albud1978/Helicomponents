@@ -134,6 +134,21 @@ class UnitsOrchestrator:
         modules_ok = 0
         modules_failed = 0
         
+        # 0. InitPlanerDt — загрузка dt планеров в MacroProperty (ПЕРВЫМ!)
+        try:
+            from init_planer_dt import register_init_planer_dt
+            dt_array = self.env_data.get('planer_dt_array')
+            ac_to_idx = self.env_data.get('ac_to_idx', {})
+            if dt_array is not None and len(ac_to_idx) > 0:
+                register_init_planer_dt(model, dt_array, ac_to_idx, max_days)
+                modules_ok += 1
+                print(f"  ✅ init_planer_dt: {len(ac_to_idx)} планеров, dt_size={len(dt_array):,}")
+            else:
+                print(f"  ⚠️ init_planer_dt: нет данных, будет fallback 90 мин/день")
+        except Exception as e:
+            print(f"  ❌ init_planer_dt: {e}")
+            modules_failed += 1
+        
         # 1. states_stub — инициализация intent для не-operations состояний
         try:
             import rtc_units_states_stub
@@ -143,14 +158,16 @@ class UnitsOrchestrator:
             print(f"  ❌ units_states_stub: {e}")
             modules_failed += 1
         
-        # 2. state_operations — intent для operations
-        try:
-            import rtc_units_state_operations
-            rtc_units_state_operations.register_rtc(model, agent)
-            modules_ok += 1
-        except Exception as e:
-            print(f"  ❌ units_state_operations: {e}")
-            modules_failed += 1
+        # 2. state_operations — ОТКЛЮЧЕН (дублирует rtc_units_check_limits)
+        # Проверка lимитов теперь выполняется в rtc_units_increment ПОСЛЕ инкремента
+        # try:
+        #     import rtc_units_state_operations
+        #     rtc_units_state_operations.register_rtc(model, agent)
+        #     modules_ok += 1
+        # except Exception as e:
+        #     print(f"  ❌ units_state_operations: {e}")
+        #     modules_failed += 1
+        print("  ⚠️ units_state_operations: ОТКЛЮЧЕН (логика в units_increment.check_limits)")
         
         # 2b. increment — чтение dt от планера и инкремент sne/ppr
         try:
@@ -180,22 +197,14 @@ class UnitsOrchestrator:
         #     modules_failed += 1
         print("  ⚠️ units_count: ОТКЛЮЧЕН для отладки")
         
-        # 5-6. FIFO модули — семифазная архитектура
+        # 5-6. Трёхуровневая приоритетная FIFO + spawn
+        # Приоритет: serviceable → reserve(active=1) → spawn(active=0)
         try:
-            import rtc_units_fifo
-            rtc_units_fifo.register_rtc(model, agent, max_frames, max_days)
+            import rtc_units_fifo_priority
+            rtc_units_fifo_priority.register_rtc(model, agent, max_frames, max_days)
             modules_ok += 1
         except Exception as e:
-            print(f"  ❌ units_fifo: {e}")
-            modules_failed += 1
-        
-        # 6b. spawn — динамический spawn (активация резервных агентов)
-        try:
-            import rtc_units_spawn
-            rtc_units_spawn.register_rtc(model, agent)
-            modules_ok += 1
-        except Exception as e:
-            print(f"  ❌ units_spawn: {e}")
+            print(f"  ❌ units_fifo_priority: {e}")
             modules_failed += 1
         
         # 7. transition_ops — переходы из operations
@@ -288,28 +297,50 @@ class UnitsOrchestrator:
         print(f"✅ Агенты инициализированы за {self.timing['populate']:.2f}с")
     
     def _init_fifo_macroproperty(self):
-        """Инициализирует MacroProperty для FIFO-очереди и dt планеров"""
-        queue_heads = self.env_data.get('queue_heads', {})
-        queue_tails = self.env_data.get('queue_tails', {})
+        """Инициализирует MacroProperty для FIFO-очередей и dt планеров"""
+        # Получаем данные из population_builder (трёхуровневая система)
+        svc_tails = getattr(self.population_builder, 'svc_tails', {})
+        rsv_tails = getattr(self.population_builder, 'rsv_tails', {})
         
-        # Получаем доступ к MacroProperty через HostFunction (нельзя напрямую)
-        # Будет инициализировано в первом step через host function
-        print(f"   FIFO очереди будут инициализированы в первом step")
+        # Сохраняем для InitFunction
+        self._svc_tails = svc_tails
+        self._rsv_tails = rsv_tails
+        
+        total_svc = sum(svc_tails.values())
+        total_rsv = sum(rsv_tails.values())
+        print(f"   FIFO очереди: svc={total_svc}, rsv={total_rsv}")
         
         # Инициализация dt планеров
         planer_dt = self.env_data.get('planer_dt_array')
         ac_to_idx = self.env_data.get('ac_to_idx', {})
         
         if planer_dt is not None and len(ac_to_idx) > 0:
-            # Записываем через setEnvironmentMacroProperty (если поддерживается)
-            # Альтернатива — InitFunction
             print(f"   📊 dt планеров: {len(ac_to_idx)} маппингов загружено")
-            # Сохраняем для InitFunction
             self._planer_dt_array = planer_dt
             self._ac_to_idx = ac_to_idx
         else:
             self._planer_dt_array = None
             self._ac_to_idx = {}
+    
+    def _init_fifo_on_first_step(self):
+        """Инициализирует MacroProperty FIFO очередей через simulation.environment"""
+        try:
+            # Инициализируем mp_svc_tail
+            for gb, tail in self._svc_tails.items():
+                if gb < 50 and tail > 0:
+                    self.simulation.environment.setMacroPropertyUInt32("mp_svc_tail", gb, tail)
+            
+            # Инициализируем mp_rsv_tail
+            for gb, tail in self._rsv_tails.items():
+                if gb < 50 and tail > 0:
+                    self.simulation.environment.setMacroPropertyUInt32("mp_rsv_tail", gb, tail)
+            
+            total_svc = sum(self._svc_tails.values())
+            total_rsv = sum(self._rsv_tails.values())
+            print(f"   ✅ FIFO очереди инициализированы: svc={total_svc}, rsv={total_rsv}")
+        except Exception as e:
+            print(f"   ⚠️ Ошибка инициализации FIFO: {e}")
+            print(f"      (очереди будут инициализированы через HostFunction)")
     
     def run(self, steps: int = 100):
         """Запускает симуляцию"""
@@ -318,6 +349,9 @@ class UnitsOrchestrator:
         print("\n" + "=" * 60)
         print(f"🚀 ЗАПУСК СИМУЛЯЦИИ НА {steps} ШАГОВ")
         print("=" * 60)
+        
+        # === Инициализация FIFO очередей через HostFunction ===
+        self._init_fifo_on_first_step()
         
         step_times = []
         

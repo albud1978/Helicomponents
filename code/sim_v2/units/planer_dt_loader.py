@@ -101,9 +101,10 @@ def load_planer_dt_from_sim(version_date: str, version_id: int = 1) -> Tuple[np.
     total_dt = np.sum(dt_array)
     print(f"   ✅ Загружено {len(dt_data)} записей dt, сумма = {total_dt / 60:.0f} часов")
     
-    # Загружаем состояние планера (для блокировки dt при ремонте)
+    # Загружаем состояние планера (для блокировки dt при ремонте/inactive)
+    # state - это String: 'operations', 'inactive', 'repair', 'reserve', 'storage'
     state_sql = """
-    SELECT day_u16, aircraft_number, intent_state
+    SELECT day_u16, aircraft_number, state
     FROM sim_masterv2
     WHERE version_date = %(version_date)s
       AND version_id = %(version_id)s
@@ -116,27 +117,25 @@ def load_planer_dt_from_sim(version_date: str, version_id: int = 1) -> Tuple[np.
         'version_id': version_id
     })
     
-    # Массив состояний: 0=unknown, 2=operations, 4=repair, 5=reserve, 6=storage
-    state_array = np.zeros(MAX_DAYS * MAX_PLANERS, dtype=np.uint8)
+    # Массив состояний: True = operations, False = другое
+    is_operations = np.zeros(MAX_DAYS * MAX_PLANERS, dtype=np.bool_)
     
     for row in state_data:
-        day_idx, ac_num, state_val = row[0], row[1], row[2]
+        day_idx, ac_num, state_str = row[0], row[1], row[2]
         if ac_num in ac_to_idx and day_idx < MAX_DAYS:
             planer_idx = ac_to_idx[ac_num]
             pos = day_idx * MAX_PLANERS + planer_idx
-            state_array[pos] = int(state_val)
+            is_operations[pos] = (state_str == 'operations')
     
-    # Применяем блокировку: dt = 0 если планер НЕ в operations (state != 2)
-    # Состояния: 2=operations, 4=repair, 5=reserve, 6=storage, 1=inactive
+    # Применяем блокировку: dt = 0 если планер НЕ в operations
     blocked_count = 0
     for i in range(len(dt_array)):
-        if state_array[i] != 2 and state_array[i] != 0:  # Не в operations и не unknown
-            if dt_array[i] > 0:
-                dt_array[i] = 0
-                blocked_count += 1
+        if not is_operations[i] and dt_array[i] > 0:
+            dt_array[i] = 0
+            blocked_count += 1
     
     if blocked_count > 0:
-        print(f"   🚫 Заблокировано {blocked_count} записей dt (планер не в operations)")
+        print(f"   🚫 Заблокировано {blocked_count:,} записей dt (планер не в operations)")
     
     return dt_array, ac_to_idx
 
@@ -172,13 +171,17 @@ def load_planer_dt_from_program(version_date: str, version_id: int = 1) -> Tuple
     print(f"   Загружено {len(ac_to_idx)} планеров из heli_pandas")
     
     # Загружаем нормативный налёт
+    # Колонки: dates (Date), daily_hours (UInt32 минуты)
     program_sql = """
-    SELECT day_index, aircraft_number, flight_hours
+    SELECT 
+        toUInt32(dates - version_date) as day_idx,
+        aircraft_number, 
+        daily_hours
     FROM flight_program_fl
     WHERE toString(version_date) = %(version_date)s
       AND version_id = %(version_id)s
-      AND flight_hours > 0
-    ORDER BY day_index, aircraft_number
+      AND daily_hours > 0
+    ORDER BY day_idx, aircraft_number
     """
     
     program_data = client.execute(program_sql, {
@@ -188,12 +191,12 @@ def load_planer_dt_from_program(version_date: str, version_id: int = 1) -> Tuple
     
     dt_array = np.zeros(MAX_DAYS * MAX_PLANERS, dtype=np.uint32)
     
-    for day_idx, ac_num, flight_hours in program_data:
+    for day_idx, ac_num, daily_hours in program_data:
         if ac_num in ac_to_idx and day_idx < MAX_DAYS:
             planer_idx = ac_to_idx[ac_num]
             pos = day_idx * MAX_PLANERS + planer_idx
-            # Конвертируем часы → минуты
-            dt_array[pos] = int(flight_hours * 60)
+            # daily_hours уже в минутах
+            dt_array[pos] = int(daily_hours)
     
     total_dt = np.sum(dt_array)
     print(f"   Загружено {len(program_data)} записей программы, сумма = {total_dt / 60:.0f} часов")
@@ -205,9 +208,9 @@ def load_planer_dt(version_date: str, version_id: int = 1) -> Tuple[Optional[np.
     """
     Основная функция загрузки dt планеров
     
-    Приоритет:
-    1. sim_masterv2 (результаты симуляции)
-    2. flight_program_fl (нормативный налёт)
+    Логика:
+    1. Попытаться загрузить реальный dt из sim_masterv2 (результат симуляции планеров)
+    2. Если sim_masterv2 пуст или dt=0 → fallback на flight_program_fl с блокировкой по state
     
     Returns:
         dt_array: массив dt[day * MAX_PLANERS + planer_idx]
@@ -215,15 +218,73 @@ def load_planer_dt(version_date: str, version_id: int = 1) -> Tuple[Optional[np.
     """
     print("📊 Загрузка dt планеров...")
     
-    # Пробуем из симуляции
+    # Пробуем загрузить реальный dt из sim_masterv2
     dt_array, ac_to_idx = load_planer_dt_from_sim(version_date, version_id)
     
     if dt_array is not None and np.sum(dt_array) > 0:
+        print(f"   ✅ Использован реальный dt из sim_masterv2")
         return dt_array, ac_to_idx
     
-    # Fallback на программу
-    print("   Fallback на flight_program_fl...")
-    return load_planer_dt_from_program(version_date, version_id)
+    # Fallback: загружаем из программы с блокировкой по state
+    print("   ⚠️ sim_masterv2 пуст или dt=0, fallback на flight_program_fl")
+    dt_array, ac_to_idx = load_planer_dt_from_program(version_date, version_id)
+    
+    if dt_array is None or len(ac_to_idx) == 0:
+        print("   ⚠️ Нет данных flight_program_fl")
+        return None, {}
+    
+    # Загружаем state из sim_masterv2 для блокировки
+    client = get_clickhouse_client()
+    
+    from datetime import date
+    if isinstance(version_date, str):
+        vd = date.fromisoformat(version_date)
+        version_date_int = (vd - date(1970, 1, 1)).days
+    else:
+        version_date_int = version_date
+    
+    state_sql = """
+    SELECT day_u16, aircraft_number, state
+    FROM sim_masterv2
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND group_by IN (1, 2)
+    ORDER BY day_u16, aircraft_number
+    """
+    
+    try:
+        state_data = client.execute(state_sql, {
+            'version_date': version_date_int,
+            'version_id': version_id
+        })
+        
+        if state_data:
+            # Применяем блокировку
+            is_operations = np.zeros(MAX_DAYS * MAX_PLANERS, dtype=np.bool_)
+            
+            for row in state_data:
+                day_idx, ac_num, state_str = row[0], row[1], row[2]
+                if ac_num in ac_to_idx and day_idx < MAX_DAYS:
+                    planer_idx = ac_to_idx[ac_num]
+                    pos = day_idx * MAX_PLANERS + planer_idx
+                    is_operations[pos] = (state_str == 'operations')
+            
+            blocked_count = 0
+            for i in range(len(dt_array)):
+                if not is_operations[i] and dt_array[i] > 0:
+                    dt_array[i] = 0
+                    blocked_count += 1
+            
+            if blocked_count > 0:
+                remaining = np.count_nonzero(dt_array)
+                print(f"   🚫 Заблокировано {blocked_count:,} записей (планер не в operations)")
+                print(f"   ✅ Осталось {remaining:,} записей dt")
+        else:
+            print("   ⚠️ Нет данных sim_masterv2 для блокировки")
+    except Exception as e:
+        print(f"   ⚠️ Ошибка загрузки state: {e}")
+    
+    return dt_array, ac_to_idx
 
 
 if __name__ == "__main__":

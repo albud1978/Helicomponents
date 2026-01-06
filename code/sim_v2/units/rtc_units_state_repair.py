@@ -63,10 +63,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_apply_4_to_5, flamegpu::MessageNone, flamegpu:
         FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
     }
     
-    // Сброс счётчиков
+    // Сброс счётчиков и подготовка к rsv-очереди
     FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
     FLAMEGPU->setVariable<unsigned int>("aircraft_number", 0u);  // Снят с планера
     FLAMEGPU->setVariable<unsigned int>("transition_4_to_5", 0u);
+    FLAMEGPU->setVariable<unsigned int>("queue_position", 0u);   // Сигнал для rtc_fifo_return_to_rsv
+    FLAMEGPU->setVariable<unsigned int>("active", 1u);           // Реальный агрегат (не spawn)
     
     // Логирование
     if (psn < 100000u) {  // Только для оригинальных агрегатов (не spawn)

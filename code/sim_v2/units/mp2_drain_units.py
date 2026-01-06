@@ -89,6 +89,18 @@ class MP2DrainUnitsHostFunction(fg.HostFunction):
         
         self.client.execute(ddl)
         print(f"   ✅ Таблица {self.table_name} готова (с Delta+ZSTD кодеками)")
+        
+        # Очищаем данные для этого датасета (идемпотентность)
+        delete_sql = f"""
+        ALTER TABLE {self.table_name} DELETE 
+        WHERE version_date = {self.version_date_int} 
+          AND version_id = {self.version_id}
+        """
+        self.client.execute(delete_sql)
+        # Ждём завершения мутации
+        import time
+        time.sleep(2)
+        print(f"   🗑️ Старые данные удалены (version_date={self.version_date_int}, version_id={self.version_id})")
     
     def run(self, FLAMEGPU):
         """Вызывается каждый step - проверяет нужен ли drain"""
