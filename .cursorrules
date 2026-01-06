@@ -212,7 +212,7 @@ printf "2\n2\n" | python3 code/extract_master.py --mode PROD
 | RTC calls/sec | ~1.3 млн |
 | Ускорение vs CPU | ~32x |
 
-### Полная команда симуляции
+### Полная команда симуляции планеров
 
 ```bash
 cd code/sim_v2 && python3 orchestrator_v2.py \
@@ -225,8 +225,21 @@ cd code/sim_v2 && python3 orchestrator_v2.py \
   --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
 
+⚠️ **КРИТИЧНО**: Без полного набора `--modules` (особенно `state_2_operations`) dt и sne **не записываются** в sim_masterv2!
+По умолчанию используется только `mp5_probe`, который не выполняет инкременты.
+
 ⚠️ `--drop-table` **обязателен** для первого тестового прогона DS1 (2025-07-04) в режиме полной перезаливки (TEST),
 чтобы гарантировать чистую таблицу `sim_masterv2`. Для повторных прогонов и для DS2 обычно **не используйте** его без явной необходимости.
+
+### Симуляция агрегатов (после планеров!)
+
+```bash
+cd code/sim_v2/units && python3 orchestrator_units.py \
+  --version-date 2025-07-04 \
+  --steps 3650 --export
+```
+
+⚠️ **ПОСЛЕДОВАТЕЛЬНОСТЬ**: Сначала симуляция планеров → sim_masterv2, затем симуляция агрегатов (читает dt из sim_masterv2).
 
 ### Аргументы симуляции
 - `--version-date YYYY-MM-DD` — **ОБЯЗАТЕЛЬНО** указать дату датасета

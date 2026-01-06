@@ -52,29 +52,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_state_operations_intent, flamegpu::MessageNone
     return flamegpu::ALIVE;
 }
 
-// Инкремент наработки (вызывается ПОСЛЕ вычисления intent)
-FLAMEGPU_AGENT_FUNCTION(rtc_units_state_operations_increment, flamegpu::MessageNone, flamegpu::MessageNone) {
-    unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
-    unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-    
-    // TODO: Читать dt из MP2 планера по aircraft_number
-    // Пока используем фиксированное значение 90 минут/день
-    const unsigned int dt = 90u;
-    
-    // Инкремент наработки
-    sne += dt;
-    ppr += dt;
-    
-    FLAMEGPU->setVariable<unsigned int>("sne", sne);
-    FLAMEGPU->setVariable<unsigned int>("ppr", ppr);
-    
-    return flamegpu::ALIVE;
-}
+// DEPRECATED: Инкремент перенесён в rtc_units_increment.py
+// Этот модуль использует реальный dt от планера, а не хардкод 90u
+// FLAMEGPU_AGENT_FUNCTION(rtc_units_state_operations_increment, ...) - УДАЛЁН
 """
 
 
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
-    """Регистрирует RTC функции для operations"""
+    """Регистрирует RTC функции для operations (только intent)"""
     rtc_code = get_rtc_code()
     
     # Функция вычисления intent
@@ -82,17 +67,11 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     fn_intent.setInitialState("operations")
     fn_intent.setEndState("operations")
     
-    # Функция инкремента
-    fn_increment = agent.newRTCFunction("rtc_units_state_operations_increment", rtc_code)
-    fn_increment.setInitialState("operations")
-    fn_increment.setEndState("operations")
+    # DEPRECATED: fn_increment удалён — используется rtc_units_increment.py
     
-    # Слои (порядок важен!)
+    # Слой intent
     layer_intent = model.newLayer("layer_units_ops_intent")
     layer_intent.addAgentFunction(fn_intent)
     
-    layer_increment = model.newLayer("layer_units_ops_increment")
-    layer_increment.addAgentFunction(fn_increment)
-    
-    print("  RTC модуль units_state_operations зарегистрирован (2 слоя)")
+    print("  RTC модуль units_state_operations зарегистрирован (1 слой: intent only)")
 

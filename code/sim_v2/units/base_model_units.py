@@ -87,10 +87,17 @@ class V2BaseModelUnits:
         self._mp2_max_frames = max_frames
         self._mp2_max_days = max_days
         
-        # === FIFO-очередь для замены агрегатов ===
-        # Голова очереди по group_by (следующий на выдачу)
+        # === FIFO-очереди для замены агрегатов (трёхуровневая приоритетная система) ===
+        # Приоритет 1: Serviceable (готовые на складе)
+        self.env.newMacroPropertyUInt32("mp_svc_head", MAX_GROUPS)  # Голова очереди serviceable
+        self.env.newMacroPropertyUInt32("mp_svc_tail", MAX_GROUPS)  # Хвост очереди serviceable
+        # Приоритет 2: Reserve (после ремонта, active=1)
+        self.env.newMacroPropertyUInt32("mp_rsv_head", MAX_GROUPS)  # Голова очереди reserve
+        self.env.newMacroPropertyUInt32("mp_rsv_tail", MAX_GROUPS)  # Хвост очереди reserve
+        # Приоритет 3: Spawn (active=0) — не в очереди, активируется при пустых очередях
+        
+        # Устаревшие (для совместимости, можно удалить позже)
         self.env.newMacroPropertyUInt32("mp_queue_head", MAX_GROUPS)
-        # Хвост очереди по group_by (следующий индекс для новых)
         self.env.newMacroPropertyUInt32("mp_queue_tail", MAX_GROUPS)
         # Запросы на замену: aircraft_number для которого нужна замена (0 = нет запроса)
         self.env.newMacroPropertyUInt32("mp_replacement_request", max_frames)
@@ -109,9 +116,9 @@ class V2BaseModelUnits:
         # Формат: mp_planer_dt[day * MAX_PLANERS + planer_idx] = dt в минутах
         MAX_PLANERS = 400
         planer_dt_size = MAX_PLANERS * (max_days + 1)
-        self.env.newMacroPropertyUInt32("mp_planer_dt", planer_dt_size)
+        self.env.newMacroPropertyUInt("mp_planer_dt", planer_dt_size)
         # Маппинг aircraft_number → planer_idx (для агрегатов)
-        self.env.newMacroPropertyUInt32("mp_ac_to_idx", 2000000)  # MAX aircraft_number
+        self.env.newMacroPropertyUInt("mp_ac_to_idx", 2000000)  # MAX aircraft_number
         
         # === MP2 для агрегатов (циклический буфер на DRAIN_INTERVAL дней) ===
         # Полная история слишком большая (140M), используем буфер на 10 дней

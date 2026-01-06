@@ -336,17 +336,23 @@ class AgentPopulationUnitsBuilder:
         for gb in units_by_group:
             units_by_group[gb].sort(key=lambda u: u.get('mfg_date') or date(1970, 1, 1))
         
-        # === Инициализация FIFO-очереди ===
-        queue_heads = {}  # group_by -> head (первый на выдачу)
-        queue_tails = {}  # group_by -> tail (следующий индекс)
+        # === Инициализация FIFO-очередей (трёхуровневая система) ===
+        # Приоритет 1: Serviceable (svc) — готовые агрегаты на складе
+        # Приоритет 2: Reserve (rsv) — после ремонта
+        # Приоритет 3: Spawn — active=0, не в очереди
         
-        # Счётчик позиций в очереди по группам
-        queue_positions = {}  # group_by -> текущая позиция для агентов в пуле
+        svc_positions = {}  # group_by -> текущая позиция для serviceable
+        rsv_positions = {}  # group_by -> текущая позиция для reserve
+        
+        # Счётчики для инициализации MacroProperty
+        svc_tails = {}  # group_by -> svc_tail
+        rsv_tails = {}  # group_by -> rsv_tail
         
         for gb in units_by_group:
-            queue_positions[gb] = 0
-            queue_heads[gb] = 0
-            queue_tails[gb] = 0
+            svc_positions[gb] = 0
+            rsv_positions[gb] = 0
+            svc_tails[gb] = 0
+            rsv_tails[gb] = 0
         
         # === Заполнение агентов ===
         idx = 0
@@ -359,6 +365,11 @@ class AgentPopulationUnitsBuilder:
                 if status_id not in status_to_state:
                     status_id = 4  # repair
                 
+                # FIX: Агрегаты без aircraft_number не могут быть в operations
+                # Они должны быть в serviceable (готовы к установке)
+                if status_id == 2 and unit['aircraft_number'] == 0:
+                    status_id = 3  # serviceable
+                
                 state_name = status_to_state[status_id]
                 pop = populations[state_name]
                 pop.push_back()
@@ -367,6 +378,7 @@ class AgentPopulationUnitsBuilder:
                 # === Базовые переменные ===
                 agent.setVariableUInt("idx", idx)
                 agent.setVariableUInt("psn", unit['psn'])
+                agent.setVariableUInt("active", 1)  # Реальный агрегат (не spawn-резерв)
                 agent.setVariableUInt("aircraft_number", unit['aircraft_number'])
                 agent.setVariableUInt("partseqno_i", unit['partseqno_i'])
                 agent.setVariableUInt("group_by", unit['group_by'])
@@ -405,15 +417,23 @@ class AgentPopulationUnitsBuilder:
                 agent.setVariableUInt("br", br_val)
                 agent.setVariableUInt("repair_time", norms.get('repair_time', 30))
                 
-                # === FIFO queue_position ===
-                # Для агентов в пуле (reserve, serviceable) — назначаем позицию
-                if state_name in ['reserve', 'serviceable']:
-                    agent.setVariableUInt("queue_position", queue_positions[gb])
-                    queue_positions[gb] += 1
-                    queue_tails[gb] = queue_positions[gb]
+                # === FIFO queue_position (трёхуровневая система) ===
+                # Все реальные агрегаты (active=1) получают позицию в очереди
+                # Spawn-резерв (active=0) создаётся отдельно ниже
+                
+                if state_name == 'serviceable':
+                    # Приоритет 1: svc-очередь
+                    agent.setVariableUInt("queue_position", svc_positions[gb])
+                    svc_positions[gb] += 1
+                    svc_tails[gb] = svc_positions[gb]
+                elif state_name == 'reserve':
+                    # Приоритет 2: rsv-очередь (реальные агрегаты после ремонта)
+                    agent.setVariableUInt("queue_position", rsv_positions[gb])
+                    rsv_positions[gb] += 1
+                    rsv_tails[gb] = rsv_positions[gb]
                 else:
-                    # Для агентов не в пуле — позиция 0xFFFFFFFF (не в очереди)
-                    agent.setVariableUInt("queue_position", 0xFFFFFFFF)
+                    # Для агентов в других состояниях — позиция 0
+                    agent.setVariableUInt("queue_position", 0)
                 
                 # === mfg_date ===
                 mfg = unit.get('mfg_date')
@@ -433,6 +453,64 @@ class AgentPopulationUnitsBuilder:
                 
                 idx += 1
         
+        # === Создание spawn-резерва (active=0) ===
+        reserve_slots = env_data.get('reserve_slots', 0)
+        spawn_group_counts = env_data.get('group_counts', {})  # Из get_env_data
+        
+        if reserve_slots > 0 and spawn_group_counts:
+            print(f"   🔄 Создаём {reserve_slots} spawn-слотов...")
+            spawn_pop = populations.get('reserve', fg.AgentVector(agent_def))
+            
+            total_units = sum(spawn_group_counts.values())
+            # Распределяем по группам пропорционально
+            for gb, count in spawn_group_counts.items():
+                # Резерв пропорционален размеру группы
+                slots_for_group = max(10, int(reserve_slots * count / total_units)) if total_units > 0 else 10
+                
+                for _ in range(slots_for_group):
+                    spawn_pop.push_back()
+                    spawn_agent = spawn_pop.back()
+                    
+                    spawn_agent.setVariableUInt("idx", idx)
+                    spawn_agent.setVariableUInt("psn", 1000000 + idx)  # Синтетический PSN
+                    spawn_agent.setVariableUInt("active", 0)  # Spawn-резерв
+                    spawn_agent.setVariableUInt("aircraft_number", 0)
+                    spawn_agent.setVariableUInt("partseqno_i", 0)
+                    spawn_agent.setVariableUInt("group_by", gb)
+                    spawn_agent.setVariableUInt("sne", 0)
+                    spawn_agent.setVariableUInt("ppr", 0)
+                    spawn_agent.setVariableUInt("repair_days", 0)
+                    spawn_agent.setVariableUInt("queue_position", 0)  # Не в очереди
+                    spawn_agent.setVariableUInt("intent_state", 5)  # reserve
+                    spawn_agent.setVariableUInt("mfg_date", 0)
+                    
+                    # Нормативы из первого агрегата группы (если есть)
+                    if gb in units_by_group and len(units_by_group[gb]) > 0:
+                        sample_unit = units_by_group[gb][0]
+                        partseqno = sample_unit['partseqno_i']
+                        norms = mp1_norms.get(partseqno, {})
+                        ac_mask = sample_unit.get('ac_type_mask', 96)
+                        
+                        if ac_mask & 64:
+                            spawn_agent.setVariableUInt("ll", norms.get('ll_mi17', 0))
+                            spawn_agent.setVariableUInt("oh", norms.get('oh_mi17', 0))
+                            spawn_agent.setVariableUInt("br", norms.get('br_mi17', 0))
+                        else:
+                            spawn_agent.setVariableUInt("ll", norms.get('ll_mi8', 0))
+                            spawn_agent.setVariableUInt("oh", norms.get('oh_mi8', 0))
+                            spawn_agent.setVariableUInt("br", norms.get('br_mi8', 0))
+                        spawn_agent.setVariableUInt("repair_time", norms.get('repair_time', 30))
+                    else:
+                        spawn_agent.setVariableUInt("ll", 0)
+                        spawn_agent.setVariableUInt("oh", 0)
+                        spawn_agent.setVariableUInt("br", 0)
+                        spawn_agent.setVariableUInt("repair_time", 30)
+                    
+                    idx += 1
+            
+            populations['reserve'] = spawn_pop
+            print(f"   ✅ Создано {idx - len(self.units_data)} spawn-слотов")
+        
         # === Загружаем популяции в симуляцию ===
         all_states = ['operations', 'serviceable', 'repair', 'reserve', 'storage']
         for state_name in all_states:
@@ -441,13 +519,20 @@ class AgentPopulationUnitsBuilder:
             if len(pop) > 0:
                 print(f"   Загружено {len(pop)} агентов в состояние '{state_name}'")
         
+        # === Сохраняем tails для инициализации MacroProperty ===
+        self.svc_tails = svc_tails
+        self.rsv_tails = rsv_tails
+        
         # === Статистика ===
         print(f"   Всего загружено: {idx} агрегатов")
-        print(f"   FIFO-очереди по группам:")
-        for gb in sorted(queue_tails.keys()):
-            print(f"      group_by={gb}: tail={queue_tails[gb]}")
+        print(f"   FIFO-очереди (трёхуровневая система):")
+        for gb in sorted(set(svc_tails.keys()) | set(rsv_tails.keys())):
+            svc_t = svc_tails.get(gb, 0)
+            rsv_t = rsv_tails.get(gb, 0)
+            if svc_t > 0 or rsv_t > 0:
+                print(f"      group_by={gb}: svc_tail={svc_t}, rsv_tail={rsv_t}")
         
-        # Сохраняем queue_tails в env_data для инициализации MacroProperty
-        env_data['queue_heads'] = queue_heads
-        env_data['queue_tails'] = queue_tails
+        # Сохраняем tails в env_data для инициализации MacroProperty
+        env_data['svc_tails'] = svc_tails
+        env_data['rsv_tails'] = rsv_tails
 

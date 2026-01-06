@@ -22,31 +22,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_apply_5_to_5, flamegpu::MessageNone, flamegpu:
     return flamegpu::ALIVE;
 }}
 
-// 5→2 (reserve → operations через FIFO)
+// 5→2 (reserve → operations)
+// Основная логика в rtc_fifo_assign_reserve — здесь только transition
 FLAMEGPU_AGENT_FUNCTION(rtc_units_apply_5_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
-    const unsigned int psn = FLAMEGPU->getVariable<unsigned int>("psn");
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    const unsigned int queue_position = FLAMEGPU->getVariable<unsigned int>("queue_position");
-    
-    // Читаем aircraft_number из запроса замены
-    auto requests = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mp_replacement_request");
-    const unsigned int my_idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int target_ac = requests[my_idx];
-    
-    if (target_ac > 0u) {{
-        // Есть запрос — устанавливаемся на планер
-        FLAMEGPU->setVariable<unsigned int>("aircraft_number", target_ac);
-        FLAMEGPU->setVariable<unsigned int>("transition_5_to_2", 1u);
-        
-        // Очищаем запрос через atomicExch
-        requests[my_idx].exchange(0u);
-        
-        // Логирование
-        printf("  [UNIT 5→2 Day %u] PSN %u (group %u): reserve -> operations, AC=%u, FIFO pos=%u\\n", 
-               step_day, psn, group_by, target_ac, queue_position);
-    }}
-    
+    // aircraft_number и intent_state уже установлены в rtc_fifo_assign_reserve
+    FLAMEGPU->setVariable<unsigned int>("transition_5_to_2", 1u);
     return flamegpu::ALIVE;
 }}
 """
