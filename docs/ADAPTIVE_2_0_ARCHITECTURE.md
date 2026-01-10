@@ -416,19 +416,72 @@ adaptive_days = следующий min(resource, repair, program)
 
 ---
 
-## Следующие шаги
+## Результаты тестирования (11.01.2026)
 
-1. [ ] Создать `precompute_program_events.py` — извлечь события из mp4_ops_counter
-2. [ ] Создать `agents_2_0.py` — определения Planer и ProgramEvent
-3. [ ] Реализовать `module_compute_adaptive.py` с limiter_date
-4. [ ] Реализовать `module_batch_increment.py` с cumsum
-5. [ ] Реализовать `module_transitions.py` с пересчётом limiter_date
-6. [ ] Реализовать `module_quota.py` с ProgramEvent
-7. [ ] Создать `orchestrator_2_0.py`
-8. [ ] Тестирование и валидация
+### Производительность
+
+| Метрика | Значение |
+|---------|----------|
+| **Время GPU** | 1.81с |
+| **Время выгрузки** | 0.39с |
+| **Всего шагов** | 632 |
+| **Шагов/год** | ~63 |
+| **Ускорение vs baseline** | ~40-50x |
+
+### Распределение агентов (финальный день 3650)
+
+| Состояние | Количество | SNE | PPR |
+|-----------|------------|-----|-----|
+| operations | 302 | 174M | 118M |
+| reserve | 98 | 34M | 0 |
+| **TOTAL** | **400** | | |
+
+### Ключевые достижения
+
+1. ✅ **100% GPU-only** — без HostFunction для current_day
+2. ✅ **MP2 export** — запись в ClickHouse работает
+3. ✅ **Adaptive steps** — 632 шага вместо 3650
+4. ✅ **limiter_date** — обновляется после каждого batch_increment
+5. ✅ **Read/write разделение** — 2 слоя для MacroProperty операций
+
+### Решённые проблемы FLAME GPU
+
+| Проблема | Решение |
+|----------|---------|
+| Read/write MacroProperty в одном слое | Разделение на 2 RTC: read→agent_var, agent_var→write |
+| exchange() только UInt32 | Все буферы MP2 — UInt32 |
+| getPopulationData() | Использование AgentVector |
+| current_day на GPU | MacroProperty + early return |
 
 ---
 
-**Автор:** Алексей (концепция), AI (детализация)
-**Дата:** 10.01.2026
+## Файлы реализации
+
+| Файл | Описание |
+|------|----------|
+| `agents_2_0.py` | ✅ Определения агентов Planer, ProgramEvent, QuotaManager |
+| `rtc_modules_2_0.py` | ✅ Все 6 модулей (10 RTC слоёв) |
+| `orchestrator_2_0.py` | ✅ Главный оркестратор с drain |
+| `precompute_program_events.py` | ✅ Создание ProgramEvent из mp4 |
+
+---
+
+## Следующие шаги
+
+1. [x] ~~Создать `precompute_program_events.py`~~ ✅
+2. [x] ~~Создать `agents_2_0.py`~~ ✅
+3. [x] ~~Реализовать compute_adaptive_days~~ ✅
+4. [x] ~~Реализовать batch_increment~~ ✅
+5. [x] ~~Реализовать transitions~~ ✅
+6. [x] ~~Реализовать quota~~ ✅
+7. [x] ~~Создать `orchestrator_2_0.py`~~ ✅
+8. [x] ~~Тестирование и валидация~~ ✅
+9. [ ] Полное квотирование (demote/promote)
+10. [ ] Сравнение с baseline на идентичных данных
+
+---
+
+**Автор:** Алексей (концепция), AI (реализация)
+**Дата создания:** 10.01.2026
+**Последнее обновление:** 11.01.2026
 
