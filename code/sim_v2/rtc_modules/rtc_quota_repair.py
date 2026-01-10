@@ -24,15 +24,20 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     RTC_QUOTA_REPAIR_TEMPLATE = Template("""
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    
+    // DEBUG: логирование на первых шагах
+    if (step_day <= 2u && idx < 5u) {
+        printf("  [QUOTA_REPAIR DEBUG Day %u] idx=%u, group_by=%u, intent=%u\\n", step_day, idx, group_by, intent);
+    }
     
     // Фильтр: только кандидаты (reserve&0 или operations&4)
     if (intent != 0u && intent != 4u) {
         return flamegpu::ALIVE;
     }
     
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     
     // Только планеры Mi-8/Mi-17
@@ -43,6 +48,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
     // ✅ Читаем repair_number из MacroProperty по idx (UInt32 для выравнивания)
     auto repair_number_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, $MAX_FRAMES>("repair_number_by_idx");
     const unsigned int repair_number = repair_number_by_idx[idx];
+    
+    // DEBUG: логирование repair_number
+    if (step_day <= 2u && intent == 4u) {
+        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        printf("  [QUOTA_REPAIR CHECK Day %u] AC %u (idx=%u): intent=4, repair_number=%u\\n", 
+               step_day, aircraft_number, idx, repair_number);
+    }
     
     // 0 означает отсутствие квоты
     if (repair_number == 0u) {

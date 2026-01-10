@@ -111,7 +111,8 @@ class AgentPopulationBuilder:
                         'frame_idx': frames_index[ac],
                         'status_id': int(status_list[j] or 1) if j < len(status_list) else 1,
                         'sne': int(sne_list[j] or 0) if j < len(sne_list) else 0,
-                        'ppr': int(ppr_list[j] or 0) if j < len(ppr_list) else 0,
+                        # PPR = SNE для планеров если ppr=0 (двухфазная логика baseline)
+                        'ppr': int(ppr_list[j] or 0) if (j < len(ppr_list) and ppr_list[j]) else int(sne_list[j] or 0) if j < len(sne_list) else 0,
                         'repair_days': int(repair_days_list[j] or 0) if j < len(repair_days_list) else 0,
                         'group_by': gb,
                         'partseqno_i': int(pseq_list[j] or 0) if j < len(pseq_list) else 0,
@@ -252,15 +253,20 @@ class AgentPopulationBuilder:
                     agent.setVariableUInt("assembly_trigger", 1)
             
             # intent_state зависит от status_id (state):
-            # - operations/serviceable/reserve/inactive → 2 (хотят в operations)
-            # - repair → 4 (в ремонте)
-            # - storage → 6 (утилизирован)
-            if status_id == 4:
+            # - inactive (1) → 1 (замороженные, ждут repair_time)
+            # - operations (2) → 2 (в эксплуатации)
+            # - serviceable (3) → 3 (холдинг)
+            # - repair (4) → 4 (в ремонте)
+            # - reserve (5) → 5 (в резерве)
+            # - storage (6) → 6 (утилизирован)
+            if status_id == 1:
+                agent.setVariableUInt("intent_state", 1)  # ✅ inactive = замороженные
+            elif status_id == 4:
                 agent.setVariableUInt("intent_state", 4)
             elif status_id == 6:
                 agent.setVariableUInt("intent_state", 6)
-            else:  # 1, 2, 3, 5
-                agent.setVariableUInt("intent_state", 2)
+            else:  # 2, 3, 5
+                agent.setVariableUInt("intent_state", status_id)  # соответствует state
         
         # Загружаем популяции в симуляцию по состояниям
         # ВАЖНО: Нужно инициализировать ВСЕ states, даже пустые (для spawn)
@@ -384,4 +390,45 @@ class AgentPopulationBuilder:
                     )
         
         return ll_by_frame, oh_by_frame, br_by_frame
+    
+    def get_initial_ops_count(self) -> Dict[int, int]:
+        """
+        Возвращает начальное количество агентов в состоянии operations по типам.
+        
+        Returns:
+            Dict[int, int]: {group_by: count}, например {1: 67, 2: 93}
+        """
+        mp3 = self.env_data.get('mp3_arrays', {})
+        ac_list = mp3.get('mp3_aircraft_number', [])
+        status_list = mp3.get('mp3_status_id', [])
+        gb_list = mp3.get('mp3_group_by', [])
+        frames_index = self.env_data.get('frames_index', {})
+        first_reserved_idx = self.env_data.get('first_reserved_idx', self.frames)
+        
+        # Считаем агентов в operations (status_id=2) по group_by
+        ops_count = {1: 0, 2: 0}  # Mi-8, Mi-17
+        
+        seen_frames = set()
+        for j in range(len(ac_list)):
+            gb = int(gb_list[j] or 0) if j < len(gb_list) else 0
+            if gb not in [1, 2]:
+                continue
+            
+            ac = int(ac_list[j] or 0)
+            if ac <= 0 or ac not in frames_index:
+                continue
+            
+            frame_idx = frames_index[ac]
+            if frame_idx >= first_reserved_idx:
+                continue
+            
+            if frame_idx in seen_frames:
+                continue
+            seen_frames.add(frame_idx)
+            
+            status_id = int(status_list[j] or 1) if j < len(status_list) else 1
+            if status_id == 2:  # operations
+                ops_count[gb] += 1
+        
+        return ops_count
 

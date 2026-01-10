@@ -164,8 +164,10 @@ class MP2DrainHostFunction(fg.HostFunction):
         
         print(f"  ✅ Выгружено {rows} строк MP2 за {self.total_drain_time:.2f}с")
         
-        # Transition флаги уже вычислены на GPU (слой compute_transitions)
-        # и записаны в MP2 напрямую - постобработка НЕ НУЖНА
+        # Вычисляем transition флаги через SQL postprocessing
+        # Это нужно т.к. GPU слой compute_transitions может быть не подключен
+        self._compute_transitions_sql()
+        
         self._last_drained_day = actual_end_day + 1
         self._pending = False
         return
@@ -659,7 +661,7 @@ class MP2DrainHostFunction(fg.HostFunction):
     def _compute_transitions_sql(self):
         """Вычисляет transition флаги через SQL window функции после дренажа"""
         try:
-            version_date = self.client.execute("SELECT max(version_date) FROM sim_masterv2")[0][0]
+            version_date = self.client.execute(f"SELECT max(version_date) FROM {self.table_name}")[0][0]
             
             # Получаем уникальные самолеты и дни для вычисления переходов
             # Используем JOIN с предыдущим днем

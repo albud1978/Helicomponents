@@ -319,8 +319,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_ops_repair, flamegpu::MessageNone, flamegpu::M
     # =========================================================================
     # Логирование баланса (gap) по типам (per-day агрегированный показатель)
     # =========================================================================
-    model.Environment().newMacroPropertyInt32("mp2_quota_gap_mi8", max_days + 1)
-    model.Environment().newMacroPropertyInt32("mp2_quota_gap_mi17", max_days + 1)
+    try:
+        model.Environment().newMacroPropertyInt32("mp2_quota_gap_mi8", max_days + 1)
+        model.Environment().newMacroPropertyInt32("mp2_quota_gap_mi17", max_days + 1)
+    except:
+        pass  # Уже созданы в base_model
 
     # ✅ УСТАРЕЛО: RTC функция для логирования MP4 целей больше не используется
     # Целевые значения теперь читаются напрямую из mp4_ops_counter на стороне Python
