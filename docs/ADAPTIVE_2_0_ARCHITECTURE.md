@@ -55,9 +55,9 @@
 │  │   current_day_mp[0] += adaptive_days (атомарно!)        │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
-│  EXIT CONDITION (минимальный host callback):                    │
-│  ─────────────────────────────────────────                      │
-│  if current_day_mp[0] >= end_day: return EXIT                   │
+│  EARLY RETURN в каждой RTC (НОЛЬ host callbacks!):              │
+│  ─────────────────────────────────────────────────              │
+│  if (current_day >= end_day) return flamegpu::ALIVE;            │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -73,10 +73,33 @@ const unsigned int current_day = mp_day[0];
 mp_day[0].exchange(current_day + adaptive_days);
 ```
 
-Это позволяет:
-- Нет Python loop — один вызов `simulate()`
-- current_day обновляется внутри GPU
-- Минимальный host overhead (только exit condition)
+### Истинный GPU-only: Early Return
+
+```cuda
+// В КАЖДОЙ RTC функции:
+FLAMEGPU_AGENT_FUNCTION(rtc_any_function, ...) {
+    // Early return если симуляция завершена
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;  // ← Мгновенный выход!
+    
+    // ... основная логика
+}
+```
+
+**Преимущества:**
+- **НОЛЬ host callbacks** — никаких exit conditions
+- **ОДИН вызов `simulate(N)`** — вся симуляция за один запуск
+- current_day обновляется внутри GPU атомарно
+- После достижения end_day "пустые" шаги выполняются мгновенно
+
+**Вызов:**
+```python
+# Расчёт N: ~150 шагов/год × 10 лет + запас
+estimated_steps = int(years * 150) + 100
+simulation.simulate(estimated_steps)  # ОДИН вызов, НОЛЬ взаимодействий с хостом!
+```
 
 ---
 
