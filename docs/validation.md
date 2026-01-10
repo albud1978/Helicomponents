@@ -2252,3 +2252,150 @@ HAVING cnt > 0;
 - `docs/rtc_pipeline_architecture.md` — общая архитектура пайплайна
 - `.cursorrules` — правила разработки (state-based архитектура, каскадное квотирование)
 
+---
+
+## 🚀 LIMITER архитектура (ветка feature/flame-messaging, 10-01-2026)
+
+### Статус
+✅ **ВАЛИДИРОВАН** — 100% соответствие baseline по всем метрикам
+
+### Концепция
+LIMITER — альтернативная архитектура симуляции с adaptive time step и event-driven квотированием:
+- **Limiter date:** Каждый агент вычисляет дату истощения ресурса (min(LL-SNE, OH-PPR) / avg_dt)
+- **Event-driven:** Квотирование выполняется только при изменении программы или выбытии агента
+- **GPU-оптимизация:** Ежедневные инкременты полностью на GPU, минимальные host-взаимодействия
+
+### Сравнение с BASELINE (DS1: 2025-07-04, 3650 дней)
+
+| Метрика | BASELINE | LIMITER | DIFF |
+|---------|----------|---------|------|
+| **Время** | ~75с | **48с** | **-36%** |
+| **GPU время** | ~34с | ~27с | **-21%** |
+| **Drain время** | ~38с | ~21с | **-45%** |
+| **Переходы** | 1,352 | 1,352 | **0** |
+| **Записей** | 1,098,816 | 1,098,816 | **0** |
+
+### Переходы (100% совпадение)
+
+| Переход | LIMITER | BASELINE | DIFF |
+|---------|---------|----------|------|
+| serviceable → operations | 355 | 355 | 0 |
+| operations → serviceable | 344 | 344 | 0 |
+| repair → reserve | 198 | 198 | 0 |
+| reserve → operations | 181 | 181 | 0 |
+| operations → repair | 172 | 172 | 0 |
+| operations → storage | 29 | 29 | 0 |
+| operations → reserve | 22 | 22 | 0 |
+| reserve → repair | 22 | 22 | 0 |
+| repair → operations | 16 | 16 | 0 |
+| inactive → repair | 13 | 13 | 0 |
+| **ИТОГО** | **1,352** | **1,352** | **0** |
+
+### Распределение по состояниям (100% совпадение)
+
+| State | LIMITER | BASELINE | DIFF |
+|-------|---------|----------|------|
+| operations | 577,193 | 577,193 | 0 |
+| inactive | 353,117 | 353,117 | 0 |
+| reserve | 62,856 | 62,856 | 0 |
+| serviceable | 37,683 | 37,683 | 0 |
+| repair | 36,843 | 36,843 | 0 |
+| storage | 31,124 | 31,124 | 0 |
+| **ИТОГО** | **1,098,816** | **1,098,816** | **0** |
+
+### SNE/PPR на день 3649 (100% совпадение)
+
+| State | LIM_SNE | BAS_SNE | LIM_PPR | BAS_PPR |
+|-------|---------|---------|---------|---------|
+| inactive | 125,706,987 | 125,706,987 | 14,824,005 | 14,824,005 |
+| operations | 134,433,818 | 134,433,818 | 23,627,936 | 23,627,936 |
+| repair | 1,619,220 | 1,619,220 | 1,079,678 | 1,079,678 |
+| reserve | 20,234,590 | 20,234,590 | 0 | 0 |
+| storage | 36,327,412 | 36,327,412 | 6,793,558 | 6,793,558 |
+
+### Инварианты LIMITER
+
+**INV-LIMITER-1:** Переходы идентичны baseline
+```sql
+-- Сравнение переходов между LIMITER и BASELINE
+WITH 
+  limiter_trans AS (
+    SELECT l1.state as from_state, l2.state as to_state, count() as cnt
+    FROM sim_masterv2_limiter l1
+    JOIN sim_masterv2_limiter l2 ON l1.idx = l2.idx AND l1.day_u16 + 1 = l2.day_u16
+    WHERE l1.state != l2.state
+    GROUP BY from_state, to_state
+  ),
+  baseline_trans AS (
+    SELECT b1.state as from_state, b2.state as to_state, count() as cnt
+    FROM sim_masterv2 b1
+    JOIN sim_masterv2 b2 ON b1.idx = b2.idx AND b1.day_u16 + 1 = b2.day_u16
+    WHERE b1.state != b2.state AND b1.version_date = 20273
+    GROUP BY from_state, to_state
+  )
+SELECT * FROM limiter_trans l
+FULL OUTER JOIN baseline_trans b ON l.from_state = b.from_state AND l.to_state = b.to_state
+WHERE coalesce(l.cnt, 0) != coalesce(b.cnt, 0);
+-- Ожидается: 0 строк (все переходы совпадают)
+```
+
+**INV-LIMITER-2:** Количество записей совпадает
+```sql
+SELECT 
+    (SELECT count() FROM sim_masterv2_limiter) as limiter_count,
+    (SELECT count() FROM sim_masterv2 WHERE version_date = 20273) as baseline_count;
+-- Ожидается: оба значения равны (1,098,816)
+```
+
+**INV-LIMITER-3:** SNE/PPR на финальный день совпадают
+```sql
+SELECT 
+    l.state,
+    sum(l.sne) as lim_sne, sum(b.sne) as bas_sne,
+    sum(l.ppr) as lim_ppr, sum(b.ppr) as bas_ppr
+FROM sim_masterv2_limiter l
+JOIN sim_masterv2 b ON l.idx = b.idx AND l.day_u16 = b.day_u16
+WHERE l.day_u16 = 3649 AND b.version_date = 20273
+GROUP BY l.state;
+-- Ожидается: все пары lim_*/bas_* равны
+```
+
+**INV-LIMITER-4:** quota_repair работает корректно
+```sql
+-- Проверка: repair_number=18 применяется для планеров
+SELECT day_u16, count() as in_repair
+FROM sim_masterv2_limiter
+WHERE state = 'repair'
+GROUP BY day_u16
+ORDER BY in_repair DESC
+LIMIT 1;
+-- Ожидается: in_repair <= 18
+```
+
+### Ключевые файлы
+
+| Файл | Назначение |
+|------|------------|
+| `code/sim_v2/messaging/orchestrator_limiter.py` | Оркестратор LIMITER |
+| `code/sim_v2/messaging/rtc_limiter_date.py` | Расчёт limiter_date |
+| `code/sim_v2/messaging/rtc_batch_operations.py` | Пакетные инкременты |
+| `code/sim_v2/messaging/base_model_messaging.py` | Модель агентов LIMITER |
+| `code/sim_v2/rtc_modules/rtc_quota_repair.py` | FIFO очередь на ремонт |
+
+### Команда запуска
+
+```bash
+cd code/sim_v2/messaging && python3 orchestrator_limiter.py \
+  --version-date 2025-07-04 \
+  --end-day 3650 \
+  --enable-mp2 \
+  --drop-table
+```
+
+### Связанные документы
+
+- `docs/MESSAGING_RESEARCH.md` — исследование messaging подходов FLAME GPU
+- `docs/ADAPTIVE_STEP_ARCHITECTURE.md` — архитектура adaptive time step
+- `docs/GPU_ONLY_ARCHITECTURE.md` — GPU-only архитектура
+- `docs/changelog.md` — история изменений (запись 10-01-2026)
+

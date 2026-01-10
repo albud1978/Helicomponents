@@ -54,6 +54,16 @@ python3 code/extract_master.py
 | `docs/validation.md` | Инварианты и процедуры тестирования |
 | `docs/spawn_dynamic_architecture.md` | Архитектура динамического спавна |
 
+### 🚀 LIMITER архитектура (ветка feature/flame-messaging)
+| Файл | Описание |
+|------|----------|
+| `docs/MESSAGING_RESEARCH.md` | Исследование FLAME GPU messaging |
+| `docs/ADAPTIVE_STEP_ARCHITECTURE.md` | Архитектура adaptive time step |
+| `docs/GPU_ONLY_ARCHITECTURE.md` | GPU-only архитектура |
+| `code/sim_v2/messaging/` | Модули LIMITER архитектуры |
+
+**Результаты:** 100% соответствие baseline, **1.56x ускорение** (48с vs 75с)
+
 ### ETL процессы
 | Файл | Описание |
 |------|----------|
