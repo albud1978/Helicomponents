@@ -58,11 +58,13 @@ python3 code/extract_master.py
 | Файл | Описание |
 |------|----------|
 | `docs/MESSAGING_RESEARCH.md` | Исследование FLAME GPU messaging |
-| `docs/ADAPTIVE_STEP_ARCHITECTURE.md` | Архитектура adaptive time step |
+| `docs/ADAPTIVE_STEP_ARCHITECTURE.md` | Архитектура adaptive time step (v1) |
+| **`docs/ADAPTIVE_STEP_V3_ARCHITECTURE.md`** | **Adaptive Step v3 с cumsum (проект)** |
 | `docs/GPU_ONLY_ARCHITECTURE.md` | GPU-only архитектура |
 | `code/sim_v2/messaging/` | Модули LIMITER архитектуры |
 
-**Результаты:** 100% соответствие baseline, **1.56x ускорение** (48с vs 75с)
+**LIMITER (текущий):** 100% соответствие baseline, **1.56x ускорение** (48с vs 75с)
+**Adaptive v3 (проект):** Ожидаемое ускорение **30x** (~120 шагов вместо 3650)
 
 ### ETL процессы
 | Файл | Описание |
