@@ -190,6 +190,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
         // Я в числе K первых → промоут, меняю intent=1 на intent=2
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Изменяем: 1→2 (одобрены на операции)
         
+        // DEBUG: проверим что intent реально установлен
+        const unsigned int new_intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+        
         /* Логирование выбора для P3 с информацией о br2_mi17 */
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         const char* repair_mode = skip_repair ? "КОМПЛЕКТАЦИЯ (ppr<br2)" : "РЕМОНТ (ppr>=br2)";

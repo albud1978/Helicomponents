@@ -21,8 +21,9 @@ except ImportError as e:
 # RTC функция для state_1 (inactive)
 RTC_STATE_1_INACTIVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_1_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // ✅ Все неактивные агенты замороженные (intent=1)
-    // Логика проверки step_day >= repair_time находится в quota_promote_inactive
+    // ✅ Сбрасываем intent в 1 (замороженный) в НАЧАЛЕ каждого шага
+    // Квотирование (quota_promote_inactive) потом установит intent=2 для готовых агентов
+    // State manager (transition_inactive_to_ops) переведёт их в operations
     FLAMEGPU->setVariable<unsigned int>("intent_state", 1u);
     
     // Обнуляем daily_today_u32 (нет налёта в inactive)
@@ -152,8 +153,10 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует RTC функции для всех состояний с setEndState"""
     
     # Все функции теперь с setEndState для корректной работы
+    # ВАЖНО: inactive НЕ включён! Он обрабатывается в state_manager_inactive
+    # чтобы избежать сброса intent=2 после quota_promote_inactive
     funcs = [
-        ("rtc_state_1_inactive", RTC_STATE_1_INACTIVE, "inactive", "inactive"),  # Остаётся
+        # ("rtc_state_1_inactive", RTC_STATE_1_INACTIVE, "inactive", "inactive"),  # ❌ УБРАНО! См. state_manager_inactive
         ("rtc_state_3_serviceable", RTC_STATE_3_SERVICEABLE, "serviceable", "serviceable"),  # Остаётся  
         ("rtc_state_4_repair", RTC_STATE_4_REPAIR, "repair", None),  # Условные переходы внутри
         ("rtc_state_5_reserve", RTC_STATE_5_RESERVE, "reserve", "reserve"),  # Остаётся

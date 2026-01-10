@@ -3,6 +3,7 @@
 State Manager for reserve (state 5).
 Handles transitions:
 - 5->5_queue when intent=0 (repair queue hold)
+- 5->2 when intent=2 (promoted to operations)
 - 5->4 when intent=4 (approved to repair)
 - 5->5 when intent=5 (general reserve hold)
 """
@@ -13,6 +14,12 @@ import pyflamegpu as fg
 RTC_COND_INTENT_0 = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_0) {
     return FLAMEGPU->getVariable<unsigned int>("intent_state") == 0u;
+}
+"""
+
+RTC_COND_INTENT_2_RESERVE = """
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_2_reserve) {
+    return FLAMEGPU->getVariable<unsigned int>("intent_state") == 2u;
 }
 """
 
@@ -36,6 +43,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_5_queue, flamegpu::MessageNone, flamegpu:
 }
 """
 
+# 5->2 (promoted to operations)
+RTC_APPLY_5_TO_2 = """
+FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    
+    const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
+    printf("  [TRANSITION 5→2 Day %u] AC %u (idx %u, %s): reserve -> operations\\n", 
+           step_day, aircraft_number, idx, type);
+    
+    return flamegpu::ALIVE;
+}
+"""
+
 # 5->4 (approved to repair)
 RTC_APPLY_5_TO_4 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_4, flamegpu::MessageNone, flamegpu::MessageNone) {
@@ -54,7 +77,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_5, flamegpu::MessageNone, flamegpu::Messa
 
 def register_state_manager_reserve(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Registers state manager for reserve state."""
-    print("  Register state_manager_reserve (5->5_queue, 5->4, 5->5)")
+    print("  Register state_manager_reserve (5->5_queue, 5->2, 5->4, 5->5)")
 
     # 5->5_queue (intent=0)
     layer_5_to_5_queue = model.newLayer("transition_5_to_5_queue")
@@ -63,6 +86,14 @@ def register_state_manager_reserve(model: fg.ModelDescription, agent: fg.AgentDe
     rtc_func_5_to_5_queue.setInitialState("reserve")
     rtc_func_5_to_5_queue.setEndState("reserve")
     layer_5_to_5_queue.addAgentFunction(rtc_func_5_to_5_queue)
+
+    # 5->2 (intent=2) - promoted to operations
+    layer_5_to_2 = model.newLayer("transition_reserve_to_ops")
+    rtc_func_5_to_2 = agent.newRTCFunction("rtc_apply_reserve_to_ops", RTC_APPLY_5_TO_2)
+    rtc_func_5_to_2.setRTCFunctionCondition(RTC_COND_INTENT_2_RESERVE)
+    rtc_func_5_to_2.setInitialState("reserve")
+    rtc_func_5_to_2.setEndState("operations")
+    layer_5_to_2.addAgentFunction(rtc_func_5_to_2)
 
     # 5->4 (intent=4)
     layer_5_to_4 = model.newLayer("transition_5_to_4")
