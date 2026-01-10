@@ -23,14 +23,15 @@ def extract_program_events(client: Client, version_date: str, max_days: int = 36
             - target_mi17: int
     """
     # Запрос данных
+    # Колонка dates содержит дату, вычисляем day_u16 как разницу с version_date
     query = f"""
     SELECT 
-        day_u16,
+        toUInt16(dates - toDate('{version_date}')) AS day_u16,
         ops_counter_mi8,
         ops_counter_mi17
     FROM flight_program_ac
     WHERE version_date = toDate('{version_date}')
-    ORDER BY day_u16
+    ORDER BY dates
     LIMIT {max_days + 1}
     """
     
@@ -126,7 +127,17 @@ def compute_limiter_date_ops(
         limiter_date: День когда агент достигнет лимита
     """
     MAX_DAYS_PLUS_1 = max_days + 1
+    max_idx = len(mp5_cumsum) // MAX_DAYS_PLUS_1
+    
+    # Проверка границ
+    if idx >= max_idx:
+        return current_day + 3650  # Дефолтный горизонт
+    
     base_idx = idx * MAX_DAYS_PLUS_1
+    
+    # Проверка доступа
+    if base_idx + current_day >= len(mp5_cumsum):
+        return current_day + 3650
     
     # Текущий cumsum
     base_cumsum = mp5_cumsum[base_idx + current_day]

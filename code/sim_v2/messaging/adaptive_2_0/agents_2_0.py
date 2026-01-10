@@ -145,16 +145,18 @@ def setup_environment_2_0(env: fg.EnvironmentDescription, max_frames: int = 400,
     cumsum_size = max_frames * (max_days + 1)
     env.newMacroPropertyUInt32("mp5_cumsum", cumsum_size)
     
-    # ProgramEvent данные (альтернатива агентам для простоты)
-    env.newMacroPropertyUInt16("program_event_days", max_events)
-    env.newMacroPropertyUInt16("program_target_mi8", max_events)
-    env.newMacroPropertyUInt16("program_target_mi17", max_events)
+    # ProgramEvent данные (UInt32 для exchange() совместимости)
+    env.newMacroPropertyUInt32("program_event_days", max_events)
+    env.newMacroPropertyUInt32("program_target_mi8", max_events)
+    env.newMacroPropertyUInt32("program_target_mi17", max_events)
     
     # Буфер limiter_date для global min (одно значение на агента)
-    env.newMacroPropertyUInt16("limiter_buffer", max_frames)
+    # ВАЖНО: UInt32 потому что exchange() не поддерживает UInt16
+    env.newMacroPropertyUInt32("limiter_buffer", max_frames)
     
     # Результат global min: [adaptive_days, min_idx, ...]
-    env.newMacroPropertyUInt16("global_min_result", 4)
+    # ВАЖНО: UInt32 для exchange()
+    env.newMacroPropertyUInt32("global_min_result", 4)
     
     # MP2 буфер для batch drain (записываем ВСЁ, drain в конце)
     mp2_size = max_frames * 500  # ~500 шагов за симуляцию
