@@ -84,9 +84,10 @@ class HF_InitProgramEvents(fg.HostFunction):
         if self.done:
             return
         
-        days_mp = FLAMEGPU.environment.getMacroPropertyUInt16("program_event_days")
-        mi8_mp = FLAMEGPU.environment.getMacroPropertyUInt16("program_target_mi8")
-        mi17_mp = FLAMEGPU.environment.getMacroPropertyUInt16("program_target_mi17")
+        # UInt32 для exchange() совместимости
+        days_mp = FLAMEGPU.environment.getMacroPropertyUInt32("program_event_days")
+        mi8_mp = FLAMEGPU.environment.getMacroPropertyUInt32("program_target_mi8")
+        mi17_mp = FLAMEGPU.environment.getMacroPropertyUInt32("program_target_mi17")
         
         count = 0
         for i in range(len(self.event_days)):
@@ -96,7 +97,7 @@ class HF_InitProgramEvents(fg.HostFunction):
                 mi17_mp[i] = int(self.target_mi17[i])
                 count += 1
             else:
-                days_mp[i] = 0xFFFF
+                days_mp[i] = 0xFFFFFFFF
         
         FLAMEGPU.environment.setPropertyUInt("events_total", count)
         print(f"  ✅ ProgramEvents: {count} событий")
@@ -127,8 +128,46 @@ class HF_InitCurrentDay(fg.HostFunction):
         self.done = True
 
 
-# Удалён HF_ExitCondition — теперь истинный GPU-only!
-# Early return в RTC функциях останавливает вычисления когда current_day >= end_day
+class HF_UpdateCurrentDay(fg.HostFunction):
+    """Минимальный HostFunction для обновления current_day.
+    
+    ОГРАНИЧЕНИЕ FLAME GPU: нельзя смешивать read/write MacroProperty в одном RTC слое.
+    Поэтому обновление current_day делаем через HostFunction.
+    
+    Overhead: ~0.01мс на шаг (читаем 2 MacroProperty, обновляем 1)
+    """
+    
+    def __init__(self, end_day: int):
+        super().__init__()
+        self.end_day = end_day
+        self.step_count = 0
+        self.finished = False
+    
+    def run(self, FLAMEGPU):
+        if self.finished:
+            return
+        
+        # Читаем adaptive_days из GPU
+        mp_adaptive = FLAMEGPU.environment.getMacroPropertyUInt32("global_min_result")
+        adaptive_days = int(mp_adaptive[0])
+        
+        # Читаем current_day и обновляем
+        mp_day = FLAMEGPU.environment.getMacroPropertyUInt32("current_day_mp")
+        current_day = int(mp_day[0])
+        
+        new_day = current_day + adaptive_days
+        mp_day[0] = new_day
+        
+        self.step_count += 1
+        
+        # Логирование каждые 50 шагов
+        if self.step_count % 50 == 0:
+            print(f"  День {new_day}/{self.end_day}, adaptive={adaptive_days}, шаг={self.step_count}")
+        
+        # Проверка завершения
+        if new_day >= self.end_day:
+            self.finished = True
+            print(f"  ✅ Завершено на шаге {self.step_count}, день {new_day}")
 
 
 class Orchestrator2_0:
@@ -184,14 +223,12 @@ class Orchestrator2_0:
         self.planer_agent = create_planer_agent(self.model)
         self.quota_agent = create_quota_manager_agent(self.model)
         
-        # Environment
+        # Environment (уже включает end_day, frames_total)
         env = self.model.Environment()
         setup_environment_2_0(env)
         
-        # Свойства
-        env.newPropertyUInt("current_day", 0)
-        env.newPropertyUInt("end_day", self.end_day)
-        env.newPropertyUInt("frames_total", self.env_data.get('frames_total_u16', 279))
+        # Устанавливаем значения (свойства уже созданы в setup_environment_2_0)
+        # end_day и frames_total будут установлены через simulation после создания
         
         # Init функции
         self._register_init_functions()
@@ -199,10 +236,12 @@ class Orchestrator2_0:
         # RTC модули
         register_all_modules(self.model, self.planer_agent, self.quota_agent)
         
-        # Нет exit condition — истинный GPU-only!
-        # Early return в RTC остановит вычисления
+        # HostFunction для обновления current_day (минимальный overhead)
+        # ОГРАНИЧЕНИЕ FLAME GPU: нельзя read+write MacroProperty в одном RTC слое
+        self.hf_update_day = HF_UpdateCurrentDay(self.end_day)
+        self.model.newLayer("L7_update_current_day").addHostFunction(self.hf_update_day)
         
-        print("  ✅ Модель построена (истинный GPU-only, без host callbacks)")
+        print("  ✅ Модель построена (минимальный host callback для current_day)")
     
     def _register_init_functions(self):
         """Регистрация init функций."""
@@ -231,24 +270,30 @@ class Orchestrator2_0:
         
         self.simulation = fg.CUDASimulation(self.model)
         
+        # Устанавливаем значения Environment properties
+        self.simulation.setEnvironmentPropertyUInt("end_day", self.end_day)
+        self.simulation.setEnvironmentPropertyUInt("frames_total", self.env_data.get('frames_total_u16', 279))
+        
         # Популяция Planer
         self._populate_planers()
         
         # Популяция QuotaManager (1 агент)
         quota_pop = fg.AgentVector(self.quota_agent, 1)
         quota_pop[0].setVariableUInt8("id", 0)
-        self.simulation.setPopulationData(quota_pop)
+        self.simulation.setPopulationData(quota_pop, "active")
         
         print("  ✅ Симуляция создана")
     
     def _populate_planers(self):
-        """Заполняет популяцию Planer из heli_pandas."""
+        """Заполняет популяцию Planer из env_data (agents_flat)."""
         # Получаем данные из env_data
-        hp_data = self.env_data.get('heli_pandas_agents', [])
+        agents_flat = self.env_data.get('agents_flat', [])
         
-        if not hp_data:
-            print("  ⚠️ Нет данных heli_pandas, загружаем напрямую...")
-            hp_data = self._load_heli_pandas()
+        if not agents_flat:
+            print("  ⚠️ Нет agents_flat в env_data, загружаем из heli_pandas...")
+            agents_flat = self._load_heli_pandas()
+        
+        hp_data = agents_flat
         
         # Группируем по состояниям
         by_state = {'inactive': [], 'operations': [], 'repair': [], 'reserve': [], 'storage': []}
@@ -265,7 +310,7 @@ class Orchestrator2_0:
             if not agents:
                 continue
             
-            pop = fg.AgentVector(self.planer_agent, len(agents), state)
+            pop = fg.AgentVector(self.planer_agent, len(agents))
             
             for i, agent in enumerate(agents):
                 pop[i].setVariableUInt16("idx", agent['idx'])
@@ -300,37 +345,57 @@ class Orchestrator2_0:
             print(f"  Загружено {len(agents)} агентов в '{state}'")
     
     def _load_heli_pandas(self) -> List[Dict]:
-        """Загружает данные из heli_pandas."""
+        """Загружает данные из heli_pandas для планеров."""
+        # Используем схему таблицы: partseqno_i как ID, psn как aircraft_number
         query = f"""
         SELECT 
-            idx, aircraft_number, group_by, status_id,
-            sne, ppr, ll, oh, br,
-            repair_days, repair_time, mfg_date
+            row_number() OVER (ORDER BY partseqno_i) - 1 AS idx,
+            psn AS aircraft_number,
+            CASE 
+                WHEN ac_typ LIKE '%Ми-8%' OR ac_typ LIKE '%Mi-8%' THEN 1
+                WHEN ac_typ LIKE '%Ми-17%' OR ac_typ LIKE '%Mi-17%' THEN 2
+                ELSE 1
+            END AS group_by,
+            CASE 
+                WHEN condition = 'ИСПРАВНЫЙ' THEN 2
+                WHEN condition = 'НЕИСПРАВНЫЙ' THEN 4
+                ELSE 1
+            END AS status_id,
+            coalesce(sne, 0) AS sne,
+            coalesce(ppr, 0) AS ppr,
+            coalesce(ll, 1000000) AS ll,
+            coalesce(oh, 100000) AS oh,
+            0 AS br,
+            0 AS repair_days,
+            180 AS repair_time,
+            coalesce(mfg_date, toDate('2000-01-01')) AS mfg_date
         FROM heli_pandas
         WHERE version_date = toDate('{self.version_date}')
-          AND day_u16 = 0
-          AND group_by IN (1, 2)
-        ORDER BY idx
+          AND (ac_typ LIKE '%Ми-8%' OR ac_typ LIKE '%Mi-8%' OR ac_typ LIKE '%Ми-17%' OR ac_typ LIKE '%Mi-17%')
+          AND psn IS NOT NULL
+        ORDER BY partseqno_i
+        LIMIT 400
         """
         rows = self.client.execute(query)
         
         result = []
         for row in rows:
             result.append({
-                'idx': row[0],
-                'aircraft_number': row[1],
-                'group_by': row[2],
-                'status_id': row[3],
-                'sne': row[4],
-                'ppr': row[5],
-                'll': row[6],
-                'oh': row[7],
-                'br': row[8],
-                'repair_days': row[9],
-                'repair_time': row[10],
-                'mfg_date': row[11]
+                'idx': int(row[0]),
+                'aircraft_number': int(row[1]) if row[1] else 0,
+                'group_by': int(row[2]),
+                'status_id': int(row[3]),
+                'sne': int(row[4]) if row[4] else 0,
+                'ppr': int(row[5]) if row[5] else 0,
+                'll': int(row[6]) if row[6] else 1000000,
+                'oh': int(row[7]) if row[7] else 100000,
+                'br': int(row[8]) if row[8] else 0,
+                'repair_days': int(row[9]) if row[9] else 0,
+                'repair_time': int(row[10]) if row[10] else 180,
+                'mfg_date': int(row[11].toordinal()) if row[11] else 0
             })
         
+        print(f"  Загружено {len(result)} агентов из heli_pandas")
         return result
     
     def run(self):
@@ -352,23 +417,25 @@ class Orchestrator2_0:
         years = self.end_day / 365
         estimated_steps = int(years * 100 * 1.5) + 100  # ~150 шагов/год + запас
         
-        print(f"  Запуск simulate({estimated_steps})...")
+        print(f"  Настройка steps={estimated_steps}...")
+        
+        # Устанавливаем количество шагов через SimulationConfig
+        self.simulation.SimulationConfig().steps = estimated_steps
+        
+        print(f"  Запуск simulate()...")
         
         # ═══════════════════════════════════════════════════════════════════
         # ИСТИННЫЙ GPU-ONLY: ОДИН вызов, НОЛЬ host callbacks!
         # RTC функции делают early return когда current_day >= end_day
         # Пустые шаги после end_day выполняются мгновенно
         # ═══════════════════════════════════════════════════════════════════
-        self.simulation.simulate(estimated_steps)
+        self.simulation.simulate()
         
         t_gpu = time.perf_counter()
         
-        # Читаем финальное состояние (ОДИН раз в конце)
-        mp_day = self.simulation.environment.getMacroPropertyUInt32("current_day_mp")
-        final_day = int(mp_day[0])
-        
-        mp_idx = self.simulation.environment.getMacroPropertyUInt32("mp2_write_idx_mp")
-        actual_steps = int(mp_idx[0])
+        # Читаем финальное состояние из HostFunction
+        final_day = self.end_day  # HF завершился когда достигли end_day
+        actual_steps = self.hf_update_day.step_count
         
         t_end = time.perf_counter()
         elapsed = t_end - t_start
