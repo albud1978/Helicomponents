@@ -192,6 +192,29 @@ FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_ops, flamegpu::MessageNone, flamegpu
     FLAMEGPU->setVariable<unsigned int>("sne", sne);
     FLAMEGPU->setVariable<unsigned int>("ppr", ppr);
     
+    // КРИТИЧНО: обновляем limiter_date!
+    // Пересчитываем горизонт на основе остатка ресурса
+    const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
+    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+    const unsigned int new_day = current_day + adaptive_days;
+    
+    // Остаток до лимита
+    unsigned int remaining_sne = (ll > sne) ? (ll - sne) : 0u;
+    unsigned int remaining_ppr = (oh > ppr) ? (oh - ppr) : 0u;
+    unsigned int remaining = (remaining_sne < remaining_ppr) ? remaining_sne : remaining_ppr;
+    
+    // Грубая оценка: ~2 минуты/день налёта
+    // Для точного расчёта нужен binary search по cumsum, но это дорого
+    // Используем приближение: remaining / avg_daily_hours
+    // avg ~ 120 минут/день (2 часа)
+    unsigned int days_remaining = remaining / 120u;
+    if (days_remaining == 0u && remaining > 0u) days_remaining = 1u;
+    
+    unsigned int new_limiter = new_day + days_remaining;
+    if (new_limiter > end_day) new_limiter = end_day;
+    
+    FLAMEGPU->setVariable<unsigned short>("limiter_date", (unsigned short)new_limiter);
+    
     return flamegpu::ALIVE;
 }}
 """
@@ -211,9 +234,25 @@ FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_repair, flamegpu::MessageNone, flame
         return flamegpu::ALIVE;
     }
     
+    // Инкремент repair_days
     unsigned int repair_days = FLAMEGPU->getVariable<unsigned short>("repair_days");
     repair_days += adaptive_days;
     FLAMEGPU->setVariable<unsigned short>("repair_days", (unsigned short)repair_days);
+    
+    // КРИТИЧНО: обновляем limiter_date!
+    // limiter_date = current_day + adaptive_days + (repair_time - repair_days)
+    //              = new_day + remaining_repair_days
+    const unsigned int repair_time = FLAMEGPU->getVariable<unsigned short>("repair_time");
+    const unsigned int new_day = current_day + adaptive_days;
+    
+    if (repair_days < repair_time) {
+        const unsigned int remaining = repair_time - repair_days;
+        const unsigned int new_limiter = new_day + remaining;
+        FLAMEGPU->setVariable<unsigned short>("limiter_date", (unsigned short)new_limiter);
+    } else {
+        // Ремонт завершится в этом шаге — лимитер уже не нужен
+        FLAMEGPU->setVariable<unsigned short>("limiter_date", 0xFFFFu);
+    }
     
     return flamegpu::ALIVE;
 }
