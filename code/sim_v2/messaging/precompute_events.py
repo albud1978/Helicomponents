@@ -45,15 +45,23 @@ def compute_mp5_cumsum(mp5_lin: np.ndarray, frames: int, days: int) -> np.ndarra
     sum(mp5[f, a:b]) = cumsum[f, b] - cumsum[f, a]
     
     Args:
-        mp5_lin: Линейный массив [frames * days] дневных наработок
+        mp5_lin: Линейный массив [days * frames] дневных наработок (формат FLAME GPU)
         frames: Количество агентов
         days: Количество дней
         
     Returns:
         np.ndarray: Кумулятивные суммы [frames * (days + 1)]
     """
-    # Reshape в 2D для удобства
-    mp5_2d = np.array(mp5_lin, dtype=np.uint32).reshape(frames, days)
+    if len(mp5_lin) == 0:
+        return np.zeros(frames * (days + 1), dtype=np.uint32)
+    
+    # mp5_lin имеет формат [day * frames + frame], транспонируем в [frames, days]
+    mp5_2d = np.zeros((frames, days), dtype=np.uint32)
+    for d in range(days):
+        for f in range(frames):
+            src_idx = d * frames + f
+            if src_idx < len(mp5_lin):
+                mp5_2d[f, d] = mp5_lin[src_idx]
     
     # Кумулятивная сумма с начальным 0
     cumsum = np.zeros((frames, days + 1), dtype=np.uint32)
