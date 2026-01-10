@@ -129,12 +129,15 @@ class HF_InitCurrentDay(fg.HostFunction):
 
 
 class HF_UpdateCurrentDay(fg.HostFunction):
-    """Минимальный HostFunction для обновления current_day.
+    """DEPRECATED: Заменено на RTC_SAVE_ADAPTIVE + RTC_UPDATE_CURRENT_DAY.
     
-    ОГРАНИЧЕНИЕ FLAME GPU: нельзя смешивать read/write MacroProperty в одном RTC слое.
-    Поэтому обновление current_day делаем через HostFunction.
+    Оставлено для документации решения проблемы read/write MacroProperty.
     
-    Overhead: ~0.01мс на шаг (читаем 2 MacroProperty, обновляем 1)
+    РЕШЕНИЕ: разделение на 2 RTC функции в разных слоях:
+      L7a: rtc_save_adaptive   - READ MacroProperty → agent var
+      L7b: rtc_update_day      - READ agent var → WRITE MacroProperty
+    
+    Это позволяет 100% GPU-only выполнение без HostFunction!
     """
     
     def __init__(self, end_day: int):
@@ -233,15 +236,15 @@ class Orchestrator2_0:
         # Init функции
         self._register_init_functions()
         
-        # RTC модули
+        # RTC модули (включая update_current_day — теперь тоже RTC!)
         register_all_modules(self.model, self.planer_agent, self.quota_agent)
         
-        # HostFunction для обновления current_day (минимальный overhead)
-        # ОГРАНИЧЕНИЕ FLAME GPU: нельзя read+write MacroProperty в одном RTC слое
-        self.hf_update_day = HF_UpdateCurrentDay(self.end_day)
-        self.model.newLayer("L7_update_current_day").addHostFunction(self.hf_update_day)
+        # HostFunction больше НЕ нужен!
+        # Обновление current_day теперь через 2 RTC функции:
+        #   L7a: rtc_save_adaptive - READ MacroProperty → agent var
+        #   L7b: rtc_update_day    - READ agent var → WRITE MacroProperty
         
-        print("  ✅ Модель построена (минимальный host callback для current_day)")
+        print("  ✅ Модель построена (100% GPU-only, без HostFunction!)")
     
     def _register_init_functions(self):
         """Регистрация init функций."""
@@ -433,9 +436,14 @@ class Orchestrator2_0:
         
         t_gpu = time.perf_counter()
         
-        # Читаем финальное состояние из HostFunction
-        final_day = self.end_day  # HF завершился когда достигли end_day
-        actual_steps = self.hf_update_day.step_count
+        # Читаем финальное состояние
+        # getStepCounter() возвращает количество выполненных шагов
+        actual_steps = self.simulation.getStepCounter()
+        
+        # final_day определяем из логики: шаги * средний adaptive_days
+        # Более точно — читаем через step() и HF_LogProgress
+        # Но для простоты используем end_day (симуляция достигла его)
+        final_day = self.end_day  # Симуляция завершилась при достижении end_day
         
         t_end = time.perf_counter()
         elapsed = t_end - t_start

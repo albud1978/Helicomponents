@@ -108,11 +108,17 @@ def create_quota_manager_agent(model: fg.ModelDescription) -> fg.AgentDescriptio
     # Для идентификации (опционально)
     agent.newVariableUInt8("id", 0)
     
+    # КЛЮЧЕВОЕ: промежуточное хранение adaptive_days для разделения read/write
+    # L7a: READ global_min_result → SET adaptive_days
+    # L7b: READ adaptive_days → WRITE current_day_mp
+    agent.newVariableUInt32("adaptive_days", 0)
+    agent.newVariableUInt32("current_day_cache", 0)
+    
     # Единственное состояние
     agent.newState("active")
     agent.setInitialState("active")
     
-    print("  ✅ Агент QuotaManager создан")
+    print("  ✅ Агент QuotaManager создан (+ adaptive_days для GPU-only)")
     return agent
 
 

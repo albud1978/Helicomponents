@@ -431,15 +431,69 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_ops, flamegpu::MessageNone, flamegpu::Mess
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # МОДУЛЬ 6: update_current_day (ВНУТРИ GPU!)
+# 
+# РЕШЕНИЕ проблемы read/write MacroProperty:
+# Разделяем на 2 RTC функции в разных слоях:
+#   L7a: rtc_save_adaptive - READ global_min_result → SET agent.adaptive_days
+#   L7b: rtc_update_day    - READ agent.adaptive_days → WRITE current_day_mp
 # ═══════════════════════════════════════════════════════════════════════════════
+
+RTC_SAVE_ADAPTIVE = """
+FLAMEGPU_AGENT_FUNCTION(rtc_save_adaptive, flamegpu::MessageNone, flamegpu::MessageNone) {
+    // L7a: ТОЛЬКО READ из MacroProperty → сохраняем в агентную переменную
+    
+    // Читаем adaptive_days из global_min_result
+    auto result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("global_min_result");
+    const unsigned int adaptive_days = result[0];
+    
+    // Читаем current_day из MacroProperty
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    
+    // Сохраняем в агентные переменные (для следующего слоя)
+    FLAMEGPU->setVariable<unsigned int>("adaptive_days", adaptive_days);
+    FLAMEGPU->setVariable<unsigned int>("current_day_cache", current_day);
+    
+    // Логирование каждые 50 шагов (через step counter)
+    const unsigned int step = FLAMEGPU->getStepCounter();
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    
+    if (step % 50u == 0u && current_day < end_day) {
+        printf("  День %u/%u, adaptive=%u, шаг=%u\\n", 
+               current_day + adaptive_days, end_day, adaptive_days, step);
+    }
+    
+    if (current_day + adaptive_days >= end_day && current_day < end_day) {
+        printf("  ✅ Завершено на шаге %u, день %u\\n", step, current_day + adaptive_days);
+    }
+    
+    return flamegpu::ALIVE;
+}
+"""
 
 RTC_UPDATE_CURRENT_DAY = """
 FLAMEGPU_AGENT_FUNCTION(rtc_update_current_day, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // ОГРАНИЧЕНИЕ FLAME GPU: нельзя смешивать read/write MacroProperty в одном слое
-    // current_day обновляется через HostFunction
+    // L7b: READ из агентной переменной → WRITE в MacroProperty
+    // Это разные источники, поэтому read/write НЕ конфликтует!
     
-    // Эта функция теперь пустая — вся логика перенесена в HF_UpdateCurrentDay
-    // Оставлена для совместимости со слоями модели
+    // Читаем из агентных переменных (установлены в предыдущем слое)
+    const unsigned int adaptive_days = FLAMEGPU->getVariable<unsigned int>("adaptive_days");
+    const unsigned int current_day = FLAMEGPU->getVariable<unsigned int>("current_day_cache");
+    
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    
+    // Проверяем завершение
+    if (current_day >= end_day || adaptive_days == 0u) {
+        return flamegpu::ALIVE;
+    }
+    
+    // Вычисляем новый день
+    unsigned int new_day = current_day + adaptive_days;
+    if (new_day > end_day) new_day = end_day;
+    
+    // ТОЛЬКО WRITE в MacroProperty
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    mp_day[0].exchange(new_day);
     
     return flamegpu::ALIVE;
 }
@@ -593,13 +647,20 @@ def register_all_modules(model: fg.ModelDescription,
     
     # ═══════════════════════════════════════════════════════════════════════
     # МОДУЛЬ 6: update_current_day (ВНУТРИ GPU!)
+    # РЕШЕНИЕ проблемы read/write: разделяем на 2 слоя
     # ═══════════════════════════════════════════════════════════════════════
     
+    # L7a: ТОЛЬКО READ из MacroProperty → agent var
+    fn_save_adaptive = quota_manager.newRTCFunction("rtc_save_adaptive", RTC_SAVE_ADAPTIVE)
+    layer7a = model.newLayer("L7a_save_adaptive")
+    layer7a.addAgentFunction(fn_save_adaptive)
+    
+    # L7b: READ agent var → WRITE MacroProperty (разные источники, НЕ конфликт!)
     fn_update_day = quota_manager.newRTCFunction("rtc_update_current_day", RTC_UPDATE_CURRENT_DAY)
-    layer6 = model.newLayer("L6_update_day")
-    layer6.addAgentFunction(fn_update_day)
+    layer7b = model.newLayer("L7b_update_day")
+    layer7b.addAgentFunction(fn_update_day)
     
-    print("    ✅ Модуль 6: update_current_day (GPU-only)")
+    print("    ✅ Модуль 6: update_current_day (GPU-only, 2 слоя)")
     
-    print("  ✅ Все 6 модулей зарегистрированы (полностью на GPU)")
+    print("  ✅ Все 6 модулей зарегистрированы (100% GPU, без HostFunction!)")
 
