@@ -138,6 +138,30 @@ class HF_InitMP5(fg.HostFunction):
         self.initialized = True
 
 
+class HF_ReadAdaptiveDays(fg.HostFunction):
+    """HostFunction для чтения adaptive_days из MacroProperty после каждого шага"""
+    
+    def __init__(self):
+        super().__init__()
+        self.adaptive_days = 1  # Значение по умолчанию
+    
+    def run(self, FLAMEGPU):
+        """Читает adaptive_days из MacroProperty mp_adaptive_result"""
+        try:
+            mp = FLAMEGPU.environment.getMacroPropertyUInt32("mp_adaptive_result")
+            value = int(mp[0])
+            if value > 0 and value < 10000:
+                self.adaptive_days = value
+            else:
+                self.adaptive_days = 1
+        except Exception as e:
+            self.adaptive_days = 1
+    
+    def get_adaptive_days(self) -> int:
+        """Возвращает последнее прочитанное значение"""
+        return self.adaptive_days
+
+
 class AdaptiveV3Orchestrator:
     """
     Оркестратор Adaptive Step v3.
@@ -167,12 +191,20 @@ class AdaptiveV3Orchestrator:
         self.env_data = prepare_env_arrays(self.client, self.version_date)
         
         # Кумулятивная сумма MP5
-        mp5_lin = self.env_data.get('mp5_lin', np.array([]))
+        # Данные называются 'mp5_daily_hours_linear' в sim_env_setup
+        mp5_lin = self.env_data.get('mp5_daily_hours_linear', np.array([]))
+        if len(mp5_lin) == 0:
+            mp5_lin = self.env_data.get('mp5_lin', np.array([]))
+        
         frames = self.env_data.get('frames_total_u16', 279)
         days = self.end_day
         
+        # Сохраняем для использования в init функциях
+        self.mp5_lin_data = np.array(mp5_lin, dtype=np.uint32)
+        
         if len(mp5_lin) > 0:
             print(f"  Вычисление mp5_cumsum для {frames} агентов × {days} дней...")
+            print(f"  📊 mp5_lin: {len(mp5_lin)} элементов, первые 10: {list(mp5_lin[:10])}")
             self.mp5_cumsum = compute_mp5_cumsum(mp5_lin, frames, days)
             print(f"  ✅ mp5_cumsum: {len(self.mp5_cumsum)} элементов")
         else:
@@ -198,6 +230,11 @@ class AdaptiveV3Orchestrator:
         self.base_model.agent.newVariableUInt("horizon", 0xFFFFFFFF)
         
         # ═══════════════════════════════════════════════════════════════════════
+        # КРИТИЧНО: Init функции ПЕРВЫМИ (до adaptive модулей)
+        # ═══════════════════════════════════════════════════════════════════════
+        self._register_init_functions()
+        
+        # ═══════════════════════════════════════════════════════════════════════
         # Регистрация RTC модулей
         # ═══════════════════════════════════════════════════════════════════════
         
@@ -214,7 +251,10 @@ class AdaptiveV3Orchestrator:
         # 3. State managers
         self._register_state_managers()
         
-        # 4. MP2 writer — в Adaptive v3 используем собственный метод collect_mp2_data
+        # 4. Spawn для динамического создания агентов
+        self._register_spawn()
+        
+        # 5. MP2 writer — в Adaptive v3 используем собственный метод collect_mp2_data
         # (RTC MP2 writer не нужен, данные собираем через getPopulationData)
     
     def _register_quota_modules(self):
@@ -248,35 +288,52 @@ class AdaptiveV3Orchestrator:
             self.model, self.base_model.agent)
         
         print("  ✅ State managers подключены")
+    
+    def _register_spawn(self):
+        """Регистрирует модуль spawn для динамического создания агентов."""
+        print("  Регистрация spawn...")
         
-        # 4. HostFunctions для инициализации данных
-        self._register_init_functions()
+        try:
+            import rtc_spawn_v2
+            rtc_spawn_v2.register_spawn_v2(self.model, self.base_model.agent)
+            print("  ✅ Spawn подключен")
+        except ImportError as e:
+            print(f"  ⚠️ Spawn недоступен: {e}")
+        
+        # Финальный слой для чтения adaptive_days
+        self.hf_read_adaptive = HF_ReadAdaptiveDays()
+        read_layer = self.model.newLayer("z_read_adaptive_days")
+        read_layer.addHostFunction(self.hf_read_adaptive)
         
         print("  ✅ Модель построена")
     
     def _register_init_functions(self):
-        """Регистрирует HostFunctions для инициализации данных."""
-        print("  Регистрация init функций...")
+        """Регистрирует HostFunctions для инициализации данных.
+        
+        КРИТИЧНО: Этот метод должен вызываться ПЕРВЫМ в build_model(),
+        до регистрации Adaptive v3 модулей, чтобы mp5_cumsum был 
+        инициализирован к моменту вычисления горизонтов.
+        """
+        print("  Регистрация init функций (ПЕРВЫМИ)...")
         
         frames = self.env_data.get('frames_total_u16', 279)
         days = self.end_day
         
-        # Слой инициализации MP5 cumsum
-        hf_cumsum = HF_InitMP5Cumsum(self.mp5_cumsum, frames, days)
-        init_layer = self.model.newLayer("init_mp5_cumsum")
-        init_layer.addHostFunction(hf_cumsum)
-        
-        # Слой инициализации MP5 lin
-        mp5_lin = self.env_data.get('mp5_lin', np.array([]))
-        if len(mp5_lin) > 0:
-            hf_mp5 = HF_InitMP5(mp5_lin, frames, days)
-            init_layer2 = self.model.newLayer("init_mp5_lin")
-            init_layer2.addHostFunction(hf_mp5)
-        
-        # Инициализация repair_number_by_idx
+        # Инициализация repair_number_by_idx (нужен для quota_repair)
         self._init_repair_number_buffer()
         
-        print("  ✅ Init функции зарегистрированы")
+        # Слой инициализации MP5 cumsum
+        hf_cumsum = HF_InitMP5Cumsum(self.mp5_cumsum, frames, days)
+        init_layer = self.model.newLayer("init_01_mp5_cumsum")
+        init_layer.addHostFunction(hf_cumsum)
+        
+        # Слой инициализации MP5 lin (используем данные из prepare_environment)
+        if hasattr(self, 'mp5_lin_data') and len(self.mp5_lin_data) > 0:
+            hf_mp5 = HF_InitMP5(self.mp5_lin_data, frames, days)
+            init_layer2 = self.model.newLayer("init_02_mp5_lin")
+            init_layer2.addHostFunction(hf_mp5)
+        
+        print(f"  ✅ Init функции зарегистрированы (cumsum: {len(self.mp5_cumsum)} элементов)")
     
     def create_simulation(self) -> fg.CUDASimulation:
         """Создаёт CUDA симуляцию."""
@@ -339,10 +396,10 @@ class AdaptiveV3Orchestrator:
                 for i, val in enumerate(self.data):
                     mp[i] = int(val)
                 self.initialized = True
-                print(f"  ✅ HF_InitRepairNumber: {sum(1 for v in self.data if v > 0)} > 0")
+                print(f"    ✅ HF_InitRepairNumber: {sum(1 for v in self.data if v > 0)} > 0")
         
         hf = HF_InitRepairNumber(repair_number_by_idx)
-        init_layer = self.model.newLayer("init_repair_number")
+        init_layer = self.model.newLayer("init_00_repair_number")
         init_layer.addHostFunction(hf)
     
     def run(self):
@@ -424,9 +481,9 @@ class AdaptiveV3Orchestrator:
         }
     
     def _get_adaptive_days(self) -> int:
-        """Читает adaptive_days из MacroProperty."""
-        # ВРЕМЕННО: возвращаем 1 для daily step (как baseline LIMITER)
-        # TODO: реализовать чтение из GPU через HostFunction
+        """Читает adaptive_days из HostFunction."""
+        if hasattr(self, 'hf_read_adaptive'):
+            return self.hf_read_adaptive.get_adaptive_days()
         return 1
     
     def _prepare_output_table(self):

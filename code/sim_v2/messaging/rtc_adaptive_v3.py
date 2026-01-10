@@ -88,13 +88,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_horizon_ops, flamegpu::MessageNone, flamegpu
     
     // ═══════════════════════════════════════════════════════════════════════
     // Бинарный поиск для PPR (межремонтный ресурс)
-    // PPR накапливается медленнее (примерно dt/6)
+    // PPR накапливается так же как SNE (ppr += dt)
     // ═══════════════════════════════════════════════════════════════════════
     unsigned int horizon_ppr = 3650u;
     if (remaining_ppr > 0u) {{
-        // PPR растёт медленнее, примерно в 6 раз
-        // remaining_ppr * 6 = эквивалент в единицах cumsum
-        const unsigned int target_ppr = base_cumsum + remaining_ppr * 6u;
+        // PPR = SNE, поэтому target_ppr = base_cumsum + remaining_ppr
+        const unsigned int target_ppr = base_cumsum + remaining_ppr;
         
         unsigned int lo = current_day;
         unsigned int hi = end_day;
@@ -259,6 +258,7 @@ def get_rtc_batch_increment_ops() -> str:
     """
     Батчевый инкремент для operations.
     Использует cumsum для точного расчёта delta.
+    ВАЖНО: Устанавливает intent_state при достижении лимита!
     """
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_ops_v3, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -291,8 +291,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_ops_v3, flamegpu::MessageNone, flame
     // Delta SNE
     const unsigned int delta_sne = (cumsum_end > cumsum_start) ? (cumsum_end - cumsum_start) : 0u;
     
-    // Delta PPR (примерно 1/6 от SNE для моторесурса)
-    const unsigned int delta_ppr = delta_sne / 6u;
+    // Delta PPR = Delta SNE (как в baseline)
+    const unsigned int delta_ppr = delta_sne;
     
     // ═══════════════════════════════════════════════════════════════════════
     // Применяем инкременты
@@ -305,6 +305,31 @@ FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_ops_v3, flamegpu::MessageNone, flame
     
     FLAMEGPU->setVariable<unsigned int>("sne", sne);
     FLAMEGPU->setVariable<unsigned int>("ppr", ppr);
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // Проверка достижения лимита → установка intent_state
+    // ═══════════════════════════════════════════════════════════════════════
+    const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
+    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+    const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
+    
+    // sne >= ll → storage (назначенный ресурс исчерпан)
+    if (ll > 0u && sne >= ll) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);  // → storage
+        return flamegpu::ALIVE;
+    }}
+    
+    // ppr >= oh → repair (межремонтный ресурс исчерпан)
+    if (oh > 0u && ppr >= oh) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);  // → repair
+        return flamegpu::ALIVE;
+    }}
+    
+    // sne >= br → repair (межремонтный контроль по SNE)
+    if (br > 0u && sne >= br) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);  // → repair
+        return flamegpu::ALIVE;
+    }}
     
     return flamegpu::ALIVE;
 }}
