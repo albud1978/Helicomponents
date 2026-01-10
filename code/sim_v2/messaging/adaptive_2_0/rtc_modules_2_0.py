@@ -26,6 +26,12 @@ CUMSUM_SIZE = MAX_FRAMES * MAX_DAYS_PLUS_1
 
 RTC_COPY_LIMITER_TO_BUFFER = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_copy_limiter_ops, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Early return если симуляция завершена
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
     const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
     const unsigned int limiter_date = FLAMEGPU->getVariable<unsigned short>("limiter_date");
     
@@ -40,12 +46,17 @@ FLAMEGPU_AGENT_FUNCTION(rtc_copy_limiter_ops, flamegpu::MessageNone, flamegpu::M
 
 RTC_COPY_LIMITER_REPAIR = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_copy_limiter_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Early return если симуляция завершена
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
     const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
     const unsigned int limiter_date = FLAMEGPU->getVariable<unsigned short>("limiter_date");
     
     if (idx < {MAX_FRAMES}u) {{
         auto buffer = FLAMEGPU->environment.getMacroProperty<unsigned short, {MAX_FRAMES}u>("limiter_buffer");
-        // atomicMin для repair (может быть меньше чем ops)
         unsigned short current = buffer[idx];
         if (limiter_date < current) {{
             buffer[idx].exchange(limiter_date);
@@ -58,10 +69,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_copy_limiter_repair, flamegpu::MessageNone, flamegpu
 
 RTC_CLEAR_LIMITER_BUFFER = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_clear_limiter, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Early return если симуляция завершена
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
     const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
     
-    // Состояния без лимитера: inactive, reserve, storage
-    // Устанавливаем MAX чтобы не влиять на min
     if (idx < {MAX_FRAMES}u) {{
         auto buffer = FLAMEGPU->environment.getMacroProperty<unsigned short, {MAX_FRAMES}u>("limiter_buffer");
         buffer[idx].exchange(0xFFFFu);
@@ -81,7 +96,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min, flamegpu::MessageNone, flamegpu:
     auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
     const unsigned int current_day = mp_day[0];
     
+    // Early return если симуляция завершена
     if (current_day >= end_day) {{
+        // Обнуляем adaptive_days чтобы другие функции тоже пропустили
+        auto result = FLAMEGPU->environment.getMacroProperty<unsigned short, 4u>("global_min_result");
+        result[0].exchange(0u);
         return flamegpu::ALIVE;
     }}
     
@@ -142,6 +161,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min, flamegpu::MessageNone, flamegpu:
 
 RTC_BATCH_INCREMENT_OPS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_ops, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Читаем current_day и проверяем завершение
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
     // Читаем adaptive_days из global_min_result
     auto result = FLAMEGPU->environment.getMacroProperty<unsigned short, 4u>("global_min_result");
     const unsigned int adaptive_days = result[0];
@@ -151,10 +176,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_ops, flamegpu::MessageNone, flamegpu
     }}
     
     const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
-    
-    // Читаем current_day из MacroProperty (внутри GPU!)
-    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
-    const unsigned int current_day = mp_day[0];
     
     // Читаем delta из cumsum
     auto cumsum = FLAMEGPU->environment.getMacroProperty<unsigned int, {CUMSUM_SIZE}u>("mp5_cumsum");
@@ -180,6 +201,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_ops, flamegpu::MessageNone, flamegpu
 
 RTC_BATCH_INCREMENT_REPAIR = """
 FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_repair, flamegpu::MessageNone, flamegpu::MessageNone) {
+    // Early return если симуляция завершена
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
     auto result = FLAMEGPU->environment.getMacroProperty<unsigned short, 4u>("global_min_result");
     const unsigned int adaptive_days = result[0];
     
@@ -202,6 +229,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_repair, flamegpu::MessageNone, flame
 
 RTC_TRANSITION_REPAIR_TO_RESERVE = """
 FLAMEGPU_AGENT_FUNCTION(rtc_transition_repair_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {
+    // Early return если симуляция завершена
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
     const unsigned int repair_days = FLAMEGPU->getVariable<unsigned short>("repair_days");
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned short>("repair_time");
     
@@ -209,11 +242,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_transition_repair_reserve, flamegpu::MessageNone, fl
         // Переход repair → reserve
         FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
         FLAMEGPU->setVariable<unsigned short>("repair_days", 0u);
-        FLAMEGPU->setVariable<unsigned short>("limiter_date", 0xFFFFu);  // Резерв без лимитера
+        FLAMEGPU->setVariable<unsigned short>("limiter_date", 0xFFFFu);
         
-        // Логирование (читаем current_day из MacroProperty)
-        auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
-        const unsigned int current_day = mp_day[0];
         const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         printf("  [TRANSITION Day %u] AC %u: repair -> reserve\\n", current_day, ac);
     }
@@ -232,15 +262,17 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(condition_repair_done) {
 
 RTC_TRANSITION_OPS_CHECK = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_transition_ops_check, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Читаем current_day и проверяем завершение
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
-    
-    // Читаем current_day из MacroProperty (внутри GPU!)
-    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
-    const unsigned int current_day = mp_day[0];
     
     // sne >= ll → storage
     if (ll > 0u && sne >= ll) {{
@@ -283,11 +315,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_transition_ops_check, flamegpu::MessageNone, flamegp
 
 RTC_QUOTA_PROCESS_EVENT = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_process_event, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // QuotaManager обрабатывает ProgramEvent если current_day совпадает
-    
-    // Читаем current_day из MacroProperty (внутри GPU!)
+    // Читаем current_day и проверяем завершение
     auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
     const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
     
     const unsigned int events_total = FLAMEGPU->environment.getProperty<unsigned int>("events_total");
     
@@ -324,11 +356,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_process_event, flamegpu::MessageNone, flamegpu
 
 RTC_MP2_WRITE_OPS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_ops, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
-    
-    // Читаем current_day из MacroProperty (не Environment!)
+    // Читаем current_day и проверяем завершение
     auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
     const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
     
     // Читаем write_idx из MacroProperty
     auto mp_write_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp2_write_idx_mp");
@@ -369,13 +403,21 @@ FLAMEGPU_AGENT_FUNCTION(rtc_update_current_day, flamegpu::MessageNone, flamegpu:
         return flamegpu::ALIVE;
     }
     
+    // Читаем current_day и проверяем завершение
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    
+    // Если уже завершено — ничего не делаем
+    if (current_day >= end_day) {
+        return flamegpu::ALIVE;
+    }
+    
     // Читаем adaptive_days
     auto mp_adaptive = FLAMEGPU->environment.getMacroProperty<unsigned short, 4u>("global_min_result");
     const unsigned int adaptive_days = mp_adaptive[0];
     
-    // Читаем и обновляем current_day
-    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
-    unsigned int current_day = mp_day[0];
+    // Обновляем current_day
     current_day += adaptive_days;
     mp_day[0].exchange(current_day);
     

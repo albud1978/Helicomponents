@@ -127,32 +127,8 @@ class HF_InitCurrentDay(fg.HostFunction):
         self.done = True
 
 
-class HF_ExitCondition(fg.HostFunction):
-    """Exit condition: проверяет current_day >= end_day."""
-    
-    def __init__(self, end_day: int):
-        super().__init__()
-        self.end_day = end_day
-        self.step_count = 0
-    
-    def run(self, FLAMEGPU):
-        # Читаем current_day из MacroProperty
-        mp_day = FLAMEGPU.environment.getMacroPropertyUInt32("current_day_mp")
-        current_day = int(mp_day[0])
-        
-        self.step_count += 1
-        
-        # Логирование каждые 20 шагов
-        if self.step_count % 20 == 0:
-            mp_adaptive = FLAMEGPU.environment.getMacroPropertyUInt16("global_min_result")
-            adaptive_days = int(mp_adaptive[0])
-            print(f"  День {current_day}/{self.end_day}, adaptive={adaptive_days}, шаг={self.step_count}")
-        
-        # Exit condition
-        if current_day >= self.end_day:
-            return fg.EXIT
-        
-        return fg.CONTINUE
+# Удалён HF_ExitCondition — теперь истинный GPU-only!
+# Early return в RTC функциях останавливает вычисления когда current_day >= end_day
 
 
 class Orchestrator2_0:
@@ -223,11 +199,10 @@ class Orchestrator2_0:
         # RTC модули
         register_all_modules(self.model, self.planer_agent, self.quota_agent)
         
-        # Exit condition (минимальный host callback)
-        self.hf_exit = HF_ExitCondition(self.end_day)
-        self.model.addExitCondition(self.hf_exit)
+        # Нет exit condition — истинный GPU-only!
+        # Early return в RTC остановит вычисления
         
-        print("  ✅ Модель построена (GPU-only с exit condition)")
+        print("  ✅ Модель построена (истинный GPU-only, без host callbacks)")
     
     def _register_init_functions(self):
         """Регистрация init функций."""
@@ -359,44 +334,56 @@ class Orchestrator2_0:
         return result
     
     def run(self):
-        """Запуск симуляции — ОДИН вызов simulate(), всё внутри GPU!"""
-        print(f"\n▶️  Запуск Adaptive 2.0 GPU-only (end_day={self.end_day})")
+        """Запуск симуляции — ОДИН вызов simulate(), истинный GPU-only!"""
+        print(f"\n▶️  Запуск Adaptive 2.0 (истинный GPU-only)")
         print("=" * 60)
-        print("  Host: загрузка → simulate() → drain")
-        print("  GPU: compute_adaptive → batch_increment → transitions → quota → mp2_write → update_day")
+        print(f"  end_day = {self.end_day}")
+        print("  Host: загрузка → simulate(N) → drain")
+        print("  GPU: все RTC с early return когда current_day >= end_day")
         print()
         
         t_start = time.perf_counter()
         
         # ═══════════════════════════════════════════════════════════════════
-        # ОДИН вызов simulate() — всё внутри GPU!
-        # Exit condition остановит когда current_day >= end_day
+        # Расчёт N шагов
+        # ~100 шагов/год (изменения программы + выработка ресурса + ремонты)
+        # С запасом ×1.5 для безопасности
         # ═══════════════════════════════════════════════════════════════════
-        max_steps = 10000  # Safety limit
-        self.simulation.simulate(max_steps)
+        years = self.end_day / 365
+        estimated_steps = int(years * 100 * 1.5) + 100  # ~150 шагов/год + запас
+        
+        print(f"  Запуск simulate({estimated_steps})...")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # ИСТИННЫЙ GPU-ONLY: ОДИН вызов, НОЛЬ host callbacks!
+        # RTC функции делают early return когда current_day >= end_day
+        # Пустые шаги после end_day выполняются мгновенно
+        # ═══════════════════════════════════════════════════════════════════
+        self.simulation.simulate(estimated_steps)
         
         t_gpu = time.perf_counter()
         
-        # Читаем финальное состояние
+        # Читаем финальное состояние (ОДИН раз в конце)
         mp_day = self.simulation.environment.getMacroPropertyUInt32("current_day_mp")
         final_day = int(mp_day[0])
         
         mp_idx = self.simulation.environment.getMacroPropertyUInt32("mp2_write_idx_mp")
-        steps = int(mp_idx[0])
+        actual_steps = int(mp_idx[0])
         
         t_end = time.perf_counter()
         elapsed = t_end - t_start
         gpu_time = t_gpu - t_start
         
         print(f"\n✅ Adaptive 2.0 GPU-only завершена:")
-        print(f"  • Шагов: {steps}")
-        print(f"  • Финальный день: {final_day}")
+        print(f"  • Выполнено шагов: {estimated_steps} (из них {actual_steps} рабочих)")
+        print(f"  • Финальный день: {final_day}/{self.end_day}")
         print(f"  • Время GPU: {gpu_time:.2f}с")
         print(f"  • Время общее: {elapsed:.2f}с")
-        print(f"  • Шагов/год: {steps / 10:.1f}")
+        print(f"  • Рабочих шагов/год: {actual_steps / years:.1f}")
         
         return {
-            'steps': steps,
+            'steps': actual_steps,
+            'total_steps': estimated_steps,
             'days': final_day,
             'elapsed': elapsed,
             'gpu_time': gpu_time
