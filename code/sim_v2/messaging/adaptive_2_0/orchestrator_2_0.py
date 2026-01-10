@@ -103,20 +103,56 @@ class HF_InitProgramEvents(fg.HostFunction):
         self.done = True
 
 
-class HF_ReadAdaptiveDays(fg.HostFunction):
-    """HostFunction для чтения adaptive_days после шага."""
+class HF_InitCurrentDay(fg.HostFunction):
+    """HostFunction для инициализации current_day_mp и mp2_write_idx_mp."""
     
-    def __init__(self):
+    def __init__(self, start_day: int = 0):
         super().__init__()
-        self.value = 1
+        self.start_day = start_day
+        self.done = False
     
     def run(self, FLAMEGPU):
-        mp = FLAMEGPU.environment.getMacroPropertyUInt16("global_min_result")
-        val = int(mp[0])
-        if val > 0 and val < 10000:
-            self.value = val
-        else:
-            self.value = 1
+        if self.done:
+            return
+        
+        # Инициализация current_day_mp
+        mp_day = FLAMEGPU.environment.getMacroPropertyUInt32("current_day_mp")
+        mp_day[0] = self.start_day
+        
+        # Инициализация mp2_write_idx_mp
+        mp_idx = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_write_idx_mp")
+        mp_idx[0] = 0
+        
+        print(f"  ✅ current_day_mp = {self.start_day}, mp2_write_idx_mp = 0")
+        self.done = True
+
+
+class HF_ExitCondition(fg.HostFunction):
+    """Exit condition: проверяет current_day >= end_day."""
+    
+    def __init__(self, end_day: int):
+        super().__init__()
+        self.end_day = end_day
+        self.step_count = 0
+    
+    def run(self, FLAMEGPU):
+        # Читаем current_day из MacroProperty
+        mp_day = FLAMEGPU.environment.getMacroPropertyUInt32("current_day_mp")
+        current_day = int(mp_day[0])
+        
+        self.step_count += 1
+        
+        # Логирование каждые 20 шагов
+        if self.step_count % 20 == 0:
+            mp_adaptive = FLAMEGPU.environment.getMacroPropertyUInt16("global_min_result")
+            adaptive_days = int(mp_adaptive[0])
+            print(f"  День {current_day}/{self.end_day}, adaptive={adaptive_days}, шаг={self.step_count}")
+        
+        # Exit condition
+        if current_day >= self.end_day:
+            return fg.EXIT
+        
+        return fg.CONTINUE
 
 
 class Orchestrator2_0:
@@ -187,26 +223,30 @@ class Orchestrator2_0:
         # RTC модули
         register_all_modules(self.model, self.planer_agent, self.quota_agent)
         
-        # Read adaptive_days
-        self.hf_read = HF_ReadAdaptiveDays()
-        read_layer = self.model.newLayer("Z_read_adaptive")
-        read_layer.addHostFunction(self.hf_read)
+        # Exit condition (минимальный host callback)
+        self.hf_exit = HF_ExitCondition(self.end_day)
+        self.model.addExitCondition(self.hf_exit)
         
-        print("  ✅ Модель построена")
+        print("  ✅ Модель построена (GPU-only с exit condition)")
     
     def _register_init_functions(self):
         """Регистрация init функций."""
         frames = self.env_data.get('frames_total_u16', 279)
         
+        # Init current_day_mp (ПЕРВЫМ!)
+        hf_day = HF_InitCurrentDay(start_day=0)
+        layer_day = self.model.newLayer("init_00_current_day")
+        layer_day.addHostFunction(hf_day)
+        
         # Init cumsum
         hf_cumsum = HF_InitCumsum(self.mp5_cumsum, frames, self.end_day)
-        layer_cumsum = self.model.newLayer("init_cumsum")
+        layer_cumsum = self.model.newLayer("init_01_cumsum")
         layer_cumsum.addHostFunction(hf_cumsum)
         
         # Init program events
         event_days, target_mi8, target_mi17 = create_program_event_array(self.program_events)
         hf_events = HF_InitProgramEvents(event_days, target_mi8, target_mi17)
-        layer_events = self.model.newLayer("init_events")
+        layer_events = self.model.newLayer("init_02_events")
         layer_events.addHostFunction(hf_events)
     
     def create_simulation(self):
@@ -319,46 +359,47 @@ class Orchestrator2_0:
         return result
     
     def run(self):
-        """Запуск симуляции."""
-        print(f"\n▶️  Запуск Adaptive 2.0 (end_day={self.end_day})")
+        """Запуск симуляции — ОДИН вызов simulate(), всё внутри GPU!"""
+        print(f"\n▶️  Запуск Adaptive 2.0 GPU-only (end_day={self.end_day})")
         print("=" * 60)
+        print("  Host: загрузка → simulate() → drain")
+        print("  GPU: compute_adaptive → batch_increment → transitions → quota → mp2_write → update_day")
+        print()
         
         t_start = time.perf_counter()
         
-        current_day = 0
-        step_count = 0
+        # ═══════════════════════════════════════════════════════════════════
+        # ОДИН вызов simulate() — всё внутри GPU!
+        # Exit condition остановит когда current_day >= end_day
+        # ═══════════════════════════════════════════════════════════════════
+        max_steps = 10000  # Safety limit
+        self.simulation.simulate(max_steps)
         
-        while current_day < self.end_day:
-            # Устанавливаем current_day
-            self.simulation.setEnvironmentPropertyUInt("current_day", current_day)
-            
-            # Шаг
-            self.simulation.step()
-            
-            # Читаем adaptive_days
-            adaptive_days = self.hf_read.value
-            
-            # Лог
-            if step_count % 20 == 0 or adaptive_days > 50:
-                print(f"  День {current_day}/{self.end_day}, adaptive={adaptive_days}, шаг={step_count}")
-            
-            # Следующий день
-            current_day += adaptive_days
-            step_count += 1
+        t_gpu = time.perf_counter()
+        
+        # Читаем финальное состояние
+        mp_day = self.simulation.environment.getMacroPropertyUInt32("current_day_mp")
+        final_day = int(mp_day[0])
+        
+        mp_idx = self.simulation.environment.getMacroPropertyUInt32("mp2_write_idx_mp")
+        steps = int(mp_idx[0])
         
         t_end = time.perf_counter()
         elapsed = t_end - t_start
+        gpu_time = t_gpu - t_start
         
-        print(f"\n✅ Adaptive 2.0 завершена:")
-        print(f"  • Шагов: {step_count}")
-        print(f"  • Дней: {current_day}")
-        print(f"  • Время: {elapsed:.2f}с")
-        print(f"  • Шагов/год: {step_count / 10:.1f}")
+        print(f"\n✅ Adaptive 2.0 GPU-only завершена:")
+        print(f"  • Шагов: {steps}")
+        print(f"  • Финальный день: {final_day}")
+        print(f"  • Время GPU: {gpu_time:.2f}с")
+        print(f"  • Время общее: {elapsed:.2f}с")
+        print(f"  • Шагов/год: {steps / 10:.1f}")
         
         return {
-            'steps': step_count,
-            'days': current_day,
-            'elapsed': elapsed
+            'steps': steps,
+            'days': final_day,
+            'elapsed': elapsed,
+            'gpu_time': gpu_time
         }
 
 

@@ -119,23 +119,27 @@ def create_quota_manager_agent(model: fg.ModelDescription) -> fg.AgentDescriptio
 def setup_environment_2_0(env: fg.EnvironmentDescription, max_frames: int = 400, max_days: int = 4000, max_events: int = 500):
     """
     Настраивает Environment для Adaptive 2.0.
+    
+    КРИТИЧНО: current_day хранится в MacroProperty для обновления внутри GPU!
     """
     # ═══════════════════════════════════════════════════════════════════════
-    # Скалярные свойства
+    # Скалярные свойства (только для чтения из RTC)
     # ═══════════════════════════════════════════════════════════════════════
-    env.newPropertyUInt("current_day", 0)
     env.newPropertyUInt("end_day", 3650)
-    env.newPropertyUInt("adaptive_days", 1)
     env.newPropertyUInt("frames_total", 0)
     env.newPropertyUInt("events_total", 0)
     
-    # Текущие targets (обновляются при обработке ProgramEvent)
-    env.newPropertyUInt("target_mi8", 0)
-    env.newPropertyUInt("target_mi17", 0)
+    # ═══════════════════════════════════════════════════════════════════════
+    # MacroProperty для GPU-only обновления
+    # ═══════════════════════════════════════════════════════════════════════
     
-    # ═══════════════════════════════════════════════════════════════════════
-    # MacroProperty
-    # ═══════════════════════════════════════════════════════════════════════
+    # КЛЮЧЕВОЕ: current_day в MacroProperty для обновления из RTC!
+    # current_day_mp[0] = текущий день
+    # current_day_mp[1] = зарезервировано
+    env.newMacroPropertyUInt32("current_day_mp", 4)
+    
+    # Индекс записи MP2 (для batch drain)
+    env.newMacroPropertyUInt32("mp2_write_idx_mp", 4)
     
     # Кумулятивная сумма налёта: mp5_cumsum[idx * (MAX_DAYS+1) + day]
     cumsum_size = max_frames * (max_days + 1)
@@ -149,18 +153,17 @@ def setup_environment_2_0(env: fg.EnvironmentDescription, max_frames: int = 400,
     # Буфер limiter_date для global min (одно значение на агента)
     env.newMacroPropertyUInt16("limiter_buffer", max_frames)
     
-    # Результат global min
-    env.newMacroPropertyUInt16("global_min_result", 4)  # [min_value, min_idx, ...]
+    # Результат global min: [adaptive_days, min_idx, ...]
+    env.newMacroPropertyUInt16("global_min_result", 4)
     
-    # MP2 буфер для batch drain
+    # MP2 буфер для batch drain (записываем ВСЁ, drain в конце)
     mp2_size = max_frames * 500  # ~500 шагов за симуляцию
     env.newMacroPropertyUInt32("mp2_buffer_sne", mp2_size)
     env.newMacroPropertyUInt32("mp2_buffer_ppr", mp2_size)
     env.newMacroPropertyUInt16("mp2_buffer_day", mp2_size)
     env.newMacroPropertyUInt8("mp2_buffer_state", mp2_size)
-    env.newPropertyUInt("mp2_write_idx", 0)
     
-    print(f"  ✅ Environment 2.0: cumsum[{cumsum_size}], events[{max_events}], mp2[{mp2_size}]")
+    print(f"  ✅ Environment 2.0 (GPU-only): current_day_mp, cumsum[{cumsum_size}], mp2[{mp2_size}]")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

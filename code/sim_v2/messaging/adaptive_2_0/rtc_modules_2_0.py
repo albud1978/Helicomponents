@@ -75,8 +75,11 @@ RTC_COMPUTE_GLOBAL_MIN = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // QuotaManager агент вычисляет global min
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    
+    // Читаем current_day из MacroProperty (внутри GPU!)
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
     
     if (current_day >= end_day) {{
         return flamegpu::ALIVE;
@@ -148,7 +151,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_batch_increment_ops, flamegpu::MessageNone, flamegpu
     }}
     
     const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    
+    // Читаем current_day из MacroProperty (внутри GPU!)
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
     
     // Читаем delta из cumsum
     auto cumsum = FLAMEGPU->environment.getMacroProperty<unsigned int, {CUMSUM_SIZE}u>("mp5_cumsum");
@@ -205,8 +211,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_transition_repair_reserve, flamegpu::MessageNone, fl
         FLAMEGPU->setVariable<unsigned short>("repair_days", 0u);
         FLAMEGPU->setVariable<unsigned short>("limiter_date", 0xFFFFu);  // Резерв без лимитера
         
-        // Логирование
-        const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+        // Логирование (читаем current_day из MacroProperty)
+        auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+        const unsigned int current_day = mp_day[0];
         const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         printf("  [TRANSITION Day %u] AC %u: repair -> reserve\\n", current_day, ac);
     }
@@ -230,7 +237,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_transition_ops_check, flamegpu::MessageNone, flamegp
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    
+    // Читаем current_day из MacroProperty (внутри GPU!)
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
     
     // sne >= ll → storage
     if (ll > 0u && sne >= ll) {{
@@ -274,7 +284,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_transition_ops_check, flamegpu::MessageNone, flamegp
 RTC_QUOTA_PROCESS_EVENT = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_process_event, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // QuotaManager обрабатывает ProgramEvent если current_day совпадает
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    
+    // Читаем current_day из MacroProperty (внутри GPU!)
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    
     const unsigned int events_total = FLAMEGPU->environment.getProperty<unsigned int>("events_total");
     
     auto event_days = FLAMEGPU->environment.getMacroProperty<unsigned short, 500u>("program_event_days");
@@ -309,6 +323,78 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_process_event, flamegpu::MessageNone, flamegpu
 # ═══════════════════════════════════════════════════════════════════════════════
 
 RTC_MP2_WRITE_OPS = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_ops, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
+    
+    // Читаем current_day из MacroProperty (не Environment!)
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    
+    // Читаем write_idx из MacroProperty
+    auto mp_write_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp2_write_idx_mp");
+    const unsigned int write_idx = mp_write_idx[0];
+    
+    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    
+    // Позиция в буфере
+    const unsigned int pos = write_idx * {MAX_FRAMES}u + idx;
+    
+    auto buf_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * 500}u>("mp2_buffer_sne");
+    auto buf_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * 500}u>("mp2_buffer_ppr");
+    auto buf_day = FLAMEGPU->environment.getMacroProperty<unsigned short, {MAX_FRAMES * 500}u>("mp2_buffer_day");
+    auto buf_state = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_FRAMES * 500}u>("mp2_buffer_state");
+    
+    if (pos < {MAX_FRAMES * 500}u) {{
+        buf_sne[pos] = sne;
+        buf_ppr[pos] = ppr;
+        buf_day[pos] = (unsigned short)current_day;
+        buf_state[pos] = 2u;  // operations = 2
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# МОДУЛЬ 6: update_current_day (ВНУТРИ GPU!)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RTC_UPDATE_CURRENT_DAY = """
+FLAMEGPU_AGENT_FUNCTION(rtc_update_current_day, flamegpu::MessageNone, flamegpu::MessageNone) {
+    // Только QuotaManager (один агент) обновляет current_day
+    const unsigned char id = FLAMEGPU->getVariable<unsigned char>("id");
+    if (id != 0u) {
+        return flamegpu::ALIVE;
+    }
+    
+    // Читаем adaptive_days
+    auto mp_adaptive = FLAMEGPU->environment.getMacroProperty<unsigned short, 4u>("global_min_result");
+    const unsigned int adaptive_days = mp_adaptive[0];
+    
+    // Читаем и обновляем current_day
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    unsigned int current_day = mp_day[0];
+    current_day += adaptive_days;
+    mp_day[0].exchange(current_day);
+    
+    // Инкремент write_idx для MP2
+    auto mp_write_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp2_write_idx_mp");
+    unsigned int write_idx = mp_write_idx[0];
+    write_idx += 1u;
+    mp_write_idx[0].exchange(write_idx);
+    
+    return flamegpu::ALIVE;
+}
+"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEPRECATED: старая версия mp2_write (удалить после тестирования)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_RTC_MP2_WRITE_OPS_OLD = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_ops, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
@@ -454,5 +540,15 @@ def register_all_modules(model: fg.ModelDescription,
     
     print("    ✅ Модуль 5: mp2_write")
     
-    print("  ✅ Все 5 модулей зарегистрированы")
+    # ═══════════════════════════════════════════════════════════════════════
+    # МОДУЛЬ 6: update_current_day (ВНУТРИ GPU!)
+    # ═══════════════════════════════════════════════════════════════════════
+    
+    fn_update_day = quota_manager.newRTCFunction("rtc_update_current_day", RTC_UPDATE_CURRENT_DAY)
+    layer6 = model.newLayer("L6_update_day")
+    layer6.addAgentFunction(fn_update_day)
+    
+    print("    ✅ Модуль 6: update_current_day (GPU-only)")
+    
+    print("  ✅ Все 6 модулей зарегистрированы (полностью на GPU)")
 
