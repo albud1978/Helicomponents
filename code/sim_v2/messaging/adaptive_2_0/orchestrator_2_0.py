@@ -463,12 +463,129 @@ class Orchestrator2_0:
             'elapsed': elapsed,
             'gpu_time': gpu_time
         }
+    
+    def drain_mp2_to_db(self, table_name: str = "sim_masterv2_adaptive20"):
+        """Выгрузка MP2 буфера из GPU в ClickHouse."""
+        import numpy as np
+        
+        print(f"\n📤 Выгрузка MP2 в {table_name}")
+        print("=" * 60)
+        t_start = time.perf_counter()
+        
+        # Получаем размеры
+        frames = self.env_data.get('frames_total_u16', 279)
+        
+        # Читаем write_idx (количество записанных шагов)
+        # К сожалению после simulate() нет прямого доступа к MacroProperty
+        # Используем оценку: actual_steps из run()
+        # Для точного значения нужен HostFunction в конце
+        
+        # Альтернатива: считаем что записали все шаги до end_day
+        # write_idx ≈ количество adaptive шагов
+        max_records = frames * 700  # максимум в буфере
+        
+        print(f"  Чтение буферов (макс {max_records} записей)...")
+        
+        # Читаем через HostFunction-like доступ
+        # После simulate() нужен step() чтобы получить данные
+        # Или использовать getPopulationData для агентов
+        
+        # Упрощённый подход: читаем финальное состояние агентов
+        agents_data = []
+        for state in ['operations', 'repair', 'reserve', 'storage', 'inactive']:
+            try:
+                # Создаём AgentVector и заполняем его данными из симуляции
+                pop = fg.AgentVector(self.planer_agent, 0)  # пустой вектор
+                self.simulation.getPopulationData(pop, state)  # заполняем
+                
+                for i in range(pop.size()):
+                    agent = pop[i]
+                    agents_data.append({
+                        'idx': int(agent.getVariableUInt16("idx")),
+                        'sne': int(agent.getVariableUInt32("sne")),
+                        'ppr': int(agent.getVariableUInt32("ppr")),
+                        'state': state,
+                        'day': self.end_day
+                    })
+            except Exception as e:
+                print(f"    ⚠️ Состояние {state}: {e}")
+        
+        print(f"  Получено {len(agents_data)} записей финального состояния")
+        
+        if not agents_data:
+            print("  ❌ Нет данных для выгрузки")
+            return 0
+        
+        # Создаём таблицу если не существует
+        create_table_sql = f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            version_date Date,
+            day_u16 UInt16,
+            idx UInt16,
+            aircraft_number UInt32,
+            sne UInt32,
+            ppr UInt32,
+            status_id UInt8,
+            group_by UInt8,
+            timestamp DateTime DEFAULT now()
+        ) ENGINE = MergeTree()
+        ORDER BY (version_date, day_u16, idx)
+        """
+        
+        try:
+            self.client.execute(create_table_sql)
+            print(f"  ✅ Таблица {table_name} готова")
+        except Exception as e:
+            print(f"  ⚠️ Таблица: {e}")
+        
+        # Очистка старых данных для этой версии
+        self.client.execute(f"ALTER TABLE {table_name} DELETE WHERE version_date = toDate('{self.version_date}')")
+        print(f"  🗑️ Очищены старые данные для {self.version_date}")
+        
+        # Подготовка данных для вставки
+        # Добавляем aircraft_number и group_by из env_data
+        hp_data = self.env_data.get('heli_pandas', [])
+        ac_map = {row['idx']: (row['aircraft_number'], row['group_by']) for row in hp_data}
+        
+        # Маппинг состояний
+        state_map = {'operations': 2, 'repair': 4, 'reserve': 5, 'storage': 6, 'inactive': 1}
+        
+        from datetime import datetime
+        version_dt = datetime.strptime(self.version_date, '%Y-%m-%d').date()
+        
+        rows = []
+        for agent in agents_data:
+            idx = agent['idx']
+            ac_num, group_by = ac_map.get(idx, (0, 0))
+            rows.append((
+                version_dt,
+                agent['day'],
+                idx,
+                ac_num,
+                agent['sne'],
+                agent['ppr'],
+                state_map.get(agent['state'], 0),
+                group_by
+            ))
+        
+        # Вставка
+        self.client.execute(
+            f"INSERT INTO {table_name} (version_date, day_u16, idx, aircraft_number, sne, ppr, status_id, group_by) VALUES",
+            rows
+        )
+        
+        t_end = time.perf_counter()
+        print(f"  ✅ Выгружено {len(rows)} записей за {t_end - t_start:.2f}с")
+        
+        return len(rows)
 
 
 def main():
     parser = argparse.ArgumentParser(description='Adaptive 2.0 Orchestrator')
     parser.add_argument('--version-date', required=True, help='Дата версии (YYYY-MM-DD)')
     parser.add_argument('--end-day', type=int, default=3650, help='Конечный день')
+    parser.add_argument('--export', action='store_true', help='Экспорт в БД')
+    parser.add_argument('--table', default='sim_masterv2_adaptive20', help='Имя таблицы')
     
     args = parser.parse_args()
     
@@ -481,6 +598,10 @@ def main():
     orch.build_model()
     orch.create_simulation()
     result = orch.run()
+    
+    if args.export:
+        rows = orch.drain_mp2_to_db(args.table)
+        result['exported_rows'] = rows
     
     print("\n✅ Готово!")
     return result

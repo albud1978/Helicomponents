@@ -392,6 +392,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_process_event, flamegpu::MessageNone, flamegpu
 # МОДУЛЬ 5: mp2_write
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Размер буфера MP2
+MP2_BUFFER_SIZE = MAX_FRAMES * 700  # ~700 шагов за симуляцию
+
 RTC_MP2_WRITE_OPS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_ops, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Читаем current_day и проверяем завершение
@@ -409,23 +412,133 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_ops, flamegpu::MessageNone, flamegpu::Mess
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     
-    // Позиция в буфере
+    // Позиция в буфере: write_idx * MAX_FRAMES + idx
     const unsigned int pos = write_idx * {MAX_FRAMES}u + idx;
     
-    auto buf_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * 500}u>("mp2_buffer_sne");
-    auto buf_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES * 500}u>("mp2_buffer_ppr");
-    auto buf_day = FLAMEGPU->environment.getMacroProperty<unsigned short, {MAX_FRAMES * 500}u>("mp2_buffer_day");
-    auto buf_state = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_FRAMES * 500}u>("mp2_buffer_state");
+    // ВСЕ буферы UInt32 для совместимости с exchange()
+    auto buf_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_sne");
+    auto buf_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_ppr");
+    auto buf_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_day");
+    auto buf_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_state");
+    auto buf_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_idx");
     
-    if (pos < {MAX_FRAMES * 500}u) {{
-        buf_sne[pos] = sne;
-        buf_ppr[pos] = ppr;
-        buf_day[pos] = (unsigned short)current_day;
-        buf_state[pos] = 2u;  // operations = 2
+    if (pos < {MP2_BUFFER_SIZE}u) {{
+        buf_sne[pos].exchange(sne);
+        buf_ppr[pos].exchange(ppr);
+        buf_day[pos].exchange(current_day);
+        buf_state[pos].exchange(2u);  // operations = 2
+        buf_idx[pos].exchange(idx);
     }}
     
     return flamegpu::ALIVE;
 }}
+"""
+
+# MP2 для repair агентов (state = 4)
+RTC_MP2_WRITE_REPAIR = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
+    auto mp_write_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp2_write_idx_mp");
+    const unsigned int write_idx = mp_write_idx[0];
+    
+    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    
+    const unsigned int pos = write_idx * {MAX_FRAMES}u + idx;
+    
+    auto buf_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_sne");
+    auto buf_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_ppr");
+    auto buf_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_day");
+    auto buf_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_state");
+    auto buf_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_idx");
+    
+    if (pos < {MP2_BUFFER_SIZE}u) {{
+        buf_sne[pos].exchange(sne);
+        buf_ppr[pos].exchange(ppr);
+        buf_day[pos].exchange(current_day);
+        buf_state[pos].exchange(4u);  // repair = 4
+        buf_idx[pos].exchange(idx);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
+# MP2 для reserve агентов (state = 5)
+RTC_MP2_WRITE_RESERVE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned short>("idx");
+    auto mp_write_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp2_write_idx_mp");
+    const unsigned int write_idx = mp_write_idx[0];
+    
+    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    
+    const unsigned int pos = write_idx * {MAX_FRAMES}u + idx;
+    
+    auto buf_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_sne");
+    auto buf_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_ppr");
+    auto buf_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_day");
+    auto buf_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_state");
+    auto buf_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_BUFFER_SIZE}u>("mp2_buffer_idx");
+    
+    if (pos < {MP2_BUFFER_SIZE}u) {{
+        buf_sne[pos].exchange(sne);
+        buf_ppr[pos].exchange(ppr);
+        buf_day[pos].exchange(current_day);
+        buf_state[pos].exchange(5u);  // reserve = 5
+        buf_idx[pos].exchange(idx);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
+# Инкремент write_idx: разделено на 2 функции для избежания read/write конфликта
+# L5b: READ mp2_write_idx_mp → SET agent.write_idx_cache
+RTC_MP2_READ_IDX = """
+FLAMEGPU_AGENT_FUNCTION(rtc_mp2_read_idx, flamegpu::MessageNone, flamegpu::MessageNone) {
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
+    // ТОЛЬКО READ из MacroProperty → сохраняем в агентную переменную
+    auto mp_write_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp2_write_idx_mp");
+    const unsigned int old_idx = mp_write_idx[0];
+    FLAMEGPU->setVariable<unsigned int>("write_idx_cache", old_idx);
+    
+    return flamegpu::ALIVE;
+}
+"""
+
+# L5c: READ agent.write_idx_cache → WRITE mp2_write_idx_mp
+RTC_MP2_INCREMENT_IDX = """
+FLAMEGPU_AGENT_FUNCTION(rtc_mp2_increment_idx, flamegpu::MessageNone, flamegpu::MessageNone) {
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    if (current_day >= end_day) return flamegpu::ALIVE;
+    
+    // Читаем из агентной переменной (установлена в предыдущем слое)
+    const unsigned int old_idx = FLAMEGPU->getVariable<unsigned int>("write_idx_cache");
+    
+    // ТОЛЬКО WRITE в MacroProperty
+    auto mp_write_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp2_write_idx_mp");
+    mp_write_idx[0].exchange(old_idx + 1u);
+    
+    return flamegpu::ALIVE;
+}
 """
 
 
@@ -638,12 +751,38 @@ def register_all_modules(model: fg.ModelDescription,
     print("    ✅ Модуль 4: quota")
     
     # ═══════════════════════════════════════════════════════════════════════
-    # МОДУЛЬ 5: mp2_write (временно отключен - требует рефакторинга)
+    # МОДУЛЬ 5: mp2_write (запись в буфер на GPU)
     # ═══════════════════════════════════════════════════════════════════════
-    # DeviceMacroProperty не поддерживает operator=, только exchange()
-    # Для MP2 нужен другой подход (агентные переменные или unified memory)
     
-    print("    ⚠️ Модуль 5: mp2_write (отключен для теста)")
+    # L5a: запись для всех состояний
+    fn_mp2_ops = planer.newRTCFunction("rtc_mp2_write_ops", RTC_MP2_WRITE_OPS)
+    fn_mp2_ops.setInitialState("operations")
+    fn_mp2_ops.setEndState("operations")
+    
+    fn_mp2_repair = planer.newRTCFunction("rtc_mp2_write_repair", RTC_MP2_WRITE_REPAIR)
+    fn_mp2_repair.setInitialState("repair")
+    fn_mp2_repair.setEndState("repair")
+    
+    fn_mp2_reserve = planer.newRTCFunction("rtc_mp2_write_reserve", RTC_MP2_WRITE_RESERVE)
+    fn_mp2_reserve.setInitialState("reserve")
+    fn_mp2_reserve.setEndState("reserve")
+    
+    layer5a = model.newLayer("L5a_mp2_write")
+    layer5a.addAgentFunction(fn_mp2_ops)
+    layer5a.addAgentFunction(fn_mp2_repair)
+    layer5a.addAgentFunction(fn_mp2_reserve)
+    
+    # L5b: READ write_idx → agent var (QuotaManager)
+    fn_mp2_read = quota_manager.newRTCFunction("rtc_mp2_read_idx", RTC_MP2_READ_IDX)
+    layer5b = model.newLayer("L5b_mp2_read_idx")
+    layer5b.addAgentFunction(fn_mp2_read)
+    
+    # L5c: agent var → WRITE write_idx (QuotaManager)
+    fn_mp2_inc = quota_manager.newRTCFunction("rtc_mp2_increment_idx", RTC_MP2_INCREMENT_IDX)
+    layer5c = model.newLayer("L5c_mp2_increment")
+    layer5c.addAgentFunction(fn_mp2_inc)
+    
+    print("    ✅ Модуль 5: mp2_write (GPU буфер, 3 слоя)")
     
     # ═══════════════════════════════════════════════════════════════════════
     # МОДУЛЬ 6: update_current_day (ВНУТРИ GPU!)

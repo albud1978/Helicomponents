@@ -108,11 +108,12 @@ def create_quota_manager_agent(model: fg.ModelDescription) -> fg.AgentDescriptio
     # Для идентификации (опционально)
     agent.newVariableUInt8("id", 0)
     
-    # КЛЮЧЕВОЕ: промежуточное хранение adaptive_days для разделения read/write
+    # КЛЮЧЕВОЕ: промежуточное хранение для разделения read/write
     # L7a: READ global_min_result → SET adaptive_days
     # L7b: READ adaptive_days → WRITE current_day_mp
     agent.newVariableUInt32("adaptive_days", 0)
     agent.newVariableUInt32("current_day_cache", 0)
+    agent.newVariableUInt32("write_idx_cache", 0)  # Для MP2 инкремента
     
     # Единственное состояние
     agent.newState("active")
@@ -165,11 +166,13 @@ def setup_environment_2_0(env: fg.EnvironmentDescription, max_frames: int = 400,
     env.newMacroPropertyUInt32("global_min_result", 4)
     
     # MP2 буфер для batch drain (записываем ВСЁ, drain в конце)
-    mp2_size = max_frames * 500  # ~500 шагов за симуляцию
+    # ВАЖНО: ВСЕ буферы UInt32 т.к. exchange() не поддерживает UInt16/UInt8
+    mp2_size = max_frames * 700  # ~700 шагов за симуляцию (с запасом)
     env.newMacroPropertyUInt32("mp2_buffer_sne", mp2_size)
     env.newMacroPropertyUInt32("mp2_buffer_ppr", mp2_size)
-    env.newMacroPropertyUInt16("mp2_buffer_day", mp2_size)
-    env.newMacroPropertyUInt8("mp2_buffer_state", mp2_size)
+    env.newMacroPropertyUInt32("mp2_buffer_day", mp2_size)    # UInt32 для exchange()
+    env.newMacroPropertyUInt32("mp2_buffer_state", mp2_size)  # UInt32 для exchange()
+    env.newMacroPropertyUInt32("mp2_buffer_idx", mp2_size)    # idx агента
     
     print(f"  ✅ Environment 2.0 (GPU-only): current_day_mp, cumsum[{cumsum_size}], mp2[{mp2_size}]")
 
