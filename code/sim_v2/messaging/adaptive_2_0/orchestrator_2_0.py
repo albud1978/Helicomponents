@@ -32,6 +32,7 @@ from sim_env_setup import get_client, prepare_env_arrays
 from precompute_program_events import extract_program_events, create_program_event_array, compute_limiter_date_ops
 from agents_2_0 import create_planer_agent, create_quota_manager_agent, setup_environment_2_0
 from rtc_modules_2_0 import register_all_modules
+from components.agent_population import AgentPopulationBuilder
 
 try:
     import pyflamegpu as fg
@@ -288,21 +289,63 @@ class Orchestrator2_0:
         print("  ✅ Симуляция создана")
     
     def _populate_planers(self):
-        """Заполняет популяцию Planer из env_data (agents_flat)."""
-        # Получаем данные из env_data
-        agents_flat = self.env_data.get('agents_flat', [])
+        """Заполняет популяцию Planer из MP3 данных (через AgentPopulationBuilder или напрямую)."""
+        # Извлекаем массивы MP3 из env_data (правильный источник!)
+        mp3 = self.env_data.get('mp3_arrays', {})
+        ac_list = mp3.get('mp3_aircraft_number', [])
+        status_list = mp3.get('mp3_status_id', [])
+        sne_list = mp3.get('mp3_sne', [])
+        ppr_list = mp3.get('mp3_ppr', [])
+        repair_days_list = mp3.get('mp3_repair_days', [])
+        gb_list = mp3.get('mp3_group_by', [])
         
-        if not agents_flat:
-            print("  ⚠️ Нет agents_flat в env_data, загружаем из heli_pandas...")
-            agents_flat = self._load_heli_pandas()
+        # Получаем константы для LL/OH/BR
+        mi8_ll = int(self.env_data.get('mi8_ll_const', 1080000))
+        mi8_oh = int(self.env_data.get('mi8_oh_const', 270000))
+        mi8_br = int(self.env_data.get('mi8_br_const', 973750))
+        mi17_ll = int(self.env_data.get('mi17_ll_const', 1080000))
+        mi17_oh = int(self.env_data.get('mi17_oh_const', 270000))
+        mi17_br = int(self.env_data.get('mi17_br_const', 973750))
+        mi8_repair_time = int(self.env_data.get('mi8_repair_time_const', 180))
+        mi17_repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
         
-        hp_data = agents_flat
+        # Фильтруем только планеры (group_by IN (1, 2))
+        plane_records = []
+        for i in range(len(ac_list)):
+            gb = int(gb_list[i]) if i < len(gb_list) else 0
+            if gb not in (1, 2):
+                continue
+            
+            status = int(status_list[i]) if i < len(status_list) else 1
+            ll = mi8_ll if gb == 1 else mi17_ll
+            oh = mi8_oh if gb == 1 else mi17_oh
+            br = mi8_br if gb == 1 else mi17_br
+            repair_time = mi8_repair_time if gb == 1 else mi17_repair_time
+            
+            plane_records.append({
+                'idx': len(plane_records),
+                'aircraft_number': int(ac_list[i]) if i < len(ac_list) else 0,
+                'group_by': gb,
+                'status_id': status,
+                'sne': int(sne_list[i]) if i < len(sne_list) else 0,
+                'ppr': int(ppr_list[i]) if i < len(ppr_list) else 0,
+                'll': ll,
+                'oh': oh,
+                'br': br,
+                'repair_days': int(repair_days_list[i]) if i < len(repair_days_list) else 0,
+                'repair_time': repair_time,
+            })
+        
+        print(f"  📊 MP3: найдено {len(plane_records)} планеров (group_by IN (1,2))")
+        
+        # Сохраняем для drain
+        self.env_data['heli_pandas'] = plane_records
         
         # Группируем по состояниям
         by_state = {'inactive': [], 'operations': [], 'repair': [], 'reserve': [], 'storage': []}
         state_map = {1: 'inactive', 2: 'operations', 3: 'serviceable', 4: 'repair', 5: 'reserve', 6: 'storage'}
         
-        for agent in hp_data:
+        for agent in plane_records:
             state = state_map.get(agent.get('status_id', 1), 'inactive')
             if state == 'serviceable':
                 state = 'operations'  # Simplify for 2.0
@@ -347,59 +390,6 @@ class Orchestrator2_0:
             self.simulation.setPopulationData(pop, state)
             print(f"  Загружено {len(agents)} агентов в '{state}'")
     
-    def _load_heli_pandas(self) -> List[Dict]:
-        """Загружает данные из heli_pandas для планеров."""
-        # Используем схему таблицы: partseqno_i как ID, psn как aircraft_number
-        query = f"""
-        SELECT 
-            row_number() OVER (ORDER BY partseqno_i) - 1 AS idx,
-            psn AS aircraft_number,
-            CASE 
-                WHEN ac_typ LIKE '%Ми-8%' OR ac_typ LIKE '%Mi-8%' THEN 1
-                WHEN ac_typ LIKE '%Ми-17%' OR ac_typ LIKE '%Mi-17%' THEN 2
-                ELSE 1
-            END AS group_by,
-            CASE 
-                WHEN condition = 'ИСПРАВНЫЙ' THEN 2
-                WHEN condition = 'НЕИСПРАВНЫЙ' THEN 4
-                ELSE 1
-            END AS status_id,
-            coalesce(sne, 0) AS sne,
-            coalesce(ppr, 0) AS ppr,
-            coalesce(ll, 1000000) AS ll,
-            coalesce(oh, 100000) AS oh,
-            0 AS br,
-            0 AS repair_days,
-            180 AS repair_time,
-            coalesce(mfg_date, toDate('2000-01-01')) AS mfg_date
-        FROM heli_pandas
-        WHERE version_date = toDate('{self.version_date}')
-          AND (ac_typ LIKE '%Ми-8%' OR ac_typ LIKE '%Mi-8%' OR ac_typ LIKE '%Ми-17%' OR ac_typ LIKE '%Mi-17%')
-          AND psn IS NOT NULL
-        ORDER BY partseqno_i
-        LIMIT 400
-        """
-        rows = self.client.execute(query)
-        
-        result = []
-        for row in rows:
-            result.append({
-                'idx': int(row[0]),
-                'aircraft_number': int(row[1]) if row[1] else 0,
-                'group_by': int(row[2]),
-                'status_id': int(row[3]),
-                'sne': int(row[4]) if row[4] else 0,
-                'ppr': int(row[5]) if row[5] else 0,
-                'll': int(row[6]) if row[6] else 1000000,
-                'oh': int(row[7]) if row[7] else 100000,
-                'br': int(row[8]) if row[8] else 0,
-                'repair_days': int(row[9]) if row[9] else 0,
-                'repair_time': int(row[10]) if row[10] else 180,
-                'mfg_date': int(row[11].toordinal()) if row[11] else 0
-            })
-        
-        print(f"  Загружено {len(result)} агентов из heli_pandas")
-        return result
     
     def run(self):
         """Запуск симуляции — ОДИН вызов simulate(), истинный GPU-only!"""
