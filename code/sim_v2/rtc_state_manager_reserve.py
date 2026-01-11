@@ -100,7 +100,7 @@ def register_state_manager_reserve(model: fg.ModelDescription, agent: fg.AgentDe
     rtc_func_5_to_4 = agent.newRTCFunction("rtc_apply_5_to_4", RTC_APPLY_5_TO_4)
     rtc_func_5_to_4.setRTCFunctionCondition(RTC_COND_INTENT_4)
     rtc_func_5_to_4.setInitialState("reserve")
-    rtc_func_5_to_4.setEndState("repair")
+    rtc_func_5_to_4.setEndState("unserviceable")
     layer_5_to_4.addAgentFunction(rtc_func_5_to_4)
 
     # 5->5 (intent=5)
