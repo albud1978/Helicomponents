@@ -238,26 +238,26 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::Mes
     layer_count_ina.addAgentFunction(rtc_func_ina)
     
     # =========================================================================
-    # Слой 6: Подсчёт агентов в repair (для квотирования ремонтов)
+    # Слой 6: Подсчёт агентов в unserviceable (для квотирования)
     # =========================================================================
-    RTC_COUNT_REPAIR = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_count_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    RTC_COUNT_UNSERVICEABLE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_unserviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
-    // Записываем флаг что этот агент в repair
-    auto repair_state_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_state_buffer");
-    repair_state_buffer[idx].exchange(1u);
+    // Записываем флаг что этот агент в unserviceable
+    auto unserviceable_state_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_state_buffer");
+    unserviceable_state_buffer[idx].exchange(1u);
     
     return flamegpu::ALIVE;
 }}
 """
     
-    rtc_func_rep = agent.newRTCFunction("rtc_count_repair", RTC_COUNT_REPAIR)
-    rtc_func_rep.setInitialState("unserviceable")
-    rtc_func_rep.setEndState("unserviceable")
+    rtc_func_unsrv = agent.newRTCFunction("rtc_count_unserviceable", RTC_COUNT_UNSERVICEABLE)
+    rtc_func_unsrv.setInitialState("unserviceable")
+    rtc_func_unsrv.setEndState("unserviceable")
     
-    layer_count_rep = model.newLayer("count_repair")
-    layer_count_rep.addAgentFunction(rtc_func_rep)
+    layer_count_unsrv = model.newLayer("count_unserviceable")
+    layer_count_unsrv.addAgentFunction(rtc_func_unsrv)
     
     # =========================================================================
     # Слой 7: Подсчёт кандидатов в очереди на ремонт (reserve & intent=0)
@@ -285,29 +285,29 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_reserve_queue, flamegpu::MessageNone, flamegpu
     layer_count_rq.addAgentFunction(rtc_func_rq)
     
     # =========================================================================
-    # Слой 8: Подсчёт запросов на ремонт (operations & intent=4)
+    # Слой 8: Подсчёт запросов на переход в unserviceable (operations & intent=4)
     # =========================================================================
-    RTC_COUNT_OPS_REPAIR = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_count_ops_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    RTC_COUNT_OPS_TO_UNSERVICEABLE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_ops_to_unserviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
     
-    // Только агенты с intent=4 (запрос на ремонт)
+    // Только агенты с intent=4 (запрос на переход в unserviceable)
     if (intent == 4u) {{
-        auto ops_repair_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("ops_repair_buffer");
-        ops_repair_buffer[idx].exchange(1u);
+        auto ops_to_unsrv_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("ops_repair_buffer");
+        ops_to_unsrv_buffer[idx].exchange(1u);
     }}
     
     return flamegpu::ALIVE;
 }}
 """
     
-    rtc_func_or = agent.newRTCFunction("rtc_count_ops_repair", RTC_COUNT_OPS_REPAIR)
-    rtc_func_or.setInitialState("operations")
-    rtc_func_or.setEndState("operations")
+    rtc_func_otu = agent.newRTCFunction("rtc_count_ops_to_unserviceable", RTC_COUNT_OPS_TO_UNSERVICEABLE)
+    rtc_func_otu.setInitialState("operations")
+    rtc_func_otu.setEndState("operations")
     
-    layer_count_or = model.newLayer("count_ops_repair")
-    layer_count_or.addAgentFunction(rtc_func_or)
+    layer_count_otu = model.newLayer("count_ops_to_unserviceable")
+    layer_count_otu.addAgentFunction(rtc_func_otu)
     
     # =========================================================================
     # Слой 9: Логирование MP4 целевых значений в MacroProperty для экспорта

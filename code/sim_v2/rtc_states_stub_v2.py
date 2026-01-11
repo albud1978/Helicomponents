@@ -32,12 +32,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_3_serviceable_v2, flamegpu::MessageNone, flame
 }}
 """
 
-# RTC функция для state_4 (repair/unserviceable) — V3: С repair логикой!
-RTC_STATE_4_REPAIR = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair_v2, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // V3: Repair/Unserviceable — агенты ожидают завершения ремонта
+# RTC функция для state_4 (unserviceable) — V3: С логикой ожидания ремонта
+RTC_STATE_4_UNSERVICEABLE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_state_4_unserviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // V3: Unserviceable — агенты ожидают завершения ремонта
     // ✅ Инкремент repair_days
-    // ✅ Переход НАПРЯМУЮ в operations (intent=2) при завершении ремонта
+    // ✅ Переход НАПРЯМУЮ в operations (intent=2) при завершении
     // ✅ PPR обнуляется в rtc_apply_4_to_2
     
     // Читаем step_days из Environment для адаптивных шагов
@@ -51,14 +51,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair_v2, flamegpu::MessageNone, flamegpu::
     // Проверка завершения ремонта
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     if (repair_days >= repair_time) {{
-        // V3: Ремонт завершён → переход НАПРЯМУЮ в operations (не через reserve!)
+        // V3: Готов к эксплуатации → переход в operations (не через reserve!)
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
     }} else {{
-        // Продолжаем ремонт
+        // Продолжаем ожидание
         FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
     }}
     
-    // Обнуляем daily_today_u32 (нет налёта в ремонте)
+    // Обнуляем daily_today_u32 (нет налёта в unserviceable)
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
     
     return flamegpu::ALIVE;
@@ -95,7 +95,7 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     
     funcs = [
         ("rtc_state_3_serviceable_v2", RTC_STATE_3_SERVICEABLE, "serviceable", "serviceable"),
-        ("rtc_state_4_repair_v2", RTC_STATE_4_REPAIR, "unserviceable", "unserviceable"),  # V3: unserviceable (бывший repair)
+        ("rtc_state_4_unserviceable", RTC_STATE_4_UNSERVICEABLE, "unserviceable", "unserviceable"),
         ("rtc_state_5_reserve_v2", RTC_STATE_5_RESERVE, "reserve", "reserve"),
         ("rtc_state_6_storage_v2", RTC_STATE_6_STORAGE, "storage", "storage")
     ]
@@ -114,5 +114,5 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
         except Exception as e:
             print(f"  Ошибка регистрации {func_name}: {e}")
     
-    print("  ✅ RTC модуль states_stub_v2 зарегистрирован (V3: с repair логикой)")
+    print("  ✅ RTC модуль states_stub_v2 зарегистрирован (V3: unserviceable с логикой ожидания)")
 
