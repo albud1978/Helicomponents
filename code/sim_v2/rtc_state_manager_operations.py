@@ -84,7 +84,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_2, flamegpu::MessageNone, flamegpu::Messa
 # Функция для перехода 2→4 (operations → repair)
 RTC_APPLY_2_TO_4 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_4, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
@@ -114,7 +114,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_4, flamegpu::MessageNone, flamegpu::Messa
 # Функция для перехода 2→5 (operations → reserve) при отклонении quota_repair
 RTC_APPLY_2_TO_5 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_5, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
@@ -141,7 +141,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_5, flamegpu::MessageNone, flamegpu::Messa
 # Функция для перехода 2→6 (operations → storage)
 RTC_APPLY_2_TO_6 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_6, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     
     // ✅ КРИТИЧНО: Сброс active_trigger при переходе из operations
@@ -190,7 +190,7 @@ def register_state_manager_operations(model: fg.ModelDescription, agent: fg.Agen
     # Слой 1b: Переход 2→3 (operations → serviceable) для квотного демоута
     RTC_APPLY_2_TO_3 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_3, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
@@ -224,7 +224,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_3, flamegpu::MessageNone, flamegpu::Messa
     # Это обработка результата quota_promote_serviceable/reserve/inactive
     RTC_APPLY_3_TO_2 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_3_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
@@ -255,7 +255,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_3_to_2, flamegpu::MessageNone, flamegpu::Messa
     # ✅ Слой 1d: Переход 5→2 (reserve&intent=2 → operations) для промутов P2
     RTC_APPLY_5_TO_2 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
@@ -278,7 +278,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_2, flamegpu::MessageNone, flamegpu::Messa
     # ✅ Слой 1e: Переход 1→2 (inactive&intent=2 → operations) для промутов P3
     RTC_APPLY_1_TO_2 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");

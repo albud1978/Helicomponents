@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-RTC модуль V2 для состояний БЕЗ repair в обороте
+RTC модуль V2/V3 для состояний
 
-ИЗМЕНЕНИЯ V2:
-- ❌ Убраны инкременты repair_days
-- ❌ Убран переход repair→reserve
-- ✅ State 4 теперь "unserviceable" — просто ожидание promote P2
+ИЗМЕНЕНИЯ V3 (11.01.2026):
+- ✅ Восстановлен инкремент repair_days
+- ✅ Восстановлен переход repair→reserve при repair_days >= repair_time
+- ✅ Используется step_days из Environment для адаптивных шагов
 - ✅ State 5 (reserve) только для spawn
-
-Ремонт будет добавлен постпроцессингом на GPU.
 """
 import os
 import sys
@@ -34,19 +32,32 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_3_serviceable_v2, flamegpu::MessageNone, flame
 }}
 """
 
-# RTC функция для state_4 (unserviceable) — V2: БЕЗ repair логики!
-RTC_STATE_4_UNSERVICEABLE = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_state_4_unserviceable_v2, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // V2: Unserviceable — агенты ожидают promote P2
-    // ❌ НЕТ инкрементов repair_days
-    // ❌ НЕТ перехода в reserve при завершении ремонта
-    // ✅ Ремонт будет добавлен постпроцессингом на GPU
+# RTC функция для state_4 (repair) — V3: С repair логикой!
+RTC_STATE_4_REPAIR = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair_v2, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // V3: Repair — агенты ожидают завершения ремонта
+    // ✅ Инкремент repair_days
+    // ✅ Переход в reserve при завершении ремонта
     
-    // По умолчанию остаёмся в состоянии 4 (unserviceable)
-    // Квотирование (promote P2) установит intent=2 для готовых агентов
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
+    // Читаем step_days из Environment для адаптивных шагов
+    const unsigned int step_days = FLAMEGPU->environment.getProperty<unsigned int>("step_days");
     
-    // Обнуляем daily_today_u32 (нет налёта)
+    // Инкремент repair_days
+    unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
+    repair_days += step_days;
+    FLAMEGPU->setVariable<unsigned int>("repair_days", repair_days);
+    
+    // Проверка завершения ремонта
+    const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
+    if (repair_days >= repair_time) {{
+        // Ремонт завершён → переход в reserve
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
+    }} else {{
+        // Продолжаем ремонт
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
+    }}
+    
+    // Обнуляем daily_today_u32 (нет налёта в ремонте)
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
     
     return flamegpu::ALIVE;
@@ -83,7 +94,7 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     
     funcs = [
         ("rtc_state_3_serviceable_v2", RTC_STATE_3_SERVICEABLE, "serviceable", "serviceable"),
-        ("rtc_state_4_unserviceable_v2", RTC_STATE_4_UNSERVICEABLE, "repair", "repair"),  # state ID=4, семантика=unserviceable
+        ("rtc_state_4_repair_v2", RTC_STATE_4_REPAIR, "repair", "repair"),  # V3: с repair логикой
         ("rtc_state_5_reserve_v2", RTC_STATE_5_RESERVE, "reserve", "reserve"),
         ("rtc_state_6_storage_v2", RTC_STATE_6_STORAGE, "storage", "storage")
     ]
@@ -102,5 +113,5 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
         except Exception as e:
             print(f"  Ошибка регистрации {func_name}: {e}")
     
-    print("  ✅ RTC модуль states_stub_v2 зарегистрирован (БЕЗ repair!)")
+    print("  ✅ RTC модуль states_stub_v2 зарегистрирован (V3: с repair логикой)")
 

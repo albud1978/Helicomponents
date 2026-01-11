@@ -35,7 +35,8 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     rtc_func = agent.newRTCFunction("rtc_state_2_operations", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    // V3: используем current_day из Environment для совместимости с адаптивными шагами
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     // Runtime frames_total из Environment (для индексации)
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     

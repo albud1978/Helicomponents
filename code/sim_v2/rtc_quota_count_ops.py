@@ -118,7 +118,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_ops, flamegpu::MessageNone, flamegpu::MessageN
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     
     // DEBUG для агента 100006 (idx=285) в дни 824-826
     if ((step_day >= 824u && step_day <= 826u) && idx == 285u && group_by == 2u) {{
@@ -344,7 +344,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_log_mp4_targets, flamegpu::MessageNone, flamegpu::Me
     # =========================================================================
     RTC_LOG_GAP = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_log_quota_gap, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     

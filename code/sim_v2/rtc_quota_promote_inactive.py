@@ -46,7 +46,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
         return flamegpu::ALIVE;
     }}
     
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
@@ -74,7 +74,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
     
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     // group_by уже определён выше
-    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
