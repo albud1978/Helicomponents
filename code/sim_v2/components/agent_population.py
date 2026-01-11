@@ -111,8 +111,8 @@ class AgentPopulationBuilder:
                         'frame_idx': frames_index[ac],
                         'status_id': int(status_list[j] or 1) if j < len(status_list) else 1,
                         'sne': int(sne_list[j] or 0) if j < len(sne_list) else 0,
-                        # PPR = SNE для планеров если ppr=0 (двухфазная логика baseline)
-                        'ppr': int(ppr_list[j] or 0) if (j < len(ppr_list) and ppr_list[j]) else int(sne_list[j] or 0) if j < len(sne_list) else 0,
+                        # PPR из heli_pandas как есть (первый цикл корректируется в heli_pandas позже)
+                        'ppr': int(ppr_list[j] or 0) if j < len(ppr_list) else 0,
                         'repair_days': int(repair_days_list[j] or 0) if j < len(repair_days_list) else 0,
                         'group_by': gb,
                         'partseqno_i': int(pseq_list[j] or 0) if j < len(pseq_list) else 0,
@@ -270,7 +270,7 @@ class AgentPopulationBuilder:
         
         # Загружаем популяции в симуляцию по состояниям
         # ВАЖНО: Нужно инициализировать ВСЕ states, даже пустые (для spawn)
-        all_states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage']
+        all_states = ['inactive', 'operations', 'serviceable', 'unserviceable', 'reserve', 'storage']
         
         # FIX 4: Используем agent_def, НЕ simulation.getAgentDescription (нет такого метода!)
         for state_name in all_states:

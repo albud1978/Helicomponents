@@ -328,7 +328,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::Messa
     rtc_func_2_to_4 = agent.newRTCFunction("rtc_apply_2_to_4", RTC_APPLY_2_TO_4)
     rtc_func_2_to_4.setRTCFunctionCondition(RTC_COND_INTENT_4)
     rtc_func_2_to_4.setInitialState("operations")
-    rtc_func_2_to_4.setEndState("repair")
+    rtc_func_2_to_4.setEndState("unserviceable")
     layer_2_to_4.addAgentFunction(rtc_func_2_to_4)
     
     # Слой 2b: Переход 2→5 (operations → reserve) для отклонённых quota_repair

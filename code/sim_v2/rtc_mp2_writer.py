@@ -693,8 +693,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     return flamegpu::ALIVE;
 }}
 """)
-        rtc_write_repair.setInitialState("repair")
-        rtc_write_repair.setEndState("repair")
+        rtc_write_repair.setInitialState("unserviceable")
+        rtc_write_repair.setEndState("unserviceable")
 
         # reserve (state=5)
         rtc_write_reserve = agent.newRTCFunction("rtc_mp2_write_reserve", f"""

@@ -253,8 +253,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_repair, flamegpu::MessageNone, flamegpu::Messa
 """
     
     rtc_func_rep = agent.newRTCFunction("rtc_count_repair", RTC_COUNT_REPAIR)
-    rtc_func_rep.setInitialState("repair")
-    rtc_func_rep.setEndState("repair")
+    rtc_func_rep.setInitialState("unserviceable")
+    rtc_func_rep.setEndState("unserviceable")
     
     layer_count_rep = model.newLayer("count_repair")
     layer_count_rep.addAgentFunction(rtc_func_rep)
