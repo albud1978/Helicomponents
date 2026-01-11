@@ -109,15 +109,15 @@ def register_state_manager_repair(model: fg.ModelDescription, agent: fg.AgentDes
     layer_4_to_4 = model.newLayer("transition_4_to_4")
     rtc_func_4_to_4 = agent.newRTCFunction("rtc_apply_4_to_4", RTC_APPLY_4_TO_4)
     rtc_func_4_to_4.setRTCFunctionCondition(RTC_COND_INTENT_4)
-    rtc_func_4_to_4.setInitialState("repair")
-    rtc_func_4_to_4.setEndState("repair")
+    rtc_func_4_to_4.setInitialState("unserviceable")
+    rtc_func_4_to_4.setEndState("unserviceable")
     layer_4_to_4.addAgentFunction(rtc_func_4_to_4)
     
     # Layer 2: Transition 4->2 (unserviceable -> operations) — V3!
     layer_4_to_2 = model.newLayer("transition_4_to_2")
     rtc_func_4_to_2 = agent.newRTCFunction("rtc_apply_4_to_2", RTC_APPLY_4_TO_2)
     rtc_func_4_to_2.setRTCFunctionCondition(RTC_COND_INTENT_2)
-    rtc_func_4_to_2.setInitialState("repair")
+    rtc_func_4_to_2.setInitialState("unserviceable")
     rtc_func_4_to_2.setEndState("operations")
     layer_4_to_2.addAgentFunction(rtc_func_4_to_2)
     
@@ -125,7 +125,7 @@ def register_state_manager_repair(model: fg.ModelDescription, agent: fg.AgentDes
     layer_4_to_5 = model.newLayer("transition_4_to_5")
     rtc_func_4_to_5 = agent.newRTCFunction("rtc_apply_4_to_5", RTC_APPLY_4_TO_5)
     rtc_func_4_to_5.setRTCFunctionCondition(RTC_COND_INTENT_5)
-    rtc_func_4_to_5.setInitialState("repair")
+    rtc_func_4_to_5.setInitialState("unserviceable")
     rtc_func_4_to_5.setEndState("reserve")
     layer_4_to_5.addAgentFunction(rtc_func_4_to_5)
     

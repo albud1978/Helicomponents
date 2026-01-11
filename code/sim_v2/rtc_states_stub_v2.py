@@ -95,7 +95,7 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     
     funcs = [
         ("rtc_state_3_serviceable_v2", RTC_STATE_3_SERVICEABLE, "serviceable", "serviceable"),
-        ("rtc_state_4_repair_v2", RTC_STATE_4_REPAIR, "repair", "repair"),  # V3: с repair логикой
+        ("rtc_state_4_repair_v2", RTC_STATE_4_REPAIR, "unserviceable", "unserviceable"),  # V3: unserviceable (бывший repair)
         ("rtc_state_5_reserve_v2", RTC_STATE_5_RESERVE, "reserve", "reserve"),
         ("rtc_state_6_storage_v2", RTC_STATE_6_STORAGE, "storage", "storage")
     ]

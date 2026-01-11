@@ -344,7 +344,7 @@ class V2BaseModelMessaging:
         agent.newState("inactive")      # 1
         agent.newState("operations")    # 2
         agent.newState("serviceable")   # 3
-        agent.newState("repair")        # 4
+        agent.newState("unserviceable") # 4 (бывший repair, ремонт в постпроцессинге)
         agent.newState("reserve")       # 5
         agent.newState("storage")       # 6
         

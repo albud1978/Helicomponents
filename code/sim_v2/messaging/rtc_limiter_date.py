@@ -306,8 +306,8 @@ def register_rtc(model: fg.ModelDescription, heli_agent: fg.AgentDescription,
     # 2. rtc_set_limiter_repair — агенты в repair устанавливают limiter_date
     # ═══════════════════════════════════════════════════════════════════════
     fn_set_repair = heli_agent.newRTCFunction("rtc_set_limiter_repair", rtc_repair_code)
-    fn_set_repair.setInitialState("repair")
-    fn_set_repair.setEndState("repair")
+    fn_set_repair.setInitialState("unserviceable")
+    fn_set_repair.setEndState("unserviceable")
     
     layer_set_limiter.addAgentFunction(fn_set_repair)
     
