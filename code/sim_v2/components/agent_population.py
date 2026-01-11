@@ -80,7 +80,7 @@ class AgentPopulationBuilder:
             'inactive': fg.AgentVector(agent_def),      # state_1
             'operations': fg.AgentVector(agent_def),    # state_2
             'serviceable': fg.AgentVector(agent_def),   # state_3
-            'repair': fg.AgentVector(agent_def),        # state_4
+            'unserviceable': fg.AgentVector(agent_def), # state_4 (бывший repair)
             'reserve': fg.AgentVector(agent_def),       # state_5
             'storage': fg.AgentVector(agent_def)        # state_6
         }
@@ -91,7 +91,7 @@ class AgentPopulationBuilder:
             1: 'inactive',
             2: 'operations',
             3: 'serviceable',
-            4: 'repair',
+            4: 'unserviceable', # бывший repair, ремонт в постпроцессинге
             5: 'reserve',
             6: 'storage'
         }
@@ -161,32 +161,32 @@ class AgentPopulationBuilder:
             # Базовые переменные (используем frame_idx из build_frames_index)
             agent.setVariableUInt("idx", frame_idx)
             agent.setVariableUInt("aircraft_number", agent_data['aircraft_number'])
-            # FIX 2: status_id НЕ используется - переведено на States
-            agent.setVariableUInt("sne", agent_data['sne'])
-            agent.setVariableUInt("ppr", agent_data['ppr'])
-            agent.setVariableUInt("repair_days", agent_data['repair_days'])
             gb = agent_data.get('group_by', 0)
             partseqno = agent_data.get('partseqno_i', 0)
             agent.setVariableUInt("group_by", gb)
             agent.setVariableUInt("partseqno_i", partseqno)
+            agent.setVariableUInt("repair_days", agent_data['repair_days'])
             
-            # OH берём из MP1 по типу вертолёта
+            # OH вычисляем СНАЧАЛА (нужен для правила первого цикла ppr)
             oh_value = oh_by_frame[frame_idx]  # Значение по умолчанию
-            
-            # Используем mp1_index как в sim_master
             mp1_index = self.env_data.get('mp1_index', {})
             pidx = mp1_index.get(partseqno, -1)
             
             if pidx >= 0:
-                # В sim_master используется ac_type_mask, но у нас есть group_by
-                # group_by = 1 это Mi-8 (mask & 32)
-                # group_by = 2 это Mi-17 (mask & 64)
                 if gb == 1:  # Mi-8
                     if pidx < len(mp1_oh_mi8):
                         oh_value = int(mp1_oh_mi8[pidx] or 0)
                 elif gb == 2:  # Mi-17
                     if pidx < len(mp1_oh_mi17):
                         oh_value = int(mp1_oh_mi17[pidx] or 0)
+            
+            # SNE и PPR — берём из heli_pandas как есть
+            # PPR ≠ SNE означает что был ремонт (не первый цикл)
+            sne_value = agent_data['sne']
+            ppr_value = agent_data['ppr']
+            
+            agent.setVariableUInt("sne", sne_value)
+            agent.setVariableUInt("ppr", ppr_value)
             
             # Нормативы
             # LL берём из MP3 (heli_pandas)

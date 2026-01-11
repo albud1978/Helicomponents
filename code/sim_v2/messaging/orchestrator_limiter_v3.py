@@ -667,7 +667,7 @@ class LimiterOrchestrator:
     
     def _collect_mp2_day(self, all_rows: list, day: int) -> int:
         """Собирает MP2 данные за один день (быстро, без интерполяции)"""
-        states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage']
+        states = ['inactive', 'operations', 'serviceable', 'unserviceable', 'reserve', 'storage']
         
         vd = dt_date.fromisoformat(self.version_date_str)
         version_date = vd.year * 10000 + vd.month * 100 + vd.day
@@ -707,7 +707,7 @@ class LimiterOrchestrator:
         if not self.enable_mp2:
             return 0
         
-        states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage']
+        states = ['inactive', 'operations', 'serviceable', 'unserviceable', 'reserve', 'storage']
         
         vd = dt_date.fromisoformat(self.version_date_str)
         version_date = vd.year * 10000 + vd.month * 100 + vd.day
@@ -772,7 +772,7 @@ class LimiterOrchestrator:
         Логика (как в baseline mp2_postprocess_active):
         1. Находим день d_event где агент перешёл inactive → operations
         2. Заполняем историю ремонта задним числом: [d_event - repair_time .. d_event - 1]
-        3. Устанавливаем state='repair', repair_days=1..R для этого окна
+        3. Устанавливаем state='unserviceable', repair_days=1..R для этого окна
         """
         if not all_rows:
             return 0
@@ -811,8 +811,8 @@ class LimiterOrchestrator:
                             for j, (j_row_idx, j_row) in enumerate(rows_list):
                                 j_day = j_row['day_u16']
                                 if s <= j_day <= e:
-                                    # Меняем state на 'repair'
-                                    all_rows[j_row_idx]['state'] = 'repair'
+                                    # Меняем state на 'unserviceable'
+                                    all_rows[j_row_idx]['state'] = 'unserviceable'
                                     all_rows[j_row_idx]['repair_days'] = repair_day_counter
                                     repair_day_counter += 1
                                     modified_count += 1
