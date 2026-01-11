@@ -32,10 +32,11 @@ except ImportError as e:
 # Просто держит агентов — переходы управляются через intent_state и квотирование
 RTC_STATE_MANAGER_UNSERVICEABLE = """
 FLAMEGPU_AGENT_FUNCTION(rtc_state_manager_unserviceable, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // V2: Unserviceable — агенты ожидают promote P2
+    // V2/V3: Unserviceable — агенты ожидают promote P2
     // Ремонт добавится постпроцессингом (на GPU)
     
-    const unsigned int day = FLAMEGPU->getStepCounter();
+    // V3: используем current_day из Environment для совместимости с адаптивными шагами
+    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");  // UInt!
     
     // Если intent=2 (operations), значит получили approve от promote P2
