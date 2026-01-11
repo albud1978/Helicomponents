@@ -130,6 +130,10 @@ class LimiterOrchestrator:
         self.program_change_days = rtc_limiter_date.precompute_program_changes(
             clickhouse_client, version_date_str
         )
+        # Добавляем end_day чтобы гарантировать финальный шаг точно на последний день
+        if self.end_day not in self.program_change_days:
+            self.program_change_days.append(self.end_day)
+            self.program_change_days.sort()
         
         # Загрузка MP5 данных (лётные часы)
         print("📊 Загрузка MP5 данных...")
@@ -833,7 +837,7 @@ def create_limiter_table(client):
         aircraft_number UInt32,
         group_by UInt8,
         state String,
-        dt UInt16,
+        dt UInt32,
         sne UInt32,
         ppr UInt32,
         ll UInt32,

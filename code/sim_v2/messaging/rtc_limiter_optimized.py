@@ -250,7 +250,10 @@ class HF_ComputeAdaptiveDays(fg.HostFunction):
         # 4. Устанавливаем adaptive_days в Environment
         FLAMEGPU.environment.setPropertyUInt("adaptive_days", adaptive_days)
         
-        # 5. Обновляем current_day
+        # 5. Сохраняем prev_day ПЕРЕД обновлением current_day (для cumsum в RTC)
+        FLAMEGPU.environment.setPropertyUInt("prev_day", current_day)
+        
+        # 6. Обновляем current_day
         new_day = current_day + adaptive_days
         FLAMEGPU.environment.setPropertyUInt("current_day", new_day)
         
@@ -282,6 +285,10 @@ def setup_limiter_macroproperties(env, program_changes: list):
         pass
     try:
         env.newPropertyUInt("adaptive_days", 1)  # По умолчанию 1 день
+    except:
+        pass
+    try:
+        env.newPropertyUInt("prev_day", 0)  # Предыдущий день для cumsum
     except:
         pass
     
