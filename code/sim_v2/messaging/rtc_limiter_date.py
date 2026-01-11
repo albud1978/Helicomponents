@@ -237,21 +237,21 @@ FLAMEGPU_AGENT_FUNCTION(rtc_clear_limiter_{state_name}, flamegpu::MessageNone, f
 """
 
 
-def get_rtc_repair_limiter() -> str:
+def get_rtc_unserviceable_limiter() -> str:
     """
-    RTC функция для агентов в repair — устанавливает limiter_date = current_day + (repair_time - repair_days).
-    Когда repair_days достигает repair_time, агент должен перейти в reserve.
+    RTC функция для агентов в unserviceable — устанавливает limiter_date = current_day + (repair_time - repair_days).
+    Когда repair_days достигает repair_time, агент готов к переходу в operations.
     """
     return f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_set_limiter_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
+FLAMEGPU_AGENT_FUNCTION(rtc_set_limiter_unserviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     
-    // Читаем время ремонта
+    // Читаем время ожидания (repair_time используется как время готовности)
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
     
-    // Вычисляем limiter_date — когда ремонт завершится
+    // Вычисляем limiter_date — когда агент будет готов
     unsigned int days_remaining = 0u;
     if (repair_time > repair_days) {{
         days_remaining = repair_time - repair_days;
@@ -290,7 +290,7 @@ def register_rtc(model: fg.ModelDescription, heli_agent: fg.AgentDescription,
     rtc_set_code = get_rtc_set_limiter_ops()
     rtc_copy_code = get_rtc_copy_limiter_to_macro()
     rtc_quota_code = get_rtc_compute_step_days()
-    rtc_repair_code = get_rtc_repair_limiter()
+    rtc_unserviceable_code = get_rtc_unserviceable_limiter()
     
     # ═══════════════════════════════════════════════════════════════════════
     # 1. rtc_set_limiter_ops — агенты в operations устанавливают limiter_date
@@ -303,13 +303,13 @@ def register_rtc(model: fg.ModelDescription, heli_agent: fg.AgentDescription,
     layer_set_limiter.addAgentFunction(fn_set_limiter)
     
     # ═══════════════════════════════════════════════════════════════════════
-    # 2. rtc_set_limiter_repair — агенты в repair устанавливают limiter_date
+    # 2. rtc_set_limiter_unserviceable — агенты в unserviceable устанавливают limiter_date
     # ═══════════════════════════════════════════════════════════════════════
-    fn_set_repair = heli_agent.newRTCFunction("rtc_set_limiter_repair", rtc_repair_code)
-    fn_set_repair.setInitialState("unserviceable")
-    fn_set_repair.setEndState("unserviceable")
+    fn_set_unserviceable = heli_agent.newRTCFunction("rtc_set_limiter_unserviceable", rtc_unserviceable_code)
+    fn_set_unserviceable.setInitialState("unserviceable")
+    fn_set_unserviceable.setEndState("unserviceable")
     
-    layer_set_limiter.addAgentFunction(fn_set_repair)
+    layer_set_limiter.addAgentFunction(fn_set_unserviceable)
     
     # ═══════════════════════════════════════════════════════════════════════
     # 3. rtc_copy_limiter_ops — агенты в ops копируют limiter в MacroProperty
@@ -323,9 +323,9 @@ def register_rtc(model: fg.ModelDescription, heli_agent: fg.AgentDescription,
     
     # ═══════════════════════════════════════════════════════════════════════
     # 4. rtc_clear_limiter_* — агенты в inactive/serviceable/reserve/storage сбрасывают лимитер
-    # (repair обрабатывается отдельно через rtc_set_limiter_repair)
+    # (unserviceable обрабатывается отдельно через rtc_set_limiter_unserviceable)
     # ═══════════════════════════════════════════════════════════════════════
-    states_other = ['inactive', 'serviceable', 'reserve', 'storage']  # repair исключен!
+    states_other = ['inactive', 'serviceable', 'reserve', 'storage']  # unserviceable исключен!
     layer_clear = model.newLayer("layer_clear_limiter")
     
     for state in states_other:

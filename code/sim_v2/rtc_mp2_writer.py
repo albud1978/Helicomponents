@@ -551,9 +551,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
         rtc_write_serviceable.setInitialState("serviceable")
         rtc_write_serviceable.setEndState("serviceable")
 
-        # repair (state=4)
-        rtc_write_repair = agent.newRTCFunction("rtc_mp2_write_repair", f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
+        # unserviceable (state=4)
+        rtc_write_unserviceable = agent.newRTCFunction("rtc_mp2_write_unserviceable", f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_unserviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Пропускаем агентов с aircraft_number=0 (запас под спавн)
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     if (aircraft_number == 0u) {{
@@ -605,7 +605,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     mp2_partseqno[pos].exchange(FLAMEGPU->getVariable<unsigned int>("partseqno_i"));
     mp2_group_by[pos].exchange(FLAMEGPU->getVariable<unsigned int>("group_by"));
     
-    mp2_state[pos].exchange(4u); // state_id = repair
+    mp2_state[pos].exchange(4u); // state_id = unserviceable
     mp2_intent[pos].exchange(FLAMEGPU->getVariable<unsigned int>("intent_state"));
     mp2_bi_counter[pos].exchange(1u);  // Служебное поле для BI (всегда 1)
     
@@ -693,8 +693,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     return flamegpu::ALIVE;
 }}
 """)
-        rtc_write_repair.setInitialState("unserviceable")
-        rtc_write_repair.setEndState("unserviceable")
+        rtc_write_unserviceable.setInitialState("unserviceable")
+        rtc_write_unserviceable.setEndState("unserviceable")
 
         # reserve (state=5)
         rtc_write_reserve = agent.newRTCFunction("rtc_mp2_write_reserve", f"""
@@ -991,7 +991,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
         layer_snapshot.addAgentFunction(rtc_write_inactive)
         layer_snapshot.addAgentFunction(rtc_write_operations)
         layer_snapshot.addAgentFunction(rtc_write_serviceable)
-        layer_snapshot.addAgentFunction(rtc_write_repair)
+        layer_snapshot.addAgentFunction(rtc_write_unserviceable)
         layer_snapshot.addAgentFunction(rtc_write_reserve)
         layer_snapshot.addAgentFunction(rtc_write_storage)
         

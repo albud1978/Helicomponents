@@ -1,8 +1,11 @@
-# LIMITER V2 — Упрощённая архитектура
+# LIMITER V3 — Архитектура с адаптивными шагами
 
 ## Дата: 11.01.2026
 ## Ветка: feature/flame-messaging
-## Статус: ✅ Работает (постпроцессинг TODO)
+## Статус: ✅ **ОСНОВНАЯ АРХИТЕКТУРА** (валидирована)
+
+> **Актуальный код:** `orchestrator_limiter_v3.py`
+> **Постпроцессинг:** Запаркован (TODO)
 
 ---
 
@@ -94,61 +97,75 @@
 
 ---
 
-## Преимущества V2
+## Оптимизация Limiter (V3)
 
-| Аспект | V1 (baseline) | V2 (новый) |
-|--------|---------------|------------|
+**Проблема:** Сложное векторное вычисление горизонта на каждом шаге.
+
+**Решение:** Переменная агента `limiter` — максимум дней работы.
+
+| RTC функция | Когда | Что делает |
+|-------------|-------|------------|
+| `rtc_compute_limiter_on_entry` | При входе в ops | `limiter = min(days_to_ll, days_to_oh)` |
+| `rtc_decrement_limiter` | Каждый шаг | `limiter -= adaptive_days` |
+| `rtc_compute_min_limiter` | Каждый шаг | `atomicMin(mp_min_limiter, limiter)` |
+| `rtc_clear_limiter_on_exit` | При выходе из ops | `limiter = 0` |
+
+**Формула:**
+```
+adaptive_days = min(
+    min(limiter по всем агентам в ops),
+    next_program_change - current_day
+)
+```
+
+**mp_program_changes** — предрасчитанный массив дат изменения программы на 10 лет.
+
+---
+
+## Преимущества V3
+
+| Аспект | Baseline | V3 |
+|--------|----------|-----|
+| **Шагов за 10 лет** | 3,650 | **~700** |
+| **Время** | 75с | **~10с** |
 | Состояний в обороте | 6 | 5 (без repair) |
-| repair_days инкременты | ✅ | ❌ |
-| Адаптив шаги repair | ~150/год | 0 |
-| Очередь ремонтов | Сложная | Нет в обороте |
-| Постпроцессинг | Host-side | GPU |
+| Вычисление limiter | На каждом шаге | **1 раз при входе** |
+| repair_days инкременты | ✅ | В unserviceable (по step_days) |
 
 ---
 
-## Файлы реализации
+## Файлы реализации (актуальные)
 
-| Файл | Изменения |
-|------|-----------|
-| `orchestrator_limiter.py` | Убрать repair логику |
-| `rtc_modules/rtc_batch_operations.py` | Убрать repair_days инкременты |
-| `rtc_modules/rtc_quota_repair.py` | Отключить |
-| `rtc_modules/rtc_state_manager_repair.py` | → `rtc_state_manager_unserviceable.py` |
-| `components/agent_population.py` | status_id=4 → unserviceable |
-
----
+| Файл | Назначение |
+|------|------------|
+| **`orchestrator_limiter_v3.py`** | **Основной оркестратор** |
+| `rtc_limiter_optimized.py` | RTC функции limiter |
+| `rtc_states_stub_v2.py` | Логика состояний (unserviceable) |
+| `base_model_messaging.py` | Базовая модель с 6 состояниями |
+| `components/agent_population.py` | Инициализация агентов |
 
 ---
 
-## Результаты теста (365 дней)
+## Результаты теста (3650 дней)
 
-| Метрика | V2 |
+| Метрика | V3 |
 |---------|-----|
-| Время | 4.8с |
-| GPU | 2.75с (57%) |
-| Drain | 2.05с (43%) |
-| Строк | 103,407 |
-| Дней/сек | 76.1 |
-
-### Распределение (день 364):
-| Состояние | Агентов |
-|-----------|---------|
-| inactive | 522 |
-| operations | 755 |
-| unserviceable (repair) | 57 |
-| reserve (spawn) | 12 |
-| serviceable | 79 |
+| **Адаптивных шагов** | 694 |
+| **Время** | 9.4с |
+| **Σdt** | 906,443 ч |
+| **Δsne** | 906,443 ч |
+| **Δ(Δsne - Σdt)** | **0** ✅ |
 
 ### Что работает ✅:
+- Адаптивные шаги (limiter + program_changes)
 - Переход `ops → unserviceable` (PPR >= OH)
-- Promote P2 из unserviceable
+- Выход `unserviceable → ops` при `repair_days >= repair_time`
+- Квотирование P1 → P2 → P3
 - Reserve только для spawn
-- Нет инкрементов repair_days
-- Нет выхода repair→reserve
+- dt = программа (до минуты)
 
-### TODO ⏸️:
-- Постпроцессинг на GPU (добавить repair период)
-- Квота ремонта (ограничение одновременных)
+### TODO ⏸️ (запарковано):
+- Постпроцессинг на GPU (добавить repair период задним числом)
 
 ---
 
