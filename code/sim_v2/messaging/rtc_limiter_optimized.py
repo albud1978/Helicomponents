@@ -141,6 +141,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_clear_limiter_on_exit, flamegpu::MessageNone, flameg
 RTC_COMPUTE_ADAPTIVE_DAYS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_compute_min_limiter, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Каждый агент в ops записывает свой limiter в MacroProperty для reduction
+    // ВАЖНО: Только атомарная запись, без чтения!
     
     const unsigned short limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
     
@@ -149,15 +150,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_min_limiter, flamegpu::MessageNone, flamegpu
         return flamegpu::ALIVE;
     }}
     
-    // Атомарный min в MacroProperty
+    // Атомарный min в MacroProperty (без предварительного чтения!)
     auto mp_min = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp_min_limiter");
     
-    // atomicMin для поиска минимума
-    unsigned int current_min;
-    do {{
-        current_min = mp_min[0];
-        if (limiter >= current_min) break;  // Наш limiter не меньше
-    }} while (mp_min[0].exchange((unsigned int)limiter) != current_min);
+    // atomicMin: записываем если наш limiter меньше текущего
+    mp_min[0].min((unsigned int)limiter);
     
     return flamegpu::ALIVE;
 }}
