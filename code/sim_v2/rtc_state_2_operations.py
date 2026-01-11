@@ -87,7 +87,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     const unsigned int p_next = ppr_new + dn;
     
     // ПРИОРИТЕТ проверок:
-    // 1. Сначала проверяем LL
+    // 1. Сначала проверяем LL (полный назначенный ресурс)
     if (s_next >= ll) {{
         FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -96,21 +96,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
         return flamegpu::ALIVE;
     }}
     
-    // 2. Потом проверяем OH с учётом BR
+    // 2. Проверяем BR (межремонтный ресурс) — НЕЗАВИСИМО от PPR!
+    // В baseline storage достигается когда SNE >= BR
+    if (s_next >= br && br > 0u) {{
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
+        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        printf("  [Step %u] AC %u: intent=6 (storage BR), sne_next=%u >= br=%u\\n", 
+               step_day, aircraft_number, s_next, br);
+        return flamegpu::ALIVE;
+    }}
+    
+    // 3. Потом проверяем OH (межремонтный PPR)
     if (p_next >= oh) {{
-        if (s_next < br) {{
-            // Переход в ремонт
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
-            const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-            printf("  [Step %u] AC %u: intent=4 (repair), ppr_next=%u >= oh=%u, sne_next=%u < br=%u\\n", 
-                   step_day, aircraft_number, p_next, oh, s_next, br);
-        }} else {{
-            // Переход в хранение (BR достигнут)
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
-            const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-            printf("  [Step %u] AC %u: intent=6 (storage BR), ppr_next=%u >= oh=%u, sne_next=%u >= br=%u\\n", 
-                   step_day, aircraft_number, p_next, oh, s_next, br);
-        }}
+        // Переход в ремонт (SNE < BR, поэтому ещё можно ремонтировать)
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
+        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        printf("  [Step %u] AC %u: intent=4 (repair), ppr_next=%u >= oh=%u\\n", 
+               step_day, aircraft_number, p_next, oh);
         return flamegpu::ALIVE;
     }}
     
