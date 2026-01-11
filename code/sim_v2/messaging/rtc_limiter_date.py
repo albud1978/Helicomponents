@@ -377,12 +377,17 @@ def precompute_program_changes(client, version_date_str: str) -> list:
     """
     Предрасчёт дней изменения программы из flight_program_ac.
     
+    Включает:
+    - Дни изменения квоты (trigger_program_mi8/mi17)
+    - Дни планового spawn (new_counter_mi17 растёт)
+    
     Returns:
         Список дней (ordinal от version_date) с изменениями программы.
     """
     from datetime import date
     
-    query = f"""
+    # 1. Дни изменения квоты
+    query_quota = f"""
         SELECT toRelativeDayNum(dates) - toRelativeDayNum(toDate('{version_date_str}')) as day_offset
         FROM flight_program_ac 
         WHERE version_date = toDate('{version_date_str}')
@@ -390,12 +395,33 @@ def precompute_program_changes(client, version_date_str: str) -> list:
         ORDER BY dates
     """
     
-    result = client.execute(query)
-    days = [int(row[0]) for row in result if row[0] >= 0]
+    result_quota = client.execute(query_quota)
+    quota_days = set(int(row[0]) for row in result_quota if row[0] >= 0)
     
-    print(f"  📊 Предрасчёт program_changes: {len(days)} событий")
-    if days[:5]:
-        print(f"     Первые 5: {days[:5]}")
+    # 2. Дни планового spawn (когда new_counter_mi17 увеличивается)
+    query_spawn = f"""
+        SELECT day_offset, new_counter FROM (
+            SELECT 
+                toRelativeDayNum(dates) - toRelativeDayNum(toDate('{version_date_str}')) as day_offset,
+                new_counter_mi17 as new_counter,
+                lagInFrame(new_counter_mi17) OVER (ORDER BY dates) as prev_counter
+            FROM flight_program_ac 
+            WHERE version_date = toDate('{version_date_str}')
+            ORDER BY dates
+        ) WHERE new_counter > prev_counter
+    """
     
-    return days
+    result_spawn = client.execute(query_spawn)
+    spawn_days = set(int(row[0]) for row in result_spawn if row[0] >= 0)
+    
+    # Объединяем и сортируем
+    all_days = sorted(quota_days | spawn_days)
+    
+    print(f"  📊 Предрасчёт program_changes: {len(all_days)} событий")
+    print(f"     - квота: {len(quota_days)} дней")
+    print(f"     - spawn: {len(spawn_days)} дней")
+    if all_days[:5]:
+        print(f"     Первые 5: {all_days[:5]}")
+    
+    return all_days
 
