@@ -72,10 +72,11 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     # ВАЖНО: Это должно быть создано в rtc_quota_promote_inactive.py!
     # Здесь только читаем
     
-    # RTC менеджер динамического spawn
+    # RTC менеджер динамического spawn (V3: используем current_day)
     RTC_SPAWN_DYNAMIC_MGR = Template("""
     FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr, flamegpu::MessageNone, flamegpu::MessageNone) {
-        const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int step = FLAMEGPU->getStepCounter();
+        const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         // ИСПРАВЛЕНИЕ: Разделяем индексы для чтения target и записи параметров
         // target_day = D+1 (читаем целевую квоту на завтра, как в P1/P2/P3)
@@ -226,10 +227,10 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     }
     """).substitute(MAX_DAYS=MAX_DAYS, MAX_FRAMES=MAX_FRAMES)
     
-    # RTC тикет динамического spawn
+    # RTC тикет динамического spawn (V3: используем current_day)
     RTC_SPAWN_DYNAMIC_TICKET = Template("""
     FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket, flamegpu::MessageNone, flamegpu::MessageNone) {
-        const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
         const unsigned int ticket = FLAMEGPU->getVariable<unsigned int>("ticket");

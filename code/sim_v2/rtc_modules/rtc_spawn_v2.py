@@ -59,9 +59,11 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     env.newMacroPropertyUInt("spawn_base_psn_u32", MAX_DAYS)
 
     # RTC менеджер (как в sim_master с Template)
+    # ВАЖНО: используем current_day из Environment для совместимости с адаптивными шагами V3
     RTC_SPAWN_MGR = Template("""
     FLAMEGPU_AGENT_FUNCTION(rtc_spawn_mgr_v2, flamegpu::MessageNone, flamegpu::MessageNone) {
-        const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int step = FLAMEGPU->getStepCounter();
+        const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
         
@@ -73,8 +75,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         unsigned int next_acn = FLAMEGPU->getVariable<unsigned int>("next_acn");
         unsigned int next_psn = FLAMEGPU->getVariable<unsigned int>("next_psn");
         
-        // Инициализация в день 0
-        if (day == 0u) {
+        // Инициализация в шаг 0 (не день 0!)
+        if (step == 0u) {
             const unsigned int frames_initial = FLAMEGPU->environment.getProperty<unsigned int>("frames_initial");
             if (next_idx < frames_initial) next_idx = frames_initial;
             if (next_acn < 100000u) next_acn = 100000u;
@@ -113,10 +115,11 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     }
     """).substitute(MAX_DAYS=str(MAX_DAYS))
 
-    # RTC тикет - АДАПТИРОВАНО под orchestrator_v2
+    # RTC тикет - АДАПТИРОВАНО под orchestrator_v2 + V3 адаптивные шаги
     RTC_SPAWN_TICKET = Template("""
     FLAMEGPU_AGENT_FUNCTION(rtc_spawn_mi17_v2, flamegpu::MessageNone, flamegpu::MessageNone) {
-        const unsigned int day = FLAMEGPU->getStepCounter();
+        // Используем current_day из Environment для совместимости с V3
+        const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         const unsigned int frames_total = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
         const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
