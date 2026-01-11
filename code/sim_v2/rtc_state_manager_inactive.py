@@ -43,7 +43,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_1, flamegpu::MessageNone, flamegpu::Messa
 # Функция для перехода inactive → operations (1->2)
 RTC_APPLY_1_TO_2 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");

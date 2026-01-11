@@ -117,7 +117,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
         return flamegpu::ALIVE;
     }}
     
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
@@ -262,7 +262,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
         return flamegpu::ALIVE;
     }}
     
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
@@ -415,7 +415,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
         return flamegpu::ALIVE;
     }}
     
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
@@ -560,7 +560,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
         return flamegpu::ALIVE;
     }}
     
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
@@ -705,7 +705,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
         return flamegpu::ALIVE;
     }}
     
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     
@@ -850,7 +850,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
         return flamegpu::ALIVE;
     }}
     
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
     

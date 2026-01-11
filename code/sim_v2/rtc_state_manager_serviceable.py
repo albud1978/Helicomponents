@@ -44,7 +44,7 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_3_serviceable) {
     # ═════════════════════════════════════════════════════════════════════════
     RTC_SERVICEABLE_TO_OPS = """
 FLAMEGPU_AGENT_FUNCTION(rtc_serviceable_to_operations, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");

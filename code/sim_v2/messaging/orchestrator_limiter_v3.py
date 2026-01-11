@@ -201,7 +201,7 @@ class LimiterOrchestrator:
         # ═══════════════════════════════════════════════════════════════════════
         
         # 1. Ежедневные инкременты SNE/PPR (state_2_operations + states_stub_v2)
-        print("\n📦 Подключение state_2_operations + states_stub_v2 (БЕЗ repair!)...")
+        print("\n📦 Подключение state_2_operations + states_stub_v2 (V3: с repair!)...")
         import rtc_state_2_operations
         import rtc_states_stub_v2  # V2: без repair логики!
         rtc_state_2_operations.register_rtc(self.model, heli_agent)
@@ -261,31 +261,28 @@ class LimiterOrchestrator:
         print("  ✅ V2 квотирование (без quota_repair) подключено")
     
     def _register_state_managers(self):
-        """Регистрирует state managers V2 (без repair!)
+        """Регистрирует state managers V3 (с repair!)
         
-        V2 изменения:
-          - ❌ rtc_state_manager_repair — УБРАН
-          - ✅ unserviceable обрабатывается через reserve state manager (тот же ID=4→5 в терминах baseline)
-          - ✅ reserve только для spawn
+        V3 изменения (11.01.2026):
+          - ✅ rtc_state_manager_repair — ВОССТАНОВЛЕН для перехода repair→reserve
+          - ✅ repair логика работает с адаптивными шагами через step_days
         """
         import rtc_state_manager_serviceable
         import rtc_state_manager_operations
-        # ❌ V2: import rtc_state_manager_repair — УБРАН
+        import rtc_state_manager_repair  # ✅ V3: ВОССТАНОВЛЕН
         import rtc_state_manager_storage
         import rtc_state_manager_reserve
         import rtc_state_manager_inactive
         
         rtc_state_manager_serviceable.register_rtc(self.model, self.base_model.agent)
         rtc_state_manager_operations.register_state_manager_operations(self.model, self.base_model.agent)
-        # ❌ V2: rtc_state_manager_repair — УБРАН
-        # unserviceable агенты теперь напрямую идут в очередь promote P2
-        from rtc_modules import rtc_state_manager_unserviceable
-        rtc_state_manager_unserviceable.register_state_manager_unserviceable(self.model, self.base_model.agent)
+        # ✅ V3: repair state manager для перехода repair→reserve
+        rtc_state_manager_repair.register_state_manager_repair(self.model, self.base_model.agent)
         rtc_state_manager_storage.register_state_manager_storage(self.model, self.base_model.agent)
         rtc_state_manager_reserve.register_state_manager_reserve(self.model, self.base_model.agent)
         rtc_state_manager_inactive.register_state_manager_inactive(self.model, self.base_model.agent)
         
-        print("  ✅ V2 State managers (без repair) подключены")
+        print("  ✅ V3 State managers (с repair) подключены")
     
     def _register_spawn(self):
         """Регистрирует spawn_v2 для планового создания агентов"""

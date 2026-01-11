@@ -46,7 +46,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_5_queue, flamegpu::MessageNone, flamegpu:
 # 5->2 (promoted to operations)
 RTC_APPLY_5_TO_2 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");

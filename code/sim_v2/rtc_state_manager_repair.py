@@ -30,7 +30,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_4, flamegpu::MessageNone, flamegpu::Messa
 # Функция для перехода repair -> reserve (4->5)
 RTC_APPLY_4_TO_5 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_5, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    // V3: используем current_day из Environment для совместимости с адаптивными шагами
+    const unsigned int step_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
