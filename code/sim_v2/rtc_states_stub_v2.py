@@ -32,12 +32,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_3_serviceable_v2, flamegpu::MessageNone, flame
 }}
 """
 
-# RTC функция для state_4 (repair) — V3: С repair логикой!
+# RTC функция для state_4 (repair/unserviceable) — V3: С repair логикой!
 RTC_STATE_4_REPAIR = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair_v2, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // V3: Repair — агенты ожидают завершения ремонта
+    // V3: Repair/Unserviceable — агенты ожидают завершения ремонта
     // ✅ Инкремент repair_days
-    // ✅ Переход в reserve при завершении ремонта
+    // ✅ Переход НАПРЯМУЮ в operations (intent=2) при завершении ремонта
+    // ✅ PPR обнуляется в rtc_apply_4_to_2
     
     // Читаем step_days из Environment для адаптивных шагов
     const unsigned int step_days = FLAMEGPU->environment.getProperty<unsigned int>("step_days");
@@ -50,8 +51,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair_v2, flamegpu::MessageNone, flamegpu::
     // Проверка завершения ремонта
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     if (repair_days >= repair_time) {{
-        // Ремонт завершён → переход в reserve
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
+        // V3: Ремонт завершён → переход НАПРЯМУЮ в operations (не через reserve!)
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
     }} else {{
         // Продолжаем ремонт
         FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
