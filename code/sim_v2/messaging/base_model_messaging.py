@@ -403,7 +403,13 @@ class V2BaseModelMessaging:
         # Вычисляется при входе в operations, MAX = нет лимита
         agent.newVariableUInt("limiter_date", 0xFFFFFFFF)
         
-        print("  ✅ Agent HELI: 6 состояний, все переменные + limiter_date")
+        # V2 Optimized: limiter = дней до выхода из ops
+        # Вычисляется ОДИН РАЗ при входе в operations
+        # На каждом шаге: limiter -= adaptive_days
+        # При выходе: limiter = 0
+        agent.newVariableUInt16("limiter", 0)
+        
+        print("  ✅ Agent HELI: 6 состояний, все переменные + limiter")
         
         return agent
 
