@@ -233,11 +233,14 @@ class HF_ComputeAdaptiveDays(fg.HostFunction):
         
         days_to_pc = next_pc_day - current_day if next_pc_day > current_day else self.end_day
         
-        # 3. adaptive_days = min(min_limiter, days_to_pc)
+        # 3. adaptive_days = min(min_limiter, days_to_pc, MAX_ADAPTIVE_DAYS)
+        # MAX_ADAPTIVE_DAYS = 7 гарантирует регулярную проверку динамического spawn
+        MAX_ADAPTIVE_DAYS = 7
+        
         if min_limiter == 0xFFFFFFFF:
             min_limiter = days_to_pc  # Нет агентов в ops
         
-        adaptive_days = min(min_limiter, days_to_pc)
+        adaptive_days = min(min_limiter, days_to_pc, MAX_ADAPTIVE_DAYS)
         
         # Не выходим за end_day
         if current_day + adaptive_days > self.end_day:
