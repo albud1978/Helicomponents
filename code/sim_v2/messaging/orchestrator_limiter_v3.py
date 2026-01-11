@@ -74,6 +74,14 @@ class HF_InitMP5Cumsum(fg.HostFunction):
         if step > 0:
             return
         
+        # Инициализируем mp_min_limiter = MAX перед первым RTC
+        try:
+            mp_min = FLAMEGPU.environment.getMacroPropertyUInt("mp_min_limiter")
+            mp_min[0] = 0xFFFFFFFF
+            # print(f"  ✅ mp_min_limiter[0] = {mp_min[0]}")
+        except:
+            pass
+        
         mp = FLAMEGPU.environment.getMacroPropertyUInt32("mp5_cumsum")
         
         # RTC использует MAX_FRAMES=400, MAX_DAYS+1 для stride
@@ -310,6 +318,10 @@ class LimiterOrchestrator:
         )
         
         # Регистрируем RTC функции
+        # InitFunction для инициализации mp_min_limiter = MAX
+        self.hf_init_min_limiter = rtc_limiter_optimized.HF_InitMinLimiter()
+        self.model.addInitFunction(self.hf_init_min_limiter)
+        
         rtc_limiter_optimized.register_limiter_optimized(self.model, self.base_model.agent)
         
         # HostFunction для вычисления adaptive_days
@@ -554,17 +566,14 @@ class LimiterOrchestrator:
         # Начальные значения
         current_day = 0
         step_count = 0
+        last_recorded_day = -1  # Для избежания дубликатов MP2
         
         # Инициализируем current_day в Environment
         self.simulation.setEnvironmentPropertyUInt("current_day", 0)
         self.simulation.setEnvironmentPropertyUInt("adaptive_days", 1)
         self.simulation.setEnvironmentPropertyUInt("quota_enabled", 1)
         
-        # Сбрасываем mp_min_limiter в MAX
-        try:
-            self.simulation.setMacroPropertyUInt("mp_min_limiter", 0, 0xFFFFFFFF)
-        except:
-            pass  # MacroProperty может не поддерживать set напрямую
+        # mp_min_limiter инициализируется в HF_InitMP5Cumsum
         
         # ═══════════════════════════════════════════════════════════════════════════
         # V3: АДАПТИВНЫЙ ЦИКЛ (не ежедневный!)
@@ -581,11 +590,12 @@ class LimiterOrchestrator:
             current_day = self.simulation.getEnvironmentPropertyUInt("current_day")
             adaptive_days = current_day - prev_day if current_day > prev_day else 1
             
-            # Собираем MP2 данные для текущего дня
-            if self.enable_mp2:
+            # Собираем MP2 данные ТОЛЬКО если день изменился (избегаем дубликатов)
+            if self.enable_mp2 and prev_day != last_recorded_day:
                 t_collect = time.perf_counter()
                 self._collect_mp2_day(all_mp2_rows, prev_day)
                 total_collect_time += time.perf_counter() - t_collect
+                last_recorded_day = prev_day
             
             step_count += 1
             

@@ -32,13 +32,25 @@ except ImportError as e:
 # ═══════════════════════════════════════════════════════════════════
 RTC_COMPUTE_LIMITER_ON_ENTRY = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Вычисляем limiter ТОЛЬКО для агентов, входящих в operations
-    // intent_state == 2 означает, что агент получил approve на переход в ops
+    // Вычисляем limiter для агентов в operations:
+    // 1. На шаге 0: для ВСЕХ агентов в ops (начальная инициализация)
+    // 2. На остальных шагах: для агентов с intent=2 (входящих в ops)
     
+    const unsigned int step = FLAMEGPU->getStepCounter();
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+    const unsigned short current_limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
-    // Только для тех, кто переходит в operations
-    if (intent != 2u) {{
+    // Debug: логируем условия на шаге 0
+    if (step == 0u && idx < 3u) {{
+        printf("  [LIMITER CHECK Step 0] idx=%u: intent=%u, current_limiter=%u\\n", idx, intent, current_limiter);
+    }}
+    
+    // На шаге 0: вычисляем для всех с limiter=0
+    // На остальных шагах: только для входящих (intent=2)
+    bool need_compute = (step == 0u && current_limiter == 0u) || (step > 0u && intent == 2u);
+    
+    if (!need_compute) {{
         return flamegpu::ALIVE;
     }}
     
@@ -69,12 +81,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
     // Устанавливаем limiter
     FLAMEGPU->setVariable<unsigned short>("limiter", (unsigned short)limiter);
     
-    // Debug (первые несколько)
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");  // UInt не UInt16!
-    if (idx < 5u) {{
+    // Debug (первые несколько агентов или шаг 0) — idx уже объявлен выше!
+    if (step == 0u || idx < 3u) {{
         const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [LIMITER ENTRY] AC %u (idx %u): ll=%u, sne=%u, remaining=%u days; oh=%u, ppr=%u, remaining=%u days → limiter=%u\\n",
-               ac, idx, ll, sne, days_to_ll, oh, ppr, days_to_oh, limiter);
+        printf("  [LIMITER ENTRY Step %u] AC %u (idx %u): ll=%u, sne=%u, days_ll=%u; oh=%u, ppr=%u, days_oh=%u → limiter=%u\\n",
+               step, ac, idx, ll, sne, days_to_ll, oh, ppr, days_to_oh, limiter);
     }}
     
     return flamegpu::ALIVE;
@@ -144,6 +155,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_min_limiter, flamegpu::MessageNone, flamegpu
     // ВАЖНО: Только атомарная запись, без чтения!
     
     const unsigned short limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int step = FLAMEGPU->getStepCounter();
+    
+    // Debug: логируем на шаге 0
+    if (step == 0u && idx < 3u) {{
+        printf("  [MIN_LIMITER Step %u] idx=%u: limiter=%u\\n", step, idx, limiter);
+    }}
     
     // Пропускаем агентов с limiter == 0 (не в ops или уже на выходе)
     if (limiter == 0u) {{
@@ -156,6 +174,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_min_limiter, flamegpu::MessageNone, flamegpu
     // atomicMin: записываем если наш limiter меньше текущего
     mp_min[0].min((unsigned int)limiter);
     
+    // Debug: первый агент с небольшим limiter
+    if (limiter < 50u && step == 0u) {{
+        printf("  [MIN_LIMITER] AC idx=%u wrote limiter=%u to mp_min\\n", idx, limiter);
+    }}
+    
     return flamegpu::ALIVE;
 }}
 """
@@ -164,6 +187,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_min_limiter, flamegpu::MessageNone, flamegpu
 # ═══════════════════════════════════════════════════════════════════
 # HostFunction: Вычисление adaptive_days
 # ═══════════════════════════════════════════════════════════════════
+class HF_InitMinLimiter(fg.HostFunction):
+    """Инициализирует mp_min_limiter = MAX перед первым RTC (init function)"""
+    
+    def run(self, FLAMEGPU):
+        mp_min = FLAMEGPU.environment.getMacroPropertyUInt("mp_min_limiter")
+        mp_min[0] = 0xFFFFFFFF
+        print(f"  [HF_InitMinLimiter] mp_min_limiter[0] = {mp_min[0]}")
+
+
 class HF_ComputeAdaptiveDays(fg.HostFunction):
     """Вычисляет adaptive_days = min(min_limiter, next_program_change - current_day)"""
     
@@ -177,19 +209,20 @@ class HF_ComputeAdaptiveDays(fg.HostFunction):
         current_day = FLAMEGPU.environment.getPropertyUInt("current_day")
         
         # 1. Получаем min_limiter из MacroProperty
-        # API: getMacroPropertyUInt32(name)[index]
         try:
-            mp_min = FLAMEGPU.environment.getMacroPropertyUInt32("mp_min_limiter")
+            mp_min = FLAMEGPU.environment.getMacroPropertyUInt("mp_min_limiter")
             min_limiter = int(mp_min[0])
-        except:
+            # print(f"  [HF] mp_min[0] raw = {mp_min[0]}, min_limiter = {min_limiter}")
+        except Exception as e:
+            print(f"  [HF] ERROR reading mp_min_limiter: {e}")
             min_limiter = 0xFFFFFFFF
         
         # Сбрасываем MacroProperty для следующего шага
         try:
-            mp_min = FLAMEGPU.environment.getMacroPropertyUInt32("mp_min_limiter")
+            mp_min = FLAMEGPU.environment.getMacroPropertyUInt("mp_min_limiter")
             mp_min[0] = 0xFFFFFFFF
-        except:
-            pass
+        except Exception as e:
+            print(f"  [HF] ERROR resetting mp_min_limiter: {e}")
         
         # 2. Находим следующее изменение программы
         next_pc_day = self.end_day
