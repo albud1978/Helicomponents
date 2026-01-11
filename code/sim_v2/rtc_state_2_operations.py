@@ -48,15 +48,26 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
                step_day, idx, acn, intent);
     }}
     
-    // Получаем суточный налёт из MP5 (всегда, даже на шаге 0)
-    // ВАЖНО: base использует runtime frames, но mp5 объявлен с фиксированным RTC размером
-    const unsigned int base = step_day * frames + idx;
-    const unsigned int base_next = base + frames;
+    // V3 ADAPTIVE: Получаем налёт за ВЕСЬ период adaptive_days через cumsum
+    // prev_day установлен в HF_ComputeAdaptiveDays ПЕРЕД обновлением current_day
+    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    
+    const unsigned int base_curr = step_day * frames + idx;
+    const unsigned int base_prev = prev_day * frames + idx;
+    const unsigned int base_next = base_curr + frames;
+    
+    // mp5_cumsum для суммарного налёта за период
+    auto mp5_cumsum = FLAMEGPU->environment.getMacroProperty<unsigned int, {rtc_max_size}u>("mp5_cumsum");
+    // mp5_lin для прогноза на следующий день
     auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {rtc_max_size}u>("mp5_lin");
-    const unsigned int dt = mp5[base];
+    
+    // dt = cumsum[step_day] - cumsum[prev_day] = налёт за adaptive_days дней
+    const unsigned int cumsum_curr = mp5_cumsum[base_curr];
+    const unsigned int cumsum_prev = (prev_day > 0u) ? mp5_cumsum[base_prev] : 0u;
+    const unsigned int dt = cumsum_curr - cumsum_prev;
     const unsigned int dn = (step_day < {MAX_DAYS}u - 1u) ? mp5[base_next] : 0u;
     
-    // Обновляем MP5 в агенте
+    // Обновляем dt в агенте (для записи в MP2)
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", dn);
     

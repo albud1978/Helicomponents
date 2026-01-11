@@ -55,19 +55,23 @@ def compute_mp5_cumsum(mp5_lin: np.ndarray, frames: int, days: int) -> np.ndarra
     if len(mp5_lin) == 0:
         return np.zeros(frames * (days + 1), dtype=np.uint32)
     
-    # mp5_lin имеет формат [day * frames + frame], транспонируем в [frames, days]
-    mp5_2d = np.zeros((frames, days), dtype=np.uint32)
+    # mp5_lin имеет формат [day * frames + frame] (day-major)
+    # Кумулятивная сумма в том же формате: cumsum[d * frames + f] = sum(mp5[0:d, f])
+    
+    # Reshape в [days, frames] чтобы cumsum по axis=0 (дням)
+    mp5_2d = np.zeros((days, frames), dtype=np.uint32)
     for d in range(days):
         for f in range(frames):
             src_idx = d * frames + f
             if src_idx < len(mp5_lin):
-                mp5_2d[f, d] = mp5_lin[src_idx]
+                mp5_2d[d, f] = mp5_lin[src_idx]
     
-    # Кумулятивная сумма с начальным 0
-    cumsum = np.zeros((frames, days + 1), dtype=np.uint32)
-    cumsum[:, 1:] = np.cumsum(mp5_2d, axis=1)
+    # Кумулятивная сумма по дням (axis=0), добавляем начальную строку нулей
+    cumsum_2d = np.zeros((days + 1, frames), dtype=np.uint32)
+    cumsum_2d[1:, :] = np.cumsum(mp5_2d, axis=0)
     
-    return cumsum.flatten()
+    # Flatten в day-major: [day0_frame0, day0_frame1, ..., day1_frame0, ...]
+    return cumsum_2d.flatten()
 
 
 def find_next_program_change(program_changes: List[Tuple[int, int, int]], 
