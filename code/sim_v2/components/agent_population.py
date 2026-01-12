@@ -161,8 +161,8 @@ class AgentPopulationBuilder:
             agent.setVariableUInt("idx", frame_idx)
             agent.setVariableUInt("aircraft_number", agent_data['aircraft_number'])
             # FIX 2: status_id НЕ используется - переведено на States
-            agent.setVariableUInt("sne", agent_data['sne'])
-            agent.setVariableUInt("ppr", agent_data['ppr'])
+            sne_val = agent_data['sne']
+            ppr_val = agent_data['ppr']
             agent.setVariableUInt("repair_days", agent_data['repair_days'])
             gb = agent_data.get('group_by', 0)
             partseqno = agent_data.get('partseqno_i', 0)
@@ -199,6 +199,15 @@ class AgentPopulationBuilder:
             else:
                 ll_value = ll_by_frame[frame_idx]  # значение по умолчанию
             
+            # FIX: PPR = SNE для "новых" планеров без ремонта
+            # Условие: sne > 0 AND ppr = 0 AND sne < ll AND НЕ в ремонте
+            # Логика: планер до первого ремонта не имеет PPR в исходных данных
+            # Исключение: планер в repair (status_id=4) имеет PPR=0 т.к. он обнулён при входе
+            if ppr_val == 0 and sne_val > 0 and ll_value > 0 and sne_val < ll_value and status_id != 4:
+                ppr_val = sne_val  # PPR = SNE для "нового" планера
+            
+            agent.setVariableUInt("sne", sne_val)
+            agent.setVariableUInt("ppr", ppr_val)
             agent.setVariableUInt("ll", ll_value)
             if 0 <= pidx < len(mp1_second_ll):
                 second_ll_value = int(mp1_second_ll[pidx])
