@@ -156,8 +156,8 @@ class LimiterV7Orchestrator:
         # V7: Однофазные переходы состояний
         # ═══════════════════════════════════════════════════════════════
         
-        # Фаза 0-1: Детерминированные переходы + Operations инкременты и переходы
-        rtc_state_transitions_v7.register_all_v7(self.model, heli_agent)
+        # Фаза -1 до 1: exit_date copy + Детерминированные переходы + Operations
+        rtc_state_transitions_v7.register_all_v7(self.model, heli_agent, self.base_model.quota_agent)
         
         # Фаза 2: Квотирование (сброс, подсчёт, демоут, P1, P2, P3)
         rtc_quota_v7.register_quota_v7(self.model, heli_agent)

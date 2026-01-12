@@ -45,6 +45,59 @@ CUMSUM_SIZE = RTC_MAX_FRAMES * (MAX_DAYS + 1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ФАЗА -1: Копирование exit_date в MacroProperty для расчёта adaptive_days
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Сброс min_exit_date_mp перед копированием
+RTC_RESET_EXIT_DATE = """
+FLAMEGPU_AGENT_FUNCTION(rtc_reset_exit_date_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
+    // Сброс min_exit_date_mp в начале шага (ТОЛЬКО QuotaManager group_by=1)
+    const unsigned char group_by = FLAMEGPU->getVariable<unsigned char>("group_by");
+    if (group_by != 1u) return flamegpu::ALIVE;  // Только один агент
+    
+    auto mp_exit = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_exit_date_mp");
+    mp_exit[0].exchange(0xFFFFFFFFu);  // MAX = нет exit_date
+    
+    return flamegpu::ALIVE;
+}
+"""
+
+# Копирование exit_date из repair агентов
+RTC_COPY_EXIT_DATE_REPAIR = """
+FLAMEGPU_AGENT_FUNCTION(rtc_copy_exit_date_repair_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
+    // V7: Копируем exit_date в min_exit_date_mp (atomicMin, WRITE ONLY)
+    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
+    
+    // Если exit_date не установлен — пропускаем
+    if (exit_date == 0u || exit_date == 0xFFFFFFFFu) return flamegpu::ALIVE;
+    
+    // atomicMin — ТОЛЬКО WRITE, без READ
+    auto mp_exit = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_exit_date_mp");
+    mp_exit[0].min(exit_date);  // atomicMin
+    
+    return flamegpu::ALIVE;
+}
+"""
+
+# Копирование exit_date из reserve агентов (spawn)
+RTC_COPY_EXIT_DATE_SPAWN = """
+FLAMEGPU_AGENT_FUNCTION(rtc_copy_exit_date_spawn_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
+    // V7: Копируем exit_date в min_exit_date_mp (atomicMin, WRITE ONLY)
+    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
+    
+    // Если exit_date не установлен — пропускаем
+    if (exit_date == 0u || exit_date == 0xFFFFFFFFu) return flamegpu::ALIVE;
+    
+    // atomicMin — ТОЛЬКО WRITE, без READ
+    auto mp_exit = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_exit_date_mp");
+    mp_exit[0].min(exit_date);  // atomicMin
+    
+    return flamegpu::ALIVE;
+}
+"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # ФАЗА 0: Детерминированные переходы (repair, spawn)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -412,6 +465,35 @@ FLAMEGPU_AGENT_FUNCTION(rtc_storage_stay_v7, flamegpu::MessageNone, flamegpu::Me
 # Регистрация функций
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def register_exit_date_copy(model: fg.ModelDescription, agent: fg.AgentDescription, quota_agent: fg.AgentDescription = None):
+    """Фаза -1: Копирование exit_date для расчёта adaptive_days"""
+    print("  📦 V7 Фаза -1: Копирование exit_date...")
+    
+    # Сброс min_exit_date_mp (QuotaManager)
+    if quota_agent is not None:
+        layer_reset = model.newLayer("v7_reset_exit_date")
+        fn = quota_agent.newRTCFunction("rtc_reset_exit_date_v7", RTC_RESET_EXIT_DATE)
+        fn.setInitialState("default")
+        fn.setEndState("default")
+        layer_reset.addAgentFunction(fn)
+    
+    # Копирование exit_date из repair
+    layer_copy_repair = model.newLayer("v7_copy_exit_date_repair")
+    fn = agent.newRTCFunction("rtc_copy_exit_date_repair_v7", RTC_COPY_EXIT_DATE_REPAIR)
+    fn.setInitialState("repair")
+    fn.setEndState("repair")
+    layer_copy_repair.addAgentFunction(fn)
+    
+    # Копирование exit_date из reserve (spawn)
+    layer_copy_spawn = model.newLayer("v7_copy_exit_date_spawn")
+    fn = agent.newRTCFunction("rtc_copy_exit_date_spawn_v7", RTC_COPY_EXIT_DATE_SPAWN)
+    fn.setInitialState("reserve")
+    fn.setEndState("reserve")
+    layer_copy_spawn.addAgentFunction(fn)
+    
+    print("    ✅ Фаза -1 готова (exit_date → min_exit_date_mp)")
+
+
 def register_phase0_deterministic(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Фаза 0: Детерминированные переходы (repair, spawn)"""
     print("  📦 V7 Фаза 0: Детерминированные переходы...")
@@ -569,18 +651,21 @@ def register_phase3_promote(model: fg.ModelDescription, agent: fg.AgentDescripti
     print("    ✅ Фаза 3 готова (P1, P2, P3, stay)")
 
 
-def register_all_v7(model: fg.ModelDescription, agent: fg.AgentDescription):
+def register_all_v7(model: fg.ModelDescription, agent: fg.AgentDescription, quota_agent: fg.AgentDescription = None):
     """Регистрирует все V7 переходы состояний"""
     print("\n" + "=" * 60)
     print("📦 V7: Однофазные переходы состояний")
     print("=" * 60)
+    
+    # Фаза -1: Копирование exit_date для расчёта adaptive_days
+    register_exit_date_copy(model, agent, quota_agent)
     
     register_phase0_deterministic(model, agent)
     register_phase1_operations(model, agent)
     # ФАЗА 2 и 3 регистрируются ПОСЛЕ квотирования
     
     print("=" * 60)
-    print("✅ V7 переходы (фазы 0-1) зарегистрированы")
+    print("✅ V7 переходы (фазы -1 до 1) зарегистрированы")
     print("   Фазы 2-3 регистрируются после квотирования")
     print("=" * 60 + "\n")
 
