@@ -144,3 +144,7 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     
     print("  RTC модуль units_state_manager зарегистрирован (1 слой)")
 
+
+
+
+

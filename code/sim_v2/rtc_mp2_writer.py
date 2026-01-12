@@ -13,6 +13,100 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует RTC модуль mp2_writer (совместимо с orchestrator_v2)"""
     register_mp2_writer(model, agent)
 
+
+# Глобальный флаг для предотвращения повторного создания MacroProperties
+_mp2_macroproperties_created = False
+
+def setup_mp2_macroproperties(model: fg.ModelDescription):
+    """
+    Создаёт MP2 MacroProperties. Должна вызываться ДО регистрации модулей,
+    чтобы spawn_v2 и другие модули могли использовать mp2_transition_*.
+    """
+    global _mp2_macroproperties_created  # В начале функции
+    
+    # Проверяем глобальный флаг (надёжнее чем getMacroPropertyDescription)
+    if _mp2_macroproperties_created:
+        print("  ⚠️  MP2 MacroProperties уже зарегистрированы, пропускаем setup")
+        return
+    
+    # ФИКСИРОВАННЫЕ размеры для RTC кэширования
+    MAX_FRAMES = model_build.RTC_MAX_FRAMES
+    MAX_DAYS = model_build.MAX_DAYS
+    MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Плотная матрица с D+1 паддингом
+    
+    # Основные колонки MP2 (ВСЕ агентные переменные)
+    model.Environment().newMacroPropertyUInt("mp2_day_u16", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_idx", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_aircraft_number", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_partseqno", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_group_by", MP2_SIZE)
+    
+    model.Environment().newMacroPropertyUInt("mp2_state", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_intent_state", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_bi_counter", MP2_SIZE)
+    
+    model.Environment().newMacroPropertyUInt("mp2_sne", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_ppr", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_cso", MP2_SIZE)
+    
+    model.Environment().newMacroPropertyUInt("mp2_ll", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_oh", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_br", MP2_SIZE)
+    
+    model.Environment().newMacroPropertyUInt("mp2_repair_time", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_assembly_time", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_partout_time", MP2_SIZE)
+    
+    model.Environment().newMacroPropertyUInt("mp2_repair_days", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_s4_days", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_assembly_trigger", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_active_trigger", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_partout_trigger", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_mfg_date_days", MP2_SIZE)
+    
+    model.Environment().newMacroPropertyUInt("mp2_dt", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_dn", MP2_SIZE)
+    
+    # Буфер событий
+    MP2_EVENT_SIZE = 10000
+    model.Environment().newMacroPropertyUInt("mp2_event_counter")
+    model.Environment().newMacroPropertyUInt("event_day", MP2_EVENT_SIZE)
+    model.Environment().newMacroPropertyUInt("event_idx", MP2_EVENT_SIZE)
+    model.Environment().newMacroPropertyUInt("event_type", MP2_EVENT_SIZE)
+    model.Environment().newMacroPropertyUInt("event_from_state", MP2_EVENT_SIZE)
+    model.Environment().newMacroPropertyUInt("event_to_state", MP2_EVENT_SIZE)
+    model.Environment().newMacroPropertyUInt("event_value1", MP2_EVENT_SIZE)
+    model.Environment().newMacroPropertyUInt("event_value2", MP2_EVENT_SIZE)
+    
+    # Квотирование (отладка)
+    model.Environment().newMacroPropertyUInt32("mp2_quota_curr_ops", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt32("mp2_quota_target_ops", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt32("mp2_quota_svc_count", MP2_SIZE)
+    model.Environment().newMacroPropertyInt("mp2_quota_deficit", MP2_SIZE)
+    
+    # Флаги квотирования (per-agent per-day)
+    model.Environment().newMacroPropertyUInt("mp2_quota_demount", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_quota_promote_p1", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_quota_promote_p2", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_quota_promote_p3", MP2_SIZE)
+
+    # Флаги переходов между состояниями
+    model.Environment().newMacroPropertyUInt("mp2_transition_0_to_2", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_0_to_3", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_2_to_4", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_2_to_6", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_2_to_3", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_3_to_2", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_5_to_2", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_1_to_2", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_4_to_5", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_1_to_4", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_4_to_2", MP2_SIZE)
+    
+    _mp2_macroproperties_created = True
+    print("  ✅ MP2 MacroProperties созданы (setup_mp2_macroproperties)")
+
+
 def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, clickhouse_client=None):
     """Регистрирует RTC функции для записи в MP2 и host функцию для дренажа"""
     
@@ -21,93 +115,11 @@ def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, 
     MAX_DAYS = model_build.MAX_DAYS
     MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Плотная матрица с D+1 паддингом
     
-    # Проверяем, был ли уже вызван register_mp2_writer (например, если mp2_writer в списке модулей)
-    # Если mp2_day_u16 уже существует, то выходим
-    try:
-        model.Environment().getMacroPropertyDescription("mp2_day_u16")
-        print("  ⚠️  MP2 MacroProperties уже зарегистрированы, пропускаем")
-        return None
-    except:
-        pass  # MacroProperty не существует, продолжаем создание
+    # Убеждаемся что MacroProperties созданы
+    setup_mp2_macroproperties(model)
     
-    # Обёртываем создание MacroProperties в try-except для безопасности
+    # Регистрируем RTC функции для записи в MP2
     try:
-        # Основные колонки MP2 (ВСЕ агентные переменные)
-        model.Environment().newMacroPropertyUInt("mp2_day_u16", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_idx", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_aircraft_number", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_partseqno", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_group_by", MP2_SIZE)
-        
-        model.Environment().newMacroPropertyUInt("mp2_state", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_intent_state", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_bi_counter", MP2_SIZE)  # Служебное поле для BI (всегда 1)
-        
-        model.Environment().newMacroPropertyUInt("mp2_sne", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_ppr", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_cso", MP2_SIZE)
-        
-        model.Environment().newMacroPropertyUInt("mp2_ll", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_oh", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_br", MP2_SIZE)
-        
-        model.Environment().newMacroPropertyUInt("mp2_repair_time", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_assembly_time", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_partout_time", MP2_SIZE)
-        
-        model.Environment().newMacroPropertyUInt("mp2_repair_days", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_s4_days", MP2_SIZE)  # Счётчик дней в repair+reserve
-        model.Environment().newMacroPropertyUInt("mp2_assembly_trigger", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_active_trigger", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_partout_trigger", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_mfg_date_days", MP2_SIZE)
-        
-        model.Environment().newMacroPropertyUInt("mp2_dt", MP2_SIZE)
-        model.Environment().newMacroPropertyUInt("mp2_dn", MP2_SIZE)
-        
-        # ops_ticket удален (никогда не устанавливается)
-        # model.Environment().newMacroPropertyUInt("mp2_ops_ticket", MP2_SIZE)
-        
-        # Буфер событий
-        MP2_EVENT_SIZE = 10000
-        model.Environment().newMacroPropertyUInt("mp2_event_counter")  # Атомарный счетчик (скаляр)
-        model.Environment().newMacroPropertyUInt("event_day", MP2_EVENT_SIZE)
-        model.Environment().newMacroPropertyUInt("event_idx", MP2_EVENT_SIZE)
-        model.Environment().newMacroPropertyUInt("event_type", MP2_EVENT_SIZE)
-        model.Environment().newMacroPropertyUInt("event_from_state", MP2_EVENT_SIZE)
-        model.Environment().newMacroPropertyUInt("event_to_state", MP2_EVENT_SIZE)
-        model.Environment().newMacroPropertyUInt("event_value1", MP2_EVENT_SIZE)
-        model.Environment().newMacroPropertyUInt("event_value2", MP2_EVENT_SIZE)
-        
-        # Квотирование (отладка)
-        model.Environment().newMacroPropertyUInt32("mp2_quota_curr_ops", MP2_SIZE)    # Текущее кол-во в operations
-        model.Environment().newMacroPropertyUInt32("mp2_quota_target_ops", MP2_SIZE)  # Целевое кол-во
-        model.Environment().newMacroPropertyUInt32("mp2_quota_svc_count", MP2_SIZE)   # Кол-во в serviceable
-        model.Environment().newMacroPropertyInt("mp2_quota_deficit", MP2_SIZE)      # Дефицит (может быть <0)
-        
-        # Флаги квотирования (per-agent per-day)
-        model.Environment().newMacroPropertyUInt("mp2_quota_demount", MP2_SIZE)      # Флаг демоута (1 бит)
-        model.Environment().newMacroPropertyUInt("mp2_quota_promote_p1", MP2_SIZE)   # Флаг промоута P1 (serviceable)
-        model.Environment().newMacroPropertyUInt("mp2_quota_promote_p2", MP2_SIZE)   # Флаг промоута P2 (reserve)
-        model.Environment().newMacroPropertyUInt("mp2_quota_promote_p3", MP2_SIZE)   # Флаг промоута P3 (inactive)
-        
-        # MP4 целевые значения (для верификации логики квот)
-        # Note: эти буферы создаются в rtc_quota_count_ops.py как mp2_mp4_target_mi8/mi17
-
-        # Флаги переходов между состояниями (вычисляются GPU post-processing слоем)
-        model.Environment().newMacroPropertyUInt("mp2_transition_0_to_2", MP2_SIZE)   # spawn → operations (динамический)
-        model.Environment().newMacroPropertyUInt("mp2_transition_0_to_3", MP2_SIZE)   # spawn → serviceable (детерминированный)
-        model.Environment().newMacroPropertyUInt("mp2_transition_2_to_4", MP2_SIZE)   # operations → repair
-        model.Environment().newMacroPropertyUInt("mp2_transition_2_to_6", MP2_SIZE)   # operations → storage
-        model.Environment().newMacroPropertyUInt("mp2_transition_2_to_3", MP2_SIZE)   # operations → serviceable
-        model.Environment().newMacroPropertyUInt("mp2_transition_3_to_2", MP2_SIZE)   # serviceable → operations
-        model.Environment().newMacroPropertyUInt("mp2_transition_5_to_2", MP2_SIZE)   # reserve → operations
-        model.Environment().newMacroPropertyUInt("mp2_transition_1_to_2", MP2_SIZE)   # inactive → operations
-        model.Environment().newMacroPropertyUInt("mp2_transition_4_to_5", MP2_SIZE)   # repair → reserve
-        model.Environment().newMacroPropertyUInt("mp2_transition_1_to_4", MP2_SIZE)   # inactive → repair
-        model.Environment().newMacroPropertyUInt("mp2_transition_4_to_2", MP2_SIZE)   # repair → operations
-        print("  ✅ Transition MacroProperty созданы для MP2")
-
         # inactive (state=1)
         rtc_write_inactive = agent.newRTCFunction("rtc_mp2_write_inactive", f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{

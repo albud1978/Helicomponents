@@ -21,8 +21,13 @@ MAX_GROUPS = 50
 
 def get_rtc_code_spawn_check() -> str:
     """
-    RTC для проверки дефицита и активации резерва
+    RTC для проверки дефицита и активации резерва (трёхуровневая система)
     Работает с агентами в reserve (state=5, active=0)
+    
+    Spawn срабатывает только если:
+    1. Есть requests (requests > 0)
+    2. Serviceable очередь пуста (svc_head >= svc_tail)
+    3. Reserve очередь (active=1) пуста (rsv_head >= rsv_tail)
     """
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_units_spawn_check, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -37,18 +42,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_spawn_check, flamegpu::MessageNone, flamegpu::
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
-    // Проверяем есть ли неудовлетворённые запросы (READ фаза)
+    // Проверяем requests и обе очереди (READ фаза)
     auto request_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_request_count");
-    auto queue_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_queue_head");
-    auto queue_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_queue_tail");
+    auto svc_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_svc_head");
+    auto svc_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_svc_tail");
+    auto rsv_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_head");
+    auto rsv_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_tail");
     
     unsigned int requests = request_count[group_by];
-    unsigned int head = queue_head[group_by];
-    unsigned int tail = queue_tail[group_by];
     
-    // Если есть запросы и очередь пуста (head >= tail)
-    unsigned int queue_size = (tail > head) ? (tail - head) : 0u;
-    bool need_spawn = (requests > queue_size);
+    // Проверяем обе очереди
+    unsigned int svc_size = (svc_tail[group_by] > svc_head[group_by]) ? 
+                            (svc_tail[group_by] - svc_head[group_by]) : 0u;
+    unsigned int rsv_size = (rsv_tail[group_by] > rsv_head[group_by]) ? 
+                            (rsv_tail[group_by] - rsv_head[group_by]) : 0u;
+    
+    // Spawn только если обе очереди пусты И есть requests
+    bool need_spawn = (requests > 0u && svc_size == 0u && rsv_size == 0u);
     
     if (!need_spawn) {{
         return flamegpu::ALIVE;
@@ -60,19 +70,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_spawn_check, flamegpu::MessageNone, flamegpu::
         unsigned int old_val = request_count[group_by].CAS(expected, expected - 1u);
         
         if (old_val == expected) {{
-            // Успешно захватили слот — активируем агрегат
+            // Успешно захватили слот — активируем агрегат в serviceable
             FLAMEGPU->setVariable<unsigned int>("active", 1u);
-            FLAMEGPU->setVariable<unsigned int>("state", 3u);  // serviceable
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
+            FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);  // serviceable
             
-            // Устанавливаем начальные значения
+            // Устанавливаем начальные значения (новый агрегат)
             FLAMEGPU->setVariable<unsigned int>("sne", 0u);
             FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
             FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
             
-            // Получаем позицию в FIFO через CAS на tail
-            unsigned int expected_tail = tail;
-            unsigned int new_tail = queue_tail[group_by].CAS(expected_tail, expected_tail + 1u);
+            // Получаем позицию в svc-очереди через CAS на tail
+            unsigned int expected_tail = svc_tail[group_by];
+            unsigned int new_tail = svc_tail[group_by].CAS(expected_tail, expected_tail + 1u);
             FLAMEGPU->setVariable<unsigned int>("queue_position", new_tail);
         }}
     }}

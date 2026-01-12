@@ -120,9 +120,41 @@ class V2BaseModelUnits:
         # Маппинг aircraft_number → planer_idx (для агрегатов)
         self.env.newMacroPropertyUInt("mp_ac_to_idx", 2000000)  # MAX aircraft_number
         
+        # === assembly_trigger планеров (для комплектации агрегатами) ===
+        # Формат: mp_planer_assembly[day * MAX_PLANERS + planer_idx] = 0 или 1
+        # assembly_trigger=1 означает, что планер в последней стадии ремонта
+        self.env.newMacroPropertyUInt8("mp_planer_assembly", planer_dt_size)
+        
+        # === Слоты комплектации: сколько агрегатов группы назначено на планер ===
+        # Формат: mp_planer_slots[group_by * MAX_PLANERS + planer_idx] = count
+        self.env.newMacroPropertyUInt32("mp_planer_slots", MAX_GROUPS * MAX_PLANERS)
+        
+        # === Обратный маппинг: planer_idx → aircraft_number ===
+        self.env.newMacroPropertyUInt32("mp_idx_to_ac", MAX_PLANERS)
+        
+        # === Флаг: планер в operations (для assembly) ===
+        # mp_planer_in_ops[planer_idx] = 1 если планер в operations, 0 иначе
+        self.env.newMacroPropertyUInt8("mp_planer_in_ops", MAX_PLANERS)
+        
+        # === Тип планера (для проверки соответствия с типом двигателя) ===
+        # mp_planer_type[planer_idx] = 1 (Mi-8) или 2 (Mi-17)
+        # Используется в assembly для проверки:
+        #   - group_by=3 (ТВ2-117) → только для Mi-8 (planer_type=1)
+        #   - group_by=4 (ТВ3-117) → только для Mi-17 (planer_type=2)
+        self.env.newMacroPropertyUInt8("mp_planer_type", MAX_PLANERS)
+        
+        # === Дефицит планеров (не хватает агрегатов) ===
+        # mp_planer_deficit[group_by * MAX_PLANERS + planer_idx] = количество недостающих агрегатов
+        # Если > 0, планер не летает (dt не применяется) пока не получит агрегат
+        # ВАЖНО: используем UInt32 для совместимости с CUDA atomicAdd
+        self.env.newMacroPropertyUInt32("mp_planer_deficit", MAX_GROUPS * MAX_PLANERS)
+        
+        # === Лог дефицитов для аналитики ===
+        # mp_deficit_days[group_by * MAX_PLANERS + planer_idx] = количество дней в дефиците
+        # ВАЖНО: используем UInt32 т.к. CUDA atomicAdd не поддерживает UInt16
+        self.env.newMacroPropertyUInt32("mp_deficit_days", MAX_GROUPS * MAX_PLANERS)
+        
         # === MP2 для агрегатов (циклический буфер на DRAIN_INTERVAL дней) ===
-        # Полная история слишком большая (140M), используем буфер на 10 дней
-        # Ограничение: HostMacroProperty плохо работает с большими массивами
         DRAIN_INTERVAL = 10
         mp2_buffer_size = max_frames * (DRAIN_INTERVAL + 1)  # ~400K элементов
         self._mp2_drain_interval = DRAIN_INTERVAL
@@ -194,6 +226,9 @@ class V2BaseModelUnits:
         agent.newVariableUInt("intent_state", 0)        # Намерение перехода
         agent.newVariableUInt("mfg_date", 0)            # Дата производства
         agent.newVariableUInt("active", 1)              # Активен (0 = резервный слот для spawn)
+        agent.newVariableUInt("want_spawn", 0)          # Флаг для двухфазного spawn
+        agent.newVariableUInt("want_assign", 0)         # Флаг для двухфазного assign
+        agent.newVariableUInt("target_planer_idx", 0)   # Временное хранение planer_idx для assembly
         
         # === Служебное ===
         agent.newVariableUInt("bi_counter", 1)          # Счётчик для BI

@@ -51,6 +51,9 @@ except ImportError as e:
 from base_model_units import V2BaseModelUnits
 from agent_population_units import AgentPopulationUnitsBuilder
 
+# Константы
+MAX_PLANERS = 400  # Максимум планеров для assembly
+
 
 class UnitsOrchestrator:
     """Оркестратор симуляции агрегатов"""
@@ -86,18 +89,52 @@ class UnitsOrchestrator:
         self.env_data = population_builder.load_data()
         self.population_builder = population_builder
         
-        # Загрузка dt планеров для интеграции
+        # Загрузка dt, assembly_trigger, planer_in_ops и planer_type планеров для интеграции
         try:
-            from planer_dt_loader import load_planer_dt
-            dt_array, ac_to_idx = load_planer_dt(str(self.version_date), self.version_id)
+            from planer_dt_loader import load_planer_data
+            dt_array, assembly_array, ac_to_idx, planer_in_ops, planer_type = load_planer_data(str(self.version_date), self.version_id)
             if dt_array is not None:
                 self.env_data['planer_dt_array'] = dt_array
                 self.env_data['ac_to_idx'] = ac_to_idx
-                print(f"   ✅ Загружено dt {len(ac_to_idx)} планеров")
+                self.env_data['planer_assembly_array'] = assembly_array
+                self.env_data['planer_in_ops'] = planer_in_ops
+                self.env_data['planer_type'] = planer_type
+                print(f"   ✅ Загружено dt {len(ac_to_idx)} планеров, {len(planer_in_ops)} в ops")
+                if assembly_array is not None:
+                    print(f"   ✅ Загружено assembly_trigger: {assembly_array.sum()} записей")
+                if planer_type:
+                    mi8 = sum(1 for t in planer_type.values() if t == 1)
+                    mi17 = sum(1 for t in planer_type.values() if t == 2)
+                    print(f"   ✅ Загружено planer_type: Mi-8={mi8}, Mi-17={mi17}")
         except Exception as e:
-            print(f"   ⚠️ Не удалось загрузить dt планеров: {e}")
+            print(f"   ⚠️ Не удалось загрузить данные планеров: {e}")
+            import traceback
+            traceback.print_exc()
             self.env_data['planer_dt_array'] = None
             self.env_data['ac_to_idx'] = {}
+            self.env_data['planer_assembly_array'] = None
+            self.env_data['planer_type'] = {}
+        
+        # Количество компонентов на планер по group_by (для assembly)
+        # Данные из анализа: group_by=6 (лопасти) = 5, остальные в основном 1
+        comp_numbers = [0] * 50  # По умолчанию 0
+        # Основные группы с количеством > 1:
+        comp_numbers[3] = 2   # group_by=3: ~1.5 → 2
+        comp_numbers[4] = 2   # group_by=4: ~1.7 → 2
+        comp_numbers[5] = 1   # group_by=5: 1
+        comp_numbers[6] = 5   # group_by=6 (лопасти НВ): 5
+        comp_numbers[22] = 3  # group_by=22: ~2.9 → 3
+        comp_numbers[24] = 4  # group_by=24: ~3.5 → 4
+        comp_numbers[35] = 2  # group_by=35: ~1.9 → 2
+        comp_numbers[40] = 2  # group_by=40: ~1.6 → 2
+        comp_numbers[41] = 2  # group_by=41: ~1.7 → 2
+        comp_numbers[42] = 2  # group_by=42: ~1.7 → 2
+        # Остальные группы по умолчанию 1 (если есть агрегаты)
+        for i in range(7, 50):
+            if i not in [22, 24, 35, 40, 41, 42] and comp_numbers[i] == 0:
+                comp_numbers[i] = 1
+        self.env_data['comp_numbers'] = comp_numbers
+        print(f"   ✅ comp_numbers: group_by=6 (лопасти) = {comp_numbers[6]}")
         
         self.timing['load'] = time.time() - t0
         print(f"✅ Данные загружены за {self.timing['load']:.2f}с")
@@ -134,19 +171,31 @@ class UnitsOrchestrator:
         modules_ok = 0
         modules_failed = 0
         
-        # 0. InitPlanerDt — загрузка dt планеров в MacroProperty (ПЕРВЫМ!)
+        # 0. InitPlanerDt — загрузка dt, assembly_trigger, planer_in_ops, planer_type и initial_slots в MacroProperty (ПЕРВЫМ!)
+        self.init_planer_dt_fn = None
         try:
             from init_planer_dt import register_init_planer_dt
             dt_array = self.env_data.get('planer_dt_array')
             ac_to_idx = self.env_data.get('ac_to_idx', {})
+            assembly_array = self.env_data.get('planer_assembly_array')
+            planer_in_ops = self.env_data.get('planer_in_ops', {})
+            planer_type = self.env_data.get('planer_type', {})
             if dt_array is not None and len(ac_to_idx) > 0:
-                register_init_planer_dt(model, dt_array, ac_to_idx, max_days)
+                self.init_planer_dt_fn = register_init_planer_dt(
+                    model, dt_array, ac_to_idx, max_days, 
+                    assembly_array, planer_in_ops, planer_type
+                )
                 modules_ok += 1
-                print(f"  ✅ init_planer_dt: {len(ac_to_idx)} планеров, dt_size={len(dt_array):,}")
+                assembly_count = assembly_array.sum() if assembly_array is not None else 0
+                mi8 = sum(1 for t in planer_type.values() if t == 1)
+                mi17 = sum(1 for t in planer_type.values() if t == 2)
+                print(f"  ✅ init_planer_dt: {len(ac_to_idx)} планеров, dt_size={len(dt_array):,}, assembly={assembly_count:,}, in_ops={len(planer_in_ops)}, types=Mi8:{mi8}/Mi17:{mi17}")
             else:
                 print(f"  ⚠️ init_planer_dt: нет данных, будет fallback 90 мин/день")
         except Exception as e:
             print(f"  ❌ init_planer_dt: {e}")
+            import traceback
+            traceback.print_exc()
             modules_failed += 1
         
         # 1. states_stub — инициализация intent для не-operations состояний
@@ -159,24 +208,11 @@ class UnitsOrchestrator:
             modules_failed += 1
         
         # 2. state_operations — ОТКЛЮЧЕН (дублирует rtc_units_check_limits)
-        # Проверка lимитов теперь выполняется в rtc_units_increment ПОСЛЕ инкремента
-        # try:
-        #     import rtc_units_state_operations
-        #     rtc_units_state_operations.register_rtc(model, agent)
-        #     modules_ok += 1
-        # except Exception as e:
-        #     print(f"  ❌ units_state_operations: {e}")
-        #     modules_failed += 1
         print("  ⚠️ units_state_operations: ОТКЛЮЧЕН (логика в units_increment.check_limits)")
         
-        # 2b. increment — чтение dt от планера и инкремент sne/ppr
-        try:
-            import rtc_units_increment
-            rtc_units_increment.register_rtc(model, agent, max_days)
-            modules_ok += 1
-        except Exception as e:
-            print(f"  ❌ units_increment: {e}")
-            modules_failed += 1
+        # 2b. increment — ПЕРЕМЕЩЁН ПОСЛЕ assembly!
+        # Пилот не полетит без двигателя — сначала комплектация, потом полёт.
+        print("  ℹ️ units_increment: будет зарегистрирован ПОСЛЕ assembly")
         
         # 3. state_repair — intent + инкремент для repair
         try:
@@ -197,8 +233,19 @@ class UnitsOrchestrator:
         #     modules_failed += 1
         print("  ⚠️ units_count: ОТКЛЮЧЕН для отладки")
         
-        # 5-6. Трёхуровневая приоритетная FIFO + spawn
+        # 5. transition_ops — переходы из operations (СОЗДАЁТ REQUESTS!)
+        # Должен быть ПЕРЕД FIFO!
+        try:
+            import rtc_units_transition_ops
+            rtc_units_transition_ops.register_rtc(model, agent, max_frames)
+            modules_ok += 1
+        except Exception as e:
+            print(f"  ❌ units_transition_ops: {e}")
+            modules_failed += 1
+        
+        # 6-7. Трёхуровневая приоритетная FIFO + spawn
         # Приоритет: serviceable → reserve(active=1) → spawn(active=0)
+        # Работает ПОСЛЕ transition_ops, когда requests уже созданы
         try:
             import rtc_units_fifo_priority
             rtc_units_fifo_priority.register_rtc(model, agent, max_frames, max_days)
@@ -207,13 +254,16 @@ class UnitsOrchestrator:
             print(f"  ❌ units_fifo_priority: {e}")
             modules_failed += 1
         
-        # 7. transition_ops — переходы из operations
+        # 7b. Assembly — комплектация агрегатов на планеры при assembly_trigger=1
+        # Работает ПОСЛЕ FIFO, обрабатывает ONE-SHOT сигнал от планеров в ремонте
         try:
-            import rtc_units_transition_ops
-            rtc_units_transition_ops.register_rtc(model, agent)
+            import rtc_units_assembly
+            rtc_units_assembly.register_rtc(model, agent, MAX_PLANERS, max_days)
             modules_ok += 1
         except Exception as e:
-            print(f"  ❌ units_transition_ops: {e}")
+            print(f"  ❌ units_assembly: {e}")
+            import traceback
+            traceback.print_exc()
             modules_failed += 1
         
         # 8. transition_repair (уже в state_repair, но отдельно для 4→5)
@@ -237,10 +287,129 @@ class UnitsOrchestrator:
             print(f"  ❌ units_transition_serviceable: {e}")
             modules_failed += 1
         
+        # 10b. transition_storage — storage терминальное, блокирует выход
+        try:
+            import rtc_units_transition_storage
+            rtc_units_transition_storage.register_rtc(model, agent)
+            modules_ok += 1
+        except Exception as e:
+            print(f"  ❌ units_transition_storage: {e}")
+            modules_failed += 1
+        
         # 11. return_to_pool — включён в fifo_phase2 (reserve → serviceable)
         
+        # 11b. ВТОРОЙ ПРОХОД assembly — заполняем слоты освободившиеся после transitions
+        # Решает проблему "1-day gap": когда двигатель уходит в ремонт (2→4),
+        # слот освобождается, но замена должна прийти В ТОТ ЖЕ ДЕНЬ, не на следующий.
+        try:
+            import rtc_units_assembly as rtc_units_assembly_pass2
+            rtc_units_assembly_pass2.register_rtc_pass2(model, agent, MAX_PLANERS, max_days)
+            modules_ok += 1
+            print(f"  ✅ units_assembly_pass2: второй проход для instant replacement")
+        except Exception as e:
+            print(f"  ⚠️ units_assembly_pass2: {e} (не критично)")
+        
+        # 11c. ТРЕТИЙ ПРОХОД assembly — гарантия полной комплектации
+        # Решает проблему: планер вышел из repair, assembly_pass2 назначил только 1 двигатель
+        try:
+            import rtc_units_assembly as rtc_units_assembly_pass3
+            rtc_units_assembly_pass3.register_rtc_pass3(model, agent, MAX_PLANERS, max_days)
+            modules_ok += 1
+            print(f"  ✅ units_assembly_pass3: третий проход для полной комплектации")
+        except Exception as e:
+            print(f"  ⚠️ units_assembly_pass3: {e}")
+        
+        # 11d. ЧЕТВЁРТЫЙ ПРОХОД assembly — последняя попытка
+        try:
+            import rtc_units_assembly as rtc_units_assembly_pass4
+            rtc_units_assembly_pass4.register_rtc_pass4(model, agent, MAX_PLANERS, max_days)
+            modules_ok += 1
+            print(f"  ✅ units_assembly_pass4: четвёртый проход")
+        except Exception as e:
+            print(f"  ⚠️ units_assembly_pass4: {e}")
+        
+        # 11e. ПЯТЫЙ ПРОХОД assembly
+        try:
+            import rtc_units_assembly as rtc_units_assembly_pass5
+            rtc_units_assembly_pass5.register_rtc_pass5(model, agent, MAX_PLANERS, max_days)
+            print(f"  ✅ units_assembly_pass5: пятый проход")
+        except Exception as e:
+            print(f"  ⚠️ units_assembly_pass5: {e}")
+        
+        # 11f. ШЕСТОЙ ПРОХОД assembly
+        try:
+            import rtc_units_assembly as rtc_units_assembly_pass6
+            rtc_units_assembly_pass6.register_rtc_pass6(model, agent, MAX_PLANERS, max_days)
+            print(f"  ✅ units_assembly_pass6: шестой проход")
+        except Exception as e:
+            print(f"  ⚠️ units_assembly_pass6: {e}")
+        
+        # 11g. СЕДЬМОЙ ПРОХОД assembly
+        try:
+            import rtc_units_assembly as rtc_units_assembly_pass7
+            rtc_units_assembly_pass7.register_rtc_pass7(model, agent, MAX_PLANERS, max_days)
+            print(f"  ✅ units_assembly_pass7: седьмой проход")
+        except Exception as e:
+            print(f"  ⚠️ units_assembly_pass7: {e}")
+        
+        # 11h. ВОСЬМОЙ ПРОХОД assembly  
+        try:
+            import rtc_units_assembly as rtc_units_assembly_pass8
+            rtc_units_assembly_pass8.register_rtc_pass8(model, agent, MAX_PLANERS, max_days)
+            print(f"  ✅ units_assembly_pass8: восьмой проход")
+        except Exception as e:
+            print(f"  ⚠️ units_assembly_pass8: {e}")
+        
+        # 11i. ДЕВЯТЫЙ ПРОХОД
+        try:
+            import rtc_units_assembly as rtc_units_assembly_pass9
+            rtc_units_assembly_pass9.register_rtc_pass9(model, agent, MAX_PLANERS, max_days)
+            print(f"  ✅ units_assembly_pass9")
+        except Exception as e:
+            print(f"  ⚠️ pass9: {e}")
+        
+        # 11j. ДЕСЯТЫЙ ПРОХОД
+        try:
+            import rtc_units_assembly as rtc_units_assembly_pass10
+            rtc_units_assembly_pass10.register_rtc_pass10(model, agent, MAX_PLANERS, max_days)
+            print(f"  ✅ units_assembly_pass10")
+        except Exception as e:
+            print(f"  ⚠️ pass10: {e}")
+        
+        # 11k. increment — ТЕПЕРЬ ПОСЛЕ всех 10 проходов assembly!
+        # Сначала комплектация, потом полёт. Пилот не полетит без двигателя.
+        try:
+            import rtc_units_increment
+            rtc_units_increment.register_rtc(model, agent, max_days)
+            modules_ok += 1
+            print(f"  ✅ units_increment: SNE/PPR рост ПОСЛЕ всех комплектаций")
+        except Exception as e:
+            print(f"  ❌ units_increment: {e}")
+            modules_failed += 1
+        
+        # 11.5. deficit_check — StepFunction для проверки дефицита планеров
+        # Выполняется ПОСЛЕ assembly, записывает дефициты если планеры не укомплектованы
+        try:
+            from deficit_check_step import DeficitCheckStepFunction
+            # Получаем comp_numbers из self.env_data (сохранён при загрузке)
+            comp_numbers_dict = {}
+            comp_numbers_list = list(self.env_data.get('comp_numbers', []))
+            for i, cn in enumerate(comp_numbers_list):
+                if cn > 0:
+                    comp_numbers_dict[i] = cn
+            
+            # Для отладки: только группа 4 (ТВ3-117)
+            target_groups = [4]  # Группы для проверки дефицита
+            
+            self.deficit_check_fn = DeficitCheckStepFunction(comp_numbers_dict, target_groups)
+            model.addStepFunction(self.deficit_check_fn)
+            print(f"  RTC модуль deficit_check зарегистрирован (StepFunction, groups={target_groups})")
+            modules_ok += 1
+        except Exception as e:
+            print(f"  ⚠️ deficit_check: {e}")
+        
         # 12. mp2_writer — запись результатов в MacroProperty (циклический буфер)
-        drain_interval = 10  # Буфер на 10 дней (ограничение HostMacroProperty)
+        drain_interval = 10  # Буфер на 10 дней
         try:
             import rtc_units_mp2_writer
             rtc_units_mp2_writer.register_rtc(model, agent, max_frames, max_days, drain_interval)
@@ -269,6 +438,18 @@ class UnitsOrchestrator:
             modules_ok += 1
         except Exception as e:
             print(f"  ⚠️ mp2_drain: {e} (история будет только финальная)")
+        
+        # 14. init_fifo_queues — InitFunction для инициализации FIFO ДО step=0
+        # ВАЖНО: используем addInitFunction, а не addStepFunction!
+        # mp_planer_slots должен быть инициализирован ДО первого вызова assembly
+        try:
+            from init_fifo_queues import InitFifoQueuesFunction
+            self.init_fifo_fn = InitFifoQueuesFunction()
+            model.addInitFunction(self.init_fifo_fn)
+            print(f"  RTC модуль init_fifo_queues зарегистрирован (InitFunction ДО step=0)")
+            modules_ok += 1
+        except Exception as e:
+            print(f"  ⚠️ init_fifo_queues: {e}")
         
         self.timing['build'] = time.time() - t0
         print(f"✅ Модель построена за {self.timing['build']:.2f}с")
@@ -301,14 +482,26 @@ class UnitsOrchestrator:
         # Получаем данные из population_builder (трёхуровневая система)
         svc_tails = getattr(self.population_builder, 'svc_tails', {})
         rsv_tails = getattr(self.population_builder, 'rsv_tails', {})
-        
-        # Сохраняем для InitFunction
-        self._svc_tails = svc_tails
-        self._rsv_tails = rsv_tails
+        initial_slots = getattr(self.population_builder, 'initial_slots', {})
         
         total_svc = sum(svc_tails.values())
         total_rsv = sum(rsv_tails.values())
-        print(f"   FIFO очереди: svc={total_svc}, rsv={total_rsv}")
+        total_slots = sum(initial_slots.values())
+        print(f"   FIFO очереди: svc={total_svc}, rsv={total_rsv}, initial_slots={total_slots}")
+        
+        # Передаём данные в InitFunction для FIFO
+        if hasattr(self, 'init_fifo_fn') and self.init_fifo_fn is not None:
+            self.init_fifo_fn.set_tails(svc_tails, rsv_tails, initial_slots)
+            print(f"   ✅ FIFO данные переданы в InitFunction")
+        else:
+            print(f"   ⚠️ init_fifo_fn не зарегистрирован, FIFO не будет инициализирован!")
+        
+        # КРИТИЧНО: Передаём initial_slots в InitPlanerDt (выполняется ПЕРВЫМ в step=0)
+        if hasattr(self, 'init_planer_dt_fn') and self.init_planer_dt_fn is not None:
+            self.init_planer_dt_fn.set_initial_slots(initial_slots)
+            print(f"   ✅ initial_slots переданы в InitPlanerDt ({total_slots} агрегатов)")
+        else:
+            print(f"   ⚠️ init_planer_dt_fn не зарегистрирован, mp_planer_slots НЕ будет инициализирован!")
         
         # Инициализация dt планеров
         planer_dt = self.env_data.get('planer_dt_array')
@@ -322,26 +515,6 @@ class UnitsOrchestrator:
             self._planer_dt_array = None
             self._ac_to_idx = {}
     
-    def _init_fifo_on_first_step(self):
-        """Инициализирует MacroProperty FIFO очередей через simulation.environment"""
-        try:
-            # Инициализируем mp_svc_tail
-            for gb, tail in self._svc_tails.items():
-                if gb < 50 and tail > 0:
-                    self.simulation.environment.setMacroPropertyUInt32("mp_svc_tail", gb, tail)
-            
-            # Инициализируем mp_rsv_tail
-            for gb, tail in self._rsv_tails.items():
-                if gb < 50 and tail > 0:
-                    self.simulation.environment.setMacroPropertyUInt32("mp_rsv_tail", gb, tail)
-            
-            total_svc = sum(self._svc_tails.values())
-            total_rsv = sum(self._rsv_tails.values())
-            print(f"   ✅ FIFO очереди инициализированы: svc={total_svc}, rsv={total_rsv}")
-        except Exception as e:
-            print(f"   ⚠️ Ошибка инициализации FIFO: {e}")
-            print(f"      (очереди будут инициализированы через HostFunction)")
-    
     def run(self, steps: int = 100):
         """Запускает симуляцию"""
         t0 = time.time()
@@ -350,8 +523,7 @@ class UnitsOrchestrator:
         print(f"🚀 ЗАПУСК СИМУЛЯЦИИ НА {steps} ШАГОВ")
         print("=" * 60)
         
-        # === Инициализация FIFO очередей через HostFunction ===
-        self._init_fifo_on_first_step()
+        # FIFO очереди инициализируются через StepFunction на step=0
         
         step_times = []
         

@@ -43,7 +43,7 @@ class MP2DrainUnitsHostFunction(fg.HostFunction):
         self.flush_count = 0
         
         # Инкрементальный дренаж
-        self.interval_days = 10  # Drain каждые 10 дней (ограничение HostMacroProperty)
+        self.interval_days = 10  # Drain каждые 10 дней
         self._last_drained_day = -1
         
         # Создаём таблицу
@@ -206,8 +206,7 @@ class MP2DrainUnitsHostFunction(fg.HostFunction):
                     active = int(mp2_active[pos])
                     if idx == 0 and day == 0:
                         print(f"   ✅ active={active}", flush=True)
-                    if active == 0:
-                        continue
+                    # FIX: НЕ пропускаем spawn агентов (active=0) - они тоже нужны для анализа
                     
                     if idx == 0 and day == 0:
                         print(f"   🔍 Reading group_by[{pos}]...", flush=True)

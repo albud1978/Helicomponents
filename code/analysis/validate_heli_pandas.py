@@ -306,6 +306,51 @@ def run_validation_analysis(client):
             print(f"  '{cond}': {cnt}")
     
     # =========================================================================
+    # ПРОВЕРКА PPR=0 ДЛЯ АГРЕГАТОВ
+    # =========================================================================
+    print("\n" + "=" * 80)
+    print("ПРОВЕРКА PPR=0 (ДЕФЕКТ ИСХОДНЫХ ДАННЫХ)")
+    print("=" * 80)
+    
+    # Статистика PPR=0 по группам
+    ppr_query = """
+    SELECT 
+        group_by,
+        count(*) as total,
+        countIf(ppr = 0 OR ppr IS NULL) as ppr_zero,
+        countIf(sne > 0 AND (ppr = 0 OR ppr IS NULL)) as sne_pos_ppr_zero,
+        countIf(sne > 0 AND sne < ll AND (ppr = 0 OR ppr IS NULL)) as candidates_fix,
+        countIf(sne = 0 AND (ppr = 0 OR ppr IS NULL)) as new_units,
+        countIf(sne > 0 AND sne >= ll AND (ppr = 0 OR ppr IS NULL)) as over_ll
+    FROM heli_pandas
+    WHERE group_by >= 3
+    GROUP BY group_by
+    ORDER BY candidates_fix DESC
+    LIMIT 15
+    """
+    ppr_result = client.execute(ppr_query)
+    
+    print(f"\nТоп-15 групп по количеству кандидатов для FIX (PPR=SNE при sne>0, sne<ll):")
+    print(f"{'group':>6} | {'total':>6} | {'ppr=0':>6} | {'sne>0':>6} | {'FIX':>6} | {'new':>6} | {'>=ll':>6}")
+    print("-" * 60)
+    
+    total_fix = 0
+    total_new = 0
+    total_over = 0
+    for row in ppr_result:
+        gb, total_g, ppr_zero, sne_pos, fix, new, over = row
+        total_fix += fix
+        total_new += new
+        total_over += over
+        print(f"{gb:>6} | {total_g:>6} | {ppr_zero:>6} | {sne_pos:>6} | {fix:>6} | {new:>6} | {over:>6}")
+    
+    print(f"\nСВОДКА PPR=0:")
+    print(f"  Кандидаты для FIX (sne>0, sne<ll): {total_fix:,}")
+    print(f"  Новые агрегаты (sne=0): {total_new:,}")
+    print(f"  Превысили LL (sne>=ll): {total_over:,}")
+    print(f"\n⚠️ FIX PPR=SNE применяется при загрузке в симуляцию (agent_population_units.py)")
+    
+    # =========================================================================
     # ПЕРЕСЕЧЕНИЯ ФЛАГОВ
     # =========================================================================
     print("\n" + "=" * 80)
@@ -331,6 +376,104 @@ def run_validation_analysis(client):
     print(f"Status 12 + 13 (sne=0 + превышение): {overlap_12_13:,}")
 
 
+def validate_ppr_zero(client, version_date='2025-07-04', version_id=1, export=False):
+    """Проверка PPR=0 для агрегатов (дефект исходных данных)."""
+    print("\n" + "=" * 80)
+    print("ПРОВЕРКА PPR=0 (ДЕФЕКТ ИСХОДНЫХ ДАННЫХ)")
+    print(f"Версия: {version_date} v{version_id}")
+    print("=" * 80)
+    
+    # Статистика PPR=0 по группам
+    ppr_query = f"""
+    SELECT 
+        group_by,
+        count(*) as total,
+        countIf(ppr = 0 OR ppr IS NULL) as ppr_zero,
+        countIf(sne > 0 AND (ppr = 0 OR ppr IS NULL)) as sne_pos_ppr_zero,
+        countIf(sne > 0 AND sne < ll AND (ppr = 0 OR ppr IS NULL)) as candidates_fix,
+        countIf(sne = 0 AND (ppr = 0 OR ppr IS NULL)) as new_units,
+        countIf(sne > 0 AND sne >= ll AND (ppr = 0 OR ppr IS NULL)) as over_ll
+    FROM heli_pandas
+    WHERE version_date = toDate('{version_date}')
+      AND version_id = {version_id}
+      AND group_by >= 3
+    GROUP BY group_by
+    ORDER BY group_by
+    """
+    ppr_result = client.execute(ppr_query)
+    
+    print(f"\n{'group':>6} | {'total':>6} | {'ppr=0':>6} | {'sne>0':>6} | {'FIX':>6} | {'new':>6} | {'>=ll':>6}")
+    print("-" * 60)
+    
+    total_all = 0
+    ppr_zero_all = 0
+    total_fix = 0
+    total_new = 0
+    total_over = 0
+    
+    for row in ppr_result:
+        gb, total_g, ppr_zero, sne_pos, fix, new, over = row
+        total_all += total_g
+        ppr_zero_all += ppr_zero
+        total_fix += fix
+        total_new += new
+        total_over += over
+        print(f"{gb:>6} | {total_g:>6} | {ppr_zero:>6} | {sne_pos:>6} | {fix:>6} | {new:>6} | {over:>6}")
+    
+    print("-" * 60)
+    print(f"{'ИТОГО':>6} | {total_all:>6} | {ppr_zero_all:>6} | {'':>6} | {total_fix:>6} | {total_new:>6} | {total_over:>6}")
+    
+    print(f"\n📊 СВОДКА:")
+    print(f"  Всего агрегатов: {total_all:,}")
+    print(f"  PPR=0/NULL: {ppr_zero_all:,} ({100*ppr_zero_all/total_all:.1f}%)")
+    print(f"  Кандидаты для FIX (sne>0, sne<ll): {total_fix:,}")
+    print(f"  Новые агрегаты (sne=0): {total_new:,}")
+    print(f"  Превысили LL (sne>=ll): {total_over:,}")
+    print(f"\n⚠️ FIX PPR=SNE применяется при загрузке в симуляцию")
+    print(f"   Файлы: agent_population_units.py, agent_population.py")
+    
+    # Экспорт в Excel
+    if export:
+        import pandas as pd
+        from datetime import datetime
+        
+        export_query = f"""
+        SELECT 
+            group_by, psn, serialno, partno, aircraft_number,
+            sne, ppr, ll, status_id, condition, owner, mfg_date
+        FROM heli_pandas
+        WHERE version_date = toDate('{version_date}')
+          AND version_id = {version_id}
+          AND group_by >= 3
+          AND (ppr = 0 OR ppr IS NULL)
+        ORDER BY group_by, sne DESC
+        """
+        result = client.execute(export_query)
+        columns = ['group_by', 'psn', 'serialno', 'partno', 'aircraft_number',
+                   'sne', 'ppr', 'll', 'status_id', 'condition', 'owner', 'mfg_date']
+        df = pd.DataFrame(result, columns=columns)
+        
+        # Добавляем вычисляемые поля
+        df['sne_hours'] = df['sne'] / 60
+        df['ll_hours'] = df['ll'] / 60
+        df['needs_fix'] = (df['sne'] > 0) & (df['sne'] < df['ll'])
+        df['category'] = df.apply(
+            lambda r: 'FIX' if r['needs_fix'] else ('NEW' if r['sne'] == 0 else 'OVER_LL'), axis=1
+        )
+        
+        output_path = f'output/units_ppr_zero_{datetime.now().strftime("%Y-%m-%d")}.xlsx'
+        df.to_excel(output_path, index=False)
+        print(f"\n✅ Выгружено {len(df):,} записей в {output_path}")
+    
+    return {
+        'total': total_all,
+        'ppr_zero': ppr_zero_all,
+        'fix': total_fix,
+        'new': total_new,
+        'over_ll': total_over
+    }
+
+
 def main():
     """Главная функция с аргументами командной строки."""
     parser = argparse.ArgumentParser(
@@ -338,23 +481,32 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Примеры:
-  python validate_heli_pandas.py --analyze          # Только анализ (быстро)
-  python validate_heli_pandas.py --update           # Обновить ресурсы и флаги
-  python validate_heli_pandas.py --update --analyze # Обновить и показать анализ
-  python validate_heli_pandas.py --all              # Всё вместе
+  python validate_heli_pandas.py --ppr               # Проверка PPR=0 (быстро)
+  python validate_heli_pandas.py --ppr --export      # Проверка PPR=0 + экспорт в Excel
+  python validate_heli_pandas.py --analyze           # Полный анализ по error_flags
+  python validate_heli_pandas.py --update            # Обновить ресурсы и флаги
+  python validate_heli_pandas.py --all               # Всё вместе
         """
     )
     parser.add_argument('--update', action='store_true',
                         help='Обновить ll_mi8/oh_mi8/br_mi8 из md_components и пересчитать error_flags')
     parser.add_argument('--analyze', action='store_true',
                         help='Показать анализ по error_flags')
+    parser.add_argument('--ppr', action='store_true',
+                        help='Проверка PPR=0 для агрегатов')
+    parser.add_argument('--export', action='store_true',
+                        help='Экспорт результатов в Excel (с --ppr)')
+    parser.add_argument('--version-date', type=str, default='2025-07-04',
+                        help='Дата версии данных (по умолчанию: 2025-07-04)')
+    parser.add_argument('--version-id', type=int, default=1,
+                        help='ID версии (по умолчанию: 1)')
     parser.add_argument('--all', action='store_true',
                         help='Выполнить --update и --analyze')
     
     args = parser.parse_args()
     
     # Если ничего не указано — показать справку
-    if not (args.update or args.analyze or args.all):
+    if not (args.update or args.analyze or args.ppr or args.all):
         parser.print_help()
         return
     
@@ -363,6 +515,9 @@ def main():
     print("=" * 80)
     print("ВАЛИДАЦИЯ HELI_PANDAS")
     print("=" * 80)
+    
+    if args.ppr:
+        validate_ppr_zero(client, args.version_date, args.version_id, export=args.export)
     
     if args.update or args.all:
         update_resources(client)
