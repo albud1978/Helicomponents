@@ -360,8 +360,9 @@ class AgentPopulationBuilder:
                 agent.setVariableUInt16("limiter", limiter)
         
         # Загружаем популяции в симуляцию по состояниям (V6: 7 states)
-        # ВАЖНО: Нужно инициализировать ВСЕ states, даже пустые (для spawn)
-        all_states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage', 'unserviceable']
+        # ВАЖНО: Нужно инициализировать ВСЕ states, даже пустые
+        # V7: reserve пропускаем — он заполняется отдельно spawn агентами в оркестраторе
+        all_states = ['inactive', 'operations', 'serviceable', 'repair', 'storage', 'unserviceable']  # БЕЗ reserve!
         
         # FIX 4: Используем agent_def, НЕ simulation.getAgentDescription (нет такого метода!)
         for state_name in all_states:

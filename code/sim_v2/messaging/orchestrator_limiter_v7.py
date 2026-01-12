@@ -245,11 +245,14 @@ class LimiterV7Orchestrator:
         return self.end_day
     
     def _populate_agents(self):
-        """Заполнение агентов из heli_pandas"""
+        """Заполнение агентов из heli_pandas + spawn"""
         print("\n📦 Заполнение агентов...")
         
-        # Планеры
+        # Планеры из heli_pandas
         self.population_builder.populate_agents(self.simulation, self.base_model.agent)
+        
+        # V7: Детерминированный spawn — создаём агентов в reserve с exit_date
+        spawn_count = self._populate_spawn_agents()
         
         # QuotaManager агенты
         initial_ops = self.population_builder.get_initial_ops_count()
@@ -261,7 +264,93 @@ class LimiterV7Orchestrator:
         qm_pop[1].setVariableUInt8("group_by", 2)  # Mi-17
         self.simulation.setPopulationData(qm_pop)
         
-        print(f"   ✅ Агенты загружены: Mi-8 ops={mi8_ops}, Mi-17 ops={mi17_ops}")
+        print(f"   ✅ Агенты загружены: Mi-8 ops={mi8_ops}, Mi-17 ops={mi17_ops}, spawn={spawn_count}")
+    
+    def _populate_spawn_agents(self) -> int:
+        """V7: Создаём агентов для детерминированного спавна в reserve"""
+        spawn_seed = self.env_data.get('mp4_new_counter_mi17_seed', [])
+        
+        # Находим дни со спавном
+        spawn_events = []  # [(day, count), ...]
+        for day, count in enumerate(spawn_seed):
+            if count > 0:
+                spawn_events.append((day, count))
+        
+        if not spawn_events:
+            return 0
+        
+        # Получаем параметры для Mi-17 (spawn только Mi-17)
+        mi17_ll = int(self.env_data.get('mi17_ll_const', 270000))
+        mi17_oh = int(self.env_data.get('mi17_oh_const', 270000))
+        mi17_br = int(self.env_data.get('mi17_br_const', 210000))
+        mi17_repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
+        mi17_assembly_time = int(self.env_data.get('mi17_assembly_time_const', 30))
+        mi17_partout_time = int(self.env_data.get('mi17_partout_time_const', 20))
+        
+        # Стартовый idx для spawn (после всех существующих агентов)
+        first_reserved_idx = int(self.env_data.get('first_reserved_idx', 279))
+        next_idx = first_reserved_idx
+        base_acn = 100000  # Начинаем aircraft_number с 100000
+        
+        total_spawn = 0
+        spawn_agents = []
+        
+        for spawn_day, count in spawn_events:
+            for i in range(count):
+                agent_data = {
+                    'idx': next_idx,
+                    'aircraft_number': base_acn,
+                    'group_by': 2,  # Mi-17
+                    'sne': 0,
+                    'ppr': 0,
+                    'll': mi17_ll,
+                    'oh': mi17_oh,
+                    'br': mi17_br,
+                    'repair_time': mi17_repair_time,
+                    'assembly_time': mi17_assembly_time,
+                    'partout_time': mi17_partout_time,
+                    'exit_date': spawn_day,  # V7: день активации!
+                    'limiter': 0,
+                }
+                spawn_agents.append(agent_data)
+                next_idx += 1
+                base_acn += 1
+                total_spawn += 1
+        
+        if spawn_agents:
+            # Создаём популяцию в reserve
+            pop = fg.AgentVector(self.base_model.agent, len(spawn_agents))
+            
+            for i, data in enumerate(spawn_agents):
+                agent = pop[i]
+                agent.setVariableUInt("idx", data['idx'])
+                agent.setVariableUInt("aircraft_number", data['aircraft_number'])
+                agent.setVariableUInt("group_by", data['group_by'])
+                agent.setVariableUInt("sne", data['sne'])
+                agent.setVariableUInt("ppr", data['ppr'])
+                agent.setVariableUInt("ll", data['ll'])
+                agent.setVariableUInt("oh", data['oh'])
+                agent.setVariableUInt("br", data['br'])
+                agent.setVariableUInt("repair_time", data['repair_time'])
+                agent.setVariableUInt("assembly_time", data['assembly_time'])
+                agent.setVariableUInt("partout_time", data['partout_time'])
+                agent.setVariableUInt("exit_date", data['exit_date'])
+                agent.setVariableUInt16("limiter", 0)
+                agent.setVariableUInt("repair_days", 0)
+                agent.setVariableUInt("daily_today_u32", 0)
+                agent.setVariableUInt("daily_next_u32", 0)
+                # Transition flags
+                agent.setVariableUInt("transition_5_to_2", 0)
+                # V7 flags
+                agent.setVariableUInt("promoted", 0)
+                agent.setVariableUInt("needs_demote", 0)
+            
+            self.simulation.setPopulationData(pop, "reserve")
+            
+            spawn_days = sorted(set(d for d, _ in spawn_events))
+            print(f"   📦 Spawn: {total_spawn} агентов в reserve, exit_dates={spawn_days}")
+        
+        return total_spawn
     
     def _print_final_stats(self):
         """Вывод финальной статистики"""
