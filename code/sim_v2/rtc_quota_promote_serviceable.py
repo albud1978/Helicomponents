@@ -119,8 +119,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
         
         /* Логирование выбора для P1 */
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [PROMOTE P1→2 Day %u] AC %u (idx %u): rank=%u/%u serviceable->operations\\n", 
-               day, aircraft_number, idx, rank, K);
+        // PERF OFF: printf("  [PROMOTE P1→2 Day %u] AC %u (idx %u): rank=%u/%u serviceable->operations\\n", 
+               //        day, aircraft_number, idx, rank, K);
         
         /* Записываем в ОТДЕЛЬНЫЙ буфер для serviceable (избегаем race condition) */
         if (group_by == 1u) {{

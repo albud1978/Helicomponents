@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-RTC модуль: Оптимизированный расчёт LIMITER V2
+RTC модуль: Оптимизированный расчёт LIMITER V3
 
-Оптимизация:
-- limiter вычисляется ОДИН РАЗ при входе в operations
-- На каждом шаге: limiter -= adaptive_days (вместе с инкрементами)
+Архитектура ТОЧНОГО расчёта limiter:
+- limiter вычисляется ОДИН РАЗ при входе в operations (бинарный поиск по mp5_cumsum)
+- На каждом шаге: limiter -= adaptive_days (декремент)
 - adaptive_days = min(min_agent_limiter, next_program_change - current_day)
 
-Формула limiter при входе в ops:
-  limiter = min(
-    (ll - sne) / avg_dt,  // дней до LL
-    (oh - ppr) / avg_dt   // дней до OH
-  )
+Формула limiter через mp5_cumsum (ТОЧНАЯ):
+  limiter = min(days_to_ll, days_to_oh)
   
-  где avg_dt ≈ 100 мин/день (среднее из mp5)
+  где days_to_X = минимальный day такой что:
+    mp5_cumsum[day, idx] - mp5_cumsum[current_day, idx] >= remaining_X
+    
+  Это бинарный поиск: O(log N) где N = end_day - current_day
 """
 
 import sys
@@ -27,13 +27,19 @@ except ImportError as e:
     raise RuntimeError(f"pyflamegpu не установлен: {e}")
 
 
+# Константы для RTC
+CUMSUM_SIZE = RTC_MAX_FRAMES * (MAX_DAYS + 1)
+
+
 # ═══════════════════════════════════════════════════════════════════
-# RTC: Вычисление limiter при входе в operations
+# RTC: ТОЧНЫЙ расчёт limiter через бинарный поиск по mp5_cumsum
 # ═══════════════════════════════════════════════════════════════════
 RTC_COMPUTE_LIMITER_ON_ENTRY = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Вычисляем limiter для агентов в operations:
-    // 1. На шаге 0: для ВСЕХ агентов в ops (начальная инициализация)
+    // ТОЧНЫЙ расчёт limiter через бинарный поиск по mp5_cumsum
+    // 
+    // Вызывается:
+    // 1. На шаге 0: для ВСЕХ агентов в ops с limiter=0
     // 2. На остальных шагах: для агентов с intent=2 (входящих в ops)
     
     const unsigned int step = FLAMEGPU->getStepCounter();
@@ -41,52 +47,111 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
     const unsigned short current_limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
-    // Debug: логируем условия на шаге 0
-    if (step == 0u && idx < 3u) {{
-        printf("  [LIMITER CHECK Step 0] idx=%u: intent=%u, current_limiter=%u\\n", idx, intent, current_limiter);
-    }}
-    
-    // На шаге 0: вычисляем для всех с limiter=0
-    // На остальных шагах: только для входящих (intent=2)
+    // Условие вычисления: 
+    // - шаг 0 И limiter=0 (начальная инициализация)
+    // - ИЛИ шаг > 0 И intent=2 (входящий в ops)
     bool need_compute = (step == 0u && current_limiter == 0u) || (step > 0u && intent == 2u);
     
     if (!need_compute) {{
         return flamegpu::ALIVE;
     }}
     
-    // Текущие значения
+    // ═══════════════════════════════════════════════════════════════════
+    // Получаем параметры агента и окружения
+    // ═══════════════════════════════════════════════════════════════════
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     
-    // Средний налёт (минут/день) — берём консервативную оценку
-    // В реальности ~100-150 мин/день, используем 100 для безопасности
-    const unsigned int avg_dt = 100u;  // TODO: можно брать из Environment
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     
+    // ═══════════════════════════════════════════════════════════════════
     // Остаток ресурса (в минутах)
+    // ═══════════════════════════════════════════════════════════════════
     unsigned int remaining_ll = (sne < ll) ? (ll - sne) : 0u;
     unsigned int remaining_oh = (ppr < oh) ? (oh - ppr) : 0u;
     
-    // Дней до исчерпания (делим на avg_dt)
-    unsigned int days_to_ll = remaining_ll / avg_dt;
-    unsigned int days_to_oh = remaining_oh / avg_dt;
+    // Если ресурс уже исчерпан — limiter = 0
+    if (remaining_ll == 0u || remaining_oh == 0u) {{
+        FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
+        return flamegpu::ALIVE;
+    }}
     
-    // Limiter = минимум из двух
-    unsigned int limiter = (days_to_ll < days_to_oh) ? days_to_ll : days_to_oh;
+    // ═══════════════════════════════════════════════════════════════════
+    // Доступ к mp5_cumsum MacroProperty
+    // ВАЖНО: Используем ту же индексацию что в rtc_state_2_operations:
+    //   cumsum[day * frames + idx] — day-major
+    // ═══════════════════════════════════════════════════════════════════
+    auto cumsum = FLAMEGPU->environment.getMacroProperty<unsigned int, {CUMSUM_SIZE}u>("mp5_cumsum");
+    
+    // Базовое значение cumsum на текущий день (day-major)
+    const unsigned int base_cumsum = cumsum[current_day * frames + idx];
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // Бинарный поиск: найти день когда накопленный налёт >= remaining_oh
+    // Логика: найти минимальный day такой что cumsum[day] - cumsum[current] >= remaining
+    // ═══════════════════════════════════════════════════════════════════
+    unsigned int days_to_oh = end_day - current_day;  // По умолчанию — до конца
+    {{
+        unsigned int lo = current_day + 1u;
+        unsigned int hi = end_day;
+        while (lo < hi) {{
+            unsigned int mid = (lo + hi) / 2u;
+            unsigned int accumulated = cumsum[mid * frames + idx] - base_cumsum;
+            if (accumulated >= remaining_oh) {{
+                hi = mid;
+            }} else {{
+                lo = mid + 1u;
+            }}
+        }}
+        if (lo <= end_day) {{
+            // Проверяем что действительно достигли remaining_oh
+            unsigned int final_accumulated = cumsum[lo * frames + idx] - base_cumsum;
+            if (final_accumulated >= remaining_oh) {{
+                days_to_oh = lo - current_day;
+            }}
+        }}
+    }}
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // Бинарный поиск: найти день когда накопленный налёт >= remaining_ll
+    // ═══════════════════════════════════════════════════════════════════
+    unsigned int days_to_ll = end_day - current_day;
+    {{
+        unsigned int lo = current_day + 1u;
+        unsigned int hi = end_day;
+        while (lo < hi) {{
+            unsigned int mid = (lo + hi) / 2u;
+            unsigned int accumulated = cumsum[mid * frames + idx] - base_cumsum;
+            if (accumulated >= remaining_ll) {{
+                hi = mid;
+            }} else {{
+                lo = mid + 1u;
+            }}
+        }}
+        if (lo <= end_day) {{
+            unsigned int final_accumulated = cumsum[lo * frames + idx] - base_cumsum;
+            if (final_accumulated >= remaining_ll) {{
+                days_to_ll = lo - current_day;
+            }}
+        }}
+    }}
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // Limiter = min(days_to_oh, days_to_ll)
+    // ═══════════════════════════════════════════════════════════════════
+    unsigned int limiter = (days_to_oh < days_to_ll) ? days_to_oh : days_to_ll;
     
     // Ограничиваем UInt16 (65535 дней ≈ 179 лет)
     if (limiter > 65535u) limiter = 65535u;
     
-    // Устанавливаем limiter
-    FLAMEGPU->setVariable<unsigned short>("limiter", (unsigned short)limiter);
+    // Минимум 1 день (чтобы избежать застревания)
+    if (limiter == 0u) limiter = 1u;
     
-    // Debug (первые несколько агентов или шаг 0) — idx уже объявлен выше!
-    if (step == 0u || idx < 3u) {{
-        const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [LIMITER ENTRY Step %u] AC %u (idx %u): ll=%u, sne=%u, days_ll=%u; oh=%u, ppr=%u, days_oh=%u → limiter=%u\\n",
-               step, ac, idx, ll, sne, days_to_ll, oh, ppr, days_to_oh, limiter);
-    }}
+    FLAMEGPU->setVariable<unsigned short>("limiter", (unsigned short)limiter);
     
     return flamegpu::ALIVE;
 }}
@@ -160,7 +225,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_min_limiter, flamegpu::MessageNone, flamegpu
     
     // Debug: логируем на шаге 0
     if (step == 0u && idx < 3u) {{
-        printf("  [MIN_LIMITER Step %u] idx=%u: limiter=%u\\n", step, idx, limiter);
+        // PERF OFF: printf("  [MIN_LIMITER Step %u] idx=%u: limiter=%u\\n", step, idx, limiter);
     }}
     
     // Пропускаем агентов с limiter == 0 (не в ops или уже на выходе)
@@ -176,7 +241,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_min_limiter, flamegpu::MessageNone, flamegpu
     
     // Debug: первый агент с небольшим limiter
     if (limiter < 50u && step == 0u) {{
-        printf("  [MIN_LIMITER] AC idx=%u wrote limiter=%u to mp_min\\n", idx, limiter);
+        // PERF OFF: printf("  [MIN_LIMITER] AC idx=%u wrote limiter=%u to mp_min\\n", idx, limiter);
     }}
     
     return flamegpu::ALIVE;
@@ -193,7 +258,6 @@ class HF_InitMinLimiter(fg.HostFunction):
     def run(self, FLAMEGPU):
         mp_min = FLAMEGPU.environment.getMacroPropertyUInt("mp_min_limiter")
         mp_min[0] = 0xFFFFFFFF
-        print(f"  [HF_InitMinLimiter] mp_min_limiter[0] = {mp_min[0]}")
 
 
 class HF_ComputeAdaptiveDays(fg.HostFunction):

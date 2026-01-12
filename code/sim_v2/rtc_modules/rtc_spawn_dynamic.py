@@ -136,14 +136,14 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         // DEBUG для дней 824-826 (проблемные дни)
         if (day >= 824u && day <= 826u) {
-            printf("[DEBUG Day %u SPAWN] target[%u]=%u, curr=%u, used=%u, deficit=%d\\n", 
-                   day, target_day, target_ops, curr, used, deficit_signed);
+            // PERF OFF: printf("[DEBUG Day %u SPAWN] target[%u]=%u, curr=%u, used=%u, deficit=%d\\n", 
+                   //        day, target_day, target_ops, curr, used, deficit_signed);
             
             // Проверяем агента 100006 (idx=285)
             if (ops_count[285u] == 1u) {
-                printf("[DEBUG Day %u] Agent idx=285 (100006) IS in ops_count!\\n", day);
+                // PERF OFF: printf("[DEBUG Day %u] Agent idx=285 (100006) IS in ops_count!\\n", day);
             } else {
-                printf("[DEBUG Day %u] Agent idx=285 (100006) NOT in ops_count!\\n", day);
+                // PERF OFF: printf("[DEBUG Day %u] Agent idx=285 (100006) NOT in ops_count!\\n", day);
             }
         }
         
@@ -184,8 +184,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
             // Исчерпание резерва!
             if (exhausted_day == 0u) {
                 exhausted_day = day;  // Запоминаем день исчерпания
-                printf("  [SPAWN DYNAMIC WARNING] Day %u: Резерв исчерпан! deficit=%u, available=%u\\n",
-                       day, deficit, available);
+                // PERF OFF: printf("  [SPAWN DYNAMIC WARNING] Day %u: Резерв исчерпан! deficit=%u, available=%u\\n",
+                       //        day, deficit, available);
             }
             need = available;  // Создаём только доступные
         }
@@ -208,8 +208,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         bpsn_mp[write_day].exchange(next_psn);
         
         // Логирование
-        printf("  [SPAWN DYNAMIC Day %u] deficit=%u, need=%u, next_idx=%u->%u, next_acn=%u->%u\\n",
-               day, deficit, need, next_idx, next_idx + need, next_acn, next_acn + need);
+        // PERF OFF: printf("  [SPAWN DYNAMIC Day %u] deficit=%u, need=%u, next_idx=%u->%u, next_acn=%u->%u\\n",
+               //        day, deficit, need, next_idx, next_idx + need, next_acn, next_acn + need);
         
         // Сдвигаем курсоры
         next_idx += need;
@@ -330,14 +330,14 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         // ОТЛАДКА: Детальное логирование созданного агента
         if (day <= 850u) {
-            printf("  [SPAWN DYNAMIC TICKET Day %u #%u] СОЗДАН АГЕНТ:\\n", day, ticket);
-            printf("    idx=%u, acn=%u, psn=%u, group_by=%u\\n", new_idx, new_acn, base_psn, 2u);
-            printf("    sne=%u, ppr=%u, cso=%u\\n", sne_new, ppr_new, 0u);
-            printf("    ll=%u, oh=%u, br=%u\\n", ll, oh, br);
-            printf("    intent_state=%u, mfg_date=%u\\n", 2u, mfg_date);
-            printf("    repair_time=%u, repair_days=%u\\n", repair_time, 0u);
-            printf("    assembly_trigger=%u, active_trigger=%u, partout_trigger=%u\\n", 0u, 0u, 0u);
-            printf("    bi_counter=%u\\n", 1u);
+            // PERF OFF: printf("  [SPAWN DYNAMIC TICKET Day %u #%u] СОЗДАН АГЕНТ:\\n", day, ticket);
+            // PERF OFF: printf("    idx=%u, acn=%u, psn=%u, group_by=%u\\n", new_idx, new_acn, base_psn, 2u);
+            // PERF OFF: printf("    sne=%u, ppr=%u, cso=%u\\n", sne_new, ppr_new, 0u);
+            // PERF OFF: printf("    ll=%u, oh=%u, br=%u\\n", ll, oh, br);
+            // PERF OFF: printf("    intent_state=%u, mfg_date=%u\\n", 2u, mfg_date);
+            // PERF OFF: printf("    repair_time=%u, repair_days=%u\\n", repair_time, 0u);
+            // PERF OFF: printf("    assembly_trigger=%u, active_trigger=%u, partout_trigger=%u\\n", 0u, 0u, 0u);
+            // PERF OFF: printf("    bi_counter=%u\\n", 1u);
         }
         
         return flamegpu::ALIVE;

@@ -31,6 +31,20 @@ def setup_v4_macroproperties(env):
     print("  ✅ V4: используем существующие MacroProperty из V3")
 
 
+class HF_ExitCondition(fg.HostCondition):
+    """Exit condition: остановить симуляцию когда current_day >= end_day"""
+    
+    def __init__(self, end_day: int):
+        super().__init__()
+        self.end_day = end_day
+    
+    def run(self, FLAMEGPU):
+        current_day = FLAMEGPU.environment.getPropertyUInt("current_day")
+        if current_day >= self.end_day:
+            return fg.EXIT
+        return fg.CONTINUE
+
+
 class HF_ComputeAdaptiveDaysV4(fg.HostFunction):
     """
     V4 HostFunction для вычисления adaptive_days.

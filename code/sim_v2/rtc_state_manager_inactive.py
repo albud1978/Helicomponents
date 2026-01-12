@@ -23,7 +23,7 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_2_from_inactive) {
     // DEBUG: логировать все проверки
     if (intent == 2u) {
         const unsigned int ac = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [COND] AC %u: intent=%u -> condition TRUE\\n", ac, intent);
+        // PERF OFF: printf("  [COND] AC %u: intent=%u -> condition TRUE\\n", ac, intent);
     }
     return intent == 2u;
 }
@@ -51,8 +51,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::Messa
     
     // Логирование перехода
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
-    printf("  [TRANSITION 1→2 Day %u] AC %u (idx %u, %s): inactive -> operations (intent=%u)\\n", 
-           step_day, aircraft_number, idx, type, intent);
+    // PERF OFF: printf("  [TRANSITION 1→2 Day %u] AC %u (idx %u, %s): inactive -> operations (intent=%u)\\n", 
+           //        step_day, aircraft_number, idx, type, intent);
     
     // Агент переходит в operations благодаря setEndState("operations")
     return flamegpu::ALIVE;

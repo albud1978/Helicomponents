@@ -98,8 +98,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         // Логирование как в sim_master
         if (need > 0u) {
-            printf("  [SPAWN MGR Day %u] need=%u, next_idx=%u->%u, next_acn=%u->%u\\n",
-                   day, need, next_idx, next_idx + need, next_acn, next_acn + need);
+            // PERF OFF: printf("  [SPAWN MGR Day %u] need=%u, next_idx=%u->%u, next_acn=%u->%u\\n",
+                   //        day, need, next_idx, next_idx + need, next_acn, next_acn + need);
         }
         
         // Сдвигаем курсоры
@@ -178,8 +178,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         // Логирование начальной наработки (только для первого агента в батче)
         if (ticket == 0u) {
-            printf("  [SPAWN Day %u] Creating %u agents Mi-17: idx %u-%u, acn %u-%u, sne=%u, ppr=%u\\n",
-                   day, need, base_idx, base_idx + need - 1u, base_acn, base_acn + need - 1u, sne_initial, ppr_initial);
+            // PERF OFF: printf("  [SPAWN Day %u] Creating %u agents Mi-17: idx %u-%u, acn %u-%u, sne=%u, ppr=%u\\n",
+                   //        day, need, base_idx, base_idx + need - 1u, base_acn, base_acn + need - 1u, sne_initial, ppr_initial);
         }
         
         // 5. Intent (ИЗМЕНЕНО: intent_flag → intent_state)

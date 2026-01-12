@@ -52,8 +52,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_2, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
-    printf("  [TRANSITION 5→2 Day %u] AC %u (idx %u, %s): reserve -> operations\\n", 
-           step_day, aircraft_number, idx, type);
+    // PERF OFF: printf("  [TRANSITION 5→2 Day %u] AC %u (idx %u, %s): reserve -> operations\\n", 
+           //        step_day, aircraft_number, idx, type);
     
     return flamegpu::ALIVE;
 }

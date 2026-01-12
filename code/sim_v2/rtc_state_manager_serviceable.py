@@ -51,8 +51,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_serviceable_to_operations, flamegpu::MessageNone, fl
     
     // Логирование перехода
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
-    printf("  [TRANSITION 3→2 Day %u] AC %u (idx %u, %s): serviceable -> operations\\n", 
-           step_day, aircraft_number, idx, type);
+    // PERF OFF: printf("  [TRANSITION 3→2 Day %u] AC %u (idx %u, %s): serviceable -> operations\\n", 
+           //        step_day, aircraft_number, idx, type);
     
     return flamegpu::ALIVE;
 }

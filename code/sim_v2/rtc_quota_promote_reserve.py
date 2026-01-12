@@ -82,9 +82,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
     // Диагностика на ключевых днях
     if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
         if (group_by == 1u) {{
-            printf("  [PROMOTE P2 TARGET Day %u] Mi-8: Curr=%u, Used(P1)=%u, Target=%u\\n", day, curr, used, target);
+            // PERF OFF: printf("  [PROMOTE P2 TARGET Day %u] Mi-8: Curr=%u, Used(P1)=%u, Target=%u\\n", day, curr, used, target);
         }} else if (group_by == 2u) {{
-            printf("  [PROMOTE P2 TARGET Day %u] Mi-17: Curr=%u, Used(P1)=%u, Target=%u\\n", day, curr, used, target);
+            // PERF OFF: printf("  [PROMOTE P2 TARGET Day %u] Mi-17: Curr=%u, Used(P1)=%u, Target=%u\\n", day, curr, used, target);
         }}
     }}
     
@@ -142,8 +142,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
     // Диагностика на день 149 для Mi-17
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     if (day == 149u && group_by == 2u) {{
-        printf("  [P2 RANK Day %u] AC %u (idx %u): rank=%u/%u, K=%u, total_in_reserve=%u\\n", 
-               day, aircraft_number, idx, rank, total_in_reserve, K, total_in_reserve);
+        // PERF OFF: printf("  [P2 RANK Day %u] AC %u (idx %u): rank=%u/%u, K=%u, total_in_reserve=%u\\n", 
+               //        day, aircraft_number, idx, rank, total_in_reserve, K, total_in_reserve);
     }}
     
     if (rank < K) {{
@@ -152,8 +152,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
         
         /* Логирование выбора для P2 */
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [PROMOTE P2→2 Day %u] AC %u (idx %u): rank=%u/%u reserve->operations\\n", 
-               day, aircraft_number, idx, rank, K);
+        // PERF OFF: printf("  [PROMOTE P2→2 Day %u] AC %u (idx %u): rank=%u/%u reserve->operations\\n", 
+               //        day, aircraft_number, idx, rank, K);
         
         // Записываем в ОТДЕЛЬНЫЙ буфер для reserve (избегаем race condition)
         if (group_by == 1u) {{

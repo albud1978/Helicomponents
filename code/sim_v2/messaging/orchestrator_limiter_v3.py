@@ -155,8 +155,12 @@ class LimiterOrchestrator:
             print(f"  ⚠️ mp5 размер {len(mp5_raw)} < ожидаемого {expected_lin_size}")
             self.mp5_cumsum = np.zeros(self.frames * (self.days + 1), dtype=np.uint32)
         
-        # Компоненты
-        self.population_builder = AgentPopulationBuilder(env_data)
+        # Компоненты — передаём mp5_cumsum для точного расчёта limiter
+        self.population_builder = AgentPopulationBuilder(
+            env_data, 
+            mp5_cumsum=self.mp5_cumsum, 
+            end_day=self.end_day
+        )
         
         # MP5 Strategy для инициализации mp5_lin
         from components.mp5_strategy import HostOnlyMP5Strategy

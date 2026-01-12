@@ -196,8 +196,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
         /* Логирование выбора для P3 с информацией о br2_mi17 */
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         const char* repair_mode = skip_repair ? "КОМПЛЕКТАЦИЯ (ppr<br2)" : "РЕМОНТ (ppr>=br2)";
-        printf("  [PROMOTE P3→2 Day %u] AC %u (group=%u, ppr=%u, br2=%u): rank=%u/%u %s\\n", 
-               day, aircraft_number, group_by, ppr, br2_mi17, rank, K, repair_mode);
+        // PERF OFF: printf("  [PROMOTE P3→2 Day %u] AC %u (group=%u, ppr=%u, br2=%u): rank=%u/%u %s\\n", 
+               //        day, aircraft_number, group_by, ppr, br2_mi17, rank, K, repair_mode);
         
         // Записываем в ОТДЕЛЬНЫЙ буфер для inactive (избегаем race condition)
         if (group_by == 1u) {{
