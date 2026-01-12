@@ -268,6 +268,12 @@ class V2BaseModelMessaging:
         self.env.newMacroPropertyUInt32("mi8_approve_s1", max_frames)
         self.env.newMacroPropertyUInt32("mi17_approve_s1", max_frames)
         
+        # V6: MacroProperty для state 7 (unserviceable)
+        self.env.newMacroPropertyUInt32("mi8_unsvc_count", max_frames)
+        self.env.newMacroPropertyUInt32("mi17_unsvc_count", max_frames)
+        self.env.newMacroPropertyUInt32("mi8_approve_s7", max_frames)
+        self.env.newMacroPropertyUInt32("mi17_approve_s7", max_frames)
+        
         # Spawn pending для квотирования
         self.env.newMacroPropertyUInt32("mi8_spawn_pending", max_frames)
         self.env.newMacroPropertyUInt32("mi17_spawn_pending", max_frames)
@@ -340,13 +346,14 @@ class V2BaseModelMessaging:
         """Настройка агента HELI (планеры) — идентично base_model.py"""
         agent = self.model.newAgent("HELI")
         
-        # Состояния (6 штук)
-        agent.newState("inactive")      # 1
-        agent.newState("operations")    # 2
-        agent.newState("serviceable")   # 3
-        agent.newState("unserviceable") # 4 (бывший repair, ремонт в постпроцессинге)
-        agent.newState("reserve")       # 5
-        agent.newState("storage")       # 6
+        # Состояния (7 штук) — V6 архитектура
+        agent.newState("inactive")      # 1 — давно запаркованные
+        agent.newState("operations")    # 2 — в эксплуатации
+        agent.newState("serviceable")   # 3 — исправные в холдинге
+        agent.newState("repair")        # 4 — только день 0, детерминированный выход
+        agent.newState("reserve")       # 5 — только spawn, детерминированный
+        agent.newState("storage")       # 6 — списанные (BR)
+        agent.newState("unserviceable") # 7 — НОВЫЙ: после OH, ждёт промоут P2
         
         # Переменные агента
         agent.newVariableUInt("idx")
@@ -358,18 +365,19 @@ class V2BaseModelMessaging:
         agent.newVariableUInt("prev_intent", 0)  # Для event-driven: отслеживание изменений
         agent.newVariableUInt("bi_counter", 1)  # Служебное поле для BI (всегда 1)
         
-        # Transition флаги
-        agent.newVariableUInt("transition_0_to_2", 0)  # spawn -> operations
-        agent.newVariableUInt("transition_0_to_3", 0)  # spawn -> serviceable
-        agent.newVariableUInt("transition_2_to_4", 0)
-        agent.newVariableUInt("transition_2_to_6", 0)
-        agent.newVariableUInt("transition_2_to_3", 0)
-        agent.newVariableUInt("transition_3_to_2", 0)
-        agent.newVariableUInt("transition_5_to_2", 0)
-        agent.newVariableUInt("transition_1_to_2", 0)
-        agent.newVariableUInt("transition_4_to_5", 0)
-        agent.newVariableUInt("transition_1_to_4", 0)
-        agent.newVariableUInt("transition_4_to_2", 0)
+        # Transition флаги — V6 архитектура
+        agent.newVariableUInt("transition_0_to_2", 0)  # spawn → operations
+        agent.newVariableUInt("transition_2_to_3", 0)  # демоут
+        agent.newVariableUInt("transition_2_to_6", 0)  # списание (BR)
+        agent.newVariableUInt("transition_2_to_7", 0)  # ops → unserviceable (OH)
+        agent.newVariableUInt("transition_3_to_2", 0)  # промоут P1
+        agent.newVariableUInt("transition_7_to_2", 0)  # промоут P2 (unserviceable)
+        agent.newVariableUInt("transition_1_to_2", 0)  # промоут P3
+        agent.newVariableUInt("transition_4_to_3", 0)  # repair → serviceable (детерм.)
+        agent.newVariableUInt("transition_5_to_2", 0)  # spawn → operations (детерм.)
+        
+        # V6: Детерминированная дата выхода (для repair и spawn)
+        agent.newVariableUInt("exit_date", 0xFFFFFFFF)  # День перехода (MAX = нет)
         
         # Наработка
         agent.newVariableUInt("sne", 0)

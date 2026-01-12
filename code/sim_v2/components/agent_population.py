@@ -143,25 +143,27 @@ class AgentPopulationBuilder:
         # Предварительно вычисляем LL/OH/BR по кадрам
         ll_by_frame, oh_by_frame, br_by_frame = self._build_norms_by_frame()
         
-        # Создаем популяции для каждого состояния
+        # Создаем популяции для каждого состояния (V6 архитектура)
         populations = {
             'inactive': fg.AgentVector(agent_def),      # state_1
             'operations': fg.AgentVector(agent_def),    # state_2
             'serviceable': fg.AgentVector(agent_def),   # state_3
-            'unserviceable': fg.AgentVector(agent_def), # state_4 (бывший repair)
-            'reserve': fg.AgentVector(agent_def),       # state_5
-            'storage': fg.AgentVector(agent_def)        # state_6
+            'repair': fg.AgentVector(agent_def),        # state_4 (V6: детерминированный выход)
+            'reserve': fg.AgentVector(agent_def),       # state_5 (spawn tickets)
+            'storage': fg.AgentVector(agent_def),       # state_6
+            'unserviceable': fg.AgentVector(agent_def)  # state_7 (V6: после OH)
         }
         
-        # Маппинг status_id -> state name
+        # Маппинг status_id -> state name (V6 архитектура)
         status_to_state = {
-            0: 'inactive',      # Статус 0 тоже считаем неактивным
-            1: 'inactive',
-            2: 'operations',
-            3: 'serviceable',
-            4: 'unserviceable', # бывший repair, ремонт в постпроцессинге
-            5: 'reserve',
-            6: 'storage'
+            0: 'inactive',      # Статус 0 → неактивные
+            1: 'inactive',      # Статус 1 → неактивные  
+            2: 'operations',    # Статус 2 → в эксплуатации
+            3: 'serviceable',   # Статус 3 → исправные в холдинге
+            4: 'repair',        # Статус 4 → V6: детерминированный ремонт
+            5: 'reserve',       # Статус 5 → spawn tickets
+            6: 'storage',       # Статус 6 → списанные
+            7: 'unserviceable'  # Статус 7 → V6: после OH (новый)
         }
         
         # Сначала фильтруем записи с group_by in [1,2]
@@ -310,7 +312,7 @@ class AgentPopulationBuilder:
             if status_id == 6:
                 agent.setVariableUInt("s6_started", 0)  # Изначально в статусе 6
             
-            # Для агентов в статусе 4 проверяем assembly_trigger
+            # V6: Для агентов в repair (status_id=4) устанавливаем exit_date
             if status_id == 4:
                 repair_time = agent.getVariableUInt("repair_time")
                 repair_days = agent.getVariableUInt("repair_days")
@@ -319,6 +321,10 @@ class AgentPopulationBuilder:
                 # Если осталось до конца ремонта МЕНЬШЕ assembly_time - агент в фазе сборки
                 if repair_time - repair_days < assembly_time:
                     agent.setVariableUInt("assembly_trigger", 1)
+                
+                # V6: exit_date = день когда repair завершится (переход repair→serviceable)
+                remaining_repair = max(0, repair_time - repair_days)
+                agent.setVariableUInt("exit_date", remaining_repair)
             
             # intent_state зависит от status_id (state):
             # - inactive (1) → 1 (замороженные, ждут repair_time)
@@ -353,9 +359,9 @@ class AgentPopulationBuilder:
                 )
                 agent.setVariableUInt16("limiter", limiter)
         
-        # Загружаем популяции в симуляцию по состояниям
+        # Загружаем популяции в симуляцию по состояниям (V6: 7 states)
         # ВАЖНО: Нужно инициализировать ВСЕ states, даже пустые (для spawn)
-        all_states = ['inactive', 'operations', 'serviceable', 'unserviceable', 'reserve', 'storage']
+        all_states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage', 'unserviceable']
         
         # FIX 4: Используем agent_def, НЕ simulation.getAgentDescription (нет такого метода!)
         for state_name in all_states:
