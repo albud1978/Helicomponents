@@ -173,9 +173,11 @@ class LimiterV7Orchestrator:
             self.base_model.env,
             self.program_change_days  # список дней изменения программы
         )
+        # V7: skip_decrement=True — декремент уже в rtc_ops_increment_v7 (один проход)
         rtc_limiter_optimized.register_limiter_optimized(
             self.model,
-            heli_agent
+            heli_agent,
+            skip_decrement=True
         )
         
         # ═══════════════════════════════════════════════════════════════
