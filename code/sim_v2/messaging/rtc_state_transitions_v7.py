@@ -168,8 +168,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_to_ops_v7, flamegpu::MessageNone, flamegpu::Me
 # ВАЖНО: Разводим READ и WRITE через FunctionCondition
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Слой 1.1: READ — вычисляем dt, новые SNE/PPR, записываем в агента
-# Все агенты в operations выполняют эту функцию СНАЧАЛА
+# Слой 1.1: READ — вычисляем dt, новые SNE/PPR, декрементируем limiter
+# Все агенты в operations выполняют эту функцию
+# ОПТИМИЗАЦИЯ: три счётчика в одном проходе (sne++, ppr++, limiter--)
 RTC_OPS_INCREMENT = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_increment_v7, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Читаем параметры
@@ -188,18 +189,30 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_increment_v7, flamegpu::MessageNone, flamegpu::M
     const unsigned int cumsum_prev = (prev_day > 0u) ? mp5_cumsum[base_prev] : 0u;
     const unsigned int dt = (cumsum_curr >= cumsum_prev) ? (cumsum_curr - cumsum_prev) : 0u;
     
-    // Читаем текущие значения
+    // === 1. Инкременты SNE/PPR ===
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     
-    // Инкрементируем
     const unsigned int sne_new = sne + dt;
     const unsigned int ppr_new = ppr + dt;
     
-    // Записываем
     FLAMEGPU->setVariable<unsigned int>("sne", sne_new);
     FLAMEGPU->setVariable<unsigned int>("ppr", ppr_new);
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", dt);
+    
+    // === 2. Декремент limiter (горизонт до ресурсного лимита) ===
+    // adaptive_days = current_day - prev_day (длина текущего шага)
+    const unsigned int adaptive_days = (current_day > prev_day) ? (current_day - prev_day) : 0u;
+    
+    unsigned short limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
+    if (limiter > 0u) {{
+        if (limiter <= (unsigned short)adaptive_days) {{
+            limiter = 0u;  // Достигли лимита
+        }} else {{
+            limiter -= (unsigned short)adaptive_days;
+        }}
+        FLAMEGPU->setVariable<unsigned short>("limiter", limiter);
+    }}
     
     return flamegpu::ALIVE;
 }}

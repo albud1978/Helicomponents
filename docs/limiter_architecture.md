@@ -5,7 +5,7 @@
 
 ---
 
-## 📊 Таблица RTC модулей (32 функции)
+## 📊 Таблица RTC модулей (31 функция)
 
 | # | Слой | Функция | State | Описание |
 |---|------|---------|-------|----------|
@@ -17,7 +17,7 @@
 | 3 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Выход из ремонта при `current_day >= exit_date`, PPR=0 |
 | 4 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Spawn при `current_day >= exit_date` |
 | **ФАЗА 1: Operations — инкременты и переходы по ресурсам** |||||
-| 5 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt` |
+| 5 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt`, `limiter -= adaptive` (3 счётчика в 1 проход) |
 | 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `SNE >= BR` |
 | 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH`, сброс `PPR=0` |
 | 8 | v7_ops_stay | `rtc_ops_stay_v7` | 2→2 | Остаться в operations |
@@ -40,17 +40,16 @@
 | 23 | v7_apply_promote_p3 | `rtc_apply_promote_p3_v7` | 1→2 | Применение P3 |
 | **ФАЗА 4: Сбор min_limiter (горизонты по ресурсам)** |||||
 | 24 | limiter_on_entry | `rtc_compute_limiter_on_entry` | 2 | Бинарный поиск `limiter` при входе в ops |
-| 25 | decrement_limiter | `rtc_decrement_limiter` | 2 | `limiter -= adaptive_days` |
-| 26 | clear_limiter | `rtc_clear_limiter_on_exit` | 2 | `limiter=0` при выходе из ops |
-| 27 | min_limiter | `rtc_compute_min_limiter` | 2 | `atomicMin(limiter)` → `mp_min_limiter` |
+| 25 | clear_limiter | `rtc_clear_limiter_on_exit` | 2 | `limiter=0` при выходе из ops |
+| 26 | min_limiter | `rtc_compute_min_limiter` | 2 | `atomicMin(limiter)` → `mp_min_limiter` |
 | **ФАЗА 5: Расчёт adaptive_days и переход к следующему шагу** |||||
-| 28 | copy_limiter_v5 | `rtc_copy_limiter_v5` | 2 | Копирование limiter в буфер |
-| 29 | compute_global_min | `rtc_compute_global_min_v5` | QM | **ЧИТАЕТ** все min → вычисляет `adaptive_days` |
-| 30 | reset_min | `rtc_reset_min_limiter_v5` | QM | `mp_min_limiter = MAX` (для след. шага) |
-| 31 | clear_limiter_v5 | `rtc_clear_limiter_v5` | non-ops | Очистка буфера для не-ops агентов |
-| 32 | save_adaptive | `rtc_save_adaptive_v5` | HELI | Сохранение `adaptive_days` в агента |
-| 33 | save_adaptive_qm | `rtc_save_adaptive_v5_qm` | QM | Сохранение `adaptive_days` в QM |
-| 34 | update_day | `rtc_update_day_v5` | QM | `current_day += adaptive_days` |
+| 27 | copy_limiter_v5 | `rtc_copy_limiter_v5` | 2 | Копирование limiter в буфер |
+| 28 | compute_global_min | `rtc_compute_global_min_v5` | QM | **ЧИТАЕТ** все min → вычисляет `adaptive_days` |
+| 29 | reset_min | `rtc_reset_min_limiter_v5` | QM | `mp_min_limiter = MAX` (для след. шага) |
+| 30 | clear_limiter_v5 | `rtc_clear_limiter_v5` | non-ops | Очистка буфера для не-ops агентов |
+| 31 | save_adaptive | `rtc_save_adaptive_v5` | HELI | Сохранение `adaptive_days` в агента |
+| 32 | save_adaptive_qm | `rtc_save_adaptive_v5_qm` | QM | Сохранение `adaptive_days` в QM |
+| 33 | update_day | `rtc_update_day_v5` | QM | `current_day += adaptive_days` |
 
 ---
 

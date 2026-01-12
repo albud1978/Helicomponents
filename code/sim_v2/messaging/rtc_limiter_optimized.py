@@ -359,8 +359,15 @@ def setup_limiter_macroproperties(env, program_changes: list):
     print(f"  ✅ Limiter MacroProperty: mp_min_limiter, mp_program_changes_v3[{len(program_changes)}]")
 
 
-def register_limiter_optimized(model: fg.ModelDescription, agent: fg.AgentDescription):
-    """Регистрирует оптимизированные RTC функции для limiter"""
+def register_limiter_optimized(model: fg.ModelDescription, agent: fg.AgentDescription,
+                               skip_decrement: bool = False):
+    """Регистрирует оптимизированные RTC функции для limiter
+    
+    Args:
+        model: Модель FLAME GPU
+        agent: Агент HELI
+        skip_decrement: True для V7 (декремент уже в rtc_ops_increment_v7)
+    """
     
     # 1. Вычисление limiter при входе в ops (после state managers)
     fn_entry = agent.newRTCFunction("rtc_compute_limiter_on_entry", RTC_COMPUTE_LIMITER_ON_ENTRY)
@@ -370,11 +377,13 @@ def register_limiter_optimized(model: fg.ModelDescription, agent: fg.AgentDescri
     layer_entry.addAgentFunction(fn_entry)
     
     # 2. Декремент limiter на каждом шаге
-    fn_decr = agent.newRTCFunction("rtc_decrement_limiter", RTC_DECREMENT_LIMITER)
-    fn_decr.setInitialState("operations")
-    fn_decr.setEndState("operations")
-    layer_decr = model.newLayer("L_limiter_decrement")
-    layer_decr.addAgentFunction(fn_decr)
+    # V7: пропускаем — декремент уже в rtc_ops_increment_v7 (один проход: sne++, ppr++, limiter--)
+    if not skip_decrement:
+        fn_decr = agent.newRTCFunction("rtc_decrement_limiter", RTC_DECREMENT_LIMITER)
+        fn_decr.setInitialState("operations")
+        fn_decr.setEndState("operations")
+        layer_decr = model.newLayer("L_limiter_decrement")
+        layer_decr.addAgentFunction(fn_decr)
     
     # 3. Обнуление при выходе
     fn_exit = agent.newRTCFunction("rtc_clear_limiter_on_exit", RTC_CLEAR_LIMITER_ON_EXIT)
@@ -390,5 +399,6 @@ def register_limiter_optimized(model: fg.ModelDescription, agent: fg.AgentDescri
     layer_min = model.newLayer("L_limiter_min")
     layer_min.addAgentFunction(fn_min)
     
-    print("  ✅ Limiter optimized RTC зарегистрирован")
+    decr_status = "пропущен (V7)" if skip_decrement else "включён"
+    print(f"  ✅ Limiter optimized RTC зарегистрирован (decrement: {decr_status})")
 
