@@ -38,23 +38,17 @@ RTC_COMPUTE_LIMITER_ON_ENTRY = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // ТОЧНЫЙ расчёт limiter через бинарный поиск по mp5_cumsum
     // 
-    // Вызывается:
-    // 1. На шаге 0: для ВСЕХ агентов в ops с limiter=0
-    // 2. На остальных шагах: для агентов с intent=2 (входящих в ops)
+    // V7 оптимизация: вычисляем ТОЛЬКО для агентов с limiter=0
+    // (новые в ops — при переходе X→2 limiter ставится в 0)
     
-    const unsigned int step = FLAMEGPU->getStepCounter();
-    const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
     const unsigned short current_limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
-    // Условие вычисления: 
-    // - шаг 0 И limiter=0 (начальная инициализация)
-    // - ИЛИ шаг > 0 И intent=2 (входящий в ops)
-    bool need_compute = (step == 0u && current_limiter == 0u) || (step > 0u && intent == 2u);
-    
-    if (!need_compute) {{
+    // Ранний выход: если limiter уже вычислен — не трогаем
+    if (current_limiter > 0u) {{
         return flamegpu::ALIVE;
     }}
+    
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
     // ═══════════════════════════════════════════════════════════════════
     // Получаем параметры агента и окружения
@@ -385,12 +379,7 @@ def register_limiter_optimized(model: fg.ModelDescription, agent: fg.AgentDescri
         layer_decr = model.newLayer("L_limiter_decrement")
         layer_decr.addAgentFunction(fn_decr)
     
-    # 3. Обнуление при выходе
-    fn_exit = agent.newRTCFunction("rtc_clear_limiter_on_exit", RTC_CLEAR_LIMITER_ON_EXIT)
-    fn_exit.setInitialState("operations")
-    fn_exit.setEndState("operations")
-    layer_exit = model.newLayer("L_limiter_exit")
-    layer_exit.addAgentFunction(fn_exit)
+    # 3. V7: clear_limiter_on_exit УБРАН — обнуление уже в функциях 2→3, 2→6, 2→7
     
     # 4. Reduction для min
     fn_min = agent.newRTCFunction("rtc_compute_min_limiter", RTC_COMPUTE_ADAPTIVE_DAYS)
