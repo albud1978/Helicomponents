@@ -46,6 +46,9 @@ def setup_v5_macroproperties(env, program_changes: list):
     # limiter_buffer для atomicMin
     env.newMacroPropertyUInt("limiter_buffer", RTC_MAX_FRAMES)
     
+    # V7: min_exit_date для детерминированных переходов (repair, spawn)
+    env.newMacroPropertyUInt("min_exit_date_mp", 4)  # [0]=min_exit_date
+    
     # program_changes массив (фиксированный размер для RTC)
     env.newMacroPropertyUInt("program_changes_mp", 150)
     
@@ -56,7 +59,7 @@ def setup_v5_macroproperties(env, program_changes: list):
     except:
         pass  # Уже существует
     
-    print(f"  ✅ V5 MacroProperty: current_day_mp, adaptive_result_mp, limiter_buffer[{RTC_MAX_FRAMES}], program_changes_mp[150]")
+    print(f"  ✅ V5 MacroProperty: current_day_mp, adaptive_result_mp, limiter_buffer[{RTC_MAX_FRAMES}], min_exit_date_mp, program_changes_mp[150]")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -92,7 +95,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_copy_limiter_v5, flamegpu::MessageNone, flamegpu::Me
 
 RTC_COMPUTE_GLOBAL_MIN = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v5, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // V5: QuotaManager вычисляет adaptive_days из mp_min_limiter (от V3 RTC)
+    // V5/V7: QuotaManager вычисляет adaptive_days из min(limiter, exit_date, program_change)
     
     // Читаем current_day из MacroProperty
     auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
@@ -110,7 +113,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v5, flamegpu::MessageNone, flameg
     auto mp_min = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp_min_limiter");
     unsigned int min_limiter = mp_min[0];
     
-    // 2. Находим next program change
+    // 2. V7: Читаем min_exit_date для детерминированных переходов (repair, spawn)
+    auto mp_exit = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_exit_date_mp");
+    unsigned int min_exit_date = mp_exit[0];
+    
+    // 3. Находим next program change
     auto pc = FLAMEGPU->environment.getMacroProperty<unsigned int, 150u>("program_changes_mp");
     const unsigned int num_pc = FLAMEGPU->environment.getProperty<unsigned int>("num_program_changes");
     
@@ -123,26 +130,41 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v5, flamegpu::MessageNone, flameg
         }}
     }}
     
-    // 3. adaptive_days = min(min_limiter, next_pc - current_day)
+    // 4. adaptive_days = min(min_limiter, days_to_exit, days_to_pc)
     unsigned int days_to_pc = (next_pc > current_day) ? (next_pc - current_day) : 1u;
-    unsigned int adaptive_days = (min_limiter < 0xFFFFFFFFu && min_limiter > 0u) ? min_limiter : days_to_pc;
-    if (days_to_pc < adaptive_days) adaptive_days = days_to_pc;
+    
+    // V7: days_to_exit_date (если есть агенты в repair/reserve с exit_date)
+    unsigned int days_to_exit = 0xFFFFFFFFu;
+    if (min_exit_date < 0xFFFFFFFFu && min_exit_date > current_day) {{
+        days_to_exit = min_exit_date - current_day;
+    }}
+    
+    // Вычисляем adaptive_days
+    unsigned int adaptive_days = days_to_pc;
+    
+    if (min_limiter < 0xFFFFFFFFu && min_limiter > 0u && min_limiter < adaptive_days) {{
+        adaptive_days = min_limiter;
+    }}
+    
+    if (days_to_exit < adaptive_days) {{
+        adaptive_days = days_to_exit;
+    }}
     
     // Не выходить за end_day
     unsigned int remaining = end_day - current_day;
     if (adaptive_days > remaining) adaptive_days = remaining;
     if (adaptive_days < 1u) adaptive_days = 1u;
     
-    // 4. НЕ сбрасываем mp_min_limiter здесь — это делается в отдельном слое
+    // 5. НЕ сбрасываем MacroProperty здесь — это делается в отдельном слое
     
     // DEBUG: каждые 50 шагов
     unsigned int step = FLAMEGPU->getStepCounter();
     if (step % 50u == 0u || step < 5u) {{
-        printf("[V5 Step %u] current=%u, min_limiter=%u, next_pc=%u -> adaptive=%u\\n",
-               step, current_day, min_limiter, next_pc, adaptive_days);
+        printf("[V7 Step %u] current=%u, limiter=%u, exit=%u, pc=%u -> adaptive=%u\\n",
+               step, current_day, min_limiter, min_exit_date, next_pc, adaptive_days);
     }}
     
-    // 5. Записываем результат
+    // 6. Записываем результат
     auto result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
     result[0].exchange(adaptive_days);
     
