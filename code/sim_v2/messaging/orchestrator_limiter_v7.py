@@ -361,13 +361,11 @@ class LimiterV7Orchestrator:
         states = ["inactive", "operations", "serviceable", "repair", "reserve", "storage", "unserviceable"]
         total = 0
         for state in states:
-            try:
-                pop = self.simulation.getAgentStateData("HELI", state)
-                count = pop.size()
-                total += count
-                print(f"   {state}: {count}")
-            except Exception as e:
-                print(f"   {state}: ошибка ({e})")
+            heli_pop = fg.AgentVector(self.base_model.agent)
+            self.simulation.getPopulationData(heli_pop, state)
+            count = heli_pop.size()
+            total += count
+            print(f"   {state}: {count}")
         print(f"   -----------")
         print(f"   ВСЕГО: {total}")
 
