@@ -168,6 +168,7 @@ def fetch_group_counts(client, version: VersionInfo) -> Dict[int, Dict[int, int]
 
 
 def fetch_group_requirements(client, version: VersionInfo) -> Dict[int, Dict[str, int]]:
+    # md_components — универсальный справочник, НЕ фильтруем по version_date
     rows = client.execute(
         """
         SELECT
@@ -175,12 +176,9 @@ def fetch_group_requirements(client, version: VersionInfo) -> Dict[int, Dict[str
             max(comp_number) AS required_count,
             groupBitOr(toUInt16(coalesce(ac_type_mask, 0))) AS ac_type_mask
         FROM md_components
-        WHERE version_date = %(version_date)s
-          AND version_id = %(version_id)s
-          AND group_by > 2
+        WHERE group_by > 2
         GROUP BY group_by
         """,
-        {"version_date": version.version_date, "version_id": version.version_id},
     )
     return {
         int(group_by): {
@@ -192,6 +190,7 @@ def fetch_group_requirements(client, version: VersionInfo) -> Dict[int, Dict[str
 
 
 def fetch_requirement_details(client, version: VersionInfo) -> Dict[int, List[str]]:
+    # md_components — универсальный справочник, НЕ фильтруем по version_date
     rows = client.execute(
         """
         SELECT
@@ -199,11 +198,8 @@ def fetch_requirement_details(client, version: VersionInfo) -> Dict[int, List[st
             partno,
             comp_number
         FROM md_components
-        WHERE version_date = %(version_date)s
-          AND version_id = %(version_id)s
-          AND group_by > 2
+        WHERE group_by > 2
         """,
-        {"version_date": version.version_date, "version_id": version.version_id},
     )
     details: Dict[int, List[str]] = {}
     for group_by, partno, comp_number in rows:

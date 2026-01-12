@@ -773,6 +773,48 @@ class ExtractMaster:
                 logger.error(f"❌ Ошибка проверки {table}: {e}")
                 all_ready = False
         
+        # === ПРОВЕРКА КАЧЕСТВА СТАТУСОВ ПЛАНЕРОВ ===
+        logger.info("\n🔍 Проверка качества статусов планеров...")
+        try:
+            # Количество планеров всего
+            total_planers = self.client.execute(f"""
+                SELECT count() FROM heli_pandas 
+                WHERE version_date = '{self.version_date}' AND version_id = {self.version_id}
+                  AND group_by IN (1, 2)
+            """)[0][0]
+            
+            # Количество планеров с ненулевым status_id
+            planers_with_status = self.client.execute(f"""
+                SELECT count() FROM heli_pandas 
+                WHERE version_date = '{self.version_date}' AND version_id = {self.version_id}
+                  AND group_by IN (1, 2)
+                  AND status_id != 0
+            """)[0][0]
+            
+            # Планеры с status_id = 0
+            planers_zero_status = total_planers - planers_with_status
+            
+            if planers_zero_status == 0:
+                logger.info(f"✅ Все планеры имеют статус: {total_planers} из {total_planers}")
+            else:
+                logger.warning(f"⚠️ ПРОБЛЕМА КАЧЕСТВА: {planers_zero_status} планеров с status_id=0 из {total_planers}")
+                all_ready = False
+                
+                # Показываем детали
+                zero_status_details = self.client.execute(f"""
+                    SELECT serialno, partno, condition 
+                    FROM heli_pandas 
+                    WHERE version_date = '{self.version_date}' AND version_id = {self.version_id}
+                      AND group_by IN (1, 2)
+                      AND status_id = 0
+                    LIMIT 10
+                """)
+                for sn, pt, cond in zero_status_details:
+                    logger.warning(f"   → AC {sn} ({pt}): condition={cond}")
+                    
+        except Exception as e:
+            logger.error(f"❌ Ошибка проверки статусов планеров: {e}")
+        
         if all_ready:
             logger.info(f"\n🎉 СИСТЕМА ГОТОВА ДЛЯ FLAME GPU!")
             logger.info(f"📊 Общий объем данных: {total_records:,} записей")

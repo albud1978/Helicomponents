@@ -704,6 +704,68 @@ def days_to_epoch_u16(d: date) -> int:
     return max(0, int(diff))
 
 
+def calculate_spawn_reserve_universal(
+    total_flight_minutes: float,
+    ll_minutes: int,
+    oh_minutes: int = 0,
+    repair_time_days: int = 0,
+    safety_margin: float = 1.2
+) -> int:
+    """
+    Универсальная формула расчёта резерва spawn.
+    Работает для планеров (OH=0) и агрегатов (OH>0).
+    
+    Формула:
+    1. Если OH=0 или OH>=LL: простая формула total_flight / LL × 1.2
+    2. Если OH>0: учитываем ремонты:
+       - total_exits = total_flight / OH (всего выходов из эксплуатации)
+       - permanent_exits = total_exits × (OH/LL) (списания)
+       - repairs_count = total_exits × (1 - OH/LL) (ремонты)
+       - repair_buffer = (repairs_count / 10) × (repair_time / 365) × 1.2
+       - reserve = (permanent_exits + repair_buffer) × 1.2
+    
+    Args:
+        total_flight_minutes: Общий налёт за период (минуты)
+        ll_minutes: Назначенный ресурс (Life Limit, минуты)
+        oh_minutes: Межремонтный ресурс (Overhaul, минуты). 0 для планеров.
+        repair_time_days: Время ремонта (дни). 0 для планеров.
+        safety_margin: Коэффициент запаса (по умолчанию 1.2 = +20%)
+    
+    Returns:
+        Количество резервных слотов (округлено до целых, минимум 2)
+    """
+    if ll_minutes <= 0 or total_flight_minutes <= 0:
+        return 2  # Минимум
+    
+    # Если нет OH или OH >= LL — только списания (как планеры)
+    if oh_minutes <= 0 or oh_minutes >= ll_minutes:
+        # Простая формула: total_flight / LL × safety_margin
+        consumed = total_flight_minutes / ll_minutes
+        return max(2, int(round(consumed * safety_margin)))
+    
+    # === Формула с учётом ремонтов ===
+    # 1. Всего выходов из эксплуатации (по OH)
+    total_exits = total_flight_minutes / oh_minutes
+    
+    # 2. Из них списания (конец жизни): доля OH/LL
+    permanent_exits = total_exits * (oh_minutes / ll_minutes)
+    
+    # 3. Ремонты (временное выбытие): (1 - OH/LL)
+    repairs_count = total_exits * (1 - oh_minutes / ll_minutes)
+    
+    # 4. Буфер на время ремонта (сколько одновременно в ремонте за год)
+    # repairs_count / 10 лет × (repair_time / 365 дней) × safety_margin
+    repair_buffer = 0
+    if repair_time_days > 0:
+        annual_repairs = repairs_count / 10.0  # За 10 лет → в год
+        repair_buffer = annual_repairs * (repair_time_days / 365.0) * safety_margin
+    
+    # 5. Итого: (списания + ремонтный буфер) × safety_margin
+    average_exits = permanent_exits + repair_buffer
+    
+    return max(2, int(round(average_exits * safety_margin)))
+
+
 def calculate_dynamic_spawn_reserve_mi17(
     avg_fleet_size: float,
     ll_minutes: int,
@@ -711,12 +773,8 @@ def calculate_dynamic_spawn_reserve_mi17(
     simulation_days: int = 4000
 ) -> int:
     """
-    Расчёт резерва для динамического spawn Mi-17 по формуле агрегатов.
-    
-    Формула (уточнённая):
-    1. Средний налёт в день × Среднее количество бортов × Дни / LL
-    2. Запас прочности 20%
-    3. Округление до целых (без хардкода)
+    Расчёт резерва для динамического spawn Mi-17.
+    Обёртка над универсальной функцией для планеров (без OH).
     
     Args:
         avg_fleet_size: Среднее количество бортов в программе (из MP4)
@@ -730,19 +788,16 @@ def calculate_dynamic_spawn_reserve_mi17(
     if ll_minutes <= 0 or avg_daily_minutes <= 0 or avg_fleet_size <= 0:
         return 0  # Защита от некорректных данных
     
-    # 1. Суммарный налёт за период
+    # Суммарный налёт за период
     total_flight_minutes = avg_fleet_size * simulation_days * avg_daily_minutes
     
-    # 2. Количество планеров, которые выработают ресурс
-    planers_consumed = total_flight_minutes / ll_minutes
-    
-    # 3. С запасом прочности 20%
-    planers_needed = planers_consumed * 1.2
-    
-    # 4. Резервные слоты (округление до целых)
-    reserve_slots = int(round(planers_needed))
-    
-    return reserve_slots
+    # Используем универсальную формулу с OH=0 (планеры не ремонтируются)
+    return calculate_spawn_reserve_universal(
+        total_flight_minutes=total_flight_minutes,
+        ll_minutes=ll_minutes,
+        oh_minutes=0,
+        repair_time_days=0
+    )
 
 
 def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:

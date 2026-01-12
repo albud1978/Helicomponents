@@ -86,20 +86,44 @@ class AgentPopulationUnitsBuilder:
         FROM heli_pandas
         WHERE version_date = toDate('{self.version_date}')
           AND version_id = {self.version_id}
-          AND group_by >= 3
+          AND group_by IN (3, 4)  -- ТВ2-117 (Mi-8) и ТВ3-117 (Mi-17)
         ORDER BY group_by, mfg_date
         """
         
         rows = self.client.execute(sql)
         
+        # Загружаем список планеров в operations (status_id=2)
+        planers_in_ops_sql = f"""
+        SELECT DISTINCT toUInt32(serialno) as ac
+        FROM heli_pandas
+        WHERE version_date = toDate('{self.version_date}')
+          AND version_id = {self.version_id}
+          AND group_by IN (1, 2)
+          AND status_id = 2
+        """
+        planers_in_ops = set(r[0] for r in self.client.execute(planers_in_ops_sql))
+        print(f"   Планеров в operations: {len(planers_in_ops)}")
+        
         self.units_data = []
+        fixed_ac_count = 0
         for row in rows:
+            ac_num = int(row[1] or 0)
+            status_id = int(row[4] or 0)
+            
+            # Если агрегат привязан к планеру, но планер НЕ в operations
+            # → агрегат должен быть serviceable с aircraft_number=0
+            if ac_num > 0 and ac_num not in planers_in_ops:
+                if status_id == 2:  # operations → serviceable
+                    status_id = 3
+                ac_num = 0
+                fixed_ac_count += 1
+            
             self.units_data.append({
                 'psn': int(row[0] or 0),
-                'aircraft_number': int(row[1] or 0),
+                'aircraft_number': ac_num,
                 'partseqno_i': int(row[2] or 0),
                 'group_by': int(row[3] or 0),
-                'status_id': int(row[4] or 0),
+                'status_id': status_id,
                 'sne': int(row[5] or 0),
                 'ppr': int(row[6] or 0),
                 'll': int(row[7] or 0),
@@ -108,7 +132,10 @@ class AgentPopulationUnitsBuilder:
                 'ac_type_mask': int(row[10] or 0)
             })
         
-        print(f"   Загружено {len(self.units_data)} агрегатов (group_by >= 3)")
+        if fixed_ac_count > 0:
+            print(f"   ⚠️ Исправлено {fixed_ac_count} агрегатов с aircraft_number на планере не в operations")
+        
+        print(f"   Загружено {len(self.units_data)} агрегатов (group_by=4 — ТВ3-117 для Mi-17)")
     
     def _load_mp1_norms(self):
         """Загружает нормативы из md_components"""
@@ -175,12 +202,19 @@ class AgentPopulationUnitsBuilder:
     
     def _calculate_spawn_reserve(self, group_counts: Dict[int, int]) -> int:
         """
-        Расчёт количества резервных слотов для spawn агрегатов
+        Расчёт количества резервных слотов для spawn агрегатов.
         
-        Формула из docs/rtc_components.md (оборот определяет восполнение):
-        1. aggregates_consumed = flight_by_type / ll_aggregate
-        2. aggregates_needed = aggregates_consumed × 1.2 (+20% запас)
-        3. reserve_slots = max(10, aggregates_needed - existing_count)
+        Универсальная формула (согласована с sim_env_setup.py):
+        1. Если OH=0 или OH>=LL: simple = total_flight / LL × 1.2
+        2. Если OH>0:
+           - total_exits = total_flight / OH (всего выходов из эксплуатации)
+           - permanent_exits = total_exits × (OH/LL) (списания)
+           - repairs_count = total_exits × (1 - OH/LL) (ремонты)
+           - repair_buffer = (repairs_count/10) × (repair_time/365) × 1.2
+           - reserve = (permanent_exits + repair_buffer) × 1.2
+        
+        МУЛЬТИНОМЕНКЛАТУРА: если в группе несколько номенклатур с разными
+        ресурсами — берём МАКСИМАЛЬНЫЙ резерв среди всех номенклатур группы.
         
         Важно: используем ac_type_mask для выбора правильного налёта:
         - 32 (0x20) → только Mi-8
@@ -217,48 +251,252 @@ class AgentPopulationUnitsBuilder:
         # Расчёт резерва по группам
         total_reserve = 0
         top_consumers = []  # Для диагностики
+        multi_nomen_groups = []  # Группы с мультиноменклатурой
         
         for group_by, existing_count in group_counts.items():
-            # Получаем средний LL и ac_type_mask для группы
-            ll_group, ac_mask = self._get_ll_and_mask_for_group(group_by)
+            # === МУЛЬТИНОМЕНКЛАТУРА: получаем ВСЕ номенклатуры группы ===
+            nomenclatures = self._get_nomenclatures_for_group(group_by)
             
-            if ll_group > 0:
-                # Выбираем правильный налёт по ac_type_mask
-                if ac_mask == 32:  # Только Mi-8
-                    flight_10y = flight_mi8_10y
-                elif ac_mask == 64:  # Только Mi-17
-                    flight_10y = flight_mi17_10y
-                else:  # Универсальный (96) — средний
-                    flight_10y = (flight_mi8_10y + flight_mi17_10y) / 2
-                
-                # Оборот: сколько "жизней агрегатов" понадобится за 10 лет
-                aggregates_consumed = flight_10y / ll_group
-                
-                # +20% запас
-                aggregates_needed = aggregates_consumed * SAFETY_MARGIN
-                
-                # Резерв = потребность - существующие (минимум 10)
-                # Агрегаты разные — нужен полный резерв по формуле оборота
-                group_reserve = max(10, int(aggregates_needed - existing_count))
-                
-                # Собираем топ для диагностики
-                if group_reserve > 100:
-                    top_consumers.append((group_by, existing_count, int(aggregates_needed), group_reserve, ll_group))
-            else:
-                # Если LL неизвестен — минимальный резерв 20% от существующих
+            if not nomenclatures:
+                # Если нет номенклатур — минимальный резерв
                 group_reserve = max(10, int(existing_count * 0.20))
+                total_reserve += group_reserve
+                continue
+            
+            # Определяем преобладающую маску для выбора налёта
+            masks = [n['ac_mask'] for n in nomenclatures]
+            ac_mask = max(set(masks), key=masks.count) if masks else 96
+            
+            # Выбираем правильный налёт по ac_type_mask
+            if ac_mask == 32:  # Только Mi-8
+                flight_10y = flight_mi8_10y
+            elif ac_mask == 64:  # Только Mi-17
+                flight_10y = flight_mi17_10y
+            else:  # Универсальный (96) — средний
+                flight_10y = (flight_mi8_10y + flight_mi17_10y) / 2
+            
+            # === Считаем резерв для КАЖДОЙ номенклатуры и берём МАКСИМУМ ===
+            # ВАЖНО: учитываем сколько существующих агрегатов выбудет за 10 лет!
+            existing_will_retire = self._count_existing_will_retire(
+                group_by, 
+                DAYS_10_YEARS, 
+                AVG_DAILY_FLIGHT_MIN
+            )
+            
+            reserves_by_nomen = []
+            for nomen in nomenclatures:
+                ll = nomen['ll']
+                oh = nomen['oh']
+                rt = nomen['repair_time']
+                
+                if ll > 0:
+                    # Базовый резерв (на новый налёт)
+                    base_reserve = self._calc_reserve_universal(
+                        total_flight=flight_10y,
+                        ll_minutes=ll,
+                        oh_minutes=oh,
+                        repair_time_days=rt,
+                        safety_margin=SAFETY_MARGIN
+                    )
+                    # Добавляем выбывающие существующие агрегаты
+                    nomen_reserve = base_reserve + existing_will_retire
+                else:
+                    nomen_reserve = 10
+                
+                reserves_by_nomen.append({
+                    'partseqno': nomen['partseqno'],
+                    'reserve': nomen_reserve,
+                    'll': ll,
+                    'oh': oh,
+                    'rt': rt,
+                    'existing_retire': existing_will_retire
+                })
+            
+            # Берём МАКСИМАЛЬНЫЙ резерв среди всех номенклатур группы
+            group_reserve = max(r['reserve'] for r in reserves_by_nomen)
+            
+            # Для лопастей (group_by=6): минимум 2000
+            if group_by == 6:
+                min_reserve = max(2000, int(existing_count * 0.5))
+                group_reserve = max(min_reserve, group_reserve)
+            else:
+                group_reserve = max(10, group_reserve)
+            
+            # Диагностика мультиноменклатуры
+            if len(nomenclatures) > 1:
+                best_nomen = max(reserves_by_nomen, key=lambda x: x['reserve'])
+                multi_nomen_groups.append((
+                    group_by, len(nomenclatures), group_reserve,
+                    best_nomen['partseqno'], best_nomen['ll'], best_nomen['oh'], best_nomen['rt']
+                ))
+            
+            # Собираем топ для диагностики
+            if group_reserve > 50:
+                best = max(reserves_by_nomen, key=lambda x: x['reserve'])
+                top_consumers.append((
+                    group_by, existing_count, group_reserve,
+                    best['ll'], best['oh'], best['rt'], len(nomenclatures),
+                    best.get('existing_retire', 0)
+                ))
             
             total_reserve += group_reserve
         
+        # Диагностика мультиноменклатуры
+        if multi_nomen_groups:
+            print(f"   🔀 Мультиноменклатура ({len(multi_nomen_groups)} групп):")
+            for gb, n_nom, reserve, psn, ll, oh, rt in multi_nomen_groups[:5]:
+                print(f"      group_by={gb}: {n_nom} номенклатур → reserve={reserve} "
+                      f"(best: PSN={psn}, LL={ll//60}ч, OH={oh//60}ч, RT={rt}дн)")
+        
         # Диагностика топ-5 групп с большим резервом
         if top_consumers:
-            top_consumers.sort(key=lambda x: x[3], reverse=True)
-            print("   📈 Топ-5 групп по резерву:")
-            for gb, exist, needed, reserve, ll in top_consumers[:5]:
-                print(f"      group_by={gb}: exist={exist}, needed={needed}, reserve={reserve}, ll={ll//60}ч")
+            top_consumers.sort(key=lambda x: x[2], reverse=True)
+            print("   📈 Топ-5 групп по резерву (с учётом выбытия существующих):")
+            for item in top_consumers[:5]:
+                gb, exist, reserve, ll, oh, rt, n_nom = item[:7]
+                existing_retire = item[7] if len(item) > 7 else 0
+                nomen_info = f" ({n_nom} номенкл.)" if n_nom > 1 else ""
+                # Расшифровка формулы
+                if oh > 0 and oh < ll:
+                    total_exits = flight_mi17_10y / oh  # Примерно
+                    perm = total_exits * (oh / ll)
+                    repairs = total_exits * (1 - oh / ll)
+                    repair_buf = (repairs / 10) * (rt / 365) * 1.2
+                    base = int((perm + repair_buf) * 1.2)
+                    print(f"      group_by={gb}{nomen_info}: exist={exist}, reserve={reserve}")
+                    print(f"         LL={ll//60}ч, OH={oh//60}ч, RT={rt}дн")
+                    print(f"         base={base}, existing_retire={existing_retire}")
+                else:
+                    consumed = flight_mi17_10y / ll if ll > 0 else 0
+                    print(f"      group_by={gb}{nomen_info}: exist={exist}, reserve={reserve}")
+                    print(f"         LL={ll//60}ч, consumed={int(consumed)}, existing_retire={existing_retire}")
         
         # Минимум 500 резервных слотов
         return max(500, total_reserve)
+    
+    def _get_nomenclatures_for_group(self, group_by: int) -> List[Dict]:
+        """
+        Получает все уникальные номенклатуры (partseqno) группы с их ресурсами.
+        
+        Returns:
+            Список словарей: [{partseqno, ll, oh, repair_time, ac_mask}, ...]
+        """
+        nomenclatures = {}  # partseqno -> {ll, oh, repair_time, ac_mask}
+        
+        for unit in self.units_data:
+            if unit['group_by'] == group_by:
+                partseqno = unit.get('partseqno_i', 0)
+                if partseqno in nomenclatures:
+                    continue  # Уже обработана эта номенклатура
+                
+                norms = self.mp1_norms.get(partseqno, {})
+                ac_mask = unit.get('ac_type_mask', 96)
+                
+                # Берём LL и OH по типу ВС
+                if ac_mask == 32:  # Mi-8
+                    ll = norms.get('ll_mi8', 0)
+                    oh = norms.get('oh_mi8', 0)
+                elif ac_mask == 64:  # Mi-17
+                    ll = norms.get('ll_mi17', 0)
+                    oh = norms.get('oh_mi17', 0)
+                else:  # Универсальный — берём максимум
+                    ll = max(norms.get('ll_mi8', 0), norms.get('ll_mi17', 0))
+                    oh = max(norms.get('oh_mi8', 0), norms.get('oh_mi17', 0))
+                
+                repair_time = norms.get('repair_time', 30)
+                
+                nomenclatures[partseqno] = {
+                    'partseqno': partseqno,
+                    'll': ll,
+                    'oh': oh,
+                    'repair_time': repair_time,
+                    'ac_mask': ac_mask
+                }
+        
+        return list(nomenclatures.values())
+    
+    def _calc_reserve_universal(
+        self,
+        total_flight: float,
+        ll_minutes: int,
+        oh_minutes: int = 0,
+        repair_time_days: int = 0,
+        safety_margin: float = 1.2
+    ) -> int:
+        """
+        Универсальная формула расчёта резерва (дублирует sim_env_setup.py).
+        
+        Если OH=0 или OH>=LL: простая формула total_flight / LL × 1.2
+        Если OH>0: учитываем ремонты.
+        """
+        if ll_minutes <= 0 or total_flight <= 0:
+            return 10  # Минимум
+        
+        # Если нет OH или OH >= LL — только списания
+        if oh_minutes <= 0 or oh_minutes >= ll_minutes:
+            consumed = total_flight / ll_minutes
+            return max(10, int(round(consumed * safety_margin)))
+        
+        # === Формула с учётом ремонтов ===
+        # 1. Всего выходов из эксплуатации (по OH)
+        total_exits = total_flight / oh_minutes
+        
+        # 2. Из них списания (конец жизни): доля OH/LL
+        permanent_exits = total_exits * (oh_minutes / ll_minutes)
+        
+        # 3. Ремонты (временное выбытие): (1 - OH/LL)
+        repairs_count = total_exits * (1 - oh_minutes / ll_minutes)
+        
+        # 4. Буфер на время ремонта (сколько одновременно в ремонте за год)
+        repair_buffer = 0
+        if repair_time_days > 0:
+            annual_repairs = repairs_count / 10.0
+            repair_buffer = annual_repairs * (repair_time_days / 365.0) * safety_margin
+        
+        # 5. Итого: (списания + ремонтный буфер) × safety_margin
+        average_exits = permanent_exits + repair_buffer
+        
+        return max(10, int(round(average_exits * safety_margin)))
+    
+    def _count_existing_will_retire(
+        self, 
+        group_by: int, 
+        sim_days: int, 
+        avg_daily_flight_min: int
+    ) -> int:
+        """
+        Подсчитывает сколько существующих агрегатов выбудет по LL за период симуляции.
+        
+        Учитывает текущую наработку (SNE) каждого агрегата:
+        remaining = LL - SNE
+        days_to_retire = remaining / avg_daily_flight
+        Если days_to_retire < sim_days → агрегат выбудет
+        """
+        will_retire = 0
+        
+        for unit in self.units_data:
+            if unit['group_by'] != group_by:
+                continue
+            
+            sne = unit.get('sne', 0)
+            ll = unit.get('ll', 0)
+            
+            if ll <= 0:
+                continue
+            
+            remaining = ll - sne
+            if remaining <= 0:
+                # Уже выработан — точно выбудет
+                will_retire += 1
+                continue
+            
+            # Сколько дней до выбытия
+            days_to_retire = remaining / avg_daily_flight_min if avg_daily_flight_min > 0 else 999999
+            
+            if days_to_retire < sim_days:
+                will_retire += 1
+        
+        return will_retire
     
     def _get_ll_and_mask_for_group(self, group_by: int) -> Tuple[int, int]:
         """Получает средний LL и преобладающий ac_type_mask для группы"""
@@ -288,6 +526,63 @@ class AgentPopulationUnitsBuilder:
         avg_mask = max(set(masks), key=masks.count) if masks else 96
         
         return avg_ll, avg_mask
+    
+    def _get_ll_oh_and_mask_for_group(self, group_by: int) -> Tuple[int, int, int]:
+        """
+        Получает средний LL, OH и преобладающий ac_type_mask для группы.
+        
+        Returns:
+            (avg_ll, avg_oh, avg_mask): Средний LL (мин), OH (мин), ac_type_mask
+        """
+        lls = []
+        ohs = []
+        masks = []
+        
+        for unit in self.units_data:
+            if unit['group_by'] == group_by:
+                partseqno = unit.get('partseqno_i', 0)
+                norms = self.mp1_norms.get(partseqno, {})
+                ac_mask = unit.get('ac_type_mask', 96)
+                
+                # Берём LL и OH по типу ВС
+                if ac_mask == 32:  # Mi-8
+                    ll = norms.get('ll_mi8', 0)
+                    oh = norms.get('oh_mi8', 0)
+                elif ac_mask == 64:  # Mi-17
+                    ll = norms.get('ll_mi17', 0)
+                    oh = norms.get('oh_mi17', 0)
+                else:  # Универсальный — берём максимум
+                    ll = max(norms.get('ll_mi8', 0), norms.get('ll_mi17', 0))
+                    oh = max(norms.get('oh_mi8', 0), norms.get('oh_mi17', 0))
+                
+                if ll > 0:
+                    lls.append(ll)
+                    masks.append(ac_mask)
+                if oh > 0:
+                    ohs.append(oh)
+        
+        avg_ll = sum(lls) // len(lls) if lls else 0
+        avg_oh = sum(ohs) // len(ohs) if ohs else 0
+        # Берём наиболее частую маску
+        avg_mask = max(set(masks), key=masks.count) if masks else 96
+        
+        return avg_ll, avg_oh, avg_mask
+    
+    def _get_repair_time_for_group(self, group_by: int) -> int:
+        """Получает средний repair_time для группы (в днях)"""
+        repair_times = []
+        
+        for unit in self.units_data:
+            if unit['group_by'] == group_by:
+                partseqno = unit.get('partseqno_i', 0)
+                norms = self.mp1_norms.get(partseqno, {})
+                rt = norms.get('repair_time', 30)
+                if rt > 0:
+                    repair_times.append(rt)
+        
+        if repair_times:
+            return sum(repair_times) // len(repair_times)
+        return 30  # Дефолт 30 дней
     
     
     def populate_agents(self, simulation: fg.CUDASimulation, agent_def: fg.AgentDescription,
@@ -348,9 +643,17 @@ class AgentPopulationUnitsBuilder:
         svc_tails = {}  # group_by -> svc_tail
         rsv_tails = {}  # group_by -> rsv_tail
         
+        # Счётчик initial_slots для mp_planer_slots
+        # Формат: (group_by, planer_idx) -> count
+        initial_slots = {}
+        
+        # Маппинг aircraft_number -> planer_idx (из env_data)
+        ac_to_idx = env_data.get('ac_to_idx', {})
+        MAX_PLANERS = 400
+        
         for gb in units_by_group:
-            svc_positions[gb] = 0
-            rsv_positions[gb] = 0
+            svc_positions[gb] = 1  # Начинаем с 1 (head=1 в init_fifo_queues)
+            rsv_positions[gb] = 1  # Начинаем с 1
             svc_tails[gb] = 0
             rsv_tails[gb] = 0
         
@@ -367,7 +670,8 @@ class AgentPopulationUnitsBuilder:
                 
                 # FIX: Агрегаты без aircraft_number не могут быть в operations
                 # Они должны быть в serviceable (готовы к установке)
-                if status_id == 2 and unit['aircraft_number'] == 0:
+                ac_num = unit['aircraft_number']
+                if status_id == 2 and (ac_num == 0 or ac_num is None):
                     status_id = 3  # serviceable
                 
                 state_name = status_to_state[status_id]
@@ -379,13 +683,47 @@ class AgentPopulationUnitsBuilder:
                 agent.setVariableUInt("idx", idx)
                 agent.setVariableUInt("psn", unit['psn'])
                 agent.setVariableUInt("active", 1)  # Реальный агрегат (не spawn-резерв)
-                agent.setVariableUInt("aircraft_number", unit['aircraft_number'])
+                
+                # FIX: Для serviceable/repair/reserve/storage — сбрасываем aircraft_number
+                # В heli_pandas serviceable двигатели могут иметь AC (привязка для учёта),
+                # но в симуляции serviceable = "готов к установке" = AC должен быть 0
+                # чтобы assembly мог их назначить на планеры
+                if state_name in ('serviceable', 'repair', 'reserve', 'storage'):
+                    agent.setVariableUInt("aircraft_number", 0)
+                else:
+                    agent.setVariableUInt("aircraft_number", ac_num if ac_num else 0)
                 agent.setVariableUInt("partseqno_i", unit['partseqno_i'])
                 agent.setVariableUInt("group_by", unit['group_by'])
                 
                 # === Наработки ===
-                agent.setVariableUInt("sne", unit['sne'])
-                agent.setVariableUInt("ppr", unit['ppr'])
+                sne_val = unit['sne']
+                ppr_val = unit['ppr']
+                ll_raw = unit['ll']  # LL из heli_pandas (может быть 0)
+                
+                # FIX: PPR = SNE для "новых" агрегатов без ремонта
+                # Условие: sne > 0 AND ppr = 0 AND sne < ll
+                # Логика: агрегат до первого ремонта не имеет PPR в исходных данных
+                if ppr_val == 0 and sne_val > 0:
+                    # LL может быть 0 в heli_pandas — берём из mp1_norms
+                    partseqno_check = unit['partseqno_i']
+                    norms_check = mp1_norms.get(partseqno_check, {})
+                    ac_mask_check = unit['ac_type_mask']
+                    
+                    if ac_mask_check & 64:  # Mi-17
+                        ll_check = norms_check.get('ll_mi17', ll_raw)
+                    elif ac_mask_check & 32:  # Mi-8
+                        ll_check = norms_check.get('ll_mi8', ll_raw)
+                    else:
+                        ll_check = max(norms_check.get('ll_mi17', 0), norms_check.get('ll_mi8', ll_raw))
+                    
+                    if ll_check == 0:
+                        ll_check = ll_raw
+                    
+                    if ll_check > 0 and sne_val < ll_check:
+                        ppr_val = sne_val  # PPR = SNE для "нового" агрегата
+                
+                agent.setVariableUInt("sne", sne_val)
+                agent.setVariableUInt("ppr", ppr_val)
                 agent.setVariableUInt("repair_days", unit['repair_days'])
                 
                 # === Нормативы из MP1 ===
@@ -412,6 +750,20 @@ class AgentPopulationUnitsBuilder:
                 if unit['ll'] > 0:
                     ll_val = unit['ll']
                 
+                # === FIX: Агрегаты в operations с превышением лимитов должны остаться в operations ===
+                # В heli_pandas агрегаты могут летать с превышением если есть разрешение/продление.
+                # Увеличиваем лимиты чтобы check_limits не отправил их сразу в ремонт/списание.
+                if state_name == 'operations':
+                    # PPR >= OH → увеличиваем OH
+                    if oh_val > 0 and ppr_val >= oh_val:
+                        oh_val = ppr_val + 30000  # +500 часов
+                    # SNE >= BR → увеличиваем BR
+                    if br_val > 0 and sne_val >= br_val:
+                        br_val = sne_val + 30000  # +500 часов
+                    # SNE >= LL → увеличиваем LL
+                    if ll_val > 0 and sne_val >= ll_val:
+                        ll_val = sne_val + 30000  # +500 часов
+                
                 agent.setVariableUInt("ll", ll_val)
                 agent.setVariableUInt("oh", oh_val)
                 agent.setVariableUInt("br", br_val)
@@ -431,6 +783,13 @@ class AgentPopulationUnitsBuilder:
                     agent.setVariableUInt("queue_position", rsv_positions[gb])
                     rsv_positions[gb] += 1
                     rsv_tails[gb] = rsv_positions[gb]
+                elif state_name == 'operations' and ac_num and ac_num > 0:
+                    # === Инициализация mp_planer_slots для агрегатов в operations ===
+                    planer_idx = ac_to_idx.get(ac_num, 0)
+                    if planer_idx > 0 and planer_idx < MAX_PLANERS:
+                        slot_key = (gb, planer_idx)
+                        initial_slots[slot_key] = initial_slots.get(slot_key, 0) + 1
+                    agent.setVariableUInt("queue_position", 0)
                 else:
                     # Для агентов в других состояниях — позиция 0
                     agent.setVariableUInt("queue_position", 0)
@@ -519,9 +878,10 @@ class AgentPopulationUnitsBuilder:
             if len(pop) > 0:
                 print(f"   Загружено {len(pop)} агентов в состояние '{state_name}'")
         
-        # === Сохраняем tails для инициализации MacroProperty ===
+        # === Сохраняем tails и initial_slots для инициализации MacroProperty ===
         self.svc_tails = svc_tails
         self.rsv_tails = rsv_tails
+        self.initial_slots = initial_slots
         
         # === Статистика ===
         print(f"   Всего загружено: {idx} агрегатов")
@@ -532,7 +892,12 @@ class AgentPopulationUnitsBuilder:
             if svc_t > 0 or rsv_t > 0:
                 print(f"      group_by={gb}: svc_tail={svc_t}, rsv_tail={rsv_t}")
         
+        # initial_slots статистика
+        total_slots = sum(initial_slots.values())
+        print(f"   mp_planer_slots: {total_slots} начальных агрегатов на планерах")
+        
         # Сохраняем tails в env_data для инициализации MacroProperty
         env_data['svc_tails'] = svc_tails
         env_data['rsv_tails'] = rsv_tails
+        env_data['initial_slots'] = initial_slots
 

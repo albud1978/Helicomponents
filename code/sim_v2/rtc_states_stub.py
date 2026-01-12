@@ -71,20 +71,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
     s4_days++;
     FLAMEGPU->setVariable<unsigned int>("s4_days", s4_days);
     
-    // Обработка assembly_trigger: срабатывает ОДИН РАЗ, затем автоматически сбрасывается
-    unsigned int assembly_trigger = FLAMEGPU->getVariable<unsigned int>("assembly_trigger");
+    // Обработка assembly_trigger (трёхзначная логика):
+    //   0 = нет сигнала (планер не в последней стадии ремонта)
+    //   1 = ONE-SHOT сигнал на комплектацию (существует ровно 1 день!)
+    //   2 = комплектация завершена (агрегаты уже забраны, не повторять)
+    // Сброс в 0 происходит в rtc_state_manager_repair при переходе 4→5 или 4→2
+    const unsigned int assembly_trigger = FLAMEGPU->getVariable<unsigned int>("assembly_trigger");
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     const unsigned int assembly_time = FLAMEGPU->getVariable<unsigned int>("assembly_time");
     
-    // Если был установлен в прошлом шаге, сбрасываем
     if (assembly_trigger == 1u) {{
-        FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 0u);
-    }}
-    
-    // Проверяем порог (после сброса)
-    if (repair_days == repair_time - assembly_time) {{
+        // ONE-SHOT обработан → переходим в "комплектация завершена"
+        FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 2u);
+    }} else if (assembly_trigger == 0u && repair_days >= repair_time - assembly_time) {{
+        // Порог достигнут и ещё не было сигнала → устанавливаем ONE-SHOT
         FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 1u);
     }}
+    // assembly_trigger=2 остаётся без изменений до выхода из ремонта
     
     // Проверяем завершение ремонта
     if (repair_days == repair_time) {{

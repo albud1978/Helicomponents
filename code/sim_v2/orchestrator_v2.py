@@ -74,6 +74,12 @@ class V2Orchestrator:
         # Создаем слой для обработки состояний
         state_layer = self.model.newLayer('state_processing')
         
+        # Если MP2 включен, создаём MacroProperties ДО регистрации модулей
+        # (spawn_v2 и другие модули используют mp2_transition_*)
+        if self.enable_mp2:
+            import rtc_mp2_writer
+            rtc_mp2_writer.setup_mp2_macroproperties(self.model)
+        
         # Подключаем RTC модули
         for module_name in rtc_modules:
             print(f"  Подключение модуля: {module_name}")
@@ -493,7 +499,25 @@ class V2Orchestrator:
 def main():
     """Главная функция оркестратора"""
     parser = argparse.ArgumentParser(description='V2 Orchestrator с модульной архитектурой')
-    parser.add_argument('--modules', nargs='+', default=['mp5_probe'],
+    # Полный набор модулей для симуляции планеров
+    DEFAULT_MODULES = [
+        'state_2_operations',      # Инкремент sne/ppr для operations
+        'states_stub',             # Заглушки для неактивных состояний
+        'count_ops',               # Подсчёт агентов в operations
+        'quota_repair',            # Квота на repair
+        'quota_ops_excess',        # Избыток operations
+        'quota_promote_serviceable',  # Промоут serviceable → operations
+        'quota_promote_reserve',      # Промоут reserve → operations
+        'quota_promote_inactive',     # Промоут inactive → operations
+        'state_manager_serviceable',  # Переходы serviceable
+        'state_manager_operations',   # Переходы operations → repair/storage
+        'state_manager_repair',       # Переходы repair → operations/reserve
+        'state_manager_reserve',      # Переходы reserve → operations
+        'state_manager_storage',      # Storage (терминальное)
+        'state_manager_inactive',     # inactive → operations/repair
+        'spawn_v2',                   # Динамический спавн
+    ]
+    parser.add_argument('--modules', nargs='+', default=DEFAULT_MODULES,
                       help='Список RTC модулей для подключения')
     parser.add_argument('--steps', type=int, default=None,
                       help='Количество шагов симуляции (по умолчанию из HL_V2_STEPS)')

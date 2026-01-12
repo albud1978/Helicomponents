@@ -3,11 +3,14 @@ RTC модуль инициализации intent для состояний res
 Аналог rtc_states_stub планеров
 
 Функционал:
-- reserve: intent = 2 (хотят в operations)
-- serviceable: intent = 2 (хотят в operations)
-- storage: intent = 6 (остаются в storage)
+- reserve: intent = 5 (остаются, пока FIFO не назначит AC)
+- serviceable: intent = 3 (остаются, пока FIFO не назначит AC)
+- storage: intent = 6 (терминальное состояние)
 
-Дата: 05.01.2026
+ВАЖНО: intent_state = 2 (переход в operations) устанавливается ТОЛЬКО в FIFO
+при успешном назначении aircraft_number!
+
+Дата: 05.01.2026, исправлено 06.01.2026
 """
 
 import pyflamegpu as fg
@@ -16,15 +19,17 @@ import pyflamegpu as fg
 def get_rtc_code() -> str:
     """Возвращает CUDA код для stub модулей"""
     return """
-// Reserve: хотят перейти в operations (через FIFO-очередь)
+// Reserve: остаёмся, пока FIFO не назначит AC
+// intent_state = 2 устанавливается ТОЛЬКО в rtc_fifo_assign_reserve при успешном назначении
 FLAMEGPU_AGENT_FUNCTION(rtc_units_stub_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // хотим в operations
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);  // остаёмся в reserve
     return flamegpu::ALIVE;
 }
 
-// Serviceable: хотят перейти в operations (через FIFO-очередь)
+// Serviceable: остаёмся, пока FIFO не назначит AC
+// intent_state = 2 устанавливается ТОЛЬКО в rtc_fifo_assign_serviceable при успешном назначении
 FLAMEGPU_AGENT_FUNCTION(rtc_units_stub_serviceable, flamegpu::MessageNone, flamegpu::MessageNone) {
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // хотим в operations
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);  // остаёмся в serviceable
     return flamegpu::ALIVE;
 }
 

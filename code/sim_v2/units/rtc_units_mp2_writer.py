@@ -18,11 +18,11 @@ MAX_FRAMES = 10000
 MAX_DAYS = 4000
 
 
-def get_rtc_code(max_frames: int, drain_interval: int) -> str:
-    """Возвращает CUDA код для MP2 writer с циклическим буфером"""
+def get_rtc_code(max_frames: int, drain_interval: int, state_num: int) -> str:
+    """Возвращает CUDA код для MP2 writer с явным state number"""
     buffer_size = max_frames * (drain_interval + 1)
     return f"""
-// MP2 Writer для агрегатов (циклический буфер на {drain_interval} дней)
+// MP2 Writer для агрегатов (state={state_num})
 FLAMEGPU_AGENT_FUNCTION(rtc_units_mp2_write, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
@@ -44,8 +44,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_mp2_write, flamegpu::MessageNone, flamegpu::Me
     const unsigned int partseqno_i = FLAMEGPU->getVariable<unsigned int>("partseqno_i");
     const unsigned int active = FLAMEGPU->getVariable<unsigned int>("active");
     
-    // Определяем state по текущему состоянию агента
-    const unsigned int state = FLAMEGPU->getVariable<unsigned int>("intent_state");
+    // State — явно установлен из FLAME GPU state (НЕ intent_state!)
+    const unsigned int state = {state_num}u;
     
     // Записываем в MacroProperty массивы через .exchange()
     auto mp2_psn = FLAMEGPU->environment.getMacroProperty<unsigned int, {buffer_size}u>("mp2_units_psn");
@@ -78,19 +78,26 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_mp2_write, flamegpu::MessageNone, flamegpu::Me
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription, 
                  max_frames: int = 10000, max_days: int = 4000, drain_interval: int = 100):
     """Регистрирует RTC функции MP2 writer с циклическим буфером"""
-    rtc_code = get_rtc_code(max_frames, drain_interval)
     
-    # Создаём функцию для каждого состояния
-    states = ["operations", "serviceable", "repair", "reserve", "storage"]
+    # Маппинг состояний на числа (реальное FLAME GPU состояние)
+    state_mapping = {
+        "operations": 2,
+        "serviceable": 3,
+        "repair": 4,
+        "reserve": 5,
+        "storage": 6
+    }
     
     layer = model.newLayer("layer_units_mp2_write")
     
-    for state in states:
-        fn_name = f"rtc_units_mp2_write_{state}"
+    for state_name, state_num in state_mapping.items():
+        # Отдельный RTC код для каждого состояния с явным state number
+        rtc_code = get_rtc_code(max_frames, drain_interval, state_num)
+        fn_name = f"rtc_units_mp2_write_{state_name}"
         fn = agent.newRTCFunction(fn_name, rtc_code)
-        fn.setInitialState(state)
-        fn.setEndState(state)
+        fn.setInitialState(state_name)
+        fn.setEndState(state_name)
         layer.addAgentFunction(fn)
     
-    print(f"  RTC модуль units_mp2_writer зарегистрирован (1 слой, {len(states)} функций)")
+    print(f"  RTC модуль units_mp2_writer зарегистрирован (1 слой, {len(state_mapping)} функций)")
 

@@ -4,7 +4,8 @@
 
 Функционал:
 - Устанавливает статус 4 (Ремонт) для планеров ВС в капремонте
-- Работает с данными status_overhaul (ВС в капремонте != 'Закрыто')
+- Работает ТОЛЬКО с активными записями status_overhaul (статус != 'Закрыто')
+- Записи 'Закрыто' игнорируются - это завершённые ремонты
 - Сопоставляет ac_registr (status_overhaul) с serialno (heli_pandas)
 - Фильтрует по PLANER_PARTNOS (единый подход с другими процессорами)
 - Используется на ЭТАПЕ 1 в dual_loader.py
@@ -26,6 +27,15 @@ from datetime import datetime, date
 # Единый список partno планеров (как в program_ac_status_processor и inactive_planery_processor)
 PLANER_PARTNOS = {'МИ-8Т', 'МИ-8П', 'МИ-8ПС', 'МИ-8ТП', 'МИ-8АМТ', 'МИ-8МТВ'}
 
+# Типы планеров для логики br2_mi17
+MI8_PARTNOS = {'МИ-8Т', 'МИ-8П', 'МИ-8ПС', 'МИ-8ТП'}
+MI17_PARTNOS = {'МИ-8АМТ', 'МИ-8МТВ'}
+
+# Порог межремонтного для Mi-17: 3500 часов = 210000 минут
+# Если PPR < BR2_MI17: комплектация без капремонта (PPR НЕ обнуляется)
+# Если PPR >= BR2_MI17: полный капремонт (PPR обнуляется)
+BR2_MI17_MINUTES = 210000  # 3500 часов
+
 
 def load_dict_status_flat():
     """Возвращает словарь статусов с правильной нумерацией"""
@@ -45,7 +55,8 @@ def get_status_overhaul_data(client, version_date):
     
     Логика: 
     - Фильтруем по version_date (каждый датасет имеет свои данные)
-    - Возвращаем ВСЕ записи (включая 'Закрыто') для последующей обработки по датам
+    - ИГНОРИРУЕМ записи со статусом 'Закрыто' (это завершённые ремонты)
+    - Обрабатываем только активные: 'Открыто', 'В процессе'
     """
     try:
         print(f"📋 Загружаем данные из status_overhaul для version_date={version_date}...")
@@ -59,7 +70,7 @@ def get_status_overhaul_data(client, version_date):
             print("💡 Сначала запустите: python3 code/status_overhaul_loader.py")
             return None
         
-        # Получаем данные с фильтром по version_date (ВСЕ записи, включая Закрыто)
+        # Получаем данные с фильтром: version_date + status != 'Закрыто'
         query = """
         SELECT 
             ac_registr,
@@ -70,13 +81,14 @@ def get_status_overhaul_data(client, version_date):
             act_end_date
         FROM status_overhaul 
         WHERE version_date = %(version_date)s
+          AND status != 'Закрыто'
         ORDER BY ac_registr
         """
         
         result = client.execute(query, {"version_date": version_date})
         
         if not result:
-            print(f"ℹ️ Нет записей капитального ремонта для version_date={version_date}")
+            print(f"ℹ️ Нет активных записей капремонта для version_date={version_date} (все 'Закрыто' или нет данных)")
             return pd.DataFrame(columns=['ac_registr', 'status', 'sched_start_date', 'act_start_date', 'sched_end_date', 'act_end_date'])
         
         # Создаем DataFrame
@@ -101,7 +113,7 @@ def process_aircraft_status(pandas_df, client):
     - Прямое сопоставление: ac_registr (status_overhaul) = serialno (heli_pandas)
     - Фильтрация: partno IN PLANER_PARTNOS
     - Если sched_end_date >= version_date → status_id=4 (в ремонте)
-    - Если sched_end_date < version_date → status_id=2, ppr=0, repair_days=0 (ремонт завершён)
+    - Если sched_end_date < version_date → ppr=0, repair_days=0 (ремонт завершён, status_id установит heli_pandas_repair_status.py с проверкой Program_AC)
     - Переносим act_start_date → removal_date, sched_end_date → target_date
     """
     try:
@@ -172,41 +184,61 @@ def process_aircraft_status(pandas_df, client):
                 
                 print(f"✅ СОВПАДЕНИЕ: serialno={serialno} ({partno}) - капремонт: {overhaul_data['status']}, sched_end={sched_end_date}")
                 
-                # Переносим даты ВСЕГДА (независимо от статуса)
-                if overhaul_data['act_start_date']:
-                    pandas_df.at[idx, 'removal_date'] = overhaul_data['act_start_date']
-                    dates_updated_count += 1
+                # Проверяем что ремонт УЖЕ начался
+                sched_start_date = overhaul_data.get('sched_start_date')
+                act_start_date = overhaul_data.get('act_start_date')
                 
-                if sched_end_date:
-                    pandas_df.at[idx, 'target_date'] = sched_end_date
-                    dates_updated_count += 1
+                start_in_past = False
+                if sched_start_date and sched_start_date < version_date:
+                    start_in_past = True
+                if act_start_date and act_start_date < version_date:
+                    start_in_past = True
                 
-                # ГЛАВНАЯ ЛОГИКА: определяем статус по sched_end_date vs version_date
-                if sched_end_date and sched_end_date < version_date:
-                    # Ремонт ЗАВЕРШЁН (target_date в прошлом)
-                    pandas_df.at[idx, 'status_id'] = 2
-                    pandas_df.at[idx, 'ppr'] = 0           # Обнуляем ppr после ремонта
-                    pandas_df.at[idx, 'repair_days'] = 0   # Ремонт завершён
-                    status_to_ops += 1
-                    print(f"   ✅ status_id=2 (Эксплуатация), ppr=0, repair_days=0 - ремонт завершён")
-                else:
-                    # Ремонт ИДЁТ (target_date в будущем или сегодня)
-                    # Проверяем что дата начала в прошлом
-                    sched_start_date = overhaul_data.get('sched_start_date')
-                    act_start_date = overhaul_data.get('act_start_date')
+                # Даты переносим ТОЛЬКО если ремонт уже начался
+                if start_in_past:
+                    if overhaul_data['act_start_date']:
+                        pandas_df.at[idx, 'removal_date'] = overhaul_data['act_start_date']
+                        dates_updated_count += 1
                     
-                    start_in_past = False
-                    if sched_start_date and sched_start_date < version_date:
-                        start_in_past = True
-                    if act_start_date and act_start_date < version_date:
-                        start_in_past = True
+                    if sched_end_date:
+                        pandas_df.at[idx, 'target_date'] = sched_end_date
+                        dates_updated_count += 1
                     
-                    if start_in_past:
+                    # ГЛАВНАЯ ЛОГИКА: определяем статус по sched_end_date vs version_date
+                    if sched_end_date and sched_end_date < version_date:
+                        # Ремонт ЗАВЕРШЁН (target_date в прошлом)
+                        # НЕ устанавливаем status_id=2 здесь!
+                        # Это сделает heli_pandas_repair_status.py с проверкой Program_AC
+                        
+                        # Логика обнуления PPR зависит от типа планера
+                        current_ppr = pandas_df.at[idx, 'ppr']
+                        if pd.isna(current_ppr):
+                            current_ppr = 0
+                        else:
+                            current_ppr = int(current_ppr)
+                        
+                        if partno in MI17_PARTNOS:
+                            # Mi-17: обнуляем PPR только если >= BR2_MI17 (полный капремонт)
+                            if current_ppr >= BR2_MI17_MINUTES:
+                                pandas_df.at[idx, 'ppr'] = 0
+                                print(f"   ✅ Mi-17 ppr=0 (полный капремонт: ppr={current_ppr} >= {BR2_MI17_MINUTES})")
+                            else:
+                                # Комплектация без капремонта - PPR НЕ обнуляется
+                                print(f"   ✅ Mi-17 ppr={current_ppr} сохранён (комплектация: ppr < {BR2_MI17_MINUTES})")
+                        else:
+                            # Mi-8: всегда обнуляем PPR после капремонта
+                            pandas_df.at[idx, 'ppr'] = 0
+                            print(f"   ✅ Mi-8 ppr=0 (капремонт завершён)")
+                        
+                        pandas_df.at[idx, 'repair_days'] = 0   # Ремонт завершён
+                        status_to_ops += 1
+                    else:
+                        # Ремонт ИДЁТ (target_date в будущем или сегодня)
                         pandas_df.at[idx, 'status_id'] = 4
                         status_to_repair += 1
                         print(f"   ✅ status_id=4 (Ремонт) - ремонт в процессе до {sched_end_date}")
-                    else:
-                        print(f"   ⚠️ Ремонт ещё не начался (start >= version_date) - НЕ устанавливаем статус")
+                else:
+                    print(f"   ⚠️ Ремонт ещё не начался (start >= version_date) - НЕ переносим даты, НЕ устанавливаем статус")
                 
                 matches_found += 1
         
@@ -214,7 +246,7 @@ def process_aircraft_status(pandas_df, client):
         print(f"   ВС в таблице капремонта: {len(status_overhaul_df)}")
         print(f"   Совпадений найдено: {matches_found}")
         print(f"   → status_id=4 (ремонт идёт): {status_to_repair}")
-        print(f"   → status_id=2 (ремонт завершён): {status_to_ops}")
+        print(f"   → ремонт завершён (status_id будет позже): {status_to_ops}")
         print(f"   Дат обновлено: {dates_updated_count}")
         
         return pandas_df

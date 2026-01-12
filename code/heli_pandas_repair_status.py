@@ -4,6 +4,7 @@
 
 Логика:
 1. Если target_date < version_date (ремонт завершился) → status_id=2 (Эксплуатация)
+   ТОЛЬКО если планер есть в Program_AC!
 2. Если target_date >= version_date (ремонт идёт) → status_id=4 (Ремонт) + repair_days
 
 Формула repair_days: repair_time - (target_date - version_date)
@@ -13,6 +14,7 @@
 - group_by >= 1 (планеры и агрегаты)
 - status_id = 0 (ещё не обработан)
 - target_date IS NOT NULL и != 1970-01-01
+- Для перехода в status_id=2: планер должен быть в Program_AC
 
 Выполняется ПОСЛЕ heli_pandas_storage_status.py.
 Идемпотентен, поддерживает dry-run.
@@ -74,21 +76,57 @@ def resolve_version(
     return v_date, int(v_id)
 
 
-def count_past_target_date(client, version_date: date, version_id: int) -> int:
-    """Подсчёт агрегатов с target_date в прошлом"""
+def get_program_ac_set(client, version_date: date, version_id: int) -> set:
+    """Получаем множество ac_registr из Program_AC"""
     query = """
-    SELECT count(*)
-    FROM heli_pandas
+    SELECT DISTINCT ac_registr
+    FROM program_ac
     WHERE version_date = %(version_date)s
       AND version_id = %(version_id)s
-      AND toUInt32(ifNull(group_by, 0)) >= 1
-      AND toUInt8(ifNull(status_id, 0)) = 0
-      AND target_date IS NOT NULL
-      AND target_date != toDate('1970-01-01')
-      AND target_date < %(version_date)s
     """
     result = client.execute(query, {"version_date": version_date, "version_id": version_id})
-    return int(result[0][0])
+    return {int(row[0]) for row in result}
+
+
+def count_past_target_date(client, version_date: date, version_id: int) -> int:
+    """Подсчёт агрегатов с target_date в прошлом (только для планеров в Program_AC)"""
+    # Подсчёт планеров (group_by 1,2) в Program_AC с target_date в прошлом
+    query_planers = """
+    SELECT count(*)
+    FROM heli_pandas hp
+    WHERE hp.version_date = %(version_date)s
+      AND hp.version_id = %(version_id)s
+      AND toUInt32(ifNull(hp.group_by, 0)) IN (1, 2)
+      AND toUInt8(ifNull(hp.status_id, 0)) = 0
+      AND hp.target_date IS NOT NULL
+      AND hp.target_date != toDate('1970-01-01')
+      AND hp.target_date < %(version_date)s
+      AND hp.aircraft_number IN (
+          SELECT ac_registr FROM program_ac 
+          WHERE version_date = %(version_date)s AND version_id = %(version_id)s
+      )
+    """
+    result_planers = client.execute(query_planers, {"version_date": version_date, "version_id": version_id})
+    
+    # Подсчёт агрегатов (group_by > 2) на планерах в Program_AC с target_date в прошлом
+    query_aggregates = """
+    SELECT count(*)
+    FROM heli_pandas hp
+    WHERE hp.version_date = %(version_date)s
+      AND hp.version_id = %(version_id)s
+      AND toUInt32(ifNull(hp.group_by, 0)) > 2
+      AND toUInt8(ifNull(hp.status_id, 0)) = 0
+      AND hp.target_date IS NOT NULL
+      AND hp.target_date != toDate('1970-01-01')
+      AND hp.target_date < %(version_date)s
+      AND hp.aircraft_number IN (
+          SELECT ac_registr FROM program_ac 
+          WHERE version_date = %(version_date)s AND version_id = %(version_id)s
+      )
+    """
+    result_aggregates = client.execute(query_aggregates, {"version_date": version_date, "version_id": version_id})
+    
+    return int(result_planers[0][0]) + int(result_aggregates[0][0])
 
 
 def count_future_target_date(client, version_date: date, version_id: int) -> int:
@@ -111,10 +149,28 @@ def count_future_target_date(client, version_date: date, version_id: int) -> int
 def update_past_to_operations(client, version_date: date, version_id: int) -> int:
     """target_date в прошлом → status_id=2 (ремонт завершился)
     
-    ВАЖНО: Для планеров (group_by IN 1,2) принудительно ставим status_id=2
-    даже если текущий status_id=4 (были ошибочно помечены как "в ремонте")
+    ВАЖНО: Переводим в status_id=2 ТОЛЬКО если планер есть в Program_AC!
+    Планеры не в Program_AC остаются со status_id=0 (или другим текущим).
     """
-    # Сначала обрабатываем агрегаты (status_id=0)
+    # Обрабатываем ПЛАНЕРЫ (group_by 1,2) ТОЛЬКО если они в Program_AC
+    query_planers = """
+    ALTER TABLE heli_pandas
+    UPDATE status_id = 2
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND toUInt32(ifNull(group_by, 0)) IN (1, 2)
+      AND target_date IS NOT NULL
+      AND target_date != toDate('1970-01-01')
+      AND target_date < %(version_date)s
+      AND aircraft_number IN (
+          SELECT ac_registr FROM program_ac 
+          WHERE version_date = %(version_date)s AND version_id = %(version_id)s
+      )
+    """
+    client.execute("SET mutations_sync = 1")
+    client.execute(query_planers, {"version_date": version_date, "version_id": version_id})
+    
+    # Обрабатываем АГРЕГАТЫ (group_by > 2) на планерах в Program_AC
     query_aggregates = """
     ALTER TABLE heli_pandas
     UPDATE status_id = 2
@@ -125,23 +181,13 @@ def update_past_to_operations(client, version_date: date, version_id: int) -> in
       AND target_date IS NOT NULL
       AND target_date != toDate('1970-01-01')
       AND target_date < %(version_date)s
+      AND aircraft_number IN (
+          SELECT ac_registr FROM program_ac 
+          WHERE version_date = %(version_date)s AND version_id = %(version_id)s
+      )
     """
     client.execute("SET mutations_sync = 1")
     client.execute(query_aggregates, {"version_date": version_date, "version_id": version_id})
-    
-    # Затем ПРИНУДИТЕЛЬНО обрабатываем планеры (status_id любой, т.к. ремонт завершён)
-    query_planers = """
-    ALTER TABLE heli_pandas
-    UPDATE status_id = 2
-    WHERE version_date = %(version_date)s
-      AND version_id = %(version_id)s
-      AND toUInt32(ifNull(group_by, 0)) IN (1, 2)
-      AND target_date IS NOT NULL
-      AND target_date != toDate('1970-01-01')
-      AND target_date < %(version_date)s
-    """
-    client.execute("SET mutations_sync = 1")
-    client.execute(query_planers, {"version_date": version_date, "version_id": version_id})
     
     # Проверяем сколько осталось
     remaining = count_past_target_date(client, version_date, version_id)

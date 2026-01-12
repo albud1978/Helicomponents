@@ -371,6 +371,9 @@ def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name
             df['shop_visit_counter'] = df['shop_visit_counter'].fillna(0).astype('int64')
 
         # Обработка lease_restricted - ИСПРАВЛЯЕМ ПРОБЛЕМУ С NaN
+        # Список собственников с лизинговыми ограничениями
+        LEASE_RESTRICTED_OWNERS = {'ГТЛК', 'ВТК-АВИА', 'СБЕР ЛИЗИНГ'}
+        
         if 'lease_restricted' in df.columns:
             # КРИТИЧНО: сначала заменяем NaN на пустую строку
             df['lease_restricted'] = df['lease_restricted'].fillna('')
@@ -378,6 +381,18 @@ def prepare_data(df, version_date, version_id=1, filter_partnos=None, table_name
             df['lease_restricted'] = df['lease_restricted'].apply(
                 lambda x: 1 if x in ['Y', '1', '1.0'] else 0
             ).astype(int)
+        else:
+            # Если колонки нет - создаём с нулями
+            df['lease_restricted'] = 0
+            print("➕ Добавлена колонка lease_restricted (по умолчанию 0)")
+        
+        # Автозаполнение lease_restricted на основе собственника (owner)
+        if 'owner' in df.columns:
+            owner_mask = df['owner'].isin(LEASE_RESTRICTED_OWNERS)
+            auto_filled = owner_mask.sum() - (df.loc[owner_mask, 'lease_restricted'] == 1).sum()
+            df.loc[owner_mask, 'lease_restricted'] = 1
+            if auto_filled > 0:
+                print(f"🔒 Автозаполнено lease_restricted=1 для {auto_filled:,} записей по собственникам: {LEASE_RESTRICTED_OWNERS}")
         
         # Обработка строковых полей для ClickHouse
         string_columns = ['partno', 'serialno', 'ac_typ', 'location', 'condition', 'owner']
