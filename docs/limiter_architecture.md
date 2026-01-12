@@ -5,9 +5,12 @@
 
 ---
 
-## 📊 Таблица RTC модулей (26 функций)
+## 📊 Таблица RTC модулей (25 функций)
 
-> **Оптимизация:** Функции `_stay` удалены — FLAME GPU автоматически оставляет агентов в состоянии если `FunctionCondition = false`
+> **Оптимизации:**
+> - Функции `_stay` удалены — FLAME GPU автоматически оставляет агентов в состоянии
+> - `clear_limiter_on_exit` удалён — обнуление уже в функциях 2→3, 2→6, 2→7
+> - `limiter_on_entry` упрощён — проверяет только `limiter==0` (без intent)
 
 | # | Слой | Функция | State | Описание |
 |---|------|---------|-------|----------|
@@ -20,8 +23,8 @@
 | 4 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Spawn при `current_day >= exit_date` |
 | **ФАЗА 1: Operations — инкременты и переходы по ресурсам** |||||
 | 5 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt`, `limiter -= adaptive` (3 счётчика в 1 проход) |
-| 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `SNE >= BR` |
-| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH` (PPR сохраняется) |
+| 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `SNE >= BR`, `limiter=0` |
+| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH`, `limiter=0` (PPR сохраняется) |
 | **ФАЗА 2: Квотирование** |||||
 | 8 | v7_reset_flags | `rtc_reset_flags_v7` | all | Сброс `promoted=0`, `needs_demote=0` |
 | 9 | v7_reset_buffers | `rtc_reset_buffers_v7` | all | Обнуление буферов подсчёта |
@@ -31,22 +34,21 @@
 | 13 | v7_promote_p2 | `rtc_promote_p2_v7` | QM | P2: unsvc→ops |
 | 14 | v7_promote_p3 | `rtc_promote_p3_v7` | QM | P3: ina→ops |
 | **ФАЗА 3: Применение квот** |||||
-| 15 | v7_apply_demote | `rtc_apply_demote_v7` | 2→3 | Применение демоута |
+| 15 | v7_apply_demote | `rtc_apply_demote_v7` | 2→3 | Применение демоута, `limiter=0` |
 | 16 | v7_apply_promote_p1 | `rtc_apply_promote_p1_v7` | 3→2 | Применение P1 |
 | 17 | v7_apply_promote_p2 | `rtc_apply_promote_p2_v7` | 7→2 | Применение P2, `PPR=0` |
 | 18 | v7_apply_promote_p3 | `rtc_apply_promote_p3_v7` | 1→2 | Применение P3 |
 | **ФАЗА 4: Сбор min_limiter (горизонты по ресурсам)** |||||
-| 19 | limiter_on_entry | `rtc_compute_limiter_on_entry` | 2 | Бинарный поиск `limiter` при входе в ops |
-| 20 | clear_limiter | `rtc_clear_limiter_on_exit` | 2 | `limiter=0` при выходе из ops |
-| 21 | min_limiter | `rtc_compute_min_limiter` | 2 | `atomicMin(limiter)` → `mp_min_limiter` |
+| 19 | limiter_on_entry | `rtc_compute_limiter_on_entry` | 2 | Бинарный поиск `limiter` для агентов с `limiter==0` |
+| 20 | min_limiter | `rtc_compute_min_limiter` | 2 | `atomicMin(limiter)` → `mp_min_limiter` |
 | **ФАЗА 5: Расчёт adaptive_days и переход к следующему шагу** |||||
-| 22 | copy_limiter_v5 | `rtc_copy_limiter_v5` | 2 | Копирование limiter в буфер |
-| 23 | compute_global_min | `rtc_compute_global_min_v5` | QM | **ЧИТАЕТ** все min → вычисляет `adaptive_days` |
-| 24 | reset_min | `rtc_reset_min_limiter_v5` | QM | `mp_min_limiter = MAX` (для след. шага) |
-| 25 | clear_limiter_v5 | `rtc_clear_limiter_v5` | non-ops | Очистка буфера для не-ops агентов |
-| 26 | save_adaptive | `rtc_save_adaptive_v5` | HELI | Сохранение `adaptive_days` в агента |
-| 27 | save_adaptive_qm | `rtc_save_adaptive_v5_qm` | QM | Сохранение `adaptive_days` в QM |
-| 28 | update_day | `rtc_update_day_v5` | QM | `current_day += adaptive_days` |
+| 21 | copy_limiter_v5 | `rtc_copy_limiter_v5` | 2 | Копирование limiter в буфер |
+| 22 | compute_global_min | `rtc_compute_global_min_v5` | QM | **ЧИТАЕТ** все min → вычисляет `adaptive_days` |
+| 23 | reset_min | `rtc_reset_min_limiter_v5` | QM | `mp_min_limiter = MAX` (для след. шага) |
+| 24 | clear_limiter_v5 | `rtc_clear_limiter_v5` | non-ops | Очистка буфера для не-ops агентов |
+| 25 | save_adaptive | `rtc_save_adaptive_v5` | HELI | Сохранение `adaptive_days` в агента |
+| 26 | save_adaptive_qm | `rtc_save_adaptive_v5_qm` | QM | Сохранение `adaptive_days` в QM |
+| 27 | update_day | `rtc_update_day_v5` | QM | `current_day += adaptive_days` |
 
 ---
 
@@ -210,8 +212,9 @@ adaptive_days = min(min_limiter, days_to_program_change, days_to_exit_date)
 **Сравнение с V5:**
 | Метрика | V7 | V5 |
 |---------|-----|-----|
-| Шаги | 219 | 332 |
-| Время | 1.59с | 3.71с |
+| Шаги | 223 | 332 |
+| Время GPU | 1.61с | 3.71с |
+| Drain (СУБД) | 0.21с | — |
 | Ускорение | **2.3x** | — |
 
 ---
@@ -226,5 +229,5 @@ adaptive_days = min(min_limiter, days_to_program_change, days_to_exit_date)
 
 *Документ обновлён: 13-01-2026*  
 *Статус: ✅ Актуальная архитектура*  
-*Тест: 3650 дней, 219 шагов, 1.59с (2296 д/с), 285 агентов, 26 RTC функций*
+*Тест: 3650 дней, 223 шага, 1.61с GPU + 0.21с drain (2262 д/с), 285 агентов, 25 RTC функций*
 
