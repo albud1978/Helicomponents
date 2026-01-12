@@ -409,7 +409,10 @@ class V2BaseModelMessaging:
         # При выходе: limiter = 0
         agent.newVariableUInt16("limiter", 0)
         
-        print("  ✅ Agent HELI: 6 состояний, все переменные + limiter")
+        # V4: Временное хранение для GPU-only вычисления adaptive_days
+        agent.newVariableUInt("computed_adaptive_days", 1)
+        
+        print("  ✅ Agent HELI: 6 состояний, все переменные + limiter + V4")
         
         return agent
 
