@@ -420,7 +420,11 @@ class V2BaseModelMessaging:
         # V4: Временное хранение для GPU-only вычисления adaptive_days
         agent.newVariableUInt("computed_adaptive_days", 1)
         
-        print("  ✅ Agent HELI: 6 состояний, все переменные + limiter + V4")
+        # V7: Флаги для однофазной архитектуры (без intent)
+        agent.newVariableUInt("promoted", 0)     # 1 = получил промоут в этом шаге
+        agent.newVariableUInt("needs_demote", 0) # 1 = должен выйти из operations
+        
+        print("  ✅ Agent HELI: 7 состояний, переменные + limiter + V7 флаги")
         
         return agent
 
