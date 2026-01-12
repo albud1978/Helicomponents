@@ -64,9 +64,12 @@ from components.agent_population import AgentPopulationBuilder
 class LimiterV7Orchestrator:
     """Оркестратор LIMITER V7 — однофазная архитектура"""
     
-    def __init__(self, version_date: str, end_day: int = 3650):
+    def __init__(self, version_date: str, end_day: int = 3650,
+                 enable_mp2: bool = False, clickhouse_client=None):
         self.version_date = version_date
         self.end_day = end_day
+        self.enable_mp2 = enable_mp2
+        self.clickhouse_client = clickhouse_client
         
         self.model = None
         self.simulation = None
@@ -217,7 +220,10 @@ class LimiterV7Orchestrator:
         print("\n" + "=" * 60)
         print("🚀 LIMITER V7: Запуск симуляции")
         print(f"   max_steps: {max_steps}")
+        print(f"   MP2 экспорт: {'✅' if self.enable_mp2 else '❌'}")
         print("=" * 60)
+        
+        t_start = time.perf_counter()
         
         # Создание симуляции
         self.simulation = fg.CUDASimulation(self.model)
@@ -228,23 +234,84 @@ class LimiterV7Orchestrator:
         
         # Запуск
         print("\n🏃 Запуск simulate()...")
-        t0 = time.perf_counter()
+        t_gpu_start = time.perf_counter()
         self.simulation.simulate()
-        gpu_time = time.perf_counter() - t0
+        gpu_time = time.perf_counter() - t_gpu_start
         
         # Результаты
         final_steps = self.simulation.getStepCounter()
         
+        # MP2 export (финальное состояние)
+        drain_time = 0.0
+        mp2_rows = []
+        
+        if self.enable_mp2:
+            print("\n📤 Экспорт в СУБД...")
+            t_collect = time.perf_counter()
+            self._collect_mp2_final(mp2_rows)
+            collect_time = time.perf_counter() - t_collect
+            
+            if mp2_rows:
+                t_insert = time.perf_counter()
+                columns = list(mp2_rows[0].keys())
+                values = [[row[col] for col in columns] for row in mp2_rows]
+                col_str = ', '.join(columns)
+                self.clickhouse_client.execute(
+                    f"INSERT INTO sim_masterv2_v7 ({col_str}) VALUES",
+                    values
+                )
+                insert_time = time.perf_counter() - t_insert
+                drain_time = collect_time + insert_time
+                print(f"   ✅ INSERT: {len(mp2_rows)} строк ({insert_time:.2f}с)")
+        
+        t_end = time.perf_counter()
+        total_time = t_end - t_start
+        
         print(f"\n✅ Симуляция завершена:")
         print(f"   Шагов: {final_steps}")
         print(f"   end_day: {self.end_day}")
+        print(f"   Время общее: {total_time:.2f}с")
         print(f"   Время GPU: {gpu_time:.2f}с")
+        if self.enable_mp2:
+            print(f"   Время drain: {drain_time:.2f}с")
         if gpu_time > 0:
-            print(f"   Скорость: {self.end_day / gpu_time:.0f} дней/сек")
+            print(f"   Скорость: {self.end_day / gpu_time:.0f} дней/сек (GPU)")
+            print(f"   Скорость: {self.end_day / total_time:.0f} дней/сек (общая)")
         
         self._print_final_stats()
         
         return self.end_day
+    
+    def _collect_mp2_final(self, rows: list):
+        """Собирает финальное состояние агентов для экспорта"""
+        states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage', 'unserviceable']
+        
+        vd = date.fromisoformat(self.version_date)
+        version_date_int = vd.year * 10000 + vd.month * 100 + vd.day
+        version_id = int(self.env_data.get('version_id_u32', 1))
+        
+        for state_name in states:
+            heli_pop = fg.AgentVector(self.base_model.agent)
+            self.simulation.getPopulationData(heli_pop, state_name)
+            
+            for i in range(heli_pop.size()):
+                agent = heli_pop.at(i)
+                rows.append({
+                    'version_date': version_date_int,
+                    'version_id': version_id,
+                    'day_u16': self.end_day,
+                    'idx': agent.getVariableUInt('idx'),
+                    'aircraft_number': agent.getVariableUInt('aircraft_number'),
+                    'group_by': agent.getVariableUInt('group_by'),
+                    'state': state_name,
+                    'sne': agent.getVariableUInt('sne'),
+                    'ppr': agent.getVariableUInt('ppr'),
+                    'll': agent.getVariableUInt('ll'),
+                    'oh': agent.getVariableUInt('oh'),
+                    'br': agent.getVariableUInt('br'),
+                    'repair_days': agent.getVariableUInt('repair_days'),
+                    'repair_time': agent.getVariableUInt('repair_time'),
+                })
     
     def _populate_agents(self):
         """Заполнение агентов из heli_pandas + spawn"""
@@ -406,6 +473,8 @@ def main():
     parser.add_argument("--version-date", required=True, help="Дата датасета (YYYY-MM-DD)")
     parser.add_argument("--end-day", type=int, default=3650, help="Последний день симуляции")
     parser.add_argument("--max-steps", type=int, default=10000, help="Максимум шагов")
+    parser.add_argument("--enable-mp2", action="store_true", help="Экспорт в СУБД")
+    parser.add_argument("--drop-table", action="store_true", help="Пересоздать таблицу")
     
     args = parser.parse_args()
     
@@ -413,7 +482,44 @@ def main():
     print("🚀 LIMITER V7 — Однофазная архитектура")
     print("=" * 70)
     
-    orchestrator = LimiterV7Orchestrator(args.version_date, args.end_day)
+    # Подключение к ClickHouse если нужен MP2
+    client = None
+    if args.enable_mp2:
+        from sim_env_setup import get_client
+        client = get_client()
+        
+        if args.drop_table:
+            print("🗑️ DROP TABLE sim_masterv2_v7...")
+            client.execute("DROP TABLE IF EXISTS sim_masterv2_v7")
+        
+        # Создание таблицы
+        client.execute("""
+            CREATE TABLE IF NOT EXISTS sim_masterv2_v7 (
+                version_date UInt32,
+                version_id UInt8,
+                day_u16 UInt16,
+                idx UInt16,
+                aircraft_number UInt32,
+                group_by UInt8,
+                state String,
+                sne UInt32,
+                ppr UInt32,
+                ll UInt32,
+                oh UInt32,
+                br UInt32,
+                repair_days UInt16,
+                repair_time UInt16
+            ) ENGINE = MergeTree()
+            ORDER BY (version_date, version_id, day_u16, idx)
+        """)
+        print("✅ Таблица sim_masterv2_v7 готова")
+    
+    orchestrator = LimiterV7Orchestrator(
+        args.version_date, 
+        args.end_day,
+        enable_mp2=args.enable_mp2,
+        clickhouse_client=client
+    )
     orchestrator.prepare_data()
     orchestrator.build_model()
     orchestrator.run(args.max_steps)
