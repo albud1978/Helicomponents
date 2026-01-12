@@ -21,7 +21,7 @@
 | **ФАЗА 1: Operations — инкременты и переходы по ресурсам** |||||
 | 5 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt`, `limiter -= adaptive` (3 счётчика в 1 проход) |
 | 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `SNE >= BR` |
-| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH`, сброс `PPR=0` |
+| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH` (PPR сохраняется) |
 | **ФАЗА 2: Квотирование** |||||
 | 8 | v7_reset_flags | `rtc_reset_flags_v7` | all | Сброс `promoted=0`, `needs_demote=0` |
 | 9 | v7_reset_buffers | `rtc_reset_buffers_v7` | all | Обнуление буферов подсчёта |
