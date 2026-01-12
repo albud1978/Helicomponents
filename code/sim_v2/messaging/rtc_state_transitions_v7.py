@@ -466,8 +466,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_storage_stay_v7, flamegpu::MessageNone, flamegpu::Me
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def register_exit_date_copy(model: fg.ModelDescription, agent: fg.AgentDescription, quota_agent: fg.AgentDescription = None):
-    """Фаза -1: Копирование exit_date для расчёта adaptive_days"""
-    print("  📦 V7 Фаза -1: Копирование exit_date...")
+    """Фаза 0.5: Копирование exit_date для расчёта adaptive_days (ПОСЛЕ переходов!)"""
+    print("  📦 V7 Фаза 0.5: Копирование exit_date (после переходов)...")
     
     # Сброс min_exit_date_mp (QuotaManager)
     if quota_agent is not None:
@@ -491,7 +491,7 @@ def register_exit_date_copy(model: fg.ModelDescription, agent: fg.AgentDescripti
     fn.setEndState("reserve")
     layer_copy_spawn.addAgentFunction(fn)
     
-    print("    ✅ Фаза -1 готова (exit_date → min_exit_date_mp)")
+    print("    ✅ Фаза 0.5 готова (exit_date → min_exit_date_mp)")
 
 
 def register_phase0_deterministic(model: fg.ModelDescription, agent: fg.AgentDescription):
@@ -657,15 +657,18 @@ def register_all_v7(model: fg.ModelDescription, agent: fg.AgentDescription, quot
     print("📦 V7: Однофазные переходы состояний")
     print("=" * 60)
     
-    # Фаза -1: Копирование exit_date для расчёта adaptive_days
+    # Фаза 0: Детерминированные переходы (repair→serviceable, spawn→operations)
+    register_phase0_deterministic(model, agent)
+    
+    # Фаза 0.5: Копирование exit_date ПОСЛЕ переходов для расчёта adaptive_days
+    # ВАЖНО: должно идти ПОСЛЕ фазы 0, чтобы исключить агентов которые уже вышли
     register_exit_date_copy(model, agent, quota_agent)
     
-    register_phase0_deterministic(model, agent)
     register_phase1_operations(model, agent)
     # ФАЗА 2 и 3 регистрируются ПОСЛЕ квотирования
     
     print("=" * 60)
-    print("✅ V7 переходы (фазы -1 до 1) зарегистрированы")
+    print("✅ V7 переходы (фазы 0-1) зарегистрированы")
     print("   Фазы 2-3 регистрируются после квотирования")
     print("=" * 60 + "\n")
 

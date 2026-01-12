@@ -159,8 +159,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v5, flamegpu::MessageNone, flameg
     
     // DEBUG: каждые 50 шагов
     unsigned int step = FLAMEGPU->getStepCounter();
-    if (step % 50u == 0u || step < 5u) {{
-        printf("[V7 Step %u] current=%u, limiter=%u, exit=%u, pc=%u -> adaptive=%u\\n",
+    if (step % 50u == 0u || step < 10u) {{
+        printf("[V7 Step %u] day=%u, limiter=%u, exit_date=%u, pc=%u -> adaptive=%u\\n",
                step, current_day, min_limiter, min_exit_date, next_pc, adaptive_days);
     }}
     
