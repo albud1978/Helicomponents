@@ -9,48 +9,48 @@
 
 | # | Слой | Функция | State | Описание |
 |---|------|---------|-------|----------|
-| **ФАЗА -1: Копирование exit_date для adaptive_days** |||||
-| 0 | v7_reset_exit_date | `rtc_reset_exit_date_v7` | QM | Сброс min_exit_date_mp = MAX |
-| 1 | v7_copy_exit_date_repair | `rtc_copy_exit_date_repair_v7` | 4 | repair → atomicMin |
-| 2 | v7_copy_exit_date_spawn | `rtc_copy_exit_date_spawn_v7` | 5 | reserve → atomicMin |
+| **ФАЗА -1: Сбор min_exit_date (детерминированные даты ремонтов/spawn)** |||||
+| 0 | v7_reset_exit_date | `rtc_reset_exit_date_v7` | QM | `min_exit_date_mp = MAX` (сброс перед сбором) |
+| 1 | v7_copy_exit_date_repair | `rtc_copy_exit_date_repair_v7` | 4 | `atomicMin(exit_date)` от агентов в repair |
+| 2 | v7_copy_exit_date_spawn | `rtc_copy_exit_date_spawn_v7` | 5 | `atomicMin(exit_date)` от агентов в reserve |
 | **ФАЗА 0: Детерминированные переходы** |||||
-| 3 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Выход из ремонта при exit_date, PPR=0 |
-| 4 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Spawn при exit_date |
-| **ФАЗА 1: Operations — инкременты и определение перехода** |||||
-| 5 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | sne/ppr += dt |
-| 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | SNE >= BR/LL |
-| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | PPR >= OH, PPR=0 |
-| 8 | v7_ops_stay | `rtc_ops_stay_v7` | 2→2 | Остаться в ops |
-| 9 | v7_svc_stay | `rtc_svc_stay_v7` | 3→3 | Остаться в svc |
+| 3 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Выход из ремонта при `current_day >= exit_date`, PPR=0 |
+| 4 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Spawn при `current_day >= exit_date` |
+| **ФАЗА 1: Operations — инкременты и переходы по ресурсам** |||||
+| 5 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt` |
+| 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `SNE >= BR` |
+| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH`, сброс `PPR=0` |
+| 8 | v7_ops_stay | `rtc_ops_stay_v7` | 2→2 | Остаться в operations |
+| 9 | v7_svc_stay | `rtc_svc_stay_v7` | 3→3 | Остаться в serviceable |
 | 10 | v7_sto_stay | `rtc_sto_stay_v7` | 6→6 | Остаться в storage |
-| 11 | v7_unsvc_stay | `rtc_unsvc_stay_v7` | 7→7 | Остаться в unsvc |
+| 11 | v7_unsvc_stay | `rtc_unsvc_stay_v7` | 7→7 | Остаться в unserviceable |
 | 12 | v7_ina_stay | `rtc_ina_stay_v7` | 1→1 | Остаться в inactive |
-| **ФАЗА 2: Квотирование (сброс, подсчёт, демоут, P1/P2/P3)** |||||
-| 13 | v7_reset_flags | `rtc_reset_flags_v7` | all | Сброс promoted/needs_demote |
-| 14 | v7_reset_buffers | `rtc_reset_buffers_v7` | all | Обнуление MacroProperty буферов |
-| 15 | v7_count_agents | `rtc_count_agents_v7` | all | Подсчёт агентов в состояниях |
-| 16 | v7_demote | `rtc_demote_v7` | QM | Демоут ops→svc |
-| 17 | v7_promote_p1 | `rtc_promote_p1_v7` | QM | P1: svc→ops |
+| **ФАЗА 2: Квотирование** |||||
+| 13 | v7_reset_flags | `rtc_reset_flags_v7` | all | Сброс `promoted=0`, `needs_demote=0` |
+| 14 | v7_reset_buffers | `rtc_reset_buffers_v7` | all | Обнуление буферов подсчёта |
+| 15 | v7_count_agents | `rtc_count_agents_v7` | all | Подсчёт агентов по состояниям |
+| 16 | v7_demote | `rtc_demote_v7` | QM | Демоут: ops→svc (при избытке) |
+| 17 | v7_promote_p1 | `rtc_promote_p1_v7` | QM | P1: svc→ops (при дефиците) |
 | 18 | v7_promote_p2 | `rtc_promote_p2_v7` | QM | P2: unsvc→ops |
 | 19 | v7_promote_p3 | `rtc_promote_p3_v7` | QM | P3: ina→ops |
-| **ФАЗА 3: Применение решений квотирования** |||||
+| **ФАЗА 3: Применение квот** |||||
 | 20 | v7_apply_demote | `rtc_apply_demote_v7` | 2→3 | Применение демоута |
 | 21 | v7_apply_promote_p1 | `rtc_apply_promote_p1_v7` | 3→2 | Применение P1 |
-| 22 | v7_apply_promote_p2 | `rtc_apply_promote_p2_v7` | 7→2 | Применение P2, PPR=0 |
+| 22 | v7_apply_promote_p2 | `rtc_apply_promote_p2_v7` | 7→2 | Применение P2, `PPR=0` |
 | 23 | v7_apply_promote_p3 | `rtc_apply_promote_p3_v7` | 1→2 | Применение P3 |
-| **ФАЗА 4: Limiter V3** |||||
-| 24 | limiter_on_entry | `rtc_compute_limiter_on_entry` | 2 | Бинарный поиск limiter при входе в ops |
-| 25 | decrement_limiter | `rtc_decrement_limiter` | 2 | limiter -= adaptive_days |
-| 26 | clear_limiter | `rtc_clear_limiter_on_exit` | 2 | limiter=0 при выходе |
-| 27 | min_limiter | `rtc_compute_min_limiter` | 2 | atomicMin |
-| **ФАЗА 5: V5 GPU-only** |||||
-| 28 | copy_limiter_v5 | `rtc_copy_limiter_v5` | 2 | limiter → limiter_buffer |
-| 29 | compute_global_min | `rtc_compute_global_min_v5` | QM | min(limiters, program, exit_date) |
-| 30 | reset_min | `rtc_reset_min_limiter_v5` | QM | mp_min = MAX |
-| 31 | clear_limiter_v5 | `rtc_clear_limiter_v5` | non-ops | limiter_buffer = MAX |
-| 32 | save_adaptive | `rtc_save_adaptive_v5` | HELI | adaptive → agent var |
-| 33 | save_adaptive_qm | `rtc_save_adaptive_v5_qm` | QM | adaptive → agent var |
-| 34 | update_day | `rtc_update_day_v5` | QM | current_day += adaptive |
+| **ФАЗА 4: Сбор min_limiter (горизонты по ресурсам)** |||||
+| 24 | limiter_on_entry | `rtc_compute_limiter_on_entry` | 2 | Бинарный поиск `limiter` при входе в ops |
+| 25 | decrement_limiter | `rtc_decrement_limiter` | 2 | `limiter -= adaptive_days` |
+| 26 | clear_limiter | `rtc_clear_limiter_on_exit` | 2 | `limiter=0` при выходе из ops |
+| 27 | min_limiter | `rtc_compute_min_limiter` | 2 | `atomicMin(limiter)` → `mp_min_limiter` |
+| **ФАЗА 5: Расчёт adaptive_days и переход к следующему шагу** |||||
+| 28 | copy_limiter_v5 | `rtc_copy_limiter_v5` | 2 | Копирование limiter в буфер |
+| 29 | compute_global_min | `rtc_compute_global_min_v5` | QM | **ЧИТАЕТ** все min → вычисляет `adaptive_days` |
+| 30 | reset_min | `rtc_reset_min_limiter_v5` | QM | `mp_min_limiter = MAX` (для след. шага) |
+| 31 | clear_limiter_v5 | `rtc_clear_limiter_v5` | non-ops | Очистка буфера для не-ops агентов |
+| 32 | save_adaptive | `rtc_save_adaptive_v5` | HELI | Сохранение `adaptive_days` в агента |
+| 33 | save_adaptive_qm | `rtc_save_adaptive_v5_qm` | QM | Сохранение `adaptive_days` в QM |
+| 34 | update_day | `rtc_update_day_v5` | QM | `current_day += adaptive_days` |
 
 ---
 
@@ -111,9 +111,67 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v7, ...) {
 adaptive_days = min(min_limiter, days_to_program_change, days_to_exit_date)
 ```
 
-- `min_limiter` — минимальный limiter среди агентов в operations
-- `days_to_program_change` — дней до изменения программы полётов
-- `days_to_exit_date` — дней до ближайшего детерминированного события
+| Источник | Откуда | Что означает |
+|----------|--------|--------------|
+| `min_limiter` | `mp_min_limiter[0]` | Ближайший день достижения ресурсного лимита (LL/OH/BR) |
+| `days_to_program_change` | `program_changes_mp[]` | Дней до изменения программы полётов |
+| `days_to_exit_date` | `min_exit_date_mp[0]` | Дней до ближайшего выхода из ремонта/spawn |
+
+### Логика reset-функций (критично для корректности)
+
+**Проблема:** Если на шаге N нет агентов в repair, то `atomicMin` не вызывается и в `min_exit_date_mp` остаётся старое значение с шага N-1.
+
+**Решение:** Reset перед сбором → MAX означает "нет данных".
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ШАГ N                                                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ФАЗА -1: СБРОС + СБОР min_exit_date                                    │
+│  ┌────────────────────────────────────────────────────────────────────┐ │
+│  │ [0] reset_exit_date    → min_exit_date_mp = 0xFFFFFFFF (MAX)       │ │
+│  │ [1] copy_exit_repair   → агенты repair: atomicMin(exit_date)      │ │
+│  │ [2] copy_exit_spawn    → агенты reserve: atomicMin(exit_date)     │ │
+│  │                                                                    │ │
+│  │ Результат: min_exit_date_mp = MIN(все exit_date) или MAX          │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+│                                                                         │
+│  ФАЗА 4: СБОР min_limiter                                               │
+│  ┌────────────────────────────────────────────────────────────────────┐ │
+│  │ [27] min_limiter       → агенты ops: atomicMin(limiter)           │ │
+│  │                                                                    │ │
+│  │ Результат: mp_min_limiter = MIN(все limiter) или MAX              │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+│                                                                         │
+│  ФАЗА 5: ВЫЧИСЛЕНИЕ adaptive_days                                       │
+│  ┌────────────────────────────────────────────────────────────────────┐ │
+│  │ [29] compute_global    → ЧИТАЕТ: mp_min_limiter, min_exit_date_mp │ │
+│  │                        → ПИШЕТ:  adaptive_days                    │ │
+│  │                                                                    │ │
+│  │ [30] reset_min_limiter → mp_min_limiter = MAX (для шага N+1)      │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Пример без reset (БАГ):**
+```
+Шаг 10: Агент A в repair, exit_date=150 → min_exit_date_mp = 150
+Шаг 11: Агент A вышел (4→3), нет агентов в repair
+        БЕЗ RESET: min_exit_date_mp = 150 (старое!)
+        → adaptive_days некорректно = 150 - current_day
+```
+
+**Пример с reset (КОРРЕКТНО):**
+```
+Шаг 10: Агент A в repair, exit_date=150 → min_exit_date_mp = 150
+Шаг 11: RESET → min_exit_date_mp = MAX
+        Нет агентов в repair → atomicMin не вызывается
+        min_exit_date_mp = MAX → игнорируется в compute_global_min
+```
+
+**MAX = "источник не влияет на adaptive_days"**
 
 ---
 
