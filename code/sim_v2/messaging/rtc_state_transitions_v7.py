@@ -254,26 +254,6 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage) {
 }
 """
 
-# Условие: остаться в operations (PPR < OH && SNE < BR/LL && не demote)
-COND_OPS_STAY = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_stay) {
-    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
-    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
-    const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
-    const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
-    const unsigned int needs_demote = FLAMEGPU->getVariable<unsigned int>("needs_demote");
-    
-    // Не демоут, не OH, не BR/LL
-    if (needs_demote == 1u) return false;
-    if (ppr >= oh) return false;
-    if (sne >= ll) return false;
-    if (br > 0u && sne >= br) return false;
-    
-    return true;
-}
-"""
-
 # Условие: демоут (needs_demote == 1)
 COND_OPS_DEMOTE = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_demote) {
@@ -295,14 +275,6 @@ RTC_OPS_TO_STORAGE = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_6", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
-    return flamegpu::ALIVE;
-}
-"""
-
-# Функция: operations stay (2→2)
-RTC_OPS_STAY = """
-FLAMEGPU_AGENT_FUNCTION(rtc_ops_stay_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // Агент остаётся в operations, ничего дополнительного не делаем
     return flamegpu::ALIVE;
 }
 """
@@ -333,13 +305,6 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_svc_promoted) {
 }
 """
 
-# Условие: serviceable не промоутен
-COND_SVC_STAY = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_svc_stay) {
-    return FLAMEGPU->getVariable<unsigned int>("promoted") != 1u;
-}
-"""
-
 # Функция: serviceable → operations (P1, 3→2)
 RTC_SVC_TO_OPS = """
 FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
@@ -351,25 +316,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::Mess
 }
 """
 
-# Функция: serviceable stay (3→3)
-RTC_SVC_STAY = """
-FLAMEGPU_AGENT_FUNCTION(rtc_svc_stay_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
-    return flamegpu::ALIVE;
-}
-"""
-
 # Условие: unserviceable промоутен (P2)
 COND_UNSVC_PROMOTED = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_unsvc_promoted) {
     return FLAMEGPU->getVariable<unsigned int>("promoted") == 1u;
-}
-"""
-
-# Условие: unserviceable не промоутен
-COND_UNSVC_STAY = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_unsvc_stay) {
-    return FLAMEGPU->getVariable<unsigned int>("promoted") != 1u;
 }
 """
 
@@ -385,25 +335,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_to_ops_v7, flamegpu::MessageNone, flamegpu::Me
 }
 """
 
-# Функция: unserviceable stay (7→7)
-RTC_UNSVC_STAY = """
-FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_stay_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
-    return flamegpu::ALIVE;
-}
-"""
-
 # Условие: inactive промоутен (P3)
 COND_INACTIVE_PROMOTED = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_inactive_promoted) {
     return FLAMEGPU->getVariable<unsigned int>("promoted") == 1u;
-}
-"""
-
-# Условие: inactive не промоутен
-COND_INACTIVE_STAY = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_inactive_stay) {
-    return FLAMEGPU->getVariable<unsigned int>("promoted") != 1u;
 }
 """
 
@@ -429,22 +364,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_v7, flamegpu::MessageNone, flamegpu:
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
     return flamegpu::ALIVE;
 }}
-"""
-
-# Функция: inactive stay (1→1)
-RTC_INACTIVE_STAY = """
-FLAMEGPU_AGENT_FUNCTION(rtc_inactive_stay_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
-    return flamegpu::ALIVE;
-}
-"""
-
-# Функция: storage stay (6→6) — неизменяемый
-RTC_STORAGE_STAY = """
-FLAMEGPU_AGENT_FUNCTION(rtc_storage_stay_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
-    return flamegpu::ALIVE;
-}
 """
 
 
@@ -553,15 +472,10 @@ def register_phase2_demote(model: fg.ModelDescription, agent: fg.AgentDescriptio
     fn.setEndState("serviceable")
     layer_demote.addAgentFunction(fn)
     
-    # operations stay (после демоута)
-    layer_stay = model.newLayer("v7_ops_stay")
-    fn = agent.newRTCFunction("rtc_ops_stay_v7", RTC_OPS_STAY)
-    fn.setRTCFunctionCondition(COND_OPS_STAY)
-    fn.setInitialState("operations")
-    fn.setEndState("operations")
-    layer_stay.addAgentFunction(fn)
+    # V7: _stay функции удалены — FLAME GPU автоматически оставляет агентов
+    # в своём состоянии если FunctionCondition = false
     
-    print("    ✅ Фаза 2 готова (демоут, stay)")
+    print("    ✅ Фаза 2 готова (демоут)")
 
 
 def register_phase3_promote(model: fg.ModelDescription, agent: fg.AgentDescription):
@@ -576,14 +490,6 @@ def register_phase3_promote(model: fg.ModelDescription, agent: fg.AgentDescripti
     fn.setEndState("operations")
     layer_p1.addAgentFunction(fn)
     
-    # serviceable stay
-    layer_svc_stay = model.newLayer("v7_svc_stay")
-    fn = agent.newRTCFunction("rtc_svc_stay_v7", RTC_SVC_STAY)
-    fn.setRTCFunctionCondition(COND_SVC_STAY)
-    fn.setInitialState("serviceable")
-    fn.setEndState("serviceable")
-    layer_svc_stay.addAgentFunction(fn)
-    
     # P2: unserviceable → operations (7→2)
     layer_p2 = model.newLayer("v7_unsvc_to_ops")
     fn = agent.newRTCFunction("rtc_unsvc_to_ops_v7", RTC_UNSVC_TO_OPS)
@@ -591,14 +497,6 @@ def register_phase3_promote(model: fg.ModelDescription, agent: fg.AgentDescripti
     fn.setInitialState("unserviceable")
     fn.setEndState("operations")
     layer_p2.addAgentFunction(fn)
-    
-    # unserviceable stay
-    layer_unsvc_stay = model.newLayer("v7_unsvc_stay")
-    fn = agent.newRTCFunction("rtc_unsvc_stay_v7", RTC_UNSVC_STAY)
-    fn.setRTCFunctionCondition(COND_UNSVC_STAY)
-    fn.setInitialState("unserviceable")
-    fn.setEndState("unserviceable")
-    layer_unsvc_stay.addAgentFunction(fn)
     
     # P3: inactive → operations (1→2)
     layer_p3 = model.newLayer("v7_inactive_to_ops")
@@ -608,22 +506,10 @@ def register_phase3_promote(model: fg.ModelDescription, agent: fg.AgentDescripti
     fn.setEndState("operations")
     layer_p3.addAgentFunction(fn)
     
-    # inactive stay
-    layer_inactive_stay = model.newLayer("v7_inactive_stay")
-    fn = agent.newRTCFunction("rtc_inactive_stay_v7", RTC_INACTIVE_STAY)
-    fn.setRTCFunctionCondition(COND_INACTIVE_STAY)
-    fn.setInitialState("inactive")
-    fn.setEndState("inactive")
-    layer_inactive_stay.addAgentFunction(fn)
+    # V7: _stay функции удалены — FLAME GPU автоматически оставляет агентов
+    # в своём состоянии если FunctionCondition = false
     
-    # storage stay (неизменяемый)
-    layer_storage = model.newLayer("v7_storage_stay")
-    fn = agent.newRTCFunction("rtc_storage_stay_v7", RTC_STORAGE_STAY)
-    fn.setInitialState("storage")
-    fn.setEndState("storage")
-    layer_storage.addAgentFunction(fn)
-    
-    print("    ✅ Фаза 3 готова (P1, P2, P3, stay)")
+    print("    ✅ Фаза 3 готова (P1, P2, P3)")
 
 
 def register_all_v7(model: fg.ModelDescription, agent: fg.AgentDescription, quota_agent: fg.AgentDescription = None):
