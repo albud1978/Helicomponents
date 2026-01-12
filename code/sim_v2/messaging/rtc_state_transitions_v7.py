@@ -110,14 +110,7 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_repair_exit) {
 }
 """
 
-# Условие: exit_date НЕ достигнут (для repair)
-COND_REPAIR_STAY = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_repair_stay) {
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
-    return (exit_date == 0u || current_day < exit_date);
-}
-"""
+# УДАЛЕНО: cond_repair_stay — агенты автоматически остаются если condition=false
 
 # Функция: repair → serviceable (4→3)
 RTC_REPAIR_TO_SVC = """
@@ -133,13 +126,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_to_svc_v7, flamegpu::MessageNone, flamegpu::M
 }
 """
 
-# Функция: repair stay (4→4)
-RTC_REPAIR_STAY = """
-FLAMEGPU_AGENT_FUNCTION(rtc_repair_stay_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
-    return flamegpu::ALIVE;
-}
-"""
+# УДАЛЕНО: RTC_REPAIR_STAY — избыточно, агенты остаются автоматически
 
 # Условие: spawn exit_date достигнут
 COND_SPAWN_EXIT = """
@@ -150,14 +137,7 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_spawn_exit) {
 }
 """
 
-# Условие: spawn exit_date НЕ достигнут
-COND_SPAWN_STAY = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_spawn_stay) {
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
-    return (exit_date == 0u || current_day < exit_date);
-}
-"""
+# УДАЛЕНО: cond_spawn_stay — агенты автоматически остаются если condition=false
 
 # Функция: reserve → operations (spawn, 5→2)
 RTC_SPAWN_TO_OPS = """
@@ -173,13 +153,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_to_ops_v7, flamegpu::MessageNone, flamegpu::Me
 }
 """
 
-# Функция: reserve stay (5→5)
-RTC_SPAWN_STAY = """
-FLAMEGPU_AGENT_FUNCTION(rtc_spawn_stay_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
-    return flamegpu::ALIVE;
-}
-"""
+# УДАЛЕНО: RTC_SPAWN_STAY — избыточно, агенты остаются автоматически
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -506,13 +480,7 @@ def register_phase0_deterministic(model: fg.ModelDescription, agent: fg.AgentDes
     fn.setEndState("serviceable")
     layer_rep_to_svc.addAgentFunction(fn)
     
-    # repair stay (4→4)
-    layer_rep_stay = model.newLayer("v7_repair_stay")
-    fn = agent.newRTCFunction("rtc_repair_stay_v7", RTC_REPAIR_STAY)
-    fn.setRTCFunctionCondition(COND_REPAIR_STAY)
-    fn.setInitialState("repair")
-    fn.setEndState("repair")
-    layer_rep_stay.addAgentFunction(fn)
+    # УДАЛЕНО: repair stay (4→4) — избыточно
     
     # reserve → operations (spawn, 5→2)
     layer_spawn_to_ops = model.newLayer("v7_spawn_to_ops")
@@ -522,13 +490,7 @@ def register_phase0_deterministic(model: fg.ModelDescription, agent: fg.AgentDes
     fn.setEndState("operations")
     layer_spawn_to_ops.addAgentFunction(fn)
     
-    # reserve stay (5→5)
-    layer_spawn_stay = model.newLayer("v7_spawn_stay")
-    fn = agent.newRTCFunction("rtc_spawn_stay_v7", RTC_SPAWN_STAY)
-    fn.setRTCFunctionCondition(COND_SPAWN_STAY)
-    fn.setInitialState("reserve")
-    fn.setEndState("reserve")
-    layer_spawn_stay.addAgentFunction(fn)
+    # УДАЛЕНО: reserve stay (5→5) — избыточно
     
     print("    ✅ Фаза 0 готова (repair, spawn)")
 
