@@ -118,11 +118,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     }}
     
     // 3. Потом проверяем OH (межремонтный PPR)
+    // V6: Переход ops → unserviceable (state 7), НЕ repair!
     if (p_next >= oh) {{
-        // Переход в ремонт (SNE < BR, поэтому ещё можно ремонтировать)
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 7u);  // unserviceable
+        FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        // PERF OFF: printf("  [Step %u] AC %u: intent=4 (repair), ppr_next=%u >= oh=%u\\n", 
+        // PERF OFF: printf("  [Step %u] AC %u: intent=7 (unserviceable), ppr_next=%u >= oh=%u\\n", 
                //        step_day, aircraft_number, p_next, oh);
         return flamegpu::ALIVE;
     }}

@@ -55,6 +55,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
         
+        // V6: Буферы для state 7 (unserviceable)
+        auto mi8_unsvc = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_unsvc_count");
+        auto mi17_unsvc = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_unsvc_count");
+        auto mi8_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s7");
+        auto mi17_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s7");
+        
         // Spawn pending флаги
         auto mi8_spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_spawn_pending");
         auto mi17_spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_spawn_pending");
@@ -85,6 +91,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             mi17_approve_s5[i].exchange(0u);
             mi8_approve_s1[i].exchange(0u);
             mi17_approve_s1[i].exchange(0u);
+            
+            // V6: Буферы state 7
+            mi8_unsvc[i].exchange(0u);
+            mi17_unsvc[i].exchange(0u);
+            mi8_approve_s7[i].exchange(0u);
+            mi17_approve_s7[i].exchange(0u);
             
             // Spawn pending флаги
             mi8_spawn_pending[i].exchange(0u);
@@ -238,13 +250,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::Mes
     layer_count_ina.addAgentFunction(rtc_func_ina)
     
     # =========================================================================
-    # Слой 6: Подсчёт агентов в unserviceable (для квотирования)
+    # Слой 6: V6: Подсчёт агентов в unserviceable (state 7) для квотирования P2
     # =========================================================================
     RTC_COUNT_UNSERVICEABLE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_count_unserviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
-    // Записываем флаг что этот агент в unserviceable
+    // V6: Записываем флаг в mi*_unsvc_count для квотирования P2
+    if (group_by == 1u) {{
+        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_unsvc_count");
+        unsvc_count[idx].exchange(1u);
+    }} else if (group_by == 2u) {{
+        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_unsvc_count");
+        unsvc_count[idx].exchange(1u);
+    }}
+    
+    // Также в repair_state_buffer для совместимости
     auto unserviceable_state_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_state_buffer");
     unserviceable_state_buffer[idx].exchange(1u);
     
@@ -285,15 +307,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_reserve_queue, flamegpu::MessageNone, flamegpu
     layer_count_rq.addAgentFunction(rtc_func_rq)
     
     # =========================================================================
-    # Слой 8: Подсчёт запросов на переход в unserviceable (operations & intent=4)
+    # Слой 8: V6: Подсчёт запросов на переход в unserviceable (operations & intent=7)
     # =========================================================================
     RTC_COUNT_OPS_TO_UNSERVICEABLE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_count_ops_to_unserviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
     
-    // Только агенты с intent=4 (запрос на переход в unserviceable)
-    if (intent == 4u) {{
+    // V6: intent=7 означает запрос на переход в unserviceable (state 7)
+    if (intent == 7u) {{
         auto ops_to_unsrv_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("ops_repair_buffer");
         ops_to_unsrv_buffer[idx].exchange(1u);
     }}
