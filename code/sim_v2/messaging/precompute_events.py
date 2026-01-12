@@ -95,27 +95,17 @@ def compute_days_to_resource_limit(
     mp5_cumsum: np.ndarray, idx: int, days: int, current_day: int
 ) -> int:
     """
-    Вычислить количество дней до достижения ресурсного лимита
-    
-    Args:
-        sne, ppr: Текущая наработка
-        ll, oh: Лимиты
-        mp5_cumsum: Кумулятивные суммы dt
-        idx: Индекс агента
-        days: Общее количество дней
-        current_day: Текущий день
-        
-    Returns:
-        Количество дней до лимита (или 999999 если не достигнет)
+    DEPRECATED: Использует frame-major индексацию.
+    Используйте compute_limiter_exact для точного расчёта.
     """
     remaining_sne = max(0, ll - sne)
     remaining_ppr = max(0, oh - ppr)
     min_remaining = min(remaining_sne, remaining_ppr)
     
     if min_remaining == 0:
-        return 0  # Уже на лимите
+        return 0
     
-    # Бинарный поиск дня, когда cumsum >= min_remaining
+    # Frame-major (старая индексация)
     base = idx * (days + 1)
     start_cumsum = mp5_cumsum[base + current_day]
     
@@ -124,7 +114,71 @@ def compute_days_to_resource_limit(
         if delta_dt >= min_remaining:
             return d - current_day
     
-    return 999999  # Не достигнет лимита в рамках симуляции
+    return 999999
+
+
+def compute_limiter_exact(
+    sne: int, ppr: int, ll: int, oh: int,
+    mp5_cumsum: np.ndarray, idx: int, frames: int, end_day: int, current_day: int = 0
+) -> int:
+    """
+    ТОЧНЫЙ расчёт limiter через бинарный поиск по mp5_cumsum (day-major).
+    
+    Используется для инициализации агентов в Python.
+    
+    Args:
+        sne, ppr: Текущая наработка (минуты)
+        ll, oh: Лимиты ресурса (минуты)
+        mp5_cumsum: Кумулятивные суммы dt в day-major формате [days+1, frames].flat
+        idx: Индекс агента (frame index)
+        frames: Общее количество агентов
+        end_day: Последний день симуляции
+        current_day: Текущий день (по умолчанию 0)
+        
+    Returns:
+        Количество дней до исчерпания ресурса (limiter)
+    """
+    remaining_ll = max(0, ll - sne)
+    remaining_oh = max(0, oh - ppr)
+    
+    # Если ресурс уже исчерпан
+    if remaining_ll == 0 or remaining_oh == 0:
+        return 0
+    
+    # Day-major индексация: cumsum[day * frames + idx]
+    base_cumsum = mp5_cumsum[current_day * frames + idx] if current_day * frames + idx < len(mp5_cumsum) else 0
+    
+    # Бинарный поиск для OH
+    def binary_search_day(remaining: int) -> int:
+        lo, hi = current_day + 1, end_day
+        while lo < hi:
+            mid = (lo + hi) // 2
+            cumsum_mid_idx = mid * frames + idx
+            if cumsum_mid_idx >= len(mp5_cumsum):
+                hi = mid
+                continue
+            accumulated = mp5_cumsum[cumsum_mid_idx] - base_cumsum
+            if accumulated >= remaining:
+                hi = mid
+            else:
+                lo = mid + 1
+        
+        if lo <= end_day:
+            final_idx = lo * frames + idx
+            if final_idx < len(mp5_cumsum):
+                final_accumulated = mp5_cumsum[final_idx] - base_cumsum
+                if final_accumulated >= remaining:
+                    return lo - current_day
+        return end_day - current_day  # До конца симуляции
+    
+    days_to_oh = binary_search_day(remaining_oh)
+    days_to_ll = binary_search_day(remaining_ll)
+    
+    # Limiter = min из двух
+    limiter = min(days_to_oh, days_to_ll)
+    
+    # Минимум 1 день
+    return max(1, limiter)
 
 
 class EventPrecomputer:

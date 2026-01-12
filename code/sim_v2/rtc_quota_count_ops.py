@@ -123,8 +123,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_ops, flamegpu::MessageNone, flamegpu::MessageN
     // DEBUG для агента 100006 (idx=285) в дни 824-826
     if ((step_day >= 824u && step_day <= 826u) && idx == 285u && group_by == 2u) {{
         const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("[DEBUG Day %u COUNT_OPS] Agent idx=%u (ACN=%u): intent=%u, group_by=%u\\n", 
-               step_day, idx, acn, intent, group_by);
+        // PERF OFF: printf("[DEBUG Day %u COUNT_OPS] Agent idx=%u (ACN=%u): intent=%u, group_by=%u\\n", 
+               //        step_day, idx, acn, intent, group_by);
     }}
     
     // ✅ ВАРИАНТ B: Считаем только агентов с intent=2 (хотят быть в operations)
@@ -138,7 +138,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_ops, flamegpu::MessageNone, flamegpu::MessageN
             
             // DEBUG для агента 100006
             if (step_day == 824u && idx == 285u) {{
-                printf("[DEBUG Day %u COUNT_OPS] Agent idx=%u SET in ops_count!\\n", step_day, idx);
+                // PERF OFF: printf("[DEBUG Day %u COUNT_OPS] Agent idx=%u SET in ops_count!\\n", step_day, idx);
             }}
         }}
     }}

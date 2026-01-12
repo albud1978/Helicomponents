@@ -131,8 +131,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
         if (day == 180u || day == 181u || day == 182u) {{
             const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
             const unsigned int mfg = FLAMEGPU->getVariable<unsigned int>("mfg_date");
-            printf("  [DEMOUNT Day %u] AC %u: rank=%u/%u (idx=%u, mfg=%u, balance=%d)\\n", 
-                   day, aircraft_number, rank, K, idx, mfg, balance);
+            // PERF OFF: printf("  [DEMOUNT Day %u] AC %u: rank=%u/%u (idx=%u, mfg=%u, balance=%d)\\n", 
+                   //        day, aircraft_number, rank, K, idx, mfg, balance);
         }}
     }}
     // Иначе intent остаётся = 2 (остаюсь в operations)

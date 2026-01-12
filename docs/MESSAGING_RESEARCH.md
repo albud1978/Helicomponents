@@ -199,3 +199,5 @@ cd code/sim_v2/messaging && python3 orchestrator_limiter.py \
 **Статус:** ✅ Исследование завершено, LIMITER архитектура работает
 **Финальная дата:** 10-01-2026
 **Ветка:** `feature/flame-messaging` (не сливается с main)
+
+

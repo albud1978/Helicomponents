@@ -6,6 +6,7 @@ AgentPopulation - модуль для инициализации агентов
 - Распределение по States (inactive/operations/serviceable/repair/reserve/storage)
 - Инициализация переменных агентов (idx, aircraft_number, status_id, sne, ppr, ll, oh, br, etc)
 - Вычисление нормативов LL/OH/BR по кадрам из MP1
+- Инициализация limiter для агентов в operations (точный расчёт через mp5_cumsum)
 
 Архитектурный принцип:
 - Изолированный модуль, не зависит от orchestrator
@@ -14,21 +15,86 @@ AgentPopulation - модуль для инициализации агентов
 """
 
 import pyflamegpu as fg
-from typing import Dict, List, Tuple, Union
+import numpy as np
+from typing import Dict, List, Tuple, Union, Optional
 from .data_adapters import EnvDataAdapter
 
 SECOND_LL_SENTINEL = 0xFFFFFFFF
 
 
+def compute_limiter_for_agent(
+    sne: int, ppr: int, ll: int, oh: int,
+    mp5_cumsum: np.ndarray, idx: int, frames: int, end_day: int
+) -> int:
+    """
+    Точный расчёт limiter через бинарный поиск по mp5_cumsum.
+    
+    Args:
+        sne, ppr: Текущая наработка (минуты)
+        ll, oh: Лимиты ресурса (минуты)
+        mp5_cumsum: Кумулятивные суммы dt (day-major)
+        idx: Индекс агента
+        frames: Общее количество агентов
+        end_day: Последний день симуляции
+        
+    Returns:
+        limiter в днях (max 65535)
+    """
+    remaining_ll = max(0, ll - sne)
+    remaining_oh = max(0, oh - ppr)
+    
+    # Ресурс исчерпан
+    if remaining_ll == 0 or remaining_oh == 0:
+        return 1  # Минимум 1 день для корректной работы
+    
+    # Day-major индексация: cumsum[day * frames + idx]
+    current_day = 0
+    base_idx = current_day * frames + idx
+    base_cumsum = mp5_cumsum[base_idx] if base_idx < len(mp5_cumsum) else 0
+    
+    def binary_search_day(remaining: int) -> int:
+        lo, hi = 1, end_day
+        while lo < hi:
+            mid = (lo + hi) // 2
+            cumsum_mid_idx = mid * frames + idx
+            if cumsum_mid_idx >= len(mp5_cumsum):
+                hi = mid
+                continue
+            accumulated = int(mp5_cumsum[cumsum_mid_idx]) - int(base_cumsum)
+            if accumulated >= remaining:
+                hi = mid
+            else:
+                lo = mid + 1
+        
+        if lo <= end_day:
+            final_idx = lo * frames + idx
+            if final_idx < len(mp5_cumsum):
+                final_accumulated = int(mp5_cumsum[final_idx]) - int(base_cumsum)
+                if final_accumulated >= remaining:
+                    return lo
+        return end_day
+    
+    days_to_oh = binary_search_day(remaining_oh)
+    days_to_ll = binary_search_day(remaining_ll)
+    
+    limiter = min(days_to_oh, days_to_ll)
+    
+    # Ограничиваем UInt16 и минимум 1
+    return max(1, min(65535, limiter))
+
+
 class AgentPopulationBuilder:
     """Строитель популяций агентов"""
     
-    def __init__(self, env_data: Union[Dict[str, object], EnvDataAdapter]):
+    def __init__(self, env_data: Union[Dict[str, object], EnvDataAdapter],
+                 mp5_cumsum: Optional[np.ndarray] = None, end_day: int = 3650):
         """
         Инициализация
         
         Args:
             env_data: словарь с данными окружения или EnvDataAdapter
+            mp5_cumsum: Кумулятивные суммы dt для точного расчёта limiter (day-major)
+            end_day: Последний день симуляции
         """
         # Поддержка обратной совместимости: принимаем как raw dict, так и адаптер
         if isinstance(env_data, EnvDataAdapter):
@@ -39,6 +105,8 @@ class AgentPopulationBuilder:
             self.env_data = env_data
         
         self.frames = self.adapter.dimensions.frames_total
+        self.mp5_cumsum = mp5_cumsum
+        self.end_day = end_day
         
     def populate_agents(self, simulation: fg.CUDASimulation, agent_def: fg.AgentDescription):
         """
@@ -267,6 +335,23 @@ class AgentPopulationBuilder:
                 agent.setVariableUInt("intent_state", 6)
             else:  # 2, 3, 5
                 agent.setVariableUInt("intent_state", status_id)  # соответствует state
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # LIMITER: Точный расчёт для агентов в operations (status_id=2)
+            # Вычисляется ОДИН РАЗ при загрузке через бинарный поиск по mp5_cumsum
+            # ═══════════════════════════════════════════════════════════════════
+            if status_id == 2 and self.mp5_cumsum is not None:
+                limiter = compute_limiter_for_agent(
+                    sne=sne_value,
+                    ppr=ppr_value,
+                    ll=ll_value,
+                    oh=oh_value,
+                    mp5_cumsum=self.mp5_cumsum,
+                    idx=frame_idx,
+                    frames=self.frames,
+                    end_day=self.end_day
+                )
+                agent.setVariableUInt16("limiter", limiter)
         
         # Загружаем популяции в симуляцию по состояниям
         # ВАЖНО: Нужно инициализировать ВСЕ states, даже пустые (для spawn)

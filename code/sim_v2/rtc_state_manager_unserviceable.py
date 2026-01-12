@@ -59,8 +59,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_unserviceable_to_ops, flamegpu::MessageNone, f
     
     // Логирование перехода (4→2) с обнулением PPR
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
-    printf("  [TRANSITION 4→2 Day %u] AC %u (idx %u, %s): unserviceable -> operations, PPR: %u -> 0\\n", 
-           step_day, aircraft_number, idx, type, ppr_old);
+    // PERF OFF: printf("  [TRANSITION 4→2 Day %u] AC %u (idx %u, %s): unserviceable -> operations, PPR: %u -> 0\\n", 
+           //        step_day, aircraft_number, idx, type, ppr_old);
     
     return flamegpu::ALIVE;
 }
@@ -79,8 +79,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_unserviceable_to_reserve, flamegpu::MessageNon
     
     // Логирование перехода (4→5) с типом вертолёта
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
-    printf("  [TRANSITION 4→5 Day %u] AC %u (idx %u, %s): unserviceable -> reserve, repair_days=%u/%u\\n", 
-           step_day, aircraft_number, idx, type, repair_days, repair_time);
+    // PERF OFF: printf("  [TRANSITION 4→5 Day %u] AC %u (idx %u, %s): unserviceable -> reserve, repair_days=%u/%u\\n", 
+           //        step_day, aircraft_number, idx, type, repair_days, repair_time);
     
     // Сбрасываем счетчики при переходе в резерв
     FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);

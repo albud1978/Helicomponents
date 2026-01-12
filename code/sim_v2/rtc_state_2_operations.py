@@ -44,8 +44,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     if (step_day == 824u && idx == 285u) {{
         const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-        printf("[DEBUG Day %u STATE_2] Agent idx=%u (ACN=%u): intent=%u (BEFORE setting)\\n", 
-               step_day, idx, acn, intent);
+        // PERF OFF: printf("[DEBUG Day %u STATE_2] Agent idx=%u (ACN=%u): intent=%u (BEFORE setting)\\n", 
+               //        step_day, idx, acn, intent);
     }}
     
     // V3 ADAPTIVE: Получаем налёт за ВЕСЬ период adaptive_days через cumsum
@@ -102,8 +102,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     if (s_next >= ll) {{
         FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [Step %u] AC %u: intent=6 (storage LL), sne_next=%u >= ll=%u\\n", 
-               step_day, aircraft_number, s_next, ll);
+        // PERF OFF: printf("  [Step %u] AC %u: intent=6 (storage LL), sne_next=%u >= ll=%u\\n", 
+               //        step_day, aircraft_number, s_next, ll);
         return flamegpu::ALIVE;
     }}
     
@@ -112,8 +112,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     if (s_next >= br && br > 0u) {{
         FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [Step %u] AC %u: intent=6 (storage BR), sne_next=%u >= br=%u\\n", 
-               step_day, aircraft_number, s_next, br);
+        // PERF OFF: printf("  [Step %u] AC %u: intent=6 (storage BR), sne_next=%u >= br=%u\\n", 
+               //        step_day, aircraft_number, s_next, br);
         return flamegpu::ALIVE;
     }}
     
@@ -122,8 +122,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
         // Переход в ремонт (SNE < BR, поэтому ещё можно ремонтировать)
         FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [Step %u] AC %u: intent=4 (repair), ppr_next=%u >= oh=%u\\n", 
-               step_day, aircraft_number, p_next, oh);
+        // PERF OFF: printf("  [Step %u] AC %u: intent=4 (repair), ppr_next=%u >= oh=%u\\n", 
+               //        step_day, aircraft_number, p_next, oh);
         return flamegpu::ALIVE;
     }}
     

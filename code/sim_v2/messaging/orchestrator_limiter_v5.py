@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """
-LIMITER V4 Orchestrator — GPU-ONLY АДАПТИВНЫЕ ШАГИ
+LIMITER V5 Orchestrator — 100% GPU-ONLY (как Adaptive 2.0)
 
-V4 ИЗМЕНЕНИЯ (на базе V3):
-- ✅ HF_ComputeAdaptiveDays заменён на RTC функции
-- ✅ Вычисление adaptive_days на GPU (rtc_compute_adaptive_gpu)
-- ✅ Обновление current_day на GPU (rtc_update_day_gpu)
-- ✅ Один sync callback (HF_SyncDayToEnvironment) вместо heavy HF
-- ✅ Полный функционал baseline (spawn planned + dynamic)
+V5 АРХИТЕКТУРА:
+- ✅ current_day в MacroProperty (не Environment)
+- ✅ adaptive_days вычисляется на GPU (rtc_compute_global_min_v5)
+- ✅ current_day обновляется на GPU (rtc_update_day_v5)
+- ✅ 1 sync callback (HF_SyncDayV5) для совместимости с существующими RTC
+- ✅ simulate(N) без exit condition (early return в RTC)
 
 ПРОИЗВОДИТЕЛЬНОСТЬ:
-  V3: ~10с, 694 host callbacks (HF_ComputeAdaptiveDays на каждый step)
-  V4: ~2-3с цель, 1 lightweight sync callback per step
+  Adaptive 2.0: 1.44с (6 модулей, 100% GPU)
+  V5: ~2с цель (20 модулей, 100% GPU с sync)
 
 Запуск:
-    python3 orchestrator_limiter_v4.py --version-date 2025-07-04 --end-day 3650 --enable-mp2
+    python3 orchestrator_limiter_v5.py --version-date 2025-07-04 --end-day 3650
 
-База: V3 (адаптивные шаги) + GPU-only update
+База: V5 + GPU-only current_day
 """
 import os
 import sys
@@ -39,7 +39,7 @@ from base_model_messaging import V2BaseModelMessaging
 from precompute_events import compute_mp5_cumsum
 import rtc_limiter_date
 import rtc_limiter_optimized
-import rtc_limiter_v4  # V4: GPU-only
+import messaging.rtc_limiter_v5 as rtc_v5  # V5: 100% GPU
 import model_build
 
 from components.agent_population import AgentPopulationBuilder
@@ -96,8 +96,8 @@ class HF_InitMP5Cumsum(fg.HostFunction):
         self.initialized = True
 
 
-class LimiterV4Orchestrator:
-    """V4 Оркестратор с GPU-only адаптивными шагами"""
+class LimiterV5Orchestrator:
+    """V5 Оркестратор с GPU-only адаптивными шагами"""
     
     def __init__(self, env_data: Dict, end_day: int = 3650,
                  enable_mp2: bool = False, clickhouse_client=None,
@@ -145,10 +145,10 @@ class LimiterV4Orchestrator:
         self.mp5_strategy = HostOnlyMP5Strategy(env_data, self.frames, self.days)
     
     def build_model(self):
-        """Строит модель с V4 GPU-only архитектурой"""
+        """Строит модель с V5 GPU-only архитектурой"""
         
         print("\n" + "=" * 60)
-        print("🔧 Построение модели LIMITER V4 (GPU-only)")
+        print("🔧 Построение модели LIMITER V5 (GPU-only)")
         print("=" * 60)
         
         self.model = self.base_model.create_model(self.env_data)
@@ -176,7 +176,7 @@ class LimiterV4Orchestrator:
         
         heli_agent = self.base_model.agent
         
-        # V4: Здесь НЕ регистрируем HF — он будет в конце (после limiter)
+        # V5: Здесь НЕ регистрируем HF — он будет в конце (после limiter)
         
         # ═══════════════════════════════════════════════════════════════
         # ФАЗА 1: Ежедневные инкременты
@@ -213,20 +213,38 @@ class LimiterV4Orchestrator:
         self._register_limiter_v3_rtc_only()
         
         # ═══════════════════════════════════════════════════════════════
-        # ФАЗА 6: V4 HF_ComputeAdaptiveDaysV4 (оптимизированный)
+        # ФАЗА 6: V5 100% GPU-only (замена HF на RTC)
         # ═══════════════════════════════════════════════════════════════
-        print("\n📦 Подключение V4 HF_ComputeAdaptiveDaysV4...")
-        self.hf_adaptive_v4 = rtc_limiter_v4.register_v4_hf(
-            self.model, 
-            self.program_change_days, 
+        print("\n📦 Подключение V5 100% GPU...")
+        
+        # V5 MacroProperty и RTC
+        rtc_v5.setup_v5_macroproperties(self.base_model.env, self.program_change_days)
+        
+        # computed_adaptive_days и current_day_cache для QuotaManager
+        self.base_model.quota_agent.newVariableUInt("computed_adaptive_days", 1)
+        self.base_model.quota_agent.newVariableUInt("current_day_cache", 0)
+        
+        # Регистрация V5 слоёв (copy_limiter + compute_min + sync)
+        self.hf_init_v5, self.hf_sync_v5 = rtc_v5.register_v5(
+            self.model,
+            self.base_model.agent,
+            self.base_model.quota_agent,
+            self.program_change_days,
             self.end_day
         )
         
-        # Exit condition для остановки simulate()
-        self.hf_exit = rtc_limiter_v4.HF_ExitCondition(self.end_day)
+        # V5: Финальные слои (save_adaptive + update_day)
+        rtc_v5.register_v5_final_layers(
+            self.model,
+            self.base_model.agent,
+            self.base_model.quota_agent
+        )
+        
+        # V5: Exit condition для остановки simulate()
+        self.hf_exit = rtc_v5.HF_ExitCondition(self.end_day)
         self.model.addExitCondition(self.hf_exit)
         
-        print("\n✅ Модель LIMITER V4 (GPU-only) построена")
+        print("\n✅ Модель LIMITER V5 (GPU-only) построена")
         print("=" * 60)
         
         return self.model
@@ -278,7 +296,7 @@ class LimiterV4Orchestrator:
         print("  ✅ Spawn_dynamic зарегистрирован")
     
     def _register_limiter_v3_rtc_only(self):
-        """V4: Регистрирует V3 limiter RTC БЕЗ HF_ComputeAdaptiveDays"""
+        """V5: Регистрирует V3 limiter RTC БЕЗ HF_ComputeAdaptiveDays"""
         
         # Setup MacroProperty
         rtc_limiter_optimized.setup_limiter_macroproperties(
@@ -293,7 +311,7 @@ class LimiterV4Orchestrator:
         # RTC функции (БЕЗ HF_ComputeAdaptiveDays!)
         rtc_limiter_optimized.register_limiter_optimized(self.model, self.base_model.agent)
         
-        # ❌ V4: НЕ регистрируем HF_ComputeAdaptiveDays
+        # ❌ V5: НЕ регистрируем HF_ComputeAdaptiveDays
         # Вместо него используем rtc_compute_adaptive_gpu + rtc_update_day_gpu
         
         print("  ✅ V3 Limiter RTC (без HF) зарегистрирован")
@@ -356,9 +374,9 @@ class LimiterV4Orchestrator:
         print(f"  ✅ QuotaManager: Mi-8 (curr={mi8_ops}), Mi-17 (curr={mi17_ops})")
     
     def run(self, max_steps: int = 10000):
-        """V4: Запускает симуляцию с GPU-only адаптивными шагами"""
+        """V5: Запускает симуляцию с GPU-only адаптивными шагами"""
         
-        print(f"\n▶️  Запуск LIMITER V4 симуляции (end_day={self.end_day})")
+        print(f"\n▶️  Запуск LIMITER V5 симуляции (end_day={self.end_day})")
         print(f"  MP2 экспорт: {'✅' if self.enable_mp2 else '❌'}")
         print(f"  Режим: GPU-ONLY адаптивные шаги (simulate())")
         
@@ -372,11 +390,11 @@ class LimiterV4Orchestrator:
         self.simulation.setEnvironmentPropertyUInt("quota_enabled", 1)
         
         # ═══════════════════════════════════════════════════════════════
-        # V4: ОДИН ВЫЗОВ simulate() — минимум Python overhead
+        # V5: ОДИН ВЫЗОВ simulate() — минимум Python overhead
         # ═══════════════════════════════════════════════════════════════
         
         # ═══════════════════════════════════════════════════════════════
-        # V4 GPU-ONLY: simulate() — архитектурно чище
+        # V5 GPU-ONLY: simulate() — архитектурно чище
         # ═══════════════════════════════════════════════════════════════
         
         # Оценка шагов: ~200/год × 10 лет + запас (с учётом ежедневных шагов в начале)
@@ -417,7 +435,7 @@ class LimiterV4Orchestrator:
         t_end = time.perf_counter()
         elapsed = t_end - t_start
         
-        print(f"\n✅ LIMITER V4 симуляция завершена:")
+        print(f"\n✅ LIMITER V5 симуляция завершена:")
         print(f"  • Шагов: {step_count}")
         print(f"  • Дней: {current_day} / {self.end_day}")
         print(f"  • Время общее: {elapsed:.2f}с")
@@ -466,7 +484,7 @@ class LimiterV4Orchestrator:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='LIMITER V4 Orchestrator')
+    parser = argparse.ArgumentParser(description='LIMITER V5 Orchestrator')
     parser.add_argument('--version-date', type=str, default='2025-07-04')
     parser.add_argument('--end-day', type=int, default=3650)
     parser.add_argument('--enable-mp2', action='store_true')
@@ -474,7 +492,7 @@ def main():
     args = parser.parse_args()
     
     print("=" * 60)
-    print("🚀 LIMITER V4 — GPU-ONLY АДАПТИВНЫЕ ШАГИ")
+    print("🚀 LIMITER V5 — GPU-ONLY АДАПТИВНЫЕ ШАГИ")
     print("=" * 60)
     
     # Подключение к ClickHouse
@@ -517,7 +535,7 @@ def main():
         print("  ✅ Таблица создана")
     
     # Создаём оркестратор
-    orchestrator = LimiterV4Orchestrator(
+    orchestrator = LimiterV5Orchestrator(
         env_data=env_data,
         end_day=args.end_day,
         enable_mp2=args.enable_mp2,
@@ -534,7 +552,7 @@ def main():
     # Запускаем
     orchestrator.run()
     
-    print("\n✅ LIMITER V4 завершён")
+    print("\n✅ LIMITER V5 завершён")
 
 
 if __name__ == "__main__":

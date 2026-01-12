@@ -104,8 +104,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_4, flamegpu::MessageNone, flamegpu::Messa
     
     // Логирование перехода (2→4) с типом вертолёта
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
-    printf("  [TRANSITION 2→4 Day %u] AC %u (idx %u, %s): operations -> repair, sne=%u, ppr=%u, oh=%u, br=%u\\n", 
-           step_day, aircraft_number, idx, type, sne, ppr, oh, br);
+    // PERF OFF: printf("  [TRANSITION 2→4 Day %u] AC %u (idx %u, %s): operations -> repair, sne=%u, ppr=%u, oh=%u, br=%u\\n", 
+           //        step_day, aircraft_number, idx, type, sne, ppr, oh, br);
     
     return flamegpu::ALIVE;
 }
@@ -131,8 +131,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_5, flamegpu::MessageNone, flamegpu::Messa
     FLAMEGPU->setVariable<unsigned int>("s4_days", 1u);
     
     // Логирование перехода в очередь
-    printf("  [TRANSITION 2→5 Day %u] AC %u (idx %u): operations -> reserve (REPAIR QUEUE, intent=0)\\n", 
-           step_day, aircraft_number, idx);
+    // PERF OFF: printf("  [TRANSITION 2→5 Day %u] AC %u (idx %u): operations -> reserve (REPAIR QUEUE, intent=0)\\n", 
+           //        step_day, aircraft_number, idx);
     
     return flamegpu::ALIVE;
 }
@@ -162,8 +162,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_6, flamegpu::MessageNone, flamegpu::Messa
     
     // Логирование перехода (2→6) с типом вертолёта
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
-    printf("  [TRANSITION 2→6 Day %u] AC %u (idx %u, %s): operations -> storage, sne=%u, ppr=%u, ll=%u, oh=%u, br=%u\\n", 
-           step_day, aircraft_number, idx, type, sne, ppr, ll, oh, br);
+    // PERF OFF: printf("  [TRANSITION 2→6 Day %u] AC %u (idx %u, %s): operations -> storage, sne=%u, ppr=%u, ll=%u, oh=%u, br=%u\\n", 
+           //        step_day, aircraft_number, idx, type, sne, ppr, ll, oh, br);
     
     return flamegpu::ALIVE;
 }
@@ -205,8 +205,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_3, flamegpu::MessageNone, flamegpu::Messa
     
     // Логирование перехода (2→3) с типом вертолёта
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
-    printf("  [TRANSITION 2→3 Day %u] AC %u (idx %u, %s): operations -> serviceable (DEMOUNT), sne=%u, ppr=%u\\n", 
-           step_day, aircraft_number, idx, type, sne, ppr);
+    // PERF OFF: printf("  [TRANSITION 2→3 Day %u] AC %u (idx %u, %s): operations -> serviceable (DEMOUNT), sne=%u, ppr=%u\\n", 
+           //        step_day, aircraft_number, idx, type, sne, ppr);
     
     // ✅ Оставляем intent=3 (холдинг в serviceable, будет обработан quota_promote или state_manager_serviceable)
     // НЕ меняем intent! Это важно для холдинга!
@@ -230,8 +230,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_3_to_2, flamegpu::MessageNone, flamegpu::Messa
     
     // Логирование переходов promocode→operations
     if (aircraft_number >= 100000u || step_day == 226u || step_day == 227u || step_day == 228u) {
-        printf("  [TRANSITION 3→2 Day %u] AC %u (idx %u): serviceable -> operations (PROMOTE)\\n", 
-               step_day, aircraft_number, idx);
+        // PERF OFF: printf("  [TRANSITION 3→2 Day %u] AC %u (idx %u): serviceable -> operations (PROMOTE)\\n", 
+               //        step_day, aircraft_number, idx);
     }
     
     return flamegpu::ALIVE;
@@ -260,8 +260,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_5_to_2, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
     if (aircraft_number >= 100000u || step_day == 226u || step_day == 227u || step_day == 228u) {
-        printf("  [TRANSITION 5→2 Day %u] AC %u (idx %u): reserve -> operations (PROMOTE P2)\\n", 
-               step_day, aircraft_number, idx);
+        // PERF OFF: printf("  [TRANSITION 5→2 Day %u] AC %u (idx %u): reserve -> operations (PROMOTE P2)\\n", 
+               //        step_day, aircraft_number, idx);
     }
     
     return flamegpu::ALIVE;
@@ -308,8 +308,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::Messa
     if (aircraft_number >= 100000u || step_day == 226u || step_day == 227u || step_day == 228u) {
         const unsigned int ppr_new = FLAMEGPU->getVariable<unsigned int>("ppr");
         const char* action = (ppr_new == 0u) ? "ppr=0 (ремонт)" : "ppr сохранён (комплектация)";
-        printf("  [TRANSITION 1→2 Day %u] AC %u (group_by=%u): ppr_old=%u, br2=%u, %s, ppr_new=%u\\n", 
-               step_day, aircraft_number, group_by, ppr, br2_mi17, action, ppr_new);
+        // PERF OFF: printf("  [TRANSITION 1→2 Day %u] AC %u (group_by=%u): ppr_old=%u, br2=%u, %s, ppr_new=%u\\n", 
+               //        step_day, aircraft_number, group_by, ppr, br2_mi17, action, ppr_new);
     }
     
     return flamegpu::ALIVE;

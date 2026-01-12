@@ -194,7 +194,19 @@ printf "2\n2\n" | python3 code/extract_master.py --mode PROD
 
 ---
 
-## Симуляция (FLAME GPU) — обновлено 03.01.2026
+## Симуляция LIMITER V5 (FLAME GPU) — обновлено 12.01.2026
+
+> **⚠️ LIMITER V5 — основное направление разработки (100% GPU-only)**
+
+### Архитектура V5
+| Характеристика | Значение |
+|----------------|----------|
+| Цикл | `simulate()` (единый вызов) |
+| current_day | MacroProperty (GPU) |
+| Limiter | Точный бинарный поиск по mp5_cumsum |
+| Адаптивные шаги | 332 шага на 3650 дней |
+| Время | **3.7с** (984 дней/сек) |
+| GPU % | **100%** |
 
 ### RTC кэширование ядер
 - **RTC_MAX_FRAMES = 400** — фиксированный размер MacroProperty для всех датасетов
@@ -202,34 +214,35 @@ printf "2\n2\n" | python3 code/extract_master.py --mode PROD
 - Кэш: `.rtc_cache/` (~266 файлов после полного прогона с MP2)
 - При смене датасета перекомпиляция НЕ требуется (размеры одинаковые)
 
-### Производительность (3650 дней × ~300 агентов)
-| Метрика | Значение |
-|---------|----------|
-| Общее время | ~80с (1.3 мин) |
-| Чистое GPU | ~34с |
-| Drain в СУБД | ~38с |
-| Записей | ~1.1 млн |
-| RTC calls/sec | ~1.3 млн |
-| Ускорение vs CPU | ~32x |
-
-### Полная команда симуляции планеров
+### Команда запуска LIMITER V5
 
 ```bash
-cd code/sim_v2 && python3 orchestrator_v2.py \
+cd code/sim_v2/messaging && python3 orchestrator_limiter_v5.py \
   --version-date 2025-07-04 \
-  --modules state_2_operations states_stub count_ops quota_repair quota_ops_excess \
-    quota_promote_serviceable quota_promote_reserve quota_promote_inactive spawn_dynamic \
-    compute_transitions \
-    state_manager_serviceable state_manager_operations state_manager_repair \
-    state_manager_storage state_manager_reserve state_manager_inactive spawn_v2 \
-  --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
+  --end-day 3650
 ```
 
-⚠️ **КРИТИЧНО**: Без полного набора `--modules` (особенно `state_2_operations`) dt и sne **не записываются** в sim_masterv2!
-По умолчанию используется только `mp5_probe`, который не выполняет инкременты.
+### Резервная версия V3 (while step + HF)
 
-⚠️ `--drop-table` **обязателен** для первого тестового прогона DS1 (2025-07-04) в режиме полной перезаливки (TEST),
-чтобы гарантировать чистую таблицу `sim_masterv2`. Для повторных прогонов и для DS2 обычно **не используйте** его без явной необходимости.
+```bash
+cd code/sim_v2/messaging && python3 orchestrator_limiter_v3.py \
+  --version-date 2025-07-04 \
+  --end-day 3650
+```
+
+| Метрика | V5 | V3 |
+|---------|-----|-----|
+| Шаги | 332 | 315 |
+| Время | 3.71с | 2.67с |
+| GPU % | 100% | ~95% |
+| Архитектура | `simulate()` | `while step()` |
+
+### Сравнение с baseline (orchestrator_v2)
+| Метрика | V5 (LIMITER) | Baseline (V2) |
+|---------|--------------|---------------|
+| Шаги | 332 | 3650 |
+| Время | 3.7с | ~80с |
+| Ускорение | **~22x** | 1x |
 
 ### Симуляция агрегатов (после планеров!)
 
@@ -239,33 +252,12 @@ cd code/sim_v2/units && python3 orchestrator_units.py \
   --steps 3650 --export
 ```
 
-⚠️ **ПОСЛЕДОВАТЕЛЬНОСТЬ**: Сначала симуляция планеров → sim_masterv2, затем симуляция агрегатов (читает dt из sim_masterv2).
+⚠️ **ПОСЛЕДОВАТЕЛЬНОСТЬ**: Сначала симуляция планеров, затем симуляция агрегатов (читает dt из sim_masterv2).
 
-### Аргументы симуляции
+### Аргументы симуляции V5
 - `--version-date YYYY-MM-DD` — **ОБЯЗАТЕЛЬНО** указать дату датасета
-- `--steps N` — количество дней симуляции (3650 = 10 лет)
-- `--enable-mp2` — экспорт результатов в СУБД (sim_masterv2)
-- `--enable-mp2-postprocess` — постпроцессинг transition флагов (1→4, 4→2)
-- `--drop-table` — очистка таблицы sim_masterv2 перед записью (для первого датасета)
-
-### Ключевые правила порядка модулей
-1. `spawn_v2` ВСЕГДА в конце (новые агенты проходят логику на следующем шаге)
-2. `state_manager_serviceable` ПЕРЕД `state_manager_operations` (холдинг до промоута)
-3. Порядок state_manager: serviceable → operations → repair → storage → reserve → inactive
-4. `--enable-mp2-postprocess` ОБЯЗАТЕЛЕН для записи transition флагов
-
-### Симуляция агрегатов
-
-```bash
-cd code/sim_v2/units && python3 orchestrator_units.py \
-  --version-date 2025-07-04 \
-  --steps 3650 \
-  --export
-```
-
-**Требования:**
-- Симуляция планеров должна быть выполнена ранее (dt читается из sim_masterv2)
-- `--export` — экспорт результатов в sim_units_v2
+- `--end-day N` — количество дней симуляции (3650 = 10 лет)
+- MP2 экспорт: пока отключён для V5 (в разработке)
 
 ### Очистка RTC кэша (только при изменении RTC кода!)
 ```bash
