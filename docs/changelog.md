@@ -30,14 +30,12 @@
 - `rtc_state_manager_state7.py` — state 7
 
 ### Документация
+- **Новый файл:** `docs/limiter_v6_architecture.md` — таблица 45 RTC функций V6
+- `docs/rtc_pipeline_architecture.md` — оставлен для baseline
 - Архивированы в `docs/archive/architecture/`:
-  - ADAPTIVE_2_0_ARCHITECTURE.md
-  - ADAPTIVE_STEP_ARCHITECTURE.md
-  - ADAPTIVE_STEP_V3_ARCHITECTURE.md
-  - GPU_ONLY_ARCHITECTURE.md
-  - LIMITER_V2_ARCHITECTURE.md
-  - MESSAGING_RESEARCH.md
-- Обновлён `docs/rtc_pipeline_architecture.md` — таблица V6
+  - ADAPTIVE_2_0_ARCHITECTURE.md, ADAPTIVE_STEP_*.md
+  - GPU_ONLY_ARCHITECTURE.md, LIMITER_V2_ARCHITECTURE.md
+  - MESSAGING_RESEARCH.md, spawn_dynamic_architecture.md
 
 ---
 
