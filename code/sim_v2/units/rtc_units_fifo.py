@@ -291,8 +291,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_return_write, flamegpu::MessageNone, flamegpu::
     FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);  // Восстанавливаем
     FLAMEGPU->setVariable<unsigned int>("bi_counter", 1u);
     
-    // Переходим в serviceable
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
+    // Остаёмся в reserve (intent_state = 5)
+    // FIX: НЕ переходим в serviceable — reserve имеет отдельную FIFO-очередь
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
     
     return flamegpu::ALIVE;
 }}

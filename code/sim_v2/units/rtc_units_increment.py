@@ -121,44 +121,15 @@ def get_rtc_code_check_limits(max_days: int) -> str:
     CUDA код для проверки ppr >= oh и sne >= ll
     Устанавливает intent_state если ресурс исчерпан
     
-    FIX: Агрегаты в operations без aircraft_number должны переходить в serviceable
-    FIX: Агрегаты на планере который не летает (dt=0) уходят в serviceable
+    ВАЖНО: НЕ отправляем агрегаты в serviceable при dt=0!
+    Планеры с dt=0 — зимующие на удалённых точках, разбирать их НЕЛЬЗЯ.
+    Агрегаты остаются на планере независимо от dt.
     """
-    planer_dt_size = MAX_PLANERS * (max_days + 1)
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_units_check_limits, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Функция привязана к operations
-    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-    
-    // FIX: Агрегат в operations без планера → уходит в serviceable
-    // Это может произойти после spawn или из-за ошибки в данных
-    if (aircraft_number == 0u) {{
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);  // → serviceable
-        return flamegpu::ALIVE;
-    }}
-    
-    // FIX: Проверяем летает ли планер (dt > 0)
-    // Если планер ушёл в reserve/storage (dt=0), двигатель тоже должен уйти
-    auto mp_ac_to_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_AC_NUMBER}u>("mp_ac_to_idx");
-    unsigned int planer_idx = 0u;
-    if (aircraft_number < {MAX_AC_NUMBER}u) {{
-        planer_idx = mp_ac_to_idx[aircraft_number];
-    }}
-    
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
-    auto mp_planer_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {planer_dt_size}u>("mp_planer_dt");
-    const unsigned int dt_pos = step_day * {MAX_PLANERS}u + planer_idx;
-    unsigned int dt = 0u;
-    if (dt_pos < {planer_dt_size}u) {{
-        dt = mp_planer_dt[dt_pos];
-    }}
-    
-    // Если планер не летает (dt=0), двигатель уходит в serviceable
-    // НЕ обнуляем aircraft_number здесь — это сделает transition_ops после декремента mp_planer_slots
-    if (dt == 0u) {{
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);  // → serviceable
-        return flamegpu::ALIVE;
-    }}
+    // Проверяем только исчерпание ресурса (ppr >= oh, sne >= ll)
+    // НЕ проверяем dt — агрегаты остаются на планере даже если он не летает
     
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
