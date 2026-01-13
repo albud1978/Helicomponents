@@ -95,6 +95,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_apply_4_to_5_with_queue, flamegpu::MessageNone
     FLAMEGPU->setVariable<unsigned int>("transition_4_to_5", 0u);
     FLAMEGPU->setVariable<unsigned int>("active", 1u);  // Реальный агрегат
     
+    // FIX: Явно устанавливаем intent_state=5 (reserve)
+    // Гарантирует что агрегат останется в reserve до назначения через FIFO
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
+    
     // Получаем позицию в очереди reserve: queue_position = rsv_tail++
     if (group_by < {MAX_GROUPS}u) {{
         auto mp_rsv_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_tail");

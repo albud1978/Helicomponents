@@ -345,8 +345,10 @@ def get_rtc_code_spawn_check() -> str:
     """
     CUDA код: Phase 1 — проверка условий для spawn (только чтение MP)
     
-    FIX: Spawn когда есть requests независимо от svc/rsv очередей
-    Assembly работает параллельно и не обновляет FIFO head/tail
+    Spawn происходит ТОЛЬКО когда:
+    1. Есть запросы (request_count > 0)
+    2. Очередь serviceable пуста (svc_tail <= svc_head)
+    3. Очередь reserve пуста (rsv_tail <= rsv_head)
     """
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_check, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -369,12 +371,24 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_check, flamegpu::MessageNone, flamegpu::M
     const unsigned int requests = request_count[group_by];
     
     if (requests == 0u) {{
-        return flamegpu::ALIVE;  // Нет запросов
+        return flamegpu::ALIVE;  // Нет запросов — spawn не нужен
     }}
     
-    // FIX: Spawn когда есть requests — assembly назначит новые агрегаты на планеры
-    // Старая логика проверки svc/rsv очередей не работает с assembly
-    // (assembly не обновляет FIFO head при назначении)
+    // Проверяем есть ли свободные агрегаты в serviceable очереди
+    auto svc_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_svc_head");
+    auto svc_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_svc_tail");
+    if (svc_tail[group_by] > svc_head[group_by]) {{
+        return flamegpu::ALIVE;  // Есть свободные в serviceable — spawn не нужен
+    }}
+    
+    // Проверяем есть ли свободные агрегаты в reserve очереди
+    auto rsv_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_head");
+    auto rsv_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_tail");
+    if (rsv_tail[group_by] > rsv_head[group_by]) {{
+        return flamegpu::ALIVE;  // Есть свободные в reserve — spawn не нужен
+    }}
+    
+    // Очереди пусты, запросы есть — нужен spawn
     FLAMEGPU->setVariable<unsigned int>("want_spawn", 1u);
     
     return flamegpu::ALIVE;

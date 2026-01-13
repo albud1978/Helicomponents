@@ -142,8 +142,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_return_to_pool, flamegpu::MessageNone, flamegp
     // Записываем позицию
     FLAMEGPU->setVariable<unsigned int>("queue_position", new_position);
     
-    // Переходим в serviceable (пул исправных)
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
+    // Остаёмся в reserve (intent_state = 5)
+    // НЕ переходим в serviceable — это две разные очереди!
+    // Reserve (после ремонта) имеет отдельную FIFO-очередь от serviceable (склад)
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
     
     return flamegpu::ALIVE;
 }}
