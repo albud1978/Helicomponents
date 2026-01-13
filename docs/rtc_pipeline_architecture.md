@@ -2124,26 +2124,29 @@ python3 orchestrator_v2.py --modules \
   state_manager_reserve \        # 14. Холдинг reserve (5→5,5→4)
   state_manager_inactive \       # 15. Холдинг inactive (1→1)
   spawn_v2 \                     # 16. Детерминированный спавн (0→3)
-  --steps 3650 --enable-mp2 --drop-table
+  --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
+
+⚠️ `--drop-table` только для первого датасета (DS1). Для DS2 НЕ использовать!
 
 **Критические правила:**
 
-1. **spawn_v2 ВСЕГДА В КОНЦЕ** - новые агенты должны пройти всю логику на следующем шаге
-2. **quota_repair ПОСЛЕ count_ops, ДО quota_ops_excess** - буферы должны быть заполнены для ranking
-3. **state_manager_serviceable ПЕРЕД state_manager_operations** - холдинг до промоута
-4. **Порядок state_manager:** serviceable → operations → repair → storage → reserve → inactive
+1. **spawn_dynamic ПЕРЕД state_managers** — динамический спавн по дефициту программы
+2. **spawn_v2 ВСЕГДА В КОНЦЕ** — детерминированный спавн (новые агенты проходят логику на следующем шаге)
+3. **quota_repair ПОСЛЕ count_ops, ДО quota_ops_excess** — буферы должны быть заполнены для ranking
+4. **state_manager_serviceable ПЕРЕД state_manager_operations** — холдинг до промоута
+5. **Порядок state_manager:** serviceable → operations → repair → storage → reserve → inactive
 
 **Последствия нарушения порядка:**
+- spawn_dynamic после state_managers → спавн не покрывает дефицит текущего дня
 - spawn_v2 в начале → новые агенты пропускают установку intent
 - quota_repair до count_ops → пустые буферы, некорректный ranking
 - state_manager_serviceable после operations → race conditions в переходах
 - state_manager_reserve до state_manager_operations → агенты с intent=0 не переходят в очередь
-- Неправильный порядок холдингов → нарушение логики матрицы состояний
 
 **Источник:** `data_input/analytics/state-intent matrix.xlsx`
 
 ---
 
-*Документ обновлён: 20-11-2025*  
-*Тип: Архитектурное описание детерминированной системы переходов + критические багфиксы + оптимизации + GPU постпроцессинг + порядок слоёв + модуль quota_repair*
+*Документ обновлён: 13-01-2026*  
+*Тип: Архитектурное описание детерминированной системы переходов + spawn_dynamic + GPU постпроцессинг + порядок слоёв*

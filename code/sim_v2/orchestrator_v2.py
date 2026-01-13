@@ -515,7 +515,8 @@ def main():
         'state_manager_reserve',      # Переходы reserve → operations
         'state_manager_storage',      # Storage (терминальное)
         'state_manager_inactive',     # inactive → operations/repair
-        'spawn_v2',                   # Динамический спавн
+        'spawn_v2',                   # Детерминированный спавн (MP4 seed)
+        'spawn_dynamic',              # Динамический спавн по дефициту
     ]
     parser.add_argument('--modules', nargs='+', default=DEFAULT_MODULES,
                       help='Список RTC модулей для подключения')

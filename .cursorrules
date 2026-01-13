@@ -195,7 +195,7 @@ printf "2\n2\n" | python3 code/extract_master.py --mode PROD
 
 ---
 
-## Симуляция (FLAME GPU) — обновлено 03.01.2026
+## Симуляция (FLAME GPU) — обновлено 13.01.2026
 
 ### RTC кэширование ядер
 - **RTC_MAX_FRAMES = 400** — фиксированный размер MacroProperty для всех датасетов
@@ -206,11 +206,10 @@ printf "2\n2\n" | python3 code/extract_master.py --mode PROD
 ### Производительность (3650 дней × ~300 агентов)
 | Метрика | Значение |
 |---------|----------|
-| Общее время | ~80с (1.3 мин) |
-| Чистое GPU | ~34с |
-| Drain в СУБД | ~38с |
+| Общее время | ~150с (2.5 мин) |
+| Чистое GPU | ~72с |
+| Drain в СУБД | ~39с |
 | Записей | ~1.1 млн |
-| RTC calls/sec | ~1.3 млн |
 | Ускорение vs CPU | ~32x |
 
 ### Полная команда симуляции планеров
@@ -220,53 +219,46 @@ cd code/sim_v2 && python3 orchestrator_v2.py \
   --version-date 2025-07-04 \
   --modules state_2_operations states_stub count_ops quota_repair quota_ops_excess \
     quota_promote_serviceable quota_promote_reserve quota_promote_inactive spawn_dynamic \
-    compute_transitions \
     state_manager_serviceable state_manager_operations state_manager_repair \
     state_manager_storage state_manager_reserve state_manager_inactive spawn_v2 \
   --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
 
-⚠️ **КРИТИЧНО**: Без полного набора `--modules` (особенно `state_2_operations`) dt и sne **не записываются** в sim_masterv2!
-По умолчанию используется только `mp5_probe`, который не выполняет инкременты.
+⚠️ **КРИТИЧНО**: Без полного набора `--modules` (особенно `state_2_operations` и `spawn_dynamic`) dt/sne не записываются и спавн не работает!
 
-⚠️ `--drop-table` **обязателен** для первого тестового прогона DS1 (2025-07-04) в режиме полной перезаливки (TEST),
-чтобы гарантировать чистую таблицу `sim_masterv2`. Для повторных прогонов и для DS2 обычно **не используйте** его без явной необходимости.
+⚠️ `--drop-table` **обязателен** для первого прогона DS1 (2025-07-04). Для DS2 **НЕ использовать** — иначе данные DS1 удалятся!
 
 ### Симуляция агрегатов (после планеров!)
 
 ```bash
+# DS1 (первый датасет) — с --drop-table:
 cd code/sim_v2/units && python3 orchestrator_units.py \
   --version-date 2025-07-04 \
+  --steps 3650 --export --drop-table
+
+# DS2 (второй датасет) — БЕЗ --drop-table:
+cd code/sim_v2/units && python3 orchestrator_units.py \
+  --version-date 2025-12-30 \
   --steps 3650 --export
 ```
 
-⚠️ **ПОСЛЕДОВАТЕЛЬНОСТЬ**: Сначала симуляция планеров → sim_masterv2, затем симуляция агрегатов (читает dt из sim_masterv2).
+⚠️ **ПОСЛЕДОВАТЕЛЬНОСТЬ**: Планеры → sim_masterv2, затем агрегаты (читает dt из sim_masterv2).
 
 ### Аргументы симуляции
-- `--version-date YYYY-MM-DD` — **ОБЯЗАТЕЛЬНО** указать дату датасета
-- `--steps N` — количество дней симуляции (3650 = 10 лет)
-- `--enable-mp2` — экспорт результатов в СУБД (sim_masterv2)
-- `--enable-mp2-postprocess` — постпроцессинг transition флагов (1→4, 4→2)
-- `--drop-table` — очистка таблицы sim_masterv2 перед записью (для первого датасета)
+| Аргумент | Планеры | Агрегаты | Описание |
+|----------|---------|----------|----------|
+| `--version-date` | ✅ | ✅ | Дата датасета (YYYY-MM-DD) |
+| `--steps` | ✅ | ✅ | Дней симуляции (3650 = 10 лет) |
+| `--enable-mp2` | ✅ | — | Экспорт в sim_masterv2 |
+| `--enable-mp2-postprocess` | ✅ | — | GPU постпроцессинг (1→4→2) |
+| `--export` | — | ✅ | Экспорт в sim_units_v2 |
+| `--drop-table` | DS1 | DS1 | Очистка таблицы (только первый датасет!) |
 
 ### Ключевые правила порядка модулей
-1. `spawn_v2` ВСЕГДА в конце (новые агенты проходят логику на следующем шаге)
-2. `state_manager_serviceable` ПЕРЕД `state_manager_operations` (холдинг до промоута)
-3. Порядок state_manager: serviceable → operations → repair → storage → reserve → inactive
-4. `--enable-mp2-postprocess` ОБЯЗАТЕЛЕН для записи transition флагов
-
-### Симуляция агрегатов
-
-```bash
-cd code/sim_v2/units && python3 orchestrator_units.py \
-  --version-date 2025-07-04 \
-  --steps 3650 \
-  --export
-```
-
-**Требования:**
-- Симуляция планеров должна быть выполнена ранее (dt читается из sim_masterv2)
-- `--export` — экспорт результатов в sim_units_v2
+1. `spawn_dynamic` ПЕРЕД state_managers (динамический спавн по дефициту)
+2. `spawn_v2` ВСЕГДА в конце (детерминированный спавн)
+3. `state_manager_serviceable` ПЕРЕД `state_manager_operations` (холдинг до промоута)
+4. Порядок state_manager: serviceable → operations → repair → storage → reserve → inactive
 
 ### Очистка RTC кэша (только при изменении RTC кода!)
 ```bash
