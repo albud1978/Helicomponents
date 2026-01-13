@@ -44,12 +44,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v7, flamegpu::MessageNone, flamegp
         return flamegpu::ALIVE;
     }
     
-    // Считаем текущее количество Mi-17 в operations
+    // Считаем текущее количество Mi-17 в operations (исходные агенты)
     auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_ops_count");
     unsigned int curr_ops = 0u;
     for (unsigned int i = 0u; i < frames; ++i) {
         if (ops_count[i] == 1u) ++curr_ops;
     }
+    
+    // BUGFIX: добавляем уже заспавненных динамических агентов
+    unsigned int already_spawned = FLAMEGPU->getVariable<unsigned int>("total_spawned");
+    curr_ops += already_spawned;
     
     // Считаем промоутнутых P1 (serviceable)
     auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_svc_count");
