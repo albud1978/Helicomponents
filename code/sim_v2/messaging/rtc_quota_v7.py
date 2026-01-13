@@ -289,20 +289,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
     // Подсчёт текущих в operations + P1 промоуты
-    unsigned int curr = 0u;
-    unsigned int target = 0u;
+    unsigned int ops_curr = 0u;
+    unsigned int svc_available = 0u;  // P1 промоутит всех svc → учитываем
     unsigned int unsvc_available = 0u;
+    unsigned int target = 0u;
     
+    // P2 КАСКАДНАЯ ЛОГИКА: дефицит = target - ops - svc (P1 промоутит всех svc)
     if (group_by == 1u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
         auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
-            if (ops_count[i] == 1u) ++curr;
-            // Оцениваем P1: serviceable с promoted флагом
-            // НО: мы не можем читать agent vars напрямую из MacroProperty
-            // Используем допущение: все serviceable промоутились (worst case)
-            if (svc_count[i] == 1u) ++curr;  // P1 already counted
+            if (ops_count[i] == 1u) ++ops_curr;
+            if (svc_count[i] == 1u) ++svc_available;
             if (unsvc_count[i] == 1u) ++unsvc_available;
         }}
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
@@ -311,8 +310,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
         auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
-            if (ops_count[i] == 1u) ++curr;
-            if (svc_count[i] == 1u) ++curr;  // P1 already counted
+            if (ops_count[i] == 1u) ++ops_curr;
+            if (svc_count[i] == 1u) ++svc_available;
             if (unsvc_count[i] == 1u) ++unsvc_available;
         }}
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
@@ -320,12 +319,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
         return flamegpu::ALIVE;
     }}
     
-    // Дефицит?
-    if (curr >= target) {{
+    // P1 промоутит min(deficit_p1, svc_available)
+    // P2 получает остаток: deficit_p2 = target - ops - min(deficit_p1, svc)
+    unsigned int deficit_p1 = (target > ops_curr) ? (target - ops_curr) : 0u;
+    unsigned int p1_will_promote = (deficit_p1 < svc_available) ? deficit_p1 : svc_available;
+    unsigned int curr_after_p1 = ops_curr + p1_will_promote;
+    
+    
+    // P2 дефицит (после P1)
+    if (curr_after_p1 >= target) {{
         return flamegpu::ALIVE;
     }}
     
-    unsigned int deficit = target - curr;
+    unsigned int deficit = target - curr_after_p1;
     unsigned int K = (deficit < unsvc_available) ? deficit : unsvc_available;
     
     if (K == 0u) return flamegpu::ALIVE;
@@ -367,10 +373,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
-    // Подсчёт текущих + P1 + P2
-    unsigned int curr = 0u;
-    unsigned int target = 0u;
+    // P3 КАСКАДНАЯ ЛОГИКА: дефицит = target - ops - svc - unsvc (P1+P2 промоутят всех)
+    unsigned int ops_curr = 0u;
+    unsigned int svc_available = 0u;
+    unsigned int unsvc_available = 0u;
     unsigned int inactive_available = 0u;
+    unsigned int target = 0u;
     
     if (group_by == 1u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
@@ -378,9 +386,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
         auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
         auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
-            if (ops_count[i] == 1u) ++curr;
-            if (svc_count[i] == 1u) ++curr;  // P1
-            if (unsvc_count[i] == 1u) ++curr;  // P2
+            if (ops_count[i] == 1u) ++ops_curr;
+            if (svc_count[i] == 1u) ++svc_available;
+            if (unsvc_count[i] == 1u) ++unsvc_available;
             if (inactive_count[i] == 1u) ++inactive_available;
         }}
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
@@ -390,9 +398,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
         auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
         auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
-            if (ops_count[i] == 1u) ++curr;
-            if (svc_count[i] == 1u) ++curr;
-            if (unsvc_count[i] == 1u) ++curr;
+            if (ops_count[i] == 1u) ++ops_curr;
+            if (svc_count[i] == 1u) ++svc_available;
+            if (unsvc_count[i] == 1u) ++unsvc_available;
             if (inactive_count[i] == 1u) ++inactive_available;
         }}
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
@@ -400,12 +408,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
         return flamegpu::ALIVE;
     }}
     
-    // Дефицит?
-    if (curr >= target) {{
+    // P1 промоутит min(deficit_p1, svc_available)
+    unsigned int deficit_p1 = (target > ops_curr) ? (target - ops_curr) : 0u;
+    unsigned int p1_will_promote = (deficit_p1 < svc_available) ? deficit_p1 : svc_available;
+    unsigned int curr_after_p1 = ops_curr + p1_will_promote;
+    
+    // P2 промоутит min(deficit_p2, unsvc_available)
+    unsigned int deficit_p2 = (target > curr_after_p1) ? (target - curr_after_p1) : 0u;
+    unsigned int p2_will_promote = (deficit_p2 < unsvc_available) ? deficit_p2 : unsvc_available;
+    unsigned int curr_after_p1p2 = curr_after_p1 + p2_will_promote;
+    
+    // P3 дефицит (после P1+P2)
+    
+    if (curr_after_p1p2 >= target) {{
         return flamegpu::ALIVE;
     }}
     
-    unsigned int deficit = target - curr;
+    unsigned int deficit = target - curr_after_p1p2;
     unsigned int K = (deficit < inactive_available) ? deficit : inactive_available;
     
     if (K == 0u) return flamegpu::ALIVE;
@@ -476,13 +495,15 @@ def register_quota_v7(model: fg.ModelDescription, agent: fg.AgentDescription):
         layer_reset_flags.addAgentFunction(fn)
     print("  ✅ Сброс флагов")
     
-    # Сброс буферов (только один агент)
+    # Сброс буферов (idx=0 из ЛЮБОГО состояния)
     layer_reset_buf = model.newLayer("v7_reset_buffers")
-    fn = agent.newRTCFunction("rtc_reset_quota_v7", RTC_RESET_BUFFERS)
-    fn.setInitialState("operations")
-    fn.setEndState("operations")
-    layer_reset_buf.addAgentFunction(fn)
-    print("  ✅ Сброс буферов")
+    for state in ["inactive", "operations", "serviceable", "repair", "reserve", "storage", "unserviceable"]:
+        fn_name = f"rtc_reset_quota_v7_{state}"
+        fn = agent.newRTCFunction(fn_name, RTC_RESET_BUFFERS)
+        fn.setInitialState(state)
+        fn.setEndState(state)
+        layer_reset_buf.addAgentFunction(fn)
+    print("  ✅ Сброс буферов (все состояния)")
     
     # Подсчёт агентов
     layer_count = model.newLayer("v7_count_agents")
