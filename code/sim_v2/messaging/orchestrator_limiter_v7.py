@@ -48,6 +48,7 @@ auto_load_env_file()
 
 import pyflamegpu as fg
 import model_build
+
 import rtc_spawn_dynamic_v7
 from sim_env_setup import get_client, prepare_env_arrays
 from base_model_messaging import V2BaseModelMessaging
@@ -91,6 +92,7 @@ class LimiterV7Orchestrator:
         print("=" * 60)
         
         client = get_client()
+        self._client = client  # Сохраняем для использования в build_model
         vd = date.fromisoformat(self.version_date)
         self.env_data = prepare_env_arrays(client, vd)
         self.frames = int(self.env_data['frames_total_u16'])
