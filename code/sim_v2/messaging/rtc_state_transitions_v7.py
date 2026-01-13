@@ -326,8 +326,7 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_unsvc_promoted) {
 # Функция: unserviceable → operations (P2, 7→2)
 RTC_UNSVC_TO_OPS = """
 FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // P2: PPR обнуляется!
-    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);  // P2: PPR обнуляется!
     FLAMEGPU->setVariable<unsigned int>("transition_7_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага

@@ -48,6 +48,7 @@ auto_load_env_file()
 
 import pyflamegpu as fg
 import model_build
+import rtc_spawn_dynamic_v7
 from sim_env_setup import get_client, prepare_env_arrays
 from base_model_messaging import V2BaseModelMessaging
 from precompute_events import compute_mp5_cumsum, find_program_change_days
@@ -167,6 +168,18 @@ class LimiterV7Orchestrator:
         
         # Фаза 3: Переходы после квотирования (demote, promote)
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
+        
+        # ═══════════════════════════════════════════════════════════════
+        # ФАЗА 3.5: Динамический спавн Mi-17 (после P3)
+        # ═══════════════════════════════════════════════════════════════
+        spawn_env_data = {
+            'first_dynamic_idx': self.frames,  # После всех существующих агентов
+            'dynamic_reserve_mi17': 50,
+            'base_acn_spawn': 200000
+        }
+        self.spawn_data = rtc_spawn_dynamic_v7.register_spawn_dynamic_v7(
+            self.model, heli_agent, spawn_env_data
+        )
         
         # ═══════════════════════════════════════════════════════════════
         # ФАЗА 4: Limiter V3 (бинарный поиск)
@@ -332,6 +345,16 @@ class LimiterV7Orchestrator:
         qm_pop[0].setVariableUInt8("group_by", 1)  # Mi-8
         qm_pop[1].setVariableUInt8("group_by", 2)  # Mi-17
         self.simulation.setPopulationData(qm_pop)
+        
+        # Динамический спавн (менеджер + тикеты)
+        if hasattr(self, 'spawn_data') and self.spawn_data:
+            rtc_spawn_dynamic_v7.init_spawn_dynamic_population_v7(
+                self.simulation,
+                self.model,
+                self.spawn_data['first_dynamic_idx'],
+                self.spawn_data['dynamic_reserve'],
+                self.spawn_data['base_acn']
+            )
         
         print(f"   ✅ Агенты загружены: Mi-8 ops={mi8_ops}, Mi-17 ops={mi17_ops}, spawn={spawn_count}")
     

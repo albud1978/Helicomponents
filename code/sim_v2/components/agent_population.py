@@ -367,9 +367,7 @@ class AgentPopulationBuilder:
         # FIX 4: Используем agent_def, НЕ simulation.getAgentDescription (нет такого метода!)
         for state_name in all_states:
             pop = populations.get(state_name, fg.AgentVector(agent_def))
-            print(f"  🔍 DEBUG: Перед setPopulationData для '{state_name}', размер={len(pop)}")
             simulation.setPopulationData(pop, state_name)
-            print(f"  🔍 DEBUG: После setPopulationData для '{state_name}'")
             if len(pop) > 0:
                 print(f"  Загружено {len(pop)} агентов в состояние '{state_name}'")
     
