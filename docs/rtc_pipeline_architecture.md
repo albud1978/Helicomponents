@@ -2100,6 +2100,12 @@ quota_modules → compute_transitions → state_managers → mp2_writer
 - `code/sim_v2/mp2_drain_host.py` — удалена Python постобработка
 - `code/sim_v2/rtc_mp2_writer.py` — создание MacroProperty (уже было)
 
+> **Статус (13.01.2026):** Модуль `compute_transitions` **опционален**. Transition флаги также записываются через:
+> - `rtc_mp2_postprocess_active` — для inactive→operations (через ремонт)
+> - `rtc_spawn_dynamic` / `rtc_spawn_v2` — для spawn transitions
+> 
+> В текущей рабочей конфигурации `compute_transitions` **НЕ включён** в `--modules`, симуляция корректно работает с `--enable-mp2-postprocess`.
+
 ---
 
 ## Порядок слоёв (Layers Order) - КРИТИЧНО ВАЖЕН!
