@@ -348,8 +348,17 @@ def get_rtc_code_spawn_check() -> str:
     Spawn происходит ТОЛЬКО когда:
     1. Есть запросы (request_count > 0)
     2. Очередь serviceable пуста (svc_tail <= svc_head)
-    3. Очередь reserve пуста (rsv_tail <= rsv_head)
+    3. Очередь reserve "почти пуста" (rsv_len <= RSV_TRANSIT_TOLERANCE)
+    
+    FIX 14.01.2026: Добавлен допуск RSV_TRANSIT_TOLERANCE для "транзитных" агентов.
+    Агенты из repair (4→5) могут входить в reserve (rsv_tail++) и сразу назначаться
+    через assembly (rsv_head++) в том же шаге. rsv_tail - rsv_head показывает
+    количество "транзитных" агентов, не реальных свободных в reserve.
     """
+    # FIX 14.01.2026: Без допуска — spawn только когда rsv очередь совсем пуста
+    # Если rsv > 0, значит есть агенты которые скоро назначатся через assembly
+    RSV_TRANSIT_TOLERANCE = 0
+    
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_check, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Функция привязана к state=reserve
@@ -381,14 +390,20 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_check, flamegpu::MessageNone, flamegpu::M
         return flamegpu::ALIVE;  // Есть свободные в serviceable — spawn не нужен
     }}
     
-    // Проверяем есть ли свободные агрегаты в reserve очереди
+    // FIX: Проверяем reserve с допуском на "транзитных" агентов
+    // Агенты из repair (4→5) входят в rsv_tail++ и сразу назначаются через assembly (rsv_head++)
+    // Разница rsv_tail - rsv_head показывает количество транзитных, не реальных свободных
     auto rsv_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_head");
     auto rsv_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_tail");
-    if (rsv_tail[group_by] > rsv_head[group_by]) {{
+    unsigned int rsv_len = (rsv_tail[group_by] > rsv_head[group_by]) ? 
+                            (rsv_tail[group_by] - rsv_head[group_by]) : 0u;
+    
+    // Если много агентов в rsv очереди — они реально свободны, spawn не нужен
+    if (rsv_len > {RSV_TRANSIT_TOLERANCE}u) {{
         return flamegpu::ALIVE;  // Есть свободные в reserve — spawn не нужен
     }}
     
-    // Очереди пусты, запросы есть — нужен spawn
+    // Очереди пусты (или только транзитные), запросы есть — нужен spawn
     FLAMEGPU->setVariable<unsigned int>("want_spawn", 1u);
     
     return flamegpu::ALIVE;
@@ -396,14 +411,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_check, flamegpu::MessageNone, flamegpu::M
 """
 
 
-def get_rtc_code_spawn_activate() -> str:
+def get_rtc_code_spawn_activate(max_frames: int, max_planers: int = 400) -> str:
     """
-    CUDA код: Phase 2 — активация spawn (только атомарные операции MP)
+    CUDA код: Phase 2 — активация spawn И НАЗНАЧЕНИЕ НА ПЛАНЕР
     Срабатывает для агентов с want_spawn=1
     
-    ВАЖНО: Все операции с MacroProperty должны быть атомарными!
-    Используем CAS в цикле без предварительного чтения.
+    ВАЖНО: Spawn должен СРАЗУ назначать агрегат на планер!
+    Иначе возникает двойной декремент request_count.
+    
+    FIX 14.01.2026: Полностью переписано — spawn теперь работает как assign_svc
     """
+    mp_slots_size = MAX_GROUPS * max_planers
+    search_limit = min(2000, max_frames)
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_activate, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int want_spawn = FLAMEGPU->getVariable<unsigned int>("want_spawn");
@@ -421,48 +440,82 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_activate, flamegpu::MessageNone, flamegpu
         return flamegpu::ALIVE;
     }}
     
-    // Атомарно захватываем слот из request_count
+    // === Атомарно ищем и забираем запрос для нашей группы ===
+    auto requests_arr = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mp_replacement_request");
+    auto req_groups = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mp_replacement_group");
     auto request_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_request_count");
-    auto svc_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_svc_tail");
+    auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {mp_slots_size}u>("mp_planer_slots");
+    auto mp_ac_to_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_AC_NUMBER}u>("mp_ac_to_idx");
     
-    // Используем CAS в цикле для атомарного уменьшения request_count
-    // Начинаем с попытки уменьшить с 1 до 0, потом с 2 до 1, и т.д.
-    bool success = false;
-    for (unsigned int expected = 1u; expected <= 1000u && !success; ++expected) {{
-        unsigned int actual = request_count[group_by].CAS(expected, expected - 1u);
-        if (actual == expected) {{
-            success = true;
-            break;
-        }}
-        // Если actual < expected, значит request_count меньше чем expected
-        // Пробуем с actual как новым expected
-        if (actual < expected && actual > 0u) {{
-            unsigned int actual2 = request_count[group_by].CAS(actual, actual - 1u);
-            if (actual2 == actual) {{
-                success = true;
+    unsigned int target_ac = 0u;
+    unsigned int found_slot_idx = 0u;
+    
+    // Рандомизируем начало поиска
+    const unsigned int my_idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int start = my_idx % {search_limit}u;
+    
+    for (unsigned int j = 0u; j < {search_limit}u; ++j) {{
+        unsigned int i = (start + j) % {search_limit}u;
+        unsigned int old_ac = requests_arr[i].exchange(0u);
+        
+        if (old_ac > 0u) {{
+            unsigned int old_grp = req_groups[i].exchange(0u);
+            
+            if (old_grp == group_by) {{
+                target_ac = old_ac;
+                found_slot_idx = i;
                 break;
+            }} else {{
+                // Возвращаем обратно — не наша группа
+                requests_arr[i].exchange(old_ac);
+                req_groups[i].exchange(old_grp);
             }}
         }}
     }}
     
-    if (!success) {{
-        return flamegpu::ALIVE;  // Не удалось захватить слот
+    if (target_ac == 0u) {{
+        return flamegpu::ALIVE;  // Не нашли запрос
     }}
     
-    // === Успешно захватили слот — активируемся ===
-    FLAMEGPU->setVariable<unsigned int>("active", 1u);
-    // Остаёмся в reserve! Не переходим в serviceable
-    FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);  // остаёмся в reserve
+    // === Проверяем и инкрементируем mp_planer_slots ===
+    const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int>("comp_numbers", group_by);
     
-    // Новый агрегат — нулевые наработки
-    FLAMEGPU->setVariable<unsigned int>("sne", 0u);
-    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
-    FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
+    unsigned int planer_idx = 0u;
+    if (target_ac < {MAX_AC_NUMBER}u) {{
+        planer_idx = mp_ac_to_idx[target_ac];
+    }}
     
-    // Атомарно получаем позицию в rsv-очереди (postfix increment)
-    auto rsv_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_tail");
-    unsigned int new_pos = rsv_tail[group_by]++;
-    FLAMEGPU->setVariable<unsigned int>("queue_position", new_pos);
+    bool slot_ok = false;
+    if (planer_idx > 0u && planer_idx < {max_planers}u) {{
+        unsigned int slots_pos = group_by * {max_planers}u + planer_idx;
+        unsigned int old_count = mp_slots[slots_pos]++;
+        
+        if (old_count < comp_per_planer) {{
+            slot_ok = true;  // Успешно захватили слот
+        }} else {{
+            // Слот уже заполнен — откатываем
+            mp_slots[slots_pos] -= 1u;
+        }}
+    }}
+    
+    if (slot_ok) {{
+        // === Успешно — активируем и назначаем на планер ===
+        request_count[group_by] -= 1u;
+        
+        FLAMEGPU->setVariable<unsigned int>("active", 1u);
+        FLAMEGPU->setVariable<unsigned int>("aircraft_number", target_ac);
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // → operations
+        FLAMEGPU->setVariable<unsigned int>("queue_position", 0u);
+        
+        // Новый агрегат — нулевые наработки
+        FLAMEGPU->setVariable<unsigned int>("sne", 0u);
+        FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+        FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
+    }} else {{
+        // Слот не захвачен — возвращаем запрос обратно
+        requests_arr[found_slot_idx].exchange(target_ac);
+        req_groups[found_slot_idx].exchange(group_by);
+    }}
     
     return flamegpu::ALIVE;
 }}
@@ -539,10 +592,10 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_spawn_check.setInitialState("reserve")
     fn_spawn_check.setEndState("reserve")
     
-    rtc_spawn_activate = get_rtc_code_spawn_activate()
+    rtc_spawn_activate = get_rtc_code_spawn_activate(max_frames)  # FIX: передаём max_frames
     fn_spawn_activate = agent.newRTCFunction("rtc_fifo_spawn_activate", rtc_spawn_activate)
     fn_spawn_activate.setInitialState("reserve")
-    fn_spawn_activate.setEndState("reserve")
+    fn_spawn_activate.setEndState("reserve")  # Остаётся в reserve, переход через transition_reserve
     
     # === 4. Возврат в rsv-очередь после ремонта ===
     rtc_return = get_rtc_code_return_to_rsv_pool_write()
@@ -551,37 +604,40 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_return.setEndState("reserve")
     
     # === Слои (порядок важен!) ===
-    # Двухфазная архитектура: CHECK (только чтение) -> ACTIVATE (только запись)
+    # Двухфазная архитектура: ВСЕ CHECK → ВСЕ ACTIVATE
+    # FIX 14.01.2026: CHECK должны быть ДО ACTIVATE чтобы spawn_check видел request_count > 0
     
     # 0. Возврат после ремонта — в начале дня (только запись)
     layer_return = model.newLayer("layer_fifo_return_to_rsv")
     layer_return.addAgentFunction(fn_return)
     
-    # 1. Serviceable CHECK (только чтение MP)
+    # === PHASE 1: ВСЕ CHECK (только чтение MP) ===
+    # 1. Serviceable CHECK
     layer_svc_check = model.newLayer("layer_fifo_svc_check")
     layer_svc_check.addAgentFunction(fn_svc_check)
     
-    # 2. Serviceable ACTIVATE (только атомарные записи MP)
-    layer_svc_activate = model.newLayer("layer_fifo_svc_activate")
-    layer_svc_activate.addAgentFunction(fn_svc_activate)
-    
-    # 3. Reserve CHECK (только чтение MP)
+    # 2. Reserve CHECK  
     layer_rsv_check = model.newLayer("layer_fifo_rsv_check")
     layer_rsv_check.addAgentFunction(fn_rsv_check)
     
-    # 4. Reserve ACTIVATE (только атомарные записи MP)
-    layer_rsv_activate = model.newLayer("layer_fifo_rsv_activate")
-    layer_rsv_activate.addAgentFunction(fn_rsv_activate)
-    
-    # 5. Spawn CHECK (только чтение MP)
+    # 3. Spawn CHECK — теперь ПЕРЕД activate, видит request_count > 0!
     layer_spawn_check = model.newLayer("layer_fifo_spawn_check")
     layer_spawn_check.addAgentFunction(fn_spawn_check)
     
-    # 6. Spawn ACTIVATE (только атомарные записи MP)
+    # === PHASE 2: ВСЕ ACTIVATE (только атомарные записи MP) ===
+    # 4. Serviceable ACTIVATE
+    layer_svc_activate = model.newLayer("layer_fifo_svc_activate")
+    layer_svc_activate.addAgentFunction(fn_svc_activate)
+    
+    # 5. Reserve ACTIVATE
+    layer_rsv_activate = model.newLayer("layer_fifo_rsv_activate")
+    layer_rsv_activate.addAgentFunction(fn_rsv_activate)
+    
+    # 6. Spawn ACTIVATE
     layer_spawn_activate = model.newLayer("layer_fifo_spawn_activate")
     layer_spawn_activate.addAgentFunction(fn_spawn_activate)
     
-    print("  RTC модуль units_fifo_priority зарегистрирован (7 слоёв: return, svc_check/activate, rsv_check/activate, spawn_check/activate)")
+    print("  RTC модуль units_fifo_priority зарегистрирован (7 слоёв: return, 3×CHECK, 3×ACTIVATE)")
 
 
 
