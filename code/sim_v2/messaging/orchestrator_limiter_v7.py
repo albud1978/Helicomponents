@@ -50,6 +50,36 @@ import pyflamegpu as fg
 import model_build
 
 import rtc_spawn_dynamic_v7
+
+
+def collect_agents_state(simulation, agent_desc, current_day, version_date_int, version_id):
+    """Собирает состояние всех агентов в текущий момент"""
+    states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage', 'unserviceable']
+    rows = []
+    
+    for state_name in states:
+        pop = fg.AgentVector(agent_desc)
+        simulation.getPopulationData(pop, state_name)
+        
+        for i in range(pop.size()):
+            agent = pop.at(i)
+            rows.append({
+                'version_date': version_date_int,
+                'version_id': version_id,
+                'day_u16': current_day,
+                'idx': agent.getVariableUInt('idx'),
+                'aircraft_number': agent.getVariableUInt('aircraft_number'),
+                'group_by': agent.getVariableUInt('group_by'),
+                'state': state_name,
+                'sne': agent.getVariableUInt('sne'),
+                'ppr': agent.getVariableUInt('ppr'),
+                'll': agent.getVariableUInt('ll'),
+                'oh': agent.getVariableUInt('oh'),
+                'br': agent.getVariableUInt('br'),
+                'repair_days': agent.getVariableUInt('repair_days'),
+                'repair_time': agent.getVariableUInt('repair_time'),
+            })
+    return rows
 from sim_env_setup import get_client, prepare_env_arrays
 from base_model_messaging import V2BaseModelMessaging
 from precompute_events import compute_mp5_cumsum, find_program_change_days
@@ -213,7 +243,8 @@ class LimiterV7Orchestrator:
             self.base_model.agent,
             self.base_model.quota_agent,
             self.program_change_days,
-            self.end_day
+            self.end_day,
+            verbose_logging=self.enable_mp2  # Логирование только при MP2
         )
         
         rtc_limiter_v5.register_v5_final_layers(
@@ -247,37 +278,112 @@ class LimiterV7Orchestrator:
         # Инициализация агентов
         self._populate_agents()
         
-        # Запуск
-        print("\n🏃 Запуск simulate()...")
-        t_gpu_start = time.perf_counter()
-        self.simulation.simulate()
-        gpu_time = time.perf_counter() - t_gpu_start
+        # Подготовка MP2
+        mp2_rows = []
+        vd = date.fromisoformat(self.version_date)
+        version_date_int = vd.year * 10000 + vd.month * 100 + vd.day
+        version_id = int(self.env_data.get('version_id_u32', 1))
+        
+        # Запуск — если MP2, то step() цикл, иначе simulate()
+        if self.enable_mp2:
+            print("\n🏃 Запуск step() цикл (для MP2 + логирование)...")
+            print(f"   Датасет: {self.version_date}")
+            print(f"   program_changes: {len(self.program_change_days)} дат")
+            t_gpu_start = time.perf_counter()
+            
+            step_count = 0
+            recorded_days = set()
+            
+            # 1. День 0 — начальное состояние (ДО первого step)
+            rows = collect_agents_state(
+                self.simulation, self.base_model.agent,
+                0, version_date_int, version_id
+            )
+            mp2_rows.extend(rows)
+            recorded_days.add(0)
+            print(f"  [Step 0] day=0 (начальное состояние)")
+            
+            while self.simulation.step():
+                step_count += 1
+                
+                # Читаем current_day из step_log (обновлён HF_SyncDayV5 в конце шага)
+                step_log = self.hf_sync_v5.get_step_log()
+                if step_log:
+                    current_day = step_log[-1]['day']
+                else:
+                    current_day = 0
+                
+                # Записываем состояние КАЖДОГО шага (пропускаем если уже записан)
+                if current_day not in recorded_days:
+                    rows = collect_agents_state(
+                        self.simulation, self.base_model.agent,
+                        current_day, version_date_int, version_id
+                    )
+                    mp2_rows.extend(rows)
+                    recorded_days.add(current_day)
+                
+                if step_count >= max_steps:
+                    break
+            
+            # 3. Последний день — если не записан
+            if self.end_day not in recorded_days:
+                print(f"  [Final] day={self.end_day} (последний день)")
+                rows = collect_agents_state(
+                    self.simulation, self.base_model.agent,
+                    self.end_day, version_date_int, version_id
+                )
+                mp2_rows.extend(rows)
+                recorded_days.add(self.end_day)
+            
+            gpu_time = time.perf_counter() - t_gpu_start
+            
+            # Вывод лога шагов
+            step_log = self.hf_sync_v5.get_step_log()
+            print(f"\n📋 Лог шагов ({len(step_log)} записей):")
+            
+            # Статистика причин
+            reason_counts = {}
+            for entry in step_log:
+                for r in entry['reasons']:
+                    key = r.split(':')[0]  # limiter:N -> limiter
+                    reason_counts[key] = reason_counts.get(key, 0) + 1
+            
+            print(f"   Причины шагов:")
+            for reason, count in sorted(reason_counts.items()):
+                print(f"     {reason}: {count}")
+            
+            # Шаги с несколькими причинами
+            multi = [e for e in step_log if len(e['reasons']) > 1]
+            if multi:
+                print(f"\n   Шаги с несколькими причинами ({len(multi)}):")
+                for e in multi[:10]:
+                    print(f"     Step {e['step']}: day={e['day']}, reasons={e['reasons']}")
+        else:
+            print("\n🏃 Запуск simulate()...")
+            t_gpu_start = time.perf_counter()
+            self.simulation.simulate()
+            gpu_time = time.perf_counter() - t_gpu_start
         
         # Результаты
         final_steps = self.simulation.getStepCounter()
         
-        # MP2 export (финальное состояние)
+        # MP2 export
         drain_time = 0.0
-        mp2_rows = []
         
-        if self.enable_mp2:
-            print("\n📤 Экспорт в СУБД...")
-            t_collect = time.perf_counter()
-            self._collect_mp2_final(mp2_rows)
-            collect_time = time.perf_counter() - t_collect
+        if self.enable_mp2 and mp2_rows:
+            unique_days = len(set(r['day_u16'] for r in mp2_rows))
+            print(f"\n📤 Экспорт в СУБД: {len(mp2_rows)} строк, {unique_days} дней...")
             
-            if mp2_rows:
-                t_insert = time.perf_counter()
-                columns = list(mp2_rows[0].keys())
-                values = [[row[col] for col in columns] for row in mp2_rows]
-                col_str = ', '.join(columns)
-                self.clickhouse_client.execute(
-                    f"INSERT INTO sim_masterv2_v7 ({col_str}) VALUES",
-                    values
-                )
-                insert_time = time.perf_counter() - t_insert
-                drain_time = collect_time + insert_time
-                print(f"   ✅ INSERT: {len(mp2_rows)} строк ({insert_time:.2f}с)")
+            t_insert = time.perf_counter()
+            columns = list(mp2_rows[0].keys())
+            values = [[row[col] for col in columns] for row in mp2_rows]
+            col_str = ', '.join(columns)
+            self.clickhouse_client.execute(
+                f"INSERT INTO sim_masterv2_v7 ({col_str}) VALUES",
+                values
+            )
+            drain_time = time.perf_counter() - t_insert
+            print(f"   ✅ INSERT: {len(mp2_rows)} строк ({drain_time:.2f}с)")
         
         t_end = time.perf_counter()
         total_time = t_end - t_start

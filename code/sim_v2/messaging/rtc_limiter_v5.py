@@ -53,13 +53,14 @@ def setup_v5_macroproperties(env, program_changes: list):
     env.newMacroPropertyUInt("program_changes_mp", 150)
     
     # Environment properties (read-only для RTC)
-    # end_day уже создан в base_model, только устанавливаем num_program_changes
+    # end_day уже создан в base_model, устанавливаем num_program_changes
     try:
         env.newPropertyUInt("num_program_changes", len(program_changes))
     except:
-        pass  # Уже существует
+        # Property уже существует — обновляем значение (важно для повторных запусков!)
+        env.setPropertyUInt("num_program_changes", len(program_changes))
     
-    print(f"  ✅ V5 MacroProperty: current_day_mp, adaptive_result_mp, limiter_buffer[{RTC_MAX_FRAMES}], min_exit_date_mp, program_changes_mp[150]")
+    print(f"  ✅ V5 MacroProperty: current_day_mp, adaptive_result_mp, limiter_buffer[{RTC_MAX_FRAMES}], min_exit_date_mp, program_changes_mp[150], num_pc={len(program_changes)}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -96,6 +97,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_copy_limiter_v5, flamegpu::MessageNone, flamegpu::Me
 RTC_COMPUTE_GLOBAL_MIN = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v5, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // V5/V7: QuotaManager вычисляет adaptive_days из min(limiter, exit_date, program_change)
+    // ВАЖНО: только агент group_by=1 (Mi-8) выполняет вычисления (избегаем race condition)
+    
+    const uint8_t group_by = FLAMEGPU->getVariable<uint8_t>("group_by");
+    if (group_by != 1u) return flamegpu::ALIVE;  // Только один агент вычисляет
     
     // Читаем current_day из MacroProperty
     auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
@@ -120,6 +125,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v5, flamegpu::MessageNone, flameg
     // 3. Находим next program change
     auto pc = FLAMEGPU->environment.getMacroProperty<unsigned int, 150u>("program_changes_mp");
     const unsigned int num_pc = FLAMEGPU->environment.getProperty<unsigned int>("num_program_changes");
+    
+    // DEBUG: проверка program_changes_mp
+    unsigned int dbg_step2 = FLAMEGPU->getStepCounter();
+    if (dbg_step2 < 3u) {{
+        printf("[RTC PC] step=%u, num_pc=%u, pc[0]=%u, pc[1]=%u, pc[2]=%u\\n",
+               dbg_step2, num_pc, (unsigned int)pc[0], (unsigned int)pc[1], (unsigned int)pc[2]);
+    }}
     
     unsigned int next_pc = end_day;
     for (unsigned int i = 0u; i < num_pc && i < 150u; ++i) {{
@@ -155,16 +167,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v5, flamegpu::MessageNone, flameg
     if (adaptive_days > remaining) adaptive_days = remaining;
     if (adaptive_days < 1u) adaptive_days = 1u;
     
-    // 5. НЕ сбрасываем MacroProperty здесь — это делается в отдельном слое
-    
     // DEBUG: каждые 50 шагов
     unsigned int step = FLAMEGPU->getStepCounter();
     if (step % 50u == 0u || step < 10u) {{
-        printf("[V7 Step %u] day=%u, limiter=%u, exit_date=%u, pc=%u -> adaptive=%u\\n",
+        printf("[V7] step=%u, day=%u, lim=%u, exit=%u, pc=%u -> adaptive=%u\\n",
                step, current_day, min_limiter, min_exit_date, next_pc, adaptive_days);
     }}
     
-    // 6. Записываем результат
+    // 5. Записываем результат
     auto result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
     result[0].exchange(adaptive_days);
     
@@ -179,6 +189,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v5, flamegpu::MessageNone, flameg
 RTC_RESET_MIN_LIMITER = """
 FLAMEGPU_AGENT_FUNCTION(rtc_reset_min_limiter_v5, flamegpu::MessageNone, flamegpu::MessageNone) {
     // V5: Сброс mp_min_limiter для следующего шага (ТОЛЬКО WRITE)
+    // Только один агент (group_by=1) выполняет сброс
+    const uint8_t group_by = FLAMEGPU->getVariable<uint8_t>("group_by");
+    if (group_by != 1u) return flamegpu::ALIVE;
+    
     auto mp_min = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp_min_limiter");
     mp_min[0].exchange(0xFFFFFFFFu);
     return flamegpu::ALIVE;
@@ -188,6 +202,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_min_limiter_v5, flamegpu::MessageNone, flamegp
 RTC_CLEAR_LIMITER = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_clear_limiter_v5, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // V5: Сброс limiter_buffer для следующего шага (ТОЛЬКО WRITE)
+    // Только один агент (group_by=1) выполняет сброс
+    const uint8_t group_by = FLAMEGPU->getVariable<uint8_t>("group_by");
+    if (group_by != 1u) return flamegpu::ALIVE;
     
     auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
     const unsigned int current_day = mp_day[0];
@@ -250,6 +267,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_save_adaptive_v5_qm, flamegpu::MessageNone, flamegpu
 RTC_UPDATE_DAY = """
 FLAMEGPU_AGENT_FUNCTION(rtc_update_day_v5, flamegpu::MessageNone, flamegpu::MessageNone) {
     // V5: READ agent var → WRITE current_day_mp (ТОЛЬКО WRITE!)
+    // Только один агент (group_by=1) обновляет день
+    const uint8_t group_by = FLAMEGPU->getVariable<uint8_t>("group_by");
+    if (group_by != 1u) return flamegpu::ALIVE;
     
     const unsigned int adaptive_days = FLAMEGPU->getVariable<unsigned int>("computed_adaptive_days");
     // current_day из агентной переменной (записана в rtc_save_adaptive)
@@ -336,32 +356,97 @@ class HF_InitV5(fg.HostFunction):
 
 class HF_SyncDayV5(fg.HostFunction):
     """
-    Лёгкий sync: MacroProperty → Environment
+    Лёгкий sync: MacroProperty → Environment + логирование причин шагов
     
     Запускается в НАЧАЛЕ каждого шага чтобы существующие RTC модули
     могли читать current_day/prev_day из Environment.
-    
-    Это единственный Python callback в V5 — минимальный overhead.
     """
     
-    def __init__(self, end_day: int):
+    def __init__(self, end_day: int, program_changes: list = None, verbose: bool = False):
         super().__init__()
         self.end_day = end_day
+        # program_changes может быть списком tuples (day, mi8, mi17) или просто дней
+        if program_changes:
+            if isinstance(program_changes[0], tuple):
+                self.program_changes = set(d for d, m8, m17 in program_changes)
+            else:
+                self.program_changes = set(program_changes)
+        else:
+            self.program_changes = set()
+        self.verbose = verbose
+        self.step_log = []  # Лог шагов: [(step, day, adaptive, причины)]
     
     def run(self, FLAMEGPU):
+        step = FLAMEGPU.getStepCounter()
+        
         # Читаем из MacroProperty
         mp_day = FLAMEGPU.environment.getMacroPropertyUInt("current_day_mp")
         current_day = int(mp_day[0])
         prev_day = int(mp_day[1])
         
+        
         mp_result = FLAMEGPU.environment.getMacroPropertyUInt("adaptive_result_mp")
         adaptive_days = int(mp_result[0])
+        
+        # Читаем источники для определения причины шага
+        mp_min = FLAMEGPU.environment.getMacroPropertyUInt("mp_min_limiter")
+        min_limiter = int(mp_min[0])
+        
+        mp_exit = FLAMEGPU.environment.getMacroPropertyUInt("min_exit_date_mp")
+        min_exit_date = int(mp_exit[0])
+        
+        # Определяем ВСЕ причины текущего шага
+        reasons = []
+        
+        # День 0
+        if current_day == 0:
+            reasons.append("day_0")
+        
+        # Последний день (end_day - 1, т.к. индексация с 0)
+        if current_day >= self.end_day - 1:
+            reasons.append("end_day")
+        
+        # Limiter (ресурс LL/OH) — если limiter == adaptive_days
+        if min_limiter < 0xFFFFFFFF and min_limiter == adaptive_days:
+            reasons.append(f"limiter:{min_limiter}")
+        
+        # Exit date (repair/spawn/unserviceable)
+        if min_exit_date < 0xFFFFFFFF:
+            days_to_exit = min_exit_date - prev_day if min_exit_date > prev_day else 0
+            if days_to_exit == adaptive_days:
+                reasons.append(f"exit_date:{min_exit_date}")
+        
+        # Program change — если текущий день в списке
+        if current_day in self.program_changes:
+            reasons.append("program_change")
+        
+        # Если причина не определена — это limiter (ресурс агента)
+        if not reasons:
+            reasons.append(f"resource:{adaptive_days}")
+        
+        # Записываем в лог
+        self.step_log.append({
+            'step': step,
+            'day': current_day,
+            'prev_day': prev_day,
+            'adaptive': adaptive_days,
+            'limiter': min_limiter if min_limiter < 0xFFFFFFFF else None,
+            'exit_date': min_exit_date if min_exit_date < 0xFFFFFFFF else None,
+            'reasons': reasons
+        })
+        
+        if self.verbose or step % 50 == 0:
+            reason_str = ', '.join(reasons)
+            print(f"  [Step {step}] day={current_day}, +{adaptive_days}, причина: {reason_str}")
         
         # Синхронизируем в Environment (для существующих RTC модулей)
         FLAMEGPU.environment.setPropertyUInt("current_day", current_day)
         FLAMEGPU.environment.setPropertyUInt("prev_day", prev_day)
         FLAMEGPU.environment.setPropertyUInt("adaptive_days", adaptive_days)
         FLAMEGPU.environment.setPropertyUInt("step_days", adaptive_days)
+    
+    def get_step_log(self):
+        return self.step_log
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -369,7 +454,8 @@ class HF_SyncDayV5(fg.HostFunction):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def register_v5(model: fg.ModelDescription, heli_agent: fg.AgentDescription, 
-                quota_agent: fg.AgentDescription, program_changes: list, end_day: int):
+                quota_agent: fg.AgentDescription, program_changes: list, end_day: int,
+                verbose_logging: bool = False):
     """Регистрирует V5 RTC модули"""
     
     # Init HostFunction (один раз при старте)
@@ -377,8 +463,8 @@ def register_v5(model: fg.ModelDescription, heli_agent: fg.AgentDescription,
     model.addInitFunction(hf_init)
     
     # Step sync — единственный Python callback в step loop
-    # Синхронизирует MacroProperty → Environment
-    hf_sync = HF_SyncDayV5(end_day)
+    # Синхронизирует MacroProperty → Environment + логирование причин шагов
+    hf_sync = HF_SyncDayV5(end_day, program_changes, verbose=verbose_logging)
     model.addStepFunction(hf_sync)
     
     # V5 использует mp_min_limiter от V3 RTC (rtc_compute_min_limiter)

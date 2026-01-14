@@ -96,6 +96,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_copy_exit_date_spawn_v7, flamegpu::MessageNone, flam
 }
 """
 
+# Копирование exit_date из unserviceable агентов (ожидание repair_time)
+RTC_COPY_EXIT_DATE_UNSVC = """
+FLAMEGPU_AGENT_FUNCTION(rtc_copy_exit_date_unsvc_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
+    // V7: Копируем exit_date из unserviceable агентов в min_exit_date_mp
+    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
+    
+    // Если exit_date не установлен — пропускаем
+    if (exit_date == 0u || exit_date == 0xFFFFFFFFu) return flamegpu::ALIVE;
+    
+    // atomicMin — ТОЛЬКО WRITE, без READ
+    auto mp_exit = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_exit_date_mp");
+    mp_exit[0].min(exit_date);  // atomicMin
+    
+    return flamegpu::ALIVE;
+}
+"""
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ФАЗА 0: Детерминированные переходы (repair, spawn)
@@ -240,16 +257,24 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc) {
 }
 """
 
-# Условие: SNE >= BR или SNE >= LL (переход в storage)
+# Условие: SNE >= LL ИЛИ (PPR >= OH AND SNE >= BR) — переход в storage
+# BR — порог экономической неремонтопригодности (ремонт невыгоден)
+# Агент с SNE > BR ещё летает, но при PPR >= OH не ремонтируется → storage
 COND_OPS_TO_STORAGE = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage) {
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
-    const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     
-    // LL приоритетнее BR
+    // 1. LL — безусловно (назначенный ресурс исчерпан)
     if (sne >= ll) return true;
-    if (br > 0u && sne >= br) return true;
+    
+    // 2. BR проверяется ТОЛЬКО при PPR >= OH (ремонт нужен, но невыгоден)
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+    const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
+    
+    if (ppr >= oh && br > 0u && sne >= br) return true;
+    
     return false;
 }
 """
@@ -262,8 +287,24 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_demote) {
 """
 
 # Функция: operations → unserviceable (2→7)
+# КРИТИЧНО: Устанавливаем exit_date для ожидания repair_time перед возвратом в ops
 RTC_OPS_TO_UNSVC = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    
+    // Получаем repair_time по типу планера
+    unsigned int repair_time;
+    if (group_by == 1u) {
+        repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
+    } else {
+        repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+    }
+    
+    // Устанавливаем exit_date = день когда можно вернуться в ops
+    const unsigned int exit_date = current_day + repair_time;
+    FLAMEGPU->setVariable<unsigned int>("exit_date", exit_date);
+    
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     return flamegpu::ALIVE;
@@ -327,6 +368,7 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_unsvc_promoted) {
 RTC_UNSVC_TO_OPS = """
 FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     FLAMEGPU->setVariable<unsigned int>("ppr", 0u);  // P2: PPR обнуляется!
+    FLAMEGPU->setVariable<unsigned int>("exit_date", 0u);  // Сброс exit_date
     FLAMEGPU->setVariable<unsigned int>("transition_7_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
@@ -395,6 +437,13 @@ def register_exit_date_copy(model: fg.ModelDescription, agent: fg.AgentDescripti
     fn.setInitialState("reserve")
     fn.setEndState("reserve")
     layer_copy_spawn.addAgentFunction(fn)
+    
+    # Копирование exit_date из unserviceable (ожидание repair_time)
+    layer_copy_unsvc = model.newLayer("v7_copy_exit_date_unsvc")
+    fn = agent.newRTCFunction("rtc_copy_exit_date_unsvc_v7", RTC_COPY_EXIT_DATE_UNSVC)
+    fn.setInitialState("unserviceable")
+    fn.setEndState("unserviceable")
+    layer_copy_unsvc.addAgentFunction(fn)
     
     print("    ✅ Фаза 0.5 готова (exit_date → min_exit_date_mp)")
 

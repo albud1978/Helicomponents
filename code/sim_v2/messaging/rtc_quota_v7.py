@@ -288,6 +288,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
+    // КРИТИЧНО: Проверяем exit_date — агент должен отбыть repair_time перед возвратом в ops
+    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
+    if (exit_date > 0u && exit_date != 0xFFFFFFFFu && day < exit_date) {{
+        // Ещё не готов — ждём repair_time
+        return flamegpu::ALIVE;
+    }}
+    
     // Подсчёт текущих в operations + P1 промоуты
     unsigned int ops_curr = 0u;
     unsigned int svc_available = 0u;  // P1 промоутит всех svc → учитываем
