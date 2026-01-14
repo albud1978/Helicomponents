@@ -94,6 +94,9 @@ class V2BaseModelUnits:
         # Приоритет 2: Reserve (после ремонта, active=1)
         self.env.newMacroPropertyUInt32("mp_rsv_head", MAX_GROUPS)  # Голова очереди reserve
         self.env.newMacroPropertyUInt32("mp_rsv_tail", MAX_GROUPS)  # Хвост очереди reserve
+        # FIX 14.01.2026: Точный счётчик свободных агентов в reserve (не rsv_tail - rsv_head!)
+        # rsv_tail - rsv_head показывает "транзитных" агентов, не реальных свободных
+        self.env.newMacroPropertyUInt32("mp_rsv_count", MAX_GROUPS)  # Реальное количество свободных в reserve
         # Приоритет 3: Spawn (active=0) — не в очереди, активируется при пустых очередях
         
         # Устаревшие (для совместимости, можно удалить позже)

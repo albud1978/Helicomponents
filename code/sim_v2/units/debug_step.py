@@ -28,15 +28,17 @@ class DebugQueueStepFunction(fg.HostFunction):
         mp_svc_tail = FLAMEGPU.environment.getMacroPropertyUInt32("mp_svc_tail")
         mp_rsv_head = FLAMEGPU.environment.getMacroPropertyUInt32("mp_rsv_head")
         mp_rsv_tail = FLAMEGPU.environment.getMacroPropertyUInt32("mp_rsv_tail")
+        mp_rsv_count = FLAMEGPU.environment.getMacroPropertyUInt32("mp_rsv_count")  # FIX 14.01.2026
         
         for gb in self.target_groups:
             req = int(mp_request_count[gb])
             svc_h, svc_t = int(mp_svc_head[gb]), int(mp_svc_tail[gb])
             rsv_h, rsv_t = int(mp_rsv_head[gb]), int(mp_rsv_tail[gb])
+            rsv_cnt = int(mp_rsv_count[gb])  # Точный счётчик
             
             svc_len = svc_t - svc_h if svc_t > svc_h else 0
             rsv_len = rsv_t - rsv_h if rsv_t > rsv_h else 0
             
-            if step_day == 0 or req > 0 or svc_len == 0 or rsv_len == 0:
-                print(f"  🔍 День {step_day}, group={gb}: req={req}, svc={svc_len} ({svc_h}→{svc_t}), rsv={rsv_len} ({rsv_h}→{rsv_t})")
+            if step_day == 0 or req > 0 or svc_len == 0 or rsv_cnt == 0:
+                print(f"  🔍 День {step_day}, group={gb}: req={req}, svc={svc_len}, rsv_count={rsv_cnt} (queue={rsv_len})")
 

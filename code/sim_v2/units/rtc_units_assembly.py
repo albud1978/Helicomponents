@@ -148,9 +148,14 @@ def get_rtc_code_assembly_activate(max_planers: int, is_reserve: bool = False) -
     rsv_head_update = ""
     if is_reserve:
         rsv_head_update = f"""
-    // FIX: Инкрементируем rsv_head при назначении из reserve!
+    // FIX 14.01.2026: Инкрементируем rsv_head при назначении из reserve!
     auto rsv_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_head");
     rsv_head[group_by] += 1u;
+    
+    // FIX 14.01.2026: Декрементируем mp_rsv_count (точный счётчик свободных в reserve)
+    // Используем только атомарную запись (без чтения) чтобы избежать race condition
+    auto mp_rsv_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_count");
+    mp_rsv_count[group_by] -= 1u;
 """
     
     return f"""

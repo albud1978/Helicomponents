@@ -66,10 +66,11 @@ class InitFifoQueuesFunction(fg.HostFunction):
         except Exception as e:
             print(f"     ⚠️ mp_svc: {e}")
         
-        # Инициализируем mp_rsv_head и mp_rsv_tail
+        # Инициализируем mp_rsv_head, mp_rsv_tail и mp_rsv_count
         try:
             mp_rsv_head = FLAMEGPU.environment.getMacroPropertyUInt32("mp_rsv_head")
             mp_rsv_tail = FLAMEGPU.environment.getMacroPropertyUInt32("mp_rsv_tail")
+            mp_rsv_count = FLAMEGPU.environment.getMacroPropertyUInt32("mp_rsv_count")  # FIX 14.01.2026
             # Инициализируем ВСЕ группы, даже если rsv_tails[gb] = 0
             # Это нужно чтобы spawn и 4→5 работали корректно
             all_groups = set(self.svc_tails.keys()) | set(self.rsv_tails.keys())
@@ -78,9 +79,12 @@ class InitFifoQueuesFunction(fg.HostFunction):
                     tail = self.rsv_tails.get(gb, 0)
                     mp_rsv_head[gb] = 1       # head = 1 (ВСЕГДА)
                     mp_rsv_tail[gb] = tail + 1 if tail > 0 else 1  # tail = M+1 или 1 если пусто
+                    # FIX 14.01.2026: Инициализируем mp_rsv_count начальным количеством агентов в reserve
+                    mp_rsv_count[gb] = tail  # tail = количество агентов в reserve на день 0
             total_rsv = sum(self.rsv_tails.values())
             groups_rsv = len(all_groups)
             print(f"     mp_rsv: head=1, tail инициализирован для {groups_rsv} групп ({total_rsv} агентов)")
+            print(f"     mp_rsv_count: инициализирован для {groups_rsv} групп")
         except Exception as e:
             print(f"     ⚠️ mp_rsv: {e}")
         

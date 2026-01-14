@@ -326,6 +326,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_assign_rsv_activate, flamegpu::MessageNone, fla
             // Успешно — декрементируем счётчики и назначаем
             request_count[group_by] -= 1u;
             rsv_head[group_by] += 1u;
+            
+            // FIX 14.01.2026: Декрементируем mp_rsv_count при назначении из reserve!
+            // Используем только атомарную запись (без чтения) чтобы избежать race condition
+            auto mp_rsv_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_count");
+            mp_rsv_count[group_by] -= 1u;
+            
             FLAMEGPU->setVariable<unsigned int>("aircraft_number", target_ac);
             FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // → operations
             FLAMEGPU->setVariable<unsigned int>("queue_position", 0u);
@@ -348,17 +354,13 @@ def get_rtc_code_spawn_check() -> str:
     Spawn происходит ТОЛЬКО когда:
     1. Есть запросы (request_count > 0)
     2. Очередь serviceable пуста (svc_tail <= svc_head)
-    3. Очередь reserve "почти пуста" (rsv_len <= RSV_TRANSIT_TOLERANCE)
+    3. Очередь reserve пуста (mp_rsv_count == 0)
     
-    FIX 14.01.2026: Добавлен допуск RSV_TRANSIT_TOLERANCE для "транзитных" агентов.
-    Агенты из repair (4→5) могут входить в reserve (rsv_tail++) и сразу назначаться
-    через assembly (rsv_head++) в том же шаге. rsv_tail - rsv_head показывает
-    количество "транзитных" агентов, не реальных свободных в reserve.
+    FIX 14.01.2026: Используем mp_rsv_count вместо rsv_tail - rsv_head!
+    mp_rsv_count — точный счётчик свободных агентов в reserve:
+    - Инкрементируется в 4→5 когда агент входит в reserve
+    - Декрементируется в assembly когда агент назначается из reserve
     """
-    # FIX 14.01.2026: Без допуска — spawn только когда rsv очередь совсем пуста
-    # Если rsv > 0, значит есть агенты которые скоро назначатся через assembly
-    RSV_TRANSIT_TOLERANCE = 0
-    
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_check, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Функция привязана к state=reserve
@@ -390,20 +392,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_check, flamegpu::MessageNone, flamegpu::M
         return flamegpu::ALIVE;  // Есть свободные в serviceable — spawn не нужен
     }}
     
-    // FIX: Проверяем reserve с допуском на "транзитных" агентов
-    // Агенты из repair (4→5) входят в rsv_tail++ и сразу назначаются через assembly (rsv_head++)
-    // Разница rsv_tail - rsv_head показывает количество транзитных, не реальных свободных
-    auto rsv_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_head");
-    auto rsv_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_tail");
-    unsigned int rsv_len = (rsv_tail[group_by] > rsv_head[group_by]) ? 
-                            (rsv_tail[group_by] - rsv_head[group_by]) : 0u;
-    
-    // Если много агентов в rsv очереди — они реально свободны, spawn не нужен
-    if (rsv_len > {RSV_TRANSIT_TOLERANCE}u) {{
+    // FIX 14.01.2026: Используем mp_rsv_count — точный счётчик свободных в reserve!
+    // В отличие от rsv_tail - rsv_head, это реальное количество свободных агентов
+    auto mp_rsv_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_count");
+    if (mp_rsv_count[group_by] > 0u) {{
         return flamegpu::ALIVE;  // Есть свободные в reserve — spawn не нужен
     }}
     
-    // Очереди пусты (или только транзитные), запросы есть — нужен spawn
+    // Очереди пусты, запросы есть — нужен spawn
     FLAMEGPU->setVariable<unsigned int>("want_spawn", 1u);
     
     return flamegpu::ALIVE;
