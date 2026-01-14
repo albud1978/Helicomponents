@@ -132,14 +132,27 @@ FLAMEGPU_AGENT_FUNCTION(rtc_assembly_check, flamegpu::MessageNone, flamegpu::Mes
 """
 
 
-def get_rtc_code_assembly_activate(max_planers: int) -> str:
+def get_rtc_code_assembly_activate(max_planers: int, is_reserve: bool = False) -> str:
     """
     CUDA код: Phase 2 — атомарный захват слота на планере
     
     Агрегат с want_assign=1 пытается атомарно захватить слот.
     Если успешно — назначается на планер.
+    
+    FIX 14.01.2026: Для агентов из reserve — инкрементируем rsv_head!
+    Это критично для корректной работы spawn_check.
     """
     mp_slots_size = MAX_GROUPS * max_planers
+    
+    # Дополнительный код для reserve агентов
+    rsv_head_update = ""
+    if is_reserve:
+        rsv_head_update = f"""
+    // FIX: Инкрементируем rsv_head при назначении из reserve!
+    auto rsv_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_head");
+    rsv_head[group_by] += 1u;
+"""
+    
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_assembly_activate, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int want_assign = FLAMEGPU->getVariable<unsigned int>("want_assign");
@@ -192,7 +205,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_assembly_activate, flamegpu::MessageNone, flamegpu::
     FLAMEGPU->setVariable<unsigned int>("aircraft_number", target_ac);
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // → operations
     FLAMEGPU->setVariable<unsigned int>("queue_position", 0u);  // Очищаем
-    
+    {rsv_head_update}
     return flamegpu::ALIVE;
 }}
 """
@@ -239,13 +252,14 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_rsv_check.setEndState("reserve")
     
     # === 3. ACTIVATE — для serviceable (устанавливает aircraft_number) ===
-    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=False)
     fn_svc_activate = agent.newRTCFunction("rtc_assembly_svc_activate", rtc_svc_activate)
     fn_svc_activate.setInitialState("serviceable")
     fn_svc_activate.setEndState("serviceable")  # Остаётся пока в serviceable
     
     # === 4. ACTIVATE — для reserve (устанавливает aircraft_number) ===
-    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers)
+    # FIX 14.01.2026: is_reserve=True для инкремента rsv_head!
+    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=True)
     fn_rsv_activate = agent.newRTCFunction("rtc_assembly_rsv_activate", rtc_rsv_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_rsv_activate"))
     fn_rsv_activate.setInitialState("reserve")
@@ -333,14 +347,14 @@ def register_rtc_pass2(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_rsv_check.setEndState("reserve")
     
     # === 3. ACTIVATE — для serviceable (pass2) ===
-    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=False)
     fn_svc_activate = agent.newRTCFunction("rtc_assembly_svc_activate_p2", rtc_svc_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_svc_activate_p2"))
     fn_svc_activate.setInitialState("serviceable")
     fn_svc_activate.setEndState("serviceable")
     
     # === 4. ACTIVATE — для reserve (pass2) ===
-    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=True)
     fn_rsv_activate = agent.newRTCFunction("rtc_assembly_rsv_activate_p2", rtc_rsv_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_rsv_activate_p2"))
     fn_rsv_activate.setInitialState("reserve")
@@ -423,14 +437,14 @@ def register_rtc_pass3(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_rsv_check.setEndState("reserve")
     
     # === 3. ACTIVATE — для serviceable (pass3) ===
-    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=False)
     fn_svc_activate = agent.newRTCFunction("rtc_assembly_svc_activate_p3", rtc_svc_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_svc_activate_p3"))
     fn_svc_activate.setInitialState("serviceable")
     fn_svc_activate.setEndState("serviceable")
     
     # === 4. ACTIVATE — для reserve (pass3) ===
-    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=True)
     fn_rsv_activate = agent.newRTCFunction("rtc_assembly_rsv_activate_p3", rtc_rsv_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_rsv_activate_p3"))
     fn_rsv_activate.setInitialState("reserve")
@@ -502,13 +516,13 @@ def register_rtc_pass4(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_rsv_check.setInitialState("reserve")
     fn_rsv_check.setEndState("reserve")
     
-    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=False)
     fn_svc_activate = agent.newRTCFunction("rtc_assembly_svc_activate_p4", rtc_svc_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_svc_activate_p4"))
     fn_svc_activate.setInitialState("serviceable")
     fn_svc_activate.setEndState("serviceable")
     
-    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=True)
     fn_rsv_activate = agent.newRTCFunction("rtc_assembly_rsv_activate_p4", rtc_rsv_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_rsv_activate_p4"))
     fn_rsv_activate.setInitialState("reserve")
@@ -577,13 +591,13 @@ def register_rtc_pass5(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_rsv_check.setInitialState("reserve")
     fn_rsv_check.setEndState("reserve")
     
-    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=False)
     fn_svc_activate = agent.newRTCFunction("rtc_assembly_svc_activate_p5", rtc_svc_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_svc_activate_p5"))
     fn_svc_activate.setInitialState("serviceable")
     fn_svc_activate.setEndState("serviceable")
     
-    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=True)
     fn_rsv_activate = agent.newRTCFunction("rtc_assembly_rsv_activate_p5", rtc_rsv_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_rsv_activate_p5"))
     fn_rsv_activate.setInitialState("reserve")
@@ -652,13 +666,13 @@ def register_rtc_pass6(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_rsv_check.setInitialState("reserve")
     fn_rsv_check.setEndState("reserve")
     
-    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=False)
     fn_svc_activate = agent.newRTCFunction("rtc_assembly_svc_activate_p6", rtc_svc_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_svc_activate_p6"))
     fn_svc_activate.setInitialState("serviceable")
     fn_svc_activate.setEndState("serviceable")
     
-    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=True)
     fn_rsv_activate = agent.newRTCFunction("rtc_assembly_rsv_activate_p6", rtc_rsv_activate.replace(
         "rtc_assembly_activate", "rtc_assembly_rsv_activate_p6"))
     fn_rsv_activate.setInitialState("reserve")
@@ -724,12 +738,12 @@ def register_rtc_pass7(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_rsv_check.setInitialState("reserve")
     fn_rsv_check.setEndState("reserve")
     
-    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=False)
     fn_svc_activate = agent.newRTCFunction("rtc_assembly_svc_activate_p7", rtc_svc_activate.replace("rtc_assembly_activate", "rtc_assembly_svc_activate_p7"))
     fn_svc_activate.setInitialState("serviceable")
     fn_svc_activate.setEndState("serviceable")
     
-    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=True)
     fn_rsv_activate = agent.newRTCFunction("rtc_assembly_rsv_activate_p7", rtc_rsv_activate.replace("rtc_assembly_activate", "rtc_assembly_rsv_activate_p7"))
     fn_rsv_activate.setInitialState("reserve")
     fn_rsv_activate.setEndState("reserve")
@@ -774,12 +788,12 @@ def register_rtc_pass8(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_rsv_check.setInitialState("reserve")
     fn_rsv_check.setEndState("reserve")
     
-    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=False)
     fn_svc_activate = agent.newRTCFunction("rtc_assembly_svc_activate_p8", rtc_svc_activate.replace("rtc_assembly_activate", "rtc_assembly_svc_activate_p8"))
     fn_svc_activate.setInitialState("serviceable")
     fn_svc_activate.setEndState("serviceable")
     
-    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=True)
     fn_rsv_activate = agent.newRTCFunction("rtc_assembly_rsv_activate_p8", rtc_rsv_activate.replace("rtc_assembly_activate", "rtc_assembly_rsv_activate_p8"))
     fn_rsv_activate.setInitialState("reserve")
     fn_rsv_activate.setEndState("reserve")
@@ -823,12 +837,13 @@ def _register_generic_pass(model, agent, max_planers, max_days, suffix):
     fn_rsv_check.setInitialState("reserve")
     fn_rsv_check.setEndState("reserve")
     
-    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers)
+    rtc_svc_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=False)
     fn_svc_activate = agent.newRTCFunction(f"rtc_assembly_svc_activate_{suffix}", rtc_svc_activate.replace("rtc_assembly_activate", f"rtc_assembly_svc_activate_{suffix}"))
     fn_svc_activate.setInitialState("serviceable")
     fn_svc_activate.setEndState("serviceable")
     
-    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers)
+    # FIX 14.01.2026: is_reserve=True для инкремента rsv_head!
+    rtc_rsv_activate = get_rtc_code_assembly_activate(max_planers, is_reserve=True)
     fn_rsv_activate = agent.newRTCFunction(f"rtc_assembly_rsv_activate_{suffix}", rtc_rsv_activate.replace("rtc_assembly_activate", f"rtc_assembly_rsv_activate_{suffix}"))
     fn_rsv_activate.setInitialState("reserve")
     fn_rsv_activate.setEndState("reserve")

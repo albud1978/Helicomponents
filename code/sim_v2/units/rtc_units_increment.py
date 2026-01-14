@@ -163,20 +163,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_check_limits, flamegpu::MessageNone, flamegpu:
 """
 
 
-def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription, 
-                 max_days: int = 3650):
-    """Регистрирует RTC функции инкремента и проверки лимитов"""
+def register_check_limits(model: fg.ModelDescription, agent: fg.AgentDescription, 
+                          max_days: int = 3650):
+    """
+    Регистрирует ТОЛЬКО check_limits (установка intent_state).
     
-    # === Инкремент sne/ppr ===
-    rtc_increment = get_rtc_code_increment(max_days)
-    fn_increment = agent.newRTCFunction("rtc_units_increment_sne", rtc_increment)
-    fn_increment.setInitialState("operations")
-    fn_increment.setEndState("operations")
+    ВАЖНО: Должен быть зарегистрирован ПЕРЕД transition_ops!
+    Иначе transition_ops увидит старый intent_state.
     
-    layer_increment = model.newLayer("layer_units_increment")
-    layer_increment.addAgentFunction(fn_increment)
-    
-    # === Проверка лимитов ===
+    FIX 14.01.2026: Разделено на две функции для правильного порядка слоёв.
+    """
     rtc_check = get_rtc_code_check_limits(max_days)
     fn_check = agent.newRTCFunction("rtc_units_check_limits", rtc_check)
     fn_check.setInitialState("operations")
@@ -185,5 +181,38 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription,
     layer_check = model.newLayer("layer_units_check_limits")
     layer_check.addAgentFunction(fn_check)
     
-    print("  RTC модуль units_increment зарегистрирован (2 слоя: increment, check_limits)")
+    print("  RTC модуль units_check_limits зарегистрирован (1 слой)")
+
+
+def register_increment(model: fg.ModelDescription, agent: fg.AgentDescription, 
+                       max_days: int = 3650):
+    """
+    Регистрирует ТОЛЬКО increment (рост SNE/PPR).
+    
+    ВАЖНО: Должен быть зарегистрирован ПОСЛЕ assembly!
+    Пилот не полетит без двигателя — сначала комплектация, потом полёт.
+    
+    FIX 14.01.2026: Разделено на две функции для правильного порядка слоёв.
+    """
+    rtc_increment = get_rtc_code_increment(max_days)
+    fn_increment = agent.newRTCFunction("rtc_units_increment_sne", rtc_increment)
+    fn_increment.setInitialState("operations")
+    fn_increment.setEndState("operations")
+    
+    layer_increment = model.newLayer("layer_units_increment")
+    layer_increment.addAgentFunction(fn_increment)
+    
+    print("  RTC модуль units_increment зарегистрирован (1 слой)")
+
+
+def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription, 
+                 max_days: int = 3650):
+    """
+    Регистрирует ОБЕ функции (для обратной совместимости).
+    
+    DEPRECATED: Лучше использовать register_check_limits и register_increment отдельно!
+    """
+    register_increment(model, agent, max_days)
+    register_check_limits(model, agent, max_days)
+    print("  ⚠️ Использован объединённый register_rtc — лучше разделить для правильного порядка!")
 

@@ -207,8 +207,15 @@ class UnitsOrchestrator:
             print(f"  ❌ units_states_stub: {e}")
             modules_failed += 1
         
-        # 2. state_operations — ОТКЛЮЧЕН (дублирует rtc_units_check_limits)
-        print("  ⚠️ units_state_operations: ОТКЛЮЧЕН (логика в units_increment.check_limits)")
+        # 2. check_limits — ПЕРЕД transition_ops!
+        # FIX 14.01.2026: check_limits устанавливает intent_state, transition_ops его проверяет
+        try:
+            import rtc_units_increment
+            rtc_units_increment.register_check_limits(model, agent, max_days)
+            modules_ok += 1
+        except Exception as e:
+            print(f"  ❌ units_check_limits: {e}")
+            modules_failed += 1
         
         # 2b. increment — ПЕРЕМЕЩЁН ПОСЛЕ assembly!
         # Пилот не полетит без двигателя — сначала комплектация, потом полёт.
@@ -378,14 +385,24 @@ class UnitsOrchestrator:
         
         # 11k. increment — ТЕПЕРЬ ПОСЛЕ всех 10 проходов assembly!
         # Сначала комплектация, потом полёт. Пилот не полетит без двигателя.
+        # FIX 14.01.2026: Используем register_increment (не register_rtc!)
         try:
             import rtc_units_increment
-            rtc_units_increment.register_rtc(model, agent, max_days)
+            rtc_units_increment.register_increment(model, agent, max_days)
             modules_ok += 1
             print(f"  ✅ units_increment: SNE/PPR рост ПОСЛЕ всех комплектаций")
         except Exception as e:
             print(f"  ❌ units_increment: {e}")
             modules_failed += 1
+        
+        # 11.5a. DEBUG: отладка очередей
+        try:
+            from debug_step import DebugQueueStepFunction
+            self.debug_queue_fn = DebugQueueStepFunction(interval=500, target_groups=[4])
+            model.addStepFunction(self.debug_queue_fn)
+            print(f"  🔍 DEBUG: DebugQueueStepFunction зарегистрирован")
+        except Exception as e:
+            print(f"  ⚠️ DEBUG: {e}")
         
         # 11.5. deficit_check — StepFunction для проверки дефицита планеров
         # Выполняется ПОСЛЕ assembly, записывает дефициты если планеры не укомплектованы
