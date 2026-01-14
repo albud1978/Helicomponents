@@ -102,7 +102,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_assign_svc_activate, flamegpu::MessageNone, fla
     }}
     
     // Получаем comp_per_planer
-    const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int>("comp_numbers", group_by);
+    // FIX 15.01.2026: Используем правильный API для PropertyArray
+    const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int, {MAX_GROUPS}>("comp_numbers", group_by);
     
     // Атомарно ищем и забираем запрос для нашей группы
     auto requests_arr = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mp_replacement_request");
@@ -302,7 +303,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_assign_rsv_activate, flamegpu::MessageNone, fla
     
     if (target_ac > 0u) {{
         // FIX: Проверяем и инкрементируем mp_planer_slots
-        const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int>("comp_numbers", group_by);
+        // FIX 15.01.2026: Используем правильный API для PropertyArray
+        const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int, {MAX_GROUPS}>("comp_numbers", group_by);
         
         unsigned int planer_idx = 0u;
         if (target_ac < {MAX_AC_NUMBER}u) {{
@@ -347,7 +349,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_assign_rsv_activate, flamegpu::MessageNone, fla
 """
 
 
-def get_rtc_code_spawn_check() -> str:
+def get_rtc_code_spawn_check(max_planers: int = 400, max_days: int = 3651) -> str:
     """
     CUDA код: Phase 1 — проверка условий для spawn (только чтение MP)
     
@@ -355,12 +357,12 @@ def get_rtc_code_spawn_check() -> str:
     1. Есть запросы (request_count > 0)
     2. Очередь serviceable пуста (svc_tail <= svc_head)
     3. Очередь reserve пуста (mp_rsv_count == 0)
+    4. Есть планер с дефицитом
     
-    FIX 14.01.2026: Используем mp_rsv_count вместо rsv_tail - rsv_head!
-    mp_rsv_count — точный счётчик свободных агентов в reserve:
-    - Инкрементируется в 4→5 когда агент входит в reserve
-    - Декрементируется в assembly когда агент назначается из reserve
+    FIX 14.01.2026: Ищет target_planer_idx и сохраняет в agent variable
     """
+    mp_slots_size = MAX_GROUPS * max_planers
+    history_size = max_planers * (max_days + 1)
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_check, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Функция привязана к state=reserve
@@ -392,33 +394,86 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_check, flamegpu::MessageNone, flamegpu::M
         return flamegpu::ALIVE;  // Есть свободные в serviceable — spawn не нужен
     }}
     
-    // FIX 14.01.2026: Используем mp_rsv_count — точный счётчик свободных в reserve!
-    // В отличие от rsv_tail - rsv_head, это реальное количество свободных агентов
+    // Проверяем reserve (mp_rsv_count)
     auto mp_rsv_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_count");
     if (mp_rsv_count[group_by] > 0u) {{
         return flamegpu::ALIVE;  // Есть свободные в reserve — spawn не нужен
     }}
     
-    // Очереди пусты, запросы есть — нужен spawn
+    // === Ищем планер с дефицитом (только чтение!) ===
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    // FIX 15.01.2026: Используем правильный API для PropertyArray
+    const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int, {MAX_GROUPS}>("comp_numbers", group_by);
+    
+    if (comp_per_planer == 0u) {{
+        return flamegpu::ALIVE;
+    }}
+    
+    auto mp_history = FLAMEGPU->environment.getMacroProperty<unsigned char, {history_size}u>("mp_planer_in_ops_history");
+    auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {mp_slots_size}u>("mp_planer_slots");
+    auto mp_planer_type = FLAMEGPU->environment.getMacroProperty<unsigned char, {max_planers}u>("mp_planer_type");
+    
+    // Определяем требуемый тип планера
+    unsigned char required_type = 0u;
+    if (group_by == 3u) {{
+        required_type = 1u;  // Mi-8
+    }} else if (group_by == 4u) {{
+        required_type = 2u;  // Mi-17
+    }}
+    
+    // Рандомизируем начало поиска
+    const unsigned int my_idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    unsigned int best_planer_idx = 0u;
+    unsigned int min_slots = comp_per_planer;
+    
+    for (unsigned int j = 0u; j < {max_planers}u; ++j) {{
+        unsigned int planer_idx = 1u + ((my_idx + j) % ({max_planers}u - 1u));
+        
+        // Проверяем тип планера
+        if (required_type > 0u) {{
+            if (mp_planer_type[planer_idx] != required_type) {{
+                continue;
+            }}
+        }}
+        
+        // Проверяем что планер в operations
+        unsigned int history_pos = step_day * {max_planers}u + planer_idx;
+        if (mp_history[history_pos] != 1u) {{
+            continue;
+        }}
+        
+        // Проверяем слоты
+        unsigned int slots_pos = group_by * {max_planers}u + planer_idx;
+        unsigned int current_slots = mp_slots[slots_pos];
+        
+        if (current_slots < min_slots) {{
+            min_slots = current_slots;
+            best_planer_idx = planer_idx;
+        }}
+    }}
+    
+    if (best_planer_idx == 0u) {{
+        return flamegpu::ALIVE;  // Нет планеров с дефицитом
+    }}
+    
+    // Нашли планер — spawn!
     FLAMEGPU->setVariable<unsigned int>("want_spawn", 1u);
+    FLAMEGPU->setVariable<unsigned int>("target_planer_idx", best_planer_idx);
     
     return flamegpu::ALIVE;
 }}
 """
 
 
-def get_rtc_code_spawn_activate(max_frames: int, max_planers: int = 400) -> str:
+def get_rtc_code_spawn_activate(max_frames: int, max_planers: int = 400, max_days: int = 3651) -> str:
     """
-    CUDA код: Phase 2 — активация spawn И НАЗНАЧЕНИЕ НА ПЛАНЕР
+    CUDA код: Phase 2 — активация spawn (ТОЛЬКО АТОМАРНЫЕ ЗАПИСИ!)
     Срабатывает для агентов с want_spawn=1
     
-    ВАЖНО: Spawn должен СРАЗУ назначать агрегат на планер!
-    Иначе возникает двойной декремент request_count.
-    
-    FIX 14.01.2026: Полностью переписано — spawn теперь работает как assign_svc
+    FIX 14.01.2026: Упрощённая версия — target_planer_idx передаётся из spawn_check.
+    Здесь только атомарные записи mp_slots и request_count.
     """
     mp_slots_size = MAX_GROUPS * max_planers
-    search_limit = min(2000, max_frames)
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_activate, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int want_spawn = FLAMEGPU->getVariable<unsigned int>("want_spawn");
@@ -431,87 +486,42 @@ FLAMEGPU_AGENT_FUNCTION(rtc_fifo_spawn_activate, flamegpu::MessageNone, flamegpu
     FLAMEGPU->setVariable<unsigned int>("want_spawn", 0u);
     
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int target_planer_idx = FLAMEGPU->getVariable<unsigned int>("target_planer_idx");
     
-    if (group_by >= {MAX_GROUPS}u) {{
+    if (group_by >= {MAX_GROUPS}u || target_planer_idx == 0u || target_planer_idx >= {max_planers}u) {{
         return flamegpu::ALIVE;
     }}
     
-    // === Атомарно ищем и забираем запрос для нашей группы ===
-    auto requests_arr = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mp_replacement_request");
-    auto req_groups = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mp_replacement_group");
-    auto request_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_request_count");
+    // FIX 15.01.2026: Используем правильный API для PropertyArray
+    const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int, {MAX_GROUPS}>("comp_numbers", group_by);
+    
+    // === Атомарно захватываем слот ===
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {mp_slots_size}u>("mp_planer_slots");
-    auto mp_ac_to_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_AC_NUMBER}u>("mp_ac_to_idx");
+    unsigned int slots_pos = group_by * {max_planers}u + target_planer_idx;
+    unsigned int old_count = mp_slots[slots_pos]++;
     
-    unsigned int target_ac = 0u;
-    unsigned int found_slot_idx = 0u;
-    
-    // Рандомизируем начало поиска
-    const unsigned int my_idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int start = my_idx % {search_limit}u;
-    
-    for (unsigned int j = 0u; j < {search_limit}u; ++j) {{
-        unsigned int i = (start + j) % {search_limit}u;
-        unsigned int old_ac = requests_arr[i].exchange(0u);
-        
-        if (old_ac > 0u) {{
-            unsigned int old_grp = req_groups[i].exchange(0u);
-            
-            if (old_grp == group_by) {{
-                target_ac = old_ac;
-                found_slot_idx = i;
-                break;
-            }} else {{
-                // Возвращаем обратно — не наша группа
-                requests_arr[i].exchange(old_ac);
-                req_groups[i].exchange(old_grp);
-            }}
-        }}
+    if (old_count >= comp_per_planer) {{
+        // Слот уже заполнен — откатываем
+        mp_slots[slots_pos]--;
+        return flamegpu::ALIVE;
     }}
     
-    if (target_ac == 0u) {{
-        return flamegpu::ALIVE;  // Не нашли запрос
-    }}
+    // === Успешно — активируем и назначаем на планер ===
+    auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_planers}u>("mp_idx_to_ac");
+    auto request_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_request_count");
     
-    // === Проверяем и инкрементируем mp_planer_slots ===
-    const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int>("comp_numbers", group_by);
+    unsigned int target_ac = mp_idx_to_ac[target_planer_idx];
+    request_count[group_by]--;
     
-    unsigned int planer_idx = 0u;
-    if (target_ac < {MAX_AC_NUMBER}u) {{
-        planer_idx = mp_ac_to_idx[target_ac];
-    }}
+    FLAMEGPU->setVariable<unsigned int>("active", 1u);
+    FLAMEGPU->setVariable<unsigned int>("aircraft_number", target_ac);
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // → operations
+    FLAMEGPU->setVariable<unsigned int>("queue_position", 0u);
     
-    bool slot_ok = false;
-    if (planer_idx > 0u && planer_idx < {max_planers}u) {{
-        unsigned int slots_pos = group_by * {max_planers}u + planer_idx;
-        unsigned int old_count = mp_slots[slots_pos]++;
-        
-        if (old_count < comp_per_planer) {{
-            slot_ok = true;  // Успешно захватили слот
-        }} else {{
-            // Слот уже заполнен — откатываем
-            mp_slots[slots_pos] -= 1u;
-        }}
-    }}
-    
-    if (slot_ok) {{
-        // === Успешно — активируем и назначаем на планер ===
-        request_count[group_by] -= 1u;
-        
-        FLAMEGPU->setVariable<unsigned int>("active", 1u);
-        FLAMEGPU->setVariable<unsigned int>("aircraft_number", target_ac);
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // → operations
-        FLAMEGPU->setVariable<unsigned int>("queue_position", 0u);
-        
-        // Новый агрегат — нулевые наработки
-        FLAMEGPU->setVariable<unsigned int>("sne", 0u);
-        FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
-        FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
-    }} else {{
-        // Слот не захвачен — возвращаем запрос обратно
-        requests_arr[found_slot_idx].exchange(target_ac);
-        req_groups[found_slot_idx].exchange(group_by);
-    }}
+    // Новый агрегат — нулевые наработки
+    FLAMEGPU->setVariable<unsigned int>("sne", 0u);
+    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+    FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
     
     return flamegpu::ALIVE;
 }}
@@ -583,12 +593,12 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription,
     fn_rsv_activate.setEndState("reserve")
     
     # === 3. Spawn — двухфазный (Phase 1: check, Phase 2: activate) ===
-    rtc_spawn_check = get_rtc_code_spawn_check()
+    rtc_spawn_check = get_rtc_code_spawn_check(max_planers=400, max_days=max_days)
     fn_spawn_check = agent.newRTCFunction("rtc_fifo_spawn_check", rtc_spawn_check)
     fn_spawn_check.setInitialState("reserve")
     fn_spawn_check.setEndState("reserve")
     
-    rtc_spawn_activate = get_rtc_code_spawn_activate(max_frames)  # FIX: передаём max_frames
+    rtc_spawn_activate = get_rtc_code_spawn_activate(max_frames, max_planers=400, max_days=max_days)
     fn_spawn_activate = agent.newRTCFunction("rtc_fifo_spawn_activate", rtc_spawn_activate)
     fn_spawn_activate.setInitialState("reserve")
     fn_spawn_activate.setEndState("reserve")  # Остаётся в reserve, переход через transition_reserve

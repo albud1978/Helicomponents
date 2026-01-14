@@ -135,9 +135,17 @@ class V2BaseModelUnits:
         # === Обратный маппинг: planer_idx → aircraft_number ===
         self.env.newMacroPropertyUInt32("mp_idx_to_ac", MAX_PLANERS)
         
-        # === Флаг: планер в operations (для assembly) ===
+        # === Флаг: планер в operations (для assembly, день 0) ===
         # mp_planer_in_ops[planer_idx] = 1 если планер в operations, 0 иначе
         self.env.newMacroPropertyUInt8("mp_planer_in_ops", MAX_PLANERS)
+        
+        # === ИСТОРИЯ: планер в operations по всем дням ===
+        # mp_planer_in_ops_history[day * MAX_PLANERS + planer_idx] = 1/0
+        # Используется для детекции ВЫХОДА планера из operations:
+        #   - Когда планер уходит из ops — агрегаты отцепляются → serviceable
+        planer_ops_history_size = MAX_PLANERS * (max_days + 1)
+        self.env.newMacroPropertyUInt8("mp_planer_in_ops_history", planer_ops_history_size)
+        print(f"  mp_planer_in_ops_history: {planer_ops_history_size:,} элементов ({MAX_PLANERS} x {max_days+1})")
         
         # === Тип планера (для проверки соответствия с типом двигателя) ===
         # mp_planer_type[planer_idx] = 1 (Mi-8) или 2 (Mi-17)
@@ -243,6 +251,7 @@ class V2BaseModelUnits:
         agent.newVariableUInt("transition_3_to_2", 0)   # serviceable → operations
         agent.newVariableUInt("transition_4_to_5", 0)   # repair → reserve
         agent.newVariableUInt("transition_5_to_2", 0)   # reserve → operations
+        agent.newVariableUInt("transition_planer_exit", 0)  # operations → serviceable (планер ушёл из ops)
         
         return agent
     

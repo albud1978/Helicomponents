@@ -33,15 +33,17 @@ class InitPlanerDtHostFunction(fg.HostFunction):
     def __init__(self, dt_array: np.ndarray, ac_to_idx: Dict[int, int], 
                  max_days: int = 3651, assembly_array: Optional[np.ndarray] = None,
                  planer_in_ops: Optional[Dict[int, int]] = None,
-                 planer_type: Optional[Dict[int, int]] = None):
+                 planer_type: Optional[Dict[int, int]] = None,
+                 planer_in_ops_history: Optional[np.ndarray] = None):
         """
         Args:
             dt_array: numpy массив dt значений [day * MAX_PLANERS + planer_idx]
             ac_to_idx: словарь {aircraft_number: planer_idx}
             max_days: максимальное количество дней
             assembly_array: numpy массив assembly_trigger значений (0 или 1)
-            planer_in_ops: словарь {planer_idx: 1} для планеров в operations
+            planer_in_ops: словарь {planer_idx: 1} для планеров в operations (день 0)
             planer_type: словарь {planer_idx: type (1=Mi-8, 2=Mi-17)}
+            planer_in_ops_history: numpy массив [day * MAX_PLANERS + planer_idx] = 0/1 (вся история)
         """
         super().__init__()
         self.dt_array = dt_array
@@ -52,6 +54,7 @@ class InitPlanerDtHostFunction(fg.HostFunction):
         self.assembly_array = assembly_array
         self.planer_in_ops = planer_in_ops or {}
         self.planer_type = planer_type or {}  # planer_idx → type (1=Mi-8, 2=Mi-17)
+        self.planer_in_ops_history = planer_in_ops_history  # NEW: полная история
         self.initial_slots = {}  # (group_by, planer_idx) -> count, устанавливается позже
         self.initialized = False
     
@@ -199,6 +202,25 @@ class InitPlanerDtHostFunction(fg.HostFunction):
         else:
             print(f"     ⚠️ planer_type пуст, проверка соответствия типов отключена")
         
+        # === 7. Загрузка mp_planer_in_ops_history (полная история состояний планеров) ===
+        # Используется для детекции ВЫХОДА планера из operations
+        if self.planer_in_ops_history is not None and len(self.planer_in_ops_history) > 0:
+            try:
+                mp_history = FLAMEGPU.environment.getMacroPropertyUInt8("mp_planer_in_ops_history")
+                
+                # Загружаем только единицы
+                ops_count = 0
+                for i, val in enumerate(self.planer_in_ops_history):
+                    if val > 0:
+                        mp_history[i] = 1
+                        ops_count += 1
+                
+                print(f"     mp_planer_in_ops_history: {ops_count:,} записей operations")
+            except Exception as e:
+                print(f"     ⚠️ Ошибка mp_planer_in_ops_history: {e}")
+        else:
+            print(f"     ⚠️ planer_in_ops_history пуст, детекция выхода из operations отключена")
+        
         self.initialized = True
         print(f"  ✅ InitPlanerDt: Инициализация завершена")
 
@@ -209,9 +231,10 @@ def register_init_planer_dt(model: fg.ModelDescription,
                             max_days: int = 3651,
                             assembly_array: Optional[np.ndarray] = None,
                             planer_in_ops: Optional[Dict[int, int]] = None,
-                            planer_type: Optional[Dict[int, int]] = None) -> InitPlanerDtHostFunction:
+                            planer_type: Optional[Dict[int, int]] = None,
+                            planer_in_ops_history: Optional[np.ndarray] = None) -> InitPlanerDtHostFunction:
     """
-    Регистрирует InitFunction для загрузки dt планеров, assembly_trigger, planer_in_ops и planer_type
+    Регистрирует InitFunction для загрузки dt планеров, assembly_trigger, planer_in_ops, planer_type и истории operations
     
     Args:
         model: описание модели FLAME GPU
@@ -219,13 +242,14 @@ def register_init_planer_dt(model: fg.ModelDescription,
         ac_to_idx: маппинг aircraft_number → planer_idx
         max_days: максимальное количество дней
         assembly_array: массив assembly_trigger значений (0 или 1)
-        planer_in_ops: Dict[planer_idx → 1] для планеров в operations
+        planer_in_ops: Dict[planer_idx → 1] для планеров в operations (день 0)
         planer_type: Dict[planer_idx → type (1=Mi-8, 2=Mi-17)]
+        planer_in_ops_history: массив [day * MAX_PLANERS + planer_idx] = 0/1 (полная история)
     
     Returns:
         InitPlanerDtHostFunction для возможного повторного использования
     """
-    hf = InitPlanerDtHostFunction(dt_array, ac_to_idx, max_days, assembly_array, planer_in_ops, planer_type)
+    hf = InitPlanerDtHostFunction(dt_array, ac_to_idx, max_days, assembly_array, planer_in_ops, planer_type, planer_in_ops_history)
     
     # Создаём слой инициализации (должен быть первым!)
     init_layer = model.newLayer("layer_init_planer_dt")

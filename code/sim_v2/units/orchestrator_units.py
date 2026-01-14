@@ -89,16 +89,17 @@ class UnitsOrchestrator:
         self.env_data = population_builder.load_data()
         self.population_builder = population_builder
         
-        # Загрузка dt, assembly_trigger, planer_in_ops и planer_type планеров для интеграции
+        # Загрузка dt, assembly_trigger, planer_in_ops, planer_type и planer_in_ops_history планеров
         try:
             from planer_dt_loader import load_planer_data
-            dt_array, assembly_array, ac_to_idx, planer_in_ops, planer_type = load_planer_data(str(self.version_date), self.version_id)
+            dt_array, assembly_array, ac_to_idx, planer_in_ops, planer_type, planer_in_ops_history = load_planer_data(str(self.version_date), self.version_id)
             if dt_array is not None:
                 self.env_data['planer_dt_array'] = dt_array
                 self.env_data['ac_to_idx'] = ac_to_idx
                 self.env_data['planer_assembly_array'] = assembly_array
                 self.env_data['planer_in_ops'] = planer_in_ops
                 self.env_data['planer_type'] = planer_type
+                self.env_data['planer_in_ops_history'] = planer_in_ops_history
                 print(f"   ✅ Загружено dt {len(ac_to_idx)} планеров, {len(planer_in_ops)} в ops")
                 if assembly_array is not None:
                     print(f"   ✅ Загружено assembly_trigger: {assembly_array.sum()} записей")
@@ -106,6 +107,9 @@ class UnitsOrchestrator:
                     mi8 = sum(1 for t in planer_type.values() if t == 1)
                     mi17 = sum(1 for t in planer_type.values() if t == 2)
                     print(f"   ✅ Загружено planer_type: Mi-8={mi8}, Mi-17={mi17}")
+                if planer_in_ops_history is not None:
+                    ops_history_sum = planer_in_ops_history.sum()
+                    print(f"   ✅ Загружено planer_in_ops_history: {ops_history_sum:,} записей")
         except Exception as e:
             print(f"   ⚠️ Не удалось загрузить данные планеров: {e}")
             import traceback
@@ -114,6 +118,7 @@ class UnitsOrchestrator:
             self.env_data['ac_to_idx'] = {}
             self.env_data['planer_assembly_array'] = None
             self.env_data['planer_type'] = {}
+            self.env_data['planer_in_ops_history'] = None
         
         # Количество компонентов на планер по group_by (для assembly)
         # Данные из анализа: group_by=6 (лопасти) = 5, остальные в основном 1
@@ -171,7 +176,7 @@ class UnitsOrchestrator:
         modules_ok = 0
         modules_failed = 0
         
-        # 0. InitPlanerDt — загрузка dt, assembly_trigger, planer_in_ops, planer_type и initial_slots в MacroProperty (ПЕРВЫМ!)
+        # 0. InitPlanerDt — загрузка dt, assembly_trigger, planer_in_ops, planer_type, history и initial_slots в MacroProperty (ПЕРВЫМ!)
         self.init_planer_dt_fn = None
         try:
             from init_planer_dt import register_init_planer_dt
@@ -180,20 +185,48 @@ class UnitsOrchestrator:
             assembly_array = self.env_data.get('planer_assembly_array')
             planer_in_ops = self.env_data.get('planer_in_ops', {})
             planer_type = self.env_data.get('planer_type', {})
+            planer_in_ops_history = self.env_data.get('planer_in_ops_history')
             if dt_array is not None and len(ac_to_idx) > 0:
                 self.init_planer_dt_fn = register_init_planer_dt(
                     model, dt_array, ac_to_idx, max_days, 
-                    assembly_array, planer_in_ops, planer_type
+                    assembly_array, planer_in_ops, planer_type, planer_in_ops_history
                 )
                 modules_ok += 1
                 assembly_count = assembly_array.sum() if assembly_array is not None else 0
                 mi8 = sum(1 for t in planer_type.values() if t == 1)
                 mi17 = sum(1 for t in planer_type.values() if t == 2)
-                print(f"  ✅ init_planer_dt: {len(ac_to_idx)} планеров, dt_size={len(dt_array):,}, assembly={assembly_count:,}, in_ops={len(planer_in_ops)}, types=Mi8:{mi8}/Mi17:{mi17}")
+                history_count = planer_in_ops_history.sum() if planer_in_ops_history is not None else 0
+                print(f"  ✅ init_planer_dt: {len(ac_to_idx)} планеров, dt_size={len(dt_array):,}, assembly={assembly_count:,}, in_ops={len(planer_in_ops)}, types=Mi8:{mi8}/Mi17:{mi17}, history={history_count:,}")
             else:
                 print(f"  ⚠️ init_planer_dt: нет данных, будет fallback 90 мин/день")
         except Exception as e:
             print(f"  ❌ init_planer_dt: {e}")
+            import traceback
+            traceback.print_exc()
+            modules_failed += 1
+        
+        # 0.5 planer_exit — детекция выхода планера из operations
+        # ПЕРЕД states_stub! Если планер ушёл из ops → агрегат отцепляется → serviceable
+        try:
+            import rtc_units_planer_exit
+            rtc_units_planer_exit.register_rtc(model, agent, max_days)
+            modules_ok += 1
+        except Exception as e:
+            print(f"  ❌ units_planer_exit: {e}")
+            import traceback
+            traceback.print_exc()
+            modules_failed += 1
+        
+        # 0.6 demand_host — расчёт дефицита и установка mp_request_count
+        # ВАЖНО: Независимо от наличия агрегатов в serviceable!
+        try:
+            from rtc_units_demand_host import register_demand_host
+            comp_numbers = self.env_data.get('comp_numbers', {3: 2, 4: 2})
+            comp_dict = {i: v for i, v in enumerate(comp_numbers)} if isinstance(comp_numbers, list) else comp_numbers
+            register_demand_host(model, comp_dict, target_groups=[3, 4])
+            modules_ok += 1
+        except Exception as e:
+            print(f"  ❌ demand_host: {e}")
             import traceback
             traceback.print_exc()
             modules_failed += 1

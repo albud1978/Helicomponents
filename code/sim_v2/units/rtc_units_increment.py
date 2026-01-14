@@ -145,16 +145,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_check_limits, flamegpu::MessageNone, flamegpu:
     // ppr >= oh работает одинаково для всех агрегатов включая лопасти
     // После ремонта/продления ppr обнуляется (подтверждено данными: PPR=NULL после shop_visit)
     bool needs_repair = (oh > 0u && ppr >= oh);
-    // FIX: storage только если LL строго больше OH (иначе repair имеет приоритет)
-    // Это важно для лопастей где ll=120000=oh — они должны идти в repair, не в storage
-    bool needs_storage = (ll > 0u && sne >= ll && ll > oh) || (br > 0u && sne >= br);
+    // FIX 14.01.2026: storage только если:
+    // 1. SNE >= LL (ресурс полностью исчерпан)
+    // 2. ИЛИ PPR >= OH AND SNE >= BR (нужен ремонт, но уже неремонтопригоден)
+    // ВАЖНО: Без ppr >= oh агрегаты с SNE >= BR уходили в storage преждевременно!
+    bool needs_storage = (ll > 0u && sne >= ll && ll > oh) || (needs_repair && br > 0u && sne >= br);
     
     // FIX: Приоритет: repair > storage (можно ещё раз продлить ресурс)
+    // FIX 14.01.2026: Не перезаписываем intent_state=3 от planer_exit!
+    const unsigned int current_intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
+    
     if (needs_repair) {{
         FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
     }} else if (needs_storage) {{
         FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
-    }} else {{
+    }} else if (current_intent != 3u) {{
+        // Только если planer_exit не установил intent=3 (→serviceable)
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
     }}
     
