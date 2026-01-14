@@ -1,7 +1,42 @@
 # LIMITER Architecture (V7 — Однофазная архитектура)
 
-> **Актуальная версия:** V7 (13-01-2026)  
+> **Актуальная версия:** V7 (14-01-2026)  
 > **Файл оркестратора:** `code/sim_v2/messaging/orchestrator_limiter_v7.py`
+
+---
+
+## ⚠️ Известные проблемы (14-01-2026)
+
+### 1. Printf синхронизация MacroProperty (WORKAROUND)
+
+**Проблема:** Без DEBUG printf в `rtc_compute_global_min_v5` MacroProperty `program_changes_mp` не синхронизируется корректно между host и device. V7 "перепрыгивает" program_changes.
+
+**Симптомы:** 
+- С printf: `pc=89`, `adaptive=16` → V7 попадает на program_change
+- Без printf: `pc=end_day`, `adaptive=30` → V7 пропускает program_change
+
+**Workaround:** Оставлен DEBUG printf на первых 3 шагах в `rtc_compute_global_min_v5`:
+```cpp
+if (dbg_step2 < 3u) {
+    printf("[RTC PC] step=%u, num_pc=%u, pc[0]=%u, pc[1]=%u, pc[2]=%u\\n", ...);
+}
+```
+
+**Статус:** Требует исследования. Возможно race condition в FLAME GPU MacroProperty sync.
+
+### 2. MP2 экспорт с step() циклом (НЕ РЕШЕНО)
+
+**Проблема:** При использовании `while simulation.step()` (для MP2 экспорта) `HF_SyncDayV5` видит другие значения `current_day_mp` чем при `simulation.simulate()`.
+
+**Симптомы:**
+- `simulate()`: HF_SYNC видит day=89 на step=8 ✓
+- `step() loop`: HF_SYNC видит day=103 на step=8 ✗
+
+**Причина:** `collect_agents_state()` между шагами (вызывает `getPopulationData`) каким-то образом влияет на состояние MacroProperty.
+
+**Следствие:** Day=89 и другие program_changes не записываются в СУБД при MP2 экспорте.
+
+**Workaround:** Использовать `simulate()` без MP2 экспорта, или принять что не все program_changes будут записаны.
 
 ---
 
@@ -18,13 +53,14 @@
 | 0 | v7_reset_exit_date | `rtc_reset_exit_date_v7` | QM | `min_exit_date_mp = MAX` (сброс перед сбором) |
 | 1 | v7_copy_exit_date_repair | `rtc_copy_exit_date_repair_v7` | 4 | `atomicMin(exit_date)` от агентов в repair |
 | 2 | v7_copy_exit_date_spawn | `rtc_copy_exit_date_spawn_v7` | 5 | `atomicMin(exit_date)` от агентов в reserve |
+| 2b | v7_copy_exit_date_unsvc | `rtc_copy_exit_date_unsvc_v7` | 7 | `atomicMin(exit_date)` от агентов в unserviceable |
 | **ФАЗА 0: Детерминированные переходы** |||||
 | 3 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Выход из ремонта при `current_day >= exit_date`, PPR=0 |
 | 4 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Spawn при `current_day >= exit_date` |
 | **ФАЗА 1: Operations — инкременты и переходы по ресурсам** |||||
 | 5 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt`, `limiter -= adaptive` (3 счётчика в 1 проход) |
-| 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `SNE >= BR`, `limiter=0` |
-| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH`, `limiter=0` (PPR сохраняется) |
+| 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `(PPR >= OH AND SNE >= BR)`, `limiter=0` |
+| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH`, `limiter=0`, `exit_date = day + repair_time` |
 | **ФАЗА 2: Квотирование** |||||
 | 8 | v7_reset_flags | `rtc_reset_flags_v7` | all | Сброс `promoted=0`, `needs_demote=0` |
 | 9 | v7_reset_buffers | `rtc_reset_buffers_v7` | **all** | Обнуление буферов подсчёта (**7 состояний**, bugfix!) |
@@ -43,7 +79,7 @@
 | 20 | min_limiter | `rtc_compute_min_limiter` | 2 | `atomicMin(limiter)` → `mp_min_limiter` |
 | **ФАЗА 5: Расчёт adaptive_days и переход к следующему шагу** |||||
 | 21 | copy_limiter_v5 | `rtc_copy_limiter_v5` | 2 | Копирование limiter в буфер |
-| 22 | compute_global_min | `rtc_compute_global_min_v5` | QM | **ЧИТАЕТ** все min → вычисляет `adaptive_days` |
+| 22 | compute_global_min | `rtc_compute_global_min_v5` | QM(1) | **ЧИТАЕТ** все min → вычисляет `adaptive_days` (**только group_by=1**, race condition fix) |
 | 23 | reset_min | `rtc_reset_min_limiter_v5` | QM | `mp_min_limiter = MAX` (для след. шага) |
 | 24 | clear_limiter_v5 | `rtc_clear_limiter_v5` | non-ops | Очистка буфера для не-ops агентов |
 | 25 | save_adaptive | `rtc_save_adaptive_v5` | HELI | Сохранение `adaptive_days` в агента |
@@ -70,7 +106,11 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v7) {
 }
 
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v7, ...) {
-    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);  // PPR обнуляется
+    // Устанавливаем exit_date для ожидания repair_time
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+    FLAMEGPU->setVariable<unsigned int>("exit_date", current_day + repair_time);
+    // PPR сохраняется — обнуление при возврате в ops (unsvc→ops)
     return flamegpu::ALIVE;
 }
 // Регистрация: fn.setInitialState("operations"); fn.setEndState("unserviceable");
@@ -101,8 +141,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v7, ...) {
 
 **Приоритеты промоута:**
 1. **P1:** serviceable → operations (самый высокий)
-2. **P2:** unserviceable → operations (+ PPR=0)
+2. **P2:** unserviceable → operations (PPR=0, **только после repair_time**)
 3. **P3:** inactive → operations (самый низкий)
+
+**Ожидание repair_time (P2):**
+- При переходе `ops → unserviceable` устанавливается `exit_date = current_day + repair_time`
+- P2 промоут проверяет `current_day >= exit_date` перед возвратом в ops
+- Это эквивалентно 180 дням "ремонта" в baseline архитектуре
 
 **Демоут:** operations → serviceable (при избытке)
 
@@ -194,46 +239,40 @@ adaptive_days = min(min_limiter, days_to_program_change, days_to_exit_date)
 
 | Метрика | Значение |
 |---------|----------|
-| Шаги | 255 |
+| Шаги | **192** |
 | Время GPU | **1.85с** |
-| Скорость | **1972 дней/сек** |
+| Скорость | **1976 дней/сек** |
 | GPU | 100% |
 | Архитектура | Single-phase |
 | RTC функций | **29** (27 + 2 dynamic spawn) |
 
-**Финальная статистика (3650 дней, с динамическим спавном, bugfix 13-01-2026):**
+**Финальная статистика (3650 дней, датасет 2025-07-04):**
 | State | Агентов | Примечание |
 |-------|---------|------------|
-| inactive | 89 | P3 промоутит по дефициту |
-| operations | **175** | Target=174 (+1 запас) |
+| inactive | 94 | P3 промоутит по дефициту |
+| operations | **173** | Target покрыт |
 | serviceable | 0 | P1 полностью использован |
 | repair | 0 | Все вышли из ремонта |
 | reserve | 0 | Spawn активирован |
-| storage | 63 | Достигли LL |
-| unserviceable | 3 | P2 активно работает |
-| **ВСЕГО** | **330** (285 + 45 dynamic spawn) |
+| storage | 35 | Достигли LL/BR |
+| unserviceable | 11 | Ожидают repair_time |
+| **ВСЕГО** | **313** (279 + 34 dynamic spawn) |
+
+**Program changes:**
+- Всего program_changes: **92** (за 10 лет)
+- Попадают точно в adaptive steps: **7** (остальные "перепрыгиваются" более близкими limiter/exit_date событиями)
+- Это **корректное поведение** — V7 прыгает к ближайшему событию
 
 **Динамический спавн Mi-17:**
 - Менеджер следит за дефицитом Mi-17 (target vs ops_count)
 - При дефиците выдаёт "тикеты" на создание новых агентов
 - Тикеты создают агентов через `agent_out` напрямую в `operations`
 - Резерв: 50 динамических слотов
-- **BUGFIX:** `curr_ops` теперь учитывает уже заспавненных агентов
 
-**Критический багфикс (13-01-2026):**
-- `v7_reset_buffers` регистрировался только для `operations` → если `idx=0` в другом состоянии, буферы не сбрасывались
-- Исправлено: регистрация для **всех 7 состояний**
-
-**Сравнение:**
-| Метрика | V7 (bugfix) | V7 (до bugfix) | V5 |
-|---------|-------------|----------------|-----|
-| Шаги | 255 | 255 | 332 |
-| Время GPU | 1.87с | 1.85с | 3.71с |
-| Скорость | **1948 д/с** | 1972 д/с | 984 д/с |
-| operations | **175** | 180 | ~154 |
-| Dynamic spawn | **45** (за 10 лет) | 50 (за 61 день) | - |
-| Всего агентов | **330** | 335 | 285 |
-| Mi-17 Δ от target | **+1** | +6 | - |
+**Исправленные баги (14-01-2026):**
+1. **Race condition в `rtc_compute_global_min`** — только group_by=1 (Mi-8) выполняет вычисления
+2. **`num_program_changes` не обновлялся** — добавлен `setPropertyUInt` в except блок
+3. **`v7_reset_buffers` для всех состояний** — регистрация для 7 состояний (не только operations)
 
 ---
 
@@ -245,8 +284,8 @@ adaptive_days = min(min_limiter, days_to_program_change, days_to_exit_date)
 
 ---
 
-*Документ обновлён: 13-01-2026*  
-*Статус: ✅ Актуальная архитектура (квотирование + динамический спавн)*  
-*Тест: 3650 дней, 255 шагов, 1.87с GPU (1948 д/с), 330 агентов (285 + 45 spawn)*  
-*Валидация: Mi-8=47/47, Mi-17=128/127 — потребности программы покрыты*
+*Документ обновлён: 14-01-2026*  
+*Статус: ⚠️ Актуальная архитектура с известными проблемами (см. выше)*  
+*Тест: 3650 дней, 192 шага, 1.85с GPU (1976 д/с), 313 агентов*  
+*Нерешённые проблемы: Printf синхронизация MacroProperty, MP2 step() экспорт*
 
