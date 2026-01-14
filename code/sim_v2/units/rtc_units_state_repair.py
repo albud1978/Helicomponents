@@ -104,6 +104,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_apply_4_to_5_with_queue, flamegpu::MessageNone
         auto mp_rsv_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_tail");
         unsigned int my_pos = mp_rsv_tail[group_by]++;  // atomicAdd, возвращает старое значение
         FLAMEGPU->setVariable<unsigned int>("queue_position", my_pos);
+        
+        // FIX 14.01.2026: Инкрементируем mp_rsv_count (точный счётчик свободных в reserve)
+        auto mp_rsv_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_count");
+        mp_rsv_count[group_by] += 1u;
     }} else {{
         FLAMEGPU->setVariable<unsigned int>("queue_position", 0u);
     }}
