@@ -29,17 +29,19 @@ def get_rtc_code_assembly_check(max_planers: int, max_days: int) -> str:
     """
     CUDA код: Phase 1 — поиск планеров с запросом на комплектацию
     
-    Комплектация по двум условиям:
-    1. assembly_trigger=1 (явный ONE-SHOT из sim_masterv2 — выход из ремонта)
-    2. ИЛИ mp_request_count[group] > 0 И dt > 0 (запрос на замену И планер летает)
+    Комплектация по условию:
+    - Планер в operations (mp_planer_in_ops_history = 1)
+    - И недоукомплектован (slots < comp_per_planer)
+    
+    FIX 14.01.2026: Убрана проверка dt > 0!
+    ВС в operations с dt=0 — это дежурство, они тоже должны быть укомплектованы.
     
     ВАЖНО: Проверка соответствия типов двигателей и планеров:
     - group_by=3 (ТВ2-117) → только для Mi-8 (planer_type=1)
     - group_by=4 (ТВ3-117) → только для Mi-17 (planer_type=2)
     """
     mp_slots_size = MAX_GROUPS * max_planers
-    mp_assembly_size = max_planers * (max_days + 1)
-    mp_dt_size = max_planers * (max_days + 1)
+    mp_history_size = max_planers * (max_days + 1)
     return f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_assembly_check, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Проверяем, можем ли мы участвовать в комплектации
@@ -57,18 +59,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_assembly_check, flamegpu::MessageNone, flamegpu::Mes
     }}
     
     // Получаем количество агрегатов на планер для этой группы
-    const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int>("comp_numbers", group_by);
+    // FIX 15.01.2026: Используем правильный API для PropertyArray
+    // В FLAME GPU 2: getProperty<Type, ArraySize>("name", index)
+    const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int, {MAX_GROUPS}>("comp_numbers", group_by);
     
     if (comp_per_planer == 0u) {{
         return flamegpu::ALIVE;  // Эта группа не ставится на планеры
     }}
     
     const unsigned int step_day = FLAMEGPU->getStepCounter();
-    const unsigned int psn = FLAMEGPU->getVariable<unsigned int>("psn");
     
     // MacroProperties для проверки условий
-    auto mp_assembly = FLAMEGPU->environment.getMacroProperty<unsigned char, {mp_assembly_size}u>("mp_planer_assembly");
-    auto mp_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {mp_dt_size}u>("mp_planer_dt");
+    auto mp_history = FLAMEGPU->environment.getMacroProperty<unsigned char, {mp_history_size}u>("mp_planer_in_ops_history");
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {mp_slots_size}u>("mp_planer_slots");
     auto mp_planer_type = FLAMEGPU->environment.getMacroProperty<unsigned char, {max_planers}u>("mp_planer_type");
     
@@ -99,10 +101,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_assembly_check, flamegpu::MessageNone, flamegpu::Mes
             }}
         }}
         
-        // Условие: планер летает (dt > 0) — ОБЯЗАТЕЛЬНО!
-        unsigned int has_dt = mp_dt[pos];
-        if (has_dt == 0u) {{
-            continue;  // Планер не летает сегодня — нет комплектации
+        // FIX 14.01.2026: Проверяем что планер в operations (не dt!)
+        // ВС в ops с dt=0 — это дежурство, они тоже должны быть укомплектованы
+        unsigned char in_ops = mp_history[pos];
+        if (in_ops == 0u) {{
+            continue;  // Планер НЕ в operations — нет комплектации
         }}
         
         // Проверяем количество слотов
@@ -177,7 +180,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_assembly_activate, flamegpu::MessageNone, flamegpu::
     }}
     
     // Получаем comp_per_planer
-    const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int>("comp_numbers", group_by);
+    // FIX 15.01.2026: Используем правильный API для PropertyArray
+    const unsigned int comp_per_planer = FLAMEGPU->environment.getProperty<unsigned int, {MAX_GROUPS}>("comp_numbers", group_by);
     
     // Атомарно увеличиваем счётчик слотов
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {mp_slots_size}u>("mp_planer_slots");

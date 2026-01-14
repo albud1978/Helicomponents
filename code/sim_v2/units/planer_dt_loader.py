@@ -360,6 +360,64 @@ def load_planer_in_ops_from_sim(version_date: str, version_id: int = 1, ac_to_id
     return planer_in_ops
 
 
+def load_planer_in_ops_history_from_sim(version_date: str, version_id: int = 1, ac_to_idx: Dict[int, int] = None) -> Optional[np.ndarray]:
+    """
+    Загружает ПОЛНУЮ ИСТОРИЮ состояний планеров из sim_masterv2.
+    
+    Формат: planer_in_ops_array[day * MAX_PLANERS + planer_idx] = 1 если в operations, 0 иначе
+    
+    Используется для детекции выхода планера из operations:
+    - Когда планер уходит из operations — агрегаты на нём отцепляются и идут в serviceable
+    
+    Returns:
+        planer_in_ops_array: np.ndarray shape (MAX_DAYS * MAX_PLANERS,) — 0 или 1
+    """
+    if ac_to_idx is None or len(ac_to_idx) == 0:
+        print("   ⚠️ ac_to_idx пуст, невозможно загрузить planer_in_ops_history")
+        return None
+    
+    client = get_clickhouse_client()
+    
+    from datetime import date
+    if isinstance(version_date, str):
+        vd = date.fromisoformat(version_date)
+        version_date_int = (vd - date(1970, 1, 1)).days
+    else:
+        version_date_int = version_date
+    
+    # Загружаем ВСЕ состояния планеров (когда они в operations)
+    ops_sql = """
+    SELECT day_u16, aircraft_number
+    FROM sim_masterv2
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND group_by IN (1, 2)
+      AND state = 'operations'
+    ORDER BY day_u16, aircraft_number
+    """
+    
+    ops_data = client.execute(ops_sql, {
+        'version_date': version_date_int,
+        'version_id': version_id
+    })
+    
+    # Инициализируем массив нулями
+    planer_in_ops_array = np.zeros(MAX_DAYS * MAX_PLANERS, dtype=np.uint8)
+    
+    # Заполняем
+    for row in ops_data:
+        day_idx, ac_num = row[0], row[1]
+        if ac_num in ac_to_idx and day_idx < MAX_DAYS:
+            planer_idx = ac_to_idx[ac_num]
+            pos = day_idx * MAX_PLANERS + planer_idx
+            planer_in_ops_array[pos] = 1
+    
+    ops_count = np.sum(planer_in_ops_array)
+    print(f"   ✅ Загружено {len(ops_data)} записей planer_in_ops_history (всего: {ops_count})")
+    
+    return planer_in_ops_array
+
+
 def load_planer_type_from_sim(version_date: str, version_id: int = 1, ac_to_idx: Dict[int, int] = None) -> Dict[int, int]:
     """
     Загружает тип планера (Mi-8=1, Mi-17=2) из sim_masterv2
@@ -417,7 +475,7 @@ def load_planer_type_from_sim(version_date: str, version_id: int = 1, ac_to_idx:
     return planer_type
 
 
-def load_planer_data(version_date: str, version_id: int = 1) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Dict[int, int], Dict[int, int], Dict[int, int]]:
+def load_planer_data(version_date: str, version_id: int = 1) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Dict[int, int], Dict[int, int], Dict[int, int], Optional[np.ndarray]]:
     """
     Полная загрузка данных планеров для симуляции агрегатов
     
@@ -425,8 +483,9 @@ def load_planer_data(version_date: str, version_id: int = 1) -> Tuple[Optional[n
         dt_array: массив dt[day * MAX_PLANERS + planer_idx]
         assembly_array: массив assembly_trigger[day * MAX_PLANERS + planer_idx] (0 или 1)
         ac_to_idx: маппинг aircraft_number → planer_idx
-        planer_in_ops: Dict[planer_idx → 1] для планеров в operations
+        planer_in_ops: Dict[planer_idx → 1] для планеров в operations (день 0)
         planer_type: Dict[planer_idx → type (1=Mi-8, 2=Mi-17)]
+        planer_in_ops_history: массив [day * MAX_PLANERS + planer_idx] = 0/1 (история по всем дням)
     """
     print("📊 Загрузка данных планеров...")
     
@@ -434,18 +493,21 @@ def load_planer_data(version_date: str, version_id: int = 1) -> Tuple[Optional[n
     dt_array, ac_to_idx = load_planer_dt(version_date, version_id)
     
     if dt_array is None:
-        return None, None, {}, {}, {}
+        return None, None, {}, {}, {}, None
     
     # Загружаем assembly_trigger
     assembly_array = load_assembly_trigger_from_sim(version_date, version_id, ac_to_idx)
     
-    # Загружаем planer_in_ops (для assembly)
+    # Загружаем planer_in_ops (для assembly — только день 0)
     planer_in_ops = load_planer_in_ops_from_sim(version_date, version_id, ac_to_idx)
     
     # Загружаем тип планера (для проверки соответствия типов двигателей)
     planer_type = load_planer_type_from_sim(version_date, version_id, ac_to_idx)
     
-    return dt_array, assembly_array, ac_to_idx, planer_in_ops, planer_type
+    # NEW: Загружаем ПОЛНУЮ историю состояний планеров (для детекции выхода из operations)
+    planer_in_ops_history = load_planer_in_ops_history_from_sim(version_date, version_id, ac_to_idx)
+    
+    return dt_array, assembly_array, ac_to_idx, planer_in_ops, planer_type, planer_in_ops_history
 
 
 if __name__ == "__main__":
