@@ -243,10 +243,9 @@ QuotaManager:
 где dt = налёт СЛЕДУЮЩЕГО дня (чтобы избежать переналёта!)
 
 При переходе ops → unserviceable:
-  repair_days = repair_time - 1   // НЕ хардкод 180!
-  // repair_time берётся из MP по group_by агента
-  // Минус 1 потому что декремент идёт до 0, а не до 1
-  limiter остаётся 0 до входа в operations
+  PPR = 0                         // Сброс межремонтной наработки
+  limiter = 0                     // Не участвует в min_dynamic
+  // НЕТ repair_days! Ожидание через RepairAgent.capacity
 ```
 
 ### 4.2. repair с repair_days = 0
