@@ -44,6 +44,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     MAX_FRAMES = model_build.RTC_MAX_FRAMES
     MAX_DAYS = model_build.MAX_DAYS
     MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Размер MacroProperty для transition
+    MP5_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Размер MacroProperty для mp5_lin
     
     env.newPropertyUInt("first_dynamic_idx", first_dynamic_idx)
     env.newPropertyUInt("repair_time_mi17", repair_time_mi17)
@@ -277,9 +278,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("partseqno_i", base_psn);  // Тип ВС (partseqno индекс)
         FLAMEGPU->agent_out.setVariable<unsigned int>("group_by", 2u);  // Mi-17
         
-        // Наработка
-        FLAMEGPU->agent_out.setVariable<unsigned int>("sne", sne_new);
-        FLAMEGPU->agent_out.setVariable<unsigned int>("ppr", ppr_new);
+        // Наработка (sne/ppr устанавливаются ниже вместе с dt)
         FLAMEGPU->agent_out.setVariable<unsigned int>("cso", 0u);  // Для планеров cso=0
         
         // Нормативы
@@ -327,21 +326,47 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         // BI counter
         FLAMEGPU->agent_out.setVariable<unsigned int>("bi_counter", 1u);
         
+        // ✅ КРИТИЧНО: Читаем dt из MP5 для полной атрибуции налёта
+        // Агент создаётся СРАЗУ в operations, поэтому он должен получить свой налёт!
+        const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+        auto mp5 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MP5_SIZE}u>("mp5_lin");
+        const unsigned int mp5_base = day * frames + new_idx;
+        const unsigned int mp5_base_next = mp5_base + frames;
+        
+        // Проверяем границы и читаем dt
+        unsigned int dt = 0u;
+        unsigned int dn = 0u;
+        if (mp5_base < ${MP5_SIZE}u) {
+            dt = mp5[mp5_base];
+        }
+        if (mp5_base_next < ${MP5_SIZE}u && day < ${MAX_DAYS}u - 1u) {
+            dn = mp5[mp5_base_next];
+        }
+        
+        FLAMEGPU->agent_out.setVariable<unsigned int>("daily_today_u32", dt);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("daily_next_u32", dn);
+        
+        // ✅ Добавляем налёт к наработке (агент в operations = летает!)
+        const unsigned int sne_with_dt = sne_new + dt;
+        const unsigned int ppr_with_dt = ppr_new + dt;
+        FLAMEGPU->agent_out.setVariable<unsigned int>("sne", sne_with_dt);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("ppr", ppr_with_dt);
+        
         // ОТЛАДКА: Детальное логирование созданного агента
         if (day <= 850u) {
             printf("  [SPAWN DYNAMIC TICKET Day %u #%u] СОЗДАН АГЕНТ:\\n", day, ticket);
             printf("    idx=%u, acn=%u, psn=%u, group_by=%u\\n", new_idx, new_acn, base_psn, 2u);
-            printf("    sne=%u, ppr=%u, cso=%u\\n", sne_new, ppr_new, 0u);
+            printf("    sne=%u (+dt=%u), ppr=%u (+dt=%u), cso=%u\\n", sne_with_dt, dt, ppr_with_dt, dt, 0u);
             printf("    ll=%u, oh=%u, br=%u\\n", ll, oh, br);
             printf("    intent_state=%u, mfg_date=%u\\n", 2u, mfg_date);
             printf("    repair_time=%u, repair_days=%u\\n", repair_time, 0u);
             printf("    assembly_trigger=%u, active_trigger=%u, partout_trigger=%u\\n", 0u, 0u, 0u);
-            printf("    bi_counter=%u\\n", 1u);
+            printf("    bi_counter=%u, daily_today=%u, daily_next=%u\\n", 1u, dt, dn);
         }
         
         return flamegpu::ALIVE;
     }
-    """).substitute(MAX_DAYS=MAX_DAYS, MAX_FRAMES=MAX_FRAMES, MP2_SIZE=MP2_SIZE)
+    """).substitute(MAX_DAYS=MAX_DAYS, MAX_FRAMES=MAX_FRAMES, MP2_SIZE=MP2_SIZE, MP5_SIZE=MP5_SIZE)
     
     # Регистрация функций
     spawn_dynamic_mgr_fn = spawn_dynamic_mgr.newRTCFunction("rtc_spawn_dynamic_mgr", RTC_SPAWN_DYNAMIC_MGR)
