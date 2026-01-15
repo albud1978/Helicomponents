@@ -87,7 +87,7 @@ from datetime import date
 # V8 модули
 import rtc_state_transitions_v7  # Детерминированные переходы (repair→svc, spawn→ops)
 import rtc_state_transitions_v8  # V8: next-day dt проверка!
-import rtc_quota_v7              # Пока V7, будет заменён на V8 quota
+import rtc_quota_v8              # V8: квотирование через RepairAgent!
 import rtc_repair_agent_v8       # V8: RepairAgent!
 import rtc_limiter_optimized
 import rtc_limiter_v5            # Для совместимости
@@ -255,8 +255,8 @@ class LimiterV8Orchestrator:
         # Фаза 1.5: RepairAgent инкремент + отправка
         rtc_repair_agent_v8.register_repair_agent_layers(self.model, self.repair_agent)
         
-        # Фаза 2: Квотирование (пока V7, TODO: заменить на V8 с RepairAgent)
-        rtc_quota_v7.register_quota_v7(self.model, heli_agent)
+        # Фаза 2: V8 Квотирование (P2/P3 через RepairAgent!)
+        rtc_quota_v8.register_quota_v8_full(self.model, heli_agent)
         
         # Фаза 3: Переходы после квотирования
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
