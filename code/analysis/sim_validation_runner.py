@@ -46,6 +46,196 @@ from analysis.sim_validation_increments import IncrementsValidator
 OUTPUT_DIR = str(PROJECT_ROOT / "output")
 
 
+class InputDataValidator:
+    """Валидатор входных данных heli_pandas"""
+    
+    # status_id включает как рабочие (1-6), так и ошибочные (10-15)
+    STATUS_NAMES = {
+        1: 'inactive',
+        2: 'operations', 
+        3: 'serviceable',
+        4: 'repair',
+        5: 'reserve',
+        6: 'storage',
+        10: 'err: NO_DATA (ll=0)',
+        11: 'err: DATE_PAST',
+        12: 'err: SNE_ZERO',
+        13: 'err: OVER_LIMIT',
+        14: 'err: BAD_COND',
+        15: 'err: EARLY_DONOR',
+    }
+    
+    def __init__(self, client, version_date: int):
+        self.client = client
+        self.version_date = version_date
+        self.errors = []
+        self.warnings = []
+        self.stats = {}
+    
+    def validate(self) -> Dict:
+        """Запускает валидацию входных данных"""
+        print("\n" + "="*80)
+        print(f"ВАЛИДАЦИЯ ВХОДНЫХ ДАННЫХ (heli_pandas) для version_date={self.version_date}")
+        print("="*80)
+        
+        results = {
+            'valid': True,
+            'errors': [],
+            'warnings': [],
+            'stats': {}
+        }
+        
+        # 1. Статистика по status_id (включая ошибочные 10-15)
+        self._validate_status_distribution(results)
+        
+        # 2. Статистика по рабочим статусам (планеры)
+        self._validate_working_statuses(results)
+        
+        # 3. Статистика по типам ВС и группам
+        self._validate_aircraft_types(results)
+        
+        results['errors'] = self.errors
+        results['warnings'] = self.warnings
+        results['stats'] = self.stats
+        results['valid'] = len(self.errors) == 0
+        
+        return results
+    
+    def _validate_status_distribution(self, results: Dict):
+        """Проверяет распределение status_id (рабочие 1-6, ошибочные 10-15)"""
+        print("\n--- Распределение status_id ---")
+        
+        query = f"""
+            SELECT 
+                status_id,
+                count() as cnt,
+                countIf(bitAnd(ac_type_mask, 32) > 0) as mi8,
+                countIf(bitAnd(ac_type_mask, 64) > 0) as mi17
+            FROM heli_pandas
+            WHERE version_date = toDate({self.version_date})
+            GROUP BY status_id
+            ORDER BY status_id
+        """
+        
+        rows = self.client.execute(query)
+        
+        status_stats = {'by_status': {}, 'total': 0, 'working': 0, 'errors': 0}
+        
+        for status_id, cnt, mi8, mi17 in rows:
+            status_name = self.STATUS_NAMES.get(status_id, f'status_{status_id}')
+            status_stats['by_status'][status_id] = {
+                'name': status_name,
+                'count': cnt,
+                'mi8': mi8,
+                'mi17': mi17
+            }
+            status_stats['total'] += cnt
+            if status_id >= 10:
+                status_stats['errors'] += cnt
+            else:
+                status_stats['working'] += cnt
+        
+        self.stats['status_distribution'] = status_stats
+        
+        print(f"\nВсего записей: {status_stats['total']:,}")
+        print(f"  Рабочие (1-6): {status_stats['working']:,} ({100*status_stats['working']/status_stats['total']:.1f}%)")
+        print(f"  Ошибочные (10-15): {status_stats['errors']:,} ({100*status_stats['errors']/status_stats['total']:.1f}%)")
+        print(f"\n{'ID':>3} | {'Статус':<25} | {'Кол-во':>10} | {'Mi-8':>8} | {'Mi-17':>8}")
+        print("-" * 70)
+        
+        for status_id in sorted(status_stats['by_status'].keys()):
+            s = status_stats['by_status'][status_id]
+            marker = "❌" if status_id >= 10 else "✅"
+            print(f"{status_id:>3} | {s['name']:<25} | {s['count']:>10,} | {s['mi8']:>8,} | {s['mi17']:>8,} {marker}")
+    
+    def _validate_working_statuses(self, results: Dict):
+        """Проверяет распределение рабочих статусов планеров (group_by=1,2)"""
+        print("\n--- Распределение рабочих статусов (планеры group_by=1,2) ---")
+        
+        query = f"""
+            SELECT 
+                status_id,
+                count() as cnt,
+                countIf(group_by = 1) as mi8,
+                countIf(group_by = 2) as mi17
+            FROM heli_pandas
+            WHERE version_date = toDate({self.version_date})
+              AND group_by IN (1, 2)
+              AND status_id BETWEEN 1 AND 6
+            GROUP BY status_id
+            ORDER BY status_id
+        """
+        
+        rows = self.client.execute(query)
+        
+        status_stats = {'by_status': {}, 'total': 0}
+        
+        for status_id, cnt, mi8, mi17 in rows:
+            status_name = self.STATUS_NAMES.get(status_id, f'status_{status_id}')
+            status_stats['by_status'][status_id] = {
+                'name': status_name,
+                'total': cnt,
+                'mi8': mi8,
+                'mi17': mi17
+            }
+            status_stats['total'] += cnt
+        
+        self.stats['working_statuses'] = status_stats
+        
+        print(f"\n{'ID':>3} | {'Статус':<12} | {'Всего':>8} | {'Mi-8':>8} | {'Mi-17':>8}")
+        print("-" * 55)
+        
+        for status_id in sorted(status_stats['by_status'].keys()):
+            s = status_stats['by_status'][status_id]
+            print(f"{status_id:>3} | {s['name']:<12} | {s['total']:>8,} | {s['mi8']:>8,} | {s['mi17']:>8,}")
+        
+        print("-" * 55)
+        total_mi8 = sum(s['mi8'] for s in status_stats['by_status'].values())
+        total_mi17 = sum(s['mi17'] for s in status_stats['by_status'].values())
+        print(f"{'':>3} | {'ИТОГО':<12} | {status_stats['total']:>8,} | {total_mi8:>8,} | {total_mi17:>8,}")
+    
+    def _validate_aircraft_types(self, results: Dict):
+        """Проверяет статистику по группам"""
+        print("\n--- Статистика по группам ---")
+        
+        query = f"""
+            SELECT 
+                group_by,
+                count() as cnt,
+                countIf(status_id BETWEEN 1 AND 6) as working,
+                countIf(status_id >= 10) as errors,
+                countIf(bitAnd(ac_type_mask, 32) > 0) as mi8,
+                countIf(bitAnd(ac_type_mask, 64) > 0) as mi17
+            FROM heli_pandas
+            WHERE version_date = toDate({self.version_date})
+            GROUP BY group_by
+            ORDER BY group_by
+        """
+        
+        rows = self.client.execute(query)
+        
+        group_stats = {}
+        GROUP_NAMES = {1: 'Mi-8 планеры', 2: 'Mi-17 планеры', 3: 'Двигатели', 
+                       4: 'Редукторы', 5: 'Другие агрегаты', 6: 'Компоненты'}
+        
+        print(f"\n{'Group':>5} | {'Название':<18} | {'Всего':>10} | {'Рабочих':>10} | {'Ошибочных':>10}")
+        print("-" * 75)
+        
+        for group_by, cnt, working, errors, mi8, mi17 in rows:
+            name = GROUP_NAMES.get(group_by, f'group_{group_by}')
+            group_stats[group_by] = {
+                'name': name,
+                'total': cnt,
+                'working': working,
+                'errors': errors,
+                'mi8': mi8,
+                'mi17': mi17
+            }
+            print(f"{group_by:>5} | {name:<18} | {cnt:>10,} | {working:>10,} | {errors:>10,}")
+        
+        self.stats['groups'] = group_stats
+
+
 def generate_report(version_date_str: str, results: Dict, strict: bool = False, no_limit: bool = False) -> str:
     """
     Генерирует MD отчёт
@@ -94,6 +284,7 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
     ])
     
     check_names = {
+        'input_data': 'Входные данные (heli_pandas)',
         'quota': 'Квоты ops vs target',
         'transitions': 'Матрица переходов',
         'increments': 'Инкременты наработок'
@@ -128,6 +319,81 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
     ])
     
     # Детали по каждой проверке
+    
+    # 0. Входные данные
+    if 'input_data' in results:
+        input_errors = results['input_data'].get('errors', [])
+        input_warnings = results['input_data'].get('warnings', [])
+        input_status = "✅" if results['input_data'].get('valid', False) and (not strict or len(input_warnings) == 0) else "❌"
+        
+        lines.extend([
+            f"## 0. Валидация входных данных {input_status}",
+            f"",
+            f"**Источник:** `heli_pandas` (таблица с исходными данными компонентов)",
+            f"",
+        ])
+        
+        input_stats = results['input_data'].get('stats', {})
+        
+        # status_distribution
+        if 'status_distribution' in input_stats:
+            sd = input_stats['status_distribution']
+            lines.extend([
+                f"### Распределение status_id",
+                f"",
+                f"| Метрика | Значение | % |",
+                f"|---------|----------|---|",
+                f"| Всего записей | {sd.get('total', 0):,} | 100% |",
+                f"| Рабочие (1-6) | {sd.get('working', 0):,} | {100*sd.get('working',0)/sd.get('total',1):.1f}% |",
+                f"| Ошибочные (10-15) | {sd.get('errors', 0):,} | {100*sd.get('errors',0)/sd.get('total',1):.1f}% |",
+                f"",
+                f"**Детализация по статусам:**",
+                f"",
+                f"| ID | Статус | Кол-во | Mi-8 | Mi-17 | Статус |",
+                f"|----|--------|--------|------|-------|--------|",
+            ])
+            
+            for status_id in sorted(sd.get('by_status', {}).keys()):
+                s = sd['by_status'][status_id]
+                status_mark = "❌" if status_id >= 10 else "✅"
+                lines.append(f"| {status_id} | {s.get('name', '?')} | {s.get('count', 0):,} | {s.get('mi8', 0):,} | {s.get('mi17', 0):,} | {status_mark} |")
+            
+            lines.append("")
+        
+        # working_statuses  
+        if 'working_statuses' in input_stats:
+            ws = input_stats['working_statuses']
+            lines.extend([
+                f"### Рабочие статусы планеров (group_by=1,2)",
+                f"",
+                f"| ID | Статус | Всего | Mi-8 | Mi-17 |",
+                f"|----|--------|-------|------|-------|",
+            ])
+            
+            for status_id in sorted(ws.get('by_status', {}).keys()):
+                s = ws['by_status'][status_id]
+                lines.append(f"| {status_id} | {s.get('name', '?')} | {s.get('total', 0):,} | {s.get('mi8', 0):,} | {s.get('mi17', 0):,} |")
+            
+            total_mi8 = sum(s.get('mi8', 0) for s in ws.get('by_status', {}).values())
+            total_mi17 = sum(s.get('mi17', 0) for s in ws.get('by_status', {}).values())
+            lines.append(f"| — | **ИТОГО** | **{ws.get('total', 0):,}** | **{total_mi8:,}** | **{total_mi17:,}** |")
+            lines.append("")
+        
+        # groups
+        if 'groups' in input_stats:
+            gs = input_stats['groups']
+            lines.extend([
+                f"### Статистика по группам",
+                f"",
+                f"| Group | Название | Всего | Рабочих | Ошибочных |",
+                f"|-------|----------|-------|---------|-----------|",
+            ])
+            
+            for group_id in sorted(gs.keys()):
+                g = gs[group_id]
+                lines.append(f"| {group_id} | {g.get('name', '?')} | {g.get('total', 0):,} | {g.get('working', 0):,} | {g.get('errors', 0):,} |")
+            
+            lines.append("")
     
     # 1. Квоты
     if 'quota' in results:
@@ -510,7 +776,7 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
             source_stats.setdefault(src, {'errors': 0, 'warnings': 0})
             source_stats[src]['warnings'] += 1
         
-        source_names = {'quota': 'Квоты', 'transitions': 'Переходы', 'increments': 'Инкременты'}
+        source_names = {'input_data': 'Входные данные', 'quota': 'Квоты', 'transitions': 'Переходы', 'increments': 'Инкременты'}
         for src, stats in source_stats.items():
             name = source_names.get(src, src)
             lines.append(f"| {name} | {stats['errors']} | {stats['warnings']} |")
@@ -588,6 +854,13 @@ def main():
     client = get_clickhouse_client()
     
     results = {}
+    
+    # 0. Входные данные (heli_pandas)
+    print("\n" + "="*80)
+    print("ЗАПУСК: Валидация входных данных")
+    print("="*80)
+    input_validator = InputDataValidator(client, version_date)
+    results['input_data'] = input_validator.validate()
     
     # 1. Квоты
     print("\n" + "="*80)
