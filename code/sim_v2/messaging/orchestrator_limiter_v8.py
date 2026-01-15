@@ -336,11 +336,9 @@ class LimiterV8Orchestrator:
             self.end_day
         )
         
-        rtc_limiter_v5.register_v5_final_layers(
-            self.model,
-            self.base_model.agent,
-            self.base_model.quota_agent
-        )
+        # ИСПРАВЛЕНО: НЕ вызываем rtc_limiter_v5.register_v5_final_layers!
+        # V5 compute_global_min ПЕРЕЗАПИСЫВАЛ результат V8, вызывая баг ops≠target
+        # V8 уже имеет свои слои: v8_compute_global_min + v8_update_day
         
         # V8 Exit condition
         self.hf_exit = rtc_limiter_v8.HF_ExitConditionV8(self.end_day)

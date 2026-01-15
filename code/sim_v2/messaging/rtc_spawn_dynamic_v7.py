@@ -34,7 +34,6 @@ RTC_SPAWN_DYNAMIC_MGR_V7 = Template("""
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int target_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     const unsigned int write_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
     
@@ -44,35 +43,32 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v7, flamegpu::MessageNone, flamegp
         return flamegpu::ALIVE;
     }
     
-    // Считаем текущее количество Mi-17 в operations (исходные агенты)
+    // Считаем текущее количество Mi-17 в operations
+    // КРИТИЧНО: используем MAX_FRAMES чтобы учесть динамически спавненных агентов!
     auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_ops_count");
     unsigned int curr_ops = 0u;
-    for (unsigned int i = 0u; i < frames; ++i) {
+    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
         if (ops_count[i] == 1u) ++curr_ops;
     }
-    
-    // BUGFIX: добавляем уже заспавненных динамических агентов
-    unsigned int already_spawned = FLAMEGPU->getVariable<unsigned int>("total_spawned");
-    curr_ops += already_spawned;
     
     // Считаем промоутнутых P1 (serviceable)
     auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_svc_count");
     unsigned int svc_available = 0u;
-    for (unsigned int i = 0u; i < frames; ++i) {
+    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
         if (svc_count[i] == 1u) ++svc_available;
     }
     
     // Считаем промоутнутых P2 (unserviceable)
     auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_unsvc_count");
     unsigned int unsvc_available = 0u;
-    for (unsigned int i = 0u; i < frames; ++i) {
+    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
         if (unsvc_count[i] == 1u) ++unsvc_available;
     }
     
     // Считаем промоутнутых P3 (inactive)
     auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_inactive_count");
     unsigned int inactive_available = 0u;
-    for (unsigned int i = 0u; i < frames; ++i) {
+    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
         if (inactive_count[i] == 1u) ++inactive_available;
     }
     

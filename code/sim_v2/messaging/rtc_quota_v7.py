@@ -37,9 +37,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v7, flamegpu::MessageNone, flamegpu::Mes
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     if (idx != 0u) return flamegpu::ALIVE;
     
-    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
-    
-    // Сброс count буферов
+    // КРИТИЧНО: сбрасываем ВСЕ RTC_MAX_FRAMES слотов,
+    // чтобы включить динамически спавненных агентов!
     auto mi8_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
     auto mi17_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
     auto mi8_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
@@ -49,7 +48,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v7, flamegpu::MessageNone, flamegpu::Mes
     auto mi8_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
     auto mi17_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
     
-    for (unsigned int i = 0u; i < frames && i < {RTC_MAX_FRAMES}u; ++i) {{
+    for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
         mi8_ops[i].exchange(0u);
         mi17_ops[i].exchange(0u);
         mi8_svc[i].exchange(0u);
@@ -144,23 +143,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_demote_ops_v7, flamegpu::MessageNone, flamegpu::Mess
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
-    // Подсчёт текущих в operations
+    // Подсчёт текущих в operations (включая динамические спавны!)
+    // КРИТИЧНО: используем RTC_MAX_FRAMES, а не frames_total, чтобы учесть спавненных агентов
     unsigned int curr = 0u;
     unsigned int target = 0u;
     
     if (group_by == 1u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
+        for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++curr;
         }}
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
     }} else if (group_by == 2u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
+        for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++curr;
         }}
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
@@ -211,11 +210,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v7, flamegpu::MessageNone, flamegpu::Mes
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
-    // Подсчёт текущих в operations (после демоута)
+    // Подсчёт текущих в operations (включая динамические спавны!)
+    // КРИТИЧНО: используем RTC_MAX_FRAMES, а не frames_total
     unsigned int curr = 0u;
     unsigned int target = 0u;
     unsigned int svc_available = 0u;
@@ -223,7 +222,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v7, flamegpu::MessageNone, flamegpu::Mes
     if (group_by == 1u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
+        for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++curr;
             if (svc_count[i] == 1u) ++svc_available;
         }}
@@ -231,7 +230,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v7, flamegpu::MessageNone, flamegpu::Mes
     }} else if (group_by == 2u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
+        for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++curr;
             if (svc_count[i] == 1u) ++svc_available;
         }}
@@ -284,7 +283,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
@@ -296,6 +294,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     }}
     
     // Подсчёт текущих в operations + P1 промоуты
+    // КРИТИЧНО: используем RTC_MAX_FRAMES, чтобы учесть спавненных агентов
     unsigned int ops_curr = 0u;
     unsigned int svc_available = 0u;  // P1 промоутит всех svc → учитываем
     unsigned int unsvc_available = 0u;
@@ -306,7 +305,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
         auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
+        for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++ops_curr;
             if (svc_count[i] == 1u) ++svc_available;
             if (unsvc_count[i] == 1u) ++unsvc_available;
@@ -316,7 +315,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
         auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
+        for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++ops_curr;
             if (svc_count[i] == 1u) ++svc_available;
             if (unsvc_count[i] == 1u) ++unsvc_available;
@@ -376,11 +375,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
     // P3 КАСКАДНАЯ ЛОГИКА: дефицит = target - ops - svc - unsvc (P1+P2 промоутят всех)
+    // КРИТИЧНО: используем RTC_MAX_FRAMES, чтобы учесть спавненных агентов
     unsigned int ops_curr = 0u;
     unsigned int svc_available = 0u;
     unsigned int unsvc_available = 0u;
@@ -392,7 +391,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
         auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
         auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
+        for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++ops_curr;
             if (svc_count[i] == 1u) ++svc_available;
             if (unsvc_count[i] == 1u) ++unsvc_available;
@@ -404,7 +403,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
         auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
         auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
+        for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++ops_curr;
             if (svc_count[i] == 1u) ++svc_available;
             if (unsvc_count[i] == 1u) ++unsvc_available;
