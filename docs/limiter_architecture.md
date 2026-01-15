@@ -503,10 +503,10 @@ for (auto &msg : FLAMEGPU->message_in(100 + my_group_by)) {
 
 | Файл | Статус | Описание |
 |------|--------|----------|
-| `orchestrator_limiter_v8.py` | ✅ Создан | Оркестратор с deterministic_dates |
+| `orchestrator_limiter_v8.py` | ✅ Создан | Оркестратор V8 |
 | `rtc_limiter_v8.py` | ✅ Создан | Adaptive steps с deterministic_dates |
+| `rtc_state_transitions_v8.py` | ✅ Создан | Next-day dt проверка (SNE + dt >= LL) |
 | `rtc_quota_v8.py` | 🚧 Планируется | Квотирование через RepairAgent |
-| `rtc_state_transitions_v8.py` | 🚧 Планируется | Next-day dt проверка |
 
 ### Тестирование
 

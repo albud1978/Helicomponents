@@ -85,7 +85,8 @@ from precompute_events import compute_mp5_cumsum, find_program_change_days
 from datetime import date
 
 # V8 модули
-import rtc_state_transitions_v7  # Пока V7, будет заменён
+import rtc_state_transitions_v7  # Детерминированные переходы (repair→svc, spawn→ops)
+import rtc_state_transitions_v8  # V8: next-day dt проверка!
 import rtc_quota_v7              # Пока V7, будет заменён на RepairAgent
 import rtc_limiter_optimized
 import rtc_limiter_v5            # Для совместимости
@@ -227,12 +228,17 @@ class LimiterV8Orchestrator:
         layer_init.addHostFunction(hf_init_cumsum)
         
         # ═══════════════════════════════════════════════════════════════
-        # V8: Однофазные переходы состояний (пока используем V7)
-        # TODO: Заменить на V8 модули с next-day dt проверкой
+        # V8: Переходы состояний с next-day dt проверкой
         # ═══════════════════════════════════════════════════════════════
         
-        # Фаза 0 + 0.5: Детерминированные переходы + exit_date copy
-        rtc_state_transitions_v7.register_all_v7(self.model, heli_agent, self.base_model.quota_agent)
+        # Фаза 0: Детерминированные переходы (repair→svc, spawn→ops) — из V7
+        rtc_state_transitions_v7.register_phase0_deterministic(self.model, heli_agent)
+        
+        # Фаза 0.5: Копирование exit_date (repair, spawn, БЕЗ unsvc!) — из V7
+        rtc_state_transitions_v7.register_exit_date_copy(self.model, heli_agent, self.base_model.quota_agent)
+        
+        # Фаза 1: V8 Operations (next-day dt проверка!)
+        rtc_state_transitions_v8.register_ops_transitions_v8(self.model, heli_agent)
         
         # Фаза 2: Квотирование (пока V7)
         # TODO: Заменить на V8 с RepairAgent
