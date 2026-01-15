@@ -1,189 +1,276 @@
 # Логика определения адаптивных шагов
 
-> **Статус:** Временный файл для анализа  
-> **Дата:** 15-01-2026
+> **Статус:** Рабочий документ  
+> **Дата:** 15-01-2026  
+> **Версия:** 3.0
 
 ---
 
-## Часть 1: Детерминированные данные (до симуляции)
+## Эталон из Baseline
 
-**Источники, известные при загрузке:**
+| Метрика | Значение |
+|---------|----------|
+| Всего ресурсных переходов | 204 |
+| Уникальных дней с переходами | **183** |
+| ops→repair (PPR >= OH) | 173 перехода, 155 дней |
+| ops→storage (SNE >= BR/LL) | 31 переход, 31 день |
 
-| Источник | Откуда | Что содержит |
-|----------|--------|--------------|
-| **Program changes** | `flight_program_fl` | Даты изменения лётной программы (Mi-8/Mi-17 targets) |
-| **Ресурсные лимиты** | `heli_pandas` | LL (life limit), OH (overhaul), BR (beyond repair) для каждого агента |
-| **Начальные SNE/PPR** | `heli_pandas` | Текущая наработка и межремонтный ресурс |
-| **Repair time** | константа | 180 дней ожидания "ремонта" |
-| **MP5 cumsum** | `flight_program_fl` | Кумулятивные налёты по дням для бинарного поиска |
-
-**Вычисляется при инициализации:**
-
-1. **`program_change_days[]`** — массив дней, когда меняется target (ops count)
-2. **`exit_date`** для агентов в repair/reserve — день выхода из состояния
-3. **`limiter`** для агентов в operations — дней до ближайшего ресурсного лимита
+**Важно:** В baseline при PPR >= OH агент идёт в **repair**, в V8 — в **unserviceable**.
 
 ---
 
-## Часть 2: Цикл динамического определения длины шага
+## Часть 1: Детерминированные даты (MacroProperty)
 
-**На каждом шаге симуляции собираются три минимума:**
-
-### 2.1. Минимум по ресурсам (операционные агенты)
+Один отсортированный массив всех фиксированных дат:
 
 ```
-Для каждого агента в operations:
-    limiter = min(
-        дней до SNE >= LL,
-        дней до PPR >= OH
-    )
-    
-mp_min_limiter = MIN(все limiter агентов в ops)
+deterministic_dates[] = sorted([
+    0,                           # Начало симуляции
+    repair_exits[],              # repair_time - repair_days для агентов в repair на загрузке
+    spawn_dates[],               # Даты детерминированного spawn
+    program_change_days[],       # Даты изменения программы (~92 за 10 лет)
+    end_day                      # Последний день (3650)
+])
 ```
 
-**Как вычисляется limiter:**
-- Бинарный поиск в `mp5_cumsum`: найти день D, когда `cumsum[D] - cumsum[today] >= остаток_ресурса`
-- `limiter = D - current_day`
+**Пример для датасета 2025-07-04:**
+```
+deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
+Всего: ~94 даты
+```
 
-### 2.2. Минимум по детерминированным выходам
+---
+
+## Часть 2: Динамические лимитеры агентов
+
+### 2.1. Переменные по состояниям
+
+| Статус | Переменная | Что означает |
+|--------|------------|--------------|
+| **operations** | `limiter` | Дней до ресурсного лимита (MIN(LL-SNE, OH-PPR)) |
+| **repair** | `repair_days` | Дней до конца ремонта |
+| **unserviceable** | `repair_days` | Дней до права на вход в operations |
+| **остальные** | — | Не участвуют в min_dynamic |
+
+### 2.2. Инициализация (день 0)
 
 ```
+Для агентов в operations:
+    limiter = бинарный_поиск_по_mp5_cumsum(LL - SNE, OH - PPR)
+    // Возвращает MIN(дней_до_LL, дней_до_OH)
+
 Для агентов в repair:
-    exit_date = день входа в repair + repair_time
-    
-Для агентов в unserviceable:
-    exit_date = день входа в unsvc + repair_time
-    
-Для агентов в reserve (плановый spawn):
-    exit_date = запланированный день активации
+    repair_days = repair_time - repair_days  // Остаток до выхода
 
-min_exit_date = MIN(все exit_date)
-```
-
-### 2.3. Следующее изменение программы
-
-```
-next_program_change = первый день из program_change_days[], который > current_day
-days_to_program_change = next_program_change - current_day
+Для агентов в unserviceable (если есть):
+    repair_days = repair_time  // 180 дней ожидания
 ```
 
 ---
 
-## Часть 3: Определение следующего шага
-
-**Формула:**
+## Часть 3: Цикл вычисления adaptive_days
 
 ```
-adaptive_days = MIN(
-    mp_min_limiter,               // ближайший ресурсный лимит
-    min_exit_date - current_day,  // ближайший выход из repair/spawn
-    days_to_program_change        // ближайшее изменение программы
-)
+На каждом шаге N:
 
-// Ограничения:
-if adaptive_days < 1:  adaptive_days = 1
-if adaptive_days > (end_day - current_day):  adaptive_days = end_day - current_day
-```
+1. СБОР min_dynamic
+   min_dynamic = MIN(
+       ops.limiter,           // Все агенты в operations
+       repair.repair_days,    // Все агенты в repair
+       unsvc.repair_days      // Все агенты в unserviceable
+   )
 
-**Переход к следующему дню:**
+2. БЛИЖАЙШАЯ ДЕТЕРМИНИРОВАННАЯ ДАТА
+   next_det = первая дата из deterministic_dates[] > current_day
+   days_to_det = next_det - current_day
 
-```
-current_day = current_day + adaptive_days
-```
+3. ВЫЧИСЛЕНИЕ adaptive_days
+   adaptive_days = MIN(min_dynamic, days_to_det)
 
-**Что происходит после перехода:**
+4. ДЕКРЕМЕНТЫ
+   Для ops: limiter -= adaptive_days
+   Для repair: repair_days -= adaptive_days
+   Для unsvc: repair_days -= adaptive_days
 
-| Если adaptive_days определён | Что происходит |
-|------------------------------|----------------|
-| **Ресурсным лимитом** | Агент(ы) переходят ops→storage или ops→unsvc |
-| **Exit date** | Агент(ы) переходят repair→svc или reserve→ops или unsvc→ops |
-| **Program change** | Пересчёт квот (target изменился), возможны promote/demote |
-
----
-
-## Пример последовательности
-
-```
-День 0:
-  - mp_min_limiter = 28 (агент A достигнет OH через 28 дней)
-  - min_exit_date = 180 (агент B в repair, выйдет через 180)
-  - next_program_change = 89
-  → adaptive_days = MIN(28, 180, 89) = 28
-
-День 28:
-  - Агент A: ops → unserviceable (PPR >= OH)
-  - exit_date[A] = 28 + 180 = 208
-  - mp_min_limiter = 45 (агент C)
-  - min_exit_date = MIN(180, 208) = 180
-  - next_program_change = 89
-  → adaptive_days = MIN(45, 152, 61) = 61
-
-День 89:
-  - Program change: target изменился
-  - Квотирование: promote/demote по новому target
-  - mp_min_limiter = 12
-  - min_exit_date = 91
-  → adaptive_days = MIN(12, 91, 28) = 12
-
-...и так далее
+5. ОБНОВЛЕНИЕ ДНЯ
+   current_day += adaptive_days
 ```
 
 ---
 
-## Схема потока данных
+## Часть 4: Обработка событий (limiter=0)
+
+### 4.1. operations с limiter = 0
+
+```
+Проверка условий (в порядке приоритета):
+  1. SNE >= LL           → storage (списание по ресурсу)
+  2. PPR >= OH AND SNE >= BR → storage (ремонт нерентабелен)
+  3. PPR >= OH AND SNE < BR  → unserviceable (ждёт ремонта)
+
+При переходе ops → unserviceable:
+  repair_days = repair_time (180 дней)
+  limiter остаётся 0 до входа в operations
+```
+
+### 4.2. repair с repair_days = 0
+
+```
+Автоматический переход: repair → serviceable
+PPR = 0 (после ремонта)
+```
+
+### 4.3. unserviceable с repair_days = 0
+
+```
+НЕ автоматический переход!
+Агент получает ПРАВО на промоут в operations
+Решает QuotaManager по приоритету P2
+
+В квотировании P2:
+  Учитывать ТОЛЬКО unsvc с repair_days = 0
+```
+
+### 4.4. Вход в operations
+
+```
+ТОЛЬКО для агента, который ВХОДИТ в operations:
+  limiter = бинарный_поиск_по_mp5_cumsum(LL - SNE, OH - PPR)
+
+НЕ пересчитывать для всех агентов в operations!
+```
+
+---
+
+## Часть 5: Текущие результаты V8
+
+### Конфигурация прогона
+- Датасет: 2025-07-04
+- end_day: 3650
+- State transitions: V7 (ops→storage, ops→unsvc, repair→svc, P1/P2/P3)
+- Spawn: НЕ включён
+
+### Результаты
+| Метрика | Baseline | V8 |
+|---------|----------|-----|
+| Всего шагов | 3650 | 987 |
+| Время GPU | ~80с* | 4.7с |
+| Ускорение | 1x | ~17x* |
+
+### Итоговые состояния (day 3649/3650)
+| Состояние | Baseline | V8 | Примечание |
+|-----------|----------|-----|------------|
+| operations | 163 | 138 | V8 без spawn |
+| inactive | 93 | 94 | |
+| storage | 31 | 37 | Похоже |
+| repair | 8 | 0 | V8: unsvc вместо repair |
+| unserviceable | 0 | 10 | V8 логика |
+| serviceable | 8 | 0 | |
+| reserve | 14 | 0 | V8 без spawn |
+| **TOTAL** | **317** | **279** | Разница из-за spawn |
+
+### Причины шагов V8
+- deterministic: 93 (program changes + end_day)
+- limiter: 922 (ресурсные события)
+- end_day: 2
+
+---
+
+## Часть 6: Валидация
+
+### Что сравнивать
+
+| Метрика | Baseline | V8 |
+|---------|----------|-----|
+| Ресурсные переходы | ops→repair/storage | ops→unsvc/storage |
+| Уникальных дней | **183** | **?** |
+
+### Проблема текущей метрики
+
+V8 считает **922 "limiter шага"** — это шаги где adaptive_days определился по limiter.
+Но это НЕ то же самое что **дни с переходами**.
+
+Один шаг может не иметь переходов (limiter близок, но агент остаётся в ops).
+Несколько переходов могут произойти в один день.
+
+### Правильная метрика
+
+Нужно считать **уникальные дни** когда хотя бы один агент сделал переход ops→storage или ops→unsvc.
+
+Для этого нужно добавить логирование переходов в V8.
+
+---
+
+## Часть 7: TODO
+
+- [x] Собрать эталон из baseline (183 дня)
+- [x] Реализовать V8 с декрементом limiter/repair_days
+- [x] Интегрировать V7 state transitions
+- [ ] Добавить логирование дней переходов
+- [ ] Сравнить уникальные дни переходов V8 vs baseline (183)
+- [ ] Добавить spawn и циклы P2
+- [ ] Финальная валидация
+
+---
+
+## Схема (финальная)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ИНИЦИАЛИЗАЦИЯ (1 раз)                        │
+│                    ИНИЦИАЛИЗАЦИЯ                                │
 ├─────────────────────────────────────────────────────────────────┤
-│  program_change_days[] ← flight_program_fl                      │
-│  mp5_cumsum[][] ← flight_program_fl                             │
-│  агенты.exit_date ← repair_time / spawn_date                    │
-│  агенты.limiter ← бинарный поиск по mp5_cumsum                  │
+│  deterministic_dates[] ← [0, repair_exits, spawns, PC, end_day] │
+│  ops.limiter ← бинарный_поиск(LL-SNE, OH-PPR)                   │
+│  repair.repair_days ← остаток до выхода                         │
+│  unsvc.repair_days ← repair_time                                │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ЦИКЛ СИМУЛЯЦИИ                               │
+│                    ЦИКЛ: ШАГ N                                  │
 ├─────────────────────────────────────────────────────────────────┤
+│  1. min_dynamic = MIN(ops.limiter, repair.repair_days,          │
+│                       unsvc.repair_days)                        │
 │                                                                 │
-│  ┌─── ШАГ N ───────────────────────────────────────────────┐   │
-│  │                                                          │   │
-│  │  1. СБОР МИНИМУМОВ                                       │   │
-│  │     mp_min_limiter ← atomicMin(ops.limiter)              │   │
-│  │     min_exit_date ← atomicMin(repair/spawn/unsvc.exit)   │   │
-│  │     next_pc ← program_change_days[idx > current]         │   │
-│  │                                                          │   │
-│  │  2. ВЫЧИСЛЕНИЕ adaptive_days                             │   │
-│  │     adaptive = MIN(limiter, exit-day, pc-day)            │   │
-│  │                                                          │   │
-│  │  3. ПРИМЕНЕНИЕ СОБЫТИЙ (что произошло за adaptive дней)  │   │
-│  │     - Инкремент SNE/PPR для ops агентов                  │   │
-│  │     - Переходы по ресурсам (ops→storage, ops→unsvc)      │   │
-│  │     - Выходы из repair/spawn (repair→svc, spawn→ops)     │   │
-│  │     - Квотирование (если program change)                 │   │
-│  │                                                          │   │
-│  │  4. ОБНОВЛЕНИЕ СОСТОЯНИЯ                                 │   │
-│  │     current_day += adaptive_days                         │   │
-│  │     Пересчёт limiter для новых ops агентов               │   │
-│  │                                                          │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                              │                                  │
-│                              ▼                                  │
-│                    current_day < end_day ?                      │
-│                         │         │                             │
-│                        YES        NO → КОНЕЦ                    │
-│                         │                                       │
-│                         ▼                                       │
-│                    ШАГ N+1                                      │
+│  2. days_to_det = next(deterministic_dates) - current_day       │
 │                                                                 │
+│  3. adaptive_days = MIN(min_dynamic, days_to_det)               │
+│                                                                 │
+│  4. ДЕКРЕМЕНТ:                                                  │
+│     ops.limiter -= adaptive_days                                │
+│     repair.repair_days -= adaptive_days                         │
+│     unsvc.repair_days -= adaptive_days                          │
+│                                                                 │
+│  5. ИНКРЕМЕНТЫ (ops только):                                    │
+│     ops.sne += dt, ops.ppr += dt                                │
+│                                                                 │
+│  6. ПЕРЕХОДЫ:                                                   │
+│     ops(limiter=0 AND условие) → storage/unsvc                  │
+│     repair(repair_days=0) → serviceable                         │
+│     unsvc(repair_days=0) → ПРАВО на ops                         │
+│                                                                 │
+│  7. КВОТИРОВАНИЕ:                                               │
+│     Демоут если ops > target                                    │
+│     P1: serviceable → ops                                       │
+│     P2: unsvc(repair_days=0) → ops                              │
+│     P3: inactive → ops                                          │
+│                                                                 │
+│  8. ВХОД В OPS:                                                 │
+│     new_ops.limiter = бинарный_поиск(...)                       │
+│                                                                 │
+│  9. current_day += adaptive_days                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Заметки для доработки
+## Архитектурные отличия V8 vs Baseline
 
-<!-- Здесь можно добавить свои заметки -->
+| Аспект | Baseline | V8 |
+|--------|----------|-----|
+| PPR >= OH | → repair | → unserviceable |
+| Цикл агента | ops→repair→serviceable→ops | ops→unsvc→ops |
+| Ожидание ремонта | В repair 180 дней | В unsvc 180 дней |
+| Spawn | Динамический (reserve→ops) | Пока не включён |
 
-
+Эти отличия — архитектурные решения V7, не баги.
