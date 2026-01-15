@@ -21,21 +21,34 @@
 
 ## Часть 1: Детерминированные даты (MacroProperty)
 
-Один отсортированный массив всех фиксированных дат:
+Один отсортированный массив всех фиксированных дат.
+
+**⚠️ ВСЕ даты — в днях симуляции (0, 1, 2, ..., end_day)!**
 
 ```
 deterministic_dates[] = sorted([
-    0,                                    # Начало симуляции (день 0)
-    repair_exits[],                       # (repair_time - repair_days) для агентов в repair
-    spawn_dates[],                        # Даты детерминированного spawn
-    program_change_days[],                # Даты изменения программы (~92 за 10 лет)
+    0,                                    # День 0 симуляции
+    repair_exits[],                       # День выхода из repair (см. формулу ниже)
+    spawn_dates[],                        # День spawn (индекс из mp4_new_counter)
+    program_change_days[],                # День изменения программы (индекс)
     end_day                               # Последний день (3650)
 ])
 ```
 
-**⚠️ ВАЖНО: repair_exits — это уже абсолютные даты относительно дня 0 симуляции!**
-- На загрузке агент в repair имеет `repair_time=180`, `repair_days=X`
-- Его exit_date = `repair_time - repair_days` = дней до выхода = абсолютная дата
+**Формулы для repair_exits (день симуляции):**
+```
+Для каждого агента в repair на загрузке:
+  repair_time = 180 (или из MP по group_by)
+  repair_days = X   (сколько дней уже в ремонте, из heli_pandas)
+  
+  exit_day = repair_time - repair_days
+  // Это ДЕНЬ СИМУЛЯЦИИ когда агент выйдет из repair
+  
+Пример:
+  repair_time=180, repair_days=30
+  exit_day = 180 - 30 = 150
+  // На день 150 симуляции агент выйдет из repair
+```
 
 **⚠️ ВАЖНО: Сравнение baseline и limiter ТОЛЬКО на одном датасете!**
 - Если baseline на 2025-07-04, то limiter тоже на 2025-07-04
@@ -44,7 +57,7 @@ deterministic_dates[] = sorted([
 **Пример для датасета 2025-07-04:**
 ```
 deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
-Всего: ~94 даты
+Всего: ~94 даты (все — дни симуляции)
 ```
 
 ---
@@ -81,33 +94,72 @@ capacity += (repair_quota - count(repair))
 // Инкремент на разницу (свободные слоты за текущий день)
 ```
 
-**При переводе unsvc/inactive → ops:**
+**Роли агентов:**
 ```
-Условия для одобрения перевода:
-  1. current_day >= repair_time  // Прошло достаточно времени от начала симуляции
-  2. capacity >= repair_time     // Есть ремонтная мощность
+RepairAgent:
+  - Накапливает мощность (capacity)
+  - Выдаёт capacity на квотирование
+  - Списывает по команде QuotaManager
 
-Если оба true:
-  - Одобрить перевод в ops
-  - capacity -= repair_time
-
-Если НЕ выполнены:
-  - Перейти к spawn (покупка вертолёта)
+QuotaManager:
+  - Проверяет условия
+  - Принимает решения о переводах
+  - Отправляет команду списания
 ```
 
-**При нескольких агрегатах:**
+**Алгоритм квотирования P2/P3 (QuotaManager):**
 ```
-1. Определить дефицит = target_ops - current_ops
+ВХОД: capacity от RepairAgent, дефицит ops
+
+1. Проверка условия времени:
+   if current_day < repair_time:
+     // Недостаточно времени от начала симуляции
+     // P2/P3 недоступны → сразу к spawn
+     return
+
 2. Определить slots = floor(capacity / repair_time)
-3. approved = MIN(дефицит, slots)
-4. Отфильтровать unsvc по idx (сортировка по mfg_date) — первые approved
-5. Если unsvc недостаточно: отфильтровать inactive аналогично
-6. capacity -= (approved_unsvc + approved_inactive) * repair_time
+   if slots == 0:
+     // Нет ремонтной мощности → к spawn
+     return
+
+3. Определить дефицит = target_ops - current_ops
+   approved = MIN(дефицит, slots)
+
+4. P2: Отфильтровать unsvc по idx (mfg_date) — первые approved
+   approved_unsvc = MIN(count(unsvc), approved)
+   remaining = approved - approved_unsvc
+
+5. P3: Если remaining > 0:
+   Отфильтровать inactive по idx — первые remaining
+   approved_inactive = MIN(count(inactive), remaining)
+
+6. P4 (Spawn): Если ещё есть дефицит:
+   to_spawn = дефицит - approved_unsvc - approved_inactive
+
+7. Отправить RepairAgent команду списания:
+   to_deduct = (approved_unsvc + approved_inactive) * repair_time
 ```
 
-**Адресные сообщения:**
-- QuotaManager → RepairAgent (запрос/подтверждение мощности)
-- НЕ brute-force!
+**Протокол обмена сообщениями (внутри одного шага):**
+
+```
+Слой 1: RepairAgent → QuotaManager (адресно)
+  - RepairAgent считает capacity и отправляет доступную мощность
+  - Сообщение: { capacity, slots = floor(capacity / repair_time) }
+
+Слой 2: QuotaManager принимает решение
+  - Получает capacity от RepairAgent
+  - Считает дефицит ops, одобряет unsvc/inactive по idx
+  - Определяет to_deduct = approved * repair_time
+
+Слой 3: QuotaManager → RepairAgent (адресно)
+  - Отправляет команду списания: { to_deduct }
+
+Слой 4: RepairAgent списывает
+  - capacity -= to_deduct
+```
+
+**⚠️ Адресные сообщения — НЕ brute-force!**
 
 ### 2.3. Инициализация (день 0)
 
@@ -368,7 +420,8 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
 
 2. **Гарантия выхода при limiter = 0**
    - Если limiter = 0, ОБЯЗАТЕЛЬНО выполняется условие выхода
-   - Не должно быть ситуации: limiter=0, но агент остаётся в ops
+   - Ситуация `limiter=0 AND агент остаётся в ops` — **ОШИБКА!**
+   - При обнаружении → выбросить exception, остановить симуляцию
 
 3. **repair_days = repair_time - 1**
    - Не хардкод 180!

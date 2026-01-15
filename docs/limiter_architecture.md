@@ -62,22 +62,22 @@ if (dbg_step2 < 3u) {
 | 0 | v7_reset_exit_date | `rtc_reset_exit_date_v7` | QM | `min_exit_date_mp = MAX` (сброс перед сбором) |
 | 1 | v7_copy_exit_date_repair | `rtc_copy_exit_date_repair_v7` | 4 | `atomicMin(exit_date)` от агентов в repair |
 | 2 | v7_copy_exit_date_spawn | `rtc_copy_exit_date_spawn_v7` | 5 | `atomicMin(exit_date)` от агентов в reserve |
-| 2b | v7_copy_exit_date_unsvc | `rtc_copy_exit_date_unsvc_v7` | 7 | `atomicMin(exit_date)` от агентов в unserviceable |
+| 2b | v7_copy_exit_date_unsvc | `rtc_copy_exit_date_unsvc_v7` | 7 | ⚠️ **V8: УДАЛЁН** — unsvc не участвует в min_dynamic |
 | **ФАЗА 0: Детерминированные переходы** |||||
 | 3 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Выход из ремонта при `current_day >= exit_date`, PPR=0 |
 | 4 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Spawn при `current_day >= exit_date` |
 | **ФАЗА 1: Operations — инкременты и переходы по ресурсам** |||||
 | 5 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt`, `limiter -= adaptive` (3 счётчика в 1 проход) |
 | 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `(PPR >= OH AND SNE >= BR)`, `limiter=0` |
-| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH`, `limiter=0`, `exit_date = day + repair_time` |
+| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH`, `limiter=0` (**V8: без exit_date**) |
 | **ФАЗА 2: Квотирование** |||||
 | 8 | v7_reset_flags | `rtc_reset_flags_v7` | all | Сброс `promoted=0`, `needs_demote=0` |
 | 9 | v7_reset_buffers | `rtc_reset_buffers_v7` | **all** | Обнуление буферов подсчёта (**7 состояний**, bugfix!) |
 | 10 | v7_count_agents | `rtc_count_agents_v7` | all | Подсчёт агентов по состояниям |
 | 11 | v7_demote | `rtc_demote_v7` | QM | Демоут: ops→svc (при избытке) |
 | 12 | v7_promote_p1 | `rtc_promote_p1_v7` | QM | P1: svc→ops (при дефиците) |
-| 13 | v7_promote_p2 | `rtc_promote_p2_v7` | QM | P2: unsvc→ops |
-| 14 | v7_promote_p3 | `rtc_promote_p3_v7` | QM | P3: ina→ops |
+| 13 | v7_promote_p2 | `rtc_promote_p2_v7` | QM | P2: unsvc→ops (**V8: через RepairAgent**) |
+| 14 | v7_promote_p3 | `rtc_promote_p3_v7` | QM | P3: ina→ops (**V8: через RepairAgent**) |
 | **ФАЗА 3: Применение квот** |||||
 | 15 | v7_apply_demote | `rtc_apply_demote_v7` | 2→3 | Применение демоута, `limiter=0` |
 | 16 | v7_apply_promote_p1 | `rtc_apply_promote_p1_v7` | 3→2 | Применение P1 |
@@ -150,27 +150,39 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v7, ...) {
 
 **Приоритеты промоута:**
 1. **P1:** serviceable → operations (самый высокий)
-2. **P2:** unserviceable → operations (PPR=0, **только после repair_time**)
+2. **P2:** unserviceable → operations (PPR=0)
 3. **P3:** inactive → operations (самый низкий)
+4. **P4:** dynamic spawn (покупка вертолёта)
 
-**Ожидание repair_time (P2):**
+**V7: Ожидание repair_time через exit_date:**
 - При переходе `ops → unserviceable` устанавливается `exit_date = current_day + repair_time`
 - P2 промоут проверяет `current_day >= exit_date` перед возвратом в ops
-- Это эквивалентно 180 дням "ремонта" в baseline архитектуре
+
+**V8: Ожидание через RepairAgent.capacity:**
+- unsvc НЕ имеет exit_date для adaptive steps
+- P2/P3 проверяют: `current_day >= repair_time AND capacity >= repair_time`
+- Если условия не выполнены → P4 (spawn)
+- См. `docs/adaptive_steps_logic.md` для деталей
 
 **Демоут:** operations → serviceable (при избытке)
 
 ### Адаптивные шаги
 
+**V7:**
 ```
 adaptive_days = min(min_limiter, days_to_program_change, days_to_exit_date)
 ```
 
-| Источник | Откуда | Что означает |
-|----------|--------|--------------|
-| `min_limiter` | `mp_min_limiter[0]` | Ближайший день достижения ресурсного лимита (LL/OH/BR) |
-| `days_to_program_change` | `program_changes_mp[]` | Дней до изменения программы полётов |
-| `days_to_exit_date` | `min_exit_date_mp[0]` | Дней до ближайшего выхода из ремонта/spawn |
+**V8 (упрощённо):**
+```
+adaptive_days = min(min_dynamic, days_to_deterministic)
+```
+
+| V7 Источник | V8 Источник | Что означает |
+|-------------|-------------|--------------|
+| `min_limiter` | `min_dynamic` | MIN(limiter) для ops + repair |
+| `days_to_program_change` | `deterministic_dates[]` | Один MacroProperty со всеми датами |
+| `days_to_exit_date` (repair/spawn/**unsvc**) | `deterministic_dates[]` | **V8: unsvc НЕ участвует** |
 
 ### Логика reset-функций (критично для корректности)
 
@@ -293,12 +305,61 @@ adaptive_days = min(min_limiter, days_to_program_change, days_to_exit_date)
 
 ---
 
-## 🚧 V8: MessageBucket квотирование (В РАЗРАБОТКЕ)
+## 🚧 V8: RepairAgent + адресные сообщения (В РАЗРАБОТКЕ)
 
-> **Статус:** Альтернативная архитектура, планируется к реализации  
-> **Цель:** Замена MacroProperty буферов на адресные сообщения FLAME GPU
+> **Статус:** Альтернативная архитектура, в разработке  
+> **Документация:** `docs/adaptive_steps_logic.md`  
+> **Цель:** Упрощение квотирования ремонта + адресные сообщения
 
-### Мотивация
+### Ключевые изменения V8 vs V7
+
+| Аспект | V7 | V8 |
+|--------|-----|-----|
+| unsvc в min_dynamic | ✅ Да (exit_date) | ❌ Нет |
+| unsvc декремент | ✅ repair_days | ❌ Не декрементируется |
+| P2/P3 условие | `current_day >= exit_date` | `current_day >= repair_time AND capacity >= repair_time` |
+| Квота ремонта | Через exit_date каждого unsvc | Через RepairAgent.capacity |
+
+### RepairAgent — новый агент
+
+**Назначение:** Управление квотой ремонта через счётчик агрегато-дней
+
+```
+Переменные:
+  capacity: UInt32    // Накопленные агрегато-дни для ремонта
+  repair_quota: UInt16 // Дневная квота (слоты)
+
+Инициализация (день 0):
+  capacity = repair_quota - count(repair)
+
+Инкремент (каждый шаг):
+  capacity += (repair_quota - count(repair))
+
+Списание (по команде QuotaManager):
+  capacity -= approved * repair_time
+```
+
+### Протокол сообщений (адресные, внутри одного шага)
+
+```
+Слой 1: RepairAgent → QuotaManager
+  - Отправляет { capacity, slots = floor(capacity / repair_time) }
+
+Слой 2: QuotaManager решает
+  - Проверяет current_day >= repair_time
+  - Определяет дефицит, approved = MIN(дефицит, slots)
+  - P2: unsvc по idx (первые approved)
+  - P3: inactive по idx (если остался дефицит)
+  - P4: spawn (если P2/P3 недоступны)
+
+Слой 3: QuotaManager → RepairAgent
+  - Отправляет { to_deduct = approved * repair_time }
+
+Слой 4: RepairAgent списывает
+  - capacity -= to_deduct
+```
+
+### Мотивация (из V7)
 
 V7 использует большие MacroProperty буферы `promote[MAX_AGENTS]` для передачи решений QM → агенты. V8 заменяет их на адресные сообщения `MessageBucket`.
 
