@@ -12,6 +12,12 @@
 Usage:
     python3 code/analysis/sim_validation_runner.py --version-date 2025-07-04
     python3 code/analysis/sim_validation_runner.py --version-date 2025-12-30
+    
+    # Режим нулевой толерантности (warnings = failures)
+    python3 code/analysis/sim_validation_runner.py --version-date 2025-07-04 --strict
+    
+    # Полный отчёт всех отклонений без лимитов
+    python3 code/analysis/sim_validation_runner.py --version-date 2025-07-04 --strict --no-limit
 """
 
 import argparse
@@ -40,8 +46,16 @@ from analysis.sim_validation_increments import IncrementsValidator
 OUTPUT_DIR = str(PROJECT_ROOT / "output")
 
 
-def generate_report(version_date_str: str, results: Dict) -> str:
-    """Генерирует MD отчёт"""
+def generate_report(version_date_str: str, results: Dict, strict: bool = False, no_limit: bool = False) -> str:
+    """
+    Генерирует MD отчёт
+    
+    Args:
+        version_date_str: дата версии
+        results: результаты валидаций
+        strict: режим нулевой толерантности (warnings = failures)
+        no_limit: показывать все отклонения без лимита
+    """
     
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
@@ -50,6 +64,7 @@ def generate_report(version_date_str: str, results: Dict) -> str:
         f"",
         f"**Дата отчёта:** {now}",
         f"**Датасет:** {version_date_str}",
+        f"**Режим:** {'🔴 STRICT (нулевая толерантность)' if strict else '🟡 Стандартный'}",
         f"",
         f"## Сводка",
         f"",
@@ -59,16 +74,23 @@ def generate_report(version_date_str: str, results: Dict) -> str:
     all_valid = all(r.get('valid', False) for r in results.values())
     total_errors = sum(len(r.get('errors', [])) for r in results.values())
     total_warnings = sum(len(r.get('warnings', [])) for r in results.values())
+    total_deviations = total_errors + total_warnings
     
-    if all_valid:
+    # В strict режиме warnings также считаются failures
+    if strict:
+        passed = all_valid and total_warnings == 0
+    else:
+        passed = all_valid
+    
+    if passed:
         lines.append(f"✅ **ВАЛИДАЦИЯ ПРОЙДЕНА**")
     else:
         lines.append(f"❌ **ВАЛИДАЦИЯ НЕ ПРОЙДЕНА**")
     
     lines.extend([
         f"",
-        f"| Проверка | Статус | Ошибки | Предупреждения |",
-        f"|----------|--------|--------|----------------|",
+        f"| Проверка | Статус | Ошибки | Предупреждения | Всего отклонений |",
+        f"|----------|--------|--------|----------------|------------------|",
     ])
     
     check_names = {
@@ -80,14 +102,28 @@ def generate_report(version_date_str: str, results: Dict) -> str:
     for key, name in check_names.items():
         if key in results:
             r = results[key]
-            status = "✅" if r.get('valid', False) else "❌"
             errors = len(r.get('errors', []))
             warnings = len(r.get('warnings', []))
-            lines.append(f"| {name} | {status} | {errors} | {warnings} |")
+            deviations = errors + warnings
+            
+            # В strict режиме warnings также влияют на статус
+            if strict:
+                is_ok = r.get('valid', False) and warnings == 0
+            else:
+                is_ok = r.get('valid', False)
+            
+            status = "✅" if is_ok else "❌"
+            lines.append(f"| {name} | {status} | {errors} | {warnings} | {deviations} |")
     
     lines.extend([
         f"",
-        f"**Всего:** {total_errors} ошибок, {total_warnings} предупреждений",
+        f"### Итоги",
+        f"",
+        f"| Метрика | Значение |",
+        f"|---------|----------|",
+        f"| ❌ Ошибки (CRITICAL) | **{total_errors}** |",
+        f"| ⚠️ Предупреждения (WARNING) | **{total_warnings}** |",
+        f"| 📊 Всего отклонений | **{total_deviations}** |",
         f"",
     ])
     
@@ -200,28 +236,72 @@ def generate_report(version_date_str: str, results: Dict) -> str:
             
             lines.append("")
     
-    # Детали ошибок
+    # Сбор всех отклонений
     all_errors = []
+    all_warnings = []
+    
     for key, r in results.items():
         for err in r.get('errors', []):
             err['source'] = key
             all_errors.append(err)
+        for warn in r.get('warnings', []):
+            warn['source'] = key
+            all_warnings.append(warn)
     
+    # Лимит вывода (0 = без лимита)
+    limit = 0 if no_limit else 50
+    
+    # Детали ошибок
     if all_errors:
         lines.extend([
-            f"## Детали ошибок",
+            f"## ❌ Детали ошибок ({len(all_errors)})",
             f"",
-            f"| Источник | Тип | Сообщение |",
-            f"|----------|-----|-----------|",
+            f"| # | Источник | Тип | Сообщение |",
+            f"|---|----------|-----|-----------|",
         ])
         
-        for err in all_errors[:20]:
-            lines.append(f"| {err['source']} | {err['type']} | {err['message'][:60]}... |")
+        display_errors = all_errors if limit == 0 else all_errors[:limit]
+        for i, err in enumerate(display_errors, 1):
+            msg = err.get('message', '')
+            # Не обрезаем сообщение если no_limit
+            if not no_limit and len(msg) > 80:
+                msg = msg[:77] + "..."
+            lines.append(f"| {i} | {err['source']} | {err['type']} | {msg} |")
         
-        if len(all_errors) > 20:
-            lines.append(f"| ... | ... | ещё {len(all_errors) - 20} ошибок |")
+        if limit > 0 and len(all_errors) > limit:
+            lines.append(f"| ... | ... | ... | ещё {len(all_errors) - limit} ошибок (используйте --no-limit) |")
         
         lines.append("")
+    
+    # Детали предупреждений
+    if all_warnings:
+        lines.extend([
+            f"## ⚠️ Детали предупреждений ({len(all_warnings)})",
+            f"",
+            f"| # | Источник | Тип | Сообщение |",
+            f"|---|----------|-----|-----------|",
+        ])
+        
+        display_warnings = all_warnings if limit == 0 else all_warnings[:limit]
+        for i, warn in enumerate(display_warnings, 1):
+            msg = warn.get('message', '')
+            if not no_limit and len(msg) > 80:
+                msg = msg[:77] + "..."
+            lines.append(f"| {i} | {warn['source']} | {warn['type']} | {msg} |")
+        
+        if limit > 0 and len(all_warnings) > limit:
+            lines.append(f"| ... | ... | ... | ещё {len(all_warnings) - limit} предупреждений (используйте --no-limit) |")
+        
+        lines.append("")
+    
+    # Если нет отклонений
+    if not all_errors and not all_warnings:
+        lines.extend([
+            f"## ✅ Отклонений не обнаружено",
+            f"",
+            f"Все проверки пройдены без ошибок и предупреждений.",
+            f"",
+        ])
     
     return "\n".join(lines)
 
@@ -229,13 +309,23 @@ def generate_report(version_date_str: str, results: Dict) -> str:
 def main():
     parser = argparse.ArgumentParser(description='Оркестратор валидации симуляции')
     parser.add_argument('--version-date', required=True, help='Дата версии (YYYY-MM-DD)')
+    parser.add_argument('--strict', action='store_true', 
+                        help='Режим нулевой толерантности: warnings = failures')
+    parser.add_argument('--no-limit', action='store_true',
+                        help='Показывать все отклонения без лимита')
     args = parser.parse_args()
     
     version_date_str = args.version_date
     version_date = get_version_date_int(version_date_str)
+    strict = args.strict
+    no_limit = args.no_limit
     
     print("\n" + "="*80)
     print(f"ВАЛИДАЦИЯ СИМУЛЯЦИИ: {version_date_str} (version_date={version_date})")
+    if strict:
+        print("🔴 РЕЖИМ: STRICT (нулевая толерантность к warnings)")
+    if no_limit:
+        print("📋 РЕЖИМ: NO-LIMIT (полный вывод всех отклонений)")
     print("="*80)
     
     client = get_clickhouse_client()
@@ -264,11 +354,12 @@ def main():
     results['increments'] = increments_validator.run_all()
     
     # Генерация отчёта
-    report = generate_report(version_date_str, results)
+    report = generate_report(version_date_str, results, strict=strict, no_limit=no_limit)
     
     # Сохранение отчёта
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    report_path = os.path.join(OUTPUT_DIR, f"sim_validation_{version_date_str}.md")
+    suffix = "_strict" if strict else ""
+    report_path = os.path.join(OUTPUT_DIR, f"sim_validation_{version_date_str}{suffix}.md")
     
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(report)
@@ -280,12 +371,22 @@ def main():
     all_valid = all(r.get('valid', False) for r in results.values())
     total_errors = sum(len(r.get('errors', [])) for r in results.values())
     total_warnings = sum(len(r.get('warnings', [])) for r in results.values())
+    total_deviations = total_errors + total_warnings
     
     print(f"\n📄 Отчёт сохранён: {report_path}")
-    print(f"❌ Ошибок: {total_errors}")
-    print(f"⚠️ Предупреждений: {total_warnings}")
+    print(f"❌ Ошибок (CRITICAL): {total_errors}")
+    print(f"⚠️ Предупреждений (WARNING): {total_warnings}")
+    print(f"📊 Всего отклонений: {total_deviations}")
     
-    if all_valid:
+    # В strict режиме warnings также считаются failures
+    if strict:
+        passed = all_valid and total_warnings == 0
+        if not passed and total_warnings > 0:
+            print(f"\n🔴 STRICT: {total_warnings} предупреждений считаются failures!")
+    else:
+        passed = all_valid
+    
+    if passed:
         print("\n✅ ВАЛИДАЦИЯ СИМУЛЯЦИИ ПРОЙДЕНА")
         sys.exit(0)
     else:
