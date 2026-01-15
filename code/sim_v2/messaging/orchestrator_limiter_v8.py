@@ -84,11 +84,12 @@ from base_model_messaging import V2BaseModelMessaging
 from precompute_events import compute_mp5_cumsum, find_program_change_days
 from datetime import date
 
-# V8 модули (пока используем V7, будем заменять поэтапно)
-import rtc_state_transitions_v7
-import rtc_quota_v7
+# V8 модули
+import rtc_state_transitions_v7  # Пока V7, будет заменён
+import rtc_quota_v7              # Пока V7, будет заменён на RepairAgent
 import rtc_limiter_optimized
-import rtc_limiter_v5
+import rtc_limiter_v5            # Для совместимости
+import rtc_limiter_v8            # V8: deterministic_dates!
 from components.agent_population import AgentPopulationBuilder
 
 
@@ -267,16 +268,20 @@ class LimiterV8Orchestrator:
         )
         
         # ═══════════════════════════════════════════════════════════════
-        # ФАЗА 5: V5 GPU-only adaptive (пока используем V5)
-        # TODO: Заменить на V8 с deterministic_dates MacroProperty
+        # ФАЗА 5: V8 adaptive с deterministic_dates
         # ═══════════════════════════════════════════════════════════════
-        print("\n📦 Подключение V5 GPU-only adaptive...")
+        print("\n📦 Подключение V8 adaptive (deterministic_dates)...")
         
+        # V8 MacroProperty
+        rtc_limiter_v8.setup_v8_macroproperties(self.base_model.env, self.deterministic_dates)
+        
+        # V5 MacroProperty для совместимости с V7 модулями
         rtc_limiter_v5.setup_v5_macroproperties(self.base_model.env, self.program_change_days)
         
         self.base_model.quota_agent.newVariableUInt("computed_adaptive_days", 1)
         self.base_model.quota_agent.newVariableUInt("current_day_cache", 0)
         
+        # V5 слои для совместимости (HF_SyncDayV5 для логирования)
         self.hf_init_v5, self.hf_sync_v5 = rtc_limiter_v5.register_v5(
             self.model,
             self.base_model.agent,
@@ -286,16 +291,27 @@ class LimiterV8Orchestrator:
             verbose_logging=self.enable_mp2
         )
         
+        # V8: Регистрация adaptive layers
+        self.hf_init_v8 = rtc_limiter_v8.register_v8_adaptive_layers(
+            self.model,
+            self.base_model.agent,
+            self.base_model.quota_agent,
+            self.deterministic_dates,
+            self.end_day
+        )
+        
         rtc_limiter_v5.register_v5_final_layers(
             self.model,
             self.base_model.agent,
             self.base_model.quota_agent
         )
         
-        self.hf_exit = rtc_limiter_v5.HF_ExitCondition(self.end_day)
+        # V8 Exit condition
+        self.hf_exit = rtc_limiter_v8.HF_ExitConditionV8(self.end_day)
         self.model.addExitCondition(self.hf_exit)
         
-        print("\n✅ Модель LIMITER V8 построена (базовая версия на V7 модулях)")
+        print("\n✅ Модель LIMITER V8 построена")
+        print(f"   deterministic_dates: {len(self.deterministic_dates)} дат")
         print("=" * 60)
         
         return self.model
