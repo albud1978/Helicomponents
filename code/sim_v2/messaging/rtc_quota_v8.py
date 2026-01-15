@@ -139,9 +139,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
     if (rank < needed) {{
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         
-        // V8: Запись to_deduct (атомарный инкремент)
-        auto mp_deduct = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("repair_to_deduct_mp");
-        mp_deduct[0].add(repair_time);
+        // V8: Записываем approved в буфер (будет подсчитано в RepairAgent)
+        // Используем atomicMin для безопасной записи 1 (агент одобрен)
+        auto mp_p2_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("repair_p2_approved");
+        mp_p2_count[idx].exchange(1u);
     }}
     
     return flamegpu::ALIVE;
@@ -257,13 +258,25 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     if (rank < needed) {{
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         
-        // V8: Запись to_deduct
-        mp_deduct[0].add(repair_time);
+        // V8: Записываем approved в буфер (будет подсчитано в RepairAgent)
+        auto mp_p3_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("repair_p3_approved");
+        mp_p3_count[idx].exchange(1u);
     }}
     
     return flamegpu::ALIVE;
 }}
 """
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MacroProperty для подсчёта одобренных P2/P3
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def setup_quota_v8_macroproperties(env):
+    """Создаёт MacroProperty для подсчёта одобренных P2/P3"""
+    env.newMacroPropertyUInt("repair_p2_approved", RTC_MAX_FRAMES)  # P2: unsvc
+    env.newMacroPropertyUInt("repair_p3_approved", RTC_MAX_FRAMES)  # P3: inactive
+    print("  ✅ V8 MacroProperty: repair_p2_approved, repair_p3_approved")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -239,6 +239,10 @@ class LimiterV8Orchestrator:
         )
         rtc_repair_agent_v8.setup_repair_agent_macroproperties(self.base_model.env)
         
+        # count_repair: подсчитывается динамически или через MacroProperty
+        # Начальное значение 0, будет обновлено RTC функцией подсчёта
+        self.base_model.env.newPropertyUInt("count_repair", 0)
+        
         # ═══════════════════════════════════════════════════════════════
         # V8: Переходы состояний с next-day dt проверкой
         # ═══════════════════════════════════════════════════════════════
@@ -252,8 +256,11 @@ class LimiterV8Orchestrator:
         # Фаза 1: V8 Operations (next-day dt проверка!)
         rtc_state_transitions_v8.register_ops_transitions_v8(self.model, heli_agent)
         
-        # Фаза 1.5: RepairAgent инкремент + отправка
-        rtc_repair_agent_v8.register_repair_agent_layers(self.model, self.repair_agent)
+        # Фаза 1.5: RepairAgent инкремент + отправка (передаём heli_agent для подсчёта repair)
+        rtc_repair_agent_v8.register_repair_agent_layers(self.model, self.repair_agent, heli_agent)
+        
+        # V8 MacroProperty для подсчёта одобренных P2/P3
+        rtc_quota_v8.setup_quota_v8_macroproperties(self.base_model.env)
         
         # Фаза 2: V8 Квотирование (P2/P3 через RepairAgent!)
         rtc_quota_v8.register_quota_v8_full(self.model, heli_agent)
@@ -295,11 +302,26 @@ class LimiterV8Orchestrator:
         # ═══════════════════════════════════════════════════════════════
         print("\n📦 Подключение V8 adaptive (deterministic_dates)...")
         
-        # V8 MacroProperty
+        # V8 MacroProperty (включает current_day_mp, adaptive_result_mp и др.)
         rtc_limiter_v8.setup_v8_macroproperties(self.base_model.env, self.deterministic_dates)
         
-        # V5 MacroProperty для совместимости с V7 модулями
-        rtc_limiter_v5.setup_v5_macroproperties(self.base_model.env, self.program_change_days)
+        # V5 MacroProperty для совместимости (только недостающие)
+        # current_day_mp, adaptive_result_mp, min_exit_date_mp, mp_min_limiter — уже в V8
+        # program_changes_mp и num_program_changes — нужны для V7 модулей
+        try:
+            self.base_model.env.newMacroPropertyUInt("program_changes_mp", 150)
+        except:
+            pass
+        try:
+            self.base_model.env.newPropertyUInt("num_program_changes", len(self.program_change_days))
+        except:
+            self.base_model.env.setPropertyUInt("num_program_changes", len(self.program_change_days))
+        
+        # limiter_buffer для V5 copy_limiter
+        try:
+            self.base_model.env.newMacroPropertyUInt("limiter_buffer", model_build.RTC_MAX_FRAMES)
+        except:
+            pass
         
         self.base_model.quota_agent.newVariableUInt("computed_adaptive_days", 1)
         self.base_model.quota_agent.newVariableUInt("current_day_cache", 0)
