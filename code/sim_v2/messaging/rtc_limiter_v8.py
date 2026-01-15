@@ -240,16 +240,34 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v8, flamegpu::MessageNone, flameg
     
     unsigned int days_to_det = next_deterministic - current_day;
     
-    // 3. adaptive_days = MIN(min_dynamic, days_to_det)
+    // V8 FIX: Также учитываем min_exit_date_mp (unsvc exit_dates!)
+    auto mp_exit = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_exit_date_mp");
+    unsigned int min_exit_date = mp_exit[0];
+    unsigned int days_to_exit = 0xFFFFFFFFu;
+    if (min_exit_date != 0xFFFFFFFFu && min_exit_date > current_day) {{
+        days_to_exit = min_exit_date - current_day;
+    }}
+    
+    // 3. adaptive_days = MIN(min_dynamic, days_to_det, days_to_exit)
     unsigned int adaptive_days = days_to_det;
     
     if (min_dynamic < 0xFFFFFFFFu && min_dynamic > 0u && min_dynamic < adaptive_days) {{
         adaptive_days = min_dynamic;
     }}
     
+    if (days_to_exit < adaptive_days) {{
+        adaptive_days = days_to_exit;
+    }}
+    
     // Не выходить за end_day
     unsigned int remaining = end_day - current_day;
     if (adaptive_days > remaining) adaptive_days = remaining;
+    
+    // V8 FIX: Ограничение max adaptive_days до repair_time (180)
+    // Это гарантирует что unsvc агенты с exit_date не будут перепрыгнуты
+    const unsigned int max_step = 180u;  // repair_time
+    if (adaptive_days > max_step) adaptive_days = max_step;
+    
     if (adaptive_days < 1u) adaptive_days = 1u;
     
     // DEBUG: каждые 50 шагов
