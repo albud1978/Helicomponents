@@ -38,6 +38,125 @@ class IncrementsValidator:
         self.warnings: List[Dict] = []
         self.stats: Dict = {}
     
+    def validate_dt_zero_in_operations(self) -> Dict:
+        """
+        Проверяет: КАЖДЫЙ dt=0 в operations должен быть объяснён flight_program.
+        
+        НУЛЕВАЯ ТОЛЕРАНТНОСТЬ: Если flight_program имеет dt>0, а sim имеет dt=0 — это БАГ!
+        """
+        print("\n" + "="*80)
+        print("0. НУЛЕВАЯ ТОЛЕРАНТНОСТЬ: dt=0 В OPERATIONS")
+        print("="*80)
+        
+        results = {
+            'valid': True,
+            'bugs': [],  # dt=0 в sim при dt>0 в flight_program = БАГ
+            'valid_zeros': [],  # dt=0 в sim при dt=0 в flight_program = OK (зимовка)
+            'stats': {}
+        }
+        
+        # Находим ВСЕ записи с dt=0 в operations и сопоставляем с flight_program
+        query = f"""
+            SELECT 
+                s.aircraft_number,
+                s.group_by,
+                s.day_u16,
+                s.dt as sim_dt,
+                f.daily_hours as fp_dt,
+                -- Проверяем prev_state для определения типа: переход vs нативный 0
+                prev.state as prev_state
+            FROM sim_masterv2 s
+            LEFT JOIN flight_program_fl f 
+                ON s.aircraft_number = f.aircraft_number 
+                AND f.dates = toDate({self.version_date}) + s.day_u16
+                AND f.version_date = toDate({self.version_date})
+            LEFT JOIN sim_masterv2 prev 
+                ON s.aircraft_number = prev.aircraft_number 
+                AND prev.day_u16 = s.day_u16 - 1 
+                AND prev.version_date = {self.version_date}
+            WHERE s.version_date = {self.version_date}
+              AND s.group_by IN (1, 2)
+              AND s.state = 'operations'
+              AND s.dt = 0
+            ORDER BY s.group_by, s.aircraft_number, s.day_u16
+        """
+        
+        rows = self.client.execute(query)
+        
+        # Анализ каждой записи
+        bugs_mi8 = []
+        bugs_mi17 = []
+        valid_mi8 = 0
+        valid_mi17 = 0
+        
+        for acn, gb, day, sim_dt, fp_dt, prev_state in rows:
+            ac_type = 'Mi-8' if gb == 1 else 'Mi-17'
+            fp_dt_val = fp_dt if fp_dt is not None else 0
+            
+            if fp_dt_val > 0:
+                # БАГ: flight_program имеет налёт, но sim записал 0
+                bug = {
+                    'aircraft_number': acn,
+                    'group_by': gb,
+                    'day': day,
+                    'fp_dt': fp_dt_val,
+                    'prev_state': prev_state or '(day0)'
+                }
+                if gb == 1:
+                    bugs_mi8.append(bug)
+                else:
+                    bugs_mi17.append(bug)
+            else:
+                # OK: flight_program тоже имеет 0 (зимовка)
+                if gb == 1:
+                    valid_mi8 += 1
+                else:
+                    valid_mi17 += 1
+        
+        results['stats'] = {
+            'mi8_bugs': len(bugs_mi8),
+            'mi8_valid_zeros': valid_mi8,
+            'mi17_bugs': len(bugs_mi17),
+            'mi17_valid_zeros': valid_mi17,
+            'total_bugs': len(bugs_mi8) + len(bugs_mi17),
+            'total_valid': valid_mi8 + valid_mi17
+        }
+        
+        results['bugs'] = bugs_mi8 + bugs_mi17
+        results['valid'] = len(results['bugs']) == 0
+        
+        # Вывод результатов
+        print(f"\n{'Тип':<8} | {'Баги (fp>0, sim=0)':<20} | {'Валидные (fp=0, sim=0)':<25}")
+        print("-" * 60)
+        print(f"{'Mi-8':<8} | {len(bugs_mi8):>20} | {valid_mi8:>25}")
+        print(f"{'Mi-17':<8} | {len(bugs_mi17):>20} | {valid_mi17:>25}")
+        print("-" * 60)
+        print(f"{'ИТОГО':<8} | {len(bugs_mi8) + len(bugs_mi17):>20} | {valid_mi8 + valid_mi17:>25}")
+        
+        if results['valid']:
+            print(f"\n✅ НУЛЕВАЯ ТОЛЕРАНТНОСТЬ: Все {valid_mi8 + valid_mi17} случаев dt=0 объяснены flight_program")
+        else:
+            results['valid'] = False
+            print(f"\n❌ КРИТИЧЕСКИЕ БАГИ: {len(results['bugs'])} случаев dt=0 при fp_dt>0!")
+            print(f"\nПервые 20 багов:")
+            print(f"{'ACN':<10} | {'Тип':<6} | {'День':<6} | {'fp_dt':<8} | {'prev_state':<15}")
+            print("-" * 60)
+            for bug in results['bugs'][:20]:
+                ac_type = 'Mi-8' if bug['group_by'] == 1 else 'Mi-17'
+                print(f"{bug['aircraft_number']:<10} | {ac_type:<6} | {bug['day']:<6} | {bug['fp_dt']:<8} | {bug['prev_state']:<15}")
+            
+            for bug in results['bugs']:
+                self.errors.append({
+                    'type': 'DT_ZERO_BUG',
+                    'aircraft_number': bug['aircraft_number'],
+                    'day': bug['day'],
+                    'fp_dt': bug['fp_dt'],
+                    'message': f"AC {bug['aircraft_number']} day {bug['day']}: fp_dt={bug['fp_dt']} но sim_dt=0"
+                })
+        
+        self.stats['dt_zero_in_ops'] = results
+        return results
+    
     def validate_dt_invariant(self) -> Dict:
         """Проверяет: dt > 0 только в operations, dt = 0 в других состояниях"""
         print("\n" + "="*80)
@@ -116,6 +235,7 @@ class IncrementsValidator:
         }
         
         # Для каждого борта считаем сумму dt и изменение sne
+        # ИСКЛЮЧАЕМ spawned aircraft (AC >= 100000) — у них другой жизненный цикл
         query = f"""
             WITH 
                 -- Первый и последний день для каждого борта
@@ -128,6 +248,7 @@ class IncrementsValidator:
                     FROM sim_masterv2
                     WHERE version_date = {self.version_date}
                       AND group_by IN (1, 2)
+                      AND aircraft_number < 100000  -- Исключаем spawned aircraft
                     GROUP BY aircraft_number, group_by
                 ),
                 -- SNE на первый день
@@ -158,6 +279,7 @@ class IncrementsValidator:
                     WHERE version_date = {self.version_date}
                       AND group_by IN (1, 2)
                       AND day_u16 > 0  -- dt[0] ещё не отражён в Δsne
+                      AND aircraft_number < 100000  -- Исключаем spawned aircraft
                     GROUP BY aircraft_number, group_by
                 )
             SELECT 
@@ -235,9 +357,16 @@ class IncrementsValidator:
         return results
     
     def validate_ppr_reset_after_repair(self) -> Dict:
-        """Проверяет: ppr = 0 после выхода из repair"""
+        """
+        Проверяет: ppr сброшен после выхода из repair.
+        
+        ВАЖНО: После сброса ppr=0 на переходе 4→2, применяется dt текущего дня.
+        Поэтому в день перехода ppr = dt (а не 0).
+        
+        Правильная проверка: ppr == dt в день transition_4_to_2=1
+        """
         print("\n" + "="*80)
-        print("3. PPR = 0 ПОСЛЕ ВЫХОДА ИЗ РЕМОНТА")
+        print("3. PPR RESET ПОСЛЕ ВЫХОДА ИЗ РЕМОНТА")
         print("="*80)
         
         results = {
@@ -246,22 +375,22 @@ class IncrementsValidator:
             'summary': {}
         }
         
-        # Находим записи с transition_4_to_2=1 и проверяем ppr
-        # Исключаем Mi-17 с ppr < br2_mi17 (комплектация без ремонта)
+        # Находим записи с transition_4_to_2=1 и проверяем ppr == dt
+        # После ремонта: ppr сбрасывается в 0, затем применяется dt дня → ppr = dt
         query = f"""
             SELECT 
                 aircraft_number,
                 group_by,
                 day_u16,
                 ppr,
+                dt,
                 sne
             FROM sim_masterv2
             WHERE version_date = {self.version_date}
               AND group_by IN (1, 2)
               AND transition_4_to_2 = 1
-              AND ppr > 0
             ORDER BY group_by, aircraft_number, day_u16
-            LIMIT 100
+            LIMIT 200
         """
         
         rows = self.client.execute(query)
@@ -274,28 +403,36 @@ class IncrementsValidator:
         br2_mi17 = br2_result[0][0] if br2_result and br2_result[0][0] else 210000  # 3500 часов в минутах
         
         print(f"\n📋 Порог br2_mi17: {br2_mi17} мин ({br2_mi17/60:.0f} часов)")
-        print("   Mi-17 с ppr < br2_mi17 проходят комплектацию БЕЗ обнуления ppr\n")
+        print("   Mi-17 с ppr < br2_mi17 проходят комплектацию БЕЗ обнуления ppr")
+        print("   После reset: ppr = dt в день перехода (не 0)\n")
         
         violations_mi8 = []
-        violations_mi17_real = []  # Реальные нарушения (ppr >= br2_mi17)
-        expected_mi17 = []  # Ожидаемые (ppr < br2_mi17, комплектация)
+        violations_mi17_real = []  # Реальные нарушения (ppr != dt и ppr >= br2_mi17)
+        expected_mi17 = []  # Ожидаемые (ppr соответствует комплектации или dt)
+        correct_mi8 = 0
         
-        for acn, gb, day, ppr, sne in rows:
-            if gb == 1:  # Mi-8 всегда должен обнулять ppr
-                violations_mi8.append({
-                    'aircraft_number': acn,
-                    'day': day,
-                    'ppr': ppr,
-                    'sne': sne
-                })
+        for acn, gb, day, ppr, dt, sne in rows:
+            if gb == 1:  # Mi-8 всегда должен обнулять ppr → ppr = dt
+                if ppr == dt:
+                    correct_mi8 += 1
+                else:
+                    violations_mi8.append({
+                        'aircraft_number': acn,
+                        'day': day,
+                        'ppr': ppr,
+                        'dt': dt,
+                        'sne': sne,
+                        'reason': f'ppr={ppr} != dt={dt}'
+                    })
             else:  # Mi-17
-                # Для Mi-17 нужно знать ppr ДО ремонта, чтобы понять была ли комплектация
-                # Но сейчас мы видим ppr ПОСЛЕ, если ppr > 0 и < br2_mi17 - это ожидаемо
+                # Для Mi-17 комплектация без обнуления если ppr_prev < br2_mi17
+                # В любом случае после перехода ppr должен включать dt текущего дня
                 if ppr < br2_mi17:
                     expected_mi17.append({
                         'aircraft_number': acn,
                         'day': day,
                         'ppr': ppr,
+                        'dt': dt,
                         'sne': sne
                     })
                 else:
@@ -303,30 +440,33 @@ class IncrementsValidator:
                         'aircraft_number': acn,
                         'day': day,
                         'ppr': ppr,
+                        'dt': dt,
                         'sne': sne
                     })
         
         results['summary'] = {
+            'mi8_correct': correct_mi8,
             'mi8_violations': len(violations_mi8),
             'mi17_expected': len(expected_mi17),
             'mi17_violations': len(violations_mi17_real)
         }
         
-        # Mi-8 нарушения
+        # Mi-8: после reset ppr = dt
         if violations_mi8:
             results['valid'] = False
-            print(f"❌ Mi-8: {len(violations_mi8)} записей с ppr > 0 после ремонта:")
+            print(f"❌ Mi-8: {len(violations_mi8)} записей с ppr != dt после ремонта:")
             for v in violations_mi8[:5]:
-                print(f"   AC {v['aircraft_number']}, день {v['day']}: ppr={v['ppr']} мин ({v['ppr']/60:.0f} ч)")
+                print(f"   AC {v['aircraft_number']}, день {v['day']}: {v['reason']}")
                 self.errors.append({
                     'type': 'PPR_NOT_RESET_MI8',
                     'aircraft_number': v['aircraft_number'],
                     'day': v['day'],
                     'ppr': v['ppr'],
-                    'message': f"Mi-8 AC {v['aircraft_number']}: ppr={v['ppr']} после ремонта (должно быть 0)"
+                    'dt': v['dt'],
+                    'message': f"Mi-8 AC {v['aircraft_number']}: ppr={v['ppr']} != dt={v['dt']} (должно быть ppr=dt после reset)"
                 })
         else:
-            print("✅ Mi-8: все ppr = 0 после ремонта")
+            print(f"✅ Mi-8: все {correct_mi8} записей — ppr = dt после ремонта (корректный reset)")
         
         # Mi-17 ожидаемые (комплектация без ремонта)
         if expected_mi17:
@@ -404,6 +544,9 @@ class IncrementsValidator:
         print("\n" + "="*80)
         print(f"ВАЛИДАЦИЯ ИНКРЕМЕНТОВ ДЛЯ version_date={self.version_date}")
         print("="*80)
+        
+        # КРИТИЧНО: Проверка dt=0 с НУЛЕВОЙ ТОЛЕРАНТНОСТЬЮ
+        self.validate_dt_zero_in_operations()
         
         self.validate_dt_invariant()
         self.validate_sne_consistency()
