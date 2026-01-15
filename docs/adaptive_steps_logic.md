@@ -25,13 +25,21 @@
 
 ```
 deterministic_dates[] = sorted([
-    0,                           # Начало симуляции
-    repair_exits[],              # repair_time - repair_days для агентов в repair на загрузке
-    spawn_dates[],               # Даты детерминированного spawn
-    program_change_days[],       # Даты изменения программы (~92 за 10 лет)
-    end_day                      # Последний день (3650)
+    0,                                    # Начало симуляции (день 0)
+    repair_exits[],                       # (repair_time - repair_days) для агентов в repair
+    spawn_dates[],                        # Даты детерминированного spawn
+    program_change_days[],                # Даты изменения программы (~92 за 10 лет)
+    end_day                               # Последний день (3650)
 ])
 ```
+
+**⚠️ ВАЖНО: repair_exits — это уже абсолютные даты относительно дня 0 симуляции!**
+- На загрузке агент в repair имеет `repair_time=180`, `repair_days=X`
+- Его exit_date = `repair_time - repair_days` = дней до выхода = абсолютная дата
+
+**⚠️ ВАЖНО: Сравнение baseline и limiter ТОЛЬКО на одном датасете!**
+- Если baseline на 2025-07-04, то limiter тоже на 2025-07-04
+- Нельзя смешивать датасеты (04.07 vs 30.12)
 
 **Пример для датасета 2025-07-04:**
 ```
@@ -49,10 +57,59 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 |--------|------------|--------------|
 | **operations** | `limiter` | Дней до ресурсного лимита (MIN(LL-SNE, OH-PPR)) |
 | **repair** | `repair_days` | Дней до конца ремонта |
-| **unserviceable** | `repair_days` | Дней до права на вход в operations |
+| **unserviceable** | — | НЕ используется (квота через RepairAgent) |
 | **остальные** | — | Не участвуют в min_dynamic |
 
-### 2.2. Инициализация (день 0)
+### 2.2. RepairAgent — агент ремонтной мощности
+
+**Назначение:** Управление квотой ремонта через счётчик агрегато-дней
+
+| Переменная | Тип | Описание |
+|------------|-----|----------|
+| `capacity` | UInt32 | Накопленные агрегато-дни доступные для ремонта |
+| `repair_quota` | UInt16 | Дневная квота ремонта (кол-во слотов) |
+
+**Инициализация (день 0):**
+```
+capacity = repair_quota - count(repair)
+// Разница между квотой и агентами уже в repair
+```
+
+**Инкремент (каждый шаг):**
+```
+capacity += (repair_quota - count(repair))
+// Инкремент на разницу (свободные слоты за текущий день)
+```
+
+**При переводе unsvc/inactive → ops:**
+```
+Условия для одобрения перевода:
+  1. current_day >= repair_time  // Прошло достаточно времени от начала симуляции
+  2. capacity >= repair_time     // Есть ремонтная мощность
+
+Если оба true:
+  - Одобрить перевод в ops
+  - capacity -= repair_time
+
+Если НЕ выполнены:
+  - Перейти к spawn (покупка вертолёта)
+```
+
+**При нескольких агрегатах:**
+```
+1. Определить дефицит = target_ops - current_ops
+2. Определить slots = floor(capacity / repair_time)
+3. approved = MIN(дефицит, slots)
+4. Отфильтровать unsvc по idx (сортировка по mfg_date) — первые approved
+5. Если unsvc недостаточно: отфильтровать inactive аналогично
+6. capacity -= (approved_unsvc + approved_inactive) * repair_time
+```
+
+**Адресные сообщения:**
+- QuotaManager → RepairAgent (запрос/подтверждение мощности)
+- НЕ brute-force!
+
+### 2.3. Инициализация (день 0)
 
 ```
 Для агентов в operations:
@@ -61,9 +118,11 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 
 Для агентов в repair:
     repair_days = repair_time - repair_days  // Остаток до выхода
+    // repair_time из MP по group_by, repair_days из heli_pandas
 
-Для агентов в unserviceable (если есть):
-    repair_days = repair_time  // 180 дней ожидания
+Для RepairAgent:
+    capacity = repair_quota - count(repair)
+    // Начальная мощность = свободные слоты
 ```
 
 ---
@@ -76,9 +135,9 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 1. СБОР min_dynamic
    min_dynamic = MIN(
        ops.limiter,           // Все агенты в operations
-       repair.repair_days,    // Все агенты в repair
-       unsvc.repair_days      // Все агенты в unserviceable
+       repair.repair_days     // Все агенты в repair
    )
+   // unsvc НЕ участвует в min_dynamic!
 
 2. БЛИЖАЙШАЯ ДЕТЕРМИНИРОВАННАЯ ДАТА
    next_det = первая дата из deterministic_dates[] > current_day
@@ -90,9 +149,12 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 4. ДЕКРЕМЕНТЫ
    Для ops: limiter -= adaptive_days
    Для repair: repair_days -= adaptive_days
-   Для unsvc: repair_days -= adaptive_days
+   // unsvc НЕ декрементируется!
 
-5. ОБНОВЛЕНИЕ ДНЯ
+5. ИНКРЕМЕНТ РЕМОНТНОЙ МОЩНОСТИ
+   RepairAgent.capacity += (repair_quota - count(repair))
+
+6. ОБНОВЛЕНИЕ ДНЯ
    current_day += adaptive_days
 ```
 
@@ -102,14 +164,20 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 
 ### 4.1. operations с limiter = 0
 
+**⚠️ ГАРАНТИЯ: если limiter = 0, ОБЯЗАТЕЛЬНО выполняется одно из условий выхода!**
+
 ```
-Проверка условий (в порядке приоритета):
-  1. SNE >= LL           → storage (списание по ресурсу)
-  2. PPR >= OH AND SNE >= BR → storage (ремонт нерентабелен)
-  3. PPR >= OH AND SNE < BR  → unserviceable (ждёт ремонта)
+Проверка условий НА СЛЕДУЮЩИЙ ДЕНЬ (в порядке приоритета):
+  1. SNE + dt >= LL           → storage (списание по ресурсу)
+  2. PPR + dt >= OH AND SNE + dt >= BR → storage (ремонт нерентабелен)
+  3. PPR + dt >= OH AND SNE + dt < BR  → unserviceable (ждёт ремонта)
+
+где dt = налёт СЛЕДУЮЩЕГО дня (чтобы избежать переналёта!)
 
 При переходе ops → unserviceable:
-  repair_days = repair_time (180 дней)
+  repair_days = repair_time - 1   // НЕ хардкод 180!
+  // repair_time берётся из MP по group_by агента
+  // Минус 1 потому что декремент идёт до 0, а не до 1
   limiter остаётся 0 до входа в operations
 ```
 
@@ -120,16 +188,23 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 PPR = 0 (после ремонта)
 ```
 
-### 4.3. unserviceable с repair_days = 0
+### 4.3. unserviceable — ожидание промоута
 
 ```
 НЕ автоматический переход!
-Агент получает ПРАВО на промоут в operations
-Решает QuotaManager по приоритету P2
+Агент в unserviceable ожидает решения QuotaManager
 
-В квотировании P2:
-  Учитывать ТОЛЬКО unsvc с repair_days = 0
+Переход unsvc → ops возможен при:
+  1. current_day >= repair_time (прошло достаточно времени от начала симуляции)
+  2. RepairAgent.capacity >= repair_time (есть ремонтная мощность)
+  3. Есть дефицит в программе ops
+
+Если условия НЕ выполнены → переход к spawn (покупка)
 ```
+
+**⚠️ ВАЖНО: repair_days для unserviceable НЕ используется!**
+- Вместо отслеживания repair_days каждого unsvc
+- Используем RepairAgent с общим счётчиком мощности
 
 ### 4.4. Вход в operations
 
@@ -222,7 +297,7 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
 │  deterministic_dates[] ← [0, repair_exits, spawns, PC, end_day] │
 │  ops.limiter ← бинарный_поиск(LL-SNE, OH-PPR)                   │
 │  repair.repair_days ← остаток до выхода                         │
-│  unsvc.repair_days ← repair_time                                │
+│  RepairAgent.capacity ← repair_quota - count(repair)            │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -239,21 +314,28 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
 │  4. ДЕКРЕМЕНТ:                                                  │
 │     ops.limiter -= adaptive_days                                │
 │     repair.repair_days -= adaptive_days                         │
-│     unsvc.repair_days -= adaptive_days                          │
+│     // unsvc НЕ декрементируется!                               │
+│                                                                 │
+│  4b. ИНКРЕМЕНТ РЕМОНТНОЙ МОЩНОСТИ:                              │
+│     RepairAgent.capacity += (quota - count(repair))             │
 │                                                                 │
 │  5. ИНКРЕМЕНТЫ (ops только):                                    │
 │     ops.sne += dt, ops.ppr += dt                                │
 │                                                                 │
-│  6. ПЕРЕХОДЫ:                                                   │
-│     ops(limiter=0 AND условие) → storage/unsvc                  │
+│  6. ПЕРЕХОДЫ (проверка на СЛЕДУЮЩИЙ день!):                     │
+│     ops(limiter=0): SNE+dt>=LL → storage                        │
+│                     PPR+dt>=OH AND SNE+dt>=BR → storage         │
+│                     PPR+dt>=OH AND SNE+dt<BR → unsvc            │
 │     repair(repair_days=0) → serviceable                         │
 │     unsvc(repair_days=0) → ПРАВО на ops                         │
 │                                                                 │
 │  7. КВОТИРОВАНИЕ:                                               │
 │     Демоут если ops > target                                    │
 │     P1: serviceable → ops                                       │
-│     P2: unsvc(repair_days=0) → ops                              │
-│     P3: inactive → ops                                          │
+│     P2: unsvc → ops (если capacity >= repair_time)              │
+│     P3: inactive → ops (если capacity >= repair_time)           │
+│     P4: spawn (если P2/P3 недоступны)                           │
+│     RepairAgent.capacity -= approved * repair_time              │
 │                                                                 │
 │  8. ВХОД В OPS:                                                 │
 │     new_ops.limiter = бинарный_поиск(...)                       │
@@ -270,7 +352,29 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
 |--------|----------|-----|
 | PPR >= OH | → repair | → unserviceable |
 | Цикл агента | ops→repair→serviceable→ops | ops→unsvc→ops |
-| Ожидание ремонта | В repair 180 дней | В unsvc 180 дней |
+| Ожидание ремонта | В repair 180 дней | В unsvc repair_time-1 дней |
 | Spawn | Динамический (reserve→ops) | Пока не включён |
 
 Эти отличия — архитектурные решения V7, не баги.
+
+---
+
+## ⚠️ КРИТИЧЕСКИЕ ТРЕБОВАНИЯ
+
+1. **Проверка ресурса на СЛЕДУЮЩИЙ день**
+   - Условие: `SNE + dt >= LL` (не `SNE >= LL`)
+   - dt = налёт следующего дня
+   - Иначе возможен переналёт!
+
+2. **Гарантия выхода при limiter = 0**
+   - Если limiter = 0, ОБЯЗАТЕЛЬНО выполняется условие выхода
+   - Не должно быть ситуации: limiter=0, но агент остаётся в ops
+
+3. **repair_days = repair_time - 1**
+   - Не хардкод 180!
+   - repair_time берётся из MP по group_by агента
+   - Минус 1 потому что декремент до 0, а не до 1
+
+4. **Один датасет для сравнения**
+   - Baseline и Limiter на ОДНОЙ дате
+   - Нельзя: baseline на 04.07, limiter на 30.12
