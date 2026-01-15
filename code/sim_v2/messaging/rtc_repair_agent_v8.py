@@ -25,6 +25,7 @@ RepairAgent управляет квотой ремонта через счётч
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from model_build import RTC_MAX_FRAMES
 
 try:
     import pyflamegpu as fg
@@ -79,24 +80,47 @@ def create_repair_agent(model, env, repair_quota: int = 8, repair_time: int = 18
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# RTC: Инкремент capacity
+# RTC: Подсчёт HELI в repair (записывает 1 в буфер)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-RTC_REPAIR_INCREMENT_CAPACITY = """
-FLAMEGPU_AGENT_FUNCTION(rtc_repair_increment_capacity_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
+RTC_COUNT_REPAIR = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_repair_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    
+    auto mp_repair = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("count_repair_buffer");
+    mp_repair[idx].exchange(1u);
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RTC: Инкремент capacity (подсчитывает repair из буфера)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RTC_REPAIR_INCREMENT_CAPACITY = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_repair_increment_capacity_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // V8: Инкремент capacity на (repair_quota - count_repair)
-    // count_repair передаётся через Environment (подсчитан ранее)
+    // count_repair подсчитывается из count_repair_buffer
     
     const unsigned int capacity = FLAMEGPU->getVariable<unsigned int>("capacity");
     const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
-    const unsigned int count_repair = FLAMEGPU->environment.getProperty<unsigned int>("count_repair");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    // Подсчёт агентов в repair из буфера (БЕЗ сброса — сброс в отдельном слое)
+    auto mp_repair = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("count_repair_buffer");
+    unsigned int count_repair = 0u;
+    for (unsigned int i = 0u; i < frames && i < {RTC_MAX_FRAMES}u; ++i) {{
+        count_repair += mp_repair[i];
+    }}
     
     // capacity += (repair_quota - count_repair)
     // Если count_repair > repair_quota, инкремент = 0
     unsigned int increment = 0u;
-    if (repair_quota > count_repair) {
+    if (repair_quota > count_repair) {{
         increment = repair_quota - count_repair;
-    }
+    }}
     
     const unsigned int new_capacity = capacity + increment;
     FLAMEGPU->setVariable<unsigned int>("capacity", new_capacity);
@@ -108,13 +132,32 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_increment_capacity_v8, flamegpu::MessageNone,
     
     // DEBUG
     const unsigned int step = FLAMEGPU->getStepCounter();
-    if (step % 50u == 0u || step < 5u) {
+    if (step % 50u == 0u || step < 5u) {{
         printf("[RepairAgent] step=%u, capacity=%u (+%u), slots=%u\\n",
                step, new_capacity, increment, slots);
-    }
+    }}
     
     return flamegpu::ALIVE;
-}
+}}
+"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RTC: Сброс буфера count_repair_buffer (отдельный слой после increment)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RTC_RESET_COUNT_REPAIR_BUFFER = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_reset_count_repair_buffer_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // V8: Сброс буфера count_repair_buffer для следующего шага
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    auto mp_repair = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("count_repair_buffer");
+    for (unsigned int i = 0u; i < frames && i < {RTC_MAX_FRAMES}u; ++i) {{
+        mp_repair[i].exchange(0u);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
 """
 
 
@@ -174,7 +217,10 @@ def setup_repair_agent_macroproperties(env):
     # QuotaManager → RepairAgent
     env.newMacroPropertyUInt("repair_to_deduct_mp", 4)
     
-    print("  ✅ V8 MacroProperty для RepairAgent: capacity_mp, slots_mp, to_deduct_mp")
+    # Буфер для подсчёта агентов в repair (HELI записывает 1, RepairAgent суммирует)
+    env.newMacroPropertyUInt("count_repair_buffer", RTC_MAX_FRAMES)
+    
+    print("  ✅ V8 MacroProperty для RepairAgent: capacity_mp, slots_mp, to_deduct_mp, count_repair_buffer")
 
 
 # RTC: RepairAgent отправляет capacity в MacroProperty
@@ -196,21 +242,59 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_send_capacity_v8, flamegpu::MessageNone, flam
 """
 
 
-# RTC: RepairAgent читает to_deduct из MacroProperty
-RTC_REPAIR_RECEIVE_DEDUCT = """
-FLAMEGPU_AGENT_FUNCTION(rtc_repair_receive_deduct_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // V8: RepairAgent читает to_deduct от QuotaManager
+# RTC: RepairAgent подсчитывает одобренных из буферов P2/P3
+RTC_REPAIR_RECEIVE_DEDUCT = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_repair_receive_deduct_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // V8: RepairAgent подсчитывает одобренных P2/P3 из буферов
     
-    auto mp_deduct = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("repair_to_deduct_mp");
-    const unsigned int to_deduct = mp_deduct[0];
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("repair_time_const");
+    
+    auto mp_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("repair_p2_approved");
+    auto mp_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("repair_p3_approved");
+    
+    // Подсчёт одобренных
+    unsigned int p2_count = 0u;
+    unsigned int p3_count = 0u;
+    
+    for (unsigned int i = 0u; i < frames && i < {RTC_MAX_FRAMES}u; ++i) {{
+        p2_count += mp_p2[i];
+        p3_count += mp_p3[i];
+        // БЕЗ сброса — сброс в отдельном слое rtc_quota_v8.py
+    }}
+    
+    const unsigned int approved_total = p2_count + p3_count;
+    const unsigned int to_deduct = approved_total * repair_time;
     
     FLAMEGPU->setVariable<unsigned int>("to_deduct", to_deduct);
     
-    // Сброс MacroProperty
-    mp_deduct[0].exchange(0u);
+    // DEBUG
+    const unsigned int step = FLAMEGPU->getStepCounter();
+    if (to_deduct > 0u || step < 5u) {{
+        printf("[RepairAgent] step=%u, P2=%u, P3=%u, to_deduct=%u\\n",
+               step, p2_count, p3_count, to_deduct);
+    }}
     
     return flamegpu::ALIVE;
-}
+}}
+"""
+
+
+# RTC: Сброс буферов P2/P3 (отдельный слой после receive)
+RTC_RESET_P2P3_BUFFERS = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_reset_p2p3_buffers_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    auto mp_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("repair_p2_approved");
+    auto mp_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("repair_p3_approved");
+    
+    for (unsigned int i = 0u; i < frames && i < {RTC_MAX_FRAMES}u; ++i) {{
+        mp_p2[i].exchange(0u);
+        mp_p3[i].exchange(0u);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
 """
 
 
@@ -218,12 +302,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_receive_deduct_v8, flamegpu::MessageNone, fla
 # Регистрация слоёв RepairAgent
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def register_repair_agent_layers(model, repair_agent):
+def register_repair_agent_layers(model, repair_agent, heli_agent=None):
     """
     Регистрирует слои RepairAgent.
     
     Слои:
-    1. v8_repair_increment — инкремент capacity
+    0. v8_count_repair — HELI в repair записывает 1 в буфер (требует heli_agent)
+    1. v8_repair_increment — инкремент capacity (подсчитывает из буфера)
     2. v8_repair_send — отправка capacity/slots в MacroProperty
     (между ними — QuotaManager принимает решение)
     3. v8_repair_receive — получение to_deduct
@@ -231,12 +316,27 @@ def register_repair_agent_layers(model, repair_agent):
     """
     print("\n📦 V8: Регистрация RepairAgent слоёв...")
     
-    # 1. Инкремент capacity
+    # 0. HELI в repair записывает 1 в буфер для подсчёта
+    if heli_agent:
+        layer_count = model.newLayer("v8_count_repair")
+        fn = heli_agent.newRTCFunction("rtc_count_repair_v8", RTC_COUNT_REPAIR)
+        fn.setInitialState("repair")
+        fn.setEndState("repair")
+        layer_count.addAgentFunction(fn)
+    
+    # 1. Инкремент capacity (подсчитывает repair из буфера)
     layer_inc = model.newLayer("v8_repair_increment")
     fn = repair_agent.newRTCFunction("rtc_repair_increment_capacity_v8", RTC_REPAIR_INCREMENT_CAPACITY)
     fn.setInitialState("default")
     fn.setEndState("default")
     layer_inc.addAgentFunction(fn)
+    
+    # 1.5. Сброс буфера count_repair_buffer (отдельный слой для избежания race condition)
+    layer_reset = model.newLayer("v8_reset_count_repair")
+    fn = repair_agent.newRTCFunction("rtc_reset_count_repair_buffer_v8", RTC_RESET_COUNT_REPAIR_BUFFER)
+    fn.setInitialState("default")
+    fn.setEndState("default")
+    layer_reset.addAgentFunction(fn)
     
     # 2. Отправка в MacroProperty
     layer_send = model.newLayer("v8_repair_send")
@@ -266,6 +366,13 @@ def register_repair_agent_post_quota_layers(model, repair_agent):
     fn.setInitialState("default")
     fn.setEndState("default")
     layer_recv.addAgentFunction(fn)
+    
+    # 3.5. Сброс буферов P2/P3 (отдельный слой для избежания race condition)
+    layer_reset = model.newLayer("v8_reset_p2p3")
+    fn = repair_agent.newRTCFunction("rtc_reset_p2p3_buffers_v8", RTC_RESET_P2P3_BUFFERS)
+    fn.setInitialState("default")
+    fn.setEndState("default")
+    layer_reset.addAgentFunction(fn)
     
     # 4. Списание
     layer_deduct = model.newLayer("v8_repair_deduct")

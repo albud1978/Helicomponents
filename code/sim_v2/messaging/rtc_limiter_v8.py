@@ -269,37 +269,37 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v8, flamegpu::MessageNone, flameg
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# RTC: Update day V8
+# HostFunction: Update day V8 (заменяет RTC для избежания race condition)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-RTC_UPDATE_DAY_V8 = """
-FLAMEGPU_AGENT_FUNCTION(rtc_update_day_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // V8: Обновление current_day += adaptive_days
-    // Только один агент (group_by=1) выполняет
+class HF_UpdateDayV8(fg.HostFunction):
+    """
+    HostFunction для обновления current_day += adaptive_days.
+    Заменяет RTC функцию для избежания race condition при чтении/записи MacroProperty.
+    """
     
-    const uint8_t group_by = FLAMEGPU->getVariable<uint8_t>("group_by");
-    if (group_by != 1u) return flamegpu::ALIVE;
+    def __init__(self, end_day: int):
+        super().__init__()
+        self.end_day = end_day
     
-    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
-    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
-    
-    const unsigned int current_day = mp_day[0];
-    const unsigned int adaptive_days = mp_result[0];
-    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
-    
-    if (current_day >= end_day) return flamegpu::ALIVE;
-    
-    unsigned int new_day = current_day + adaptive_days;
-    if (new_day > end_day) new_day = end_day;
-    
-    // Сохраняем prev_day
-    mp_day[1] = current_day;
-    // Обновляем current_day
-    mp_day[0] = new_day;
-    
-    return flamegpu::ALIVE;
-}
-"""
+    def run(self, FLAMEGPU):
+        mp_day = FLAMEGPU.environment.getMacroPropertyUInt("current_day_mp")
+        mp_result = FLAMEGPU.environment.getMacroPropertyUInt("adaptive_result_mp")
+        
+        current_day = int(mp_day[0])
+        adaptive_days = int(mp_result[0])
+        
+        if current_day >= self.end_day:
+            return
+        
+        new_day = current_day + adaptive_days
+        if new_day > self.end_day:
+            new_day = self.end_day
+        
+        # Сохраняем prev_day
+        mp_day[1] = current_day
+        # Обновляем current_day
+        mp_day[0] = new_day
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -352,12 +352,10 @@ def register_v8_adaptive_layers(model, agent, quota_agent, deterministic_dates: 
     fn.setEndState("default")
     layer_compute.addAgentFunction(fn)
     
-    # 5. Update day
+    # 5. Update day (HostFunction для избежания race condition)
+    hf_update_day = HF_UpdateDayV8(end_day)
     layer_update = model.newLayer("v8_update_day")
-    fn = quota_agent.newRTCFunction("rtc_update_day_v8", RTC_UPDATE_DAY_V8)
-    fn.setInitialState("default")
-    fn.setEndState("default")
-    layer_update.addAgentFunction(fn)
+    layer_update.addHostFunction(hf_update_day)
     
     print(f"  ✅ V8 adaptive layers зарегистрированы (5 слоёв)")
     
