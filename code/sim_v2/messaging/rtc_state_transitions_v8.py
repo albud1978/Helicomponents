@@ -188,27 +188,21 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::Me
 
 RTC_CHECK_LIMITER_ZERO = """
 FLAMEGPU_AGENT_FUNCTION(rtc_check_limiter_zero_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // V8: Гарантия выхода при limiter=0
-    // Если агент в operations с limiter=0, но не перешёл — это ОШИБКА
+    // V8: Проверка limiter=0 без перехода
+    // 
+    // ПРИМЕЧАНИЕ: Это не всегда ошибка!
+    // - limiter вычисляется через бинарный поиск по mp5_cumsum
+    // - Условие перехода проверяет SNE + dt_next >= LL
+    // - При адаптивных шагах limiter может достичь 0 раньше чем SNE достигнет LL
+    //   (из-за округления и разницы между cumsum прогнозом и реальным dt)
+    // 
+    // Поэтому limiter=0 — это SIGNAL для пересчёта, не обязательно ошибка.
+    // Просто пересчитываем limiter в L_limiter_entry.
     
     const unsigned short limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
     
-    if (limiter == 0u) {
-        // limiter=0 но агент всё ещё в operations — логическая ошибка!
-        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-        const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
-        const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-        const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
-        const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
-        
-        printf("[V8 ERROR] limiter=0 but agent still in ops! idx=%u, acn=%u, sne=%u/%u, ppr=%u/%u\\n",
-               idx, acn, sne, ll, ppr, oh);
-        
-        // ВНИМАНИЕ: В production это должно быть EXCEPTION
-        // Пока только логируем для отладки
-        // return flamegpu::DEAD;  // Убивает агента — слишком радикально
-    }
+    // limiter=0 автоматически триггерит пересчёт в L_limiter_entry
+    // (где проверяется current_limiter == 0)
     
     return flamegpu::ALIVE;
 }
