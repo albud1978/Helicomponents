@@ -183,6 +183,39 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::Me
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# V8: Проверка limiter=0 без перехода (EXCEPTION)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RTC_CHECK_LIMITER_ZERO = """
+FLAMEGPU_AGENT_FUNCTION(rtc_check_limiter_zero_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
+    // V8: Гарантия выхода при limiter=0
+    // Если агент в operations с limiter=0, но не перешёл — это ОШИБКА
+    
+    const unsigned short limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
+    
+    if (limiter == 0u) {
+        // limiter=0 но агент всё ещё в operations — логическая ошибка!
+        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+        const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+        const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+        const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
+        const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+        
+        printf("[V8 ERROR] limiter=0 but agent still in ops! idx=%u, acn=%u, sne=%u/%u, ppr=%u/%u\\n",
+               idx, acn, sne, ll, ppr, oh);
+        
+        // ВНИМАНИЕ: В production это должно быть EXCEPTION
+        // Пока только логируем для отладки
+        // return flamegpu::DEAD;  // Убивает агента — слишком радикально
+    }
+    
+    return flamegpu::ALIVE;
+}
+"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Регистрация V8 переходов
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -194,6 +227,7 @@ def register_ops_transitions_v8(model, agent):
     1. v8_ops_increment — инкремент SNE/PPR + сохранение dt_next
     2. v8_ops_to_storage — переход 2→6
     3. v8_ops_to_unsvc — переход 2→7
+    4. v8_check_limiter_zero — EXCEPTION если limiter=0 без перехода
     """
     print("\n📦 V8: Регистрация operations переходов (next-day dt)...")
     
@@ -220,5 +254,12 @@ def register_ops_transitions_v8(model, agent):
     fn.setEndState("unserviceable")
     layer_unsvc.addAgentFunction(fn)
     
-    print("  ✅ V8 operations переходы: increment + storage + unsvc (next-day dt)")
+    # 4. V8: Проверка limiter=0 без перехода (EXCEPTION)
+    layer_check = model.newLayer("v8_check_limiter_zero")
+    fn = agent.newRTCFunction("rtc_check_limiter_zero_v8", RTC_CHECK_LIMITER_ZERO)
+    fn.setInitialState("operations")
+    fn.setEndState("operations")
+    layer_check.addAgentFunction(fn)
+    
+    print("  ✅ V8 operations переходы: increment + storage + unsvc + limiter_check")
 
