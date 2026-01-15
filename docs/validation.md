@@ -62,23 +62,47 @@
 
 ### 2.2 Колонки валидации
 
+**Ресурсы разделены по типам ВС (Mi-8 и Mi-17):**
+
 | Колонка | Тип | Источник | Описание |
 |---------|-----|----------|----------|
-| `ll_mi8` | Nullable(UInt32) | md_components | Life Limit (назначенный ресурс) |
-| `oh_mi8` | Nullable(UInt32) | md_components | Overhaul (межремонтный ресурс) |
-| `br_mi8` | Nullable(UInt32) | md_components | Beyond Repair (порог неремонтопригодности) |
+| `ll_mi8` | Nullable(UInt32) | md_components | Life Limit Mi-8 (назначенный ресурс) |
+| `oh_mi8` | Nullable(UInt32) | md_components | Overhaul Mi-8 (межремонтный ресурс) |
+| `br_mi8` | Nullable(UInt32) | md_components | Beyond Repair Mi-8 (порог неремонтопригодности) |
+| `ll_mi17` | Nullable(UInt32) | md_components | Life Limit Mi-17 (назначенный ресурс) |
+| `oh_mi17` | Nullable(UInt32) | md_components | Overhaul Mi-17 (межремонтный ресурс) |
+| `br_mi17` | Nullable(UInt32) | md_components | Beyond Repair Mi-17 (порог неремонтопригодности) |
 | `error_flags` | UInt8 | расчётный | Битовая маска ошибок |
+
+**Маппинг по ac_type_mask:**
+- `ac_type_mask = 32` → Mi-8 → используются `ll_mi8`, `oh_mi8`, `br_mi8`
+- `ac_type_mask = 64` → Mi-17 → используются `ll_mi17`, `oh_mi17`, `br_mi17`
 
 ### 2.3 Битовая маска error_flags
 
 | Бит | Значение | Status | Константа | Условие SQL |
 |-----|----------|--------|-----------|-------------|
-| 0 | 1 | 10 | `FLAG_NO_DATA` | `ll_mi8 IS NULL OR ll_mi8 = 0` |
+| 0 | 1 | 10 | `FLAG_NO_DATA` | `(ll_mi8 IS NULL OR ll_mi8 = 0) AND (ll_mi17 IS NULL OR ll_mi17 = 0)` |
 | 1 | 2 | 11 | `FLAG_DATE_PAST` | `target_date < version_date AND target_date IS NOT NULL` |
 | 2 | 4 | 12 | `FLAG_SNE_ZERO` | `condition != 'ИСПРАВНЫЙ' AND sne = 0` |
-| 3 | 8 | 13 | `FLAG_OVER_LIMIT` | `ll_mi8 > 0 AND (sne > ll_mi8 OR ppr > oh_mi8)` |
+| 3 | 8 | 13 | `FLAG_OVER_LIMIT` | *см. ниже* |
 | 4 | 16 | 14 | `FLAG_BAD_COND` | `condition NOT IN ('ИСПРАВНЫЙ', 'НЕИСПРАВНЫЙ', 'ДОНОР', 'ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР')` |
-| 5 | 32 | 15 | `FLAG_EARLY_DONOR` | `condition = 'ДОНОР' AND br_mi8 > 0 AND sne < br_mi8` |
+| 5 | 32 | 15 | `FLAG_EARLY_DONOR` | *см. ниже* |
+
+**Детали FLAG_OVER_LIMIT (Status 13):**
+```sql
+-- Mi-8 (ac_type_mask = 32):
+(ll_mi8 > 0 AND sne > ll_mi8) OR (oh_mi8 > 0 AND ppr > oh_mi8 AND group_by != 6)
+
+-- Mi-17 (ac_type_mask = 64):
+(ll_mi17 > 0 AND sne > ll_mi17) OR (oh_mi17 > 0 AND ppr > oh_mi17 AND group_by != 6)
+```
+
+**Детали FLAG_EARLY_DONOR (Status 15):**
+```sql
+-- Mi-8: (ac_type_mask = 32 AND br_mi8 > 0 AND sne < br_mi8)
+-- Mi-17: (ac_type_mask = 64 AND br_mi17 > 0 AND sne < br_mi17)
+```
 
 ### 2.4 Рабочие статусы (только при error_flags = 0)
 
