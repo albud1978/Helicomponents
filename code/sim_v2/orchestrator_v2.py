@@ -500,6 +500,8 @@ def main():
     """Главная функция оркестратора"""
     parser = argparse.ArgumentParser(description='V2 Orchestrator с модульной архитектурой')
     # Полный набор модулей для симуляции планеров
+    # КРИТИЧНО: порядок должен соответствовать .cursorrules!
+    # spawn_dynamic ПЕРЕД state_managers, spawn_v2 ПОСЛЕДНИМ
     DEFAULT_MODULES = [
         'state_2_operations',      # Инкремент sne/ppr для operations
         'states_stub',             # Заглушки для неактивных состояний
@@ -509,14 +511,14 @@ def main():
         'quota_promote_serviceable',  # Промоут serviceable → operations
         'quota_promote_reserve',      # Промоут reserve → operations
         'quota_promote_inactive',     # Промоут inactive → operations
+        'spawn_dynamic',              # Динамический спавн по дефициту (ПЕРЕД state_managers!)
         'state_manager_serviceable',  # Переходы serviceable
         'state_manager_operations',   # Переходы operations → repair/storage
         'state_manager_repair',       # Переходы repair → operations/reserve
-        'state_manager_reserve',      # Переходы reserve → operations
         'state_manager_storage',      # Storage (терминальное)
+        'state_manager_reserve',      # Переходы reserve → operations
         'state_manager_inactive',     # inactive → operations/repair
-        'spawn_v2',                   # Детерминированный спавн (MP4 seed)
-        'spawn_dynamic',              # Динамический спавн по дефициту
+        'spawn_v2',                   # Детерминированный спавн (MP4 seed) — ПОСЛЕДНИМ!
     ]
     parser.add_argument('--modules', nargs='+', default=DEFAULT_MODULES,
                       help='Список RTC модулей для подключения')
