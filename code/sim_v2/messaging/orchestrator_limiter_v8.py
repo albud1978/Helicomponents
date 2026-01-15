@@ -87,8 +87,9 @@ from datetime import date
 # V8 модули
 import rtc_state_transitions_v7  # Детерминированные переходы (repair→svc, spawn→ops)
 import rtc_state_transitions_v8  # V8: next-day dt проверка!
-import rtc_quota_v8              # V8: квотирование через RepairAgent!
-import rtc_repair_agent_v8       # V8: RepairAgent!
+import rtc_quota_v7              # V7: квотирование (без RepairAgent — baseline совместимо!)
+import rtc_quota_v8              # V8: квотирование через RepairAgent (ОТКЛЮЧЕНО)
+import rtc_repair_agent_v8       # V8: RepairAgent (ОТКЛЮЧЕНО)
 import rtc_limiter_optimized
 import rtc_limiter_v5            # Для совместимости
 import rtc_limiter_v8            # V8: deterministic_dates!
@@ -230,15 +231,12 @@ class LimiterV8Orchestrator:
         layer_init.addHostFunction(hf_init_cumsum)
         
         # ═══════════════════════════════════════════════════════════════
-        # V8: RepairAgent — агент ремонтной мощности
+        # V8: RepairAgent ОТКЛЮЧЁН — используем V7 квотирование
         # ═══════════════════════════════════════════════════════════════
-        repair_quota = int(self.env_data.get('mi17_repair_quota', 8))
-        repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
-        
-        self.repair_agent = rtc_repair_agent_v8.create_repair_agent(
-            self.model, self.base_model.env, repair_quota, repair_time
-        )
-        rtc_repair_agent_v8.setup_repair_agent_macroproperties(self.base_model.env)
+        # repair_quota = int(self.env_data.get('mi17_repair_quota', 8))
+        # repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
+        # self.repair_agent = rtc_repair_agent_v8.create_repair_agent(...)
+        self.repair_agent = None  # Отключено для baseline совместимости
         
         # count_repair: подсчитывается динамически или через MacroProperty
         # Начальное значение 0, будет обновлено RTC функцией подсчёта
@@ -257,20 +255,12 @@ class LimiterV8Orchestrator:
         # Фаза 1: V8 Operations (next-day dt проверка!)
         rtc_state_transitions_v8.register_ops_transitions_v8(self.model, heli_agent)
         
-        # Фаза 1.5: RepairAgent инкремент + отправка (передаём heli_agent для подсчёта repair)
-        rtc_repair_agent_v8.register_repair_agent_layers(self.model, self.repair_agent, heli_agent)
-        
-        # V8 MacroProperty для подсчёта одобренных P2/P3
-        rtc_quota_v8.setup_quota_v8_macroproperties(self.base_model.env)
-        
-        # Фаза 2: V8 Квотирование (P2/P3 через RepairAgent!)
-        rtc_quota_v8.register_quota_v8_full(self.model, heli_agent)
+        # Фаза 2: V7 Квотирование (baseline совместимо!)
+        # ВНИМАНИЕ: Используем V7 вместо V8 RepairAgent для корректного ops=target
+        rtc_quota_v7.register_quota_v7(self.model, heli_agent)
         
         # Фаза 3: Переходы после квотирования
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
-        
-        # Фаза 3.5: RepairAgent получение + списание
-        rtc_repair_agent_v8.register_repair_agent_post_quota_layers(self.model, self.repair_agent)
         
         # ═══════════════════════════════════════════════════════════════
         # Динамический спавн Mi-17 (после P3)
@@ -515,15 +505,9 @@ class LimiterV8Orchestrator:
         qm_pop[1].setVariableUInt8("group_by", 2)  # Mi-17
         self.simulation.setPopulationData(qm_pop)
         
-        # V8: RepairAgent (подсчёт агентов в repair для начальной capacity)
-        count_repair = self._count_agents_in_state("repair")
-        repair_quota = int(self.env_data.get('mi17_repair_quota', 8))
-        repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
-        
-        rtc_repair_agent_v8.init_repair_agent_population(
-            self.simulation, self.repair_agent,
-            repair_quota, repair_time, count_repair
-        )
+        # V8: RepairAgent ОТКЛЮЧЁН — не инициализируем популяцию
+        # count_repair = self._count_agents_in_state("repair")
+        # rtc_repair_agent_v8.init_repair_agent_population(...)
         
         # Динамический спавн (менеджер + тикеты)
         if hasattr(self, 'spawn_data') and self.spawn_data:
@@ -643,19 +627,84 @@ class LimiterV8Orchestrator:
         return total_spawn
     
     def _print_final_stats(self):
-        """Вывод финальной статистики"""
+        """Вывод финальной статистики + ВАЛИДАЦИЯ"""
         print("\n📊 Финальная статистика V8:")
         
+        # Подсчёт по состояниям и типам
         states = ["inactive", "operations", "serviceable", "repair", "reserve", "storage", "unserviceable"]
+        state_counts = {}
+        mi8_by_state = {}
+        mi17_by_state = {}
         total = 0
+        
         for state in states:
             heli_pop = fg.AgentVector(self.base_model.agent)
             self.simulation.getPopulationData(heli_pop, state)
             count = heli_pop.size()
+            state_counts[state] = count
             total += count
-            print(f"   {state}: {count}")
+            
+            # Подсчёт по типам
+            mi8 = 0
+            mi17 = 0
+            for i in range(count):
+                agent = heli_pop.at(i)
+                group_by = agent.getVariableUInt("group_by")  # UInt32 в HELI agent
+                if group_by == 1:
+                    mi8 += 1
+                elif group_by == 2:
+                    mi17 += 1
+            mi8_by_state[state] = mi8
+            mi17_by_state[state] = mi17
+            
+            print(f"   {state}: {count} (Mi-8: {mi8}, Mi-17: {mi17})")
         print(f"   -----------")
         print(f"   ВСЕГО: {total}")
+        
+        # ═══════════════════════════════════════════════════════════════
+        # ВАЛИДАЦИЯ: ops = target (на последний день)
+        # ═══════════════════════════════════════════════════════════════
+        print("\n🔍 ВАЛИДАЦИЯ ops = target:")
+        
+        mi8_ops = mi8_by_state.get("operations", 0)
+        mi17_ops = mi17_by_state.get("operations", 0)
+        
+        # Target на СЛЕДУЮЩИЙ день после end_day (или end_day если это последний)
+        mp4_mi8 = self.env_data.get('mp4_ops_counter_mi8', [])
+        mp4_mi17 = self.env_data.get('mp4_ops_counter_mi17', [])
+        
+        # Используем target на end_day (так как это финальное состояние)
+        target_day = min(self.end_day, len(mp4_mi8) - 1)
+        mi8_target = mp4_mi8[target_day] if target_day < len(mp4_mi8) else 0
+        mi17_target = mp4_mi17[target_day] if target_day < len(mp4_mi17) else 0
+        
+        mi8_delta = mi8_ops - mi8_target
+        mi17_delta = mi17_ops - mi17_target
+        
+        mi8_status = "✅" if mi8_delta == 0 else "❌"
+        mi17_status = "✅" if mi17_delta == 0 else "❌"
+        
+        print(f"   Mi-8:  ops={mi8_ops}, target={mi8_target}, Δ={mi8_delta:+} {mi8_status}")
+        print(f"   Mi-17: ops={mi17_ops}, target={mi17_target}, Δ={mi17_delta:+} {mi17_status}")
+        
+        # Проверка физических ограничений
+        mi8_unsvc = mi8_by_state.get("unserviceable", 0)
+        mi8_repair = mi8_by_state.get("repair", 0)
+        mi17_unsvc = mi17_by_state.get("unserviceable", 0)
+        mi17_repair = mi17_by_state.get("repair", 0)
+        
+        if mi8_delta < 0 and (mi8_unsvc > 0 or mi8_repair > 0):
+            print(f"   ⚠️ Mi-8 дефицит может быть из-за: unsvc={mi8_unsvc}, repair={mi8_repair}")
+        if mi17_delta < 0 and (mi17_unsvc > 0 or mi17_repair > 0):
+            print(f"   ⚠️ Mi-17 дефицит может быть из-за: unsvc={mi17_unsvc}, repair={mi17_repair}")
+        
+        # Итоговый статус валидации
+        if mi8_delta == 0 and mi17_delta == 0:
+            print("\n✅ ВАЛИДАЦИЯ ПРОЙДЕНА: ops = target")
+        elif abs(mi8_delta) <= (mi8_unsvc + mi8_repair) and abs(mi17_delta) <= (mi17_unsvc + mi17_repair):
+            print("\n⚠️ ВАЛИДАЦИЯ: дефицит объясняется физическими ограничениями (unsvc/repair)")
+        else:
+            print("\n❌ ВАЛИДАЦИЯ ПРОВАЛЕНА: ops ≠ target (баг квотирования!)")
 
 
 class HF_InitMP5Cumsum(fg.HostFunction):

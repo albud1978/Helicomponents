@@ -49,27 +49,20 @@ from rtc_quota_v7 import (
 
 RTC_PROMOTE_UNSVC_V8 = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // V8: P2 unserviceable → operations (с проверкой RepairAgent.capacity)
+    // V8: P2 unserviceable → operations
+    // FIX: Проверяем exit_date агента (как в V7) вместо глобального repair_time
     
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("repair_time_const");
     
-    // V8: Условие 1 — прошло достаточно времени от начала симуляции
-    if (day < repair_time) {{
-        return flamegpu::ALIVE;  // Рано для P2
-    }}
-    
-    // V8: Читаем capacity от RepairAgent
-    auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("repair_slots_mp");
-    const unsigned int available_slots = mp_slots[0];
-    
-    // V8: Условие 2 — есть ремонтная мощность
-    if (available_slots == 0u) {{
-        return flamegpu::ALIVE;  // Нет мощности для P2
+    // V8 FIX: Проверяем exit_date агента — должен отбыть repair_time перед возвратом в ops
+    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
+    if (exit_date > 0u && exit_date != 0xFFFFFFFFu && day < exit_date) {{
+        // Ещё не готов — ждём repair_time
+        return flamegpu::ALIVE;
     }}
     
     // Читаем target из mp4 (PropertyArray, не MacroProperty!)
@@ -116,9 +109,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
     }}
     unsigned int deficit = target - curr_after_p1;
     
-    // V8: Ограничение по slots
-    unsigned int approved = (deficit < available_slots) ? deficit : available_slots;
-    unsigned int needed = (approved < unsvc_available) ? approved : unsvc_available;
+    // V8 FIX: Используем V7-стиль — промоут по дефициту без ограничения slots
+    // (агент уже прошёл проверку exit_date)
+    unsigned int needed = (deficit < unsvc_available) ? deficit : unsvc_available;
     
     if (needed == 0u) {{
         return flamegpu::ALIVE;
@@ -136,11 +129,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
     
     if (rank < needed) {{
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
-        
-        // V8: Записываем approved в буфер (будет подсчитано в RepairAgent)
-        // Используем atomicMin для безопасной записи 1 (агент одобрен)
-        auto mp_p2_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("repair_p2_approved");
-        mp_p2_count[idx].exchange(1u);
     }}
     
     return flamegpu::ALIVE;
@@ -149,37 +137,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# V8: P3 ПРОМОУТ с проверкой RepairAgent.capacity
+# V8 FIX: P3 ПРОМОУТ без ограничения RepairAgent (inactive НЕ требует ремонта!)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 RTC_PROMOTE_INACTIVE_V8 = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // V8: P3 inactive → operations (с проверкой RepairAgent.capacity)
+    // V8 FIX: P3 inactive → operations (БЕЗ проверки RepairAgent — inactive УЖЕ исправны!)
+    // inactive — это агенты на хранении, которые не требуют ремонта для возврата в ops
     
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("repair_time_const");
-    
-    // V8: Условие 1 — прошло достаточно времени
-    if (day < repair_time) {{
-        return flamegpu::ALIVE;
-    }}
-    
-    // V8: Читаем ОСТАВШИЕСЯ slots (после P2)
-    auto mp_cap = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("repair_capacity_mp");
-    auto mp_deduct = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("repair_to_deduct_mp");
-    const unsigned int capacity = mp_cap[0];
-    const unsigned int already_deducted = mp_deduct[0];  // Уже зарезервировано P2
-    
-    const unsigned int remaining_capacity = (capacity > already_deducted) ? (capacity - already_deducted) : 0u;
-    const unsigned int available_slots = (repair_time > 0u) ? (remaining_capacity / repair_time) : 0u;
-    
-    if (available_slots == 0u) {{
-        return flamegpu::ALIVE;
-    }}
     
     // Читаем target (PropertyArray, не MacroProperty!)
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
@@ -233,9 +203,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     }}
     unsigned int deficit = target - curr_after_p2;
     
-    // V8: Ограничение по оставшимся slots
-    unsigned int approved = (deficit < available_slots) ? deficit : available_slots;
-    unsigned int needed = (approved < inactive_available) ? approved : inactive_available;
+    // V8 FIX: БЕЗ ограничения slots — inactive не требуют ремонта
+    unsigned int needed = (deficit < inactive_available) ? deficit : inactive_available;
     
     if (needed == 0u) {{
         return flamegpu::ALIVE;

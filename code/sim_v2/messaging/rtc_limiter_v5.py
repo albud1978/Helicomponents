@@ -165,6 +165,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v5, flamegpu::MessageNone, flameg
     // Не выходить за end_day
     unsigned int remaining = end_day - current_day;
     if (adaptive_days > remaining) adaptive_days = remaining;
+    
+    // V8 FIX: Ограничение max adaptive_days до repair_time (180)
+    // Это гарантирует что exit_date unsvc агентов не будет перепрыгнут
+    const unsigned int max_step = 180u;  // repair_time
+    if (adaptive_days > max_step) adaptive_days = max_step;
+    
     if (adaptive_days < 1u) adaptive_days = 1u;
     
     // DEBUG: каждые 50 шагов
