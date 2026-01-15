@@ -222,6 +222,7 @@ class LimiterV8Orchestrator:
         # ═══════════════════════════════════════════════════════════════
         cumsum_size = model_build.RTC_MAX_FRAMES * (model_build.MAX_DAYS + 1)
         self.base_model.env.newMacroPropertyUInt32("mp5_cumsum", cumsum_size)
+        # mp4_ops_counter_mi8/mi17 уже созданы в base_model как PropertyArray
         
         # HF для инициализации mp5_cumsum
         hf_init_cumsum = HF_InitMP5Cumsum(self.mp5_cumsum, self.frames, self.days)
