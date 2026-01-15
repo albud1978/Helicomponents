@@ -131,8 +131,21 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
     
     # 1. Квоты
     if 'quota' in results:
+        quota_errors = results['quota'].get('errors', [])
+        quota_warnings = results['quota'].get('warnings', [])
+        quota_status = "✅" if results['quota'].get('valid', False) and (not strict or len(quota_warnings) == 0) else "❌"
+        
         lines.extend([
-            f"## 1. Валидация квот",
+            f"## 1. Валидация квот {quota_status}",
+            f"",
+            f"**Проверка:** ops_count vs quota_target по дням",
+            f"",
+            f"**Критерии:**",
+            f"- ✅ Точное соответствие: delta = 0",
+            f"- ⚪ Допустимо: |delta| ≤ 1 (TOLERANCE)",
+            f"- ⚠️ Недобор: delta ∈ [-3, -2] (WARNING)",
+            f"- ❌ Критичный: delta < -3 (ERROR)",
+            f"- 📈 Избыток: delta > 0 (информационно)",
             f"",
         ])
         
@@ -146,20 +159,60 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
                     lines.extend([
                         f"### {ac_type.upper()}",
                         f"",
-                        f"| Категория | Дней | % |",
-                        f"|-----------|------|---|",
-                        f"| Точное соответствие | {s.get('ok', 0)} | {100*s.get('ok',0)/total:.1f}% |",
-                        f"| Отклонение ±1 | {s.get('minor', 0)} | {100*s.get('minor',0)/total:.1f}% |",
-                        f"| Недобор 2-3 | {s.get('deficit', 0)} | {100*s.get('deficit',0)/total:.1f}% |",
-                        f"| Критичный >3 | {s.get('critical', 0)} | {100*s.get('critical',0)/total:.1f}% |",
-                        f"| Избыток | {s.get('excess', 0)} | {100*s.get('excess',0)/total:.1f}% |",
+                        f"| Категория | Дней | % | Статус |",
+                        f"|-----------|------|---|--------|",
+                        f"| Точное соответствие | {s.get('ok', 0)} | {100*s.get('ok',0)/total:.1f}% | ✅ |",
+                        f"| Отклонение ±1 | {s.get('minor', 0)} | {100*s.get('minor',0)/total:.1f}% | ⚪ |",
+                        f"| Недобор 2-3 | {s.get('deficit', 0)} | {100*s.get('deficit',0)/total:.1f}% | ⚠️ WARNING |",
+                        f"| Критичный >3 | {s.get('critical', 0)} | {100*s.get('critical',0)/total:.1f}% | ❌ ERROR |",
+                        f"| Избыток | {s.get('excess', 0)} | {100*s.get('excess',0)/total:.1f}% | 📈 |",
                         f"",
                     ])
+        
+        # Ошибки этой проверки
+        if quota_errors:
+            lines.extend([
+                f"### ❌ Ошибки квот ({len(quota_errors)})",
+                f"",
+                f"| # | День | Тип | Квота | Факт | Дефицит |",
+                f"|---|------|-----|-------|------|---------|",
+            ])
+            display_errs = quota_errors if no_limit else quota_errors[:20]
+            for i, e in enumerate(display_errs, 1):
+                lines.append(f"| {i} | {e.get('day', '?')} | {e.get('ac_type', '?')} | {e.get('quota', '?')} | {e.get('ops', '?')} | {e.get('deficit', '?')} |")
+            if not no_limit and len(quota_errors) > 20:
+                lines.append(f"| ... | ... | ... | ... | ... | ещё {len(quota_errors) - 20} |")
+            lines.append("")
+        
+        # Warnings этой проверки
+        if quota_warnings:
+            lines.extend([
+                f"### ⚠️ Предупреждения квот ({len(quota_warnings)})",
+                f"",
+                f"| # | День | Тип | Дефицит | Описание |",
+                f"|---|------|-----|---------|----------|",
+            ])
+            display_warns = quota_warnings if no_limit else quota_warnings[:20]
+            for i, w in enumerate(display_warns, 1):
+                lines.append(f"| {i} | {w.get('day', '?')} | {w.get('ac_type', '?')} | {w.get('deficit', '?')} | Недобор 2-3 борта |")
+            if not no_limit and len(quota_warnings) > 20:
+                lines.append(f"| ... | ... | ... | ... | ещё {len(quota_warnings) - 20} |")
+            lines.append("")
     
     # 2. Переходы
     if 'transitions' in results:
+        trans_errors = results['transitions'].get('errors', [])
+        trans_warnings = results['transitions'].get('warnings', [])
+        trans_status = "✅" if results['transitions'].get('valid', False) and (not strict or len(trans_warnings) == 0) else "❌"
+        
         lines.extend([
-            f"## 2. Валидация переходов",
+            f"## 2. Валидация переходов {trans_status}",
+            f"",
+            f"**Проверки:**",
+            f"1. Матрица разрешённых переходов (transition_X_to_Y → state)",
+            f"2. Консистентность state vs transition flags",
+            f"3. Длительность ремонта vs repair_time",
+            f"4. Отсутствие запрещённых переходов",
             f"",
         ])
         
@@ -176,14 +229,14 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
                 ])
                 
                 for col, data in sorted(by_type.items()):
-                    status = "✅" if data['allowed'] else "❌"
+                    status = "✅" if data['allowed'] else "❌ ЗАПРЕЩЁН"
                     lines.append(f"| {data['from']}→{data['to']} | {data['count']:,} | {data['mi8']:,} | {data['mi17']:,} | {status} |")
                 
                 lines.append("")
         
         if 'repair_duration' in trans_stats:
             repair = trans_stats['repair_duration']
-            if 'summary' in repair:
+            if 'summary' in repair and repair['summary']:
                 lines.extend([
                     f"### Длительность ремонта",
                     f"",
@@ -192,36 +245,141 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
                 ])
                 
                 for ac_type, s in repair['summary'].items():
-                    lines.append(f"| {ac_type} | {s['total_repairs']} | {s['expected_duration']} дн. | {s['min_duration']} | {s['max_duration']} | {s['avg_duration']:.1f} | {s['correct']}/{s['total_repairs']} |")
+                    correct_pct = 100 * s['correct'] / s['total_repairs'] if s['total_repairs'] > 0 else 0
+                    status = "✅" if s['correct'] == s['total_repairs'] else "⚠️"
+                    lines.append(f"| {ac_type} | {s['total_repairs']} | {s['expected_duration']} дн. | {s['min_duration']} | {s['max_duration']} | {s['avg_duration']:.1f} | {s['correct']}/{s['total_repairs']} ({correct_pct:.0f}%) {status} |")
                 
                 lines.append("")
+        
+        # Ошибки этой проверки
+        if trans_errors:
+            lines.extend([
+                f"### ❌ Ошибки переходов ({len(trans_errors)})",
+                f"",
+                f"| # | Тип | AC | День | Описание |",
+                f"|---|-----|-----|------|----------|",
+            ])
+            display_errs = trans_errors if no_limit else trans_errors[:20]
+            for i, e in enumerate(display_errs, 1):
+                msg = e.get('message', '')[:50]
+                lines.append(f"| {i} | {e.get('type', '?')} | {e.get('aircraft_number', '?')} | {e.get('day', '?')} | {msg} |")
+            if not no_limit and len(trans_errors) > 20:
+                lines.append(f"| ... | ... | ... | ... | ещё {len(trans_errors) - 20} |")
+            lines.append("")
+        
+        # Warnings этой проверки
+        if trans_warnings:
+            lines.extend([
+                f"### ⚠️ Предупреждения переходов ({len(trans_warnings)})",
+                f"",
+                f"| # | Тип | Описание |",
+                f"|---|-----|----------|",
+            ])
+            display_warns = trans_warnings if no_limit else trans_warnings[:20]
+            for i, w in enumerate(display_warns, 1):
+                msg = w.get('message', '')[:60]
+                lines.append(f"| {i} | {w.get('type', '?')} | {msg} |")
+            if not no_limit and len(trans_warnings) > 20:
+                lines.append(f"| ... | ... | ещё {len(trans_warnings) - 20} |")
+            lines.append("")
     
     # 3. Инкременты
     if 'increments' in results:
+        inc_errors = results['increments'].get('errors', [])
+        inc_warnings = results['increments'].get('warnings', [])
+        inc_status = "✅" if results['increments'].get('valid', False) and (not strict or len(inc_warnings) == 0) else "❌"
+        
         lines.extend([
-            f"## 3. Валидация инкрементов",
+            f"## 3. Валидация инкрементов {inc_status}",
+            f"",
+            f"**Проверки:**",
+            f"1. Инвариант dt: dt > 0 только в operations",
+            f"2. Консистентность SNE: Σdt = Δsne",
+            f"3. PPR reset: ppr = 0 после ремонта",
+            f"4. Агрегированный налёт по типам",
             f"",
         ])
         
         inc_stats = results['increments'].get('stats', {})
         
+        # dt invariant
         if 'dt_invariant' in inc_stats:
             inv = inc_stats['dt_invariant']
-            if inv.get('valid', False):
-                lines.append("✅ Инвариант dt соблюдён: налёт только в operations")
-            else:
-                lines.append(f"❌ Инвариант dt НАРУШЕН: {len(inv.get('violations', []))} категорий")
-            lines.append("")
+            by_state = inv.get('by_state', {})
+            
+            if by_state:
+                lines.extend([
+                    f"### Инвариант dt (налёт по состояниям)",
+                    f"",
+                    f"| Состояние | Тип | Записей | С dt>0 | Σdt | Статус |",
+                    f"|-----------|-----|---------|--------|-----|--------|",
+                ])
+                
+                for (state, gb), data in sorted(by_state.items()):
+                    ac_type = 'Mi-8' if gb == 1 else 'Mi-17'
+                    with_dt = data.get('with_dt', 0)
+                    sum_dt = data.get('sum_dt', 0)
+                    
+                    if state == 'operations':
+                        status = "✅ ожидаемо"
+                    elif with_dt > 0:
+                        status = f"📝 дни перехода ({with_dt})"
+                    else:
+                        status = "✅"
+                    
+                    lines.append(f"| {state} | {ac_type} | {data.get('total', 0):,} | {with_dt:,} | {sum_dt:,.0f} | {status} |")
+                
+                lines.append("")
         
+        # SNE consistency
         if 'sne_consistency' in inc_stats:
             sne = inc_stats['sne_consistency']
             summary = sne.get('summary', {})
-            if sne.get('valid', False):
-                lines.append(f"✅ Консистентность Σdt = Δsne подтверждена ({summary.get('ok', 0)} бортов)")
-            else:
-                lines.append(f"❌ Расхождение Σdt ≠ Δsne: {summary.get('violations', 0)} бортов")
-            lines.append("")
+            violations = sne.get('violations', [])
+            
+            lines.extend([
+                f"### Консистентность SNE (Σdt = Δsne)",
+                f"",
+                f"| Метрика | Значение |",
+                f"|---------|----------|",
+                f"| Проверено бортов | {summary.get('total_checked', 0)} |",
+                f"| Корректных | {summary.get('ok', 0)} |",
+                f"| С расхождением | {summary.get('violations', 0)} |",
+                f"",
+            ])
+            
+            if violations:
+                lines.extend([
+                    f"**Расхождения (WARNING):**",
+                    f"",
+                    f"| AC | Тип | sne_start | sne_end | Δsne | Σdt | Разница |",
+                    f"|----|-----|-----------|---------|------|-----|---------|",
+                ])
+                display_viols = violations if no_limit else violations[:10]
+                for v in display_viols:
+                    ac_type = 'Mi-8' if v.get('group_by') == 1 else 'Mi-17'
+                    lines.append(f"| {v.get('aircraft_number', '?')} | {ac_type} | {v.get('sne_start', 0):,} | {v.get('sne_end', 0):,} | {v.get('delta_sne', 0):,} | {v.get('sum_dt', 0):,} | {v.get('diff', 0):+,} |")
+                if not no_limit and len(violations) > 10:
+                    lines.append(f"| ... | ... | ... | ... | ... | ... | ещё {len(violations) - 10} |")
+                lines.append("")
         
+        # PPR reset
+        if 'ppr_reset' in inc_stats:
+            ppr = inc_stats['ppr_reset']
+            summary = ppr.get('summary', {})
+            
+            lines.extend([
+                f"### PPR reset после ремонта",
+                f"",
+                f"| Тип | Нарушений | Комментарий |",
+                f"|-----|-----------|-------------|",
+                f"| Mi-8 | {summary.get('mi8_violations', 0)} | ppr должен быть 0 после ремонта |",
+                f"| Mi-17 (ожидаемо) | {summary.get('mi17_expected', 0)} | ppr < br (комплектация) |",
+                f"| Mi-17 (нарушения) | {summary.get('mi17_violations', 0)} | ppr >= br (реальные ошибки) |",
+                f"",
+            ])
+        
+        # Aggregate
         if 'aggregate' in inc_stats:
             agg = inc_stats['aggregate']
             lines.extend([
@@ -235,8 +393,40 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
                 lines.append(f"| {ac_type} | {data['ac_count']} | {data['total_hours']:,.0f} | {data['avg_per_ac']:,.1f} |")
             
             lines.append("")
+        
+        # Ошибки этой проверки
+        if inc_errors:
+            lines.extend([
+                f"### ❌ Ошибки инкрементов ({len(inc_errors)})",
+                f"",
+                f"| # | Тип | AC | День | Описание |",
+                f"|---|-----|-----|------|----------|",
+            ])
+            display_errs = inc_errors if no_limit else inc_errors[:20]
+            for i, e in enumerate(display_errs, 1):
+                msg = e.get('message', '')[:50]
+                lines.append(f"| {i} | {e.get('type', '?')} | {e.get('aircraft_number', '?')} | {e.get('day', '?')} | {msg} |")
+            if not no_limit and len(inc_errors) > 20:
+                lines.append(f"| ... | ... | ... | ... | ещё {len(inc_errors) - 20} |")
+            lines.append("")
+        
+        # Warnings этой проверки
+        if inc_warnings:
+            lines.extend([
+                f"### ⚠️ Предупреждения инкрементов ({len(inc_warnings)})",
+                f"",
+                f"| # | Тип | AC | Описание |",
+                f"|---|-----|-----|----------|",
+            ])
+            display_warns = inc_warnings if no_limit else inc_warnings[:20]
+            for i, w in enumerate(display_warns, 1):
+                msg = w.get('message', '')[:60]
+                lines.append(f"| {i} | {w.get('type', '?')} | {w.get('aircraft_number', '?')} | {msg} |")
+            if not no_limit and len(inc_warnings) > 20:
+                lines.append(f"| ... | ... | ... | ещё {len(inc_warnings) - 20} |")
+            lines.append("")
     
-    # Сбор всех отклонений
+    # Сбор всех отклонений для сводной таблицы
     all_errors = []
     all_warnings = []
     
@@ -248,60 +438,86 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
             warn['source'] = key
             all_warnings.append(warn)
     
-    # Лимит вывода (0 = без лимита)
-    limit = 0 if no_limit else 50
+    # Консолидированная сводка в конце
+    lines.extend([
+        f"---",
+        f"",
+        f"## 📊 Консолидированная сводка отклонений",
+        f"",
+    ])
     
-    # Детали ошибок
-    if all_errors:
-        lines.extend([
-            f"## ❌ Детали ошибок ({len(all_errors)})",
-            f"",
-            f"| # | Источник | Тип | Сообщение |",
-            f"|---|----------|-----|-----------|",
-        ])
-        
-        display_errors = all_errors if limit == 0 else all_errors[:limit]
-        for i, err in enumerate(display_errors, 1):
-            msg = err.get('message', '')
-            # Не обрезаем сообщение если no_limit
-            if not no_limit and len(msg) > 80:
-                msg = msg[:77] + "..."
-            lines.append(f"| {i} | {err['source']} | {err['type']} | {msg} |")
-        
-        if limit > 0 and len(all_errors) > limit:
-            lines.append(f"| ... | ... | ... | ещё {len(all_errors) - limit} ошибок (используйте --no-limit) |")
-        
-        lines.append("")
-    
-    # Детали предупреждений
-    if all_warnings:
-        lines.extend([
-            f"## ⚠️ Детали предупреждений ({len(all_warnings)})",
-            f"",
-            f"| # | Источник | Тип | Сообщение |",
-            f"|---|----------|-----|-----------|",
-        ])
-        
-        display_warnings = all_warnings if limit == 0 else all_warnings[:limit]
-        for i, warn in enumerate(display_warnings, 1):
-            msg = warn.get('message', '')
-            if not no_limit and len(msg) > 80:
-                msg = msg[:77] + "..."
-            lines.append(f"| {i} | {warn['source']} | {warn['type']} | {msg} |")
-        
-        if limit > 0 and len(all_warnings) > limit:
-            lines.append(f"| ... | ... | ... | ещё {len(all_warnings) - limit} предупреждений (используйте --no-limit) |")
-        
-        lines.append("")
-    
-    # Если нет отклонений
     if not all_errors and not all_warnings:
         lines.extend([
-            f"## ✅ Отклонений не обнаружено",
+            f"✅ **Отклонений не обнаружено**",
             f"",
             f"Все проверки пройдены без ошибок и предупреждений.",
             f"",
         ])
+    else:
+        lines.extend([
+            f"| Источник | Ошибки | Предупреждения |",
+            f"|----------|--------|----------------|",
+        ])
+        
+        source_stats = {}
+        for e in all_errors:
+            src = e.get('source', 'unknown')
+            source_stats.setdefault(src, {'errors': 0, 'warnings': 0})
+            source_stats[src]['errors'] += 1
+        for w in all_warnings:
+            src = w.get('source', 'unknown')
+            source_stats.setdefault(src, {'errors': 0, 'warnings': 0})
+            source_stats[src]['warnings'] += 1
+        
+        source_names = {'quota': 'Квоты', 'transitions': 'Переходы', 'increments': 'Инкременты'}
+        for src, stats in source_stats.items():
+            name = source_names.get(src, src)
+            lines.append(f"| {name} | {stats['errors']} | {stats['warnings']} |")
+        
+        lines.extend([
+            f"| **ИТОГО** | **{len(all_errors)}** | **{len(all_warnings)}** |",
+            f"",
+        ])
+        
+        if strict and all_warnings:
+            lines.extend([
+                f"🔴 **STRICT режим:** {len(all_warnings)} предупреждений считаются критическими!",
+                f"",
+            ])
+    
+    # Расшифровка типов отклонений
+    deviation_types = set()
+    for e in all_errors:
+        deviation_types.add(('ERROR', e.get('type', 'UNKNOWN')))
+    for w in all_warnings:
+        deviation_types.add(('WARNING', w.get('type', 'UNKNOWN')))
+    
+    if deviation_types:
+        lines.extend([
+            f"### Расшифровка типов отклонений",
+            f"",
+            f"| Уровень | Тип | Описание |",
+            f"|---------|-----|----------|",
+        ])
+        
+        type_descriptions = {
+            'CRITICAL_DEFICIT': 'Критический недобор квоты (>3 борта)',
+            'DEFICIT': 'Недобор квоты (2-3 борта)',
+            'FORBIDDEN_TRANSITION': 'Запрещённый переход состояния',
+            'STATE_MISMATCH': 'Несоответствие state и transition flag',
+            'IMPOSSIBLE_TRANSITION': 'Невозможный переход между днями',
+            'REPAIR_DURATION_MISMATCH': 'Отклонение длительности ремонта',
+            'PPR_NOT_RESET_MI8': 'Mi-8: ppr > 0 после ремонта',
+            'PPR_NOT_RESET_MI17': 'Mi-17: ppr >= br после ремонта',
+            'SNE_CONSISTENCY_WARNING': 'Расхождение Σdt ≠ Δsne',
+        }
+        
+        for level, dtype in sorted(deviation_types):
+            icon = "❌" if level == 'ERROR' else "⚠️"
+            desc = type_descriptions.get(dtype, 'Неизвестный тип')
+            lines.append(f"| {icon} {level} | {dtype} | {desc} |")
+        
+        lines.append("")
     
     return "\n".join(lines)
 
