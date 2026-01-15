@@ -506,7 +506,8 @@ for (auto &msg : FLAMEGPU->message_in(100 + my_group_by)) {
 | `orchestrator_limiter_v8.py` | ✅ Создан | Оркестратор V8 |
 | `rtc_limiter_v8.py` | ✅ Создан | Adaptive steps с deterministic_dates |
 | `rtc_state_transitions_v8.py` | ✅ Создан | Next-day dt проверка (SNE + dt >= LL) |
-| `rtc_quota_v8.py` | 🚧 Планируется | Квотирование через RepairAgent |
+| `rtc_repair_agent_v8.py` | ✅ Создан | RepairAgent (capacity management) |
+| `rtc_quota_v8.py` | 🚧 Планируется | Квотирование через RepairAgent messages |
 
 ### Тестирование
 

@@ -87,7 +87,8 @@ from datetime import date
 # V8 модули
 import rtc_state_transitions_v7  # Детерминированные переходы (repair→svc, spawn→ops)
 import rtc_state_transitions_v8  # V8: next-day dt проверка!
-import rtc_quota_v7              # Пока V7, будет заменён на RepairAgent
+import rtc_quota_v7              # Пока V7, будет заменён на V8 quota
+import rtc_repair_agent_v8       # V8: RepairAgent!
 import rtc_limiter_optimized
 import rtc_limiter_v5            # Для совместимости
 import rtc_limiter_v8            # V8: deterministic_dates!
@@ -228,6 +229,17 @@ class LimiterV8Orchestrator:
         layer_init.addHostFunction(hf_init_cumsum)
         
         # ═══════════════════════════════════════════════════════════════
+        # V8: RepairAgent — агент ремонтной мощности
+        # ═══════════════════════════════════════════════════════════════
+        repair_quota = int(self.env_data.get('mi17_repair_quota', 8))
+        repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
+        
+        self.repair_agent = rtc_repair_agent_v8.create_repair_agent(
+            self.model, self.base_model.env, repair_quota, repair_time
+        )
+        rtc_repair_agent_v8.setup_repair_agent_macroproperties(self.base_model.env)
+        
+        # ═══════════════════════════════════════════════════════════════
         # V8: Переходы состояний с next-day dt проверкой
         # ═══════════════════════════════════════════════════════════════
         
@@ -240,12 +252,17 @@ class LimiterV8Orchestrator:
         # Фаза 1: V8 Operations (next-day dt проверка!)
         rtc_state_transitions_v8.register_ops_transitions_v8(self.model, heli_agent)
         
-        # Фаза 2: Квотирование (пока V7)
-        # TODO: Заменить на V8 с RepairAgent
+        # Фаза 1.5: RepairAgent инкремент + отправка
+        rtc_repair_agent_v8.register_repair_agent_layers(self.model, self.repair_agent)
+        
+        # Фаза 2: Квотирование (пока V7, TODO: заменить на V8 с RepairAgent)
         rtc_quota_v7.register_quota_v7(self.model, heli_agent)
         
         # Фаза 3: Переходы после квотирования
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
+        
+        # Фаза 3.5: RepairAgent получение + списание
+        rtc_repair_agent_v8.register_repair_agent_post_quota_layers(self.model, self.repair_agent)
         
         # ═══════════════════════════════════════════════════════════════
         # Динамический спавн Mi-17 (после P3)
@@ -475,6 +492,16 @@ class LimiterV8Orchestrator:
         qm_pop[1].setVariableUInt8("group_by", 2)  # Mi-17
         self.simulation.setPopulationData(qm_pop)
         
+        # V8: RepairAgent (подсчёт агентов в repair для начальной capacity)
+        count_repair = self._count_agents_in_state("repair")
+        repair_quota = int(self.env_data.get('mi17_repair_quota', 8))
+        repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
+        
+        rtc_repair_agent_v8.init_repair_agent_population(
+            self.simulation, self.repair_agent,
+            repair_quota, repair_time, count_repair
+        )
+        
         # Динамический спавн (менеджер + тикеты)
         if hasattr(self, 'spawn_data') and self.spawn_data:
             rtc_spawn_dynamic_v7.init_spawn_dynamic_population_v7(
@@ -486,6 +513,12 @@ class LimiterV8Orchestrator:
             )
         
         print(f"   ✅ Агенты загружены: Mi-8 ops={mi8_ops}, Mi-17 ops={mi17_ops}, spawn={spawn_count}")
+    
+    def _count_agents_in_state(self, state_name: str) -> int:
+        """Подсчёт агентов в указанном состоянии"""
+        pop = fg.AgentVector(self.base_model.agent)
+        self.simulation.getPopulationData(pop, state_name)
+        return pop.size()
     
     def _add_repair_exits_to_deterministic(self):
         """V8: Добавляет даты выхода из repair в deterministic_dates"""
