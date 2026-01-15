@@ -1391,37 +1391,41 @@ print(telemetry.get_summary())
 
 ### Порядок модулей в пайплайне
 
-⚠️ **КРИТИЧНО: spawn_v2 ДОЛЖЕН быть последним модулем перед MP2 export!**
+⚠️ **КРИТИЧНО:**
+- `spawn_dynamic` ПЕРЕД state_managers (динамический спавн по дефициту)
+- `spawn_v2` ПОСЛЕДНИМ (детерминированный спавн по MP4 seed)
 
 Новые агенты создаются в конце дня и начинают участвовать в симуляции со следующего дня.
 
 ```
-1. state_2_operations        — инкременты sne/ppr + установка intent=2
-2. states_stub               — установка intent для остальных состояний (активирует serviceable → intent=2)
-3. count_ops                 — подсчёт агентов с intent=2 в operations и state=serviceable
-4. quota_ops_excess          — демоут (operations → serviceable, oldest first)
-5. quota_promote_serviceable — промоут P1 (serviceable → operations, youngest first)
-6. quota_promote_reserve     — промоут P2 (reserve → operations, youngest first)
-7. quota_promote_inactive    — промоут P3 (inactive → operations, youngest first)
-8. state_manager_serviceable — переход 3→2 (serviceable → operations)
-9. state_manager_operations  — переходы из operations (2→2, 2→3, 2→4, 2→6)
-10. state_manager_inactive   — переход 1→1 (inactive → inactive)
-11. state_manager_repair     — переходы из repair (4→4, 4→5)
-12. state_manager_reserve    — переход 5→5 (reserve → reserve)
-13. state_manager_storage    — переход 6→6 (storage → storage)
-14. spawn_v2                 — ⚠️ создание новых агентов (ОБЯЗАТЕЛЬНО В КОНЦЕ!)
-15. MP2 export               — выгрузка в СУБД (если --enable-mp2)
+1. state_2_operations         — инкременты sne/ppr + установка intent=2
+2. states_stub                — установка intent для остальных состояний
+3. count_ops                  — подсчёт агентов с intent=2 в operations
+4. quota_repair               — квотирование ремонта по repair_number
+5. quota_ops_excess           — демоут (operations → serviceable, oldest first)
+6. quota_promote_serviceable  — промоут P1 (serviceable → operations, youngest first)
+7. quota_promote_reserve      — промоут P2 (reserve → operations, youngest first)
+8. quota_promote_inactive     — промоут P3 (inactive → operations, youngest first)
+9. spawn_dynamic              — ⚠️ динамический спавн по дефициту (ПЕРЕД state_managers!)
+10. state_manager_serviceable — переход 3→2 (serviceable → operations)
+11. state_manager_operations  — переходы из operations (2→2, 2→3, 2→4, 2→6)
+12. state_manager_repair      — переходы из repair (4→4, 4→5)
+13. state_manager_storage     — переход 6→6 (storage → storage)
+14. state_manager_reserve     — переход 5→5 (reserve → reserve)
+15. state_manager_inactive    — переход 1→1 (inactive → inactive)
+16. spawn_v2                  — ⚠️ детерминированный спавн (ПОСЛЕДНИМ!)
+17. MP2 export                — выгрузка в СУБД (если --enable-mp2)
 ```
 
 **Команда запуска:**
 ```bash
 python3 orchestrator_v2.py \
-  --modules state_2_operations states_stub count_ops \
-            quota_ops_excess quota_promote_serviceable quota_promote_reserve quota_promote_inactive \
-            state_manager_operations state_manager_serviceable state_manager_inactive \
-            state_manager_repair state_manager_reserve state_manager_storage \
-            spawn_v2 \
-  --steps 3650 --enable-mp2 --drop-table
+  --version-date 2025-07-04 \
+  --modules state_2_operations states_stub count_ops quota_repair quota_ops_excess \
+    quota_promote_serviceable quota_promote_reserve quota_promote_inactive spawn_dynamic \
+    state_manager_serviceable state_manager_operations state_manager_repair \
+    state_manager_storage state_manager_reserve state_manager_inactive spawn_v2 \
+  --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
 
 **Полная команда с очисткой кэша (для продакшена):**
@@ -1581,16 +1585,13 @@ if (intent == 4u) {
 ### Команда запуска
 
 ```bash
-python3 code/sim_v2/orchestrator_v2.py \
-  --modules state_2_operations count_ops quota_ops_excess \
-            quota_promote_serviceable quota_promote_reserve \
-            quota_promote_inactive \
-            state_manager_operations state_manager_serviceable state_manager_inactive \
-            state_manager_repair state_manager_reserve state_manager_storage \
-            spawn_v2 \
-  --steps 3650 \
-  --enable-mp2 \
-  --drop-table
+cd code/sim_v2 && python3 orchestrator_v2.py \
+  --version-date 2025-07-04 \
+  --modules state_2_operations states_stub count_ops quota_repair quota_ops_excess \
+    quota_promote_serviceable quota_promote_reserve quota_promote_inactive spawn_dynamic \
+    state_manager_serviceable state_manager_operations state_manager_repair \
+    state_manager_storage state_manager_reserve state_manager_inactive spawn_v2 \
+  --steps 3650 --enable-mp2 --enable-mp2-postprocess --drop-table
 ```
 
 ### Результаты тестирования (3650 дней)
@@ -1697,24 +1698,26 @@ python3 code/sim_v2/orchestrator_v2.py \
 - `reserve&intent=5` — ждут спроса на операции (холдинг)
 - `inactive&intent=1` — ждут разморозки при `step_day >= repair_time` (заморозка)
 
-### Полный порядок модулей (14 слоёв)
+### Полный порядок модулей (16 слоёв)
 
 | Слой | Модуль | Функция | Транзиции |
 |------|--------|---------|-----------|
 | 1 | `state_2_operations` | Инициализация/логирование operations | 2→2, 2→3, 2→4, 2→6 (проверка LL/OH/BR) |
 | 2 | `states_stub` | Установка holding intents | 1→intent=1, 3→intent=3, 4→intent=4, 5→intent=5, 6→intent=6 |
 | 3 | `count_ops` | Подсчёт operations&intent=2 | Запись в MacroProperty буферы (mi8_ops_count, mi17_ops_count) |
-| 4 | `quota_ops_excess` | Демоут избытка из operations | 2→3 с intent=3 (холдинг) для демотированных агентов |
-| 5 | `quota_promote_serviceable` | Промоут из serviceable (P1) | 3→2 для выбранных (топ-K по mfg_date) |
-| 6 | `quota_promote_reserve` | Промоут из reserve (P2) | 5→2 для выбранных (топ-K по mfg_date) |
-| 7 | `quota_promote_inactive` | Промоут из inactive (P3) | 1→2 для выбранных (если step_day >= repair_time) |
-| 8 | `state_manager_operations` | Применение переходов из operations | 2→2, 2→3 (intent=3), 2→4, 2→6, 3→2, 5→2, 1→2 |
-| 9 | `state_manager_serviceable` | Холдинг в serviceable | 3→3 для intent=3 (остаются в холдинге) |
-| 10 | `state_manager_inactive` | Холдинг в inactive | 1→1 для intent=1 (остаются заморожены) |
-| 11 | `state_manager_repair` | Состояния ремонта | 4→4, 4→5 (с intent=5 при выходе) |
-| 12 | `state_manager_reserve` | Холдинг в reserve | 5→5 для intent=5 (остаются в холдинге) |
+| 4 | `quota_repair` | Квотирование ремонта | Контроль потока в repair по repair_number |
+| 5 | `quota_ops_excess` | Демоут избытка из operations | 2→3 с intent=3 (холдинг) для демотированных агентов |
+| 6 | `quota_promote_serviceable` | Промоут из serviceable (P1) | 3→2 для выбранных (топ-K по mfg_date) |
+| 7 | `quota_promote_reserve` | Промоут из reserve (P2) | 5→2 для выбранных (топ-K по mfg_date) |
+| 8 | `quota_promote_inactive` | Промоут из inactive (P3) | 1→2 для выбранных (если step_day >= repair_time) |
+| 9 | `spawn_dynamic` | ⚠️ Динамический спавн по дефициту | 0→2 при нехватке Mi-17 (ПЕРЕД state_managers!) |
+| 10 | `state_manager_serviceable` | Переход serviceable→operations | 3→2 для промоутированных |
+| 11 | `state_manager_operations` | Применение переходов из operations | 2→2, 2→3, 2→4, 2→6, 3→2, 5→2, 1→2 |
+| 12 | `state_manager_repair` | Состояния ремонта | 4→4, 4→5 (с intent=5 при выходе) |
 | 13 | `state_manager_storage` | Неизменяемое хранение | 6→6 (immutable) |
-| 14 | `spawn_v2` | Рождение новых агентов | Создание в serviceable&intent=3 |
+| 14 | `state_manager_reserve` | Холдинг в reserve | 5→5 для intent=5 (остаются в холдинге) |
+| 15 | `state_manager_inactive` | Холдинг в inactive | 1→1 для intent=1 (остаются заморожены) |
+| 16 | `spawn_v2` | ⚠️ Детерминированный спавн (MP4 seed) | Создание в serviceable (ПОСЛЕДНИМ!) |
 
 ### Таблица переходов и intent
 
