@@ -293,6 +293,7 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
             f"## 3. Валидация инкрементов {inc_status}",
             f"",
             f"**Проверки:**",
+            f"0. **НУЛЕВАЯ ТОЛЕРАНТНОСТЬ**: dt=0 в operations vs flight_program",
             f"1. Инвариант dt: dt > 0 только в operations",
             f"2. Консистентность SNE: Σdt = Δsne",
             f"3. PPR reset: ppr = 0 после ремонта",
@@ -301,6 +302,46 @@ def generate_report(version_date_str: str, results: Dict, strict: bool = False, 
         ])
         
         inc_stats = results['increments'].get('stats', {})
+        
+        # dt_zero_in_ops - НУЛЕВАЯ ТОЛЕРАНТНОСТЬ
+        if 'dt_zero_in_ops' in inc_stats:
+            dtz = inc_stats['dt_zero_in_ops']
+            stats = dtz.get('stats', {})
+            bugs = dtz.get('bugs', [])
+            
+            dtz_status = "✅" if dtz.get('valid', False) else "❌"
+            lines.extend([
+                f"### 🎯 Нулевая толерантность: dt=0 в operations {dtz_status}",
+                f"",
+                f"**Каждый dt=0 в operations должен соответствовать dt=0 в flight_program (зимовка).**",
+                f"",
+                f"| Тип | Баги (fp>0, sim=0) | Валидные (fp=0) | Статус |",
+                f"|-----|---------------------|-----------------|--------|",
+                f"| Mi-8 | {stats.get('mi8_bugs', 0)} | {stats.get('mi8_valid_zeros', 0)} | {'✅' if stats.get('mi8_bugs', 0) == 0 else '❌'} |",
+                f"| Mi-17 | {stats.get('mi17_bugs', 0)} | {stats.get('mi17_valid_zeros', 0)} | {'✅' if stats.get('mi17_bugs', 0) == 0 else '❌'} |",
+                f"| **ИТОГО** | **{stats.get('total_bugs', 0)}** | **{stats.get('total_valid', 0)}** | {dtz_status} |",
+                f"",
+            ])
+            
+            if bugs:
+                lines.extend([
+                    f"**❌ КРИТИЧЕСКИЕ БАГИ: dt=0 при fp>0**",
+                    f"",
+                    f"| # | AC | Тип | День | fp_dt | prev_state |",
+                    f"|---|-----|-----|------|-------|------------|",
+                ])
+                display_bugs = bugs if no_limit else bugs[:30]
+                for i, b in enumerate(display_bugs, 1):
+                    ac_type = 'Mi-8' if b.get('group_by') == 1 else 'Mi-17'
+                    lines.append(f"| {i} | {b.get('aircraft_number', '?')} | {ac_type} | {b.get('day', '?')} | {b.get('fp_dt', '?')} | {b.get('prev_state', '?')} |")
+                if not no_limit and len(bugs) > 30:
+                    lines.append(f"| ... | ... | ... | ... | ... | ещё {len(bugs) - 30} |")
+                lines.append("")
+            else:
+                lines.extend([
+                    f"**✅ Все {stats.get('total_valid', 0)} случаев dt=0 объяснены flight_program (зимовка Mi-17)**",
+                    f"",
+                ])
         
         # dt invariant
         if 'dt_invariant' in inc_stats:
