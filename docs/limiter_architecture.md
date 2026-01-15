@@ -76,14 +76,14 @@ if (dbg_step2 < 3u) {
 
 | # | Слой | Функция | State | Описание |
 |---|------|---------|-------|----------|
-| **ФАЗА -1: Сбор min_exit_date (детерминированные даты ремонтов/spawn)** |||||
-| 0 | v7_reset_exit_date | `rtc_reset_exit_date_v7` | QM | `min_exit_date_mp = MAX` (сброс перед сбором) |
-| 1 | v7_copy_exit_date_repair | `rtc_copy_exit_date_repair_v7` | 4 | `atomicMin(exit_date)` от агентов в repair |
-| 2 | v7_copy_exit_date_spawn | `rtc_copy_exit_date_spawn_v7` | 5 | `atomicMin(exit_date)` от агентов в reserve |
-| 2b | v7_copy_exit_date_unsvc | `rtc_copy_exit_date_unsvc_v7` | 7 | ⚠️ **V8: УДАЛЁН** — unsvc не участвует в min_dynamic |
 | **ФАЗА 0: Детерминированные переходы** |||||
-| 3 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Выход из ремонта при `current_day >= exit_date`, PPR=0 |
-| 4 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Spawn при `current_day >= exit_date` |
+| 0 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Выход из ремонта при `current_day >= exit_date`, PPR=0 |
+| 1 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Spawn при `current_day >= exit_date` |
+| **ФАЗА 0.5: Сбор min_exit_date (ПОСЛЕ переходов — только оставшиеся агенты!)** |||||
+| 2 | v7_reset_exit_date | `rtc_reset_exit_date_v7` | QM | `min_exit_date_mp = MAX` (сброс перед сбором) |
+| 3 | v7_copy_exit_date_repair | `rtc_copy_exit_date_repair_v7` | 4 | `atomicMin(exit_date)` от агентов в repair |
+| 4 | v7_copy_exit_date_spawn | `rtc_copy_exit_date_spawn_v7` | 5 | `atomicMin(exit_date)` от агентов в reserve |
+| 4b | v7_copy_exit_date_unsvc | `rtc_copy_exit_date_unsvc_v7` | 7 | ⚠️ **V8: УДАЛЁН** — unsvc не участвует в min_dynamic |
 | **ФАЗА 1: Operations — инкременты и переходы по ресурсам** |||||
 | 5 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt`, `limiter -= adaptive` (3 счётчика в 1 проход) |
 | 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `(PPR >= OH AND SNE >= BR)`, `limiter=0` |
@@ -213,28 +213,34 @@ adaptive_days = min(min_dynamic, days_to_deterministic)
 │ ШАГ N                                                                   │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  ФАЗА -1: СБРОС + СБОР min_exit_date                                    │
+│  ФАЗА 0: ДЕТЕРМИНИРОВАННЫЕ ПЕРЕХОДЫ                                     │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │ [0] reset_exit_date    → min_exit_date_mp = 0xFFFFFFFF (MAX)       │ │
-│  │ [1] copy_exit_repair   → агенты repair: atomicMin(exit_date)      │ │
-│  │ [2] copy_exit_spawn    → агенты reserve: atomicMin(exit_date)     │ │
+│  │ [0] repair_to_svc      → агенты exit_date <= current_day: 4→3     │ │
+│  │ [1] spawn_to_ops       → агенты exit_date <= current_day: 5→2     │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+│                                                                         │
+│  ФАЗА 0.5: СБРОС + СБОР min_exit_date (ПОСЛЕ переходов!)                │
+│  ┌────────────────────────────────────────────────────────────────────┐ │
+│  │ [2] reset_exit_date    → min_exit_date_mp = 0xFFFFFFFF (MAX)       │ │
+│  │ [3] copy_exit_repair   → ОСТАВШИЕСЯ repair: atomicMin(exit_date)  │ │
+│  │ [4] copy_exit_spawn    → ОСТАВШИЕСЯ reserve: atomicMin(exit_date) │ │
 │  │                                                                    │ │
-│  │ Результат: min_exit_date_mp = MIN(все exit_date) или MAX          │ │
+│  │ Результат: min_exit_date_mp = MIN(exit_date оставшихся) или MAX   │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 │  ФАЗА 4: СБОР min_limiter                                               │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │ [26] min_limiter       → агенты ops: atomicMin(limiter)           │ │
+│  │ [20] min_limiter       → агенты ops: atomicMin(limiter)           │ │
 │  │                                                                    │ │
 │  │ Результат: mp_min_limiter = MIN(все limiter) или MAX              │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 │  ФАЗА 5: ВЫЧИСЛЕНИЕ adaptive_days                                       │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │ [28] compute_global    → ЧИТАЕТ: mp_min_limiter, min_exit_date_mp │ │
+│  │ [22] compute_global    → ЧИТАЕТ: mp_min_limiter, min_exit_date_mp │ │
 │  │                        → ПИШЕТ:  adaptive_days                    │ │
 │  │                                                                    │ │
-│  │ [29] reset_min_limiter → mp_min_limiter = MAX (для шага N+1)      │ │
+│  │ [23] reset_min_limiter → mp_min_limiter = MAX (для шага N+1)      │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
