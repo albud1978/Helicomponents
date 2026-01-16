@@ -68,7 +68,7 @@ def load_planer_dt_from_sim(version_date: str, version_id: int = 1) -> Tuple[np.
         return None, {}
     
     # Создаём маппинг aircraft_number → idx
-    ac_to_idx = {row[0]: idx for idx, row in enumerate(planers)}
+    ac_to_idx = {row[0]: idx for idx, row in enumerate(planers, start=1)}
     print(f"   Загружено {len(ac_to_idx)} планеров из sim_masterv2")
     
     # Загружаем dt по дням
@@ -135,7 +135,7 @@ def load_planer_dt_from_program(version_date: str, version_id: int = 1) -> Tuple
         print(f"⚠️ Нет планеров в heli_pandas для {version_date}")
         return None, {}
     
-    ac_to_idx = {row[0]: idx for idx, row in enumerate(planers)}
+    ac_to_idx = {row[0]: idx for idx, row in enumerate(planers, start=1)}
     print(f"   Загружено {len(ac_to_idx)} планеров из heli_pandas")
     
     # Загружаем нормативный налёт
