@@ -38,8 +38,7 @@ def get_version_date_int(version_date_str: str) -> int:
 class MessagingQuotaValidator:
     """Валидатор квот ops_count vs quota_target для MESSAGING архитектуры"""
     
-    TOLERANCE = 1
-    CRITICAL_DEFICIT = 3
+    WARN_DAYS = 180
     
     def __init__(self, client, version_date_value, version_date_str: str, table: str = TABLE_NAME):
         self.client = client
@@ -131,41 +130,43 @@ class MessagingQuotaValidator:
             return {'valid': False, 'errors': self.errors, 'warnings': self.warnings, 'stats': {}}
         
         stats = {
-            'mi8': {'ok': 0, 'minor': 0, 'deficit': 0, 'critical': 0, 'excess': 0},
-            'mi17': {'ok': 0, 'minor': 0, 'deficit': 0, 'critical': 0, 'excess': 0}
+            'mi8': {'ok': 0, 'warn': 0, 'error': 0},
+            'mi17': {'ok': 0, 'warn': 0, 'error': 0}
         }
+        
+        # Хронологические списки
+        self.errors = []
+        self.warnings = []
         
         for row in data:
             for ac_type in ['mi8', 'mi17']:
                 delta = row[f'delta_{ac_type}']
+                day = row['day']
                 
                 if delta == 0:
                     stats[ac_type]['ok'] += 1
-                elif -self.TOLERANCE <= delta <= self.TOLERANCE:
-                    stats[ac_type]['minor'] += 1
-                elif delta < -self.CRITICAL_DEFICIT:
-                    stats[ac_type]['critical'] += 1
-                    self.errors.append({
-                        'type': 'CRITICAL_DEFICIT',
-                        'message': f"Day {row['day']}: {ac_type} ops={row[f'ops_{ac_type}']} vs target={row[f'quota_{ac_type}']} (delta={delta})"
-                    })
-                elif delta < 0:
-                    stats[ac_type]['deficit'] += 1
+                    continue
+                
+                message = (
+                    f"Day {day}: {ac_type} ops={row[f'ops_{ac_type}']} "
+                    f"vs target={row[f'quota_{ac_type}']} (delta={delta:+d})"
+                )
+                
+                if day <= self.WARN_DAYS:
+                    stats[ac_type]['warn'] += 1
+                    self.warnings.append({'type': 'DELTA', 'message': message, 'day': day})
                 else:
-                    stats[ac_type]['excess'] += 1
-                    self.warnings.append({
-                        'type': 'EXCESS',
-                        'message': f"Day {row['day']}: {ac_type} ops={row[f'ops_{ac_type}']} > target={row[f'quota_{ac_type}']} (delta=+{delta})"
-                    })
+                    stats[ac_type]['error'] += 1
+                    self.errors.append({'type': 'DELTA', 'message': message, 'day': day})
         
         self.stats = stats
         
         for ac_type in ['mi8', 'mi17']:
             s = stats[ac_type]
             total = sum(s.values())
-            print(f"  {ac_type.upper()}: OK={s['ok']}, ±1={s['minor']}, deficit={s['deficit']}, critical={s['critical']}, excess={s['excess']} (total={total})")
+            print(f"  {ac_type.upper()}: OK={s['ok']}, warn={s['warn']}, error={s['error']} (total={total})")
         
-        valid = all(stats[t]['critical'] == 0 for t in ['mi8', 'mi17'])
+        valid = all(stats[t]['error'] == 0 for t in ['mi8', 'mi17'])
         
         return {
             'valid': valid,
@@ -625,23 +626,35 @@ def generate_report(version_date_str: str, results: Dict, table: str) -> str:
                         f"| Категория | Дней | % |",
                         f"|-----------|------|---|",
                         f"| Точное соответствие | {s.get('ok', 0)} | {100*s.get('ok',0)/total:.1f}% |",
-                        f"| Отклонение ±1 | {s.get('minor', 0)} | {100*s.get('minor',0)/total:.1f}% |",
-                        f"| Недобор 2-3 | {s.get('deficit', 0)} | {100*s.get('deficit',0)/total:.1f}% |",
-                        f"| Критичный >3 | {s.get('critical', 0)} | {100*s.get('critical',0)/total:.1f}% |",
-                        f"| Избыток | {s.get('excess', 0)} | {100*s.get('excess',0)/total:.1f}% |",
+                        f"| Предупреждения (<=180) | {s.get('warn', 0)} | {100*s.get('warn',0)/total:.1f}% |",
+                        f"| Ошибки (>180) | {s.get('error', 0)} | {100*s.get('error',0)/total:.1f}% |",
                         f"",
                     ])
         
         quota_warnings = results['quota'].get('warnings', [])
         if quota_warnings:
             lines.extend([
-                f"### Примеры предупреждений (ops > target)",
+                f"### Предупреждения по квотам (<=180 дней)",
                 f"",
                 f"Показано: {min(len(quota_warnings), 50)} из {len(quota_warnings)}",
                 f"",
             ])
+            quota_warnings = sorted(quota_warnings, key=lambda x: x.get('day', 0))
             for w in quota_warnings[:50]:
                 lines.append(f"- {w.get('message', '')}")
+            lines.append("")
+        
+        quota_errors = results['quota'].get('errors', [])
+        if quota_errors:
+            lines.extend([
+                f"### Ошибки по квотам (>180 дней)",
+                f"",
+                f"Показано: {min(len(quota_errors), 50)} из {len(quota_errors)}",
+                f"",
+            ])
+            quota_errors = sorted(quota_errors, key=lambda x: x.get('day', 0))
+            for e in quota_errors[:50]:
+                lines.append(f"- {e.get('message', '')}")
             lines.append("")
     
     # Детали переходов
