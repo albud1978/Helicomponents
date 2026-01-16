@@ -57,7 +57,9 @@ import rtc_units_transition_repair_msg
 import rtc_units_transition_storage_msg
 
 # Экспорт MP2 (опционально)
-from sim_v2.units import rtc_units_mp2_writer, mp2_drain_units
+from sim_v2.units import rtc_units_mp2_writer
+from sim_v2.units.mp2_drain_units import register_mp2_drain_units
+from utils.config_loader import get_clickhouse_client
 
 
 class UnitsMsgOrchestrator:
@@ -69,6 +71,7 @@ class UnitsMsgOrchestrator:
         self.env_data: Dict = {}
         self.population_builder: Optional[AgentPopulationUnitsMsgBuilder] = None
         self.init_planer_dt_fn = None
+        self.mp2_drain_fn = None
 
     def load_data(self):
         print("=" * 60)
@@ -117,9 +120,12 @@ class UnitsMsgOrchestrator:
         rtc_units_transition_reserve_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_transition_storage_msg.register_rtc(model, self.base_model.agent_units)
 
-        # MP2 writer + drain
-        rtc_units_mp2_writer.register_rtc(model, self.base_model.agent_units)
-        mp2_drain_units.register_step_function(model)
+        # MP2 writer + drain (размеры должны совпадать с mp2 буфером)
+        max_frames = int(self.env_data.get('units_frames_total', 10000))
+        days_total = int(self.env_data.get('days_total_u16', 3650))
+        rtc_units_mp2_writer.register_rtc(model, self.base_model.agent_units, max_frames=max_frames, max_days=days_total, drain_interval=10)
+        client = get_clickhouse_client()
+        self.mp2_drain_fn = register_mp2_drain_units(model, self.env_data, client, self.version_date, self.version_id)
 
         self.simulation = fg.CUDASimulation(model)
 
@@ -145,6 +151,7 @@ class UnitsMsgOrchestrator:
         print("=" * 60)
         self.simulation.SimulationConfig().steps = steps
         self.simulation.simulate()
+        # Финальный drain пока не вызывается вручную (TODO синхронизировать с mp2_drain_units)
 
 
 def main():

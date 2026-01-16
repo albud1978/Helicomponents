@@ -77,6 +77,9 @@ class V2BaseModelUnitsMsg:
         self.env.newMacroPropertyUInt("mp_idx_to_ac", MAX_PLANERS)
         self.env.newMacroPropertyUInt8("mp_planer_in_ops_history", planer_dt_size)
         self.env.newMacroPropertyUInt8("mp_planer_type", MAX_PLANERS)
+        # Для совместимости с init_planer_dt
+        self.env.newMacroPropertyUInt8("mp_planer_assembly", planer_dt_size)
+        self.env.newMacroPropertyUInt8("mp_planer_in_ops", MAX_PLANERS)
 
         # Слоты агрегатов на планерах
         self.env.newMacroPropertyUInt32("mp_planer_slots", MAX_GROUPS * MAX_PLANERS)
