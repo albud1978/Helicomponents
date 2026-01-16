@@ -271,6 +271,9 @@ class V2BaseModelMessaging:
         # V6: MacroProperty для state 7 (unserviceable)
         self.env.newMacroPropertyUInt32("mi8_unsvc_count", max_frames)
         self.env.newMacroPropertyUInt32("mi17_unsvc_count", max_frames)
+        # UNSVC, готовые к промоуту (exit_date <= current_day)
+        self.env.newMacroPropertyUInt32("mi8_unsvc_ready_count", max_frames)
+        self.env.newMacroPropertyUInt32("mi17_unsvc_ready_count", max_frames)
         self.env.newMacroPropertyUInt32("mi8_approve_s7", max_frames)
         self.env.newMacroPropertyUInt32("mi17_approve_s7", max_frames)
         

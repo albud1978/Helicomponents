@@ -34,8 +34,11 @@ RTC_SPAWN_DYNAMIC_MGR_V7 = Template("""
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int target_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
-    const unsigned int write_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    unsigned int step_days = mp_result[0];
+    if (step_days == 0u) step_days = 1u;
+    const unsigned int target_day = ((day + step_days) < days_total ? (day + step_days) : (days_total > 0u ? days_total - 1u : 0u));
+    const unsigned int write_day = target_day;
     
     // Условие активации: day >= repair_time
     const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
@@ -59,7 +62,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v7, flamegpu::MessageNone, flamegp
     }
     
     // Считаем промоутнутых P2 (unserviceable)
-    auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_unsvc_count");
+    auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_unsvc_ready_count");
     unsigned int unsvc_available = 0u;
     for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
         if (unsvc_count[i] == 1u) ++unsvc_available;
@@ -133,7 +136,10 @@ RTC_SPAWN_DYNAMIC_TICKET_V7 = Template("""
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    unsigned int step_days = mp_result[0];
+    if (step_days == 0u) step_days = 1u;
+    const unsigned int safe_day = ((day + step_days) < days_total ? (day + step_days) : (days_total > 0u ? days_total - 1u : 0u));
     const unsigned int ticket = FLAMEGPU->getVariable<unsigned int>("ticket");
     
     // Читаем параметры
@@ -231,7 +237,7 @@ def register_spawn_dynamic_v7(model: fg.ModelDescription, heli_agent: fg.AgentDe
     # Параметры
     first_dynamic_idx = env_data.get('first_dynamic_idx', 340)  # После всех существующих агентов
     dynamic_reserve_mi17 = env_data.get('dynamic_reserve_mi17', 50)
-    base_acn_spawn = env_data.get('base_acn_spawn', 200000)
+    base_acn_spawn = env_data.get('base_acn_spawn', 100000)
     
     env.newPropertyUInt("first_dynamic_idx", first_dynamic_idx)
     env.newPropertyUInt("dynamic_reserve_mi17", dynamic_reserve_mi17)

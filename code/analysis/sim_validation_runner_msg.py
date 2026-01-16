@@ -41,9 +41,10 @@ class MessagingQuotaValidator:
     TOLERANCE = 1
     CRITICAL_DEFICIT = 3
     
-    def __init__(self, client, version_date: int, table: str = TABLE_NAME):
+    def __init__(self, client, version_date_value, version_date_str: str, table: str = TABLE_NAME):
         self.client = client
-        self.version_date = version_date
+        self.version_date = version_date_value
+        self.version_date_str = version_date_str
         self.table = table
         self.errors: List[Dict] = []
         self.warnings: List[Dict] = []
@@ -62,7 +63,7 @@ class MessagingQuotaValidator:
                     leadInFrame(ops_counter_mi8) OVER (ORDER BY dates) as t8_next,
                     leadInFrame(ops_counter_mi17) OVER (ORDER BY dates) as t17_next
                 FROM flight_program_ac
-                WHERE version_date = toDate({self.version_date})
+                WHERE version_date = toDate('{self.version_date_str}')
             )
             SELECT 
                 day_index,
@@ -82,7 +83,7 @@ class MessagingQuotaValidator:
                 group_by,
                 countIf(state = 'operations') as ops_count
             FROM {self.table}
-            WHERE group_by IN (1, 2)
+            WHERE group_by IN (1, 2) AND version_date = {self.version_date}
             GROUP BY day_u16, group_by
             ORDER BY day_u16, group_by
         """
@@ -187,9 +188,10 @@ class MessagingTransitionsValidator:
         'transition_0_to_2': ('spawn', 'operations'),   # spawn (динамический)
     }
     
-    def __init__(self, client, version_date: int, table: str = TABLE_NAME):
+    def __init__(self, client, version_date_value, version_date_str: str, table: str = TABLE_NAME):
         self.client = client
-        self.version_date = version_date
+        self.version_date = version_date_value
+        self.version_date_str = version_date_str
         self.table = table
         self.errors: List[Dict] = []
         self.warnings: List[Dict] = []
@@ -313,17 +315,65 @@ class MessagingTransitionsValidator:
 class MessagingIncrementsValidator:
     """Валидатор инкрементов для MESSAGING архитектуры"""
     
-    def __init__(self, client, version_date: int, table: str = TABLE_NAME):
+    def __init__(self, client, version_date_value, version_date_str: str, table: str = TABLE_NAME):
         self.client = client
-        self.version_date = version_date
+        self.version_date = version_date_value
+        self.version_date_str = version_date_str
         self.table = table
         self.errors: List[Dict] = []
         self.warnings: List[Dict] = []
         self.stats: Dict = {}
+        self.has_dt = self._has_column("dt")
+    
+    def _has_column(self, name: str) -> bool:
+        """Проверяет наличие колонки в таблице"""
+        cols = self.client.execute(f"DESCRIBE TABLE {self.table}")
+        return any(row[0] == name for row in cols)
     
     def validate_dt_invariant(self) -> Dict:
         """Проверяет: dt > 0 ТОЛЬКО в operations"""
         print(f"\n📊 Валидация инварианта dt (таблица: {self.table})")
+        
+        if not self.has_dt:
+            # Для limiter (без dt) используем delta_sne по предыдущему состоянию
+            query = f"""
+                SELECT 
+                    prev_state,
+                    countIf(delta_sne > 0) as with_inc,
+                    count() as total
+                FROM (
+                    SELECT 
+                        aircraft_number,
+                        state,
+                        lagInFrame(state) OVER (PARTITION BY aircraft_number ORDER BY day_u16) as prev_state,
+                        ifNull(sne - lagInFrame(sne) OVER (PARTITION BY aircraft_number ORDER BY day_u16), 0) as delta_sne
+                    FROM {self.table}
+                    WHERE version_date = {self.version_date}
+                )
+                WHERE prev_state IS NOT NULL
+                GROUP BY prev_state
+            """
+            
+            result = self.client.execute(query)
+            violations = []
+            for prev_state, with_inc, total in result:
+                if prev_state != 'operations' and with_inc > 0:
+                    violations.append({'state': prev_state, 'count': with_inc})
+                    self.errors.append({
+                        'type': 'SNE_INVARIANT',
+                        'message': f"delta_sne > 0 вне operations (prev_state={prev_state}): {with_inc} интервалов"
+                    })
+                print(f"  {prev_state}: delta_sne>0 в {with_inc:,}/{total:,} интервалов")
+            
+            valid = len(violations) == 0
+            self.stats['dt_invariant'] = {'valid': valid, 'violations': violations, 'method': 'delta_sne'}
+            
+            if valid:
+                print("  ✅ Инвариант delta_sne соблюдён")
+            else:
+                print(f"  ❌ Инвариант delta_sne НАРУШЕН: {len(violations)} категорий")
+            
+            return {'valid': valid, 'violations': violations}
         
         query = f"""
             SELECT 
@@ -331,6 +381,7 @@ class MessagingIncrementsValidator:
                 countIf(dt > 0) as with_dt,
                 count() as total
             FROM {self.table}
+            WHERE version_date = {self.version_date}
             GROUP BY state
         """
         
@@ -347,7 +398,7 @@ class MessagingIncrementsValidator:
             print(f"  {state}: dt>0 в {with_dt:,}/{total:,} записей")
         
         valid = len(violations) == 0
-        self.stats['dt_invariant'] = {'valid': valid, 'violations': violations}
+        self.stats['dt_invariant'] = {'valid': valid, 'violations': violations, 'method': 'dt'}
         
         if valid:
             print("  ✅ Инвариант dt соблюдён")
@@ -359,6 +410,48 @@ class MessagingIncrementsValidator:
     def validate_sne_consistency(self) -> Dict:
         """Проверяет: Σdt = Δsne для каждого борта"""
         print(f"\n📊 Валидация консистентности Σdt = Δsne")
+        
+        if not self.has_dt:
+            query = f"""
+                SELECT 
+                    idx,
+                    sumIf(delta_sne, prev_state = 'operations') as sum_ops,
+                    sumIf(delta_sne, prev_state != 'operations') as sum_non_ops
+                FROM (
+                    SELECT 
+                        idx,
+                        lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state,
+                        ifNull(sne - lagInFrame(sne) OVER (PARTITION BY idx ORDER BY day_u16), 0) as delta_sne
+                    FROM {self.table}
+                    WHERE version_date = {self.version_date}
+                )
+                WHERE prev_state IS NOT NULL
+                GROUP BY idx
+            """
+            
+            result = self.client.execute(query)
+            violations = 0
+            for idx, sum_ops, sum_non_ops in result:
+                if sum_non_ops > 0:
+                    violations += 1
+                    if violations <= 5:
+                        self.errors.append({
+                            'type': 'SNE_NON_OPS',
+                            'message': f"idx={idx}: delta_sne вне ops = {sum_non_ops}"
+                        })
+                        print(f"    ⚠️ idx={idx}: delta_sne вне ops = {sum_non_ops}")
+            
+            total = len(result)
+            ok = total - violations
+            print(f"  Агентов: {total}, корректных: {ok}, с налётом вне ops: {violations}")
+            
+            valid = violations == 0
+            self.stats['sne_consistency'] = {'valid': valid, 'summary': {'ok': ok, 'violations': violations}, 'method': 'delta_sne'}
+            
+            if valid:
+                print("  ✅ Налёт вне ops отсутствует")
+            
+            return {'valid': valid}
         
         query = f"""
             SELECT 
@@ -374,7 +467,7 @@ class MessagingIncrementsValidator:
         result = self.client.execute(query)
         
         violations = len(result)
-        total_query = f"SELECT count(DISTINCT idx) FROM {self.table}"
+        total_query = f"SELECT count(DISTINCT idx) FROM {self.table} WHERE version_date = {self.version_date}"
         total = self.client.execute(total_query)[0][0]
         ok = total - violations
         
@@ -400,14 +493,34 @@ class MessagingIncrementsValidator:
         """Агрегированная статистика налёта"""
         print(f"\n📊 Агрегированный налёт")
         
-        query = f"""
-            SELECT 
-                group_by,
-                count(DISTINCT idx) as ac_count,
-                sum(dt) / 60.0 as total_hours
-            FROM {self.table}
-            GROUP BY group_by
-        """
+        if not self.has_dt:
+            query = f"""
+                SELECT 
+                    group_by,
+                    countDistinct(idx) as ac_count,
+                    sumIf(delta_sne, prev_state = 'operations') / 60.0 as total_hours
+                FROM (
+                    SELECT 
+                        idx,
+                        group_by,
+                        lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state,
+                        ifNull(sne - lagInFrame(sne) OVER (PARTITION BY idx ORDER BY day_u16), 0) as delta_sne
+                    FROM {self.table}
+                    WHERE version_date = {self.version_date}
+                )
+                WHERE prev_state IS NOT NULL
+                GROUP BY group_by
+            """
+        else:
+            query = f"""
+                SELECT 
+                    group_by,
+                    count(DISTINCT idx) as ac_count,
+                    sum(dt) / 60.0 as total_hours
+                FROM {self.table}
+                WHERE version_date = {self.version_date}
+                GROUP BY group_by
+            """
         
         result = self.client.execute(query)
         
@@ -564,7 +677,8 @@ def main():
     args = parser.parse_args()
     
     version_date_str = args.version_date
-    version_date = get_version_date_int(version_date_str)
+    version_date_days = get_version_date_int(version_date_str)
+    version_date_ymd = int(version_date_str.replace('-', ''))
     table = args.table
     
     print("\n" + "="*80)
@@ -579,17 +693,32 @@ def main():
     
     # 1. Квоты
     print("\n" + "-"*60)
-    quota_validator = MessagingQuotaValidator(client, version_date, table)
+    # Определяем формат version_date в таблице
+    cols = client.execute(f"DESCRIBE TABLE {table}")
+    vtype = None
+    for name, ctype, *_ in cols:
+        if name == 'version_date':
+            vtype = ctype
+            break
+    if vtype is None:
+        raise RuntimeError("Колонка version_date не найдена в таблице")
+    
+    if vtype.startswith('Date'):
+        version_date_value = f"toDate('{version_date_str}')"
+    else:
+        version_date_value = str(version_date_ymd)
+    
+    quota_validator = MessagingQuotaValidator(client, version_date_value, version_date_str, table)
     results['quota'] = quota_validator.validate()
     
     # 2. Переходы
     print("\n" + "-"*60)
-    transitions_validator = MessagingTransitionsValidator(client, version_date, table)
+    transitions_validator = MessagingTransitionsValidator(client, version_date_value, version_date_str, table)
     results['transitions'] = transitions_validator.run_all()
     
     # 3. Инкременты
     print("\n" + "-"*60)
-    increments_validator = MessagingIncrementsValidator(client, version_date, table)
+    increments_validator = MessagingIncrementsValidator(client, version_date_value, version_date_str, table)
     results['increments'] = increments_validator.run_all()
     
     # Генерация отчёта
