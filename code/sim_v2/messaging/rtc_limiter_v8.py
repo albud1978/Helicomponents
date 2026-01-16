@@ -96,7 +96,8 @@ class HF_InitV8(fg.HostFunction):
     
     def __init__(self, deterministic_dates: list, end_day: int):
         super().__init__()
-        self.deterministic_dates = sorted(set(deterministic_dates))
+        # Храним ссылку: список может быть дополнен до старта симуляции
+        self.deterministic_dates = deterministic_dates
         self.end_day = end_day
         self.initialized = False
     
@@ -104,7 +105,8 @@ class HF_InitV8(fg.HostFunction):
         if self.initialized:
             return
         
-        print(f"  [HF_InitV8] Загрузка deterministic_dates: {len(self.deterministic_dates)} дат")
+        dates = sorted(set(self.deterministic_dates))
+        print(f"  [HF_InitV8] Загрузка deterministic_dates: {len(dates)} дат")
         
         # Инициализация current_day_mp
         mp_day = FLAMEGPU.environment.getMacroPropertyUInt("current_day_mp")
@@ -113,15 +115,18 @@ class HF_InitV8(fg.HostFunction):
         
         # Инициализация deterministic_dates_mp
         mp_dates = FLAMEGPU.environment.getMacroPropertyUInt("deterministic_dates_mp")
-        for i, day in enumerate(self.deterministic_dates):
+        for i, day in enumerate(dates):
             if i >= MAX_DETERMINISTIC_DATES:
                 print(f"  ⚠️ Превышен лимит {MAX_DETERMINISTIC_DATES} дат!")
                 break
             mp_dates[i] = int(day)
         
         # Заполняем остаток end_day (чтобы поиск не вышел за границы)
-        for i in range(len(self.deterministic_dates), MAX_DETERMINISTIC_DATES):
+        for i in range(len(dates), MAX_DETERMINISTIC_DATES):
             mp_dates[i] = self.end_day
+        
+        # Синхронизируем num_deterministic_dates (используется в RTC)
+        FLAMEGPU.environment.setPropertyUInt("num_deterministic_dates", len(dates))
         
         # Инициализация min_dynamic_mp
         mp_min = FLAMEGPU.environment.getMacroPropertyUInt("min_dynamic_mp")
@@ -140,7 +145,7 @@ class HF_InitV8(fg.HostFunction):
         mp_exit[0] = 0xFFFFFFFF
         
         self.initialized = True
-        print(f"  [HF_InitV8] ✅ Загружено, первые 5 дат: {self.deterministic_dates[:5]}")
+        print(f"  [HF_InitV8] ✅ Загружено, первые 5 дат: {dates[:5]}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -319,23 +324,29 @@ class HF_UpdateDayV8(fg.HostFunction):
         # Обновляем current_day
         mp_day[0] = new_day
 
+        # Синхронизация в Environment (для корректного чтения на host после шага)
+        FLAMEGPU.environment.setPropertyUInt("prev_day", current_day)
+        FLAMEGPU.environment.setPropertyUInt("current_day", new_day)
+        FLAMEGPU.environment.setPropertyUInt("adaptive_days", adaptive_days)
+        FLAMEGPU.environment.setPropertyUInt("step_days", adaptive_days)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Регистрация V8 слоёв
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def register_v8_adaptive_layers(model, agent, quota_agent, deterministic_dates: list, end_day: int):
+def register_v8_pre_quota_layers(model, agent, quota_agent, deterministic_dates: list, end_day: int):
     """
-    Регистрирует V8 слои для adaptive steps.
+    Регистрирует V8 слои до квотирования (reset/collect/compute).
     
     Слои:
-    1. v8_reset_min_dynamic — сброс min_dynamic_mp
-    2. v8_collect_min_ops — ops.limiter → min_dynamic
-    3. v8_collect_min_repair — repair.repair_days → min_dynamic
-    4. v8_compute_global_min — вычисление adaptive_days
-    5. v8_update_day — current_day += adaptive_days
+    1. v8_init
+    2. v8_reset_min_dynamic
+    3. v8_collect_min_ops
+    4. v8_collect_min_repair
+    5. v8_compute_global_min
     """
-    print("\n📦 V8: Регистрация adaptive layers...")
+    print("\n📦 V8: Регистрация adaptive pre-quota layers...")
     
     # HostFunction для инициализации
     hf_init = HF_InitV8(deterministic_dates, end_day)
@@ -370,14 +381,17 @@ def register_v8_adaptive_layers(model, agent, quota_agent, deterministic_dates: 
     fn.setEndState("default")
     layer_compute.addAgentFunction(fn)
     
-    # 5. Update day (HostFunction для избежания race condition)
+    print(f"  ✅ V8 adaptive pre-quota layers зарегистрированы (4 слоя)")
+    
+    return hf_init
+
+
+def register_v8_update_day_layer(model, end_day: int):
+    """Регистрирует обновление дня после всех переходов и квотирования."""
     hf_update_day = HF_UpdateDayV8(end_day)
     layer_update = model.newLayer("v8_update_day")
     layer_update.addHostFunction(hf_update_day)
-    
-    print(f"  ✅ V8 adaptive layers зарегистрированы (5 слоёв)")
-    
-    return hf_init
+    print("  ✅ V8 update_day layer зарегистрирован")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

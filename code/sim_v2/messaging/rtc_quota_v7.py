@@ -45,6 +45,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v7, flamegpu::MessageNone, flamegpu::Mes
     auto mi17_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
     auto mi8_unsvc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
     auto mi17_unsvc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
+    auto mi8_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
+    auto mi17_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
     auto mi8_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
     auto mi17_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
     
@@ -55,6 +57,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v7, flamegpu::MessageNone, flamegpu::Mes
         mi17_svc[i].exchange(0u);
         mi8_unsvc[i].exchange(0u);
         mi17_unsvc[i].exchange(0u);
+        mi8_unsvc_ready[i].exchange(0u);
+        mi17_unsvc_ready[i].exchange(0u);
         mi8_inactive[i].exchange(0u);
         mi17_inactive[i].exchange(0u);
     }}
@@ -104,13 +108,25 @@ RTC_COUNT_UNSVC = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_count_unsvc_v7, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    unsigned int step_days = mp_result[0];
+    if (step_days == 0u) step_days = 1u;
+    const unsigned int safe_day = day + step_days;
+    
+    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
+    const bool ready = (exit_date > 0u && exit_date != 0xFFFFFFFFu && exit_date <= safe_day);
     
     if (group_by == 1u) {{
         auto count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
+        auto ready_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
         count[idx].exchange(1u);
+        if (ready) ready_count[idx].exchange(1u);
     }} else if (group_by == 2u) {{
         auto count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
+        auto ready_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
         count[idx].exchange(1u);
+        if (ready) ready_count[idx].exchange(1u);
     }}
     return flamegpu::ALIVE;
 }}
@@ -144,7 +160,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_demote_ops_v7, flamegpu::MessageNone, flamegpu::Mess
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    unsigned int step_days = mp_result[0];
+    if (step_days == 0u) step_days = 1u;
+    unsigned int safe_day = day + step_days;
+    if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
     
     // Подсчёт текущих в operations (включая динамические спавны!)
     // КРИТИЧНО: используем RTC_MAX_FRAMES, а не frames_total, чтобы учесть спавненных агентов
@@ -211,7 +231,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v7, flamegpu::MessageNone, flamegpu::Mes
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    unsigned int step_days = mp_result[0];
+    if (step_days == 0u) step_days = 1u;
+    unsigned int safe_day = day + step_days;
+    if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
     
     // Подсчёт текущих в operations (включая динамические спавны!)
     // КРИТИЧНО: используем RTC_MAX_FRAMES, а не frames_total
@@ -284,7 +308,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    unsigned int step_days = mp_result[0];
+    if (step_days == 0u) step_days = 1u;
+    unsigned int safe_day = day + step_days;
+    if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
     
     // КРИТИЧНО: Проверяем exit_date — агент должен отбыть repair_time перед возвратом в ops
     const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
@@ -304,7 +332,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     if (group_by == 1u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
-        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
+        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
         for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++ops_curr;
             if (svc_count[i] == 1u) ++svc_available;
@@ -314,7 +342,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     }} else if (group_by == 2u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
-        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
+        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
         for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++ops_curr;
             if (svc_count[i] == 1u) ++svc_available;
@@ -345,12 +373,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     // Ранжирование
     unsigned int rank = 0u;
     if (group_by == 1u) {{
-        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
+        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
         for (unsigned int i = 0u; i < idx; ++i) {{
             if (unsvc_count[i] == 1u) ++rank;
         }}
     }} else {{
-        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
+        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
         for (unsigned int i = 0u; i < idx; ++i) {{
             if (unsvc_count[i] == 1u) ++rank;
         }}
@@ -376,7 +404,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    unsigned int step_days = mp_result[0];
+    if (step_days == 0u) step_days = 1u;
+    unsigned int safe_day = day + step_days;
+    if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
     
     // P3 КАСКАДНАЯ ЛОГИКА: дефицит = target - ops - svc - unsvc (P1+P2 промоутят всех)
     // КРИТИЧНО: используем RTC_MAX_FRAMES, чтобы учесть спавненных агентов
@@ -389,7 +421,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
     if (group_by == 1u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
-        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
+        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
         auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
         for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++ops_curr;
@@ -401,7 +433,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
     }} else if (group_by == 2u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
-        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
+        auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
         auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
         for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++ops_curr;
@@ -569,4 +601,48 @@ def register_quota_v7(model: fg.ModelDescription, agent: fg.AgentDescription):
     print("  ✅ P3 промоут (inactive)")
     
     print("✅ Квотирование V7 зарегистрировано\n")
+
+
+def register_post_quota_counts_v7(model: fg.ModelDescription, agent: fg.AgentDescription):
+    """
+    Пересчёт буферов после пост-квотных переходов.
+    Нужно для корректного динамического спавна: он должен видеть актуальные counts.
+    """
+    print("\n📊 V7: Пересчёт буферов ПОСЛЕ квотирования...")
+    
+    # Сброс буферов (idx=0 из ЛЮБОГО состояния)
+    layer_reset_buf = model.newLayer("v7_reset_buffers_post_quota")
+    for state in ["inactive", "operations", "serviceable", "repair", "reserve", "storage", "unserviceable"]:
+        fn_name = f"rtc_reset_quota_v7_post_{state}"
+        fn = agent.newRTCFunction(fn_name, RTC_RESET_BUFFERS)
+        fn.setInitialState(state)
+        fn.setEndState(state)
+        layer_reset_buf.addAgentFunction(fn)
+    print("  ✅ Сброс буферов (post)")
+    
+    # Подсчёт агентов
+    layer_count = model.newLayer("v7_count_agents_post_quota")
+    
+    fn = agent.newRTCFunction("rtc_count_ops_v7_post", RTC_COUNT_OPS)
+    fn.setInitialState("operations")
+    fn.setEndState("operations")
+    layer_count.addAgentFunction(fn)
+    
+    fn = agent.newRTCFunction("rtc_count_svc_v7_post", RTC_COUNT_SVC)
+    fn.setInitialState("serviceable")
+    fn.setEndState("serviceable")
+    layer_count.addAgentFunction(fn)
+    
+    fn = agent.newRTCFunction("rtc_count_unsvc_v7_post", RTC_COUNT_UNSVC)
+    fn.setInitialState("unserviceable")
+    fn.setEndState("unserviceable")
+    layer_count.addAgentFunction(fn)
+    
+    fn = agent.newRTCFunction("rtc_count_inactive_v7_post", RTC_COUNT_INACTIVE)
+    fn.setInitialState("inactive")
+    fn.setEndState("inactive")
+    layer_count.addAgentFunction(fn)
+    
+    print("  ✅ Подсчёт агентов (post)")
+    print("✅ Post-quota пересчёт зарегистрирован\n")
 

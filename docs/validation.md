@@ -91,6 +91,11 @@ export CUBE_CONFIG_PATH="$PWD/config"
 - Налёт вне ops: AC 100000..100005, prev_state='reserve', 103→120, delta_sne=1316
 - Ops delta_sne=0 при program=459: AC 22171..22610, интервал 0→3
 
+## Валидация MESSAGING (лимитер без dt)
+
+Скрипт `code/analysis/sim_validation_runner_msg.py` поддерживает таблицы без `dt` (например `sim_masterv2_v8`):  
+инварианты считаются через `delta_sne` по предыдущему состоянию, а агрегаты — через сумму `delta_sne` в ops‑интервалах.
+
 **Результат исправления (02-12-2025):**
 - Было: 10-20 мин первичная компиляция с warning'ами
 - Стало: ~3 мин компиляция без warning'ов

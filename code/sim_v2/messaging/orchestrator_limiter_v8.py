@@ -255,6 +255,15 @@ class LimiterV8Orchestrator:
         # Фаза 1: V8 Operations (next-day dt проверка!)
         rtc_state_transitions_v8.register_ops_transitions_v8(self.model, heli_agent)
         
+        # Фаза 1.5: V8 adaptive (до квотирования) — вычисление adaptive_days
+        self.hf_init_v8 = rtc_limiter_v8.register_v8_pre_quota_layers(
+            self.model,
+            self.base_model.agent,
+            self.base_model.quota_agent,
+            self.deterministic_dates,
+            self.end_day
+        )
+        
         # Фаза 2: V7 Квотирование (baseline совместимо!)
         # ВНИМАНИЕ: Используем V7 вместо V8 RepairAgent для корректного ops=target
         rtc_quota_v7.register_quota_v7(self.model, heli_agent)
@@ -262,13 +271,16 @@ class LimiterV8Orchestrator:
         # Фаза 3: Переходы после квотирования
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
         
+        # Фаза 3.5: Пересчёт буферов после квотирования (для spawn)
+        rtc_quota_v7.register_post_quota_counts_v7(self.model, heli_agent)
+        
         # ═══════════════════════════════════════════════════════════════
         # Динамический спавн Mi-17 (после P3)
         # ═══════════════════════════════════════════════════════════════
         spawn_env_data = {
             'first_dynamic_idx': self.frames,
             'dynamic_reserve_mi17': 50,
-            'base_acn_spawn': 200000
+            'base_acn_spawn': 100000
         }
         self.spawn_data = rtc_spawn_dynamic_v7.register_spawn_dynamic_v7(
             self.model, heli_agent, spawn_env_data
@@ -327,14 +339,8 @@ class LimiterV8Orchestrator:
             verbose_logging=self.enable_mp2
         )
         
-        # V8: Регистрация adaptive layers
-        self.hf_init_v8 = rtc_limiter_v8.register_v8_adaptive_layers(
-            self.model,
-            self.base_model.agent,
-            self.base_model.quota_agent,
-            self.deterministic_dates,
-            self.end_day
-        )
+        # V8: Обновление дня — всегда в самом конце
+        rtc_limiter_v8.register_v8_update_day_layer(self.model, self.end_day)
         
         # ИСПРАВЛЕНО: НЕ вызываем rtc_limiter_v5.register_v5_final_layers!
         # V5 compute_global_min ПЕРЕЗАПИСЫВАЛ результат V8, вызывая баг ops≠target
@@ -396,16 +402,33 @@ class LimiterV8Orchestrator:
                 step_log = self.hf_sync_v5.get_step_log()
                 if step_log:
                     current_day = step_log[-1]['day']
+                    adaptive_days = step_log[-1]['adaptive']
                 else:
                     current_day = 0
+                    adaptive_days = 0
                 
-                if current_day not in recorded_days:
+                # Записываем состояние ПОСЛЕ шага, поэтому используем end_day из Environment
+                end_day = None
+                if hasattr(self.simulation, "getEnvironmentPropertyUInt"):
+                    end_day = int(self.simulation.getEnvironmentPropertyUInt("current_day"))
+                elif hasattr(self.simulation, "getEnvironmentProperty"):
+                    end_day = int(self.simulation.getEnvironmentProperty("current_day"))
+                elif hasattr(self.simulation, "getEnvironmentPropertyInt"):
+                    end_day = int(self.simulation.getEnvironmentPropertyInt("current_day"))
+                
+                if end_day is None:
+                    raise RuntimeError("Не удалось прочитать current_day из Environment после шага")
+                
+                if end_day > self.end_day:
+                    end_day = self.end_day
+                
+                if end_day not in recorded_days:
                     rows = collect_agents_state(
                         self.simulation, self.base_model.agent,
-                        current_day, version_date_int, version_id
+                        end_day, version_date_int, version_id
                     )
                     mp2_rows.extend(rows)
-                    recorded_days.add(current_day)
+                    recorded_days.add(end_day)
                 
                 if step_count >= max_steps:
                     break
