@@ -57,7 +57,7 @@ class MessagingQuotaValidator:
         quota_query = f"""
             WITH base AS (
                 SELECT 
-                    toInt32(dates - version_date) as day_index,
+                    dateDiff('day', toDate('{self.version_date_str}'), dates) as day_index,
                     ops_counter_mi8 as t8,
                     ops_counter_mi17 as t17,
                     leadInFrame(ops_counter_mi8) OVER (ORDER BY dates) as t8_next,
@@ -99,7 +99,21 @@ class MessagingQuotaValidator:
         
         result = []
         for day in sorted(ops_by_day.keys()):
-            quota_mi8, quota_mi17 = quota_map.get(day, (0, 0))
+            if day not in quota_map:
+                # Подтягиваем реальный target точечным запросом
+                rows = self.client.execute(f"""
+                    SELECT ops_counter_mi8, ops_counter_mi17
+                    FROM flight_program_ac
+                    WHERE version_date = toDate('{self.version_date_str}')
+                      AND dateDiff('day', toDate('{self.version_date_str}'), dates) = {day}
+                    LIMIT 1
+                """)
+                if not rows:
+                    raise RuntimeError(f"Нет target в flight_program_ac для day={day}")
+                quota_mi8, quota_mi17 = rows[0]
+                quota_map[day] = (quota_mi8, quota_mi17)
+            else:
+                quota_mi8, quota_mi17 = quota_map[day]
             ops_mi8 = ops_by_day[day]['mi8']
             ops_mi17 = ops_by_day[day]['mi17']
             
