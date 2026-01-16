@@ -47,6 +47,50 @@
 > ⚠️ **При КАЖДОЙ компиляции ядер анализировать JIT лог на наличие warning'ов!**
 > Это критически важно для поддержания качества RTC кода.
 
+## Окружение для валидаций (актуально 16-01-2026)
+
+```bash
+cd /media/albud/8C327EB0327E9F40/Projects/Heli/Helicomponents-messaging
+source .venv/bin/activate
+# Если .venv отсутствует — использовать conda:
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate cuda13
+source config/load_env.sh
+export CUBE_CONFIG_PATH="$PWD/config"
+```
+
+## LIMITER V8: текущие проблемы (16-01-2026)
+
+**Контекст:** чистый прогон `orchestrator_limiter_v8.py` с `--enable-mp2 --drop-table`,  
+таблица `sim_masterv2_v8`, датасет `2025-07-04`.
+
+### 1) Ops vs Target (адаптивные шаги)
+- Всего шагов: **268**
+- Несовпадений: **219**
+  - Mi-8: 149 дней
+  - Mi-17: 202 дня
+
+**Пример:**
+- День 181: Mi-8 68/42 (Δ=+26), Mi-17 89/88 (Δ=+1)
+- День 3649: Mi-17 129/127 (Δ=+2)
+
+### 2) Налёт и инварианты (delta_sne)
+**Сводка:**
+- Δsne total = **56,689,881**
+- Σdelta_sne (ops intervals) = **56,681,985**
+- Σdelta_sne (non-ops intervals) = **7,896**  ← налёт вне operations
+- Σprogram (ops intervals) = **53,588,287**
+
+**Счётчики нарушений:**
+- non-ops with delta_sne ≠ 0: **6**
+- ops delta_sne ≠ program: **39,870**
+- program=0 but delta_sne>0: **2,546**
+- program>0 but delta_sne=0: **260**
+
+**Примеры:**
+- Налёт вне ops: AC 100000..100005, prev_state='reserve', 103→120, delta_sne=1316
+- Ops delta_sne=0 при program=459: AC 22171..22610, интервал 0→3
+
 **Результат исправления (02-12-2025):**
 - Было: 10-20 мин первичная компиляция с warning'ами
 - Стало: ~3 мин компиляция без warning'ов

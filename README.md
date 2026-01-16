@@ -40,15 +40,23 @@
 
 ```bash
 # 1. Активировать окружение
+# Основной вариант: локальный venv
 source .venv/bin/activate
+# Альтернатива (если .venv отсутствует): conda cuda13
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate cuda13
 
-# 2. Проверить подключение к БД
+# 2. Загрузить переменные окружения
+source config/load_env.sh
+export CUBE_CONFIG_PATH="$PWD/config"
+
+# 3. Проверить подключение к БД
 python3 code/utils/test_db_connection.py
 
-# 3. Запустить ETL (интерактивный выбор датасета и режима)
+# 4. Запустить ETL (интерактивный выбор датасета и режима)
 python3 code/extract_master.py
 
-# 4. Запустить симуляцию — см. полную команду в .cursorrules
+# 5. Запустить симуляцию — см. полную команду в .cursorrules
 ```
 
 > **Полные команды с параметрами:** см. `.cursorrules` (секции "Загрузка данных" и "Команда запуска симуляции")
