@@ -68,6 +68,7 @@ class V2BaseModelUnitsMsg:
         # Счётчики для приоритетов
         self.env.newMacroPropertyUInt32("mp_svc_count", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_rsv_count", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_spawn_budget", MAX_GROUPS)
 
         # Планерные данные (из sim_masterv2)
         # Фиксированный размер для RTC (по правилам проекта)
@@ -77,6 +78,9 @@ class V2BaseModelUnitsMsg:
         self.env.newMacroPropertyUInt("mp_idx_to_ac", MAX_PLANERS)
         self.env.newMacroPropertyUInt8("mp_planer_in_ops_history", planer_dt_size)
         self.env.newMacroPropertyUInt8("mp_planer_type", MAX_PLANERS)
+        # Для совместимости с init_planer_dt
+        self.env.newMacroPropertyUInt8("mp_planer_assembly", planer_dt_size)
+        self.env.newMacroPropertyUInt8("mp_planer_in_ops", MAX_PLANERS)
         # Для совместимости с init_planer_dt
         self.env.newMacroPropertyUInt8("mp_planer_assembly", planer_dt_size)
         self.env.newMacroPropertyUInt8("mp_planer_in_ops", MAX_PLANERS)

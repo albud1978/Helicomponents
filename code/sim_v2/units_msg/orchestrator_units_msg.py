@@ -47,6 +47,8 @@ from sim_v2.units.init_planer_dt import register_init_planer_dt
 import rtc_planer_messages
 import rtc_units_detach_msg
 import rtc_units_counts_msg
+import rtc_units_spawn_budget_msg
+import rtc_units_states_stub_msg
 import rtc_units_assign_msg
 import rtc_units_ops_msg
 import rtc_units_repair_msg
@@ -111,6 +113,8 @@ class UnitsMsgOrchestrator:
         rtc_planer_messages.register_rtc(model, self.base_model.agent_planer)
         rtc_units_detach_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_counts_msg.register_rtc(model, self.base_model.agent_units)
+        rtc_units_spawn_budget_msg.register_rtc(model)
+        rtc_units_states_stub_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_assign_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_ops_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_repair_msg.register_rtc(model, self.base_model.agent_units)
