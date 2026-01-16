@@ -626,6 +626,18 @@ def generate_report(version_date_str: str, results: Dict, table: str) -> str:
                         f"| Избыток | {s.get('excess', 0)} | {100*s.get('excess',0)/total:.1f}% |",
                         f"",
                     ])
+        
+        quota_warnings = results['quota'].get('warnings', [])
+        if quota_warnings:
+            lines.extend([
+                f"### Примеры предупреждений (ops > target)",
+                f"",
+                f"Показано: {min(len(quota_warnings), 50)} из {len(quota_warnings)}",
+                f"",
+            ])
+            for w in quota_warnings[:50]:
+                lines.append(f"- {w.get('message', '')}")
+            lines.append("")
     
     # Детали переходов
     if 'transitions' in results:
@@ -665,6 +677,18 @@ def generate_report(version_date_str: str, results: Dict, table: str) -> str:
             for ac_type, data in agg.items():
                 lines.append(f"| {ac_type} | {data['ac_count']} | {data['total_hours']:,.0f} | {data['avg_per_ac']:,.1f} |")
             
+            lines.append("")
+        
+        inc_errors = results['increments'].get('errors', [])
+        if inc_errors:
+            lines.extend([
+                f"### Ошибки инкрементов (примеры)",
+                f"",
+                f"Показано: {min(len(inc_errors), 20)} из {len(inc_errors)}",
+                f"",
+            ])
+            for e in inc_errors[:20]:
+                lines.append(f"- {e.get('message', '')}")
             lines.append("")
     
     return "\n".join(lines)
