@@ -20,7 +20,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_slots_count_ops, flamegpu::MessageNone, flameg
     auto mp_ac_to_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_AC_NUMBER}u>("mp_ac_to_idx");
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS * MAX_PLANERS}u>("mp_planer_slots");
     unsigned int planer_idx = mp_ac_to_idx[aircraft_number];
-    if (planer_idx == 0u || planer_idx >= {MAX_PLANERS}u) return flamegpu::ALIVE;
+    if (planer_idx >= {MAX_PLANERS}u) return flamegpu::ALIVE;
 
     const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
     mp_slots[slots_pos]++;

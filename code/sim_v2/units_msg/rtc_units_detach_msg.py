@@ -32,7 +32,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_detach_if_planer_left, flamegpu::MessageNone, 
         planer_idx = mp_ac_to_idx[aircraft_number];
     }}
 
-    if (planer_idx == 0u || planer_idx >= {MAX_PLANERS}u) {{
+    if (planer_idx >= {MAX_PLANERS}u) {{
         return flamegpu::ALIVE;
     }}
 
