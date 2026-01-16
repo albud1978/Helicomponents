@@ -47,6 +47,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForc
 
         const unsigned int ac = msg.getVariable<unsigned int>("aircraft_number");
         FLAMEGPU->setVariable<unsigned int>("aircraft_number", ac);
+        FLAMEGPU->setVariable<unsigned int>("planer_idx", planer_idx);
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
         return flamegpu::ALIVE;
     }}
@@ -123,6 +124,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
 
         const unsigned int ac = msg.getVariable<unsigned int>("aircraft_number");
         FLAMEGPU->setVariable<unsigned int>("aircraft_number", ac);
+        FLAMEGPU->setVariable<unsigned int>("planer_idx", planer_idx);
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
         return flamegpu::ALIVE;
     }}
