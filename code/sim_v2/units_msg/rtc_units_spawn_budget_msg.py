@@ -22,7 +22,7 @@ class SpawnBudgetHostFunction(fg.HostFunction):
             return
 
         mp_budget = FLAMEGPU.environment.getMacroPropertyUInt32("mp_spawn_budget")
-        mp_slots = FLAMEGPU.environment.getMacroPropertyUInt32("mp_planer_slots")
+        mp_need = FLAMEGPU.environment.getMacroPropertyUInt32("mp_planer_need")
         mp_ops = FLAMEGPU.environment.getMacroPropertyUInt8("mp_planer_in_ops_history")
         mp_type = FLAMEGPU.environment.getMacroPropertyUInt8("mp_planer_type")
         mp_svc = FLAMEGPU.environment.getMacroPropertyUInt32("mp_svc_count")
@@ -41,9 +41,7 @@ class SpawnBudgetHostFunction(fg.HostFunction):
                     continue
                 if mp_type[idx] != required_type:
                     continue
-                slots = mp_slots[g * MAX_PLANERS + idx]
-                if slots < 2:
-                    deficit += (2 - slots)
+                deficit += mp_need[g * MAX_PLANERS + idx]
 
             available = mp_svc[g] + mp_rsv[g]
             budget = deficit - available

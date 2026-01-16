@@ -48,6 +48,7 @@ import rtc_planer_messages
 import rtc_units_detach_msg
 import rtc_units_slots_reset_msg
 import rtc_units_slots_count_msg
+import rtc_units_planer_need_msg
 import rtc_units_counts_msg
 import rtc_units_spawn_budget_msg
 import rtc_units_states_stub_msg
@@ -116,6 +117,7 @@ class UnitsMsgOrchestrator:
         rtc_units_detach_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_slots_reset_msg.register_rtc(model)
         rtc_units_slots_count_msg.register_rtc(model, self.base_model.agent_units)
+        rtc_units_planer_need_msg.register_rtc(model)
         rtc_units_counts_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_spawn_budget_msg.register_rtc(model)
         rtc_units_states_stub_msg.register_rtc(model, self.base_model.agent_units)
