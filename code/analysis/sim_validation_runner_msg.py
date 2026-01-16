@@ -350,13 +350,12 @@ class MessagingIncrementsValidator:
                 FROM (
                     SELECT 
                         aircraft_number,
-                        state,
                         lagInFrame(state) OVER (PARTITION BY aircraft_number ORDER BY day_u16) as prev_state,
                         ifNull(sne - lagInFrame(sne) OVER (PARTITION BY aircraft_number ORDER BY day_u16), 0) as delta_sne
                     FROM {self.table}
                     WHERE version_date = {self.version_date}
                 )
-                WHERE prev_state IS NOT NULL
+                WHERE prev_state IS NOT NULL AND prev_state != ''
                 GROUP BY prev_state
             """
             
@@ -370,6 +369,37 @@ class MessagingIncrementsValidator:
                         'message': f"delta_sne > 0 вне operations (prev_state={prev_state}): {with_inc} интервалов"
                     })
                 print(f"  {prev_state}: delta_sne>0 в {with_inc:,}/{total:,} интервалов")
+            
+            # Примеры (хронология) для нарушений
+            detail_query = f"""
+                SELECT 
+                    day_u16,
+                    aircraft_number,
+                    prev_state,
+                    state,
+                    delta_sne
+                FROM (
+                    SELECT
+                        day_u16,
+                        aircraft_number,
+                        state,
+                        lagInFrame(state) OVER (PARTITION BY aircraft_number ORDER BY day_u16) as prev_state,
+                        ifNull(sne - lagInFrame(sne) OVER (PARTITION BY aircraft_number ORDER BY day_u16), 0) as delta_sne
+                    FROM {self.table}
+                    WHERE version_date = {self.version_date}
+                )
+                WHERE prev_state IS NOT NULL AND prev_state != ''
+                  AND prev_state != 'operations'
+                  AND delta_sne > 0
+                ORDER BY day_u16, aircraft_number
+                LIMIT 50
+            """
+            details = self.client.execute(detail_query)
+            for day_u16, acn, prev_state, state, delta_sne in details:
+                self.errors.append({
+                    'type': 'SNE_INVARIANT_DETAIL',
+                    'message': f"Day {day_u16}: acn={acn}, prev_state={prev_state}, state={state}, delta_sne={delta_sne}"
+                })
             
             valid = len(violations) == 0
             self.stats['dt_invariant'] = {'valid': valid, 'violations': violations, 'method': 'delta_sne'}
@@ -431,7 +461,7 @@ class MessagingIncrementsValidator:
                     FROM {self.table}
                     WHERE version_date = {self.version_date}
                 )
-                WHERE prev_state IS NOT NULL
+                WHERE prev_state IS NOT NULL AND prev_state != ''
                 GROUP BY idx
             """
             
@@ -514,7 +544,7 @@ class MessagingIncrementsValidator:
                     FROM {self.table}
                     WHERE version_date = {self.version_date}
                 )
-                WHERE prev_state IS NOT NULL
+                WHERE prev_state IS NOT NULL AND prev_state != ''
                 GROUP BY group_by
             """
         else:

@@ -76,7 +76,6 @@ RTC_COUNT_OPS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_count_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    
     if (group_by == 1u) {{
         auto count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
         count[idx].exchange(1u);
@@ -187,6 +186,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_demote_ops_v7, flamegpu::MessageNone, flamegpu::Mess
         return flamegpu::ALIVE;
     }}
     
+    
     // Избыток?
     if (curr <= target) {{
         return flamegpu::ALIVE;
@@ -263,6 +263,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v7, flamegpu::MessageNone, flamegpu::Mes
         return flamegpu::ALIVE;
     }}
     
+    
     // Дефицит?
     if (curr >= target) {{
         return flamegpu::ALIVE;
@@ -316,7 +317,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     
     // КРИТИЧНО: Проверяем exit_date — агент должен отбыть repair_time перед возвратом в ops
     const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
-    if (exit_date > 0u && exit_date != 0xFFFFFFFFu && day < exit_date) {{
+    if (exit_date > 0u && exit_date != 0xFFFFFFFFu && safe_day < exit_date) {{
         // Ещё не готов — ждём repair_time
         return flamegpu::ALIVE;
     }}
@@ -352,6 +353,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     }} else {{
         return flamegpu::ALIVE;
     }}
+    
     
     // P1 промоутит min(deficit_p1, svc_available)
     // P2 получает остаток: deficit_p2 = target - ops - min(deficit_p1, svc)
@@ -446,6 +448,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
         return flamegpu::ALIVE;
     }}
     
+    
     // P1 промоутит min(deficit_p1, svc_available)
     unsigned int deficit_p1 = (target > ops_curr) ? (target - ops_curr) : 0u;
     unsigned int p1_will_promote = (deficit_p1 < svc_available) ? deficit_p1 : svc_available;
@@ -489,6 +492,108 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
 }}
 """
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# P3 POST-КВОТА: дополнительный добор из inactive до target
+# (использует ПОСТ-квотные буферы counts)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RTC_PROMOTE_INACTIVE_POST = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_post_v7, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // POST P3: inactive → operations (добор после всех переходов)
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    unsigned int step_days = mp_result[0];
+    if (step_days == 0u) step_days = 1u;
+    unsigned int safe_day = day + step_days;
+    if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
+    
+    unsigned int ops_curr = 0u;
+    unsigned int inactive_available = 0u;
+    unsigned int target = 0u;
+    
+    if (group_by == 1u) {{
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
+        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
+        for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
+            if (ops_count[i] == 1u) ++ops_curr;
+            if (inactive_count[i] == 1u) ++inactive_available;
+        }}
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+    }} else if (group_by == 2u) {{
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
+        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
+        for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
+            if (ops_count[i] == 1u) ++ops_curr;
+            if (inactive_count[i] == 1u) ++inactive_available;
+        }}
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+    }} else {{
+        return flamegpu::ALIVE;
+    }}
+    
+    
+    if (ops_curr >= target) {{
+        return flamegpu::ALIVE;
+    }}
+    
+    unsigned int deficit = target - ops_curr;
+    unsigned int K = (deficit < inactive_available) ? deficit : inactive_available;
+    if (K == 0u) return flamegpu::ALIVE;
+    
+    // Ранжирование
+    unsigned int rank = 0u;
+    if (group_by == 1u) {{
+        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
+        for (unsigned int i = 0u; i < idx; ++i) {{
+            if (inactive_count[i] == 1u) ++rank;
+        }}
+    }} else {{
+        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
+        for (unsigned int i = 0u; i < idx; ++i) {{
+            if (inactive_count[i] == 1u) ++rank;
+        }}
+    }}
+    
+    if (rank < K) {{
+        FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
+COND_INACTIVE_PROMOTED_POST = """
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_inactive_promoted_post_v7) {
+    return FLAMEGPU->getVariable<unsigned int>("promoted") == 1u;
+}
+"""
+
+RTC_INACTIVE_TO_OPS_POST = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_post_v7, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // P3 POST: PPR по правилам group_by
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    
+    // Mi-17: если PPR < br2_mi17, сохраняем; иначе обнуляем
+    const unsigned int br2_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mi17_br2_const");
+    
+    if (group_by == 2u && ppr < br2_mi17) {{
+        // Комплектация без ремонта — PPR сохраняется
+    }} else {{
+        // Ремонт — PPR обнуляется
+        FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+    }}
+    
+    FLAMEGPU->setVariable<unsigned int>("transition_1_to_2", 1u);
+    FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
+    FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
+    return flamegpu::ALIVE;
+}}
+"""
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # СБРОС ФЛАГОВ (в начале каждого шага)
@@ -522,6 +627,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_flags_v7, flamegpu::MessageNone, flamegpu::Mes
 def register_quota_v7(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует квотирование V7 (без intent)"""
     print("\n📊 V7: Регистрация квотирования...")
+    
+    # MacroProperty exit_flags не используем
     
     # Сброс флагов в начале (все агенты во всех состояниях)
     layer_reset_flags = model.newLayer("v7_reset_flags")
@@ -644,5 +751,21 @@ def register_post_quota_counts_v7(model: fg.ModelDescription, agent: fg.AgentDes
     layer_count.addAgentFunction(fn)
     
     print("  ✅ Подсчёт агентов (post)")
+
+    # Доп. добор до target после пост-квотных переходов
+    layer_promote_post = model.newLayer("v7_promote_inactive_post")
+    fn = agent.newRTCFunction("rtc_promote_inactive_post_v7", RTC_PROMOTE_INACTIVE_POST)
+    fn.setInitialState("inactive")
+    fn.setEndState("inactive")
+    layer_promote_post.addAgentFunction(fn)
+    
+    layer_to_ops_post = model.newLayer("v7_inactive_to_ops_post")
+    fn = agent.newRTCFunction("rtc_inactive_to_ops_post_v7", RTC_INACTIVE_TO_OPS_POST)
+    fn.setRTCFunctionCondition(COND_INACTIVE_PROMOTED_POST)
+    fn.setInitialState("inactive")
+    fn.setEndState("operations")
+    layer_to_ops_post.addAgentFunction(fn)
+    
+    print("  ✅ Доп. добор из inactive (post)")
     print("✅ Post-quota пересчёт зарегистрирован\n")
 
