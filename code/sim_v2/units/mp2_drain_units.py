@@ -108,7 +108,8 @@ class MP2DrainUnitsHostFunction(fg.HostFunction):
         
         # Drain каждые interval_days дней
         if step_day > 0 and step_day % self.interval_days == 0:
-            self._drain_range(FLAMEGPU, self._last_drained_day + 1, step_day)
+            # Включаем текущий день (end_day не включается)
+            self._drain_range(FLAMEGPU, self._last_drained_day + 1, step_day + 1)
             self._last_drained_day = step_day
 
         # Финальный drain на последнем шаге (закрывает хвост)
