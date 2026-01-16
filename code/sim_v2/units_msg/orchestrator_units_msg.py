@@ -54,8 +54,6 @@ import rtc_units_spawn_budget_msg
 import rtc_units_states_stub_msg
 import rtc_units_assign_msg
 import rtc_units_ops_msg
-import rtc_units_cap_reset_msg
-import rtc_units_cap_ops_msg
 import rtc_units_repair_msg
 import rtc_units_transition_ops_msg
 import rtc_units_transition_serviceable_msg
@@ -125,8 +123,6 @@ class UnitsMsgOrchestrator:
         rtc_units_states_stub_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_assign_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_ops_msg.register_rtc(model, self.base_model.agent_units)
-        rtc_units_cap_reset_msg.register_rtc(model)
-        rtc_units_cap_ops_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_repair_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_transition_ops_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_transition_repair_msg.register_rtc(model, self.base_model.agent_units)
