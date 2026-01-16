@@ -19,6 +19,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_repair_step, flamegpu::MessageNone, flamegpu::
         FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
         FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
         FLAMEGPU->setVariable<unsigned int>("aircraft_number", 0u);
+        FLAMEGPU->setVariable<unsigned int>("planer_idx", 0u);
         FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
     }
 

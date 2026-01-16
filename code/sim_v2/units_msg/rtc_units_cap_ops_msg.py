@@ -15,11 +15,10 @@ def get_rtc_code() -> str:
 FLAMEGPU_AGENT_FUNCTION(rtc_units_cap_ops, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    const unsigned int planer_idx = FLAMEGPU->getVariable<unsigned int>("planer_idx");
     if (aircraft_number == 0u || group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
 
-    auto mp_ac_to_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_AC_NUMBER}u>("mp_ac_to_idx");
     auto mp_cap = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS * MAX_PLANERS}u>("mp_planer_cap");
-    unsigned int planer_idx = mp_ac_to_idx[aircraft_number];
     if (planer_idx == 0u || planer_idx >= {MAX_PLANERS}u) return flamegpu::ALIVE;
 
     const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;

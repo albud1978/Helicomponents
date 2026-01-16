@@ -17,22 +17,16 @@ def get_rtc_code() -> str:
 FLAMEGPU_AGENT_FUNCTION(rtc_units_detach_if_planer_left, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    const unsigned int planer_idx = FLAMEGPU->getVariable<unsigned int>("planer_idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
 
     if (aircraft_number == 0u || group_by >= {MAX_GROUPS}u) {{
         return flamegpu::ALIVE;
     }}
 
-    auto mp_ac_to_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_AC_NUMBER}u>("mp_ac_to_idx");
     auto mp_ops = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_planer_in_ops_history");
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
-
-    unsigned int planer_idx = 0u;
-    if (aircraft_number < {MAX_AC_NUMBER}u) {{
-        planer_idx = mp_ac_to_idx[aircraft_number];
-    }}
-
-    if (planer_idx >= {MAX_PLANERS}u) {{
+    if (planer_idx == 0u || planer_idx >= {MAX_PLANERS}u) {{
         return flamegpu::ALIVE;
     }}
 
@@ -43,6 +37,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_detach_if_planer_left, flamegpu::MessageNone, 
             const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
             mp_slots[slots_pos]--;
             FLAMEGPU->setVariable<unsigned int>("aircraft_number", 0u);
+            FLAMEGPU->setVariable<unsigned int>("planer_idx", 0u);
             FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
             FLAMEGPU->setVariable<unsigned int>("transition_planer_exit", 1u);
         }}

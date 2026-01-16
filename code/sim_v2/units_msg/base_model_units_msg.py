@@ -123,6 +123,7 @@ class V2BaseModelUnitsMsg:
         agent.newVariableUInt("idx", 0)
         agent.newVariableUInt("psn", 0)
         agent.newVariableUInt("aircraft_number", 0)
+        agent.newVariableUInt("planer_idx", 0)
         agent.newVariableUInt("partseqno_i", 0)
         agent.newVariableUInt("group_by", 0)
         agent.newVariableUInt("queue_position", 0)

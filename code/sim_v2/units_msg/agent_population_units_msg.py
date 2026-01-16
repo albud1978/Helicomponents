@@ -64,8 +64,16 @@ class AgentPopulationUnitsMsgBuilder:
         # Агрегаты (group_by 3/4)
         self.units_builder.populate_agents(simulation, units_agent, env_data)
 
-        # Планеры для сообщений
+        # Проставляем planer_idx для агрегатов по aircraft_number
         ac_to_idx = env_data.get('ac_to_idx', {})
+        if ac_to_idx:
+            units_pop = simulation.getPopulationData("unit")
+            for agent in units_pop:
+                ac = agent.getVariableUInt("aircraft_number")
+                agent.setVariableUInt("planer_idx", int(ac_to_idx.get(ac, 0)))
+            simulation.setPopulationData(units_pop, "unit")
+
+        # Планеры для сообщений
         planer_type = env_data.get('planer_type', {})
 
         planer_pop = fg.AgentVector(planer_agent)
