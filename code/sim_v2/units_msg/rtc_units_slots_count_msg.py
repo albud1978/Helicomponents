@@ -7,7 +7,7 @@ import pyflamegpu as fg
 
 MAX_GROUPS = 50
 MAX_PLANERS = 400
-MAX_AC_NUMBER = 1_000_000
+MAX_AC_NUMBER = 2_000_000
 
 
 def get_rtc_code() -> str:
