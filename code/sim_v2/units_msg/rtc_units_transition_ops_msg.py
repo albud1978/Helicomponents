@@ -18,6 +18,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_apply_2_to_2, flamegpu::MessageNone, flamegpu:
 }}
 
 FLAMEGPU_AGENT_FUNCTION(rtc_units_apply_2_to_3, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    if (aircraft_number > 0u && group_by < {MAX_GROUPS}u) {{
+        auto mp_ac_to_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_AC_NUMBER}u>("mp_ac_to_idx");
+        auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
+        unsigned int planer_idx = mp_ac_to_idx[aircraft_number];
+        if (planer_idx > 0u && planer_idx < {MAX_PLANERS}u) {{
+            const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
+            mp_slots[slots_pos]--;
+        }}
+    }}
+    FLAMEGPU->setVariable<unsigned int>("aircraft_number", 0u);
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_3", 1u);
     return flamegpu::ALIVE;
 }}
