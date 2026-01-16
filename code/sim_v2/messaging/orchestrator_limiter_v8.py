@@ -118,6 +118,9 @@ class LimiterV8Orchestrator:
         self.base_model = None
         self.env_data = None
         
+        # DEBUG: дни для детального лога состояния (локальная отладка)
+        self.debug_days = {830}
+        
         self.frames = 0
         self.days = 0
         self.mp5_cumsum = None
@@ -430,6 +433,9 @@ class LimiterV8Orchestrator:
                     mp2_rows.extend(rows)
                     recorded_days.add(end_day)
                 
+                if end_day in self.debug_days:
+                    self._debug_day_snapshot(end_day)
+                
                 if step_count >= max_steps:
                     break
             
@@ -541,6 +547,44 @@ class LimiterV8Orchestrator:
             )
         
         print(f"   ✅ Агенты загружены: Mi-8 ops={mi8_ops}, Mi-17 ops={mi17_ops}, spawn={spawn_count}")
+
+    def _debug_day_snapshot(self, day: int):
+        """Локальный отладочный срез по Mi-17 на выбранный день."""
+        print(f"\n🔎 DEBUG day={day}: Mi-17 snapshot")
+        counts = {}
+        for state_name in ["operations", "serviceable", "unserviceable", "inactive", "reserve", "storage", "repair"]:
+            pop = fg.AgentVector(self.base_model.agent)
+            self.simulation.getPopulationData(pop, state_name)
+            cnt = 0
+            for i in range(pop.size()):
+                if pop.at(i).getVariableUInt("group_by") == 2:
+                    cnt += 1
+            counts[state_name] = cnt
+        print(f"  counts: {counts}")
+        
+        unsvc = []
+        pop = fg.AgentVector(self.base_model.agent)
+        self.simulation.getPopulationData(pop, "unserviceable")
+        for i in range(pop.size()):
+            agent = pop.at(i)
+            if agent.getVariableUInt("group_by") != 2:
+                continue
+            unsvc.append({
+                "acn": agent.getVariableUInt("aircraft_number"),
+                "idx": agent.getVariableUInt("idx"),
+                "exit_date": agent.getVariableUInt("exit_date"),
+                "repair_time": agent.getVariableUInt("repair_time"),
+                "ppr": agent.getVariableUInt("ppr"),
+                "sne": agent.getVariableUInt("sne"),
+            })
+        if unsvc:
+            unsvc_sorted = sorted(unsvc, key=lambda x: x["exit_date"])
+            print("  unsvc (mi17) by exit_date:")
+            for row in unsvc_sorted[:20]:
+                print(f"    acn={row['acn']}, idx={row['idx']}, exit={row['exit_date']}, "
+                      f"repair_time={row['repair_time']}, ppr={row['ppr']}, sne={row['sne']}")
+        else:
+            print("  unsvc (mi17): none")
     
     def _count_agents_in_state(self, state_name: str) -> int:
         """Подсчёт агентов в указанном состоянии"""

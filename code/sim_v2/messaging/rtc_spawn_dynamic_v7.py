@@ -53,6 +53,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v7, flamegpu::MessageNone, flamegp
     for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
         if (ops_count[i] == 1u) ++curr_ops;
     }
+    // NOTE: выходы из ops обрабатываются общим квотированием
     
     // Считаем промоутнутых P1 (serviceable)
     auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_svc_count");

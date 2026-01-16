@@ -48,6 +48,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_increment_v8, flamegpu::MessageNone, flamegpu::M
     
     auto mp5_cumsum = FLAMEGPU->environment.getMacroProperty<unsigned int, {CUMSUM_SIZE}u>("mp5_cumsum");
     
+    // Если агент только что вошёл в operations (deterministic spawn 5→2) — пропускаем инкремент
+    const unsigned int t5 = FLAMEGPU->getVariable<unsigned int>("transition_5_to_2");
+    if (t5 == 1u) {{
+        FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+        FLAMEGPU->setVariable<unsigned int>("daily_next_u32", 0u);
+        return flamegpu::ALIVE;
+    }}
+    
     // dt = cumsum[current_day] - cumsum[prev_day] (налёт за текущий шаг)
     const unsigned int base_curr = current_day * frames + idx;
     const unsigned int base_prev = prev_day * frames + idx;
