@@ -65,9 +65,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_spawn_activate, flamegpu::MessageBruteForce, f
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     if (day < repair_time) return flamegpu::ALIVE;  // запрет spawn до repair_time
 
-    auto mp_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_svc_count");
-    auto mp_rsv = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_count");
-    if (mp_svc[group_by] > 0u || mp_rsv[group_by] > 0u) return flamegpu::ALIVE;
+    auto mp_budget = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_spawn_budget");
+    if (mp_budget[group_by] == 0u) return flamegpu::ALIVE;
 
     const unsigned int required = 2u;
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
@@ -84,6 +83,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_spawn_activate, flamegpu::MessageBruteForce, f
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
         unsigned int curr = mp_slots[slots_pos];
         if (curr < required) {{
+            unsigned int prev = mp_budget[group_by]--;
+            if (prev == 0u) {{
+                mp_budget[group_by]++;  // rollback
+                return flamegpu::ALIVE;
+            }}
             FLAMEGPU->setVariable<unsigned int>("active", 1u);
             return flamegpu::ALIVE;
         }}
