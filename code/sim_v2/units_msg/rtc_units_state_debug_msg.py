@@ -13,6 +13,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_mark_reserve, flamegpu::MessageNone, flamegpu:
     if (group_by < {MAX_GROUPS}u) {{
         auto mp_seen = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_reserve_seen");
         mp_seen[group_by] += 1u;
+        auto mp_hits = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hits");
+        mp_hits[group_by] += 1u;
     }}
     return flamegpu::ALIVE;
 }}
