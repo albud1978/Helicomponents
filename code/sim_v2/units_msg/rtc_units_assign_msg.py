@@ -27,6 +27,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForc
 
     const unsigned int required = 2u;
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
+    auto mp_hits = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hits");
 
     // Тип планера: group_by=3 → Mi-8 (1), group_by=4 → Mi-17 (2)
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
@@ -50,6 +51,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForc
         FLAMEGPU->setVariable<unsigned int>("aircraft_number", ac);
         FLAMEGPU->setVariable<unsigned int>("planer_idx", planer_idx);
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+        mp_hits[group_by] += 1u;
         return flamegpu::ALIVE;
     }}
 
@@ -72,6 +74,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
 
     const unsigned int required = 2u;
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
+    auto mp_hits = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hits");
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
 
     for (auto msg : FLAMEGPU->message_in) {{
@@ -96,6 +99,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
         FLAMEGPU->setVariable<unsigned int>("aircraft_number", ac);
         FLAMEGPU->setVariable<unsigned int>("planer_idx", planer_idx);
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+        mp_hits[group_by] += 1u;
         return flamegpu::ALIVE;
     }}
 
