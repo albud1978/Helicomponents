@@ -29,16 +29,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForc
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
     auto mp_hits = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hits");
 
-    // Тип планера: group_by=3 → Mi-8 (1), group_by=4 → Mi-17 (2)
+    const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
+    auto mp_ops = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_planer_in_ops_history");
+    auto mp_type = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u>("mp_planer_type");
+    auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
+    const unsigned int base = day * {MAX_PLANERS}u;
 
-    for (auto msg : FLAMEGPU->message_in) {{
-        const unsigned int in_ops = msg.getVariable<unsigned int>("in_ops");
-        const unsigned int planer_type = msg.getVariable<unsigned int>("planer_type");
-        if (in_ops == 0u || planer_type != required_type) continue;
-
-        const unsigned int planer_idx = msg.getVariable<unsigned int>("planer_idx");
-        if (planer_idx >= {MAX_PLANERS}u) continue;
+    for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
+        if (mp_ops[base + planer_idx] == 0u) continue;
+        if (mp_type[planer_idx] != required_type) continue;
 
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
         unsigned int prev = mp_slots[slots_pos]++;
@@ -47,7 +47,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForc
             continue;
         }}
 
-        const unsigned int ac = msg.getVariable<unsigned int>("aircraft_number");
+        const unsigned int ac = mp_idx_to_ac[planer_idx];
+        if (ac == 0u) {{
+            mp_slots[slots_pos]--;  // rollback
+            continue;
+        }}
         FLAMEGPU->setVariable<unsigned int>("aircraft_number", ac);
         FLAMEGPU->setVariable<unsigned int>("planer_idx", planer_idx);
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
@@ -76,14 +80,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
     auto mp_hits = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hits");
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
+    auto mp_ops = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_planer_in_ops_history");
+    auto mp_type = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u>("mp_planer_type");
+    auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
+    const unsigned int base = day * {MAX_PLANERS}u;
 
-    for (auto msg : FLAMEGPU->message_in) {{
-        const unsigned int in_ops = msg.getVariable<unsigned int>("in_ops");
-        const unsigned int planer_type = msg.getVariable<unsigned int>("planer_type");
-        if (in_ops == 0u || planer_type != required_type) continue;
-
-        const unsigned int planer_idx = msg.getVariable<unsigned int>("planer_idx");
-        if (planer_idx >= {MAX_PLANERS}u) continue;
+    for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
+        if (mp_ops[base + planer_idx] == 0u) continue;
+        if (mp_type[planer_idx] != required_type) continue;
 
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
         unsigned int prev = mp_slots[slots_pos]++;
@@ -95,7 +99,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
         if (active == 0u) {{
             FLAMEGPU->setVariable<unsigned int>("active", 1u);
         }}
-        const unsigned int ac = msg.getVariable<unsigned int>("aircraft_number");
+        const unsigned int ac = mp_idx_to_ac[planer_idx];
+        if (ac == 0u) {{
+            mp_slots[slots_pos]--;  // rollback
+            continue;
+        }}
         FLAMEGPU->setVariable<unsigned int>("aircraft_number", ac);
         FLAMEGPU->setVariable<unsigned int>("planer_idx", planer_idx);
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
