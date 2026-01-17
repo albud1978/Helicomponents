@@ -31,21 +31,20 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
     auto mp_attempts = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_attempts");
 
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
-    auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
-    auto mp_list_g3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_ops_list_g3");
-    auto mp_list_g4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_ops_list_g4");
-    auto mp_cnt_g3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {PLANER_MAX_DAYS}u + 1u>("mp_ops_count_g3");
-    auto mp_cnt_g4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {PLANER_MAX_DAYS}u + 1u>("mp_ops_count_g4");
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int base = day * {MAX_PLANERS}u;
-    const unsigned int total = (required_type == 1u) ? mp_cnt_g3[day] : mp_cnt_g4[day];
+    auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
+    auto mp_ops = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_planer_in_ops_history");
+    auto mp_type = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u>("mp_planer_type");
+    auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
 
-    mp_attempts[group_by] += total;
-    for (unsigned int i = 0u; i < total; ++i) {{
+    for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
         mp_attempts[group_by] += 1u;
-        const unsigned int planer_idx = (required_type == 1u) ? mp_list_g3[base + i] : mp_list_g4[base + i];
-
+        if (mp_ops[base + planer_idx] == 0u) continue;
+        if (mp_type[planer_idx] != required_type) continue;
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
+        if (mp_need[slots_pos] == 0u) continue;
+
         unsigned int prev = mp_slots[slots_pos]++;
         if (prev >= required) {{
             mp_slots[slots_pos]--;  // rollback
@@ -86,20 +85,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
     auto mp_hits = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hits");
     auto mp_attempts = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_attempts");
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
-    auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
-    auto mp_list_g3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_ops_list_g3");
-    auto mp_list_g4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_ops_list_g4");
-    auto mp_cnt_g3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {PLANER_MAX_DAYS}u + 1u>("mp_ops_count_g3");
-    auto mp_cnt_g4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {PLANER_MAX_DAYS}u + 1u>("mp_ops_count_g4");
     const unsigned int base = day * {MAX_PLANERS}u;
-    const unsigned int total = (required_type == 1u) ? mp_cnt_g3[day] : mp_cnt_g4[day];
+    auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
+    auto mp_ops = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_planer_in_ops_history");
+    auto mp_type = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u>("mp_planer_type");
+    auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
 
-    mp_attempts[group_by] += total;
-    for (unsigned int i = 0u; i < total; ++i) {{
+    for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
         mp_attempts[group_by] += 1u;
-        const unsigned int planer_idx = (required_type == 1u) ? mp_list_g3[base + i] : mp_list_g4[base + i];
-
+        if (mp_ops[base + planer_idx] == 0u) continue;
+        if (mp_type[planer_idx] != required_type) continue;
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
+        if (mp_need[slots_pos] == 0u) continue;
+
         unsigned int prev = mp_slots[slots_pos]++;
         if (prev >= required) {{
             mp_slots[slots_pos]--;  // rollback
