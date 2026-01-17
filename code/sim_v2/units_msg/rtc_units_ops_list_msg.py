@@ -42,6 +42,9 @@ class OpsListHostFunction(fg.HostFunction):
                     list_g4[pos] = int(idx)
                     cnt[4] = pos + 1
 
+        if day in (3000, 3649):
+            print(f"   ops_list: day={day} g3_count={int(cnt[3])} g4_count={int(cnt[4])}")
+
 
 def register_rtc(model: fg.ModelDescription):
     layer = model.newLayer("layer_units_msg_ops_list")
