@@ -72,6 +72,7 @@ class V2BaseModelUnitsMsg:
         self.env.newMacroPropertyUInt32("mp_assign_hits", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_assign_attempts", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_assign_called", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_assign_skip_repair", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_reserve_seen", MAX_GROUPS)
 
         # Планерные данные (из sim_masterv2)

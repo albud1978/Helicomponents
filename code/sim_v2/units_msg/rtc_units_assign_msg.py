@@ -91,7 +91,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     if (active == 0u) {{
-        if (day < repair_time) return flamegpu::ALIVE;  // запрет spawn до repair_time
+        if (day < repair_time) {{
+            auto mp_skip = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_skip_repair");
+            if (group_by < {MAX_GROUPS}u) mp_skip[group_by] += 1u;
+            return flamegpu::ALIVE;  // запрет spawn до repair_time
+        }}
     }}
 
     const unsigned int required = 2u;
