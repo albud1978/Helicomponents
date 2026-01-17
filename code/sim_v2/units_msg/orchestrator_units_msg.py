@@ -51,11 +51,8 @@ import rtc_units_slots_count_msg
 import rtc_units_planer_need_msg
 import rtc_units_counts_msg
 import rtc_units_spawn_budget_msg
-import rtc_units_assign_debug_msg
-import rtc_units_state_debug_msg
 import rtc_units_states_stub_msg
 import rtc_units_assign_msg
-import rtc_units_reserve_probe_msg
 import rtc_units_ops_msg
 import rtc_units_repair_msg
 import rtc_units_transition_ops_msg
@@ -125,12 +122,8 @@ class UnitsMsgOrchestrator:
         rtc_units_planer_need_msg.register_rtc(model)
         rtc_units_counts_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_spawn_budget_msg.register_rtc(model)
-        rtc_units_assign_debug_msg.register_reset(model)
-        rtc_units_state_debug_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_states_stub_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_assign_msg.register_rtc(model, self.base_model.agent_units)
-        rtc_units_reserve_probe_msg.register_rtc(model, self.base_model.agent_units)
-        rtc_units_assign_debug_msg.register_report(model)
         rtc_units_ops_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_repair_msg.register_rtc(model, self.base_model.agent_units)
         rtc_units_transition_ops_msg.register_rtc(model, self.base_model.agent_units)
