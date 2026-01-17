@@ -43,6 +43,8 @@ class ReportReserveSeen(fg.HostFunction):
             list_g4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp_ops_list_g4")
             if int(cnt_g4[day]) > 0:
                 print(f"   ops_list_g4[0]={int(list_g4[base])}")
+            idx_to_ac = FLAMEGPU.environment.getMacroPropertyUInt32("mp_idx_to_ac")
+            print(f"   idx_to_ac[1]={int(idx_to_ac[1])}")
         except Exception as e:
             print(f"   ops_count debug error: {e}")
 
