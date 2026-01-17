@@ -87,6 +87,10 @@ class V2BaseModelUnitsMsg:
         self.env.newMacroPropertyUInt32("mp_planer_slots", MAX_GROUPS * MAX_PLANERS)
         self.env.newMacroPropertyUInt32("mp_planer_need", MAX_GROUPS * MAX_PLANERS)
         self.env.newMacroPropertyUInt32("mp_planer_cap", MAX_GROUPS * MAX_PLANERS)
+        # Списки планеров в ops по типам (для назначения)
+        self.env.newMacroPropertyUInt32("mp_ops_list_g3", MAX_PLANERS)
+        self.env.newMacroPropertyUInt32("mp_ops_list_g4", MAX_PLANERS)
+        self.env.newMacroPropertyUInt32("mp_ops_count", MAX_GROUPS)
 
         # MP2 буфер (как в units) — для будущего экспорта
         DRAIN_INTERVAL = 10
