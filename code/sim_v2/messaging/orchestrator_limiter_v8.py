@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-LIMITER V8 Orchestrator — Архитектура с RepairAgent
+LIMITER V8 Orchestrator — Архитектура с RepairLine
 
 Архитектура V8 (отличия от V7):
-1. RepairAgent — агент ремонтной мощности (capacity UInt32)
+1. RepairLine — общий пул линий ремонта (repair_number из MP)
 2. unsvc НЕ участвует в min_dynamic
-3. exit_date для unsvc УДАЛЁН
+3. RepairLine участвует в квотировании, а не в adaptive-шагах
 4. Правило ресурса: next-day dt (SNE + dt >= LL)
 5. limiter=0 — обязательный выход (EXCEPTION если нет)
-6. Протокол сообщений RepairAgent ↔ QuotaManager
+6. Протокол сообщений RepairLine → QuotaManager
 
 Порядок слоёв V8:
 1. Детерминированные переходы (repair→svc, spawn→ops)
 2. Сброс + сбор exit_date (ПОСЛЕ переходов)
 3. Operations инкременты
 4. Operations переходы с next-day dt проверкой
-5. Квотирование через RepairAgent
+5. Квотирование через RepairLine
 6. Limiter + adaptive steps
 
 См. docs/adaptive_steps_logic.md для полной архитектуры.
@@ -87,8 +87,8 @@ from datetime import date
 # V8 модули
 import rtc_state_transitions_v7  # Детерминированные переходы (repair→svc, spawn→ops)
 import rtc_state_transitions_v8  # V8: next-day dt проверка!
-import rtc_quota_v7              # V7: квотирование (без RepairAgent — baseline совместимо!)
-import rtc_quota_v8              # V8: квотирование через RepairAgent (ОТКЛЮЧЕНО)
+import rtc_quota_v7              # V7: квотирование (без RepairLine — baseline совместимо!)
+import rtc_quota_v8              # V8: квотирование через RepairLine
 import rtc_repair_agent_v8       # V8: RepairAgent (ОТКЛЮЧЕНО)
 import rtc_repair_lines_v8       # V8: RepairLine sync
 import rtc_limiter_optimized
@@ -102,10 +102,10 @@ REPAIR_LINES_MAX = 64
 
 class LimiterV8Orchestrator:
     """
-    Оркестратор LIMITER V8 — архитектура с RepairAgent
+    Оркестратор LIMITER V8 — архитектура с RepairLine
     
     Ключевые отличия от V7:
-    - RepairAgent.capacity вместо exit_date для unsvc
+    - RepairLine вместо RepairAgent.capacity для квотирования
     - next-day dt проверка ресурсов
     - limiter=0 = обязательный выход
     """
@@ -242,6 +242,7 @@ class LimiterV8Orchestrator:
         # Base model
         self.base_model = V2BaseModelMessaging()
         self.model = self.base_model.create_model(self.env_data)
+        self.base_model.env.setPropertyUInt("repair_line_mode", 1)
         
         # Repair lines quota (без хардкода 18)
         self.repair_quota = self._compute_repair_quota()
@@ -276,7 +277,7 @@ class LimiterV8Orchestrator:
         layer_lines.addHostFunction(hf_init_lines)
         
         # ═══════════════════════════════════════════════════════════════
-        # V8: RepairAgent ОТКЛЮЧЁН — используем V7 квотирование
+        # V8: RepairAgent ОТКЛЮЧЁН — используем V8 квотирование через RepairLine
         # ═══════════════════════════════════════════════════════════════
         # repair_quota = int(self.env_data.get('mi17_repair_quota', 8))
         # repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
@@ -295,7 +296,7 @@ class LimiterV8Orchestrator:
         rtc_repair_lines_v8.register_repair_line_assign_for_repair_exit(self.model, heli_agent)
         rtc_state_transitions_v7.register_phase0_deterministic(self.model, heli_agent)
         
-        # Фаза 0.5: Копирование exit_date (repair, spawn, БЕЗ unsvc!) — из V7
+        # Фаза 0.5: Копирование exit_date (repair, spawn, unsvc) — V8 compute_global_min игнорирует unsvc
         rtc_state_transitions_v7.register_exit_date_copy(self.model, heli_agent, self.base_model.quota_agent)
         
         # Фаза 1: V8 Operations (next-day dt проверка!)
@@ -317,7 +318,7 @@ class LimiterV8Orchestrator:
         
         # Фаза 2: V8 Квотирование с RepairLine
         rtc_quota_v8.setup_quota_v8_macroproperties(self.base_model.env)
-        rtc_quota_v8.register_quota_v8_full(self.model, heli_agent)
+        rtc_quota_v8.register_quota_v8_full(self.model, heli_agent, self.base_model.quota_agent)
         
         # Фаза 3: Переходы после квотирования
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
@@ -903,7 +904,7 @@ def main():
     args = parser.parse_args()
     
     print("\n" + "=" * 70)
-    print("🚀 LIMITER V8 — Архитектура с RepairAgent")
+    print("🚀 LIMITER V8 — Архитектура с RepairLine")
     print("=" * 70)
     
     # Подключение к ClickHouse если нужен MP2

@@ -10,7 +10,7 @@
 
 | Вопрос | Решение | Обоснование |
 |--------|---------|-------------|
-| **Механизм ремонта** | RepairLine.free_days | число линий = repair_number из MP |
+| **Механизм ремонта** | RepairLine.free_days | общий пул, число линий = repair_number из MP |
 | **exit_date для unsvc** | УДАЛЁН | Заменён на RepairLine‑проверку |
 | **repair_days для unsvc** | НЕ ИСПОЛЬЗУЕТСЯ | unsvc не декрементируется |
 | **Правило ресурса** | next-day dt (`SNE + dt >= LL`) | Предотвращение переналёта |
@@ -75,6 +75,7 @@ deterministic_dates[] = sorted([
 deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 Всего: ~94 даты (все — дни симуляции)
 ```
+**⚠️ Ограничение:** `MAX_DETERMINISTIC_DATES=500` (RTC). Если дат больше, лишние даты **отбрасываются**, события будут потеряны.
 
 ---
 
@@ -91,7 +92,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 
 ### 2.2. RepairLine (repair_number → число линий)
 
-**Назначение:** Управление квотой ремонта через линии (free_days), число линий = repair_number из MP
+**Назначение:** Управление квотой ремонта через линии (free_days), общий пул линий, число линий = repair_number из MP
 
 **RepairLine (для каждой линии):**
 ```
@@ -99,6 +100,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
   - прием в ремонт только если free_days >= repair_time
   - при приёме: free_days = 0, aircraft_number = acn (однократно)
 ```
+**Day‑0:** агенты, пришедшие уже в repair, выходят по детерминированной exit‑дате; после day‑0 ремонт идёт только через RepairLine.
 
 **Алгоритм квотирования P2/P3 (QuotaManager):**
 ```
@@ -134,12 +136,18 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 **Протокол обмена сообщениями (внутри одного шага):**
 
 ```
-Слой 1: QuotaManager принимает решение
-  - Считает дефицит ops, одобряет unsvc/inactive по idx
-  - Подтверждает линии с free_days >= repair_time
+Слой 1: RepairLine → QuotaManager (адресные MessageArray)
+  - Каждая линия публикует free_days и aircraft_number
+
+Слой 2: QuotaManager формирует слоты (до P2/P3)
+  - Отбирает линии с free_days >= repair_time по типу
+  - Сохраняет списки слотов в MacroProperty (Mi-8 / Mi-17)
+
+Слой 3: P2/P3 использует слоты
+  - Для rank < needed берёт line_id из списка слотов
 ```
 
-**⚠️ Адресные сообщения — НЕ brute-force!**
+**⚠️ Сообщения — только адресные (MessageArray), без brute-force.**
 
 ### 2.3. Инициализация (день 0)
 
@@ -166,7 +174,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 1. СБОР min_dynamic
    min_dynamic = MIN(
        ops.limiter,           // Все агенты в operations
-       repair.repair_days     // Все агенты в repair
+       repair.repair_days     // Только day‑0 ремонт
    )
    // unsvc НЕ участвует в min_dynamic!
 
@@ -400,10 +408,9 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
    - Ситуация `limiter=0 AND агент остаётся в ops` — **ОШИБКА!**
    - При обнаружении → выбросить exception, остановить симуляцию
 
-3. **repair_days = repair_time - 1**
-   - Не хардкод 180!
+3. **repair_days используется только для day‑0 ремонта**
    - repair_time берётся из MP по group_by агента
-   - Минус 1 потому что декремент до 0, а не до 1
+   - day‑0 exit_day = repair_time - repair_days (из heli_pandas)
 
 4. **Один датасет для сравнения**
    - Baseline и Limiter на ОДНОЙ дате

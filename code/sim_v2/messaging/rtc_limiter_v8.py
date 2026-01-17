@@ -5,14 +5,14 @@ RTC модуль: LIMITER V8 — Упрощённая архитектура с 
 АРХИТЕКТУРА V8 (отличия от V5/V7):
 1. deterministic_dates_mp — ОДИН MacroProperty со всеми фиксированными датами
    (program_changes + repair_exits + spawn_dates + day_0 + end_day)
-2. min_dynamic_mp — минимум от ops.limiter + repair.repair_days
+2. min_dynamic_mp — минимум от ops.limiter + repair.repair_days (ТОЛЬКО day-0 ремонт)
    (unsvc НЕ участвует!)
 3. adaptive_days = MIN(min_dynamic, days_to_deterministic)
 
 Преимущества:
 - Один источник детерминированных дат вместо трёх
 - Упрощённая логика compute_global_min
-- unsvc управляется через RepairAgent.capacity (не через exit_date)
+- unserviceable управляется через RepairLine (квотирование), не через exit_date
 
 См. docs/adaptive_steps_logic.md для полной архитектуры.
 
@@ -34,7 +34,7 @@ except ImportError as e:
 # КОНСТАНТЫ V8
 # ═══════════════════════════════════════════════════════════════════════════════
 
-MAX_DETERMINISTIC_DATES = 200  # Максимум детерминированных дат (program_changes + repairs + spawns)
+MAX_DETERMINISTIC_DATES = 500  # Максимум детерминированных дат (program_changes + repairs + spawns)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -78,13 +78,14 @@ def setup_v8_macroproperties(env, deterministic_dates: list):
         pass  # Уже существует
     
     # Environment properties
+    num_dates = min(len(deterministic_dates), MAX_DETERMINISTIC_DATES)
     try:
-        env.newPropertyUInt("num_deterministic_dates", len(deterministic_dates))
+        env.newPropertyUInt("num_deterministic_dates", num_dates)
     except:
-        env.setPropertyUInt("num_deterministic_dates", len(deterministic_dates))
+        env.setPropertyUInt("num_deterministic_dates", num_dates)
     
     print(f"  ✅ V8 MacroProperty: deterministic_dates_mp[{MAX_DETERMINISTIC_DATES}], "
-          f"min_dynamic_mp, num_dates={len(deterministic_dates)}")
+          f"min_dynamic_mp, num_dates={num_dates}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -106,7 +107,10 @@ class HF_InitV8(fg.HostFunction):
             return
         
         dates = sorted(set(self.deterministic_dates))
-        print(f"  [HF_InitV8] Загрузка deterministic_dates: {len(dates)} дат")
+        total_dates = len(dates)
+        if total_dates > MAX_DETERMINISTIC_DATES:
+            print(f"  ⚠️ Превышен лимит {MAX_DETERMINISTIC_DATES} дат: {total_dates} → {MAX_DETERMINISTIC_DATES}")
+        print(f"  [HF_InitV8] Загрузка deterministic_dates: {min(total_dates, MAX_DETERMINISTIC_DATES)} дат")
         
         # Инициализация current_day_mp
         mp_day = FLAMEGPU.environment.getMacroPropertyUInt("current_day_mp")
@@ -115,18 +119,16 @@ class HF_InitV8(fg.HostFunction):
         
         # Инициализация deterministic_dates_mp
         mp_dates = FLAMEGPU.environment.getMacroPropertyUInt("deterministic_dates_mp")
-        for i, day in enumerate(dates):
-            if i >= MAX_DETERMINISTIC_DATES:
-                print(f"  ⚠️ Превышен лимит {MAX_DETERMINISTIC_DATES} дат!")
-                break
+        for i, day in enumerate(dates[:MAX_DETERMINISTIC_DATES]):
             mp_dates[i] = int(day)
         
         # Заполняем остаток end_day (чтобы поиск не вышел за границы)
-        for i in range(len(dates), MAX_DETERMINISTIC_DATES):
+        effective_len = min(total_dates, MAX_DETERMINISTIC_DATES)
+        for i in range(effective_len, MAX_DETERMINISTIC_DATES):
             mp_dates[i] = self.end_day
         
         # Синхронизируем num_deterministic_dates (используется в RTC)
-        FLAMEGPU.environment.setPropertyUInt("num_deterministic_dates", len(dates))
+        FLAMEGPU.environment.setPropertyUInt("num_deterministic_dates", effective_len)
         
         # Инициализация min_dynamic_mp
         mp_min = FLAMEGPU.environment.getMacroPropertyUInt("min_dynamic_mp")
@@ -168,7 +170,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_min_dynamic_v8, flamegpu::MessageNone, flamegp
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# RTC: Сбор min_dynamic от operations (limiter) и repair (repair_days)
+# RTC: Сбор min_dynamic от operations (limiter) и repair (repair_days, только day-0)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 RTC_COLLECT_MIN_DYNAMIC_OPS = """
@@ -187,7 +189,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_collect_min_dynamic_ops_v8, flamegpu::MessageNone, f
 
 RTC_COLLECT_MIN_DYNAMIC_REPAIR = """
 FLAMEGPU_AGENT_FUNCTION(rtc_collect_min_dynamic_repair_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // V8: repair агенты вносят repair_days в min_dynamic
+    // V8: repair агенты (day-0) вносят repair_days в min_dynamic
     const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
     
     if (repair_days > 0u) {
@@ -232,7 +234,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v8, flamegpu::MessageNone, flameg
     
     // 2. Находим ближайшую детерминированную дату
     auto mp_dates = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DETERMINISTIC_DATES}u>("deterministic_dates_mp");
-    const unsigned int num_dates = FLAMEGPU->environment.getProperty<unsigned int>("num_deterministic_dates");
+    const unsigned int num_dates_prop = FLAMEGPU->environment.getProperty<unsigned int>("num_deterministic_dates");
+    const unsigned int num_dates = (num_dates_prop < {MAX_DETERMINISTIC_DATES}u) ? num_dates_prop : {MAX_DETERMINISTIC_DATES}u;
     
     unsigned int next_deterministic = end_day;
     for (unsigned int i = 0u; i < num_dates && i < {MAX_DETERMINISTIC_DATES}u; ++i) {{
@@ -245,33 +248,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v8, flamegpu::MessageNone, flameg
     
     unsigned int days_to_det = next_deterministic - current_day;
     
-    // V8 FIX: Также учитываем min_exit_date_mp (unsvc exit_dates!)
-    auto mp_exit = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_exit_date_mp");
-    unsigned int min_exit_date = mp_exit[0];
-    unsigned int days_to_exit = 0xFFFFFFFFu;
-    if (min_exit_date != 0xFFFFFFFFu && min_exit_date > current_day) {{
-        days_to_exit = min_exit_date - current_day;
-    }}
-    
-    // 3. adaptive_days = MIN(min_dynamic, days_to_det, days_to_exit)
+    // 3. adaptive_days = MIN(min_dynamic, days_to_det)
     unsigned int adaptive_days = days_to_det;
     
     if (min_dynamic < 0xFFFFFFFFu && min_dynamic > 0u && min_dynamic < adaptive_days) {{
         adaptive_days = min_dynamic;
     }}
     
-    if (days_to_exit < adaptive_days) {{
-        adaptive_days = days_to_exit;
-    }}
-    
     // Не выходить за end_day
     unsigned int remaining = end_day - current_day;
     if (adaptive_days > remaining) adaptive_days = remaining;
-    
-    // V8 FIX: Ограничение max adaptive_days до repair_time (180)
-    // Это гарантирует что unsvc агенты с exit_date не будут перепрыгнуты
-    const unsigned int max_step = 180u;  // repair_time
-    if (adaptive_days > max_step) adaptive_days = max_step;
     
     if (adaptive_days < 1u) adaptive_days = 1u;
     
