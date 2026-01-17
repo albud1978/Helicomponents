@@ -40,6 +40,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
     const unsigned int base = day * {MAX_PLANERS}u;
     const unsigned int total = (required_type == 1u) ? mp_cnt_g3[day] : mp_cnt_g4[day];
 
+    mp_attempts[group_by] += total;
     for (unsigned int i = 0u; i < total; ++i) {{
         mp_attempts[group_by] += 1u;
         const unsigned int planer_idx = (required_type == 1u) ? mp_list_g3[base + i] : mp_list_g4[base + i];
@@ -93,6 +94,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
     const unsigned int base = day * {MAX_PLANERS}u;
     const unsigned int total = (required_type == 1u) ? mp_cnt_g3[day] : mp_cnt_g4[day];
 
+    mp_attempts[group_by] += total;
     for (unsigned int i = 0u; i < total; ++i) {{
         mp_attempts[group_by] += 1u;
         const unsigned int planer_idx = (required_type == 1u) ? mp_list_g3[base + i] : mp_list_g4[base + i];
