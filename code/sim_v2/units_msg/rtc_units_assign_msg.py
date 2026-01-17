@@ -65,6 +65,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
         return flamegpu::ALIVE;
     }}
 
+    mp_attempts[group_by] += 123u;
     return flamegpu::ALIVE;
 }}
 
