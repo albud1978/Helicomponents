@@ -20,7 +20,7 @@ def get_rtc_code() -> str:
     slots_size = MAX_GROUPS * MAX_PLANERS
     return f"""
 // === Serviceable → Operations ===
-FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForce, flamegpu::MessageNone) {{
+FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int active = FLAMEGPU->getVariable<unsigned int>("active");
     if (active == 0u || group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
@@ -65,7 +65,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForc
 // === Spawn activation (reserve, active=0) ===
 
 // === Reserve → Operations ===
-FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, flamegpu::MessageNone) {{
+FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int active = FLAMEGPU->getVariable<unsigned int>("active");
     if (group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
@@ -122,12 +122,10 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     fn_svc = agent.newRTCFunction("rtc_units_assign_serviceable", rtc_code)
     fn_svc.setInitialState("serviceable")
     fn_svc.setEndState("serviceable")
-    fn_svc.setMessageInput("planer_message")
 
     fn_rsv = agent.newRTCFunction("rtc_units_assign_reserve", rtc_code)
     fn_rsv.setInitialState("reserve")
     fn_rsv.setEndState("reserve")
-    fn_rsv.setMessageInput("planer_message")
 
     layer_svc = model.newLayer("layer_units_msg_assign_serviceable")
     layer_svc.addAgentFunction(fn_svc)
