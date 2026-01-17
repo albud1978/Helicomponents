@@ -265,7 +265,11 @@ def register_init_planer_dt(model: fg.ModelDescription,
                             assembly_array: Optional[np.ndarray] = None,
                             planer_in_ops: Optional[Dict[int, int]] = None,
                             planer_type: Optional[Dict[int, int]] = None,
-                            planer_in_ops_history: Optional[np.ndarray] = None) -> InitPlanerDtHostFunction:
+                            planer_in_ops_history: Optional[np.ndarray] = None,
+                            ops_list_g3: Optional[np.ndarray] = None,
+                            ops_list_g4: Optional[np.ndarray] = None,
+                            ops_count_g3: Optional[np.ndarray] = None,
+                            ops_count_g4: Optional[np.ndarray] = None) -> InitPlanerDtHostFunction:
     """
     Регистрирует InitFunction для загрузки dt планеров, assembly_trigger, planer_in_ops, planer_type и истории operations
     
@@ -282,7 +286,10 @@ def register_init_planer_dt(model: fg.ModelDescription,
     Returns:
         InitPlanerDtHostFunction для возможного повторного использования
     """
-    hf = InitPlanerDtHostFunction(dt_array, ac_to_idx, max_days, assembly_array, planer_in_ops, planer_type, planer_in_ops_history)
+    hf = InitPlanerDtHostFunction(
+        dt_array, ac_to_idx, max_days, assembly_array, planer_in_ops, planer_type, planer_in_ops_history,
+        ops_list_g3, ops_list_g4, ops_count_g3, ops_count_g4
+    )
     
     # Создаём слой инициализации (должен быть первым!)
     init_layer = model.newLayer("layer_init_planer_dt")
