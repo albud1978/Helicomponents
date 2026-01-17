@@ -51,7 +51,7 @@ class AgentPopulationUnitsMsgBuilder:
         # Предрасчёт списков планеров в ops по типам (по дням)
         if planer_in_ops_history is not None and len(ac_to_idx) > 0:
             max_planers = 400
-            max_days = 4000
+            max_days = max(0, (len(planer_in_ops_history) // max_planers) - 1)
             size = max_planers * (max_days + 1)
             ops_list_g3 = np.zeros(size, dtype=np.uint32)
             ops_list_g4 = np.zeros(size, dtype=np.uint32)
