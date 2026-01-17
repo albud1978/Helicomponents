@@ -1,4 +1,4 @@
-# LIMITER Architecture (V8 — RepairAgent)
+# LIMITER Architecture (V8 — RepairLine)
 
 > **Актуальная версия:** V8 (16-01-2026)  
 > **Файл оркестратора:** `code/sim_v2/messaging/orchestrator_limiter_v8.py`
@@ -47,10 +47,10 @@ if (dbg_step2 < 3u) {
 
 | Вопрос | V7 | V8 | Обоснование V8 |
 |--------|-----|-----|----------------|
-| **Механизм ремонта** | exit_date для каждого unsvc | RepairAgent.capacity + RepairLine (free_days) | capacity определяет число линий (не хардкод) |
-| **exit_date для unsvc** | ✅ Используется | ❌ УДАЛЁН | Заменён на capacity/RepairLine‑проверку |
+| **Механизм ремонта** | exit_date для каждого unsvc | RepairLine (free_days) | число линий = repair_number из MP |
+| **exit_date для unsvc** | ✅ Используется | ❌ УДАЛЁН | Заменён на RepairLine‑проверку |
 | **repair_days для unsvc** | — | ❌ НЕ ИСПОЛЬЗУЕТСЯ | unsvc не декрементируется |
-| **unsvc в min_dynamic** | ✅ Да | ❌ НЕТ | Управляется через capacity |
+| **unsvc в min_dynamic** | ✅ Да | ❌ НЕТ | Управляется через RepairLine |
 | **Правило ресурса** | post-increment (`sne += dt; if sne >= ll`) | next-day dt (`if sne + dt >= ll`) | Предотвращение переналёта |
 | **limiter=0** | min(1, ...) в Python | **Обязательный выход** (иначе EXCEPTION) | Гарантия корректности |
 | **limiter инициализация** | max(1, ...) | Разрешён 0 | Консистентность с RTC |
@@ -95,8 +95,8 @@ if (dbg_step2 < 3u) {
 | 10 | v7_count_agents | `rtc_count_agents_v7` | all | Подсчёт агентов по состояниям |
 | 11 | v7_demote | `rtc_demote_v7` | QM | Демоут: ops→svc (при избытке) |
 | 12 | v7_promote_p1 | `rtc_promote_p1_v7` | QM | P1: svc→ops (при дефиците) |
-| 13 | v7_promote_p2 | `rtc_promote_p2_v7` | QM | P2: unsvc→ops (**V8: через RepairLine/free_days + capacity**) |
-| 14 | v7_promote_p3 | `rtc_promote_p3_v7` | QM | P3: ina→ops (**V8: через RepairLine/free_days + capacity**) |
+| 13 | v7_promote_p2 | `rtc_promote_p2_v7` | QM | P2: unsvc→ops (**V8: через RepairLine/free_days**) |
+| 14 | v7_promote_p3 | `rtc_promote_p3_v7` | QM | P3: ina→ops (**V8: через RepairLine/free_days**) |
 | **ФАЗА 3: Применение квот** |||||
 | 15 | v7_apply_demote | `rtc_apply_demote_v7` | 2→3 | Применение демоута, `limiter=0` |
 | 16 | v7_apply_promote_p1 | `rtc_apply_promote_p1_v7` | 3→2 | Применение P1 |
@@ -177,9 +177,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v7, ...) {
 - При переходе `ops → unserviceable` устанавливается `exit_date = current_day + repair_time`
 - P2 промоут проверяет `current_day >= exit_date` перед возвратом в ops
 
-**V8: Ожидание через RepairAgent + RepairLine:**
+**V8: Ожидание через RepairLine:**
 - unsvc НЕ имеет exit_date для adaptive steps
-- P2/P3 проверяют: `capacity >= repair_time` и наличие линии с `free_days >= repair_time`
+- P2/P3 проверяют: наличие линии с `free_days >= repair_time`
 - Если условия не выполнены → P4 (spawn)
 - См. `docs/adaptive_steps_logic.md` для деталей
 
@@ -330,7 +330,7 @@ adaptive_days = min(min_dynamic, days_to_deterministic)
 
 ---
 
-## 🚧 V8: RepairAgent + адресные сообщения (В РАЗРАБОТКЕ)
+## 🚧 V8: RepairLine (В РАЗРАБОТКЕ)
 
 > **Статус:** Альтернативная архитектура, в разработке  
 > **Документация:** `docs/adaptive_steps_logic.md`  
@@ -342,28 +342,14 @@ adaptive_days = min(min_dynamic, days_to_deterministic)
 |--------|-----|-----|
 | unsvc в min_dynamic | ✅ Да (exit_date) | ❌ Нет |
 | unsvc декремент | ✅ repair_days | ❌ Не декрементируется |
-| P2/P3 условие | `current_day >= exit_date` | `capacity >= repair_time` + RepairLine.free_days ≥ repair_time |
-| Квота ремонта | Через exit_date каждого unsvc | Через RepairAgent.capacity (определяет число линий) |
+| P2/P3 условие | `current_day >= exit_date` | RepairLine.free_days ≥ repair_time |
+| Квота ремонта | Через exit_date каждого unsvc | repair_number из MP (число линий) |
 
-### RepairAgent + RepairLine
+### RepairLine (repair_number → число линий)
 
-**Назначение:** Управление квотой ремонта через capacity и линии ремонта (free_days)
+**Назначение:** Управление квотой ремонта через линии (free_days), число линий = repair_number из MP
 
 ```
-Переменные:
-  capacity: UInt32    // Накопленные агрегато-дни для ремонта
-  repair_quota: UInt16 // Дневная квота (слоты, не хардкод)
-
-Инициализация (день 0):
-  capacity = repair_quota - count(repair)
-
-Инкремент (каждый шаг):
-  capacity += (repair_quota - count(repair))
-
-Списание (по команде QuotaManager):
-  capacity -= approved * repair_time
-```
-
 ```
 RepairLine (для каждой линии):
   free_days += adaptive_days   // всегда
@@ -375,20 +361,11 @@ RepairLine (для каждой линии):
 ### Протокол сообщений (адресные, внутри одного шага)
 
 ```
-Слой 1: RepairAgent → QuotaManager
-  - Отправляет { capacity, slots = floor(capacity / repair_time) }
-
 Слой 2: QuotaManager решает
-  - Определяет дефицит, approved = MIN(дефицит, slots)
-  - P2: unsvc по idx (первые approved), и только если есть RepairLine с free_days >= repair_time
-  - P3: inactive по idx (если остался дефицит), и только если есть RepairLine с free_days >= repair_time
+  - Определяет дефицит, approved = MIN(дефицит, lines_available)
+  - P2: unsvc по idx (первые approved), только если free_days >= repair_time
+  - P3: inactive по idx (если остался дефицит), только если free_days >= repair_time
   - P4: spawn (если P2/P3 недоступны)
-
-Слой 3: QuotaManager → RepairAgent
-  - Отправляет { to_deduct = approved * repair_time }
-
-Слой 4: RepairAgent списывает
-  - capacity -= to_deduct
   - подтверждённым линиям: free_days = 0, aircraft_number = acn
 ```
 
@@ -515,9 +492,8 @@ for (auto &msg : FLAMEGPU->message_in(100 + my_group_by)) {
 | `orchestrator_limiter_v8.py` | ✅ Создан | Оркестратор V8 |
 | `rtc_limiter_v8.py` | ✅ Создан | Adaptive steps с deterministic_dates |
 | `rtc_state_transitions_v8.py` | ✅ Создан | Next-day dt проверка (SNE + dt >= LL) |
-| `rtc_repair_agent_v8.py` | ✅ Создан | RepairAgent (capacity management) |
 | `rtc_repair_lines_v8.py` | ✅ Создан | RepairLine (free_days + aircraft_number) |
-| `rtc_quota_v8.py` | ✅ Создан | P2/P3 через RepairAgent.capacity |
+| `rtc_quota_v8.py` | ✅ Создан | P2/P3 через RepairLine |
 
 ### Результаты тестирования V8 (16-01-2026)
 
@@ -530,13 +506,13 @@ for (auto &msg : FLAMEGPU->message_in(100 + my_group_by)) {
 | Общее время | 5.60с | ~6с | — |
 
 **Примечания:**
-- V8 использует RepairAgent + RepairLine вместо MacroProperty exit_date для unsvc
+- V8 использует RepairLine вместо MacroProperty exit_date для unsvc
 - Меньше шагов из-за более агрессивного adaptive step (deterministic_dates)
 - 9 агентов spawn (Mi-17)
 
 ---
 
 *Документ обновлён: 16-01-2026*  
-*Статус V8: ✅ Актуальная архитектура (RepairAgent + RepairLine)*
+*Статус V8: ✅ Актуальная архитектура (RepairLine)*
 *Статус V7: 📦 Резервная архитектура*
 
