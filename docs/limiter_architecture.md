@@ -6,11 +6,11 @@
 
 ---
 
-## ⚠️ Известные проблемы (14-01-2026)
+## ⚠️ Известные проблемы (актуально на 17-01-2026)
 
 ### 1. Printf синхронизация MacroProperty (WORKAROUND)
 
-**Проблема:** Без DEBUG printf в `rtc_compute_global_min_v5` MacroProperty `program_changes_mp` не синхронизируется корректно между host и device. V7 "перепрыгивает" program_changes.
+**Проблема:** Без DEBUG printf в `rtc_compute_global_min_v5` MacroProperty `program_changes_mp` не синхронизируется корректно между host и device. Проблема актуальна для V7 и V8, т.к. V8 использует `rtc_limiter_v5.register_v5` для логирования/compat.
 
 **Симптомы:** 
 - С printf: `pc=89`, `adaptive=16` → V7 попадает на program_change
@@ -23,11 +23,11 @@ if (dbg_step2 < 3u) {
 }
 ```
 
-**Статус:** Требует исследования. Возможно race condition в FLAME GPU MacroProperty sync.
+**Статус:** Требует исследования. DEBUG printf всё ещё присутствует в `rtc_limiter_v5.py`.
 
 ### 2. MP2 экспорт с step() циклом (НЕ РЕШЕНО)
 
-**Проблема:** При использовании `while simulation.step()` (для MP2 экспорта) `HF_SyncDayV5` видит другие значения `current_day_mp` чем при `simulation.simulate()`.
+**Проблема:** При использовании `while simulation.step()` (для MP2 экспорта) `HF_SyncDayV5` видит другие значения `current_day_mp` чем при `simulation.simulate()`. В V8 режим MP2 всё ещё использует `step()` + `collect_agents_state()`.
 
 **Симптомы:**
 - `simulate()`: HF_SYNC видит day=89 на step=8 ✓
@@ -37,7 +37,7 @@ if (dbg_step2 < 3u) {
 
 **Следствие:** Day=89 и другие program_changes не записываются в СУБД при MP2 экспорте.
 
-**Workaround:** Использовать `simulate()` без MP2 экспорта, или принять что не все program_changes будут записаны.
+**Workaround:** Использовать `simulate()` без MP2 экспорта, или принять что не все program_changes будут записаны. В коде V8 фикса пока нет.
 
 ---
 
