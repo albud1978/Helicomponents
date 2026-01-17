@@ -52,6 +52,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
     }}
 
     for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
+        mp_called[group_by] += 1000u;
         mp_attempts[group_by] += 1u;
         if (mp_ops[base + planer_idx] == 0u) continue;
         if (mp_type[planer_idx] != required_type) continue;
@@ -108,6 +109,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
     auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
 
     for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
+        mp_called[group_by] += 1000u;
         mp_attempts[group_by] += 1u;
         if (mp_ops[base + planer_idx] == 0u) continue;
         if (mp_type[planer_idx] != required_type) continue;
