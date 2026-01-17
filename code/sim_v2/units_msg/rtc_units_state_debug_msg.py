@@ -15,6 +15,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_mark_reserve, flamegpu::MessageNone, flamegpu:
         mp_seen[group_by] += 1u;
         auto mp_hits = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hits");
         mp_hits[group_by] += 1u;
+        auto mp_loop_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_loop_flag");
+        mp_loop_flag[group_by].exchange(1u);
     }}
     return flamegpu::ALIVE;
 }}
