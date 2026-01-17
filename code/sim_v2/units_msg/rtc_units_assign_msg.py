@@ -25,7 +25,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForc
     const unsigned int active = FLAMEGPU->getVariable<unsigned int>("active");
     if (active == 0u || group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
 
-    auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
+    const unsigned int required = 2u;
+    auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
 
     // Тип планера: group_by=3 → Mi-8 (1), group_by=4 → Mi-17 (2)
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
@@ -39,9 +40,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForc
         if (planer_idx >= {MAX_PLANERS}u) continue;
 
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
-        unsigned int prev = mp_need[slots_pos]--;
-        if (prev == 0u) {{
-            mp_need[slots_pos]++;  // rollback
+        unsigned int prev = mp_slots[slots_pos]++;
+        if (prev >= required) {{
+            mp_slots[slots_pos]--;  // rollback
             continue;
         }}
 
@@ -69,7 +70,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
         if (day < repair_time) return flamegpu::ALIVE;  // запрет spawn до repair_time
     }}
 
-    auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
+    const unsigned int required = 2u;
+    auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
 
     for (auto msg : FLAMEGPU->message_in) {{
@@ -81,9 +83,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
         if (planer_idx >= {MAX_PLANERS}u) continue;
 
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
-        unsigned int prev = mp_need[slots_pos]--;
-        if (prev == 0u) {{
-            mp_need[slots_pos]++;  // rollback
+        unsigned int prev = mp_slots[slots_pos]++;
+        if (prev >= required) {{
+            mp_slots[slots_pos]--;  // rollback
             continue;
         }}
 
