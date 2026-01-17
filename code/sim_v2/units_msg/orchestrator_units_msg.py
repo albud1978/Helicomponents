@@ -107,7 +107,9 @@ class UnitsMsgOrchestrator:
         if dt_array is not None and len(ac_to_idx) > 0:
             self.init_planer_dt_fn = register_init_planer_dt(
                 model, dt_array, ac_to_idx, self.env_data.get('days_total_u16', 3650),
-                assembly_array, planer_in_ops, planer_type, planer_in_ops_history
+                assembly_array, planer_in_ops, planer_type, planer_in_ops_history,
+                self.env_data.get('ops_list_g3'), self.env_data.get('ops_list_g4'),
+                self.env_data.get('ops_count_g3'), self.env_data.get('ops_count_g4')
             )
             print("  ✅ init_planer_dt зарегистрирован")
         else:
