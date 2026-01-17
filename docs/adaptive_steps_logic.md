@@ -10,12 +10,12 @@
 
 | Вопрос | Решение | Обоснование |
 |--------|---------|-------------|
-| **Механизм ремонта** | RepairAgent.capacity | Единственный гейт для P2/P3 |
-| **exit_date для unsvc** | УДАЛЁН | Заменён на capacity-проверку |
+| **Механизм ремонта** | RepairAgent.capacity + RepairLine.free_days | capacity задаёт число линий (не хардкод) |
+| **exit_date для unsvc** | УДАЛЁН | Заменён на capacity/RepairLine‑проверку |
 | **repair_days для unsvc** | НЕ ИСПОЛЬЗУЕТСЯ | unsvc не декрементируется |
 | **Правило ресурса** | next-day dt (`SNE + dt >= LL`) | Предотвращение переналёта |
 | **limiter=0** | Обязательный выход (иначе EXCEPTION) | Гарантия корректности |
-| **unsvc в min_dynamic** | НЕ участвует | Управляется через capacity |
+| **unsvc в min_dynamic** | НЕ участвует | Управляется через capacity/RepairLine |
 | **Инициализация limiter** | Разрешён 0 (убрать max(1,...)) | Консистентность с RTC |
 
 **Отличие от V7:** V8 НЕ эквивалентен V7 по переходам — это осознанное решение
@@ -86,12 +86,12 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 |--------|------------|--------------|
 | **operations** | `limiter` | Дней до ресурсного лимита (MIN(LL-SNE, OH-PPR)) |
 | **repair** | `repair_days` | Дней до конца ремонта |
-| **unserviceable** | — | НЕ используется (квота через RepairAgent) |
+| **unserviceable** | — | НЕ используется (квота через RepairAgent + RepairLine) |
 | **остальные** | — | Не участвуют в min_dynamic |
 
-### 2.2. RepairAgent — агент ремонтной мощности
+### 2.2. RepairAgent + RepairLine
 
-**Назначение:** Управление квотой ремонта через счётчик агрегато-дней
+**Назначение:** Управление квотой ремонта через capacity и линии (free_days)
 
 | Переменная | Тип | Описание |
 |------------|-----|----------|
@@ -114,8 +114,17 @@ capacity += (repair_quota - count(repair))
 ```
 RepairAgent:
   - Накапливает мощность (capacity)
+  - Определяет количество линий (через repair_quota, не хардкод)
+  - Выдаёт capacity на квотирование
+RepairAgent:
+  - Накапливает мощность (capacity)
   - Выдаёт capacity на квотирование
   - Списывает по команде QuotaManager
+
+RepairLine (для каждой линии):
+  - free_days += adaptive_days (всегда)
+  - прием в ремонт только если free_days >= repair_time
+  - при приёме: free_days = 0, aircraft_number = acn (однократно)
 
 QuotaManager:
   - Проверяет условия
@@ -138,22 +147,28 @@ QuotaManager:
      // Нет ремонтной мощности → к spawn
      return
 
+3. Отфильтровать RepairLine:
+   free_days >= repair_time
+
 3. Определить дефицит = target_ops - current_ops
    approved = MIN(дефицит, slots)
 
-4. P2: Отфильтровать unsvc по idx (mfg_date) — первые approved
-   approved_unsvc = MIN(count(unsvc), approved)
+4. P2: Отфильтровать unsvc по idx — первые approved
+   approved_unsvc = MIN(count(unsvc), approved, available_lines)
    remaining = approved - approved_unsvc
 
 5. P3: Если remaining > 0:
    Отфильтровать inactive по idx — первые remaining
-   approved_inactive = MIN(count(inactive), remaining)
+   approved_inactive = MIN(count(inactive), remaining, remaining_lines)
 
 6. P4 (Spawn): Если ещё есть дефицит:
    to_spawn = дефицит - approved_unsvc - approved_inactive
 
 7. Отправить RepairAgent команду списания:
    to_deduct = (approved_unsvc + approved_inactive) * repair_time
+
+8. При подтверждении линии:
+   free_days = 0, aircraft_number = acn (однократно)
 ```
 
 **Протокол обмена сообщениями (внутри одного шага):**
@@ -220,7 +235,8 @@ QuotaManager:
    // unsvc НЕ декрементируется!
 
 5. ИНКРЕМЕНТ РЕМОНТНОЙ МОЩНОСТИ
-   RepairAgent.capacity += (repair_quota - count(repair))
+  RepairAgent.capacity += (repair_quota - count(repair))
+  RepairLine.free_days += adaptive_days (для всех линий)
 
 6. ОБНОВЛЕНИЕ ДНЯ
    current_day += adaptive_days
@@ -245,7 +261,7 @@ QuotaManager:
 При переходе ops → unserviceable:
   PPR = 0                         // Сброс межремонтной наработки
   limiter = 0                     // Не участвует в min_dynamic
-  // НЕТ repair_days! Ожидание через RepairAgent.capacity
+  // НЕТ repair_days! Ожидание через RepairAgent.capacity + RepairLine.free_days
 ```
 
 ### 4.2. repair с repair_days = 0
@@ -262,8 +278,8 @@ PPR = 0 (после ремонта)
 Агент в unserviceable ожидает решения QuotaManager
 
 Переход unsvc → ops возможен при:
-  1. current_day >= repair_time (прошло достаточно времени от начала симуляции)
-  2. RepairAgent.capacity >= repair_time (есть ремонтная мощность)
+  1. RepairAgent.capacity >= repair_time (есть ремонтная мощность)
+  2. Есть RepairLine с free_days >= repair_time
   3. Есть дефицит в программе ops
 
 Если условия НЕ выполнены → переход к spawn (покупка)
@@ -271,7 +287,7 @@ PPR = 0 (после ремонта)
 
 **⚠️ ВАЖНО: repair_days для unserviceable НЕ используется!**
 - Вместо отслеживания repair_days каждого unsvc
-- Используем RepairAgent с общим счётчиком мощности
+- Используем RepairAgent + RepairLine (free_days)
 
 ### 4.4. Вход в operations
 
@@ -365,6 +381,7 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
 │  ops.limiter ← бинарный_поиск(LL-SNE, OH-PPR)                   │
 │  repair.repair_days ← остаток до выхода                         │
 │  RepairAgent.capacity ← repair_quota - count(repair)            │
+│  RepairLine.free_days ← 1, aircraft_number ← 0                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -385,6 +402,7 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
 │                                                                 │
 │  4b. ИНКРЕМЕНТ РЕМОНТНОЙ МОЩНОСТИ:                              │
 │     RepairAgent.capacity += (quota - count(repair))             │
+│     RepairLine.free_days += adaptive_days                       │
 │                                                                 │
 │  5. ИНКРЕМЕНТЫ (ops только):                                    │
 │     ops.sne += dt, ops.ppr += dt                                │
@@ -394,13 +412,15 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
 │                     PPR+dt>=OH AND SNE+dt>=BR → storage         │
 │                     PPR+dt>=OH AND SNE+dt<BR → unsvc            │
 │     repair(repair_days=0) → serviceable                         │
-│     unsvc → ПРАВО на ops (через RepairAgent.capacity)           │
+│     unsvc → ПРАВО на ops (через RepairAgent + RepairLine)       │
 │                                                                 │
 │  7. КВОТИРОВАНИЕ:                                               │
 │     Демоут если ops > target                                    │
 │     P1: serviceable → ops                                       │
-│     P2: unsvc → ops (если capacity >= repair_time)              │
-│     P3: inactive → ops (если capacity >= repair_time)           │
+│     P2: unsvc → ops (если capacity >= repair_time и            │
+│                      есть RepairLine.free_days >= repair_time) │
+│     P3: inactive → ops (если capacity >= repair_time и         │
+│                        есть RepairLine.free_days >= repair_time)│
 │     P4: spawn (если P2/P3 недоступны)                           │
 │     RepairAgent.capacity -= approved * repair_time              │
 │                                                                 │

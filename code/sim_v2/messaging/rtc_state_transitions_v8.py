@@ -183,8 +183,10 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
 RTC_OPS_TO_STORAGE_V8 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
     // V8: Переход в storage, limiter=0
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_6", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }
 """
@@ -212,6 +214,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::Me
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
     FLAMEGPU->setVariable<unsigned int>("exit_date", current_day + repair_time);
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     
     return flamegpu::ALIVE;
 }

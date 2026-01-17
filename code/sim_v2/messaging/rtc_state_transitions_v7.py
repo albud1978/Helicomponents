@@ -34,6 +34,7 @@ from model_build import RTC_MAX_FRAMES, MAX_DAYS
 import pyflamegpu as fg
 
 CUMSUM_SIZE = RTC_MAX_FRAMES * (MAX_DAYS + 1)
+REPAIR_LINES_MAX = 64
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -133,12 +134,29 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_repair_exit) {
 RTC_REPAIR_TO_SVC = """
 FLAMEGPU_AGENT_FUNCTION(rtc_repair_to_svc_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     // Переход из ремонта: PPR = 0, limiter сбрасывается
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    
+    // V8 simplified: фиксация линии ремонта для day0 repair
+    const unsigned int candidate = FLAMEGPU->getVariable<unsigned int>("repair_candidate");
+    if (candidate == 1u) {
+        const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
+        const unsigned int best_days = FLAMEGPU->getVariable<unsigned int>("repair_line_day");
+        auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, 64u>("repair_line_free_days_mp");
+        auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, 64u>("repair_line_acn_mp");
+        const unsigned int old_days = mp_days[line_id].exchange(0u);
+        if (old_days == best_days) {
+            const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+            mp_acn[line_id].exchange(acn);
+        }
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+    }
     FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     FLAMEGPU->setVariable<unsigned int>("exit_date", 0u);
     FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
     FLAMEGPU->setVariable<unsigned int>("transition_4_to_3", 1u);
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }
 """
@@ -160,12 +178,14 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_spawn_exit) {
 RTC_SPAWN_TO_OPS = """
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     // Spawn: новый агент в operations
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
     FLAMEGPU->setVariable<unsigned int>("sne", 0u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("exit_date", 0u);
     FLAMEGPU->setVariable<unsigned int>("transition_5_to_2", 1u);
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }
 """
@@ -307,6 +327,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v7, flamegpu::MessageNone, flamegpu::Me
     
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }
 """
@@ -314,8 +335,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v7, flamegpu::MessageNone, flamegpu::Me
 # Функция: operations → storage (2→6)
 RTC_OPS_TO_STORAGE = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_6", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }
 """
@@ -323,9 +346,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v7, flamegpu::MessageNone, flamegpu::
 # Функция: operations → serviceable (демоут, 2→3)
 RTC_OPS_DEMOTE = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_3", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     FLAMEGPU->setVariable<unsigned int>("needs_demote", 0u);  // Сброс флага
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }
 """
@@ -350,9 +375,11 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_svc_promoted) {
 RTC_SVC_TO_OPS = """
 FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     // P1: PPR сохраняется
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     FLAMEGPU->setVariable<unsigned int>("transition_3_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }
 """
@@ -367,11 +394,13 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_unsvc_promoted) {
 # Функция: unserviceable → operations (P2, 7→2)
 RTC_UNSVC_TO_OPS = """
 FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     FLAMEGPU->setVariable<unsigned int>("ppr", 0u);  // P2: PPR обнуляется!
     FLAMEGPU->setVariable<unsigned int>("exit_date", 0u);  // Сброс exit_date
     FLAMEGPU->setVariable<unsigned int>("transition_7_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }
 """
@@ -387,6 +416,7 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_inactive_promoted) {
 RTC_INACTIVE_TO_OPS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // P3: PPR по правилам group_by
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     
@@ -403,6 +433,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_v7, flamegpu::MessageNone, flamegpu:
     FLAMEGPU->setVariable<unsigned int>("transition_1_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }}
 """

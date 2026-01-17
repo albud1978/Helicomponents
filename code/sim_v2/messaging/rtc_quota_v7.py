@@ -604,6 +604,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_flags_v7, flamegpu::MessageNone, flamegpu::Mes
     // Сброс флагов квотирования
     FLAMEGPU->setVariable<unsigned int>("needs_demote", 0u);
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);
+    FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+    FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+    FLAMEGPU->setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);
     
     // Сброс transition флагов
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_3", 0u);

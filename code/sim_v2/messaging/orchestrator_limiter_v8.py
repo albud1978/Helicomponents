@@ -90,10 +90,14 @@ import rtc_state_transitions_v8  # V8: next-day dt проверка!
 import rtc_quota_v7              # V7: квотирование (без RepairAgent — baseline совместимо!)
 import rtc_quota_v8              # V8: квотирование через RepairAgent (ОТКЛЮЧЕНО)
 import rtc_repair_agent_v8       # V8: RepairAgent (ОТКЛЮЧЕНО)
+import rtc_repair_lines_v8       # V8: RepairLine sync
 import rtc_limiter_optimized
 import rtc_limiter_v5            # Для совместимости
 import rtc_limiter_v8            # V8: deterministic_dates!
 from components.agent_population import AgentPopulationBuilder
+
+# Максимум ремонтных линий (MacroProperty размер)
+REPAIR_LINES_MAX = 64
 
 
 class LimiterV8Orchestrator:
@@ -203,6 +207,31 @@ class LimiterV8Orchestrator:
         
         self.deterministic_dates = sorted(dates)
         print(f"   V8 deterministic_dates: {len(self.deterministic_dates)} дат")
+    
+    def _compute_repair_quota(self) -> int:
+        """Определяет квоту ремонтных линий из mp1_repair_number (без хардкода)."""
+        repair_numbers = self.env_data.get('mp1_repair_number', [])
+        mp1_index = self.env_data.get('mp1_index', {})
+        mp3 = self.env_data.get('mp3_arrays', {})
+        pseq_list = mp3.get('mp3_partseqno_i', [])
+        gb_list = mp3.get('mp3_group_by', [])
+        
+        valid = []
+        for i, partseqno in enumerate(pseq_list):
+            gb = int(gb_list[i] or 0) if i < len(gb_list) else 0
+            if gb not in (1, 2):
+                continue
+            pidx = mp1_index.get(int(partseqno or 0), -1)
+            if pidx < 0 or pidx >= len(repair_numbers):
+                continue
+            rn = int(repair_numbers[pidx])
+            if rn not in (0, 255):
+                valid.append(rn)
+        
+        if not valid:
+            raise RuntimeError("Не удалось определить repair_quota по планерам из mp1_repair_number")
+        
+        return max(valid)
         
     def build_model(self):
         """Построение модели V8"""
@@ -213,6 +242,14 @@ class LimiterV8Orchestrator:
         # Base model
         self.base_model = V2BaseModelMessaging()
         self.model = self.base_model.create_model(self.env_data)
+        
+        # Repair lines quota (без хардкода 18)
+        self.repair_quota = self._compute_repair_quota()
+        if self.repair_quota > REPAIR_LINES_MAX:
+            raise RuntimeError(f"repair_quota={self.repair_quota} > REPAIR_LINES_MAX={REPAIR_LINES_MAX}")
+        self.base_model.env.newPropertyUInt("repair_quota", self.repair_quota)
+        self.base_model.env.newMacroPropertyUInt("repair_line_free_days_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_acn_mp", REPAIR_LINES_MAX)
         
         # Environment properties
         self.base_model.env.newPropertyUInt("end_day", self.end_day)
@@ -233,6 +270,11 @@ class LimiterV8Orchestrator:
         layer_init = self.model.newLayer("layer_init_mp5_cumsum")
         layer_init.addHostFunction(hf_init_cumsum)
         
+        # HF для инициализации repair_line_*_mp
+        hf_init_lines = HF_InitRepairLines(self.repair_quota)
+        layer_lines = self.model.newLayer("layer_init_repair_lines")
+        layer_lines.addHostFunction(hf_init_lines)
+        
         # ═══════════════════════════════════════════════════════════════
         # V8: RepairAgent ОТКЛЮЧЁН — используем V7 квотирование
         # ═══════════════════════════════════════════════════════════════
@@ -250,6 +292,7 @@ class LimiterV8Orchestrator:
         # ═══════════════════════════════════════════════════════════════
         
         # Фаза 0: Детерминированные переходы (repair→svc, spawn→ops) — из V7
+        rtc_repair_lines_v8.register_repair_line_assign_for_repair_exit(self.model, heli_agent)
         rtc_state_transitions_v7.register_phase0_deterministic(self.model, heli_agent)
         
         # Фаза 0.5: Копирование exit_date (repair, spawn, БЕЗ unsvc!) — из V7
@@ -267,15 +310,25 @@ class LimiterV8Orchestrator:
             self.end_day
         )
         
-        # Фаза 2: V7 Квотирование (baseline совместимо!)
-        # ВНИМАНИЕ: Используем V7 вместо V8 RepairAgent для корректного ops=target
-        rtc_quota_v7.register_quota_v7(self.model, heli_agent)
+        # RepairLine: sync -> increment -> write (до квотирования)
+        rtc_repair_lines_v8.register_repair_line_pre_quota_layers(
+            self.model, self.base_model.repair_line_agent
+        )
+        
+        # Фаза 2: V8 Квотирование с RepairLine
+        rtc_quota_v8.setup_quota_v8_macroproperties(self.base_model.env)
+        rtc_quota_v8.register_quota_v8_full(self.model, heli_agent)
         
         # Фаза 3: Переходы после квотирования
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
         
         # Фаза 3.5: Пересчёт буферов после квотирования (для spawn)
         rtc_quota_v7.register_post_quota_counts_v7(self.model, heli_agent)
+        
+        # Синхронизация RepairLine после квотирования
+        rtc_repair_lines_v8.register_repair_line_sync_post_quota(
+            self.model, self.base_model.repair_line_agent
+        )
         
         # ═══════════════════════════════════════════════════════════════
         # Динамический спавн Mi-17 (после P3)
@@ -532,6 +585,15 @@ class LimiterV8Orchestrator:
         qm_pop[1].setVariableUInt8("group_by", 2)  # Mi-17
         self.simulation.setPopulationData(qm_pop)
         
+        # RepairLine агенты (ремонтные линии)
+        if self.repair_quota > 0:
+            rl_pop = fg.AgentVector(self.base_model.repair_line_agent, self.repair_quota)
+            for i in range(self.repair_quota):
+                rl_pop[i].setVariableUInt("line_id", i)
+                rl_pop[i].setVariableUInt("free_days", 1)
+                rl_pop[i].setVariableUInt("aircraft_number", 0)
+            self.simulation.setPopulationData(rl_pop)
+        
         # V8: RepairAgent ОТКЛЮЧЁН — не инициализируем популяцию
         # count_repair = self._count_agents_in_state("repair")
         # rtc_repair_agent_v8.init_repair_agent_population(...)
@@ -683,6 +745,10 @@ class LimiterV8Orchestrator:
                 agent.setVariableUInt("transition_5_to_2", 0)
                 agent.setVariableUInt("promoted", 0)
                 agent.setVariableUInt("needs_demote", 0)
+                agent.setVariableUInt("status_change_day", 0)
+                agent.setVariableUInt("repair_candidate", 0)
+                agent.setVariableUInt("repair_line_id", 0xFFFFFFFF)
+                agent.setVariableUInt("repair_line_day", 0xFFFFFFFF)
             
             self.simulation.setPopulationData(pop, "reserve")
             
@@ -798,6 +864,32 @@ class HF_InitMP5Cumsum(fg.HostFunction):
         
         self.initialized = True
         print(f"  [HF_InitMP5Cumsum] ✅ Загружено")
+
+
+class HF_InitRepairLines(fg.HostFunction):
+    """HostFunction для инициализации repair_line_free_days_mp/repair_line_acn_mp"""
+    
+    def __init__(self, repair_quota: int):
+        super().__init__()
+        self.repair_quota = int(repair_quota)
+        self.initialized = False
+    
+    def run(self, FLAMEGPU):
+        if self.initialized:
+            return
+        
+        mp_days = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_free_days_mp")
+        mp_acn = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_acn_mp")
+        for i in range(len(mp_days)):
+            if i < self.repair_quota:
+                mp_days[i] = 1  # day0: свободно с 1
+                mp_acn[i] = 0   # 0 = свободно
+            else:
+                mp_days[i] = 0xFFFFFFFF  # не используется
+                mp_acn[i] = 0
+        
+        self.initialized = True
+        print(f"  [HF_InitRepairLines] ✅ Загружено (quota={self.repair_quota})")
 
 
 def main():

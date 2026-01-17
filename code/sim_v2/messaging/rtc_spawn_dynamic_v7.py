@@ -212,6 +212,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v7, flamegpu::MessageNone, flam
     FLAMEGPU->agent_out.setVariable<unsigned int>("s4_days", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("limiter_date", 0xFFFFFFFFu);
     FLAMEGPU->agent_out.setVariable<unsigned int>("prev_intent", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("status_change_day", day);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_candidate", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);
     
     // Transitions (все 0) - только те что есть в модели
     FLAMEGPU->agent_out.setVariable<unsigned int>("transition_0_to_2", 0u);
