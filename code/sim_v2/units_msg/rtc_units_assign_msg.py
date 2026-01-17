@@ -56,50 +56,20 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForc
 }}
 
 // === Spawn activation (reserve, active=0) ===
-FLAMEGPU_AGENT_FUNCTION(rtc_units_spawn_activate, flamegpu::MessageBruteForce, flamegpu::MessageNone) {{
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    const unsigned int active = FLAMEGPU->getVariable<unsigned int>("active");
-    if (active == 1u || group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
-
-    const unsigned int day = FLAMEGPU->getStepCounter();
-    const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
-    if (day < repair_time) return flamegpu::ALIVE;  // запрет spawn до repair_time
-
-    auto mp_budget = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_spawn_budget");
-    if (mp_budget[group_by] == 0u) return flamegpu::ALIVE;
-
-    auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
-    const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
-
-    for (auto msg : FLAMEGPU->message_in) {{
-        const unsigned int in_ops = msg.getVariable<unsigned int>("in_ops");
-        const unsigned int planer_type = msg.getVariable<unsigned int>("planer_type");
-        if (in_ops == 0u || planer_type != required_type) continue;
-
-        const unsigned int planer_idx = msg.getVariable<unsigned int>("planer_idx");
-        if (planer_idx >= {MAX_PLANERS}u) continue;
-
-        const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
-        unsigned int curr = mp_need[slots_pos];
-        if (curr > 0u) {{
-            unsigned int prev = mp_budget[group_by]--;
-            if (prev == 0u) {{
-                mp_budget[group_by]++;  // rollback
-                return flamegpu::ALIVE;
-            }}
-            FLAMEGPU->setVariable<unsigned int>("active", 1u);
-            return flamegpu::ALIVE;
-        }}
-    }}
-
-    return flamegpu::ALIVE;
-}}
 
 // === Reserve → Operations ===
 FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, flamegpu::MessageNone) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int active = FLAMEGPU->getVariable<unsigned int>("active");
-    if (active == 0u || group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
+    if (group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
+
+    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
+    auto mp_budget = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_spawn_budget");
+    if (active == 0u) {{
+        if (day < repair_time) return flamegpu::ALIVE;  // запрет spawn до repair_time
+        if (mp_budget[group_by] == 0u) return flamegpu::ALIVE;
+    }}
 
     auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
@@ -119,6 +89,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
             continue;
         }}
 
+        if (active == 0u) {{
+            unsigned int prev_budget = mp_budget[group_by]--;
+            if (prev_budget == 0u) {{
+                mp_need[slots_pos]++;  // rollback
+                return flamegpu::ALIVE;
+            }}
+            FLAMEGPU->setVariable<unsigned int>("active", 1u);
+        }}
         const unsigned int ac = msg.getVariable<unsigned int>("aircraft_number");
         FLAMEGPU->setVariable<unsigned int>("aircraft_number", ac);
         FLAMEGPU->setVariable<unsigned int>("planer_idx", planer_idx);
@@ -134,11 +112,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     rtc_code = get_rtc_code()
 
-    fn_spawn = agent.newRTCFunction("rtc_units_spawn_activate", rtc_code)
-    fn_spawn.setInitialState("reserve")
-    fn_spawn.setEndState("reserve")
-    fn_spawn.setMessageInput("planer_message")
-
     fn_svc = agent.newRTCFunction("rtc_units_assign_serviceable", rtc_code)
     fn_svc.setInitialState("serviceable")
     fn_svc.setEndState("serviceable")
@@ -148,9 +121,6 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     fn_rsv.setInitialState("reserve")
     fn_rsv.setEndState("reserve")
     fn_rsv.setMessageInput("planer_message")
-
-    layer_spawn = model.newLayer("layer_units_msg_spawn_activate")
-    layer_spawn.addAgentFunction(fn_spawn)
 
     layer_svc = model.newLayer("layer_units_msg_assign_serviceable")
     layer_svc.addAgentFunction(fn_svc)
