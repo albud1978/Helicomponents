@@ -25,6 +25,10 @@ class ResetAssignHits(fg.HostFunction):
         any_after = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_any_after")
         ret_active = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_return_active")
         ret_group = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_return_group")
+        entry_svc = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_entry_svc")
+        entry_rsv = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_entry_rsv")
+        after_svc = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_after_svc")
+        after_rsv = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_after_rsv")
         for i in range(MAX_GROUPS):
             hits[i] = 0
             attempts[i] = 0
@@ -41,6 +45,10 @@ class ResetAssignHits(fg.HostFunction):
         any_after[0] = 0
         ret_active[0] = 0
         ret_group[0] = 0
+        entry_svc[0] = 0
+        entry_rsv[0] = 0
+        after_svc[0] = 0
+        after_rsv[0] = 0
 
 
 class ReportAssignHits(fg.HostFunction):
@@ -63,6 +71,10 @@ class ReportAssignHits(fg.HostFunction):
         any_after = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_any_after")
         ret_active = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_return_active")
         ret_group = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_return_group")
+        entry_svc = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_entry_svc")
+        entry_rsv = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_entry_rsv")
+        after_svc = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_after_svc")
+        after_rsv = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_after_rsv")
         print(f"   assign_hits: day={day} g3={int(hits[3])} g4={int(hits[4])}")
         print(f"   assign_attempts: day={day} g3={int(attempts[3])} g4={int(attempts[4])}")
         print(f"   assign_called: day={day} g3={int(called[3])} g4={int(called[4])}")
@@ -78,6 +90,10 @@ class ReportAssignHits(fg.HostFunction):
         print(f"   assign_any_after: day={day} v={int(any_after[0])}")
         print(f"   assign_return_active: day={day} v={int(ret_active[0])}")
         print(f"   assign_return_group: day={day} v={int(ret_group[0])}")
+        print(f"   assign_entry_svc: day={day} v={int(entry_svc[0])}")
+        print(f"   assign_after_svc: day={day} v={int(after_svc[0])}")
+        print(f"   assign_entry_rsv: day={day} v={int(entry_rsv[0])}")
+        print(f"   assign_after_rsv: day={day} v={int(after_rsv[0])}")
 
 
 def register_reset(model: fg.ModelDescription):
