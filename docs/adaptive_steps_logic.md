@@ -104,21 +104,21 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 ```
 ВХОД: repair_number (число линий), дефицит ops
 
-1. Проверка условия времени:
-   if current_day < repair_time:
-     // Недостаточно времени от начала симуляции
-     // P2/P3 недоступны → сразу к spawn
+1. Готовность агента:
+   if current_day < status_change_day + repair_time:
+     // Агент ещё не готов к ремонту
      return
 
 2. Отфильтровать RepairLine:
    free_days >= repair_time
 
 3. Определить дефицит = target_ops - current_ops
-   approved = MIN(дефицит, slots)
+   approved = MIN(дефицит, available_lines)
 
 4. P2: Отфильтровать unsvc по idx — первые approved
    approved_unsvc = MIN(count(unsvc), approved, available_lines)
    remaining = approved - approved_unsvc
+   remaining_lines = available_lines - approved_unsvc
 
 5. P3: Если remaining > 0:
    Отфильтровать inactive по idx — первые remaining
