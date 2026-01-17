@@ -34,7 +34,11 @@ class InitPlanerDtHostFunction(fg.HostFunction):
                  max_days: int = 3651, assembly_array: Optional[np.ndarray] = None,
                  planer_in_ops: Optional[Dict[int, int]] = None,
                  planer_type: Optional[Dict[int, int]] = None,
-                 planer_in_ops_history: Optional[np.ndarray] = None):
+                 planer_in_ops_history: Optional[np.ndarray] = None,
+                 ops_list_g3: Optional[np.ndarray] = None,
+                 ops_list_g4: Optional[np.ndarray] = None,
+                 ops_count_g3: Optional[np.ndarray] = None,
+                 ops_count_g4: Optional[np.ndarray] = None):
         """
         Args:
             dt_array: numpy массив dt значений [day * MAX_PLANERS + planer_idx]
@@ -55,6 +59,10 @@ class InitPlanerDtHostFunction(fg.HostFunction):
         self.planer_in_ops = planer_in_ops or {}
         self.planer_type = planer_type or {}  # planer_idx → type (1=Mi-8, 2=Mi-17)
         self.planer_in_ops_history = planer_in_ops_history  # NEW: полная история
+        self.ops_list_g3 = ops_list_g3
+        self.ops_list_g4 = ops_list_g4
+        self.ops_count_g3 = ops_count_g3
+        self.ops_count_g4 = ops_count_g4
         self.initial_slots = {}  # (group_by, planer_idx) -> count, устанавливается позже
         self.initialized = False
     
@@ -220,6 +228,31 @@ class InitPlanerDtHostFunction(fg.HostFunction):
                 print(f"     ⚠️ Ошибка mp_planer_in_ops_history: {e}")
         else:
             print(f"     ⚠️ planer_in_ops_history пуст, детекция выхода из operations отключена")
+
+        # === 8. Списки планеров в ops по типам (для назначения) ===
+        if self.ops_list_g3 is not None and self.ops_list_g4 is not None:
+            try:
+                mp_ops_list_g3 = FLAMEGPU.environment.getMacroPropertyUInt32("mp_ops_list_g3")
+                mp_ops_list_g4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp_ops_list_g4")
+                for i, val in enumerate(self.ops_list_g3):
+                    mp_ops_list_g3[i] = int(val)
+                for i, val in enumerate(self.ops_list_g4):
+                    mp_ops_list_g4[i] = int(val)
+                print("     mp_ops_list_g3/g4 загружены")
+            except Exception as e:
+                print(f"     ⚠️ Ошибка mp_ops_list_g3/g4: {e}")
+
+        if self.ops_count_g3 is not None and self.ops_count_g4 is not None:
+            try:
+                mp_ops_count_g3 = FLAMEGPU.environment.getMacroPropertyUInt32("mp_ops_count_g3")
+                mp_ops_count_g4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp_ops_count_g4")
+                for i, val in enumerate(self.ops_count_g3):
+                    mp_ops_count_g3[i] = int(val)
+                for i, val in enumerate(self.ops_count_g4):
+                    mp_ops_count_g4[i] = int(val)
+                print("     mp_ops_count_g3/g4 загружены")
+            except Exception as e:
+                print(f"     ⚠️ Ошибка mp_ops_count_g3/g4: {e}")
         
         self.initialized = True
         print(f"  ✅ InitPlanerDt: Инициализация завершена")

@@ -46,6 +46,37 @@ class AgentPopulationUnitsMsgBuilder:
         env_data['planer_in_ops'] = planer_in_ops
         env_data['planer_type'] = planer_type
         env_data['planer_in_ops_history'] = planer_in_ops_history
+        # Предрасчёт списков планеров в ops по типам (по дням)
+        if planer_in_ops_history is not None and len(ac_to_idx) > 0:
+            max_planers = 400
+            max_days = 4000
+            size = max_planers * (max_days + 1)
+            ops_list_g3 = np.zeros(size, dtype=np.uint32)
+            ops_list_g4 = np.zeros(size, dtype=np.uint32)
+            ops_count_g3 = np.zeros(max_days + 1, dtype=np.uint32)
+            ops_count_g4 = np.zeros(max_days + 1, dtype=np.uint32)
+
+            for day in range(max_days + 1):
+                base = day * max_planers
+                c3 = 0
+                c4 = 0
+                for idx in range(max_planers):
+                    if planer_in_ops_history[base + idx] == 0:
+                        continue
+                    ptype = planer_type.get(idx, 0)
+                    if ptype == 1:
+                        ops_list_g3[base + c3] = idx
+                        c3 += 1
+                    elif ptype == 2:
+                        ops_list_g4[base + c4] = idx
+                        c4 += 1
+                ops_count_g3[day] = c3
+                ops_count_g4[day] = c4
+
+            env_data['ops_list_g3'] = ops_list_g3
+            env_data['ops_list_g4'] = ops_list_g4
+            env_data['ops_count_g3'] = ops_count_g3
+            env_data['ops_count_g4'] = ops_count_g4
         env_data['planers_total'] = len(ac_to_idx)
 
         self.planer_data = {
