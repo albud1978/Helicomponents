@@ -99,9 +99,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
     mp_attempts[group_by] += 123u;
     return flamegpu::ALIVE;
 }}
+"""
 
-// === Spawn activation (reserve, active=0) ===
 
+def get_rtc_code_reserve() -> str:
+    slots_size = MAX_GROUPS * MAX_PLANERS
+    return f"""
 // === Reserve → Operations ===
 FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
@@ -190,15 +193,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
 }}
 """
 
-
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
-    rtc_code = get_rtc_code()
+    rtc_code_svc = get_rtc_code()
+    rtc_code_rsv = get_rtc_code_reserve()
 
-    fn_svc = agent.newRTCFunction("rtc_units_assign_serviceable", rtc_code)
+    fn_svc = agent.newRTCFunction("rtc_units_assign_serviceable", rtc_code_svc)
     fn_svc.setInitialState("serviceable")
     fn_svc.setEndState("serviceable")
 
-    fn_rsv = agent.newRTCFunction("rtc_units_assign_reserve", rtc_code)
+    fn_rsv = agent.newRTCFunction("rtc_units_assign_reserve", rtc_code_rsv)
     fn_rsv.setInitialState("reserve")
     fn_rsv.setEndState("reserve")
 
