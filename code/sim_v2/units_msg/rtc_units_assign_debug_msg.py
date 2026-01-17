@@ -21,6 +21,8 @@ class ResetAssignHits(fg.HostFunction):
         need_flag = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_need_flag")
         slot_flag = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_slot_flag")
         ac_flag = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_ac_flag")
+        any_entry = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_any_entry")
+        any_after = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_any_after")
         for i in range(MAX_GROUPS):
             hits[i] = 0
             attempts[i] = 0
@@ -33,6 +35,8 @@ class ResetAssignHits(fg.HostFunction):
             need_flag[i] = 0
             slot_flag[i] = 0
             ac_flag[i] = 0
+        any_entry[0] = 0
+        any_after[0] = 0
 
 
 class ReportAssignHits(fg.HostFunction):
@@ -51,6 +55,8 @@ class ReportAssignHits(fg.HostFunction):
         need_flag = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_need_flag")
         slot_flag = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_slot_flag")
         ac_flag = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_ac_flag")
+        any_entry = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_any_entry")
+        any_after = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_any_after")
         print(f"   assign_hits: day={day} g3={int(hits[3])} g4={int(hits[4])}")
         print(f"   assign_attempts: day={day} g3={int(attempts[3])} g4={int(attempts[4])}")
         print(f"   assign_called: day={day} g3={int(called[3])} g4={int(called[4])}")
@@ -62,6 +68,8 @@ class ReportAssignHits(fg.HostFunction):
         print(f"   assign_need_flag: day={day} g3={int(need_flag[3])} g4={int(need_flag[4])}")
         print(f"   assign_slot_flag: day={day} g3={int(slot_flag[3])} g4={int(slot_flag[4])}")
         print(f"   assign_ac_flag: day={day} g3={int(ac_flag[3])} g4={int(ac_flag[4])}")
+        print(f"   assign_any_entry: day={day} v={int(any_entry[0])}")
+        print(f"   assign_any_after: day={day} v={int(any_after[0])}")
 
 
 def register_reset(model: fg.ModelDescription):
