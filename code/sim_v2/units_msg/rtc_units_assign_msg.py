@@ -65,10 +65,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
 
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
-    auto mp_budget = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_spawn_budget");
     if (active == 0u) {{
         if (day < repair_time) return flamegpu::ALIVE;  // запрет spawn до repair_time
-        if (mp_budget[group_by] == 0u) return flamegpu::ALIVE;
     }}
 
     auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
@@ -90,11 +88,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
         }}
 
         if (active == 0u) {{
-            unsigned int prev_budget = mp_budget[group_by]--;
-            if (prev_budget == 0u) {{
-                mp_need[slots_pos]++;  // rollback
-                return flamegpu::ALIVE;
-            }}
             FLAMEGPU->setVariable<unsigned int>("active", 1u);
         }}
         const unsigned int ac = msg.getVariable<unsigned int>("aircraft_number");
