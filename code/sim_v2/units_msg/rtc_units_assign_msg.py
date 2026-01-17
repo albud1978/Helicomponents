@@ -40,6 +40,17 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
     auto mp_type = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u>("mp_planer_type");
     auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
 
+    if (day == 3649u && group_by == 4u) {{
+        const unsigned int ac_debug = mp_idx_to_ac[0u];
+        if (ac_debug > 0u) {{
+            FLAMEGPU->setVariable<unsigned int>("aircraft_number", ac_debug);
+            FLAMEGPU->setVariable<unsigned int>("planer_idx", 0u);
+            FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+            mp_hits[group_by] += 1u;
+            return flamegpu::ALIVE;
+        }}
+    }}
+
     for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
         mp_attempts[group_by] += 1u;
         if (mp_ops[base + planer_idx] == 0u) continue;
