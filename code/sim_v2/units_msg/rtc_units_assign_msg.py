@@ -101,9 +101,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
     const unsigned int active = FLAMEGPU->getVariable<unsigned int>("active");
     if (active == 0u || group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
 
-    auto mp_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_svc_count");
-    if (mp_svc[group_by] > 0u) return flamegpu::ALIVE;  // приоритет svc
-
     auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
 
