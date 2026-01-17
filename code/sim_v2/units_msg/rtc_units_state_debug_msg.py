@@ -33,6 +33,16 @@ class ReportReserveSeen(fg.HostFunction):
             return
         seen = FLAMEGPU.environment.getMacroPropertyUInt32("mp_reserve_seen")
         print(f"   reserve_seen: day={day} g3={int(seen[3])} g4={int(seen[4])}")
+        try:
+            cnt_g3 = FLAMEGPU.environment.getMacroPropertyUInt32("mp_ops_count_g3")
+            cnt_g4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp_ops_count_g4")
+            print(f\"   ops_count: day={day} g3={int(cnt_g3[day])} g4={int(cnt_g4[day])}\")
+            base = day * 400
+            list_g4 = FLAMEGPU.environment.getMacroPropertyUInt32(\"mp_ops_list_g4\")
+            if int(cnt_g4[day]) > 0:
+                print(f\"   ops_list_g4[0]={int(list_g4[base])}\")
+        except Exception as e:
+            print(f\"   ops_count debug error: {e}\")
 
 
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
