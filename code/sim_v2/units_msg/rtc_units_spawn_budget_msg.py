@@ -48,7 +48,7 @@ class SpawnBudgetHostFunction(fg.HostFunction):
             if budget > 0:
                 mp_budget[g] = budget
             if day in (3000, 3649):
-                print(f\"   🧮 mp_budget: day={day} g={g} deficit={deficit} svc={int(mp_svc[g])} rsv={int(mp_rsv[g])} budget={int(mp_budget[g])}\")
+                print(f"   mp_budget: day={day} g={g} deficit={deficit} svc={int(mp_svc[g])} rsv={int(mp_rsv[g])} budget={int(mp_budget[g])}")
 
 
 def register_rtc(model: fg.ModelDescription):

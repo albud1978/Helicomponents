@@ -44,7 +44,7 @@ class PlanerNeedHostFunction(fg.HostFunction):
             for idx in range(MAX_PLANERS):
                 sum_g3 += mp_need[3 * MAX_PLANERS + idx]
                 sum_g4 += mp_need[4 * MAX_PLANERS + idx]
-            print(f\"   🧩 mp_planer_need: day={day} g3={sum_g3} g4={sum_g4}\")
+            print(f"   mp_planer_need: day={day} g3={sum_g3} g4={sum_g4}")
 
 
 def register_rtc(model: fg.ModelDescription):
