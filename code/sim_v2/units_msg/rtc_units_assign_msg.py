@@ -38,9 +38,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
     auto mp_ac_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_ac_flag");
     auto mp_any_entry = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_any_entry");
     auto mp_any_after = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_any_after");
+    auto mp_ret_active = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_active");
+    auto mp_ret_group = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_group");
     mp_any_entry[0].exchange(1u);
     if (group_by < {MAX_GROUPS}u) mp_called[group_by] += 1u;
-    if (active == 0u || group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
+    if (active == 0u) {{
+        mp_ret_active[0].exchange(1u);
+        return flamegpu::ALIVE;
+    }}
+    if (group_by < 3u || group_by > 4u) {{
+        mp_ret_group[0].exchange(1u);
+        return flamegpu::ALIVE;
+    }}
     mp_any_after[0].exchange(1u);
 
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
@@ -118,9 +127,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
     auto mp_ac_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_ac_flag");
     auto mp_any_entry = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_any_entry");
     auto mp_any_after = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_any_after");
+    auto mp_ret_active = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_active");
+    auto mp_ret_group = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_group");
     mp_any_entry[0].exchange(1u);
     if (group_by < {MAX_GROUPS}u) mp_called[group_by] += 1u;
-    if (group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
+    if (group_by < 3u || group_by > 4u) {{
+        mp_ret_group[0].exchange(1u);
+        return flamegpu::ALIVE;
+    }}
     mp_any_after[0].exchange(1u);
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
     const unsigned int base = day * {MAX_PLANERS}u;
