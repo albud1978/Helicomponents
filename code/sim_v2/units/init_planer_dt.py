@@ -251,9 +251,6 @@ class InitPlanerDtHostFunction(fg.HostFunction):
                 for i, val in enumerate(self.ops_count_g4):
                     mp_ops_count_g4[i] = int(val)
                 print("     mp_ops_count_g3/g4 загружены")
-                if len(self.ops_count_g3) > 3649:
-                    print(f"     mp_ops_count_g3[0]={int(self.ops_count_g3[0])} mp_ops_count_g4[0]={int(self.ops_count_g4[0])}")
-                    print(f"     mp_ops_count_g3[3649]={int(self.ops_count_g3[3649])} mp_ops_count_g4[3649]={int(self.ops_count_g4[3649])}")
             except Exception as e:
                 print(f"     ⚠️ Ошибка mp_ops_count_g3/g4: {e}")
         

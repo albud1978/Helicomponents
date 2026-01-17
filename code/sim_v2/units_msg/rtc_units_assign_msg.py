@@ -26,35 +26,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
 
     const unsigned int required = 2u;
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
-    auto mp_hits = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hits");
-    auto mp_attempts = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_attempts");
-    auto mp_called = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_called");
-    auto mp_loop_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_loop_flag");
-    auto mp_hit_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hit_flag");
-    auto mp_ops_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_ops_flag");
-    auto mp_type_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_type_flag");
-    auto mp_need_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_need_flag");
-    auto mp_slot_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_slot_flag");
-    auto mp_ac_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_ac_flag");
-    auto mp_any_entry = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_any_entry");
-    auto mp_any_after = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_any_after");
-    auto mp_ret_active = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_active");
-    auto mp_ret_group = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_group");
-    auto mp_entry_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_entry_svc");
-    auto mp_after_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_after_svc");
-    mp_any_entry[0].exchange(1u);
-    mp_entry_svc[0].exchange(1u);
-    if (group_by < {MAX_GROUPS}u) mp_called[group_by] += 1u;
-    if (active == 0u) {{
-        mp_ret_active[0].exchange(1u);
-        return flamegpu::ALIVE;
-    }}
-    if (group_by < 3u || group_by > 4u) {{
-        mp_ret_group[0].exchange(1u);
-        return flamegpu::ALIVE;
-    }}
-    mp_any_after[0].exchange(1u);
-    mp_after_svc[0].exchange(1u);
+    if (active == 0u || group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
 
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
     const unsigned int day = FLAMEGPU->getStepCounter();
@@ -66,37 +38,28 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
 
     mp_loop_flag[group_by].exchange(1u);
     for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
-        mp_attempts[group_by] += 1u;
         if (mp_ops[base + planer_idx] == 0u) continue;
-        mp_ops_flag[group_by].exchange(1u);
         if (mp_type[planer_idx] != required_type) continue;
-        mp_type_flag[group_by].exchange(1u);
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
         if (mp_need[slots_pos] == 0u) continue;
-        mp_need_flag[group_by].exchange(1u);
 
         unsigned int prev = mp_slots[slots_pos]++;
         if (prev >= required) {{
             mp_slots[slots_pos]--;  // rollback
             continue;
         }}
-        mp_slot_flag[group_by].exchange(1u);
 
         const unsigned int ac = mp_idx_to_ac[planer_idx];
         if (ac == 0u) {{
             mp_slots[slots_pos]--;  // rollback
             continue;
         }}
-        mp_ac_flag[group_by].exchange(1u);
         FLAMEGPU->setVariable<unsigned int>("aircraft_number", ac);
         FLAMEGPU->setVariable<unsigned int>("planer_idx", planer_idx);
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-        mp_hits[group_by] += 1u;
-        mp_hit_flag[group_by].exchange(1u);
         return flamegpu::ALIVE;
     }}
 
-    mp_attempts[group_by] += 123u;
     return flamegpu::ALIVE;
 }}
 """
@@ -112,41 +75,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
 
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
-    if (active == 0u) {{
-        if (day < repair_time) {{
-            auto mp_skip = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_skip_repair");
-            if (group_by < {MAX_GROUPS}u) mp_skip[group_by] += 1u;
-            return flamegpu::ALIVE;  // запрет spawn до repair_time
-        }}
+    if (active == 0u && day < repair_time) {{
+        return flamegpu::ALIVE;  // запрет spawn до repair_time
     }}
 
     const unsigned int required = 2u;
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
-    auto mp_hits = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hits");
-    auto mp_attempts = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_attempts");
-    auto mp_called = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_called");
-    auto mp_loop_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_loop_flag");
-    auto mp_hit_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hit_flag");
-    auto mp_ops_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_ops_flag");
-    auto mp_type_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_type_flag");
-    auto mp_need_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_need_flag");
-    auto mp_slot_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_slot_flag");
-    auto mp_ac_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_ac_flag");
-    auto mp_any_entry = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_any_entry");
-    auto mp_any_after = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_any_after");
-    auto mp_ret_active = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_active");
-    auto mp_ret_group = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_group");
-    auto mp_entry_rsv = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_entry_rsv");
-    auto mp_after_rsv = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_after_rsv");
-    mp_any_entry[0].exchange(1u);
-    mp_entry_rsv[0].exchange(1u);
-    if (group_by < {MAX_GROUPS}u) mp_called[group_by] += 1u;
-    if (group_by < 3u || group_by > 4u) {{
-        mp_ret_group[0].exchange(1u);
-        return flamegpu::ALIVE;
-    }}
-    mp_any_after[0].exchange(1u);
-    mp_after_rsv[0].exchange(1u);
+    if (group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
     const unsigned int base = day * {MAX_PLANERS}u;
     auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
@@ -154,23 +89,17 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
     auto mp_type = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u>("mp_planer_type");
     auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
 
-    mp_loop_flag[group_by].exchange(1u);
     for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
-        mp_attempts[group_by] += 1u;
         if (mp_ops[base + planer_idx] == 0u) continue;
-        mp_ops_flag[group_by].exchange(1u);
         if (mp_type[planer_idx] != required_type) continue;
-        mp_type_flag[group_by].exchange(1u);
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
         if (mp_need[slots_pos] == 0u) continue;
-        mp_need_flag[group_by].exchange(1u);
 
         unsigned int prev = mp_slots[slots_pos]++;
         if (prev >= required) {{
             mp_slots[slots_pos]--;  // rollback
             continue;
         }}
-        mp_slot_flag[group_by].exchange(1u);
 
         if (active == 0u) {{
             FLAMEGPU->setVariable<unsigned int>("active", 1u);
@@ -180,12 +109,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
             mp_slots[slots_pos]--;  // rollback
             continue;
         }}
-        mp_ac_flag[group_by].exchange(1u);
         FLAMEGPU->setVariable<unsigned int>("aircraft_number", ac);
         FLAMEGPU->setVariable<unsigned int>("planer_idx", planer_idx);
         FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-        mp_hits[group_by] += 1u;
-        mp_hit_flag[group_by].exchange(1u);
         return flamegpu::ALIVE;
     }}
 
