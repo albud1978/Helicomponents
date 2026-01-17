@@ -32,14 +32,14 @@ class OpsListHostFunction(fg.HostFunction):
                 continue
             ptype = mp_type[idx]
             if ptype == 1:
-                pos = cnt[3]
+                pos = int(cnt[3])
                 if pos < MAX_PLANERS:
-                    list_g3[pos] = idx
+                    list_g3[pos] = int(idx)
                     cnt[3] = pos + 1
             elif ptype == 2:
-                pos = cnt[4]
+                pos = int(cnt[4])
                 if pos < MAX_PLANERS:
-                    list_g4[pos] = idx
+                    list_g4[pos] = int(idx)
                     cnt[4] = pos + 1
 
 
