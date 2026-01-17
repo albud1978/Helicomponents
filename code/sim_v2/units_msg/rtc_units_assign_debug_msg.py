@@ -13,10 +13,12 @@ class ResetAssignHits(fg.HostFunction):
         hits = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_hits")
         attempts = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_attempts")
         called = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_called")
+        skip_repair = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_skip_repair")
         for i in range(MAX_GROUPS):
             hits[i] = 0
             attempts[i] = 0
             called[i] = 0
+            skip_repair[i] = 0
 
 
 class ReportAssignHits(fg.HostFunction):
@@ -27,9 +29,11 @@ class ReportAssignHits(fg.HostFunction):
         hits = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_hits")
         attempts = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_attempts")
         called = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_called")
+        skip_repair = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_skip_repair")
         print(f"   assign_hits: day={day} g3={int(hits[3])} g4={int(hits[4])}")
         print(f"   assign_attempts: day={day} g3={int(attempts[3])} g4={int(attempts[4])}")
         print(f"   assign_called: day={day} g3={int(called[3])} g4={int(called[4])}")
+        print(f"   assign_skip_repair: day={day} g3={int(skip_repair[3])} g4={int(skip_repair[4])}")
 
 
 def register_reset(model: fg.ModelDescription):
