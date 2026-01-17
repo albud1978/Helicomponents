@@ -31,13 +31,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageBruteForc
 
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
-    auto mp_ops = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_planer_in_ops_history");
+    auto mp_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_planer_dt");
     auto mp_type = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u>("mp_planer_type");
     auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
     const unsigned int base = day * {MAX_PLANERS}u;
 
     for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
-        if (mp_ops[base + planer_idx] == 0u) continue;
+        if (mp_dt[base + planer_idx] == 0u) continue;
         if (mp_type[planer_idx] != required_type) continue;
 
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
@@ -80,13 +80,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageBruteForce, f
     auto mp_slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_slots");
     auto mp_hits = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_hits");
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
-    auto mp_ops = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_planer_in_ops_history");
+    auto mp_dt = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u * ({PLANER_MAX_DAYS}u + 1u)>("mp_planer_dt");
     auto mp_type = FLAMEGPU->environment.getMacroProperty<unsigned char, {MAX_PLANERS}u>("mp_planer_type");
     auto mp_idx_to_ac = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_PLANERS}u>("mp_idx_to_ac");
     const unsigned int base = day * {MAX_PLANERS}u;
 
     for (unsigned int planer_idx = 0u; planer_idx < {MAX_PLANERS}u; ++planer_idx) {{
-        if (mp_ops[base + planer_idx] == 0u) continue;
+        if (mp_dt[base + planer_idx] == 0u) continue;
         if (mp_type[planer_idx] != required_type) continue;
 
         const unsigned int slots_pos = group_by * {MAX_PLANERS}u + planer_idx;
