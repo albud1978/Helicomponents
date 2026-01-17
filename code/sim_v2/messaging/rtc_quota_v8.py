@@ -28,6 +28,9 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from model_build import RTC_MAX_FRAMES, MAX_DAYS
 
+# Максимум ремонтных линий (MacroProperty размер)
+REPAIR_LINES_MAX = 64
+
 import pyflamegpu as fg
 
 # Импорт RTC строк из V7 (reset, count, demote, P1)
@@ -50,18 +53,50 @@ from rtc_quota_v7 import (
 RTC_PROMOTE_UNSVC_V8 = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // V8: P2 unserviceable → operations
-    // FIX: Проверяем exit_date агента (как в V7) вместо глобального repair_time
+    // Перевод только при наличии окна ремонта в прошлом
     
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");
     
-    // V8 FIX: Проверяем exit_date агента — должен отбыть repair_time перед возвратом в ops
-    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
-    if (exit_date > 0u && exit_date != 0xFFFFFFFFu && day < exit_date) {{
-        // Ещё не готов — ждём repair_time
+    // repair_time по типу
+    unsigned int repair_time = 0u;
+    if (group_by == 1u) {{
+        repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
+    }} else if (group_by == 2u) {{
+        repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+    }} else {{
+        return flamegpu::ALIVE;
+    }}
+    
+    // Должен пройти полный ремонт с момента смены статуса
+    if (day < (status_change_day + repair_time)) {{
+        return flamegpu::ALIVE;
+    }}
+    
+    // Доступные линии ремонта: free_days >= repair_time
+    const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
+    auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    
+    unsigned int available_lines = 0u;
+    unsigned int best_line = 0xFFFFFFFFu;
+    unsigned int best_days = 0xFFFFFFFFu;
+    
+    for (unsigned int i = 0u; i < repair_quota; ++i) {{
+        const unsigned int free_days = line_mp[i];
+        if (free_days >= repair_time) {{
+            ++available_lines;
+            if (free_days < best_days) {{
+                best_days = free_days;
+                best_line = i;
+            }}
+        }}
+    }}
+    
+    if (available_lines == 0u || best_line == 0xFFFFFFFFu) {{
         return flamegpu::ALIVE;
     }}
     
@@ -109,9 +144,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
     }}
     unsigned int deficit = target - curr_after_p1;
     
-    // V8 FIX: Используем V7-стиль — промоут по дефициту без ограничения slots
-    // (агент уже прошёл проверку exit_date)
+    // Промоут по дефициту с учётом доступных линий
     unsigned int needed = (deficit < unsvc_available) ? deficit : unsvc_available;
+    
+    if (available_lines < needed) {{
+        needed = available_lines;
+    }}
     
     if (needed == 0u) {{
         return flamegpu::ALIVE;
@@ -128,7 +166,33 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
     }}
     
     if (rank < needed) {{
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", best_line);
+        FLAMEGPU->setVariable<unsigned int>("repair_line_day", best_days);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
+
+RTC_PROMOTE_UNSVC_COMMIT_V8 = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int candidate = FLAMEGPU->getVariable<unsigned int>("repair_candidate");
+    if (candidate == 0u) return flamegpu::ALIVE;
+    
+    const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
+    const unsigned int best_days = FLAMEGPU->getVariable<unsigned int>("repair_line_day");
+    auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    
+    const unsigned int old_days = line_mp[line_id].exchange(0u);
+    if (old_days == best_days) {{
+        const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        line_acn[line_id].exchange(acn);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
+    }} else {{
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
     }}
     
     return flamegpu::ALIVE;
@@ -142,14 +206,52 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
 
 RTC_PROMOTE_INACTIVE_V8 = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // V8 FIX: P3 inactive → operations (БЕЗ проверки RepairAgent — inactive УЖЕ исправны!)
-    // inactive — это агенты на хранении, которые не требуют ремонта для возврата в ops
+    // V8: P3 inactive → operations с проверкой ремонтной линии
     
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");
+    
+    // repair_time по типу
+    unsigned int repair_time = 0u;
+    if (group_by == 1u) {{
+        repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
+    }} else if (group_by == 2u) {{
+        repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+    }} else {{
+        return flamegpu::ALIVE;
+    }}
+    
+    // Должен пройти полный ремонт с момента смены статуса
+    if (day < (status_change_day + repair_time)) {{
+        return flamegpu::ALIVE;
+    }}
+    
+    // Доступные линии ремонта: free_days >= repair_time
+    const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
+    auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    
+    unsigned int available_lines = 0u;
+    unsigned int best_line = 0xFFFFFFFFu;
+    unsigned int best_days = 0xFFFFFFFFu;
+    
+    for (unsigned int i = 0u; i < repair_quota; ++i) {{
+        const unsigned int free_days = line_mp[i];
+        if (free_days >= repair_time) {{
+            ++available_lines;
+            if (free_days < best_days) {{
+                best_days = free_days;
+                best_line = i;
+            }}
+        }}
+    }}
+    
+    if (available_lines == 0u || best_line == 0xFFFFFFFFu) {{
+        return flamegpu::ALIVE;
+    }}
     
     // Читаем target (PropertyArray, не MacroProperty!)
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
@@ -203,8 +305,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     }}
     unsigned int deficit = target - curr_after_p2;
     
-    // V8 FIX: БЕЗ ограничения slots — inactive не требуют ремонта
+    // Ограничиваем количеством доступных линий
     unsigned int needed = (deficit < inactive_available) ? deficit : inactive_available;
+    
+    if (available_lines < needed) {{
+        needed = available_lines;
+    }}
     
     if (needed == 0u) {{
         return flamegpu::ALIVE;
@@ -221,11 +327,37 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     }}
     
     if (rank < needed) {{
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", best_line);
+        FLAMEGPU->setVariable<unsigned int>("repair_line_day", best_days);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
+
+RTC_PROMOTE_INACTIVE_COMMIT_V8 = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int candidate = FLAMEGPU->getVariable<unsigned int>("repair_candidate");
+    if (candidate == 0u) return flamegpu::ALIVE;
+    
+    const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
+    const unsigned int best_days = FLAMEGPU->getVariable<unsigned int>("repair_line_day");
+    auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    
+    const unsigned int old_days = line_mp[line_id].exchange(0u);
+    if (old_days == best_days) {{
+        const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        line_acn[line_id].exchange(acn);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         
         // V8: Записываем approved в буфер (будет подсчитано в RepairAgent)
         auto mp_p3_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("repair_p3_approved");
-        mp_p3_count[idx].exchange(1u);
+        mp_p3_count[FLAMEGPU->getVariable<unsigned int>("idx")].exchange(1u);
+    }} else {{
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
     }}
     
     return flamegpu::ALIVE;
@@ -261,18 +393,30 @@ def register_quota_p2_p3_v8(model, agent):
     print("  📦 V8: P2/P3 через RepairAgent...")
     
     # P2: unserviceable → operations (V8)
-    layer_p2 = model.newLayer("v8_promote_unsvc")
+    layer_p2_decide = model.newLayer("v8_promote_unsvc_decide")
     fn = agent.newRTCFunction("rtc_promote_unsvc_v8", RTC_PROMOTE_UNSVC_V8)
     fn.setInitialState("unserviceable")
     fn.setEndState("unserviceable")  # Переход в operations через post_quota
-    layer_p2.addAgentFunction(fn)
+    layer_p2_decide.addAgentFunction(fn)
+    
+    layer_p2_commit = model.newLayer("v8_promote_unsvc_commit")
+    fn = agent.newRTCFunction("rtc_promote_unsvc_commit_v8", RTC_PROMOTE_UNSVC_COMMIT_V8)
+    fn.setInitialState("unserviceable")
+    fn.setEndState("unserviceable")
+    layer_p2_commit.addAgentFunction(fn)
     
     # P3: inactive → operations (V8)
-    layer_p3 = model.newLayer("v8_promote_inactive")
+    layer_p3_decide = model.newLayer("v8_promote_inactive_decide")
     fn = agent.newRTCFunction("rtc_promote_inactive_v8", RTC_PROMOTE_INACTIVE_V8)
     fn.setInitialState("inactive")
     fn.setEndState("inactive")  # Переход в operations через post_quota
-    layer_p3.addAgentFunction(fn)
+    layer_p3_decide.addAgentFunction(fn)
+    
+    layer_p3_commit = model.newLayer("v8_promote_inactive_commit")
+    fn = agent.newRTCFunction("rtc_promote_inactive_commit_v8", RTC_PROMOTE_INACTIVE_COMMIT_V8)
+    fn.setInitialState("inactive")
+    fn.setEndState("inactive")
+    layer_p3_commit.addAgentFunction(fn)
     
     print("  ✅ V8 P2 (unsvc) + P3 (inactive)")
 

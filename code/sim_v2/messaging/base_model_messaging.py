@@ -29,6 +29,7 @@ class V2BaseModelMessaging:
         self.model: Optional[fg.ModelDescription] = None
         self.agent: Optional[fg.AgentDescription] = None  # HELI (планеры)
         self.quota_agent: Optional[fg.AgentDescription] = None  # QuotaManager
+        self.repair_line_agent: Optional[fg.AgentDescription] = None  # RepairLine (ремонтные линии)
         self.env: Optional[fg.EnvironmentDescription] = None
         self.env_data: Optional[Dict[str, object]] = None
         
@@ -67,6 +68,7 @@ class V2BaseModelMessaging:
         # ═══════════════════════════════════════════════════════════════
         self.agent = self._setup_agent()
         self.quota_agent = self._setup_quota_agent()
+        self.repair_line_agent = self._setup_repair_line_agent()
         
         return self.model
     
@@ -145,6 +147,15 @@ class V2BaseModelMessaging:
         print(f"  ✅ Agent QuotaManager: 2 агента (Mi-8, Mi-17), MacroProperty буферы {max_frames}")
         
         return quota
+
+    def _setup_repair_line_agent(self) -> fg.AgentDescription:
+        """Агент ремонтной линии (одна линия ремонта)"""
+        repair_line = self.model.newAgent("RepairLine")
+        repair_line.newVariableUInt("line_id")
+        repair_line.newVariableUInt("free_days")
+        repair_line.newVariableUInt("aircraft_number")
+        print("  ✅ Agent RepairLine: переменные line_id, free_days, aircraft_number")
+        return repair_line
     
     def _setup_scalar_properties(self, env_data: Dict[str, object]):
         """Настройка скалярных свойств окружения (идентично base_model.py)"""
@@ -422,6 +433,14 @@ class V2BaseModelMessaging:
         
         # V4: Временное хранение для GPU-only вычисления adaptive_days
         agent.newVariableUInt("computed_adaptive_days", 1)
+        
+        # Дата последней смены статуса (для аналитики и ремонтов)
+        agent.newVariableUInt("status_change_day", 0)
+        
+        # V8: данные для выбора ремонтной линии (двухфазно)
+        agent.newVariableUInt("repair_candidate", 0)
+        agent.newVariableUInt("repair_line_id", 0xFFFFFFFF)
+        agent.newVariableUInt("repair_line_day", 0xFFFFFFFF)
         
         # V7: Флаги для однофазной архитектуры (без intent)
         agent.newVariableUInt("promoted", 0)     # 1 = получил промоут в этом шаге

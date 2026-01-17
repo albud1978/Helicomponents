@@ -236,6 +236,10 @@ class AgentPopulationBuilder:
             agent.setVariableUInt("group_by", gb)
             agent.setVariableUInt("partseqno_i", partseqno)
             agent.setVariableUInt("repair_days", agent_data['repair_days'])
+            agent.setVariableUInt("status_change_day", 0)
+            agent.setVariableUInt("repair_candidate", 0)
+            agent.setVariableUInt("repair_line_id", 0xFFFFFFFF)
+            agent.setVariableUInt("repair_line_day", 0xFFFFFFFF)
             
             # OH вычисляем СНАЧАЛА (нужен для правила первого цикла ppr)
             oh_value = oh_by_frame[frame_idx]  # Значение по умолчанию
