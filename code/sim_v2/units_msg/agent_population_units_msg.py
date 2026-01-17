@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import pyflamegpu as fg
 
+import numpy as np
+
 from sim_v2.units.agent_population_units import AgentPopulationUnitsBuilder
 from sim_v2.units.planer_dt_loader import load_planer_data
 
