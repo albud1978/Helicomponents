@@ -88,6 +88,7 @@ class V2BaseModelUnitsMsg:
         self.env.newMacroPropertyUInt32("mp_assign_entry_rsv", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_assign_after_svc", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_assign_after_rsv", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_reserve_probe", 1)
         self.env.newMacroPropertyUInt32("mp_reserve_seen", MAX_GROUPS)
 
         # Планерные данные (из sim_masterv2)
