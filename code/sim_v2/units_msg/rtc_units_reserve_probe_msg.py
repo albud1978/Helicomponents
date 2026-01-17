@@ -7,7 +7,7 @@ import pyflamegpu as fg
 def get_rtc_code() -> str:
     return """
 FLAMEGPU_AGENT_FUNCTION(rtc_units_reserve_probe, flamegpu::MessageNone, flamegpu::MessageNone) {
-    auto probe = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mp_reserve_probe");
+    auto probe = FLAMEGPU->environment.getMacroProperty<unsigned int, 50u>("mp_reserve_probe");
     probe[0].exchange(1u);
     return flamegpu::ALIVE;
 }
