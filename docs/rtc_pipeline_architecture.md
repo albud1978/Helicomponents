@@ -1,5 +1,10 @@
 # RTC Pipeline Architecture
 
+## Примечания по LIMITER V8 (17-01-2026)
+- `deterministic_dates_mp` ограничен `MAX_DETERMINISTIC_DATES=500`; при превышении лимита даты обрезаются.
+- `unserviceable` не участвует в `min_dynamic` и не влияет на adaptive‑шаги.
+- RepairLine — общий пул линий, используется только в квотировании (P2/P3), не в scheduler.
+
 ## Анализ всех RTC функций системы
 
 ### Полная таблица RTC функций

@@ -22,6 +22,10 @@ except ImportError as e:
     raise RuntimeError(f"pyflamegpu не установлен: {e}")
 
 
+# Максимум ремонтных линий для адресных сообщений RepairLine
+REPAIR_LINES_MAX = 64
+
+
 class V2BaseModelMessaging:
     """Базовая модель V2 с Messaging архитектурой"""
     
@@ -36,6 +40,7 @@ class V2BaseModelMessaging:
         # Messages
         self.msg_planer_report: Optional[fg.MessageDescription] = None
         self.msg_quota_decision: Optional[fg.MessageDescription] = None
+        self.msg_repair_line_status: Optional[fg.MessageDescription] = None
     
     def create_model(self, env_data: Dict[str, object]) -> fg.ModelDescription:
         """Создает модель с messaging архитектурой"""
@@ -108,8 +113,16 @@ class V2BaseModelMessaging:
         self.msg_quota_decision.newVariableUInt16("idx")         # Кому адресовано
         self.msg_quota_decision.newVariableUInt8("action")       # 0=none, 1=demote→3, 2=promote→2
         self.msg_quota_decision.newVariableUInt8("group_by")     # Для фильтрации
+
+        # ═══════════════════════════════════════════════════════════════
+        # Message "RepairLineStatus": RepairLine → QuotaManager (addressed)
+        # ═══════════════════════════════════════════════════════════════
+        self.msg_repair_line_status = self.model.newMessageArray("RepairLineStatus")
+        self.msg_repair_line_status.setLength(REPAIR_LINES_MAX)
+        self.msg_repair_line_status.newVariableUInt("free_days")
+        self.msg_repair_line_status.newVariableUInt("aircraft_number")
         
-        print("  ✅ Messages: PlanerReport, PlanerEvent, QuotaDecision")
+        print("  ✅ Messages: PlanerReport, PlanerEvent, QuotaDecision, RepairLineStatus")
     
     def _setup_quota_agent(self) -> fg.AgentDescription:
         """Настройка агента QuotaManager"""
@@ -169,6 +182,7 @@ class V2BaseModelMessaging:
         self.env.newPropertyUInt("current_day", 0)
         self.env.newPropertyUInt("step_days", 1)
         self.env.newPropertyUInt("quota_enabled", 1)  # По умолчанию квотирование включено
+        self.env.newPropertyUInt("repair_line_mode", 0)  # 1 = RepairLine логика ремонта (V8)
         
         # Константы нормативов из MP1
         self._setup_norm_constants(env_data)
@@ -285,6 +299,9 @@ class V2BaseModelMessaging:
         # UNSVC, готовые к промоуту (exit_date <= current_day)
         self.env.newMacroPropertyUInt32("mi8_unsvc_ready_count", max_frames)
         self.env.newMacroPropertyUInt32("mi17_unsvc_ready_count", max_frames)
+        # UNSVC, ожидающие назначения RepairLine
+        self.env.newMacroPropertyUInt32("mi8_unsvc_wait_count", max_frames)
+        self.env.newMacroPropertyUInt32("mi17_unsvc_wait_count", max_frames)
         self.env.newMacroPropertyUInt32("mi8_approve_s7", max_frames)
         self.env.newMacroPropertyUInt32("mi17_approve_s7", max_frames)
         
@@ -441,6 +458,7 @@ class V2BaseModelMessaging:
         agent.newVariableUInt("repair_candidate", 0)
         agent.newVariableUInt("repair_line_id", 0xFFFFFFFF)
         agent.newVariableUInt("repair_line_day", 0xFFFFFFFF)
+        agent.newVariableUInt("repair_done", 0)  # 1 = ремонт завершён, ждёт промоут в ops
         
         # V7: Флаги для однофазной архитектуры (без intent)
         agent.newVariableUInt("promoted", 0)     # 1 = получил промоут в этом шаге

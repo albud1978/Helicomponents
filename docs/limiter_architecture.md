@@ -12,7 +12,7 @@
 
 | Вопрос | V7 | V8 | Обоснование V8 |
 |--------|-----|-----|----------------|
-| **Механизм ремонта** | exit_date для каждого unsvc | RepairLine (free_days) | число линий = repair_number из MP |
+| **Механизм ремонта** | exit_date для каждого unsvc | RepairLine (free_days) | общий пул, число линий = repair_number из MP |
 | **exit_date для unsvc** | ✅ Используется | ❌ УДАЛЁН | Заменён на RepairLine‑проверку |
 | **repair_days для unsvc** | — | ❌ НЕ ИСПОЛЬЗУЕТСЯ | unsvc не декрементируется |
 | **unsvc в min_dynamic** | ✅ Да | ❌ НЕТ | Управляется через RepairLine |
@@ -21,6 +21,8 @@
 | **limiter инициализация** | max(1, ...) | Разрешён 0 | Консистентность с RTC |
 
 **⚠️ ВАЖНО: V8 НЕ эквивалентен V7 по переходам — это осознанное архитектурное решение.**
+
+**⚠️ Ограничение deterministic_dates:** `MAX_DETERMINISTIC_DATES=500`. При превышении лимита лишние даты **отбрасываются**, события могут быть потеряны.
 
 ---
 
@@ -50,7 +52,7 @@
 | 3 | v7_reset_exit_date | `rtc_reset_exit_date_v7` | QM | `min_exit_date_mp = MAX` (сброс перед сбором) |
 | 4 | v7_copy_exit_date_repair | `rtc_copy_exit_date_repair_v7` | 4 | `atomicMin(exit_date)` от агентов в repair |
 | 5 | v7_copy_exit_date_spawn | `rtc_copy_exit_date_spawn_v7` | 5 | `atomicMin(exit_date)` от агентов в reserve |
-| 4b | v7_copy_exit_date_unsvc | `rtc_copy_exit_date_unsvc_v7` | 7 | ⚠️ **V8: УДАЛЁН** — unsvc не участвует в min_dynamic |
+| 4b | v7_copy_exit_date_unsvc | `rtc_copy_exit_date_unsvc_v7` | 7 | V8: слой не влияет на adaptive_days (min_exit_date не используется) |
 | **ФАЗА 1: Operations — инкременты и переходы по ресурсам** |||||
 | 6 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt`, `limiter -= adaptive` (3 счётчика в 1 проход) |
 | 7 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `(PPR >= OH AND SNE >= BR)`, `limiter=0` |
@@ -59,14 +61,18 @@
 | 9 | v8_repair_line_sync_pre | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линий из MacroProperty |
 | 10 | v8_repair_line_increment | `rtc_repair_line_increment_v8` | RepairLine | `free_days += adaptive_days` |
 | 11 | v8_repair_line_write | `rtc_repair_line_write_v8` | RepairLine | Запись free_days/aircraft_number в MacroProperty |
+| 11b | v8_repair_line_publish | `rtc_repair_line_publish_status_v8` | RepairLine | Адресное сообщение: линия → QM (free_days, aircraft_number) |
 | **ФАЗА 2: Квотирование** |||||
 | 12 | v7_reset_flags | `rtc_reset_flags_v7` | all | Сброс `promoted=0`, `needs_demote=0` |
 | 13 | v7_reset_buffers | `rtc_reset_buffers_v7` | **all** | Обнуление буферов подсчёта (**7 состояний**, bugfix!) |
 | 14 | v7_count_agents | `rtc_count_agents_v7` | all | Подсчёт агентов по состояниям |
+| 14b | v8_repair_line_slots | `rtc_repair_line_slots_v8` | QM | Сбор доступных линий по сообщениям (общий пул, слоты по типам) |
 | 15 | v7_demote | `rtc_demote_v7` | QM | Демоут: ops→svc (при избытке) |
 | 16 | v7_promote_p1 | `rtc_promote_p1_v7` | QM | P1: svc→ops (при дефиците) |
-| 17 | v7_promote_p2 | `rtc_promote_p2_v7` | QM | P2: unsvc→ops (**V8: через RepairLine/free_days**) |
-| 18 | v7_promote_p3 | `rtc_promote_p3_v7` | QM | P3: ina→ops (**V8: через RepairLine/free_days**) |
+| 17a | v8_promote_unsvc_decide | `rtc_promote_unsvc_v8` | QM | P2: выбор кандидатов (RepairLine слоты) |
+| 17b | v8_promote_unsvc_commit | `rtc_promote_unsvc_commit_v8` | QM | P2: бронирование линии + promoted |
+| 18a | v8_promote_inactive_decide | `rtc_promote_inactive_v8` | QM | P3: выбор кандидатов (RepairLine слоты) |
+| 18b | v8_promote_inactive_commit | `rtc_promote_inactive_commit_v8` | QM | P3: бронирование линии + promoted |
 | **ФАЗА 3: Применение квот** |||||
 | 19 | v7_apply_demote | `rtc_apply_demote_v7` | 2→3 | Применение демоута, `limiter=0` |
 | 20 | v7_apply_promote_p1 | `rtc_apply_promote_p1_v7` | 3→2 | Применение P1 |

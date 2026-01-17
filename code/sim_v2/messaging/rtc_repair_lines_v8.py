@@ -75,6 +75,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_assign_repair_v8, flamegpu::MessageNone,
 }}
 """
 
+RTC_REPAIR_LINE_PUBLISH_STATUS = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_publish_status_v8, flamegpu::MessageNone, flamegpu::MessageArray) {{
+    const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("line_id");
+    const unsigned int free_days = FLAMEGPU->getVariable<unsigned int>("free_days");
+    const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    
+    FLAMEGPU->message_out.setIndex(line_id);
+    FLAMEGPU->message_out.setVariable<unsigned int>("free_days", free_days);
+    FLAMEGPU->message_out.setVariable<unsigned int>("aircraft_number", acn);
+    return flamegpu::ALIVE;
+}}
+"""
+
 
 def register_repair_line_pre_quota_layers(model: fg.ModelDescription, repair_line_agent: fg.AgentDescription):
     """Слои RepairLine до квотирования: sync -> increment -> write"""
@@ -95,6 +108,13 @@ def register_repair_line_pre_quota_layers(model: fg.ModelDescription, repair_lin
     fn.setInitialState("default")
     fn.setEndState("default")
     layer_write.addAgentFunction(fn)
+
+    layer_pub = model.newLayer("v8_repair_line_publish_status")
+    fn = repair_line_agent.newRTCFunction("rtc_repair_line_publish_status_v8", RTC_REPAIR_LINE_PUBLISH_STATUS)
+    fn.setInitialState("default")
+    fn.setEndState("default")
+    fn.setMessageOutput("RepairLineStatus")
+    layer_pub.addAgentFunction(fn)
     
     print("  ✅ V8: RepairLine pre-quota слои зарегистрированы")
 

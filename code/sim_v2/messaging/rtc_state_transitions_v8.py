@@ -5,7 +5,7 @@ RTC модуль: State Transitions V8 — Next-day dt проверка
 АРХИТЕКТУРА V8 (отличия от V7):
 1. Проверка ресурса на СЛЕДУЮЩИЙ день (SNE + dt_next >= LL)
 2. limiter=0 → обязательный выход (EXCEPTION если нет перехода)
-3. ops→unsvc НЕ устанавливает exit_date (управляется через RepairAgent)
+3. ops→unsvc НЕ устанавливает exit_date (квотирование через RepairLine)
 
 Порядок проверок (приоритет):
 1. SNE + dt_next >= LL → storage (назначенный ресурс)
@@ -134,7 +134,6 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage_v8) {
 """
 
 # Условие V8: PPR + dt_next >= OH (переход в unserviceable)
-# V8 FIX: НЕ переходить если exit_date > end_day (симуляция закончится раньше ремонта)
 COND_OPS_TO_UNSVC_V8 = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
     // V8: Проверка на СЛЕДУЮЩИЙ день
@@ -143,20 +142,6 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
     
-    // V8 FIX: НЕ переходить если exit_date > end_day
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    unsigned int repair_time;
-    if (group_by == 1u) {
-        repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
-    } else {
-        repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
-    }
-    // Если exit_date вышел бы за end_day — НЕ переходим (остаёмся в ops)
-    if (current_day + repair_time > end_day) {
-        return false;
-    }
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int dt_next = FLAMEGPU->getVariable<unsigned int>("daily_next_u32");
     
@@ -192,28 +177,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v8, flamegpu::MessageNone, flamegpu::
 """
 
 # ops → unserviceable (2→7)
-# V8 FIX: Устанавливаем exit_date для корректной работы P2 промоута!
+# V8: Переход в unserviceable без exit_date (квотирование через RepairLine)
 RTC_OPS_TO_UNSVC_V8 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
     // V8: Переход в unserviceable
     // PPR=0 (сброс межремонтной наработки)
-    // exit_date = current_day + repair_time (когда можно вернуться в ops)
+    // exit_date НЕ используется в V8 (квотирование через RepairLine)
     
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    
-    // Выбираем repair_time по типу планера
-    unsigned int repair_time;
-    if (group_by == 1u) {
-        repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
-    } else {
-        repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
-    }
-    
     FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
-    FLAMEGPU->setVariable<unsigned int>("exit_date", current_day + repair_time);
+    FLAMEGPU->setVariable<unsigned int>("repair_done", 0u);
+    FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     
     return flamegpu::ALIVE;
@@ -247,24 +223,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_check_limiter_zero_v8, flamegpu::MessageNone, flameg
 }
 """
 
-
-# V8 FIX: Копирование exit_date для НОВЫХ unsvc агентов в min_exit_date_mp
-RTC_COPY_EXIT_DATE_NEW_UNSVC_V8 = """
-FLAMEGPU_AGENT_FUNCTION(rtc_copy_exit_date_new_unsvc_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // V8 FIX: Копируем exit_date в min_exit_date_mp (atomicMin)
-    // Это критично — без этого адаптивные шаги перепрыгивают exit_date!
-    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
-    
-    // Если exit_date не установлен — пропускаем
-    if (exit_date == 0u || exit_date == 0xFFFFFFFFu) return flamegpu::ALIVE;
-    
-    // atomicMin для конкуренции между агентами
-    auto mp_exit = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_exit_date_mp");
-    mp_exit[0].min(exit_date);
-    
-    return flamegpu::ALIVE;
-}
-"""
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Регистрация V8 переходов
@@ -304,14 +262,6 @@ def register_ops_transitions_v8(model, agent):
     fn.setInitialState("operations")
     fn.setEndState("unserviceable")
     layer_unsvc.addAgentFunction(fn)
-    
-    # 3.5. V8 FIX: Копирование exit_date для НОВЫХ unsvc агентов
-    # Это критично для адаптивных шагов — без этого exit_date не учитывается до следующего шага!
-    layer_copy_unsvc = model.newLayer("v8_copy_exit_date_new_unsvc")
-    fn = agent.newRTCFunction("rtc_copy_exit_date_new_unsvc_v8", RTC_COPY_EXIT_DATE_NEW_UNSVC_V8)
-    fn.setInitialState("unserviceable")
-    fn.setEndState("unserviceable")
-    layer_copy_unsvc.addAgentFunction(fn)
     
     # 4. V8: Проверка limiter=0 без перехода (EXCEPTION)
     layer_check = model.newLayer("v8_check_limiter_zero")

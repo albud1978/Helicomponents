@@ -27,6 +27,32 @@ OUTPUT_DIR = str(PROJECT_ROOT / "output")
 
 # Таблица для messaging архитектуры
 TABLE_NAME = "sim_masterv2_msg"
+DEDUP_TABLES = {"sim_masterv2_v8"}
+
+
+def get_table_expr(table: str, version_date_value: str) -> str:
+    """Возвращает SQL-выражение таблицы с фильтром version_date и дедупликацией."""
+    if table in DEDUP_TABLES:
+        return f"""(
+            SELECT
+                day_u16,
+                idx,
+                group_by,
+                aircraft_number,
+                state,
+                sne,
+                ppr,
+                ll,
+                oh,
+                br,
+                repair_days,
+                repair_time
+            FROM {table}
+            WHERE version_date = {version_date_value}
+            ORDER BY sne DESC
+            LIMIT 1 BY day_u16, idx
+        )"""
+    return f"(SELECT * FROM {table} WHERE version_date = {version_date_value})"
 
 
 def get_version_date_int(version_date_str: str) -> int:
@@ -45,6 +71,7 @@ class MessagingQuotaValidator:
         self.version_date = version_date_value
         self.version_date_str = version_date_str
         self.table = table
+        self.table_expr = get_table_expr(table, version_date_value)
         self.errors: List[Dict] = []
         self.warnings: List[Dict] = []
         self.stats: Dict = {}
@@ -54,12 +81,21 @@ class MessagingQuotaValidator:
         
         # quota_target из flight_program_ac
         quota_query = f"""
+            WITH base AS (
+                SELECT 
+                    dateDiff('day', toDate('{self.version_date_str}'), dates) as day_index,
+                    ops_counter_mi8 as t8,
+                    ops_counter_mi17 as t17,
+                    leadInFrame(ops_counter_mi8, 1, ops_counter_mi8) OVER (ORDER BY dates) as t8_next,
+                    leadInFrame(ops_counter_mi17, 1, ops_counter_mi17) OVER (ORDER BY dates) as t17_next
+                FROM flight_program_ac
+                WHERE version_date = toDate('{self.version_date_str}')
+            )
             SELECT 
-                dateDiff('day', toDate('{self.version_date_str}'), dates) as day_index,
-                ops_counter_mi8 as quota_mi8,
-                ops_counter_mi17 as quota_mi17
-            FROM flight_program_ac
-            WHERE version_date = toDate('{self.version_date_str}')
+                day_index,
+                least(t8, t8_next) as quota_mi8,
+                least(t17, t17_next) as quota_mi17
+            FROM base
             ORDER BY day_index
         """
         
@@ -67,16 +103,28 @@ class MessagingQuotaValidator:
         quota_map = {row[0]: (row[1], row[2]) for row in quota_data}
         
         # ops_count из sim_masterv2_msg
-        ops_query = f"""
-            SELECT 
-                day_u16,
-                group_by,
-                countIf(state = 'operations') as ops_count
-            FROM {self.table}
-            WHERE group_by IN (1, 2) AND version_date = {self.version_date}
-            GROUP BY day_u16, group_by
-            ORDER BY day_u16, group_by
-        """
+        if self.table in DEDUP_TABLES:
+            ops_query = f"""
+                SELECT 
+                    day_u16,
+                    group_by,
+                    countDistinctIf(idx, state = 'operations') as ops_count
+                FROM {self.table}
+                WHERE version_date = {self.version_date} AND group_by IN (1, 2)
+                GROUP BY day_u16, group_by
+                ORDER BY day_u16, group_by
+            """
+        else:
+            ops_query = f"""
+                SELECT 
+                    day_u16,
+                    group_by,
+                    countIf(state = 'operations') as ops_count
+                FROM {self.table_expr}
+                WHERE group_by IN (1, 2)
+                GROUP BY day_u16, group_by
+                ORDER BY day_u16, group_by
+            """
         
         ops_data = self.client.execute(ops_query)
         
@@ -199,6 +247,7 @@ class MessagingTransitionsValidator:
         self.version_date = version_date_value
         self.version_date_str = version_date_str
         self.table = table
+        self.table_expr = get_table_expr(table, version_date_value)
         self.errors: List[Dict] = []
         self.warnings: List[Dict] = []
         self.stats: Dict = {}
@@ -217,7 +266,7 @@ class MessagingTransitionsValidator:
                     SELECT 
                         group_by,
                         sum({col}) as cnt
-                    FROM {self.table}
+                    FROM {self.table_expr}
                     WHERE {col} > 0
                     GROUP BY group_by
                 """
@@ -264,7 +313,7 @@ class MessagingTransitionsValidator:
                     group_by,
                     min(day_u16) as repair_start,
                     max(day_u16) as repair_end
-                FROM {self.table}
+                FROM {self.table_expr}
                 WHERE state = 'repair'
                 GROUP BY idx, group_by
             )
@@ -326,6 +375,7 @@ class MessagingIncrementsValidator:
         self.version_date = version_date_value
         self.version_date_str = version_date_str
         self.table = table
+        self.table_expr = get_table_expr(table, version_date_value)
         self.errors: List[Dict] = []
         self.warnings: List[Dict] = []
         self.stats: Dict = {}
@@ -349,11 +399,10 @@ class MessagingIncrementsValidator:
                     count() as total
                 FROM (
                     SELECT 
-                        aircraft_number,
-                        lagInFrame(state) OVER (PARTITION BY aircraft_number ORDER BY day_u16) as prev_state,
-                        ifNull(sne - lagInFrame(sne) OVER (PARTITION BY aircraft_number ORDER BY day_u16), 0) as delta_sne
-                    FROM {self.table}
-                    WHERE version_date = {self.version_date}
+                        idx,
+                        lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state,
+                        ifNull(sne - lagInFrame(sne) OVER (PARTITION BY idx ORDER BY day_u16), 0) as delta_sne
+                    FROM {self.table_expr}
                 )
                 WHERE prev_state IS NOT NULL AND prev_state != ''
                 GROUP BY prev_state
@@ -374,31 +423,30 @@ class MessagingIncrementsValidator:
             detail_query = f"""
                 SELECT 
                     day_u16,
-                    aircraft_number,
+                    idx,
                     prev_state,
                     state,
                     delta_sne
                 FROM (
                     SELECT
                         day_u16,
-                        aircraft_number,
+                        idx,
                         state,
-                        lagInFrame(state) OVER (PARTITION BY aircraft_number ORDER BY day_u16) as prev_state,
-                        ifNull(sne - lagInFrame(sne) OVER (PARTITION BY aircraft_number ORDER BY day_u16), 0) as delta_sne
-                    FROM {self.table}
-                    WHERE version_date = {self.version_date}
+                        lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state,
+                        ifNull(sne - lagInFrame(sne) OVER (PARTITION BY idx ORDER BY day_u16), 0) as delta_sne
+                    FROM {self.table_expr}
                 )
                 WHERE prev_state IS NOT NULL AND prev_state != ''
                   AND prev_state != 'operations'
                   AND delta_sne > 0
-                ORDER BY day_u16, aircraft_number
+                ORDER BY day_u16, idx
                 LIMIT 50
             """
             details = self.client.execute(detail_query)
-            for day_u16, acn, prev_state, state, delta_sne in details:
+            for day_u16, idx, prev_state, state, delta_sne in details:
                 self.errors.append({
                     'type': 'SNE_INVARIANT_DETAIL',
-                    'message': f"Day {day_u16}: acn={acn}, prev_state={prev_state}, state={state}, delta_sne={delta_sne}"
+                    'message': f"Day {day_u16}: idx={idx}, prev_state={prev_state}, state={state}, delta_sne={delta_sne}"
                 })
             
             valid = len(violations) == 0
@@ -416,8 +464,7 @@ class MessagingIncrementsValidator:
                 state,
                 countIf(dt > 0) as with_dt,
                 count() as total
-            FROM {self.table}
-            WHERE version_date = {self.version_date}
+            FROM {self.table_expr}
             GROUP BY state
         """
         
@@ -458,8 +505,7 @@ class MessagingIncrementsValidator:
                         idx,
                         lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state,
                         ifNull(sne - lagInFrame(sne) OVER (PARTITION BY idx ORDER BY day_u16), 0) as delta_sne
-                    FROM {self.table}
-                    WHERE version_date = {self.version_date}
+                    FROM {self.table_expr}
                 )
                 WHERE prev_state IS NOT NULL AND prev_state != ''
                 GROUP BY idx
@@ -495,7 +541,7 @@ class MessagingIncrementsValidator:
                 sum(dt) as sum_dt,
                 max(sne) - min(sne) as delta_sne,
                 abs(sum(dt) - (max(sne) - min(sne))) as diff
-            FROM {self.table}
+            FROM {self.table_expr}
             GROUP BY idx
             HAVING diff > 0
         """
@@ -503,7 +549,7 @@ class MessagingIncrementsValidator:
         result = self.client.execute(query)
         
         violations = len(result)
-        total_query = f"SELECT count(DISTINCT idx) FROM {self.table} WHERE version_date = {self.version_date}"
+        total_query = f"SELECT count(DISTINCT idx) FROM {self.table_expr}"
         total = self.client.execute(total_query)[0][0]
         ok = total - violations
         
@@ -541,8 +587,7 @@ class MessagingIncrementsValidator:
                         group_by,
                         lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state,
                         ifNull(sne - lagInFrame(sne) OVER (PARTITION BY idx ORDER BY day_u16), 0) as delta_sne
-                    FROM {self.table}
-                    WHERE version_date = {self.version_date}
+                    FROM {self.table_expr}
                 )
                 WHERE prev_state IS NOT NULL AND prev_state != ''
                 GROUP BY group_by
@@ -553,8 +598,8 @@ class MessagingIncrementsValidator:
                     group_by,
                     count(DISTINCT idx) as ac_count,
                     sum(dt) / 60.0 as total_hours
-                FROM {self.table}
-                WHERE version_date = {self.version_date}
+                FROM {self.table_expr}
+                FROM {self.table_expr}
                 GROUP BY group_by
             """
         

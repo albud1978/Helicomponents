@@ -54,15 +54,15 @@ class QuotaValidator:
                     toInt32(dates - version_date) as day_index,
                     ops_counter_mi8 as t8,
                     ops_counter_mi17 as t17,
-                    leadInFrame(ops_counter_mi8) OVER (ORDER BY dates) as t8_next,
-                    leadInFrame(ops_counter_mi17) OVER (ORDER BY dates) as t17_next
+                    leadInFrame(ops_counter_mi8, 1, ops_counter_mi8) OVER (ORDER BY dates) as t8_next,
+                    leadInFrame(ops_counter_mi17, 1, ops_counter_mi17) OVER (ORDER BY dates) as t17_next
                 FROM flight_program_ac
                 WHERE version_date = toDate({self.version_date})
             )
             SELECT 
                 day_index,
-                least(t8, coalesce(t8_next, t8)) as quota_mi8,
-                least(t17, coalesce(t17_next, t17)) as quota_mi17
+                least(t8, t8_next) as quota_mi8,
+                least(t17, t17_next) as quota_mi17
             FROM base
             ORDER BY day_index
         """
