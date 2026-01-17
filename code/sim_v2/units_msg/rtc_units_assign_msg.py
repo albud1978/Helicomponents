@@ -40,7 +40,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
     auto mp_any_after = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_any_after");
     auto mp_ret_active = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_active");
     auto mp_ret_group = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_group");
+    auto mp_entry_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_entry_svc");
+    auto mp_after_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_after_svc");
     mp_any_entry[0].exchange(1u);
+    mp_entry_svc[0].exchange(1u);
     if (group_by < {MAX_GROUPS}u) mp_called[group_by] += 1u;
     if (active == 0u) {{
         mp_ret_active[0].exchange(1u);
@@ -51,6 +54,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
         return flamegpu::ALIVE;
     }}
     mp_any_after[0].exchange(1u);
+    mp_after_svc[0].exchange(1u);
 
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
     const unsigned int day = FLAMEGPU->getStepCounter();
@@ -129,13 +133,17 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
     auto mp_any_after = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_any_after");
     auto mp_ret_active = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_active");
     auto mp_ret_group = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_return_group");
+    auto mp_entry_rsv = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_entry_rsv");
+    auto mp_after_rsv = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_after_rsv");
     mp_any_entry[0].exchange(1u);
+    mp_entry_rsv[0].exchange(1u);
     if (group_by < {MAX_GROUPS}u) mp_called[group_by] += 1u;
     if (group_by < 3u || group_by > 4u) {{
         mp_ret_group[0].exchange(1u);
         return flamegpu::ALIVE;
     }}
     mp_any_after[0].exchange(1u);
+    mp_after_rsv[0].exchange(1u);
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
     const unsigned int base = day * {MAX_PLANERS}u;
     auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
