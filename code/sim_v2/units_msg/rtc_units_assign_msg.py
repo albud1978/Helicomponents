@@ -36,8 +36,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_serviceable, flamegpu::MessageNone, fla
     auto mp_need_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_need_flag");
     auto mp_slot_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_slot_flag");
     auto mp_ac_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_ac_flag");
+    auto mp_any_entry = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mp_assign_any_entry");
+    auto mp_any_after = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mp_assign_any_after");
+    mp_any_entry[0] = 1u;
     if (group_by < {MAX_GROUPS}u) mp_called[group_by] += 1u;
     if (active == 0u || group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
+    mp_any_after[0] = 1u;
 
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
     const unsigned int day = FLAMEGPU->getStepCounter();
@@ -112,8 +116,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_units_assign_reserve, flamegpu::MessageNone, flamegp
     auto mp_need_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_need_flag");
     auto mp_slot_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_slot_flag");
     auto mp_ac_flag = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_assign_ac_flag");
+    auto mp_any_entry = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mp_assign_any_entry");
+    auto mp_any_after = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mp_assign_any_after");
+    mp_any_entry[0] = 1u;
     if (group_by < {MAX_GROUPS}u) mp_called[group_by] += 1u;
     if (group_by < 3u || group_by > 4u) return flamegpu::ALIVE;
+    mp_any_after[0] = 1u;
     const unsigned int required_type = (group_by == 3u) ? 1u : 2u;
     const unsigned int base = day * {MAX_PLANERS}u;
     auto mp_need = FLAMEGPU->environment.getMacroProperty<unsigned int, {slots_size}u>("mp_planer_need");
