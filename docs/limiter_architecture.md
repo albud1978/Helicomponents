@@ -78,44 +78,51 @@ if (dbg_step2 < 3u) {
 | # | Слой | Функция | State | Описание |
 |---|------|---------|-------|----------|
 | **ФАЗА 0: Детерминированные переходы** |||||
-| 0 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Выход из ремонта при `current_day >= exit_date`, PPR=0 + фиксация линии (day0 repair) |
-| 1 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Spawn при `current_day >= exit_date` |
+| 0 | v8_repair_line_assign_repair | `rtc_repair_line_assign_repair_v8` | 4→4 | Выбор линии для day0 repair |
+| 1 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Выход из ремонта при `current_day >= exit_date`, PPR=0 + фиксация линии (day0 repair) |
+| 2 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Spawn при `current_day >= exit_date` |
 | **ФАЗА 0.5: Сбор min_exit_date (ПОСЛЕ переходов — только оставшиеся агенты!)** |||||
-| 2 | v7_reset_exit_date | `rtc_reset_exit_date_v7` | QM | `min_exit_date_mp = MAX` (сброс перед сбором) |
-| 3 | v7_copy_exit_date_repair | `rtc_copy_exit_date_repair_v7` | 4 | `atomicMin(exit_date)` от агентов в repair |
-| 4 | v7_copy_exit_date_spawn | `rtc_copy_exit_date_spawn_v7` | 5 | `atomicMin(exit_date)` от агентов в reserve |
+| 3 | v7_reset_exit_date | `rtc_reset_exit_date_v7` | QM | `min_exit_date_mp = MAX` (сброс перед сбором) |
+| 4 | v7_copy_exit_date_repair | `rtc_copy_exit_date_repair_v7` | 4 | `atomicMin(exit_date)` от агентов в repair |
+| 5 | v7_copy_exit_date_spawn | `rtc_copy_exit_date_spawn_v7` | 5 | `atomicMin(exit_date)` от агентов в reserve |
 | 4b | v7_copy_exit_date_unsvc | `rtc_copy_exit_date_unsvc_v7` | 7 | ⚠️ **V8: УДАЛЁН** — unsvc не участвует в min_dynamic |
 | **ФАЗА 1: Operations — инкременты и переходы по ресурсам** |||||
-| 5 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt`, `limiter -= adaptive` (3 счётчика в 1 проход) |
-| 6 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `(PPR >= OH AND SNE >= BR)`, `limiter=0` |
-| 7 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH`, `limiter=0` (**V8: без exit_date**) |
+| 6 | v7_ops_increment | `rtc_ops_increment_v7` | 2→2 | `sne += dt`, `ppr += dt`, `limiter -= adaptive` (3 счётчика в 1 проход) |
+| 7 | v7_ops_to_storage | `rtc_ops_to_storage_v7` | 2→6 | Переход если `SNE >= LL` или `(PPR >= OH AND SNE >= BR)`, `limiter=0` |
+| 8 | v7_ops_to_unsvc | `rtc_ops_to_unsvc_v7` | 2→7 | Переход если `PPR >= OH`, `limiter=0` (**V8: без exit_date**) |
+| **ФАЗА 1.5: RepairLine (pre‑quota)** |||||
+| 9 | v8_repair_line_sync_pre | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линий из MacroProperty |
+| 10 | v8_repair_line_increment | `rtc_repair_line_increment_v8` | RepairLine | `free_days += adaptive_days` |
+| 11 | v8_repair_line_write | `rtc_repair_line_write_v8` | RepairLine | Запись free_days/aircraft_number в MacroProperty |
 | **ФАЗА 2: Квотирование** |||||
-| 8 | v7_reset_flags | `rtc_reset_flags_v7` | all | Сброс `promoted=0`, `needs_demote=0` |
-| 9 | v7_reset_buffers | `rtc_reset_buffers_v7` | **all** | Обнуление буферов подсчёта (**7 состояний**, bugfix!) |
-| 10 | v7_count_agents | `rtc_count_agents_v7` | all | Подсчёт агентов по состояниям |
-| 11 | v7_demote | `rtc_demote_v7` | QM | Демоут: ops→svc (при избытке) |
-| 12 | v7_promote_p1 | `rtc_promote_p1_v7` | QM | P1: svc→ops (при дефиците) |
-| 13 | v7_promote_p2 | `rtc_promote_p2_v7` | QM | P2: unsvc→ops (**V8: через RepairLine/free_days**) |
-| 14 | v7_promote_p3 | `rtc_promote_p3_v7` | QM | P3: ina→ops (**V8: через RepairLine/free_days**) |
+| 12 | v7_reset_flags | `rtc_reset_flags_v7` | all | Сброс `promoted=0`, `needs_demote=0` |
+| 13 | v7_reset_buffers | `rtc_reset_buffers_v7` | **all** | Обнуление буферов подсчёта (**7 состояний**, bugfix!) |
+| 14 | v7_count_agents | `rtc_count_agents_v7` | all | Подсчёт агентов по состояниям |
+| 15 | v7_demote | `rtc_demote_v7` | QM | Демоут: ops→svc (при избытке) |
+| 16 | v7_promote_p1 | `rtc_promote_p1_v7` | QM | P1: svc→ops (при дефиците) |
+| 17 | v7_promote_p2 | `rtc_promote_p2_v7` | QM | P2: unsvc→ops (**V8: через RepairLine/free_days**) |
+| 18 | v7_promote_p3 | `rtc_promote_p3_v7` | QM | P3: ina→ops (**V8: через RepairLine/free_days**) |
 | **ФАЗА 3: Применение квот** |||||
-| 15 | v7_apply_demote | `rtc_apply_demote_v7` | 2→3 | Применение демоута, `limiter=0` |
-| 16 | v7_apply_promote_p1 | `rtc_apply_promote_p1_v7` | 3→2 | Применение P1 |
-| 17 | v7_apply_promote_p2 | `rtc_apply_promote_p2_v7` | 7→2 | Применение P2, `PPR=0` |
-| 18 | v7_apply_promote_p3 | `rtc_apply_promote_p3_v7` | 1→2 | Применение P3 |
+| 19 | v7_apply_demote | `rtc_apply_demote_v7` | 2→3 | Применение демоута, `limiter=0` |
+| 20 | v7_apply_promote_p1 | `rtc_apply_promote_p1_v7` | 3→2 | Применение P1 |
+| 21 | v7_apply_promote_p2 | `rtc_apply_promote_p2_v7` | 7→2 | Применение P2, `PPR=0` |
+| 22 | v7_apply_promote_p3 | `rtc_apply_promote_p3_v7` | 1→2 | Применение P3 |
 | **ФАЗА 4: Сбор min_limiter (горизонты по ресурсам)** |||||
-| 19 | limiter_on_entry | `rtc_compute_limiter_on_entry` | 2 | Бинарный поиск `limiter` для агентов с `limiter==0` |
-| 20 | min_limiter | `rtc_compute_min_limiter` | 2 | `atomicMin(limiter)` → `mp_min_limiter` |
+| 23 | limiter_on_entry | `rtc_compute_limiter_on_entry` | 2 | Бинарный поиск `limiter` для агентов с `limiter==0` |
+| 24 | min_limiter | `rtc_compute_min_limiter` | 2 | `atomicMin(limiter)` → `mp_min_limiter` |
 | **ФАЗА 5: Расчёт adaptive_days и переход к следующему шагу** |||||
-| 21 | copy_limiter_v5 | `rtc_copy_limiter_v5` | 2 | Копирование limiter в буфер |
-| 22 | compute_global_min | `rtc_compute_global_min_v5` | QM(1) | **ЧИТАЕТ** все min → вычисляет `adaptive_days` (**только group_by=1**, race condition fix) |
-| 23 | reset_min | `rtc_reset_min_limiter_v5` | QM | `mp_min_limiter = MAX` (для след. шага) |
-| 24 | clear_limiter_v5 | `rtc_clear_limiter_v5` | non-ops | Очистка буфера для не-ops агентов |
-| 25 | save_adaptive | `rtc_save_adaptive_v5` | HELI | Сохранение `adaptive_days` в агента |
-| 26 | save_adaptive_qm | `rtc_save_adaptive_v5_qm` | QM | Сохранение `adaptive_days` в QM |
-| 27 | update_day | `rtc_update_day_v5` | QM | `current_day += adaptive_days` |
+| 25 | copy_limiter_v5 | `rtc_copy_limiter_v5` | 2 | Копирование limiter в буфер |
+| 26 | compute_global_min | `rtc_compute_global_min_v5` | QM(1) | **ЧИТАЕТ** все min → вычисляет `adaptive_days` (**только group_by=1**, race condition fix) |
+| 27 | reset_min | `rtc_reset_min_limiter_v5` | QM | `mp_min_limiter = MAX` (для след. шага) |
+| 28 | clear_limiter_v5 | `rtc_clear_limiter_v5` | non-ops | Очистка буфера для не-ops агентов |
+| 29 | save_adaptive | `rtc_save_adaptive_v5` | HELI | Сохранение `adaptive_days` в агента |
+| 30 | save_adaptive_qm | `rtc_save_adaptive_v5_qm` | QM | Сохранение `adaptive_days` в QM |
+| 31 | update_day | `rtc_update_day_v5` | QM | `current_day += adaptive_days` |
+| **ФАЗА 5.5: RepairLine (post‑quota)** |||||
+| 32 | v8_repair_line_sync_post | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линий после квотирования |
 | **ФАЗА 6: Динамический спавн** |||||
-| 28 | v7_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr` | SpawnMgr | Расчёт дефицита, установка need/base_idx |
-| 29 | v7_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket` | Ticket→ops | Создание новых агентов (agent_out) |
+| 33 | v7_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr` | SpawnMgr | Расчёт дефицита, установка need/base_idx |
+| 34 | v7_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket` | Ticket→ops | Создание новых агентов (agent_out) |
 
 ---
 
