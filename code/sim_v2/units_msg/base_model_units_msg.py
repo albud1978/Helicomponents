@@ -70,6 +70,7 @@ class V2BaseModelUnitsMsg:
         self.env.newMacroPropertyUInt32("mp_rsv_count", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_spawn_budget", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_assign_hits", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_assign_attempts", MAX_GROUPS)
 
         # Планерные данные (из sim_masterv2)
         # Фиксированный размер для RTC (по правилам проекта)

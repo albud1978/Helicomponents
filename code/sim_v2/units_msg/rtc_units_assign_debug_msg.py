@@ -11,8 +11,10 @@ MAX_GROUPS = 50
 class ResetAssignHits(fg.HostFunction):
     def run(self, FLAMEGPU):
         hits = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_hits")
+        attempts = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_attempts")
         for i in range(MAX_GROUPS):
             hits[i] = 0
+            attempts[i] = 0
 
 
 class ReportAssignHits(fg.HostFunction):
@@ -21,7 +23,9 @@ class ReportAssignHits(fg.HostFunction):
         if day not in (3000, 3649):
             return
         hits = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_hits")
+        attempts = FLAMEGPU.environment.getMacroPropertyUInt32("mp_assign_attempts")
         print(f"   assign_hits: day={day} g3={int(hits[3])} g4={int(hits[4])}")
+        print(f"   assign_attempts: day={day} g3={int(attempts[3])} g4={int(attempts[4])}")
 
 
 def register_reset(model: fg.ModelDescription):
