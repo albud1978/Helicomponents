@@ -75,6 +75,11 @@ class V2BaseModelUnitsMsg:
         self.env.newMacroPropertyUInt32("mp_assign_skip_repair", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_assign_loop_flag", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_assign_hit_flag", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_assign_ops_flag", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_assign_type_flag", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_assign_need_flag", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_assign_slot_flag", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_assign_ac_flag", MAX_GROUPS)
         self.env.newMacroPropertyUInt32("mp_reserve_seen", MAX_GROUPS)
 
         # Планерные данные (из sim_masterv2)
