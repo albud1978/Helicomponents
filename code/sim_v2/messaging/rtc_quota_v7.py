@@ -163,6 +163,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_demote_ops_v7, flamegpu::MessageNone, flamegpu::Mess
     if (step_days == 0u) step_days = 1u;
     unsigned int safe_day = day + step_days;
     if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
+    unsigned int target_day = day;
+    if (target_day >= days_total) target_day = (days_total > 0u ? days_total - 1u : 0u);
+    unsigned int target_day = day;
+    if (target_day >= days_total) target_day = (days_total > 0u ? days_total - 1u : 0u);
     
     // Подсчёт текущих в operations (включая динамические спавны!)
     // КРИТИЧНО: используем RTC_MAX_FRAMES, а не frames_total, чтобы учесть спавненных агентов
@@ -174,13 +178,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_demote_ops_v7, flamegpu::MessageNone, flamegpu::Mess
         for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++curr;
         }}
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", target_day);
     }} else if (group_by == 2u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
         for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
             if (ops_count[i] == 1u) ++curr;
         }}
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
     }} else {{
         return flamegpu::ALIVE;
     }}
@@ -235,6 +239,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v7, flamegpu::MessageNone, flamegpu::Mes
     if (step_days == 0u) step_days = 1u;
     unsigned int safe_day = day + step_days;
     if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
+    unsigned int target_day = day;
+    if (target_day >= days_total) target_day = (days_total > 0u ? days_total - 1u : 0u);
     
     // Подсчёт текущих в operations (включая динамические спавны!)
     // КРИТИЧНО: используем RTC_MAX_FRAMES, а не frames_total
@@ -249,7 +255,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v7, flamegpu::MessageNone, flamegpu::Mes
             if (ops_count[i] == 1u) ++curr;
             if (svc_count[i] == 1u) ++svc_available;
         }}
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", target_day);
     }} else if (group_by == 2u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
@@ -257,7 +263,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v7, flamegpu::MessageNone, flamegpu::Mes
             if (ops_count[i] == 1u) ++curr;
             if (svc_count[i] == 1u) ++svc_available;
         }}
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
     }} else {{
         return flamegpu::ALIVE;
     }}
@@ -313,6 +319,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
     if (step_days == 0u) step_days = 1u;
     unsigned int safe_day = day + step_days;
     if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
+    unsigned int target_day = day;
+    if (target_day >= days_total) target_day = (days_total > 0u ? days_total - 1u : 0u);
     
     // КРИТИЧНО: Проверяем exit_date — агент должен отбыть repair_time перед возвратом в ops
     const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
@@ -338,7 +346,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
             if (svc_count[i] == 1u) ++svc_available;
             if (unsvc_count[i] == 1u) ++unsvc_available;
         }}
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", target_day);
     }} else if (group_by == 2u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
@@ -348,7 +356,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v7, flamegpu::MessageNone, flamegpu::M
             if (svc_count[i] == 1u) ++svc_available;
             if (unsvc_count[i] == 1u) ++unsvc_available;
         }}
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
     }} else {{
         return flamegpu::ALIVE;
     }}
@@ -410,6 +418,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
     if (step_days == 0u) step_days = 1u;
     unsigned int safe_day = day + step_days;
     if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
+    unsigned int target_day = day;
+    if (target_day >= days_total) target_day = (days_total > 0u ? days_total - 1u : 0u);
     
     // P3 КАСКАДНАЯ ЛОГИКА: дефицит = target - ops - svc - unsvc (P1+P2 промоутят всех)
     // КРИТИЧНО: используем RTC_MAX_FRAMES, чтобы учесть спавненных агентов
@@ -430,7 +440,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
             if (unsvc_count[i] == 1u) ++unsvc_available;
             if (inactive_count[i] == 1u) ++inactive_available;
         }}
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", target_day);
     }} else if (group_by == 2u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
         auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
@@ -442,7 +452,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v7, flamegpu::MessageNone, flamegpu
             if (unsvc_count[i] == 1u) ++unsvc_available;
             if (inactive_count[i] == 1u) ++inactive_available;
         }}
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
     }} else {{
         return flamegpu::ALIVE;
     }}
@@ -520,7 +530,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_post_v7, flamegpu::MessageNone, fla
             if (ops_count[i] == 1u) ++ops_curr;
             if (inactive_count[i] == 1u) ++inactive_available;
         }}
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", target_day);
     }} else if (group_by == 2u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
         auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
@@ -528,7 +538,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_post_v7, flamegpu::MessageNone, fla
             if (ops_count[i] == 1u) ++ops_curr;
             if (inactive_count[i] == 1u) ++inactive_available;
         }}
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
     }} else {{
         return flamegpu::ALIVE;
     }}
