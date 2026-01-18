@@ -90,17 +90,19 @@ PlanerMessage {
 Защищённое исключение:
 - Если у планера `assembly_trigger=1` и он в ремонте (window repair) — агрегаты **не снимаются** до окончания ремонта.
 
-### 4.1 Таблица переходов (временная)
+### 4.1 Табличная матрица (переходы планера → поведение агрегатов)
 
-```
-Планер →      operations     repair          serviceable/reserve/storage/inactive/unserviceable
-Агрегат ops → stays ops       detach → svc    detach → svc
-Агрегат svc → assign to ops   stay svc        stay svc (может быть привязан/отвязан)
-Агрегат repair → stay repair  stay repair     stay repair
-Агрегат storage → stay storage stay storage   stay storage
-```
+Обозначения:
+- **привязка**: `aircraft_number` у агрегата
+- **svc**: `serviceable`, **ops**: `operations`
 
-> **Примечание:** фактическая матрица уточняется после согласования правил пользователя.
+| Планер \\ Агрегат | ops | svc | repair | storage |
+| --- | --- | --- | --- | --- |
+| **operations** | Остаётся в `ops`, наработка начисляется | Если есть `need>0` → назначается на планер (`ops`, привязка), иначе остаётся `svc` | Остаётся в `repair` (не снимается) | Остаётся в `storage` |
+| **repair** | **Если `assembly_trigger=1`** → остаётся привязанным и в своём статусе до конца ремонта; иначе **снять привязку** → `svc` | Остаётся `svc` (может быть привязан/отвязан как «склад на крыле») | Остаётся в `repair` | Остаётся в `storage` |
+| **serviceable / reserve / storage / inactive / unserviceable** | При выходе планера из ops: снять привязку, перевести в `svc` (если не `repair`/`storage`) | Остаётся `svc` (может быть привязан/отвязан) | Остаётся в `repair` | Остаётся в `storage` |
+
+> **Примечание:** это рабочая матрица для реализации; при уточнениях правил корректируем клетки точечно.
 
 ### 4.1 Назначение агрегатов
 Агрегат в `serviceable` или `reserve`:
