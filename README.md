@@ -89,6 +89,7 @@ python3 code/extract_master.py
 | **`code/sim_v2/messaging/orchestrator_limiter_v8.py`** | ✅ **ОСНОВНОЙ** | RepairLine + adaptive steps (deterministic_dates) |
 | `code/sim_v2/messaging/orchestrator_limiter_v5.py` | ⚡ Резервный | Двухфазная (intent-based), 100% GPU-only |
 | `code/sim_v2/messaging/orchestrator_limiter_v3.py` | 📦 Архивный | `while step()` + HF |
+| `code/sim_v2/messaging/rtc_quota_v8_base.py` | ✅ Актуальный | Локальные квоты V8 (без зависимости от V7) |
 | `code/sim_v2/messaging/rtc_state_transitions_v7.py` | ✅ Актуальный | Однофазные переходы состояний |
 | `code/sim_v2/messaging/rtc_limiter_optimized.py` | ✅ Актуальный | Бинарный поиск limiter через mp5_cumsum |
 | `code/sim_v2/messaging/rtc_limiter_v5.py` | ✅ Актуальный | GPU-only модули (current_day, adaptive) |

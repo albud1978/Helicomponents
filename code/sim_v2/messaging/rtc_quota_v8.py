@@ -31,16 +31,15 @@ REPAIR_LINES_MAX = 64
 
 import pyflamegpu as fg
 
-# Импорт RTC строк из V7 (reset, count, demote, P1)
-from rtc_quota_v7 import (
+# Локальные копии V7-квот для V8 (reset/count/demote/P1/post)
+from rtc_quota_v8_base import (
     RTC_RESET_FLAGS,
     RTC_RESET_BUFFERS,
     RTC_COUNT_OPS,
     RTC_COUNT_SVC,
-    RTC_COUNT_UNSVC,
     RTC_COUNT_INACTIVE,
     RTC_DEMOTE_OPS,
-    RTC_PROMOTE_SVC,  # P1 остаётся V7
+    RTC_PROMOTE_SVC,
     RTC_PROMOTE_INACTIVE_POST,
     RTC_INACTIVE_TO_OPS_POST,
     COND_INACTIVE_PROMOTED_POST,
@@ -303,9 +302,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-    const unsigned int last_acn = line_last_acn[line_id];
-    const unsigned int last_day = line_last_day[line_id];
-    if (last_acn == acn && last_day == (current_day > 0u ? current_day - 1u : 0u)) {{
+    const unsigned int prev_last_acn = line_last_acn[line_id].exchange(0u);
+    const unsigned int prev_last_day = line_last_day[line_id].exchange(0u);
+    if (prev_last_acn == acn && prev_last_day == (current_day > 0u ? current_day - 1u : 0u)) {{
+        line_last_acn[line_id].exchange(prev_last_acn);
+        line_last_day[line_id].exchange(prev_last_day);
         FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
         return flamegpu::ALIVE;
     }}
@@ -322,6 +323,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
         line_last_day[line_id].exchange(current_day);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
     }} else {{
+        line_last_acn[line_id].exchange(prev_last_acn);
+        line_last_day[line_id].exchange(prev_last_day);
         FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
     }}
     
@@ -486,9 +489,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-    const unsigned int last_acn = line_last_acn[line_id];
-    const unsigned int last_day = line_last_day[line_id];
-    if (last_acn == acn && last_day == (current_day > 0u ? current_day - 1u : 0u)) {{
+    const unsigned int prev_last_acn = line_last_acn[line_id].exchange(0u);
+    const unsigned int prev_last_day = line_last_day[line_id].exchange(0u);
+    if (prev_last_acn == acn && prev_last_day == (current_day > 0u ? current_day - 1u : 0u)) {{
+        line_last_acn[line_id].exchange(prev_last_acn);
+        line_last_day[line_id].exchange(prev_last_day);
         FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
         return flamegpu::ALIVE;
     }}
@@ -505,6 +510,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
         line_last_day[line_id].exchange(current_day);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
     }} else {{
+        line_last_acn[line_id].exchange(prev_last_acn);
+        line_last_day[line_id].exchange(prev_last_day);
         FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
     }}
     
