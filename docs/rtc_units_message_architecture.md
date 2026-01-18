@@ -71,6 +71,37 @@ PlanerMessage {
 
 ## 4. Основные правила
 
+### 4.0 Матрица переходов планера ↔ агрегатов (draft)
+
+Термины:
+- **Планер state**: `operations`, `repair`, `serviceable`, `reserve`, `storage`, `inactive`, `unserviceable`
+- **Агрегат state**: `operations`, `serviceable`, `repair`, `storage`
+- **Привязка**: `aircraft_number` у агрегата
+
+Правила на уровне шага:
+- Если планер **входит в operations**: агрегаты **доукомплектовываются** до 2 шт по квотированию.
+- Если планер **выходит из operations**: агрегаты на нем **переводятся в serviceable** и **снимается привязка**,  
+  **кроме** агрегатов, которые ушли в `repair`/`storage`.
+- В `inactive/serviceable/reserve/storage/unserviceable` у планера агрегаты могут быть:
+  - привязаны и иметь `serviceable` (склад на крыле),
+  - или отвязаны (доступны для других планеров).
+- При `dt=0` у планера в operations агрегаты **остаются в operations** (нет разукомплектации).
+
+Защищённое исключение:
+- Если у планера `assembly_trigger=1` и он в ремонте (window repair) — агрегаты **не снимаются** до окончания ремонта.
+
+### 4.1 Таблица переходов (временная)
+
+```
+Планер →      operations     repair          serviceable/reserve/storage/inactive/unserviceable
+Агрегат ops → stays ops       detach → svc    detach → svc
+Агрегат svc → assign to ops   stay svc        stay svc (может быть привязан/отвязан)
+Агрегат repair → stay repair  stay repair     stay repair
+Агрегат storage → stay storage stay storage   stay storage
+```
+
+> **Примечание:** фактическая матрица уточняется после согласования правил пользователя.
+
 ### 4.1 Назначение агрегатов
 Агрегат в `serviceable` или `reserve`:
 1) Читает сообщения планеров  
@@ -85,6 +116,9 @@ PlanerMessage {
 1) Все агрегаты на этом планере отцепляются
 2) Переходят в `serviceable`
 3) `mp_planer_slots--`
+
+Исключение:
+- агрегаты в `repair`/`storage` **не разукомплектовываются**.
 
 ### 4.4 Ремонт и хранение
 Правила аналогичны планерам:
