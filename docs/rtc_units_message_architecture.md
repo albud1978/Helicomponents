@@ -71,30 +71,16 @@ PlanerMessage {
 
 ## 4. Основные правила
 
-### 4.0 Матрица переходов планера ↔ агрегатов (draft)
+### 4.0 Матрица переходов планера ↔ агрегатов (rule)
 
-Термины:
-- **Планер state**: `operations`, `repair`, `serviceable`, `reserve`, `storage`, `inactive`, `unserviceable`
-- **Агрегат state**: `operations`, `serviceable`, `repair`, `storage`
-- **Привязка**: `aircraft_number` у агрегата
-
-Правила на уровне шага:
-- Если планер **входит в operations**: агрегаты **доукомплектовываются** до 2 шт по квотированию.
-- Если планер **выходит из operations**: агрегаты на нем **переводятся в serviceable** и **снимается привязка**,  
-  **кроме** агрегатов, которые ушли в `repair`/`storage`.
-- В `inactive/serviceable/reserve/storage/unserviceable` у планера агрегаты могут быть:
-  - привязаны и иметь `serviceable` (склад на крыле),
-  - или отвязаны (доступны для других планеров).
-- При `dt=0` у планера в operations агрегаты **остаются в operations** (нет разукомплектации).
-
-Защищённое исключение:
-- Если у планера `assembly_trigger=1` и он в ремонте (window repair) — агрегаты **не снимаются** до окончания ремонта.
+- Неисправные агрегаты (`repair`/`storage`) уходят по своему циклу независимо от статуса планера.
+- На планер в `operations`/`serviceable` **нельзя** устанавливать агрегаты не `operations`/`serviceable`.
 
 ### 4.1 Табличная матрица 7×7 (планер → планер)
 
 | Из \\ В | operations | repair | serviceable | reserve | storage | inactive | unserviceable |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **operations** | state=operations; aircraft_number=planer; slots=2 | if assembly_trigger=1 → state=operations; aircraft_number=planer; else state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=0 |
+| **operations** | state=operations; aircraft_number=planer; need=0 | if assembly_trigger=1 → state=operations; aircraft_number=planer; else state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=0 |
 | **repair** | if assembly_trigger=1 → state=operations; aircraft_number=planer; else state=serviceable; aircraft_number=0 | if assembly_trigger=1 → state=serviceable; aircraft_number=planer; else state=serviceable; aircraft_number=0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 |
 | **serviceable** | if need>0 → state=operations; aircraft_number=planer; else state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 |
 | **reserve** | if need>0 → state=operations; aircraft_number=planer; else state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 |
