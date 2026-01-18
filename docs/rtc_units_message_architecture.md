@@ -152,6 +152,33 @@ PlanerMessage {
 
 ---
 
+## 6.1 RTC функции (units_msg)
+
+| № | Модуль | Файл | Состояния | Действие |
+| --- | --- | --- | --- | --- |
+| 0 | InitPlanerDt | `code/sim_v2/units/init_planer_dt.py` | host | загрузка dt/ops/slots/type/ops_history |
+| 1 | rtc_planer_messages | `code/sim_v2/units_msg/rtc_planer_messages.py` | planer | публикация планерных данных |
+| 2 | rtc_units_detach_msg | `code/sim_v2/units_msg/rtc_units_detach_msg.py` | operations | detach при выходе планера из ops |
+| 3 | rtc_units_slots_reset_msg | `code/sim_v2/units_msg/rtc_units_slots_reset_msg.py` | host | reset slots |
+| 4 | rtc_units_slots_count_msg | `code/sim_v2/units_msg/rtc_units_slots_count_msg.py` | operations | пересчёт slots |
+| 5 | rtc_units_planer_need_msg | `code/sim_v2/units_msg/rtc_units_planer_need_msg.py` | host | расчёт need |
+| 6 | rtc_units_counts_msg | `code/sim_v2/units_msg/rtc_units_counts_msg.py` | all | счётчики по состояниям |
+| 7 | rtc_units_spawn_budget_msg | `code/sim_v2/units_msg/rtc_units_spawn_budget_msg.py` | host | бюджет спавна |
+| 8 | rtc_units_states_stub_msg | `code/sim_v2/units_msg/rtc_units_states_stub_msg.py` | svc/rsv/storage | фикс intent_state |
+| 9 | rtc_units_assign_msg | `code/sim_v2/units_msg/rtc_units_assign_msg.py` | svc/rsv | назначение на планеры |
+| 10 | rtc_units_ops_msg | `code/sim_v2/units_msg/rtc_units_ops_msg.py` | operations | инкременты sne/ppr |
+| 11 | rtc_units_repair_msg | `code/sim_v2/units_msg/rtc_units_repair_msg.py` | repair | счётчик repair_days |
+| 12 | rtc_units_transition_ops_msg | `code/sim_v2/units_msg/rtc_units_transition_ops_msg.py` | operations | transitions из ops |
+| 13 | rtc_units_transition_repair_msg | `code/sim_v2/units_msg/rtc_units_transition_repair_msg.py` | repair | transitions из repair |
+| 14 | rtc_units_transition_serviceable_msg | `code/sim_v2/units_msg/rtc_units_transition_serviceable_msg.py` | serviceable | transitions из svc |
+| 15 | rtc_units_transition_reserve_msg | `code/sim_v2/units_msg/rtc_units_transition_reserve_msg.py` | reserve | transitions из rsv |
+| 16 | rtc_units_transition_storage_msg | `code/sim_v2/units_msg/rtc_units_transition_storage_msg.py` | storage | transitions из storage |
+| 17 | rtc_units_mp2_writer | `code/sim_v2/units/rtc_units_mp2_writer.py` | all | запись MP2 |
+
+Сверено с порядком регистрации в `code/sim_v2/units_msg/orchestrator_units_msg.py`.
+
+---
+
 ## 7. Инварианты
 
 - На каждом планере в `operations` **ровно 2 двигателя** (groups 3/4).
