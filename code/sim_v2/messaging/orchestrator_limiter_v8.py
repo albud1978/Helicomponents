@@ -258,6 +258,9 @@ class LimiterV8Orchestrator:
         self.base_model.env.newPropertyUInt("repair_quota", self.repair_quota)
         self.base_model.env.newMacroPropertyUInt("repair_line_free_days_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_acn_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_rt_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_last_acn_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_last_day_mp", REPAIR_LINES_MAX)
         
         # Environment properties
         self.base_model.env.newPropertyUInt("end_day", self.end_day)
@@ -577,6 +580,13 @@ class LimiterV8Orchestrator:
         # Планеры из heli_pandas
         self.population_builder.populate_agents(self.simulation, self.base_model.agent)
         
+        # inactive: repair_days всегда 0
+        inactive_pop = fg.AgentVector(self.base_model.agent)
+        self.simulation.getPopulationData(inactive_pop, "inactive")
+        for i in range(inactive_pop.size()):
+            inactive_pop[i].setVariableUInt("repair_days", 0)
+        self.simulation.setPopulationData(inactive_pop, "inactive")
+        
         # V8: Детерминированный spawn
         spawn_count = self._populate_spawn_agents()
         
@@ -668,11 +678,10 @@ class LimiterV8Orchestrator:
         repair_pop = fg.AgentVector(self.base_model.agent)
         self.simulation.getPopulationData(repair_pop, "repair")
         
-        repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
-        
         for i in range(repair_pop.size()):
             agent = repair_pop.at(i)
             repair_days = agent.getVariableUInt('repair_days')
+            repair_time = agent.getVariableUInt('repair_time')
             # exit_day = repair_time - repair_days (абсолютный день)
             exit_day = repair_time - repair_days
             if exit_day > 0 and exit_day <= self.end_day:
@@ -875,7 +884,7 @@ class HF_InitMP5Cumsum(fg.HostFunction):
 
 
 class HF_InitRepairLines(fg.HostFunction):
-    """HostFunction для инициализации repair_line_free_days_mp/repair_line_acn_mp"""
+    """HostFunction для инициализации RepairLine MacroProperty"""
     
     def __init__(self, repair_quota: int):
         super().__init__()
@@ -888,13 +897,22 @@ class HF_InitRepairLines(fg.HostFunction):
         
         mp_days = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_free_days_mp")
         mp_acn = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_acn_mp")
+        mp_rt = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_rt_mp")
+        mp_last_acn = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_last_acn_mp")
+        mp_last_day = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_last_day_mp")
         for i in range(len(mp_days)):
             if i < self.repair_quota:
                 mp_days[i] = 1  # day0: свободно с 1
                 mp_acn[i] = 0   # 0 = свободно
+                mp_rt[i] = 0
+                mp_last_acn[i] = 0
+                mp_last_day[i] = 0
             else:
                 mp_days[i] = 0xFFFFFFFF  # не используется
                 mp_acn[i] = 0
+                mp_rt[i] = 0
+                mp_last_acn[i] = 0
+                mp_last_day[i] = 0
         
         self.initialized = True
         print(f"  [HF_InitRepairLines] ✅ Загружено (quota={self.repair_quota})")

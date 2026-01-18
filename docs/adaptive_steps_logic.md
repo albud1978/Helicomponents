@@ -89,6 +89,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 | **operations** | `limiter` | Дней до ресурсного лимита (MIN(LL-SNE, OH-PPR)) |
 | **repair** | `repair_days` | Дней до конца ремонта |
 | **unserviceable** | `repair_days` | Дней до готовности к ремонту |
+| **inactive** | `repair_days=0` | Не декрементируется, не участвует в min_dynamic |
 | **остальные** | — | Не участвуют в min_dynamic |
 
 ### 2.2. RepairLine (repair_number → число линий)
@@ -111,7 +112,8 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
    day >= repair_time AND repair_days == 0
 
 2. Отфильтровать RepairLine:
-   free_days >= repair_time
+   free_days >= repair_time AND aircraft_number == 0
+   + защита от повтора: last_acn != acn за день N-1
 
 3. Определить дефицит = target_ops - current_ops
    approved = MIN(дефицит, available_lines)
@@ -190,6 +192,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
    Для ops: limiter -= adaptive_days
    Для repair: repair_days -= adaptive_days
    Для unsvc: repair_days -= adaptive_days (не влияет на min_dynamic)
+   Для inactive: repair_days всегда 0 (не декрементируется)
 
 5. ИНКРЕМЕНТ ЛИНИЙ РЕМОНТА
   RepairLine.free_days += adaptive_days (для всех линий)

@@ -127,26 +127,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_decrement_v8, flamegpu::MessageNone, flamegpu:
 }
 """
 
-# V8: Декремент repair_days для inactive
-RTC_INACTIVE_DECREMENT_V8 = """
-FLAMEGPU_AGENT_FUNCTION(rtc_inactive_decrement_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
-    const unsigned int adaptive_days = (current_day > prev_day) ? (current_day - prev_day) : 0u;
-    if (adaptive_days == 0u) return flamegpu::ALIVE;
-    
-    unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
-    if (repair_days > 0u) {
-        if (repair_days <= adaptive_days) {
-            repair_days = 0u;
-        } else {
-            repair_days -= adaptive_days;
-        }
-        FLAMEGPU->setVariable<unsigned int>("repair_days", repair_days);
-    }
-    return flamegpu::ALIVE;
-}
-"""
+# inactive: repair_days не декрементируется (всегда 0)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # V8: Условия переходов с next-day dt проверкой
@@ -199,6 +180,10 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
     // Если ремонт нерентабелен → это storage
     if (br > 0u && ppr_next >= oh && sne_next >= br) return false;
     
+    // Если limiter=0, выход обязателен (storage уже отфильтрован выше)
+    const unsigned short limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
+    if (limiter == 0u) return true;
+    
     // OH проверка на следующий день
     return (ppr_next >= oh);
 }
@@ -246,31 +231,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::Me
 """
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# V8: Проверка limiter=0 без перехода (EXCEPTION)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-RTC_CHECK_LIMITER_ZERO = """
-FLAMEGPU_AGENT_FUNCTION(rtc_check_limiter_zero_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // V8: Проверка limiter=0 без перехода
-    // 
-    // ПРИМЕЧАНИЕ: Это не всегда ошибка!
-    // - limiter вычисляется через бинарный поиск по mp5_cumsum
-    // - Условие перехода проверяет SNE + dt_next >= LL
-    // - При адаптивных шагах limiter может достичь 0 раньше чем SNE достигнет LL
-    //   (из-за округления и разницы между cumsum прогнозом и реальным dt)
-    // 
-    // Поэтому limiter=0 — это SIGNAL для пересчёта, не обязательно ошибка.
-    // Просто пересчитываем limiter в L_limiter_entry.
-    
-    const unsigned short limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
-    
-    // limiter=0 автоматически триггерит пересчёт в L_limiter_entry
-    // (где проверяется current_limiter == 0)
-    
-    return flamegpu::ALIVE;
-}
-"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -284,10 +244,8 @@ def register_ops_transitions_v8(model, agent):
     Слои:
     1. v8_ops_increment — инкремент SNE/PPR + сохранение dt_next
     2. v8_unsvc_decrement — декремент repair_days в unserviceable
-    3. v8_inactive_decrement — декремент repair_days в inactive
-    4. v8_ops_to_storage — переход 2→6
-    5. v8_ops_to_unsvc — переход 2→7
-    6. v8_check_limiter_zero — EXCEPTION если limiter=0 без перехода
+    3. v8_ops_to_storage — переход 2→6
+    4. v8_ops_to_unsvc — переход 2→7
     """
     print("\n📦 V8: Регистрация operations переходов (next-day dt)...")
     
@@ -305,14 +263,7 @@ def register_ops_transitions_v8(model, agent):
     fn.setEndState("unserviceable")
     layer_unsvc.addAgentFunction(fn)
     
-    # 3. inactive: decrement repair_days
-    layer_inactive = model.newLayer("v8_inactive_decrement")
-    fn = agent.newRTCFunction("rtc_inactive_decrement_v8", RTC_INACTIVE_DECREMENT_V8)
-    fn.setInitialState("inactive")
-    fn.setEndState("inactive")
-    layer_inactive.addAgentFunction(fn)
-    
-    # 4. ops → storage (приоритет 1)
+    # 3. ops → storage (приоритет 1)
     layer_storage = model.newLayer("v8_ops_to_storage")
     fn = agent.newRTCFunction("rtc_ops_to_storage_v8", RTC_OPS_TO_STORAGE_V8)
     fn.setRTCFunctionCondition(COND_OPS_TO_STORAGE_V8)
@@ -320,7 +271,7 @@ def register_ops_transitions_v8(model, agent):
     fn.setEndState("storage")
     layer_storage.addAgentFunction(fn)
     
-    # 5. ops → unserviceable (приоритет 2)
+    # 4. ops → unserviceable (приоритет 2)
     layer_unsvc = model.newLayer("v8_ops_to_unsvc")
     fn = agent.newRTCFunction("rtc_ops_to_unsvc_v8", RTC_OPS_TO_UNSVC_V8)
     fn.setRTCFunctionCondition(COND_OPS_TO_UNSVC_V8)
@@ -328,12 +279,5 @@ def register_ops_transitions_v8(model, agent):
     fn.setEndState("unserviceable")
     layer_unsvc.addAgentFunction(fn)
     
-    # 6. V8: Проверка limiter=0 без перехода (EXCEPTION)
-    layer_check = model.newLayer("v8_check_limiter_zero")
-    fn = agent.newRTCFunction("rtc_check_limiter_zero_v8", RTC_CHECK_LIMITER_ZERO)
-    fn.setInitialState("operations")
-    fn.setEndState("operations")
-    layer_check.addAgentFunction(fn)
-    
-    print("  ✅ V8 operations переходы: increment + storage + unsvc + limiter_check")
+    print("  ✅ V8 operations переходы: increment + storage + unsvc")
 
