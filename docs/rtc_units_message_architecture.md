@@ -90,19 +90,17 @@ PlanerMessage {
 Защищённое исключение:
 - Если у планера `assembly_trigger=1` и он в ремонте (window repair) — агрегаты **не снимаются** до окончания ремонта.
 
-### 4.1 Табличная матрица (переходы планера → поведение агрегатов)
+### 4.1 Табличная матрица 7×7 (планер → агрегат)
 
-Обозначения:
-- **привязка**: `aircraft_number` у агрегата
-- **svc**: `serviceable`, **ops**: `operations`
-
-| Планер \\ Агрегат | ops | svc | repair | storage |
-| --- | --- | --- | --- | --- |
-| **operations** | Остаётся в `ops`, наработка начисляется | Если есть `need>0` → назначается на планер (`ops`, привязка), иначе остаётся `svc` | Остаётся в `repair` (не снимается) | Остаётся в `storage` |
-| **repair** | **Если `assembly_trigger=1`** → остаётся привязанным и в своём статусе до конца ремонта; иначе **снять привязку** → `svc` | Остаётся `svc` (может быть привязан/отвязан как «склад на крыле») | Остаётся в `repair` | Остаётся в `storage` |
-| **serviceable / reserve / storage / inactive / unserviceable** | При выходе планера из ops: снять привязку, перевести в `svc` (если не `repair`/`storage`) | Остаётся `svc` (может быть привязан/отвязан) | Остаётся в `repair` | Остаётся в `storage` |
-
-> **Примечание:** это рабочая матрица для реализации; при уточнениях правил корректируем клетки точечно.
+| Планер \\ Агрегат | operations | repair | serviceable | reserve | storage | inactive | unserviceable |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **operations** | state=operations; aircraft_number=planer | недопустимо | if need>0 → state=operations; aircraft_number=planer; else state=serviceable | if need>0 → state=operations; aircraft_number=planer; else state=reserve | state=storage | state=inactive | state=unserviceable |
+| **repair** | if assembly_trigger=1 → state=operations; aircraft_number=planer; else state=serviceable; aircraft_number=0 | state=repair; aircraft_number=planer | state=serviceable; aircraft_number=planer/0 | state=reserve; aircraft_number=planer/0 | state=storage; aircraft_number=planer/0 | state=inactive; aircraft_number=planer/0 | state=unserviceable; aircraft_number=planer/0 |
+| **serviceable** | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 |
+| **reserve** | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 |
+| **storage** | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 |
+| **inactive** | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 |
+| **unserviceable** | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 | state=serviceable; aircraft_number=planer/0 |
 
 ### 4.1 Назначение агрегатов
 Агрегат в `serviceable` или `reserve`:
