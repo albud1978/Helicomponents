@@ -138,6 +138,24 @@ class V2BaseModelMessaging:
         quota.newVariableInt("balance")              # current - target (+ = excess, - = deficit)
         quota.newVariableUInt("remaining_deficit")   # Остаток после P1+P2+P3
         
+        # Временное логирование слотов RepairLine (Mi-17)
+        quota.newVariableUInt("debug_slots_count_mi17")
+        quota.newVariableUInt("debug_slot_mi17_0")
+        quota.newVariableUInt("debug_slot_mi17_1")
+        quota.newVariableUInt("debug_slot_mi17_2")
+        quota.newVariableUInt("debug_slot_mi17_3")
+        quota.newVariableUInt("debug_slot_mi17_4")
+        quota.newVariableUInt("debug_slot_mi17_5")
+        
+        # Временное логирование P2 (Mi-8/Mi-17)
+        quota.newVariableUInt("debug_p2_ops")
+        quota.newVariableUInt("debug_p2_target")
+        quota.newVariableUInt("debug_p2_deficit")
+        quota.newVariableUInt("debug_p2_needed")
+        quota.newVariableUInt("debug_p2_slots")
+        quota.newVariableUInt("debug_p2_svc")
+        quota.newVariableUInt("debug_p2_unsvc")
+        
         # MacroProperty буферы для хранения idx агентов (для масштабирования >1000)
         # Каждый QuotaManager хранит idx своей группы
         # ВАЖНО: Используем UInt32 т.к. atomic exchange поддерживает только 32/64-bit типы
@@ -167,6 +185,8 @@ class V2BaseModelMessaging:
         repair_line.newVariableUInt("line_id")
         repair_line.newVariableUInt("free_days")
         repair_line.newVariableUInt("aircraft_number")
+        repair_line.newVariableUInt("last_acn")
+        repair_line.newVariableUInt("last_day")
         print("  ✅ Agent RepairLine: переменные line_id, free_days, aircraft_number")
         return repair_line
     

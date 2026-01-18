@@ -164,6 +164,38 @@ export CUBE_CONFIG_PATH="$PWD/config"
 
 ---
 
+## LIMITER V8 — порядок двух прогонов в одной таблице
+
+**Правило:** перед первым датасетом делаем DROP `sim_masterv2_v8`, затем подряд два прогона (DS1 → DS2), затем две валидации.
+
+```bash
+# DROP таблицы перед DS1 (по явному согласованию)
+python3 - << 'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path('/path/to/Helicomponents-messaging/code')))
+from utils.config_loader import get_clickhouse_client
+client = get_clickhouse_client()
+client.execute("DROP TABLE IF EXISTS sim_masterv2_v8")
+print("DROP sim_masterv2_v8: OK")
+PY
+
+# Прогон DS1
+cd /path/to/Helicomponents-messaging
+python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
+  --version-date 2025-07-04 --end-day 3650 --enable-mp2
+
+# Прогон DS2 (в ту же таблицу)
+python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
+  --version-date 2025-12-30 --end-day 3650 --enable-mp2
+
+# Валидация DS1/DS2 в общей таблице
+python3 code/analysis/sim_validation_runner_msg.py --version-date 2025-07-04 --table sim_masterv2_v8
+python3 code/analysis/sim_validation_runner_msg.py --version-date 2025-12-30 --table sim_masterv2_v8
+```
+
+---
+
 ## Загрузка данных (Extract) — обновлено 03.01.2026
 
 **Extract запускается ТОЛЬКО целиком через extract_master.py:**
