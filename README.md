@@ -82,7 +82,7 @@ python3 code/extract_master.py
 ### 🚀 LIMITER V8 — основная архитектура (ветка feature/flame-messaging)
 
 > **⚠️ В этой ветке основной код — LIMITER V8 (`orchestrator_limiter_v8.py`)**
-> V8 = RepairLine + adaptive steps с deterministic_dates; P2 ранжирует только `unserviceable` в readiness.
+> V8 = RepairLine + adaptive steps с deterministic_dates; P2 ранжирует только `unserviceable` в readiness; spawn считает дефицит по текущему дню на актуальных counts (после post‑промоутов); debug спавна фиксируется в MP2.
 
 | Файл | Статус | Описание |
 |------|--------|----------|

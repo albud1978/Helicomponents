@@ -751,5 +751,37 @@ def register_post_quota_counts_v8(model: fg.ModelDescription, agent: fg.AgentDes
     layer_to_ops_post.addAgentFunction(fn)
     
     print("  ✅ Доп. добор из inactive (post)")
+
+    # Обновляем буферы после post-промоутов, чтобы spawn видел актуальный ops
+    layer_reset_spawn = model.newLayer("v8_reset_buffers_spawn")
+    for state in ["inactive", "operations", "serviceable", "repair", "reserve", "storage", "unserviceable"]:
+        fn_name = f"rtc_reset_quota_v8_spawn_{state}"
+        fn = agent.newRTCFunction(fn_name, RTC_RESET_BUFFERS)
+        fn.setInitialState(state)
+        fn.setEndState(state)
+        layer_reset_spawn.addAgentFunction(fn)
+    print("  ✅ Сброс буферов (spawn)")
+    
+    layer_count_spawn = model.newLayer("v8_count_agents_spawn")
+    fn = agent.newRTCFunction("rtc_count_ops_v8_spawn", RTC_COUNT_OPS)
+    fn.setInitialState("operations")
+    fn.setEndState("operations")
+    layer_count_spawn.addAgentFunction(fn)
+    
+    fn = agent.newRTCFunction("rtc_count_svc_v8_spawn", RTC_COUNT_SVC)
+    fn.setInitialState("serviceable")
+    fn.setEndState("serviceable")
+    layer_count_spawn.addAgentFunction(fn)
+    
+    fn = agent.newRTCFunction("rtc_count_unsvc_v8_spawn", RTC_COUNT_UNSVC_V8)
+    fn.setInitialState("unserviceable")
+    fn.setEndState("unserviceable")
+    layer_count_spawn.addAgentFunction(fn)
+    
+    fn = agent.newRTCFunction("rtc_count_inactive_v8_spawn", RTC_COUNT_INACTIVE)
+    fn.setInitialState("inactive")
+    fn.setEndState("inactive")
+    layer_count_spawn.addAgentFunction(fn)
+    print("  ✅ Подсчёт агентов (spawn)")
     print("✅ Post-quota пересчёт зарегистрирован\n")
 

@@ -34,10 +34,7 @@ RTC_SPAWN_DYNAMIC_MGR_V7 = Template("""
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
-    unsigned int step_days = mp_result[0];
-    if (step_days == 0u) step_days = 1u;
-    const unsigned int target_day = ((day + step_days) < days_total ? (day + step_days) : (days_total > 0u ? days_total - 1u : 0u));
+    const unsigned int target_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
     const unsigned int write_day = target_day;
     
     // Условие активации: day >= repair_time
@@ -132,14 +129,70 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v7, flamegpu::MessageNone, flamegp
 }
 """).substitute(MAX_FRAMES=RTC_MAX_FRAMES, MAX_DAYS=MAX_DAYS)
 
+RTC_SPAWN_DYNAMIC_TICKET_V8 = Template("""
+FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
+    const unsigned int ticket = FLAMEGPU->getVariable<unsigned int>("ticket");
+    
+    // Читаем параметры
+    auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_need");
+    auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_idx");
+    auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_acn");
+    
+    const unsigned int need = need_mp[safe_day];
+    const unsigned int base_idx = bidx_mp[safe_day];
+    const unsigned int base_acn = bacn_mp[safe_day];
+    
+    if (ticket >= need) {
+        return flamegpu::ALIVE;
+    }
+    
+    // Создаём нового агента
+    const unsigned int new_idx = base_idx + ticket;
+    const unsigned int new_acn = base_acn + ticket;
+    
+    // Нормативы Mi-17
+    const unsigned int ll = FLAMEGPU->environment.getProperty<unsigned int>("mi17_ll_const");
+    const unsigned int oh = FLAMEGPU->environment.getProperty<unsigned int>("mi17_oh_const");
+    const unsigned int br = FLAMEGPU->environment.getProperty<unsigned int>("mi17_br_const");
+    const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+    
+    // Начальная наработка (новый вертолёт)
+    const unsigned int sne_new = 0u;
+    const unsigned int ppr_new = 0u;
+    
+    // Устанавливаем переменные агента
+    FLAMEGPU->agent_out.setVariable<unsigned int>("idx", new_idx);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("aircraft_number", new_acn);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("partseqno_i", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("group_by", 2u);  // Mi-17
+    
+    FLAMEGPU->agent_out.setVariable<unsigned int>("sne", sne_new);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("ppr", ppr_new);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("cso", 0u);
+    
+    FLAMEGPU->agent_out.setVariable<unsigned int>("ll", ll);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("oh", oh);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("br", br);
+    
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_time", repair_time);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_days", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("status_change_day", day);
+    
+    FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 1u);
+    FLAMEGPU->agent_out.setVariable<unsigned short>("limiter", 0u);
+    
+    return flamegpu::ALIVE;
+}
+""").substitute(MAX_DAYS=MAX_DAYS)
+
 RTC_SPAWN_DYNAMIC_MGR_V8 = Template("""
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
-    unsigned int step_days = mp_result[0];
-    if (step_days == 0u) step_days = 1u;
-    const unsigned int target_day = ((day + step_days) < days_total ? (day + step_days) : (days_total > 0u ? days_total - 1u : 0u));
+    const unsigned int target_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
     const unsigned int write_day = target_day;
     
     // Условие активации: day >= repair_time
@@ -155,54 +208,17 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v8, flamegpu::MessageNone, flamegp
         if (ops_count[i] == 1u) ++curr_ops;
     }
     
-    // Считаем доступные пулы
-    auto svc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_svc_count");
-    unsigned int svc_available = 0u;
-    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
-        if (svc_count[i] == 1u) ++svc_available;
-    }
-    
-    auto unsvc_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_unsvc_ready_count");
-    unsigned int unsvc_available = 0u;
-    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
-        if (unsvc_count[i] == 1u) ++unsvc_available;
-    }
-    
-    auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_inactive_count");
-    unsigned int inactive_available = 0u;
-    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
-        if (inactive_count[i] == 1u) ++inactive_available;
-    }
-    
-    // Целевое значение из MP4
+    // Целевое значение из MP4 (текущий день)
     const unsigned int target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
-    
-    // Ограничение по линиям ремонта (P2+P3)
-    auto slots_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("repair_line_slots_count_mp");
-    unsigned int slots_total = slots_count_mp[1];
-    
-    unsigned int deficit_p1 = (target > curr_ops) ? (target - curr_ops) : 0u;
-    unsigned int p1_will = (deficit_p1 < svc_available) ? deficit_p1 : svc_available;
-    unsigned int after_p1 = curr_ops + p1_will;
-    
-    unsigned int deficit_p2 = (target > after_p1) ? (target - after_p1) : 0u;
-    unsigned int p2_will = deficit_p2;
-    if (p2_will > unsvc_available) p2_will = unsvc_available;
-    if (p2_will > slots_total) p2_will = slots_total;
-    unsigned int after_p2 = after_p1 + p2_will;
-    
-    unsigned int slots_left = (slots_total > p2_will) ? (slots_total - p2_will) : 0u;
-    unsigned int deficit_p3 = (target > after_p2) ? (target - after_p2) : 0u;
-    unsigned int p3_will = deficit_p3;
-    if (p3_will > inactive_available) p3_will = inactive_available;
-    if (p3_will > slots_left) p3_will = slots_left;
-    unsigned int after_p3 = after_p2 + p3_will;
-    
-    if (after_p3 >= target) {
+    FLAMEGPU->setVariable<unsigned int>("debug_curr_ops", curr_ops);
+    FLAMEGPU->setVariable<unsigned int>("debug_target", target);
+    if (curr_ops >= target) {
+        FLAMEGPU->setVariable<unsigned int>("debug_need", 0u);
         return flamegpu::ALIVE;
     }
     
-    unsigned int deficit = target - after_p3;
+    unsigned int deficit = target - curr_ops;
+    FLAMEGPU->setVariable<unsigned int>("debug_need", deficit);
     
     // Курсоры
     unsigned int next_idx = FLAMEGPU->getVariable<unsigned int>("next_idx");
@@ -358,6 +374,9 @@ def register_spawn_dynamic_v7(model: fg.ModelDescription, heli_agent: fg.AgentDe
     spawn_mgr.newVariableUInt("next_idx", first_dynamic_idx)
     spawn_mgr.newVariableUInt("next_acn", base_acn_spawn)
     spawn_mgr.newVariableUInt("total_spawned", 0)
+    spawn_mgr.newVariableUInt("debug_curr_ops", 0)
+    spawn_mgr.newVariableUInt("debug_target", 0)
+    spawn_mgr.newVariableUInt("debug_need", 0)
     
     # Агенты-тикеты
     spawn_ticket = model.newAgent("SpawnDynamicTicket")
@@ -415,6 +434,9 @@ def register_spawn_dynamic_v8(model: fg.ModelDescription, heli_agent: fg.AgentDe
     spawn_mgr.newVariableUInt("next_idx", first_dynamic_idx)
     spawn_mgr.newVariableUInt("next_acn", base_acn_spawn)
     spawn_mgr.newVariableUInt("total_spawned", 0)
+    spawn_mgr.newVariableUInt("debug_curr_ops", 0)
+    spawn_mgr.newVariableUInt("debug_target", 0)
+    spawn_mgr.newVariableUInt("debug_need", 0)
     
     spawn_ticket = model.newAgent("SpawnDynamicTicket")
     spawn_ticket.newState("default")
@@ -424,7 +446,7 @@ def register_spawn_dynamic_v8(model: fg.ModelDescription, heli_agent: fg.AgentDe
     mgr_fn.setInitialState("default")
     mgr_fn.setEndState("default")
     
-    ticket_fn = spawn_ticket.newRTCFunction("rtc_spawn_dynamic_ticket_v8", RTC_SPAWN_DYNAMIC_TICKET_V7)
+    ticket_fn = spawn_ticket.newRTCFunction("rtc_spawn_dynamic_ticket_v8", RTC_SPAWN_DYNAMIC_TICKET_V8)
     ticket_fn.setAgentOutput(heli_agent, "operations")
     ticket_fn.setInitialState("default")
     ticket_fn.setEndState("default")
