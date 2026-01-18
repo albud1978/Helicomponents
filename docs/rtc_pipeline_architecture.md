@@ -4,8 +4,8 @@
 - `deterministic_dates_mp` ограничен `MAX_DETERMINISTIC_DATES=500`; при превышении лимита даты обрезаются.
 - `unserviceable` не участвует в `min_dynamic` и не влияет на adaptive‑шаги.
 - RepairLine — общий пул линий, используется только в квотировании (P2/P3), не в scheduler.
-- P2/P3: условия `day >= repair_time`, `repair_days == 0`, линия с `free_days >= repair_time`.
-- `repair_days` декрементируется в `unserviceable` и `inactive` на величину `adaptive_days`.
+- P2/P3: условия `day >= repair_time`, `repair_days == 0`, линия с `free_days >= repair_time` и `aircraft_number == 0` (+ защита от повтора acn в соседние дни).
+- `repair_days` декрементируется только в `unserviceable`; для `inactive` всегда 0 и не участвует в шаге.
 - V8 readiness для `unserviceable`: `repair_days == 0` и `day >= repair_time` (для квот и динамического спавна, включая post‑quota counts).
 - Динамический спавн Mi‑17 учитывает лимит RepairLine слотов (P2/P3).
 

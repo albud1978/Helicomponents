@@ -79,24 +79,25 @@ python3 code/extract_master.py
 | `docs/validation.md` | Инварианты и процедуры тестирования |
 | `docs/spawn_dynamic_architecture.md` | Архитектура динамического спавна |
 
-### 🚀 LIMITER V7 — основная архитектура (ветка feature/flame-messaging)
+### 🚀 LIMITER V8 — основная архитектура (ветка feature/flame-messaging)
 
-> **⚠️ В этой ветке основной код — LIMITER V7 (`orchestrator_limiter_v7.py`)**
-> V7 = однофазная архитектура без intent_state + 100% GPU-only адаптивные шаги.
+> **⚠️ В этой ветке основной код — LIMITER V8 (`orchestrator_limiter_v8.py`)**
+> V8 = RepairLine + adaptive steps с deterministic_dates.
 
 | Файл | Статус | Описание |
 |------|--------|----------|
-| **`code/sim_v2/messaging/orchestrator_limiter_v7.py`** | ✅ **ОСНОВНОЙ** | Однофазная архитектура, 100% GPU-only |
+| **`code/sim_v2/messaging/orchestrator_limiter_v8.py`** | ✅ **ОСНОВНОЙ** | RepairLine + adaptive steps (deterministic_dates) |
 | `code/sim_v2/messaging/orchestrator_limiter_v5.py` | ⚡ Резервный | Двухфазная (intent-based), 100% GPU-only |
 | `code/sim_v2/messaging/orchestrator_limiter_v3.py` | 📦 Архивный | `while step()` + HF |
 | `code/sim_v2/messaging/rtc_state_transitions_v7.py` | ✅ Актуальный | Однофазные переходы состояний |
 | `code/sim_v2/messaging/rtc_limiter_optimized.py` | ✅ Актуальный | Бинарный поиск limiter через mp5_cumsum |
 | `code/sim_v2/messaging/rtc_limiter_v5.py` | ✅ Актуальный | GPU-only модули (current_day, adaptive) |
-| **`docs/limiter_architecture.md`** | 📄 Документ | **Архитектура LIMITER V7 с таблицей модулей** |
+| **`docs/limiter_architecture.md`** | 📄 Документ | **Архитектура LIMITER V8 с таблицей слоёв** |
 
 **Архивные** (не использовать):
 | Файл | Описание |
 |------|----------|
+| `code/sim_v2/messaging/orchestrator_limiter_v7.py` | Legacy V7 (однофазная архитектура) |
 | `orchestrator_limiter.py` | Старая версия без оптимизации limiter |
 | `orchestrator_limiter_v2.py` | Промежуточная версия (ежедневные шаги) |
 | `orchestrator_limiter_v4.py` | Промежуточная GPU-only версия |

@@ -79,8 +79,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_slots_v8, flamegpu::MessageArray, flameg
     for (unsigned int i = 0u; i < repair_quota; ++i) {{
         auto msg = FLAMEGPU->message_in.at(i);
         const unsigned int free_days = msg.getVariable<unsigned int>("free_days");
+        const unsigned int acn = msg.getVariable<unsigned int>("aircraft_number");
         
-        if (free_days >= mi8_rt && count_mi8 < {REPAIR_LINES_MAX}u) {{
+        if (acn == 0u && free_days >= mi8_rt && count_mi8 < {REPAIR_LINES_MAX}u) {{
             unsigned int pos = count_mi8;
             while (pos > 0u && free_days < days_mi8[pos - 1u]) {{
                 days_mi8[pos] = days_mi8[pos - 1u];
@@ -92,7 +93,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_slots_v8, flamegpu::MessageArray, flameg
             ++count_mi8;
         }}
         
-        if (free_days >= mi17_rt && count_mi17 < {REPAIR_LINES_MAX}u) {{
+        if (acn == 0u && free_days >= mi17_rt && count_mi17 < {REPAIR_LINES_MAX}u) {{
             unsigned int pos = count_mi17;
             while (pos > 0u && free_days < days_mi17[pos - 1u]) {{
                 days_mi17[pos] = days_mi17[pos - 1u];
@@ -168,7 +169,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    const unsigned int frames = {RTC_MAX_FRAMES}u;
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
     
@@ -296,11 +297,29 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     const unsigned int best_days = FLAMEGPU->getVariable<unsigned int>("repair_line_day");
     auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
     auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
+    auto line_last_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_acn_mp");
+    auto line_last_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_day_mp");
+    
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    const unsigned int last_acn = line_last_acn[line_id];
+    const unsigned int last_day = line_last_day[line_id];
+    if (last_acn == acn && last_day == (current_day > 0u ? current_day - 1u : 0u)) {{
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+        return flamegpu::ALIVE;
+    }}
     
     const unsigned int old_days = line_mp[line_id].exchange(0u);
     if (old_days == best_days) {{
-        const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+        const unsigned int repair_time = (group_by == 1u)
+            ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
+            : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
         line_acn[line_id].exchange(acn);
+        line_rt[line_id].exchange(repair_time);
+        line_last_acn[line_id].exchange(acn);
+        line_last_day[line_id].exchange(current_day);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
     }} else {{
         FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
@@ -322,7 +341,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    const unsigned int frames = {RTC_MAX_FRAMES}u;
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
     
@@ -461,11 +480,29 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     const unsigned int best_days = FLAMEGPU->getVariable<unsigned int>("repair_line_day");
     auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
     auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
+    auto line_last_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_acn_mp");
+    auto line_last_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_day_mp");
+    
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    const unsigned int last_acn = line_last_acn[line_id];
+    const unsigned int last_day = line_last_day[line_id];
+    if (last_acn == acn && last_day == (current_day > 0u ? current_day - 1u : 0u)) {{
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+        return flamegpu::ALIVE;
+    }}
     
     const unsigned int old_days = line_mp[line_id].exchange(0u);
     if (old_days == best_days) {{
-        const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+        const unsigned int repair_time = (group_by == 1u)
+            ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
+            : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
         line_acn[line_id].exchange(acn);
+        line_rt[line_id].exchange(repair_time);
+        line_last_acn[line_id].exchange(acn);
+        line_last_day[line_id].exchange(current_day);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
     }} else {{
         FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
