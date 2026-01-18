@@ -81,22 +81,13 @@ class MessagingQuotaValidator:
         
         # quota_target из flight_program_ac
         quota_query = f"""
-            WITH base AS (
-                SELECT 
-                    dateDiff('day', toDate('{self.version_date_str}'), dates) as day_index,
-                    ops_counter_mi8 as t8,
-                    ops_counter_mi17 as t17,
-                    leadInFrame(ops_counter_mi8, 1, ops_counter_mi8) OVER (ORDER BY dates) as t8_next,
-                    leadInFrame(ops_counter_mi17, 1, ops_counter_mi17) OVER (ORDER BY dates) as t17_next
-                FROM flight_program_ac
-                WHERE version_date = toDate('{self.version_date_str}')
-            )
             SELECT 
-                day_index,
-                least(t8, t8_next) as quota_mi8,
-                least(t17, t17_next) as quota_mi17
-            FROM base
-            ORDER BY day_index
+                dateDiff('day', toDate('{self.version_date_str}'), dates) as day_index,
+                ops_counter_mi8 as quota_mi8,
+                ops_counter_mi17 as quota_mi17
+            FROM flight_program_ac
+            WHERE version_date = toDate('{self.version_date_str}')
+            ORDER BY dates
         """
         
         quota_data = self.client.execute(quota_query)
@@ -400,11 +391,14 @@ class MessagingIncrementsValidator:
                 FROM (
                     SELECT 
                         idx,
+                        state,
                         lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state,
                         ifNull(sne - lagInFrame(sne) OVER (PARTITION BY idx ORDER BY day_u16), 0) as delta_sne
                     FROM {self.table_expr}
                 )
                 WHERE prev_state IS NOT NULL AND prev_state != ''
+                  AND state IS NOT NULL AND state != ''
+                  AND state != 'operations'
                 GROUP BY prev_state
             """
             
@@ -437,7 +431,9 @@ class MessagingIncrementsValidator:
                     FROM {self.table_expr}
                 )
                 WHERE prev_state IS NOT NULL AND prev_state != ''
+                  AND state IS NOT NULL AND state != ''
                   AND prev_state != 'operations'
+                  AND state != 'operations'
                   AND delta_sne > 0
                 ORDER BY day_u16, idx
                 LIMIT 50
@@ -498,16 +494,18 @@ class MessagingIncrementsValidator:
             query = f"""
                 SELECT 
                     idx,
-                    sumIf(delta_sne, prev_state = 'operations') as sum_ops,
-                    sumIf(delta_sne, prev_state != 'operations') as sum_non_ops
+                    sumIf(delta_sne, prev_state = 'operations' OR state = 'operations') as sum_ops,
+                    sumIf(delta_sne, prev_state != 'operations' AND state != 'operations') as sum_non_ops
                 FROM (
                     SELECT 
                         idx,
+                        state,
                         lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state,
                         ifNull(sne - lagInFrame(sne) OVER (PARTITION BY idx ORDER BY day_u16), 0) as delta_sne
                     FROM {self.table_expr}
                 )
                 WHERE prev_state IS NOT NULL AND prev_state != ''
+                  AND state IS NOT NULL AND state != ''
                 GROUP BY idx
             """
             
@@ -580,16 +578,18 @@ class MessagingIncrementsValidator:
                 SELECT 
                     group_by,
                     countDistinct(idx) as ac_count,
-                    sumIf(delta_sne, prev_state = 'operations') / 60.0 as total_hours
+                    sumIf(delta_sne, prev_state = 'operations' OR state = 'operations') / 60.0 as total_hours
                 FROM (
                     SELECT 
                         idx,
                         group_by,
+                        state,
                         lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state,
                         ifNull(sne - lagInFrame(sne) OVER (PARTITION BY idx ORDER BY day_u16), 0) as delta_sne
                     FROM {self.table_expr}
                 )
                 WHERE prev_state IS NOT NULL AND prev_state != ''
+                  AND state IS NOT NULL AND state != ''
                 GROUP BY group_by
             """
         else:

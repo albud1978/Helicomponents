@@ -94,16 +94,18 @@
 | 37 | v8_count_agents_post_quota | `rtc_count_*` | all | Post‑quota counts для расчёта дефицита |
 | 38 | v8_promote_inactive_post | `rtc_promote_inactive_post_v7` | 1 | Дополнительный добор inactive |
 | 39 | v8_inactive_to_ops_post | `rtc_inactive_to_ops_post_v7` | 1→2 | Применение post‑добора |
+| 40 | v8_reset_buffers_spawn | `rtc_reset_buffers_v7` | all | Сброс буферов перед spawn |
+| 41 | v8_count_agents_spawn | `rtc_count_*` | all | Актуальные counts для spawn (после post‑добора) |
 | **ФАЗА 3.75: RepairLine (post‑quota)** |||||
-| 40 | v8_repair_line_sync_post | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линий после квот |
+| 42 | v8_repair_line_sync_post | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линий после квот |
 | **ФАЗА 4: Динамический спавн** |||||
-| 41 | v8_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr_v8` | SpawnMgr | Расчёт дефицита для спавна |
-| 42 | v8_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket_v7` | Ticket→ops | Создание новых агентов |
+| 43 | v8_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr_v8` | SpawnMgr | Расчёт дефицита для спавна |
+| 44 | v8_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket_v7` | Ticket→ops | Создание новых агентов |
 | **ФАЗА 5: Limiter (min_limiter)** |||||
-| 43 | L_limiter_entry | `rtc_compute_limiter_on_entry` | 2→2 | Пересчёт limiter при входе/нулевом значении |
-| 44 | L_limiter_min | `rtc_compute_min_limiter` | 2→2 | Сбор минимального limiter по ops |
+| 45 | L_limiter_entry | `rtc_compute_limiter_on_entry` | 2→2 | Пересчёт limiter при входе/нулевом значении |
+| 46 | L_limiter_min | `rtc_compute_min_limiter` | 2→2 | Сбор минимального limiter по ops |
 | **ФАЗА 6: Update day** |||||
-| 45 | v8_update_day | `HF_UpdateDayV8` | Host | Обновление `current_day` по `adaptive_days` |
+| 47 | v8_update_day | `HF_UpdateDayV8` | Host | Обновление `current_day` по `adaptive_days` |
 
 ---
 

@@ -183,6 +183,7 @@ class V2BaseModelMessaging:
         self.env.newPropertyUInt("step_days", 1)
         self.env.newPropertyUInt("quota_enabled", 1)  # По умолчанию квотирование включено
         
+        
         # Константы нормативов из MP1
         self._setup_norm_constants(env_data)
     
@@ -318,6 +319,7 @@ class V2BaseModelMessaging:
         # Quota gap для логирования (per-day, не per-agent)
         self.env.newMacroPropertyInt32("mp2_quota_gap_mi8", model_build.MAX_DAYS + 1)
         self.env.newMacroPropertyInt32("mp2_quota_gap_mi17", model_build.MAX_DAYS + 1)
+        
         
         # ═══════════════════════════════════════════════════════════════════════
         # MP2 Transition flags (для spawn_v2 и rtc_mp2_writer)

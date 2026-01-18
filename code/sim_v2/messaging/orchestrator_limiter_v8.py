@@ -49,10 +49,30 @@ import model_build
 import rtc_spawn_dynamic_v7
 
 
-def collect_agents_state(simulation, agent_desc, current_day, version_date_int, version_id):
+def collect_agents_state(simulation, agent_desc, current_day, version_date_int, version_id, spawn_mgr_desc=None):
     """Собирает состояние всех агентов в текущий момент"""
     states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage', 'unserviceable']
     rows = []
+    
+    def _get_env_u32(name: str, default: int = 0) -> int:
+        if hasattr(simulation, "getEnvironmentPropertyUInt"):
+            return int(simulation.getEnvironmentPropertyUInt(name))
+        if hasattr(simulation, "getEnvironmentProperty"):
+            return int(simulation.getEnvironmentProperty(name))
+        return default
+    
+    env_current_day = _get_env_u32("current_day", current_day)
+    spawn_debug_curr_ops = 0
+    spawn_debug_target = 0
+    spawn_debug_need = 0
+    if spawn_mgr_desc is not None:
+        pop_mgr = fg.AgentVector(spawn_mgr_desc)
+        simulation.getPopulationData(pop_mgr, "default")
+        if pop_mgr.size() > 0:
+            mgr = pop_mgr.at(0)
+            spawn_debug_curr_ops = mgr.getVariableUInt("debug_curr_ops")
+            spawn_debug_target = mgr.getVariableUInt("debug_target")
+            spawn_debug_need = mgr.getVariableUInt("debug_need")
     
     for state_name in states:
         pop = fg.AgentVector(agent_desc)
@@ -85,6 +105,10 @@ def collect_agents_state(simulation, agent_desc, current_day, version_date_int, 
                 'debug_repair_candidate': agent.getVariableUInt('debug_repair_candidate'),
                 'debug_repair_line_id': agent.getVariableUInt('debug_repair_line_id'),
                 'debug_repair_line_day': agent.getVariableUInt('debug_repair_line_day'),
+                'spawn_debug_curr_ops': spawn_debug_curr_ops,
+                'spawn_debug_target': spawn_debug_target,
+                'spawn_debug_need': spawn_debug_need,
+                'debug_current_day': env_current_day,
             })
     return rows
 
@@ -467,7 +491,8 @@ class LimiterV8Orchestrator:
             # День 0
             rows = collect_agents_state(
                 self.simulation, self.base_model.agent,
-                0, version_date_int, version_id
+                0, version_date_int, version_id,
+                spawn_mgr_desc=self.spawn_data.get('mgr_agent') if self.spawn_data else None
             )
             mp2_rows.extend(rows)
             recorded_days.add(0)
@@ -503,7 +528,8 @@ class LimiterV8Orchestrator:
                 if day_to_record not in recorded_days:
                     rows = collect_agents_state(
                         self.simulation, self.base_model.agent,
-                        day_to_record, version_date_int, version_id
+                        day_to_record, version_date_int, version_id,
+                        spawn_mgr_desc=self.spawn_data.get('mgr_agent') if self.spawn_data else None
                     )
                     mp2_rows.extend(rows)
                     recorded_days.add(day_to_record)
