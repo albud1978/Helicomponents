@@ -53,24 +53,24 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_write_v8, flamegpu::MessageNone, flamegp
 RTC_REPAIR_LINE_ASSIGN_REPAIR = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_assign_repair_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Назначение линии для repair->serviceable (без порога free_days)
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
+    if (exit_date == 0xFFFFFFFFu || current_day < exit_date) {{
+        return flamegpu::ALIVE;
+    }}
     const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
     auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
     
-    unsigned int best_line = 0xFFFFFFFFu;
-    unsigned int best_days = 0xFFFFFFFFu;
+    const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     for (unsigned int i = 0u; i < repair_quota; ++i) {{
-        const unsigned int fd = mp_days[i];
-        if (fd < best_days) {{
-            best_days = fd;
-            best_line = i;
+        const unsigned int prev = mp_acn[i].exchange(acn);
+        if (prev == 0u) {{
+            mp_days[i].exchange(0u);
+            FLAMEGPU->setVariable<unsigned int>("repair_line_id", i);
+            break;
         }}
     }}
-    
-    if (best_line == 0xFFFFFFFFu) return flamegpu::ALIVE;
-    
-    FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
-    FLAMEGPU->setVariable<unsigned int>("repair_line_id", best_line);
-    FLAMEGPU->setVariable<unsigned int>("repair_line_day", best_days);
     return flamegpu::ALIVE;
 }}
 """

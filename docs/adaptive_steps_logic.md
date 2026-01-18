@@ -12,7 +12,7 @@
 |--------|---------|-------------|
 | **Механизм ремонта** | RepairLine.free_days | общий пул, число линий = repair_number из MP |
 | **exit_date для unsvc** | УДАЛЁН | Заменён на RepairLine‑проверку |
-| **repair_days для unsvc** | НЕ ИСПОЛЬЗУЕТСЯ | unsvc не декрементируется |
+| **repair_days для unsvc** | ИСПОЛЬЗУЕТСЯ | unsvc декрементирует repair_days до 0 |
 | **Правило ресурса** | next-day dt (`SNE + dt >= LL`) | Предотвращение переналёта |
 | **limiter=0** | Обязательный выход (иначе EXCEPTION) | Гарантия корректности |
 | **unsvc в min_dynamic** | НЕ участвует | Управляется через RepairLine |
@@ -75,6 +75,7 @@ deterministic_dates[] = sorted([
 deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 Всего: ~94 даты (все — дни симуляции)
 ```
+**Обязательная дата:** `repair_time` (например, 180) — добавляется в deterministic_dates.
 **⚠️ Ограничение:** `MAX_DETERMINISTIC_DATES=500` (RTC). Если дат больше, лишние даты **отбрасываются**, события будут потеряны.
 
 ---
@@ -87,7 +88,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 |--------|------------|--------------|
 | **operations** | `limiter` | Дней до ресурсного лимита (MIN(LL-SNE, OH-PPR)) |
 | **repair** | `repair_days` | Дней до конца ремонта |
-| **unserviceable** | — | НЕ используется (квота через RepairLine) |
+| **unserviceable** | `repair_days` | Дней до готовности к ремонту |
 | **остальные** | — | Не участвуют в min_dynamic |
 
 ### 2.2. RepairLine (repair_number → число линий)
@@ -97,8 +98,8 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 **RepairLine (для каждой линии):**
 ```
   - free_days += adaptive_days (всегда)
-  - прием в ремонт только если free_days >= repair_time
-  - при приёме: free_days = 0, aircraft_number = acn (однократно)
+  - линия доступна если free_days >= repair_time
+  - при назначении: free_days = 0, aircraft_number = acn (однократно)
 ```
 **Day‑0:** агенты, пришедшие уже в repair, выходят по детерминированной exit‑дате; после day‑0 ремонт идёт только через RepairLine.
 
@@ -107,9 +108,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 ВХОД: repair_number (число линий), дефицит ops
 
 1. Готовность агента:
-   if current_day < status_change_day + repair_time:
-     // Агент ещё не готов к ремонту
-     return
+   day >= repair_time AND repair_days == 0
 
 2. Отфильтровать RepairLine:
    free_days >= repair_time
@@ -131,6 +130,8 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 
 7. При подтверждении линии:
    free_days = 0, aircraft_number = acn (однократно)
+8. Промоут в ops:
+   line.free_days >= repair_time AND deficit > 0
 ```
 
 **Протокол обмена сообщениями (внутри одного шага):**
@@ -140,7 +141,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
   - Каждая линия публикует free_days и aircraft_number
 
 Слой 2: QuotaManager формирует слоты (до P2/P3)
-  - Отбирает линии с free_days >= repair_time по типу
+  - Отбирает линии: aircraft_number = 0 AND free_days >= repair_time
   - Сохраняет списки слотов в MacroProperty (Mi-8 / Mi-17)
 
 Слой 3: P2/P3 использует слоты
@@ -188,7 +189,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 4. ДЕКРЕМЕНТЫ
    Для ops: limiter -= adaptive_days
    Для repair: repair_days -= adaptive_days
-   // unsvc НЕ декрементируется!
+   Для unsvc: repair_days -= adaptive_days (не влияет на min_dynamic)
 
 5. ИНКРЕМЕНТ ЛИНИЙ РЕМОНТА
   RepairLine.free_days += adaptive_days (для всех линий)
@@ -216,7 +217,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
 При переходе ops → unserviceable:
   PPR = 0                         // Сброс межремонтной наработки
   limiter = 0                     // Не участвует в min_dynamic
-  // НЕТ repair_days! Ожидание через RepairLine.free_days
+  repair_days = repair_time       // Планер ждёт минимум repair_time
 ```
 
 ### 4.2. repair с repair_days = 0
@@ -233,15 +234,16 @@ PPR = 0 (после ремонта)
 Агент в unserviceable ожидает решения QuotaManager
 
 Переход unsvc → ops возможен при:
-  1. Есть RepairLine с free_days >= repair_time
-  2. Есть дефицит в программе ops
+  1. day >= repair_time AND repair_days == 0
+  2. Есть RepairLine с free_days >= repair_time
+  3. Есть дефицит в программе ops
 
 Если условия НЕ выполнены → переход к spawn (покупка)
 ```
 
-**⚠️ ВАЖНО: repair_days для unserviceable НЕ используется!**
-- Вместо отслеживания repair_days каждого unsvc
-- Используем RepairLine (free_days)
+**⚠️ ВАЖНО: repair_days для unserviceable используется для readiness!**
+- repair_days декрементируется до 0
+- RepairLine подтверждает окно ремонта
 
 ### 4.4. Вход в operations
 
@@ -351,7 +353,7 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
 │  4. ДЕКРЕМЕНТ:                                                  │
 │     ops.limiter -= adaptive_days                                │
 │     repair.repair_days -= adaptive_days                         │
-│     // unsvc НЕ декрементируется!                               │
+│     // unsvc: repair_days -= adaptive_days (без влияния на min)  │
 │                                                                 │
 │  4b. ИНКРЕМЕНТ ЛИНИЙ РЕМОНТА:                                   │
 │     RepairLine.free_days += adaptive_days                       │
@@ -369,8 +371,8 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
 │  7. КВОТИРОВАНИЕ:                                               │
 │     Демоут если ops > target                                    │
 │     P1: serviceable → ops                                       │
-│     P2: unsvc → ops (если есть RepairLine.free_days >= repair_time) │
-│     P3: inactive → ops (если есть RepairLine.free_days >= repair_time)│
+│     P2: unsvc → ops (day>=repair_time, repair_days==0, line.free_days>=repair_time) │
+│     P3: inactive → ops (day>=repair_time, repair_days==0, line.free_days>=repair_time)│
 │     P4: spawn (если P2/P3 недоступны)                           │
 │     free_days = 0, aircraft_number = acn                        │
 │                                                                 │
@@ -408,9 +410,9 @@ V8 считает **922 "limiter шага"** — это шаги где adaptive
    - Ситуация `limiter=0 AND агент остаётся в ops` — **ОШИБКА!**
    - При обнаружении → выбросить exception, остановить симуляцию
 
-3. **repair_days используется только для day‑0 ремонта**
-   - repair_time берётся из MP по group_by агента
+3. **repair_days используется для day‑0 ремонта и readiness unsvc**
    - day‑0 exit_day = repair_time - repair_days (из heli_pandas)
+   - для unsvc: repair_days декрементируется до 0
 
 4. **Один датасет для сравнения**
    - Baseline и Limiter на ОДНОЙ дате

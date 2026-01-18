@@ -104,6 +104,51 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_increment_v8, flamegpu::MessageNone, flamegpu::M
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# V8: Декремент repair_days для unserviceable
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RTC_UNSVC_DECREMENT_V8 = """
+FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_decrement_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    const unsigned int adaptive_days = (current_day > prev_day) ? (current_day - prev_day) : 0u;
+    if (adaptive_days == 0u) return flamegpu::ALIVE;
+    
+    unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
+    if (repair_days > 0u) {
+        if (repair_days <= adaptive_days) {
+            repair_days = 0u;
+        } else {
+            repair_days -= adaptive_days;
+        }
+        FLAMEGPU->setVariable<unsigned int>("repair_days", repair_days);
+    }
+    return flamegpu::ALIVE;
+}
+"""
+
+# V8: Декремент repair_days для inactive
+RTC_INACTIVE_DECREMENT_V8 = """
+FLAMEGPU_AGENT_FUNCTION(rtc_inactive_decrement_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    const unsigned int adaptive_days = (current_day > prev_day) ? (current_day - prev_day) : 0u;
+    if (adaptive_days == 0u) return flamegpu::ALIVE;
+    
+    unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
+    if (repair_days > 0u) {
+        if (repair_days <= adaptive_days) {
+            repair_days = 0u;
+        } else {
+            repair_days -= adaptive_days;
+        }
+        FLAMEGPU->setVariable<unsigned int>("repair_days", repair_days);
+    }
+    return flamegpu::ALIVE;
+}
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # V8: Условия переходов с next-day dt проверкой
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -185,10 +230,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::Me
     // exit_date НЕ используется в V8 (квотирование через RepairLine)
     
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int repair_time = (group_by == 1u)
+        ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
+        : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
     FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
-    FLAMEGPU->setVariable<unsigned int>("repair_done", 0u);
+    FLAMEGPU->setVariable<unsigned int>("repair_days", repair_time);
     FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     
@@ -234,9 +283,11 @@ def register_ops_transitions_v8(model, agent):
     
     Слои:
     1. v8_ops_increment — инкремент SNE/PPR + сохранение dt_next
-    2. v8_ops_to_storage — переход 2→6
-    3. v8_ops_to_unsvc — переход 2→7
-    4. v8_check_limiter_zero — EXCEPTION если limiter=0 без перехода
+    2. v8_unsvc_decrement — декремент repair_days в unserviceable
+    3. v8_inactive_decrement — декремент repair_days в inactive
+    4. v8_ops_to_storage — переход 2→6
+    5. v8_ops_to_unsvc — переход 2→7
+    6. v8_check_limiter_zero — EXCEPTION если limiter=0 без перехода
     """
     print("\n📦 V8: Регистрация operations переходов (next-day dt)...")
     
@@ -247,7 +298,21 @@ def register_ops_transitions_v8(model, agent):
     fn.setEndState("operations")
     layer_incr.addAgentFunction(fn)
     
-    # 2. ops → storage (приоритет 1)
+    # 2. unserviceable: decrement repair_days
+    layer_unsvc = model.newLayer("v8_unsvc_decrement")
+    fn = agent.newRTCFunction("rtc_unsvc_decrement_v8", RTC_UNSVC_DECREMENT_V8)
+    fn.setInitialState("unserviceable")
+    fn.setEndState("unserviceable")
+    layer_unsvc.addAgentFunction(fn)
+    
+    # 3. inactive: decrement repair_days
+    layer_inactive = model.newLayer("v8_inactive_decrement")
+    fn = agent.newRTCFunction("rtc_inactive_decrement_v8", RTC_INACTIVE_DECREMENT_V8)
+    fn.setInitialState("inactive")
+    fn.setEndState("inactive")
+    layer_inactive.addAgentFunction(fn)
+    
+    # 4. ops → storage (приоритет 1)
     layer_storage = model.newLayer("v8_ops_to_storage")
     fn = agent.newRTCFunction("rtc_ops_to_storage_v8", RTC_OPS_TO_STORAGE_V8)
     fn.setRTCFunctionCondition(COND_OPS_TO_STORAGE_V8)
@@ -255,7 +320,7 @@ def register_ops_transitions_v8(model, agent):
     fn.setEndState("storage")
     layer_storage.addAgentFunction(fn)
     
-    # 3. ops → unserviceable (приоритет 2)
+    # 5. ops → unserviceable (приоритет 2)
     layer_unsvc = model.newLayer("v8_ops_to_unsvc")
     fn = agent.newRTCFunction("rtc_ops_to_unsvc_v8", RTC_OPS_TO_UNSVC_V8)
     fn.setRTCFunctionCondition(COND_OPS_TO_UNSVC_V8)
@@ -263,7 +328,7 @@ def register_ops_transitions_v8(model, agent):
     fn.setEndState("unserviceable")
     layer_unsvc.addAgentFunction(fn)
     
-    # 4. V8: Проверка limiter=0 без перехода (EXCEPTION)
+    # 6. V8: Проверка limiter=0 без перехода (EXCEPTION)
     layer_check = model.newLayer("v8_check_limiter_zero")
     fn = agent.newRTCFunction("rtc_check_limiter_zero_v8", RTC_CHECK_LIMITER_ZERO)
     fn.setInitialState("operations")
