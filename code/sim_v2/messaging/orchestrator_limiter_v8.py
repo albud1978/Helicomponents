@@ -474,43 +474,39 @@ class LimiterV8Orchestrator:
                     current_day = 0
                     adaptive_days = 0
                 
-                # Записываем состояние ПОСЛЕ шага, поэтому используем end_day из Environment
-                end_day = None
+                # Логируем состояние на ДЕНЬ, для которого применены квоты (prev_day)
+                prev_day = None
                 if hasattr(self.simulation, "getEnvironmentPropertyUInt"):
-                    end_day = int(self.simulation.getEnvironmentPropertyUInt("current_day"))
+                    prev_day = int(self.simulation.getEnvironmentPropertyUInt("prev_day"))
                 elif hasattr(self.simulation, "getEnvironmentProperty"):
-                    end_day = int(self.simulation.getEnvironmentProperty("current_day"))
+                    prev_day = int(self.simulation.getEnvironmentProperty("prev_day"))
                 elif hasattr(self.simulation, "getEnvironmentPropertyInt"):
-                    end_day = int(self.simulation.getEnvironmentPropertyInt("current_day"))
+                    prev_day = int(self.simulation.getEnvironmentPropertyInt("prev_day"))
                 
-                if end_day is None:
-                    raise RuntimeError("Не удалось прочитать current_day из Environment после шага")
+                if prev_day is None:
+                    raise RuntimeError("Не удалось прочитать prev_day из Environment после шага")
                 
-                if end_day > self.end_day:
-                    end_day = self.end_day
+                day_to_record = prev_day
+                if day_to_record > self.end_day:
+                    day_to_record = self.end_day
                 
-                if end_day not in recorded_days:
+                if day_to_record not in recorded_days:
                     rows = collect_agents_state(
                         self.simulation, self.base_model.agent,
-                        end_day, version_date_int, version_id
+                        day_to_record, version_date_int, version_id
                     )
                     mp2_rows.extend(rows)
-                    recorded_days.add(end_day)
+                    recorded_days.add(day_to_record)
                 
-                if end_day in self.debug_days:
-                    self._debug_day_snapshot(end_day)
+                if day_to_record in self.debug_days:
+                    self._debug_day_snapshot(day_to_record)
                 
                 if step_count >= max_steps:
                     break
             
-            # Последний день
-            if self.end_day not in recorded_days:
-                rows = collect_agents_state(
-                    self.simulation, self.base_model.agent,
-                    self.end_day, version_date_int, version_id
-                )
-                mp2_rows.extend(rows)
-                recorded_days.add(self.end_day)
+            # Финальный день фиксируем только если квоты применялись на этот день
+            if self.end_day in recorded_days:
+                pass
             
             gpu_time = time.perf_counter() - t_gpu_start
             
