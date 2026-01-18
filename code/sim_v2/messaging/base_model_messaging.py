@@ -459,6 +459,13 @@ class V2BaseModelMessaging:
         agent.newVariableUInt("promoted", 0)     # 1 = получил промоут в этом шаге
         agent.newVariableUInt("needs_demote", 0) # 1 = должен выйти из operations
         
+        # V8: отладочные флаги (снимок решений квот)
+        agent.newVariableUInt("debug_promoted", 0)
+        agent.newVariableUInt("debug_needs_demote", 0)
+        agent.newVariableUInt("debug_repair_candidate", 0)
+        agent.newVariableUInt("debug_repair_line_id", 0xFFFFFFFF)
+        agent.newVariableUInt("debug_repair_line_day", 0xFFFFFFFF)
+        
         print("  ✅ Agent HELI: 7 состояний, переменные + limiter + V7 флаги")
         
         return agent

@@ -278,6 +278,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
                 FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
                 FLAMEGPU->setVariable<unsigned int>("repair_line_id", line_id);
                 FLAMEGPU->setVariable<unsigned int>("repair_line_day", best_days);
+                FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
+                FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", line_id);
+                FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", best_days);
             }}
         }}
     }}
@@ -322,6 +325,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
         line_last_acn[line_id].exchange(acn);
         line_last_day[line_id].exchange(current_day);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
+        FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
     }} else {{
         line_last_acn[line_id].exchange(prev_last_acn);
         line_last_day[line_id].exchange(prev_last_day);
@@ -465,6 +469,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
                 FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
                 FLAMEGPU->setVariable<unsigned int>("repair_line_id", line_id);
                 FLAMEGPU->setVariable<unsigned int>("repair_line_day", best_days);
+                FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
+                FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", line_id);
+                FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", best_days);
             }}
         }}
     }}
@@ -509,6 +516,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
         line_last_acn[line_id].exchange(acn);
         line_last_day[line_id].exchange(current_day);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
+        FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
     }} else {{
         line_last_acn[line_id].exchange(prev_last_acn);
         line_last_day[line_id].exchange(prev_last_day);

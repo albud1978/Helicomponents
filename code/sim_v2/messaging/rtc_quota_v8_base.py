@@ -168,6 +168,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_demote_ops_v8, flamegpu::MessageNone, flamegpu::Mess
     // Если rank < excess — демоутим
     if (rank < excess) {{
         FLAMEGPU->setVariable<unsigned int>("needs_demote", 1u);
+        FLAMEGPU->setVariable<unsigned int>("debug_needs_demote", 1u);
     }}
     
     return flamegpu::ALIVE;
@@ -246,6 +247,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v8, flamegpu::MessageNone, flamegpu::Mes
     // Если rank < K — промоутим
     if (rank < K) {{
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
+        FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
     }}
     
     return flamegpu::ALIVE;
@@ -319,6 +321,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_post_v8, flamegpu::MessageNone, fla
     
     if (rank < K) {{
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
+        FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
     }}
     
     return flamegpu::ALIVE;
@@ -366,6 +369,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_flags_v8, flamegpu::MessageNone, flamegpu::Mes
     FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
     FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     FLAMEGPU->setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);
+    FLAMEGPU->setVariable<unsigned int>("debug_needs_demote", 0u);
+    FLAMEGPU->setVariable<unsigned int>("debug_promoted", 0u);
+    FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 0u);
+    FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", 0xFFFFFFFFu);
+    FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", 0xFFFFFFFFu);
     
     // Сброс transition флагов
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_3", 0u);

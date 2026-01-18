@@ -75,6 +75,16 @@ def collect_agents_state(simulation, agent_desc, current_day, version_date_int, 
                 'br': agent.getVariableUInt('br'),
                 'repair_days': agent.getVariableUInt('repair_days'),
                 'repair_time': agent.getVariableUInt('repair_time'),
+                'promoted': agent.getVariableUInt('promoted'),
+                'needs_demote': agent.getVariableUInt('needs_demote'),
+                'repair_candidate': agent.getVariableUInt('repair_candidate'),
+                'repair_line_id': agent.getVariableUInt('repair_line_id'),
+                'repair_line_day': agent.getVariableUInt('repair_line_day'),
+                'debug_promoted': agent.getVariableUInt('debug_promoted'),
+                'debug_needs_demote': agent.getVariableUInt('debug_needs_demote'),
+                'debug_repair_candidate': agent.getVariableUInt('debug_repair_candidate'),
+                'debug_repair_line_id': agent.getVariableUInt('debug_repair_line_id'),
+                'debug_repair_line_day': agent.getVariableUInt('debug_repair_line_day'),
             })
     return rows
 
