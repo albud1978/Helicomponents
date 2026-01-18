@@ -165,8 +165,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_demote_ops_v7, flamegpu::MessageNone, flamegpu::Mess
     if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
     unsigned int target_day = day;
     if (target_day >= days_total) target_day = (days_total > 0u ? days_total - 1u : 0u);
-    unsigned int target_day = day;
-    if (target_day >= days_total) target_day = (days_total > 0u ? days_total - 1u : 0u);
     
     // Подсчёт текущих в operations (включая динамические спавны!)
     // КРИТИЧНО: используем RTC_MAX_FRAMES, а не frames_total, чтобы учесть спавненных агентов
