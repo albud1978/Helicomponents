@@ -17,8 +17,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_sync_v8, flamegpu::MessageNone, flamegpu
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("line_id");
     auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
     auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    auto mp_last_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_acn_mp");
+    auto mp_last_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_day_mp");
     FLAMEGPU->setVariable<unsigned int>("free_days", mp_days[line_id]);
     FLAMEGPU->setVariable<unsigned int>("aircraft_number", mp_acn[line_id]);
+    FLAMEGPU->setVariable<unsigned int>("last_acn", mp_last_acn[line_id]);
+    FLAMEGPU->setVariable<unsigned int>("last_day", mp_last_day[line_id]);
     return flamegpu::ALIVE;
 }}
 """

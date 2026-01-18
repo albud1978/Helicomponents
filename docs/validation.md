@@ -77,6 +77,7 @@ export CUBE_CONFIG_PATH="$PWD/config"
 - Итого ошибок по валидации: **0**, предупреждений: **2**
 
 **Debug:** в MP2 фиксируются `spawn_debug_curr_ops/target/need` и `debug_current_day` для анализа динамического спавна.
+**Debug (временно):** в MP2 фиксируются `debug_step/debug_prev_day/debug_adaptive_days`, `debug_rl_*` и `debug_*_mi17` для диагностики RepairLine/квот. Состояние линий пишется в `sim_repair_lines_v8` (включая `last_acn/last_day`), слоты и P2‑метрики — в `sim_quota_mgr_v8` (первые 6 слотов Mi‑17). P2/P3 commit при занятом слоте выбирает следующий доступный в пределах слотов. Ready‑unsvc исключает агентов с уже назначенным `repair_line_id`.
 
 ## Валидация MESSAGING (лимитер без dt)
 

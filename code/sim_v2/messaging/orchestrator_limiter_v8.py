@@ -49,7 +49,9 @@ import model_build
 import rtc_spawn_dynamic_v7
 
 
-def collect_agents_state(simulation, agent_desc, current_day, version_date_int, version_id, spawn_mgr_desc=None):
+def collect_agents_state(simulation, agent_desc, current_day, version_date_int, version_id,
+                         step_id=0, prev_day=0, adaptive_days=0,
+                         spawn_mgr_desc=None, repair_line_desc=None):
     """Собирает состояние всех агентов в текущий момент"""
     states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage', 'unserviceable']
     rows = []
@@ -74,26 +76,61 @@ def collect_agents_state(simulation, agent_desc, current_day, version_date_int, 
             spawn_debug_target = mgr.getVariableUInt("debug_target")
             spawn_debug_need = mgr.getVariableUInt("debug_need")
     
+    # RepairLine stats (временное логирование)
+    repair_time = _get_env_u32("mi17_repair_time_const", 0)
+    rl_total = 0
+    rl_free = 0
+    rl_ready = 0
+    rl_min_free = 0
+    rl_max_free = 0
+    if repair_line_desc is not None:
+        pop_rl = fg.AgentVector(repair_line_desc)
+        simulation.getPopulationData(pop_rl, "default")
+        rl_total = pop_rl.size()
+        if rl_total > 0:
+            min_free = None
+            max_free = None
+            for i in range(rl_total):
+                line = pop_rl.at(i)
+                free_days = line.getVariableUInt("free_days")
+                aircraft_number = line.getVariableUInt("aircraft_number")
+                if min_free is None or free_days < min_free:
+                    min_free = free_days
+                if max_free is None or free_days > max_free:
+                    max_free = free_days
+                if aircraft_number == 0:
+                    rl_free += 1
+                    if repair_time > 0 and free_days >= repair_time:
+                        rl_ready += 1
+            rl_min_free = min_free if min_free is not None else 0
+            rl_max_free = max_free if max_free is not None else 0
+    
+    # Сбор состояния агентов
     for state_name in states:
         pop = fg.AgentVector(agent_desc)
         simulation.getPopulationData(pop, state_name)
         
         for i in range(pop.size()):
             agent = pop.at(i)
+            group_by = agent.getVariableUInt('group_by')
+            repair_days = agent.getVariableUInt('repair_days')
             rows.append({
                 'version_date': version_date_int,
                 'version_id': version_id,
+                'debug_step': step_id,
+                'debug_prev_day': prev_day,
+                'debug_adaptive_days': adaptive_days,
                 'day_u16': current_day,
                 'idx': agent.getVariableUInt('idx'),
                 'aircraft_number': agent.getVariableUInt('aircraft_number'),
-                'group_by': agent.getVariableUInt('group_by'),
+                'group_by': group_by,
                 'state': state_name,
                 'sne': agent.getVariableUInt('sne'),
                 'ppr': agent.getVariableUInt('ppr'),
                 'll': agent.getVariableUInt('ll'),
                 'oh': agent.getVariableUInt('oh'),
                 'br': agent.getVariableUInt('br'),
-                'repair_days': agent.getVariableUInt('repair_days'),
+                'repair_days': repair_days,
                 'repair_time': agent.getVariableUInt('repair_time'),
                 'promoted': agent.getVariableUInt('promoted'),
                 'needs_demote': agent.getVariableUInt('needs_demote'),
@@ -109,7 +146,172 @@ def collect_agents_state(simulation, agent_desc, current_day, version_date_int, 
                 'spawn_debug_target': spawn_debug_target,
                 'spawn_debug_need': spawn_debug_need,
                 'debug_current_day': env_current_day,
+                'debug_rl_total': rl_total,
+                'debug_rl_free': rl_free,
+                'debug_rl_ready': rl_ready,
+                'debug_rl_min_free': rl_min_free,
+                'debug_rl_max_free': rl_max_free,
+                'debug_ops_mi17': 0,
+                'debug_svc_mi17': 0,
+                'debug_unsvc_ready_mi17': 0,
+                'debug_inactive_ready_mi17': 0,
             })
+    
+    # Статусные счётчики для Mi-17 (временное логирование)
+    mi17_ops = 0
+    mi17_svc = 0
+    mi17_unsvc_ready = 0
+    mi17_inactive_ready = 0
+    for row in rows:
+        if row['group_by'] != 2:
+            continue
+        state_name = row['state']
+        repair_days = row['repair_days']
+        if state_name == "operations":
+            mi17_ops += 1
+        elif state_name == "serviceable":
+            mi17_svc += 1
+        elif state_name == "unserviceable":
+            if repair_days == 0 and (repair_time == 0 or current_day >= repair_time):
+                mi17_unsvc_ready += 1
+        elif state_name == "inactive":
+            if repair_days == 0 and (repair_time == 0 or current_day >= repair_time):
+                mi17_inactive_ready += 1
+    
+    for row in rows:
+        row['debug_ops_mi17'] = mi17_ops
+        row['debug_svc_mi17'] = mi17_svc
+        row['debug_unsvc_ready_mi17'] = mi17_unsvc_ready
+        row['debug_inactive_ready_mi17'] = mi17_inactive_ready
+    return rows
+
+
+def collect_repair_lines_state(simulation, repair_line_desc, day_u16, version_date_int, version_id,
+                               step_id=0, prev_day=0, adaptive_days=0):
+    """Собирает состояние RepairLine агентов (временное логирование)."""
+    if repair_line_desc is None:
+        return []
+    
+    def _get_env_u32(name: str, default: int = 0) -> int:
+        if hasattr(simulation, "getEnvironmentPropertyUInt"):
+            return int(simulation.getEnvironmentPropertyUInt(name))
+        if hasattr(simulation, "getEnvironmentProperty"):
+            return int(simulation.getEnvironmentProperty(name))
+        return default
+    
+    env_current_day = _get_env_u32("current_day", day_u16)
+    mi8_rt = _get_env_u32("mi8_repair_time_const", 0)
+    mi17_rt = _get_env_u32("mi17_repair_time_const", 0)
+    
+    pop_rl = fg.AgentVector(repair_line_desc)
+    simulation.getPopulationData(pop_rl, "default")
+    rows = []
+    for i in range(pop_rl.size()):
+        line = pop_rl.at(i)
+        line_id = line.getVariableUInt("line_id")
+        free_days = line.getVariableUInt("free_days")
+        acn = line.getVariableUInt("aircraft_number")
+        is_free = 1 if acn == 0 else 0
+        ready_mi8 = 1 if (acn == 0 and mi8_rt > 0 and free_days >= mi8_rt) else 0
+        ready_mi17 = 1 if (acn == 0 and mi17_rt > 0 and free_days >= mi17_rt) else 0
+        rows.append({
+            'version_date': version_date_int,
+            'version_id': version_id,
+            'day_u16': day_u16,
+            'debug_step': step_id,
+            'debug_prev_day': prev_day,
+            'debug_adaptive_days': adaptive_days,
+            'debug_current_day': env_current_day,
+            'line_id': line_id,
+            'free_days': free_days,
+            'aircraft_number': acn,
+            'last_acn': line.getVariableUInt("last_acn"),
+            'last_day': line.getVariableUInt("last_day"),
+            'is_free': is_free,
+            'ready_mi8': ready_mi8,
+            'ready_mi17': ready_mi17,
+        })
+    return rows
+
+
+def collect_quota_manager_state(simulation, quota_desc, day_u16, version_date_int, version_id,
+                                step_id=0, prev_day=0, adaptive_days=0):
+    """Собирает debug-состояние QuotaManager (временное логирование слотов)."""
+    def _get_env_u32(name: str, default: int = 0) -> int:
+        if hasattr(simulation, "getEnvironmentPropertyUInt"):
+            return int(simulation.getEnvironmentPropertyUInt(name))
+        if hasattr(simulation, "getEnvironmentProperty"):
+            return int(simulation.getEnvironmentProperty(name))
+        return default
+    
+    env_current_day = _get_env_u32("current_day", day_u16)
+    
+    pop = fg.AgentVector(quota_desc)
+    simulation.getPopulationData(pop)
+    rows = []
+    for agent in pop:
+        rows.append({
+            'version_date': version_date_int,
+            'version_id': version_id,
+            'day_u16': day_u16,
+            'debug_step': step_id,
+            'debug_prev_day': prev_day,
+            'debug_adaptive_days': adaptive_days,
+            'debug_current_day': env_current_day,
+            'group_by': int(agent.getVariableUInt8("group_by")),
+            'debug_slots_count_mi17': int(agent.getVariableUInt("debug_slots_count_mi17")),
+            'debug_slot_mi17_0': int(agent.getVariableUInt("debug_slot_mi17_0")),
+            'debug_slot_mi17_1': int(agent.getVariableUInt("debug_slot_mi17_1")),
+            'debug_slot_mi17_2': int(agent.getVariableUInt("debug_slot_mi17_2")),
+            'debug_slot_mi17_3': int(agent.getVariableUInt("debug_slot_mi17_3")),
+            'debug_slot_mi17_4': int(agent.getVariableUInt("debug_slot_mi17_4")),
+            'debug_slot_mi17_5': int(agent.getVariableUInt("debug_slot_mi17_5")),
+            'debug_p2_ops': int(agent.getVariableUInt("debug_p2_ops")),
+            'debug_p2_target': int(agent.getVariableUInt("debug_p2_target")),
+            'debug_p2_deficit': int(agent.getVariableUInt("debug_p2_deficit")),
+            'debug_p2_needed': int(agent.getVariableUInt("debug_p2_needed")),
+            'debug_p2_slots': int(agent.getVariableUInt("debug_p2_slots")),
+            'debug_p2_svc': int(agent.getVariableUInt("debug_p2_svc")),
+            'debug_p2_unsvc': int(agent.getVariableUInt("debug_p2_unsvc")),
+        })
+    return rows
+
+
+def collect_repair_slots_state(simulation, day_u16, version_date_int, version_id,
+                               step_id=0, prev_day=0, adaptive_days=0):
+    """Собирает слоты RepairLine для Mi-17 (временное логирование)."""
+    def _get_env_u32(name: str, default: int = 0) -> int:
+        if hasattr(simulation, "getEnvironmentPropertyUInt"):
+            return int(simulation.getEnvironmentPropertyUInt(name))
+        if hasattr(simulation, "getEnvironmentProperty"):
+            return int(simulation.getEnvironmentProperty(name))
+        return default
+    
+    env_current_day = _get_env_u32("current_day", day_u16)
+    repair_quota = _get_env_u32("repair_quota", 0)
+    
+    try:
+        slots_mi17 = simulation.getEnvironmentMacroPropertyUInt("repair_line_slots_mi17")
+        slots_count_mp = simulation.getEnvironmentMacroPropertyUInt("repair_line_slots_count_mp")
+    except Exception:
+        return []
+    
+    slots_count = int(slots_count_mp[1]) if len(slots_count_mp) > 1 else 0
+    rows = []
+    limit = repair_quota if repair_quota > 0 else min(len(slots_mi17), REPAIR_LINES_MAX)
+    for i in range(limit):
+        rows.append({
+            'version_date': version_date_int,
+            'version_id': version_id,
+            'day_u16': day_u16,
+            'debug_step': step_id,
+            'debug_prev_day': prev_day,
+            'debug_adaptive_days': adaptive_days,
+            'debug_current_day': env_current_day,
+            'slot_idx': i,
+            'line_id': int(slots_mi17[i]),
+            'slots_count': slots_count,
+        })
     return rows
 
 
@@ -476,6 +678,8 @@ class LimiterV8Orchestrator:
         
         # Подготовка MP2
         mp2_rows = []
+        repair_line_rows = []
+        quota_rows = []
         vd = date.fromisoformat(self.version_date)
         version_date_int = vd.year * 10000 + vd.month * 100 + vd.day
         version_id = int(self.env_data.get('version_id_u32', 1))
@@ -492,9 +696,25 @@ class LimiterV8Orchestrator:
             rows = collect_agents_state(
                 self.simulation, self.base_model.agent,
                 0, version_date_int, version_id,
-                spawn_mgr_desc=self.spawn_data.get('mgr_agent') if self.spawn_data else None
+                step_id=0, prev_day=0, adaptive_days=0,
+                spawn_mgr_desc=self.spawn_data.get('mgr_agent') if self.spawn_data else None,
+                repair_line_desc=self.base_model.repair_line_agent
             )
             mp2_rows.extend(rows)
+            rl_rows = collect_repair_lines_state(
+                self.simulation,
+                self.base_model.repair_line_agent,
+                0, version_date_int, version_id,
+                step_id=0, prev_day=0, adaptive_days=0
+            )
+            repair_line_rows.extend(rl_rows)
+            qm_rows = collect_quota_manager_state(
+                self.simulation,
+                self.base_model.quota_agent,
+                0, version_date_int, version_id,
+                step_id=0, prev_day=0, adaptive_days=0
+            )
+            quota_rows.extend(qm_rows)
             recorded_days.add(0)
             print(f"  [Step 0] day=0 (начальное состояние)")
             
@@ -529,9 +749,25 @@ class LimiterV8Orchestrator:
                     rows = collect_agents_state(
                         self.simulation, self.base_model.agent,
                         day_to_record, version_date_int, version_id,
-                        spawn_mgr_desc=self.spawn_data.get('mgr_agent') if self.spawn_data else None
+                        step_id=step_count, prev_day=prev_day, adaptive_days=adaptive_days,
+                        spawn_mgr_desc=self.spawn_data.get('mgr_agent') if self.spawn_data else None,
+                        repair_line_desc=self.base_model.repair_line_agent
                     )
                     mp2_rows.extend(rows)
+                    rl_rows = collect_repair_lines_state(
+                        self.simulation,
+                        self.base_model.repair_line_agent,
+                        day_to_record, version_date_int, version_id,
+                        step_id=step_count, prev_day=prev_day, adaptive_days=adaptive_days
+                    )
+                    repair_line_rows.extend(rl_rows)
+                    qm_rows = collect_quota_manager_state(
+                        self.simulation,
+                        self.base_model.quota_agent,
+                        day_to_record, version_date_int, version_id,
+                        step_id=step_count, prev_day=prev_day, adaptive_days=adaptive_days
+                    )
+                    quota_rows.extend(qm_rows)
                     recorded_days.add(day_to_record)
                 
                 if day_to_record in self.debug_days:
@@ -585,6 +821,36 @@ class LimiterV8Orchestrator:
             )
             drain_time = time.perf_counter() - t_insert
             print(f"   ✅ INSERT: {len(mp2_rows)} строк ({drain_time:.2f}с)")
+        
+        if self.enable_mp2 and repair_line_rows:
+            unique_days_rl = len(set(r['day_u16'] for r in repair_line_rows))
+            print(f"\n📤 Экспорт RepairLine: {len(repair_line_rows)} строк, {unique_days_rl} дней...")
+            t_insert_rl = time.perf_counter()
+            columns = list(repair_line_rows[0].keys())
+            values = [[row[col] for col in columns] for row in repair_line_rows]
+            col_str = ', '.join(columns)
+            self.clickhouse_client.execute(
+                f"INSERT INTO sim_repair_lines_v8 ({col_str}) VALUES",
+                values
+            )
+            drain_time_rl = time.perf_counter() - t_insert_rl
+            print(f"   ✅ INSERT RepairLine: {len(repair_line_rows)} строк ({drain_time_rl:.2f}с)")
+        
+        if self.enable_mp2 and quota_rows:
+            unique_days_qm = len(set(r['day_u16'] for r in quota_rows))
+            print(f"\n📤 Экспорт QuotaManager: {len(quota_rows)} строк, {unique_days_qm} дней...")
+            t_insert_qm = time.perf_counter()
+            columns = list(quota_rows[0].keys())
+            values = [[row[col] for col in columns] for row in quota_rows]
+            col_str = ', '.join(columns)
+            self.clickhouse_client.execute(
+                f"INSERT INTO sim_quota_mgr_v8 ({col_str}) VALUES",
+                values
+            )
+            drain_time_qm = time.perf_counter() - t_insert_qm
+            print(f"   ✅ INSERT QuotaManager: {len(quota_rows)} строк ({drain_time_qm:.2f}с)")
+        
+        # Export RepairSlots отключён: логирование слотов идёт через sim_quota_mgr_v8
         
         t_end = time.perf_counter()
         total_time = t_end - t_start
@@ -980,6 +1246,9 @@ def main():
                 version_date UInt32,
                 version_id UInt8,
                 day_u16 UInt16,
+                debug_step UInt32,
+                debug_prev_day UInt32,
+                debug_adaptive_days UInt32,
                 idx UInt16,
                 aircraft_number UInt32,
                 group_by UInt8,
@@ -990,9 +1259,79 @@ def main():
                 oh UInt32,
                 br UInt32,
                 repair_days UInt16,
-                repair_time UInt16
+                repair_time UInt16,
+                promoted UInt8,
+                needs_demote UInt8,
+                repair_candidate UInt8,
+                repair_line_id UInt32,
+                repair_line_day UInt32,
+                debug_promoted UInt8,
+                debug_needs_demote UInt8,
+                debug_repair_candidate UInt8,
+                debug_repair_line_id UInt32,
+                debug_repair_line_day UInt32,
+                spawn_debug_curr_ops UInt32,
+                spawn_debug_target UInt32,
+                spawn_debug_need UInt32,
+                debug_current_day UInt32,
+                debug_rl_total UInt32,
+                debug_rl_free UInt32,
+                debug_rl_ready UInt32,
+                debug_rl_min_free UInt32,
+                debug_rl_max_free UInt32,
+                debug_ops_mi17 UInt32,
+                debug_svc_mi17 UInt32,
+                debug_unsvc_ready_mi17 UInt32,
+                debug_inactive_ready_mi17 UInt32
             ) ENGINE = MergeTree()
             ORDER BY (version_date, version_id, day_u16, idx)
+        """)
+        client.execute("""
+            CREATE TABLE IF NOT EXISTS sim_repair_lines_v8 (
+                version_date UInt32,
+                version_id UInt8,
+                day_u16 UInt16,
+                debug_step UInt32,
+                debug_prev_day UInt32,
+                debug_adaptive_days UInt32,
+                debug_current_day UInt32,
+                line_id UInt32,
+                free_days UInt32,
+                aircraft_number UInt32,
+                last_acn UInt32,
+                last_day UInt32,
+                is_free UInt8,
+                ready_mi8 UInt8,
+                ready_mi17 UInt8
+            ) ENGINE = MergeTree()
+            ORDER BY (version_date, version_id, day_u16, line_id)
+        """)
+        client.execute("""
+            CREATE TABLE IF NOT EXISTS sim_quota_mgr_v8 (
+                version_date UInt32,
+                version_id UInt8,
+                day_u16 UInt16,
+                debug_step UInt32,
+                debug_prev_day UInt32,
+                debug_adaptive_days UInt32,
+                debug_current_day UInt32,
+                group_by UInt8,
+                debug_slots_count_mi17 UInt32,
+                debug_slot_mi17_0 UInt32,
+                debug_slot_mi17_1 UInt32,
+                debug_slot_mi17_2 UInt32,
+                debug_slot_mi17_3 UInt32,
+                debug_slot_mi17_4 UInt32,
+                debug_slot_mi17_5 UInt32,
+                debug_p2_ops UInt32,
+                debug_p2_target UInt32,
+                debug_p2_deficit UInt32,
+                debug_p2_needed UInt32,
+                debug_p2_slots UInt32,
+                debug_p2_svc UInt32,
+                debug_p2_unsvc UInt32
+            ) ENGINE = MergeTree()
+            ORDER BY (version_date, version_id, day_u16, group_by)
         """)
         print("✅ Таблица sim_masterv2_v8 готова")
     
