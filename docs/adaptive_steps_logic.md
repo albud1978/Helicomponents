@@ -115,7 +115,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
    free_days >= repair_time AND aircraft_number == 0
    + защита от повтора: last_acn != acn за день N-1
 
-3. Определить дефицит = target_ops - current_ops
+3. Определить дефицит = target_ops(day) - current_ops
    approved = MIN(дефицит, available_lines)
 
 4. P2: Отфильтровать unsvc по idx — первые approved

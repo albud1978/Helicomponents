@@ -207,7 +207,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
     }}
     
     // Читаем target из mp4 (PropertyArray, не MacroProperty!)
-    const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+    const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
     
     unsigned int ops_curr = 0u;
     unsigned int svc_available = 0u;
@@ -378,7 +378,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     }}
     
     // Читаем target (PropertyArray, не MacroProperty!)
-    const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+    const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
     
     unsigned int ops_curr = 0u;
     unsigned int svc_available = 0u;
