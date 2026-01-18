@@ -182,7 +182,6 @@ class V2BaseModelMessaging:
         self.env.newPropertyUInt("current_day", 0)
         self.env.newPropertyUInt("step_days", 1)
         self.env.newPropertyUInt("quota_enabled", 1)  # По умолчанию квотирование включено
-        self.env.newPropertyUInt("repair_line_mode", 0)  # 1 = RepairLine логика ремонта (V8)
         
         # Константы нормативов из MP1
         self._setup_norm_constants(env_data)
@@ -299,9 +298,6 @@ class V2BaseModelMessaging:
         # UNSVC, готовые к промоуту (exit_date <= current_day)
         self.env.newMacroPropertyUInt32("mi8_unsvc_ready_count", max_frames)
         self.env.newMacroPropertyUInt32("mi17_unsvc_ready_count", max_frames)
-        # UNSVC, ожидающие назначения RepairLine
-        self.env.newMacroPropertyUInt32("mi8_unsvc_wait_count", max_frames)
-        self.env.newMacroPropertyUInt32("mi17_unsvc_wait_count", max_frames)
         self.env.newMacroPropertyUInt32("mi8_approve_s7", max_frames)
         self.env.newMacroPropertyUInt32("mi17_approve_s7", max_frames)
         
@@ -458,7 +454,6 @@ class V2BaseModelMessaging:
         agent.newVariableUInt("repair_candidate", 0)
         agent.newVariableUInt("repair_line_id", 0xFFFFFFFF)
         agent.newVariableUInt("repair_line_day", 0xFFFFFFFF)
-        agent.newVariableUInt("repair_done", 0)  # 1 = ремонт завершён, ждёт промоут в ops
         
         # V7: Флаги для однофазной архитектуры (без intent)
         agent.newVariableUInt("promoted", 0)     # 1 = получил промоут в этом шаге

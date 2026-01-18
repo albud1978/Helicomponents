@@ -47,8 +47,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v7, flamegpu::MessageNone, flamegpu::Mes
     auto mi17_unsvc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
     auto mi8_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
     auto mi17_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
-    auto mi8_unsvc_wait = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_wait_count");
-    auto mi17_unsvc_wait = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_wait_count");
     auto mi8_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
     auto mi17_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
     
@@ -61,8 +59,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v7, flamegpu::MessageNone, flamegpu::Mes
         mi17_unsvc[i].exchange(0u);
         mi8_unsvc_ready[i].exchange(0u);
         mi17_unsvc_ready[i].exchange(0u);
-        mi8_unsvc_wait[i].exchange(0u);
-        mi17_unsvc_wait[i].exchange(0u);
         mi8_inactive[i].exchange(0u);
         mi17_inactive[i].exchange(0u);
     }}
@@ -111,39 +107,25 @@ RTC_COUNT_UNSVC = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_count_unsvc_v7, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    const unsigned int repair_line_mode = FLAMEGPU->environment.getProperty<unsigned int>("repair_line_mode");
-    bool ready = false;
-    bool wait = false;
-    if (repair_line_mode == 1u) {
-        const unsigned int repair_done = FLAMEGPU->getVariable<unsigned int>("repair_done");
-        const unsigned int repair_line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
-        ready = (repair_done == 1u);
-        wait = (repair_done == 0u && repair_line_id == 0xFFFFFFFFu);
-    } else {
-        const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-        auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
-        unsigned int step_days = mp_result[0];
-        if (step_days == 0u) step_days = 1u;
-        const unsigned int safe_day = day + step_days;
-        const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
-        ready = (exit_date > 0u && exit_date != 0xFFFFFFFFu && exit_date <= safe_day);
-        wait = false;
-    }
+    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    unsigned int step_days = mp_result[0];
+    if (step_days == 0u) step_days = 1u;
+    const unsigned int safe_day = day + step_days;
+    
+    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
+    const bool ready = (exit_date > 0u && exit_date != 0xFFFFFFFFu && exit_date <= safe_day);
     
     if (group_by == 1u) {{
         auto count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
         auto ready_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
-        auto wait_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_wait_count");
         count[idx].exchange(1u);
         if (ready) ready_count[idx].exchange(1u);
-        if (wait) wait_count[idx].exchange(1u);
     }} else if (group_by == 2u) {{
         auto count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
         auto ready_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
-        auto wait_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_wait_count");
         count[idx].exchange(1u);
         if (ready) ready_count[idx].exchange(1u);
-        if (wait) wait_count[idx].exchange(1u);
     }}
     return flamegpu::ALIVE;
 }}
@@ -153,7 +135,6 @@ RTC_COUNT_INACTIVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive_v7, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    
     if (group_by == 1u) {{
         auto count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
         count[idx].exchange(1u);

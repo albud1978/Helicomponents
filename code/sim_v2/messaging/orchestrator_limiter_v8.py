@@ -196,6 +196,14 @@ class LimiterV8Orchestrator:
         # end_day
         dates.add(self.end_day)
         
+        # День repair_time (обязательный шаг)
+        mi8_rt = int(self.env_data.get('mi8_repair_time_const', 0))
+        mi17_rt = int(self.env_data.get('mi17_repair_time_const', 0))
+        if mi8_rt > 0 and mi8_rt <= self.end_day:
+            dates.add(mi8_rt)
+        if mi17_rt > 0 and mi17_rt <= self.end_day:
+            dates.add(mi17_rt)
+        
         # Repair exits (repair_time - repair_days для агентов в repair)
         # Будет добавлено при populate_agents, пока placeholder
         
@@ -242,7 +250,6 @@ class LimiterV8Orchestrator:
         # Base model
         self.base_model = V2BaseModelMessaging()
         self.model = self.base_model.create_model(self.env_data)
-        self.base_model.env.setPropertyUInt("repair_line_mode", 1)
         
         # Repair lines quota (без хардкода 18)
         self.repair_quota = self._compute_repair_quota()
@@ -324,7 +331,7 @@ class LimiterV8Orchestrator:
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
         
         # Фаза 3.5: Пересчёт буферов после квотирования (для spawn)
-        rtc_quota_v7.register_post_quota_counts_v7(self.model, heli_agent)
+        rtc_quota_v8.register_post_quota_counts_v8(self.model, heli_agent)
         
         # Синхронизация RepairLine после квотирования
         rtc_repair_lines_v8.register_repair_line_sync_post_quota(
@@ -339,7 +346,7 @@ class LimiterV8Orchestrator:
             'dynamic_reserve_mi17': 50,
             'base_acn_spawn': 100000
         }
-        self.spawn_data = rtc_spawn_dynamic_v7.register_spawn_dynamic_v7(
+        self.spawn_data = rtc_spawn_dynamic_v7.register_spawn_dynamic_v8(
             self.model, heli_agent, spawn_env_data
         )
         

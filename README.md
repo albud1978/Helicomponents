@@ -75,7 +75,7 @@ python3 code/extract_master.py
 | Файл | Описание |
 |------|----------|
 | `docs/rtc_pipeline_architecture.md` | **Baseline** — архитектура RTC пайплайна (intent-based, orchestrator_v2) |
-| `docs/limiter_architecture.md` | **LIMITER V8** — RepairLine, адаптивные шаги |
+| `docs/limiter_architecture.md` | **LIMITER V8** — RepairLine + repair_days в unsvc/inactive (readiness/спавн учитывают RepairLine) |
 | `docs/validation.md` | Инварианты и процедуры тестирования |
 | `docs/spawn_dynamic_architecture.md` | Архитектура динамического спавна |
 
