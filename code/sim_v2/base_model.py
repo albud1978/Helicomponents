@@ -60,6 +60,8 @@ class V2BaseModel:
         self.env.newPropertyUInt("version_id", int(env_data.get('version_id_u32', 0)))
         self.env.newPropertyUInt("frames_total", int(env_data['frames_total_u16']))
         self.env.newPropertyUInt("days_total", int(env_data['days_total_u16']))
+        # Глобальная квота ремонта (общая для всех планеров)
+        self.env.newPropertyUInt("repair_quota_total", int(env_data.get('repair_quota_total_u16', 0)))
         
         # Фазовый флаг для постпроцессинга MP2
         # 0 = обычная симуляция, 2 = постпроцессинг active_trigger
@@ -182,6 +184,13 @@ class V2BaseModel:
         self.env.newMacroPropertyUInt32("mi17_approve_s5", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi8_approve_s1", model_build.MAX_FRAMES)   # inactive → operations
         self.env.newMacroPropertyUInt32("mi17_approve_s1", model_build.MAX_FRAMES)
+        # Кандидаты P3 (inactive) — для централизованного аллокатора окна ремонта
+        self.env.newMacroPropertyUInt32("mi8_candidate_s1", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_candidate_s1", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi8_candidate_repair_time", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_candidate_repair_time", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi8_candidate_skip_repair", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_candidate_skip_repair", model_build.MAX_FRAMES)
         
         # Динамический spawn (pending агенты, которые ещё не появились в operations)
         self.env.newMacroPropertyUInt32("mi8_spawn_pending", model_build.MAX_FRAMES)
@@ -192,6 +201,9 @@ class V2BaseModel:
         self.env.newMacroPropertyUInt32("reserve_queue_buffer", model_build.MAX_FRAMES)  # reserve & intent=0
         self.env.newMacroPropertyUInt32("ops_repair_buffer", model_build.MAX_FRAMES)  # operations & intent=4
         self.env.newMacroPropertyUInt32("repair_number_by_idx", model_build.MAX_FRAMES)  # repair_number для каждого idx (UInt32 для выравнивания)
+        # История загрузки ремонта (для учета backfill inactive→operations)
+        self.env.newMacroPropertyUInt32("repair_day_count", model_build.MAX_DAYS)
+        self.env.newMacroPropertyUInt32("repair_backfill_load", model_build.MAX_DAYS)
 
         # MP4 квоты (если включены)
         if os.environ.get('HL_ENABLE_QUOTAS', '0') == '1':

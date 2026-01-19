@@ -99,6 +99,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             quota_gap_mi8       Int16,
             quota_gap_mi17      Int16,
             
+            -- Загрузка квоты ремонта (per-day)
+            repair_quota_load   UInt16,
+            repair_quota_full   UInt8,
+            
             -- Флаги квотирования (per-agent per-day)
             quota_demount       UInt8,
             quota_promote_p1    UInt8,
@@ -242,6 +246,16 @@ class MP2DrainHostFunction(fg.HostFunction):
         except:
             mp2_quota_gap_mi17 = None
         
+        # Загрузка квоты ремонта (per-day)
+        try:
+            mp2_repair_quota_load = env.getMacroPropertyUInt32("mp2_repair_quota_load")
+        except:
+            mp2_repair_quota_load = None
+        try:
+            mp2_repair_quota_full = env.getMacroPropertyUInt32("mp2_repair_quota_full")
+        except:
+            mp2_repair_quota_full = None
+        
         # Флаги квотирования (per-agent per-day)
         try:
             mp2_quota_demount = env.getMacroPropertyUInt32("mp2_quota_demount")
@@ -358,6 +372,8 @@ class MP2DrainHostFunction(fg.HostFunction):
                         self._get_mp4_target(mp4_ops_counter_mi17, day, days_total),
                         int(mp2_quota_gap_mi8[day]) if mp2_quota_gap_mi8 is not None else 0,
                         int(mp2_quota_gap_mi17[day]) if mp2_quota_gap_mi17 is not None else 0,
+                        int(mp2_repair_quota_load[day]) if mp2_repair_quota_load is not None else 0,
+                        int(mp2_repair_quota_full[day]) if mp2_repair_quota_full is not None else 0,
                         int(mp2_quota_demount[pos]) if mp2_quota_demount is not None else 0,
                         int(mp2_quota_promote_p1[pos]) if mp2_quota_promote_p1 is not None else 0,
                         int(mp2_quota_promote_p2[pos]) if mp2_quota_promote_p2 is not None else 0,
@@ -451,6 +467,16 @@ class MP2DrainHostFunction(fg.HostFunction):
             mp2_quota_gap_mi17 = FLAMEGPU.environment.getMacroPropertyInt32("mp2_quota_gap_mi17")
         except:
             mp2_quota_gap_mi17 = None
+        
+        # Загрузка квоты ремонта (per-day)
+        try:
+            mp2_repair_quota_load = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_repair_quota_load")
+        except:
+            mp2_repair_quota_load = None
+        try:
+            mp2_repair_quota_full = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_repair_quota_full")
+        except:
+            mp2_repair_quota_full = None
         
         # Флаги квотирования (per-agent per-day)
         try:
@@ -574,6 +600,8 @@ class MP2DrainHostFunction(fg.HostFunction):
                         self._get_mp4_target(mp4_ops_counter_mi17, day, days_total),
                         int(mp2_quota_gap_mi8[day]) if mp2_quota_gap_mi8 is not None else 0,
                         int(mp2_quota_gap_mi17[day]) if mp2_quota_gap_mi17 is not None else 0,
+                        int(mp2_repair_quota_load[day]) if mp2_repair_quota_load is not None else 0,
+                        int(mp2_repair_quota_full[day]) if mp2_repair_quota_full is not None else 0,
                         int(mp2_quota_demount[pos]) if mp2_quota_demount is not None else 0,
                         int(mp2_quota_promote_p1[pos]) if mp2_quota_promote_p1 is not None else 0,
                         int(mp2_quota_promote_p2[pos]) if mp2_quota_promote_p2 is not None else 0,
@@ -619,10 +647,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             self.max_batch_rows = batch_rows
         t_start = time.perf_counter()
         # MATERIALIZED day_date вычисляется на стороне ClickHouse, не вставляем её явно
-        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,bi_counter,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s4_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_0_to_2,transition_0_to_3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_3_to_2,transition_5_to_2,transition_1_to_2,transition_4_to_5,transition_1_to_4,transition_4_to_2"
+        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,bi_counter,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s4_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,repair_quota_load,repair_quota_full,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_0_to_2,transition_0_to_3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_3_to_2,transition_5_to_2,transition_1_to_2,transition_4_to_5,transition_1_to_4,transition_4_to_2"
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES"
         # Подаём данные в колоннарном формате для уменьшения накладных расходов драйвера
-        num_cols = 46  # 27 базовых + 2 MP4 целей + 4 флага квот + 2 gap + 11 transition флагов (включая 0_to_2 и 0_to_3)
+        num_cols = 48  # 27 базовых + 2 MP4 целей + 2 gap + 2 repair_quota + 4 флага квот + 11 transition флагов
         cols = [[] for _ in range(num_cols)]
         for r in self.batch:
             for i, v in enumerate(r):

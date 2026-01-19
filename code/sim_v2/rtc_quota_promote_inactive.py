@@ -29,17 +29,15 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     # ПРОМОУТ ПРИОРИТЕТ 3: inactive → operations
     # ═══════════════════════════════════════════════════════════════
     # Логика:
-    # 1. Считаем used (демоут + serviceable + reserve)
-    # 2. Считаем Target (из mp4_ops_counter на D+1)
-    # 3. deficit = Target - used
-    # 4. ЕСЛИ deficit <= 0: Early exit (все агенты)
-    # 5. ИНАЧЕ: Промоут deficit агентов С УСЛОВИЕМ → intent=2 + mi*_approve=1
-    # 6. ⚠️ Может остаться deficit > 0 (допустимо!)
+    # 1. Маркируем кандидатов (ready inactive) без ранжирования
+    # 2. Один агент (idx=0) считает дефицит и аллоцирует top-K по idx (youngest first)
+    # 3. Проверяем окно ремонта (quota-1) и ставим approve_s1
+    # 4. Каждый утверждённый агент применяет intent=2 + резервирует backfill окно
+    # 5. ⚠️ Может остаться deficit > 0 (допустимо!)
     # ═══════════════════════════════════════════════════════════════
     
-    RTC_QUOTA_PROMOTE_INACTIVE = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // MAX_DAYS = {MAX_DAYS} (для MacroProperty deficit)
+    RTC_MARK_INACTIVE_CANDIDATES = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mark_inactive_candidates, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Фильтр: только агенты с intent=1 (замороженные в inactive)
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
     if (intent != 1u) {{
@@ -50,164 +48,206 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
-    // ═══════════════════════════════════════════════════════════════════════
     // ЛОГИКА br2_mi17: Mi-17 с низким ppr НЕ ждут ремонта (комплектация)
-    // ═══════════════════════════════════════════════════════════════════════
-    // Mi-8 (group_by=1): всегда ждут repair_time (реальный ремонт)
-    // Mi-17 (group_by=2):
-    //   - ppr < br2_mi17 (3500ч) → комплектация БЕЗ ремонта, сразу готовы
-    //   - ppr >= br2_mi17 → ждут repair_time (ремонт с обнулением ppr)
     const unsigned int br2_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mi17_br2_const");
-    
     bool skip_repair = false;
     if (group_by == 2u && ppr < br2_mi17) {{
-        // Mi-17 с ppr < порога → комплектация без ремонта, сразу готовы
         skip_repair = true;
     }}
     
-    // ✅ Проверка готовности: пришло время (step_day >= repair_time) ИЛИ skip_repair
+    // Проверка готовности
     if (!skip_repair && step_day < repair_time) {{
-        // Ещё не готовы - пропускаем (ждём ремонта)
         return flamegpu::ALIVE;
     }}
     
+    if (group_by == 1u) {{
+        auto cand = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_s1");
+        auto cand_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_repair_time");
+        auto cand_skip = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_skip_repair");
+        cand[idx].exchange(1u);
+        cand_rt[idx].exchange(repair_time);
+        cand_skip[idx].exchange(0u);
+    }} else if (group_by == 2u) {{
+        auto cand = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_s1");
+        auto cand_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_repair_time");
+        auto cand_skip = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_skip_repair");
+        cand[idx].exchange(1u);
+        cand_rt[idx].exchange(repair_time);
+        cand_skip[idx].exchange(skip_repair ? 1u : 0u);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    RTC_ALLOCATE_INACTIVE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_allocate_inactive, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    // group_by уже определён выше
+    if (idx != 0u) return flamegpu::ALIVE;  // аллокатор только один
+    
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
+    const unsigned int quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota_total");
+    const unsigned int limit = (quota > 0u) ? (quota - 1u) : 0u;
     
-    // ═══════════════════════════════════════════════════════════
-    // ШАГ 1: Подсчёт curr + учёт одобренных из P1 и P2
-    // ═══════════════════════════════════════════════════════════
-    unsigned int curr = 0u;
-    unsigned int target = 0u;
-    unsigned int used = 0u;  // Сколько уже одобрено из P1 + P2
+    // Буферы для подсчёта и кандидатов
+    auto mi8_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
+    auto mi17_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
+    auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s3");
+    auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s3");
+    auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s5");
+    auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s5");
     
+    auto cand8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_s1");
+    auto cand17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_s1");
+    auto cand8_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_repair_time");
+    auto cand17_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_repair_time");
+    auto cand8_skip = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_skip_repair");
+    auto cand17_skip = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_skip_repair");
+    
+    auto approve8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
+    auto approve17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
+    
+    auto repair_day_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("repair_day_count");
+    auto repair_backfill = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("repair_backfill_load");
+    
+    // Подсчёт curr/used по группам
+    unsigned int curr8 = 0u, curr17 = 0u, used8 = 0u, used17 = 0u;
+    for (unsigned int i = 0u; i < frames; ++i) {{
+        if (mi8_ops[i] == 1u) ++curr8;
+        if (mi17_ops[i] == 1u) ++curr17;
+        if (mi8_approve_s3[i] == 1u) ++used8;
+        if (mi17_approve_s3[i] == 1u) ++used17;
+        if (mi8_approve_s5[i] == 1u) ++used8;
+        if (mi17_approve_s5[i] == 1u) ++used17;
+    }}
+    
+    const unsigned int target8 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+    const unsigned int target17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+    const int deficit8 = (int)target8 - (int)curr8 - (int)used8;
+    const int deficit17 = (int)target17 - (int)curr17 - (int)used17;
+    const unsigned int K8 = (deficit8 > 0) ? (unsigned int)deficit8 : 0u;
+    const unsigned int K17 = (deficit17 > 0) ? (unsigned int)deficit17 : 0u;
+    
+    // Публикуем deficit для динамического spawn
+    auto deficit_mp8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("quota_deficit_mi8_u32");
+    auto deficit_mp17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("quota_deficit_mi17_u32");
+    deficit_mp8[safe_day].exchange((deficit8 > 0) ? (unsigned int)deficit8 : 0u);
+    deficit_mp17[safe_day].exchange((deficit17 > 0) ? (unsigned int)deficit17 : 0u);
+    
+    // Локальный учёт доп. нагрузки для окна ремонта
+    unsigned int extra[{MAX_DAYS}u];
+    for (unsigned int d = 0u; d < {MAX_DAYS}u; ++d) {{
+        extra[d] = 0u;
+    }}
+    
+    unsigned int approved8 = 0u;
+    unsigned int approved17 = 0u;
+    
+    // Аллокация: youngest first (idx desc)
+    for (int i = (int)frames - 1; i >= 0; --i) {{
+        const unsigned int ui = (unsigned int)i;
+        if (approved8 < K8 && cand8[ui] == 1u) {{
+            const unsigned int R = cand8_rt[ui];
+            bool ok = true;
+            if (quota > 0u) {{
+                const unsigned int start = (day > R) ? (day - R) : 0u;
+                for (unsigned int d = start; d < day && d < {MAX_DAYS}u; ++d) {{
+                    const unsigned int load = repair_day_count[d] + repair_backfill[d] + extra[d];
+                    if (load > limit) {{
+                        ok = false;
+                        break;
+                    }}
+                }}
+                if (ok) {{
+                    for (unsigned int d = start; d < day && d < {MAX_DAYS}u; ++d) {{
+                        extra[d] += 1u;
+                    }}
+                }}
+            }}
+            if (ok) {{
+                approve8[ui].exchange(1u);
+                ++approved8;
+            }}
+        }}
+        if (approved17 < K17 && cand17[ui] == 1u) {{
+            const unsigned int R = cand17_rt[ui];
+            bool ok = true;
+            if (quota > 0u) {{
+                const unsigned int start = (day > R) ? (day - R) : 0u;
+                for (unsigned int d = start; d < day && d < {MAX_DAYS}u; ++d) {{
+                    const unsigned int load = repair_day_count[d] + repair_backfill[d] + extra[d];
+                    if (load > limit) {{
+                        ok = false;
+                        break;
+                    }}
+                }}
+                if (ok) {{
+                    for (unsigned int d = start; d < day && d < {MAX_DAYS}u; ++d) {{
+                        extra[d] += 1u;
+                    }}
+                }}
+            }}
+            if (ok) {{
+                approve17[ui].exchange(1u);
+                ++approved17;
+            }}
+        }}
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    RTC_APPLY_INACTIVE_APPROVAL = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_apply_inactive_approval, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
+    
+    unsigned int approved = 0u;
     if (group_by == 1u) {{
-        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
-            if (ops_count[i] == 1u) ++curr;
-        }}
-        
-        // Считаем сколько уже одобрено из serviceable (P1)
-        auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s3");
-        for (unsigned int i = 0u; i < frames; ++i) {{
-            if (approve_s3[i] == 1u) ++used;
-        }}
-        
-        // Считаем сколько одобрено из reserve (P2)
-        auto approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s5");
-        for (unsigned int i = 0u; i < frames; ++i) {{
-            if (approve_s5[i] == 1u) ++used;
-        }}
-        
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
-        
+        auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
+        approved = approve[idx];
     }} else if (group_by == 2u) {{
-        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
-            if (ops_count[i] == 1u) ++curr;
-        }}
-        
-        auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s3");
-        for (unsigned int i = 0u; i < frames; ++i) {{
-            if (approve_s3[i] == 1u) ++used;
-        }}
-        
-        auto approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s5");
-        for (unsigned int i = 0u; i < frames; ++i) {{
-            if (approve_s5[i] == 1u) ++used;
-        }}
-        
-        target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+        auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
+        approved = approve[idx];
     }} else {{
         return flamegpu::ALIVE;
     }}
     
-    // Диагностика на ключевых днях (УБРАНО — избыточное логирование)
-    
-    // ═══════════════════════════════════════════════════════════
-    // ШАГ 2: Расчёт дефицита (сколько не хватает до target с учётом P1+P2)
-    // ═══════════════════════════════════════════════════════════
-    const int deficit = (int)target - (int)curr - (int)used;
-    
-    // Публикуем deficit в MacroProperty для динамического spawn (слой 7.5)
-    // ВАЖНО: Публикуем ВСЕГДА (даже если deficit <= 0), чтобы spawn_dynamic знал
-    const unsigned int deficit_u = (deficit > 0) ? (unsigned int)deficit : 0u;
-    if (group_by == 1u) {{
-        auto deficit_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("quota_deficit_mi8_u32");
-        deficit_mp[safe_day].exchange(deficit_u);
-    }} else if (group_by == 2u) {{
-        auto deficit_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("quota_deficit_mi17_u32");
-        deficit_mp[safe_day].exchange(deficit_u);
-    }}
-    
-    if (deficit <= 0) {{
-        // Уже достаточно (curr + P1+P2 одобрено) или target=0 → выход
+    if (approved == 0u) {{
         return flamegpu::ALIVE;
     }}
     
-    // ═══════════════════════════════════════════════════════════
-    // ШАГ 3: Промоут готовых агентов (каскадное квотирование P3)
-    // Поднимаем ровно deficit агентов (может остаться нераспределённо - допустимо!)
-    // ═══════════════════════════════════════════════════════════
-    const unsigned int K = (unsigned int)deficit;  // ✅ Каскадная логика
-    
-    // Ранжирование: youngest first среди РЕАЛЬНЫХ агентов в inactive (которые ГОТОВЫ)
-    // ✅ КРИТИЧНО: idx УЖЕ отсортирован по mfg_date (старые первые)!
-    // Для "youngest first": больший idx = моложе!
-    unsigned int rank = 0u;
-    
-    // ✅ ВАЖНО: Фильтруем по inactive state используя буфер (state=1, intent=1, но готовы: step_day >= repair_time)
-    if (group_by == 1u) {{
-        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_inactive_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
-            if (i == idx) continue;
-            if (inactive_count[i] != 1u) continue;  // ✅ Только агенты в inactive
-            
-            // Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx)
-            if (i > idx) {{
-                ++rank;
-            }}
-        }}
-    }} else if (group_by == 2u) {{
-        auto inactive_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_inactive_count");
-        for (unsigned int i = 0u; i < frames; ++i) {{
-            if (i == idx) continue;
-            if (inactive_count[i] != 1u) continue;  // ✅ Только агенты в inactive
-            
-            // Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx)
-            if (i > idx) {{
-                ++rank;
-            }}
-        }}
+    // ЛОГИКА br2_mi17: Mi-17 с низким ppr НЕ ждут ремонта (комплектация)
+    const unsigned int br2_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mi17_br2_const");
+    bool skip_repair = false;
+    if (group_by == 2u && ppr < br2_mi17) {{
+        skip_repair = true;
     }}
     
-    if (rank < K) {{
-        // Я в числе K первых → промоут, меняю intent=1 на intent=2
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);  // Изменяем: 1→2 (одобрены на операции)
-        
-        /* Логирование выбора для P3 с информацией о br2_mi17 */
-        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        const char* repair_mode = skip_repair ? "КОМПЛЕКТАЦИЯ (ppr<br2)" : "РЕМОНТ (ppr>=br2)";
-        printf("  [PROMOTE P3→2 Day %u] AC %u (group=%u, ppr=%u, br2=%u): rank=%u/%u %s\\n", 
-               day, aircraft_number, group_by, ppr, br2_mi17, rank, K, repair_mode);
-        
-        // Записываем в ОТДЕЛЬНЫЙ буфер для inactive (избегаем race condition)
-        if (group_by == 1u) {{
-            auto approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
-            approve_s1[idx].exchange(1u);  // ✅ Помечаем в отдельном буфере
-        }} else if (group_by == 2u) {{
-            auto approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
-            approve_s1[idx].exchange(1u);
-        }}
-    }} else {{
-        // Не вошёл в квоту → intent остаётся 1 (замороженное, ждёт следующего дня)
-        // REJECT логирование убрано - оставляем только PROMOTE логи для чистоты
+    // Резервируем окно backfill всегда (окно обязано быть свободным)
+    auto repair_backfill = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("repair_backfill_load");
+    const unsigned int start = (day > repair_time) ? (day - repair_time) : 0u;
+    for (unsigned int d = start; d < day && d < {MAX_DAYS}u; ++d) {{
+        repair_backfill[d]++;
     }}
+    
+    // Меняем intent на operations
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+    
+    // Логирование
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+    const char* repair_mode = skip_repair ? "КОМПЛЕКТАЦИЯ (ppr<br2)" : "РЕМОНТ (ppr>=br2)";
+    printf("  [PROMOTE P3→2 Day %u] AC %u (group=%u, ppr=%u, br2=%u): %s\\n",
+           day, aircraft_number, group_by, ppr, br2_mi17, repair_mode);
     
     return flamegpu::ALIVE;
 }}
@@ -216,11 +256,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_inactive, flamegpu::MessageNone, flame
     # ═══════════════════════════════════════════════════════════
     # Регистрация слоя
     # ═══════════════════════════════════════════════════════════
-    layer_promote = model.newLayer("quota_promote_inactive")
-    rtc_func_promote = agent.newRTCFunction("rtc_quota_promote_inactive", RTC_QUOTA_PROMOTE_INACTIVE)
-    rtc_func_promote.setAllowAgentDeath(False)
-    rtc_func_promote.setInitialState("inactive")  # ✅ Фильтр по state
-    rtc_func_promote.setEndState("inactive")      # Остаются в inactive (intent изменён)
-    layer_promote.addAgentFunction(rtc_func_promote)
+    layer_candidates = model.newLayer("quota_promote_inactive_candidates")
+    fn_candidates = agent.newRTCFunction("rtc_mark_inactive_candidates", RTC_MARK_INACTIVE_CANDIDATES)
+    fn_candidates.setAllowAgentDeath(False)
+    fn_candidates.setInitialState("inactive")
+    fn_candidates.setEndState("inactive")
+    layer_candidates.addAgentFunction(fn_candidates)
     
-    print("  RTC модуль quota_promote_inactive зарегистрирован (1 слой, приоритет 3)")
+    layer_allocate = model.newLayer("quota_promote_inactive_allocate")
+    fn_allocate = agent.newRTCFunction("rtc_allocate_inactive", RTC_ALLOCATE_INACTIVE)
+    fn_allocate.setAllowAgentDeath(False)
+    layer_allocate.addAgentFunction(fn_allocate)
+    
+    layer_apply = model.newLayer("quota_promote_inactive_apply")
+    fn_apply = agent.newRTCFunction("rtc_apply_inactive_approval", RTC_APPLY_INACTIVE_APPROVAL)
+    fn_apply.setAllowAgentDeath(False)
+    fn_apply.setInitialState("inactive")
+    fn_apply.setEndState("inactive")
+    layer_apply.addAgentFunction(fn_apply)
+    
+    print("  RTC модуль quota_promote_inactive зарегистрирован (3 слоя, приоритет 3)")
