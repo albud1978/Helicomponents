@@ -32,6 +32,7 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     RTC_RESET_BUFFERS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
     
     // Только первый агент (idx=0) обнуляет буферы
     if (idx == 0u) {{
@@ -54,6 +55,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s5");
         auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
+        auto mi8_candidate_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_s1");
+        auto mi17_candidate_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_s1");
+        auto mi8_candidate_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_repair_time");
+        auto mi17_candidate_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_repair_time");
+        auto mi8_candidate_skip = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_skip_repair");
+        auto mi17_candidate_skip = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_skip_repair");
         
         // Spawn pending флаги
         auto mi8_spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_spawn_pending");
@@ -63,6 +70,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto repair_state_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_state_buffer");
         auto reserve_queue_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("reserve_queue_buffer");
         auto ops_repair_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("ops_repair_buffer");
+        
+        // Дневные счётчики квоты ремонта (инициализация только на d=0)
+        auto repair_day_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days}u>("repair_day_count");
+        auto repair_backfill = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days}u>("repair_backfill_load");
+        auto mp2_repair_load = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days + 1}u>("mp2_repair_quota_load");
+        auto mp2_repair_full = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days + 1}u>("mp2_repair_quota_full");
         
         // Сброс ВСЕХ буферов
         for (unsigned int i = 0u; i < {max_frames}u; ++i) {{
@@ -85,6 +98,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             mi17_approve_s5[i].exchange(0u);
             mi8_approve_s1[i].exchange(0u);
             mi17_approve_s1[i].exchange(0u);
+            mi8_candidate_s1[i].exchange(0u);
+            mi17_candidate_s1[i].exchange(0u);
+            mi8_candidate_rt[i].exchange(0u);
+            mi17_candidate_rt[i].exchange(0u);
+            mi8_candidate_skip[i].exchange(0u);
+            mi17_candidate_skip[i].exchange(0u);
             
             // Spawn pending флаги
             mi8_spawn_pending[i].exchange(0u);
@@ -94,6 +113,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             repair_state_buffer[i].exchange(0u);
             reserve_queue_buffer[i].exchange(0u);
             ops_repair_buffer[i].exchange(0u);
+        }}
+        
+        // Инициализация дневных массивов один раз (чтобы избежать мусора)
+        if (step_day == 0u) {{
+            for (unsigned int d = 0u; d < {max_days}u; ++d) {{
+                repair_day_count[d].exchange(0u);
+                repair_backfill[d].exchange(0u);
+                mp2_repair_load[d].exchange(0u);
+                mp2_repair_full[d].exchange(0u);
+            }}
+            // +1 паддинг
+            mp2_repair_load[{max_days}u].exchange(0u);
+            mp2_repair_full[{max_days}u].exchange(0u);
         }}
     }}
     
@@ -258,6 +290,45 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_repair, flamegpu::MessageNone, flamegpu::Messa
     
     layer_count_rep = model.newLayer("count_repair")
     layer_count_rep.addAgentFunction(rtc_func_rep)
+
+    # =========================================================================
+    # Слой 6b: Логирование количества в ремонте по дням (для backfill-квоты)
+    # =========================================================================
+    RTC_LOG_REPAIR_DAY = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_log_repair_day_count, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (idx != 0u) return flamegpu::ALIVE;  // только один агент
+    
+    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    const unsigned int quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota_total");
+    
+    auto repair_state_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_state_buffer");
+    unsigned int curr_in_repair = 0u;
+    for (unsigned int i = 0u; i < frames; ++i) {{
+        if (repair_state_buffer[i] == 1u) ++curr_in_repair;
+    }}
+    
+    auto repair_day_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days}u>("repair_day_count");
+    auto repair_backfill = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days}u>("repair_backfill_load");
+    auto mp2_repair_load = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days + 1}u>("mp2_repair_quota_load");
+    auto mp2_repair_full = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days + 1}u>("mp2_repair_quota_full");
+    if (day < {max_days}u) {{
+        repair_day_count[day].exchange(curr_in_repair);
+        const unsigned int total_load = curr_in_repair + repair_backfill[day];
+        mp2_repair_load[day].exchange(total_load);
+        const unsigned int full_flag = (quota > 0u && total_load >= quota) ? 1u : 0u;
+        mp2_repair_full[day].exchange(full_flag);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    rtc_func_rep_log = agent.newRTCFunction("rtc_log_repair_day_count", RTC_LOG_REPAIR_DAY)
+    # Запускаем для всех агентов, но работает только idx==0
+    layer_log_rep = model.newLayer("log_repair_day_count")
+    layer_log_rep.addAgentFunction(rtc_func_rep_log)
     
     # =========================================================================
     # Слой 7: Подсчёт кандидатов в очереди на ремонт (reserve & intent=0)
@@ -321,6 +392,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_ops_repair, flamegpu::MessageNone, flamegpu::M
     # =========================================================================
     model.Environment().newMacroPropertyInt32("mp2_quota_gap_mi8", max_days + 1)
     model.Environment().newMacroPropertyInt32("mp2_quota_gap_mi17", max_days + 1)
+    
+    # =========================================================================
+    # Логирование загрузки квоты ремонта (per-day)
+    # =========================================================================
+    model.Environment().newMacroPropertyUInt32("mp2_repair_quota_load", max_days + 1)
+    model.Environment().newMacroPropertyUInt32("mp2_repair_quota_full", max_days + 1)
 
     # ✅ УСТАРЕЛО: RTC функция для логирования MP4 целей больше не используется
     # Целевые значения теперь читаются напрямую из mp4_ops_counter на стороне Python
