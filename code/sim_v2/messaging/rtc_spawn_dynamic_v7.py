@@ -201,40 +201,34 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v8, flamegpu::MessageNone, flamegp
         return flamegpu::ALIVE;
     }
     
-    // Текущее количество Mi-17 в operations
-    auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_ops_count");
-    unsigned int curr_ops = 0u;
-    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
-        if (ops_count[i] == 1u) ++curr_ops;
-    }
-    
-    // Одобренные в P1/P2/P3 (используем approve буферы вместо post-quota counts)
-    auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve_s3");
-    auto approve_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve");
-    auto approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve_s1");
-    auto demote = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_demote");
-    int used = 0;
-    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
-        used += (int)approve_s3[i];
-        used += (int)approve_p2[i];
-        used += (int)approve_s1[i];
-        used -= (int)demote[i];
-    }
-    
     // Целевое значение из MP4 (текущий день)
     const unsigned int target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
-    FLAMEGPU->setVariable<unsigned int>("debug_curr_ops", curr_ops);
-    FLAMEGPU->setVariable<unsigned int>("debug_target", target);
-    if ((int)curr_ops + used >= (int)target) {
-        FLAMEGPU->setVariable<unsigned int>("debug_need", 0u);
-        return flamegpu::ALIVE;
+    auto qm_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("qm_ops_mp");
+    const unsigned int curr_ops = qm_ops[1];
+    
+    // Коммиты P1/P2/P3
+    auto p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve_s3");
+    auto p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve");
+    auto p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve_s1");
+    unsigned int used = 0u;
+    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
+        used += p1[i];
+        used += p2[i];
+        used += p3[i];
     }
     
     unsigned int deficit = 0u;
-    if ((int)target > (int)curr_ops + used) {
-        deficit = (unsigned int)((int)target - (int)curr_ops - used);
+    if (target > curr_ops + used) {
+        deficit = target - curr_ops - used;
     }
+    
+    FLAMEGPU->setVariable<unsigned int>("debug_curr_ops", curr_ops);
+    FLAMEGPU->setVariable<unsigned int>("debug_target", target);
     FLAMEGPU->setVariable<unsigned int>("debug_need", deficit);
+    
+    if (deficit == 0u) {
+        return flamegpu::ALIVE;
+    }
     
     // Курсоры
     unsigned int next_idx = FLAMEGPU->getVariable<unsigned int>("next_idx");

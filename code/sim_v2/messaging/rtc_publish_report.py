@@ -38,14 +38,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_publish_report, flamegpu::MessageNone, flamegpu::Mes
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
     const unsigned int mfg_date = FLAMEGPU->getVariable<unsigned int>("mfg_date");
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
+    const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
+    const unsigned int repair_line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     
     // State хардкодится для каждой функции (определён из FLAME GPU state machine)
     const unsigned char state = {state_code}u;
     
     // Вычисляем repair_ready
-    const unsigned char repair_ready = (step_day >= repair_time) ? 1u : 0u;
+    const unsigned char repair_ready = (day >= repair_time) ? 1u : 0u;
     
     // Вычисляем skip_repair (для Mi-17 с ppr < br2)
     const unsigned int br2_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mi17_br2_const");
@@ -59,6 +61,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_publish_report, flamegpu::MessageNone, flamegpu::Mes
     FLAMEGPU->message_out.setVariable<unsigned short>("mfg_date", (unsigned short)mfg_date);
     FLAMEGPU->message_out.setVariable<unsigned char>("repair_ready", repair_ready);
     FLAMEGPU->message_out.setVariable<unsigned char>("skip_repair", skip_repair);
+    FLAMEGPU->message_out.setVariable<unsigned int>("repair_days", repair_days);
+    FLAMEGPU->message_out.setVariable<unsigned int>("repair_line_id", repair_line_id);
     
     return flamegpu::ALIVE;
 }}
@@ -74,7 +78,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_publish_report, flamegpu::MessageNone, flamegpu::Mes
         "serviceable": 3,
         "repair": 4,
         "reserve": 5,
-        "storage": 6
+        "unserviceable": 7
     }
     
     for state_name, state_code in state_codes.items():

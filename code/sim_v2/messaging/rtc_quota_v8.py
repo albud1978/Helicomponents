@@ -44,6 +44,8 @@ from rtc_quota_v8_base import (
     RTC_INACTIVE_TO_OPS_POST,
     COND_INACTIVE_PROMOTED_POST,
 )
+from rtc_publish_report import register_rtc as register_publish_report
+from rtc_apply_decisions import register_rtc as register_apply_decisions
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # V8: Слоты RepairLine (RepairLine → QM, адресные MessageArray)
@@ -55,82 +57,368 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_slots_v8, flamegpu::MessageArray, flameg
     if (group_by != 1u) return flamegpu::ALIVE;  // один QM формирует слоты
     
     const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
-    const unsigned int mi8_rt = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
-    const unsigned int mi17_rt = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+    const unsigned int max_lines = (repair_quota < {REPAIR_LINES_MAX}u) ? repair_quota : {REPAIR_LINES_MAX}u;
     
-    auto slots_mi8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_mi8");
-    auto slots_mi17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_mi17");
-    auto slots_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("repair_line_slots_count_mp");
+    auto slots_all = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_all");
+    auto slots_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_days");
+    auto slots_count = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("repair_line_slots_count_mp");
     
-    unsigned int ids_mi8[{REPAIR_LINES_MAX}u];
-    unsigned int days_mi8[{REPAIR_LINES_MAX}u];
-    unsigned int ids_mi17[{REPAIR_LINES_MAX}u];
-    unsigned int days_mi17[{REPAIR_LINES_MAX}u];
+    unsigned int ids[{REPAIR_LINES_MAX}u];
+    unsigned int days[{REPAIR_LINES_MAX}u];
+    unsigned int count = 0u;
     
-    unsigned int count_mi8 = 0u;
-    unsigned int count_mi17 = 0u;
-    
-    for (unsigned int i = 0u; i < repair_quota; ++i) {{
-        slots_mi8[i].exchange(0xFFFFFFFFu);
-        slots_mi17[i].exchange(0xFFFFFFFFu);
-        ids_mi8[i] = 0xFFFFFFFFu;
-        ids_mi17[i] = 0xFFFFFFFFu;
+    for (unsigned int i = 0u; i < max_lines; ++i) {{
+        slots_all[i].exchange(0xFFFFFFFFu);
+        slots_days[i].exchange(0u);
+        ids[i] = 0xFFFFFFFFu;
     }}
     
-    for (unsigned int i = 0u; i < repair_quota; ++i) {{
+    for (unsigned int i = 0u; i < max_lines; ++i) {{
         auto msg = FLAMEGPU->message_in.at(i);
         const unsigned int free_days = msg.getVariable<unsigned int>("free_days");
         const unsigned int acn = msg.getVariable<unsigned int>("aircraft_number");
         
-        if (acn == 0u && free_days >= mi8_rt && count_mi8 < {REPAIR_LINES_MAX}u) {{
-            unsigned int pos = count_mi8;
-            while (pos > 0u && free_days < days_mi8[pos - 1u]) {{
-                days_mi8[pos] = days_mi8[pos - 1u];
-                ids_mi8[pos] = ids_mi8[pos - 1u];
+        if (acn == 0u && count < {REPAIR_LINES_MAX}u) {{
+            unsigned int pos = count;
+            while (pos > 0u && free_days < days[pos - 1u]) {{
+                days[pos] = days[pos - 1u];
+                ids[pos] = ids[pos - 1u];
                 --pos;
             }}
-            days_mi8[pos] = free_days;
-            ids_mi8[pos] = i;
-            ++count_mi8;
+            days[pos] = free_days;
+            ids[pos] = i;
+            ++count;
         }}
+    }}
+    
+    for (unsigned int i = 0u; i < count; ++i) {{
+        slots_all[i].exchange(ids[i]);
+        slots_days[i].exchange(days[i]);
+    }}
+    
+    slots_count[0].exchange(count);
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V8: QuotaManager (message-only, единый модуль)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RTC_QUOTA_MANAGER_V8_MSG = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_msg, flamegpu::MessageBruteForce, flamegpu::MessageArray) {{
+    const unsigned char group_by = FLAMEGPU->getVariable<unsigned char>("group_by");
+    if (group_by != 1u) return flamegpu::ALIVE;  // один QM для всех типов
+    
+    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    unsigned int target_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
+    
+    const unsigned int target_mi8 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", target_day);
+    const unsigned int target_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
+    
+    const unsigned int mi8_rt = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
+    const unsigned int mi17_rt = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+    
+    // Буферы кандидатов (локальные массивы)
+    unsigned short ops_mi8[{RTC_MAX_FRAMES}u];
+    unsigned short ops_mi17[{RTC_MAX_FRAMES}u];
+    unsigned short svc_mi8[{RTC_MAX_FRAMES}u];
+    unsigned short svc_mi17[{RTC_MAX_FRAMES}u];
+    unsigned short unsvc_idx[{RTC_MAX_FRAMES}u];
+    unsigned char unsvc_group[{RTC_MAX_FRAMES}u];
+    unsigned short ina_idx[{RTC_MAX_FRAMES}u];
+    unsigned char ina_group[{RTC_MAX_FRAMES}u];
+    
+    unsigned int ops_cnt_mi8 = 0u;
+    unsigned int ops_cnt_mi17 = 0u;
+    unsigned int svc_cnt_mi8 = 0u;
+    unsigned int svc_cnt_mi17 = 0u;
+    unsigned int unsvc_cnt = 0u;
+    unsigned int ina_cnt = 0u;
+    
+    // Сбор сообщений
+    for (const auto& msg : FLAMEGPU->message_in) {{
+        const unsigned int idx = msg.getVariable<unsigned short>("idx");
+        const unsigned char msg_group = msg.getVariable<unsigned char>("group_by");
+        const unsigned char state = msg.getVariable<unsigned char>("state");
+        const unsigned int repair_days = msg.getVariable<unsigned int>("repair_days");
+        const unsigned int repair_line_id = msg.getVariable<unsigned int>("repair_line_id");
+        const unsigned char skip_repair = msg.getVariable<unsigned char>("skip_repair");
         
-        if (acn == 0u && free_days >= mi17_rt && count_mi17 < {REPAIR_LINES_MAX}u) {{
-            unsigned int pos = count_mi17;
-            while (pos > 0u && free_days < days_mi17[pos - 1u]) {{
-                days_mi17[pos] = days_mi17[pos - 1u];
-                ids_mi17[pos] = ids_mi17[pos - 1u];
-                --pos;
+        if (state == 6u) continue;  // storage не участвует
+        
+        if (state == 2u) {{
+            if (msg_group == 1u && ops_cnt_mi8 < {RTC_MAX_FRAMES}u) {{
+                ops_mi8[ops_cnt_mi8++] = (unsigned short)idx;
+            }} else if (msg_group == 2u && ops_cnt_mi17 < {RTC_MAX_FRAMES}u) {{
+                ops_mi17[ops_cnt_mi17++] = (unsigned short)idx;
             }}
-            days_mi17[pos] = free_days;
-            ids_mi17[pos] = i;
-            ++count_mi17;
+        }} else if (state == 3u) {{
+            if (msg_group == 1u && svc_cnt_mi8 < {RTC_MAX_FRAMES}u) {{
+                svc_mi8[svc_cnt_mi8++] = (unsigned short)idx;
+            }} else if (msg_group == 2u && svc_cnt_mi17 < {RTC_MAX_FRAMES}u) {{
+                svc_mi17[svc_cnt_mi17++] = (unsigned short)idx;
+            }}
+        }} else if (state == 7u) {{
+            if (repair_days == 0u && repair_line_id == 0xFFFFFFFFu) {{
+                if (unsvc_cnt < {RTC_MAX_FRAMES}u) {{
+                    unsvc_idx[unsvc_cnt] = (unsigned short)idx;
+                    unsvc_group[unsvc_cnt] = msg_group;
+                    ++unsvc_cnt;
+                }}
+            }}
+        }} else if (state == 1u) {{
+            unsigned int rt = (msg_group == 1u) ? mi8_rt : mi17_rt;
+            if (day >= rt || skip_repair == 1u) {{
+                if (ina_cnt < {RTC_MAX_FRAMES}u) {{
+                    ina_idx[ina_cnt] = (unsigned short)idx;
+                    ina_group[ina_cnt] = msg_group;
+                    ++ina_cnt;
+                }}
+            }}
         }}
     }}
     
-    for (unsigned int i = 0u; i < count_mi8; ++i) {{
-        slots_mi8[i].exchange(ids_mi8[i]);
-    }}
-    for (unsigned int i = 0u; i < count_mi17; ++i) {{
-        slots_mi17[i].exchange(ids_mi17[i]);
+    unsigned int quota_left_mi8 = (target_mi8 > ops_cnt_mi8) ? (target_mi8 - ops_cnt_mi8) : 0u;
+    unsigned int quota_left_mi17 = (target_mi17 > ops_cnt_mi17) ? (target_mi17 - ops_cnt_mi17) : 0u;
+    const unsigned int deficit_mi8 = quota_left_mi8;
+    const unsigned int deficit_mi17 = quota_left_mi17;
+    
+    // Пишем дефицит ДО коммитов (дальше будет декремент по факту)
+    auto qm_ops_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("qm_ops_mp");
+    qm_ops_mp[0].exchange(ops_cnt_mi8);
+    qm_ops_mp[1].exchange(ops_cnt_mi17);
+    
+    // Сбрасываем commit-флаги (будут выставлены по факту переходов)
+    auto mi8_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s3");
+    auto mi17_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s3");
+    auto mi8_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve");
+    auto mi17_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve");
+    auto mi8_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s1");
+    auto mi17_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s1");
+    for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
+        mi8_p1[i].exchange(0u);
+        mi17_p1[i].exchange(0u);
+        mi8_p2[i].exchange(0u);
+        mi17_p2[i].exchange(0u);
+        mi8_p3[i].exchange(0u);
+        mi17_p3[i].exchange(0u);
     }}
     
-    slots_count[0].exchange(count_mi8);
-    slots_count[1].exchange(count_mi17);
+    if (quota_left_mi8 == 0u && quota_left_mi17 == 0u) {{
+        return flamegpu::ALIVE;
+    }}
     
-    // Временное логирование слотов в переменные QM (Mi-17)
-    FLAMEGPU->setVariable<unsigned int>("debug_slots_count_mi17", count_mi17);
-    const unsigned int slot0 = (count_mi17 > 0u) ? ids_mi17[0] : 0xFFFFFFFFu;
-    const unsigned int slot1 = (count_mi17 > 1u) ? ids_mi17[1] : 0xFFFFFFFFu;
-    const unsigned int slot2 = (count_mi17 > 2u) ? ids_mi17[2] : 0xFFFFFFFFu;
-    const unsigned int slot3 = (count_mi17 > 3u) ? ids_mi17[3] : 0xFFFFFFFFu;
-    const unsigned int slot4 = (count_mi17 > 4u) ? ids_mi17[4] : 0xFFFFFFFFu;
-    const unsigned int slot5 = (count_mi17 > 5u) ? ids_mi17[5] : 0xFFFFFFFFu;
-    FLAMEGPU->setVariable<unsigned int>("debug_slot_mi17_0", slot0);
-    FLAMEGPU->setVariable<unsigned int>("debug_slot_mi17_1", slot1);
-    FLAMEGPU->setVariable<unsigned int>("debug_slot_mi17_2", slot2);
-    FLAMEGPU->setVariable<unsigned int>("debug_slot_mi17_3", slot3);
-    FLAMEGPU->setVariable<unsigned int>("debug_slot_mi17_4", slot4);
-    FLAMEGPU->setVariable<unsigned int>("debug_slot_mi17_5", slot5);
+    // Demote по типам (oldest first = меньший idx)
+    if (ops_cnt_mi8 > target_mi8) {{
+        unsigned int K = ops_cnt_mi8 - target_mi8;
+        for (unsigned int i = 0u; i + 1u < ops_cnt_mi8; ++i) {{
+            for (unsigned int j = 0u; j + 1u < ops_cnt_mi8 - i; ++j) {{
+                if (ops_mi8[j] > ops_mi8[j + 1u]) {{
+                    unsigned short tmp = ops_mi8[j];
+                    ops_mi8[j] = ops_mi8[j + 1u];
+                    ops_mi8[j + 1u] = tmp;
+                }}
+            }}
+        }}
+        if (K > ops_cnt_mi8) K = ops_cnt_mi8;
+        for (unsigned int i = 0u; i < K; ++i) {{
+        FLAMEGPU->message_out.setIndex(ops_mi8[i]);
+            FLAMEGPU->message_out.setVariable<unsigned char>("action", 1u);
+            FLAMEGPU->message_out.setVariable<unsigned char>("group_by", 1u);
+            FLAMEGPU->message_out.setVariable<unsigned int>("line_id", 0xFFFFFFFFu);
+        }}
+        quota_left_mi8 = 0u;
+    }}
+    if (ops_cnt_mi17 > target_mi17) {{
+        unsigned int K = ops_cnt_mi17 - target_mi17;
+        for (unsigned int i = 0u; i + 1u < ops_cnt_mi17; ++i) {{
+            for (unsigned int j = 0u; j + 1u < ops_cnt_mi17 - i; ++j) {{
+                if (ops_mi17[j] > ops_mi17[j + 1u]) {{
+                    unsigned short tmp = ops_mi17[j];
+                    ops_mi17[j] = ops_mi17[j + 1u];
+                    ops_mi17[j + 1u] = tmp;
+                }}
+            }}
+        }}
+        if (K > ops_cnt_mi17) K = ops_cnt_mi17;
+        for (unsigned int i = 0u; i < K; ++i) {{
+        FLAMEGPU->message_out.setIndex(ops_mi17[i]);
+            FLAMEGPU->message_out.setVariable<unsigned char>("action", 1u);
+            FLAMEGPU->message_out.setVariable<unsigned char>("group_by", 2u);
+            FLAMEGPU->message_out.setVariable<unsigned int>("line_id", 0xFFFFFFFFu);
+        }}
+        quota_left_mi17 = 0u;
+    }}
+    
+    // P1: serviceable (youngest first = больший idx)
+    if (quota_left_mi8 > 0u && svc_cnt_mi8 > 0u) {{
+        for (unsigned int i = 0u; i + 1u < svc_cnt_mi8; ++i) {{
+            for (unsigned int j = 0u; j + 1u < svc_cnt_mi8 - i; ++j) {{
+                if (svc_mi8[j] < svc_mi8[j + 1u]) {{
+                    unsigned short tmp = svc_mi8[j];
+                    svc_mi8[j] = svc_mi8[j + 1u];
+                    svc_mi8[j + 1u] = tmp;
+                }}
+            }}
+        }}
+        unsigned int K = (quota_left_mi8 < svc_cnt_mi8) ? quota_left_mi8 : svc_cnt_mi8;
+        for (unsigned int i = 0u; i < K; ++i) {{
+        FLAMEGPU->message_out.setIndex(svc_mi8[i]);
+            FLAMEGPU->message_out.setVariable<unsigned char>("action", 2u);
+            FLAMEGPU->message_out.setVariable<unsigned char>("group_by", 1u);
+            FLAMEGPU->message_out.setVariable<unsigned int>("line_id", 0xFFFFFFFFu);
+        }}
+        quota_left_mi8 -= K;
+    }}
+    if (quota_left_mi17 > 0u && svc_cnt_mi17 > 0u) {{
+        for (unsigned int i = 0u; i + 1u < svc_cnt_mi17; ++i) {{
+            for (unsigned int j = 0u; j + 1u < svc_cnt_mi17 - i; ++j) {{
+                if (svc_mi17[j] < svc_mi17[j + 1u]) {{
+                    unsigned short tmp = svc_mi17[j];
+                    svc_mi17[j] = svc_mi17[j + 1u];
+                    svc_mi17[j + 1u] = tmp;
+                }}
+            }}
+        }}
+        unsigned int K = (quota_left_mi17 < svc_cnt_mi17) ? quota_left_mi17 : svc_cnt_mi17;
+        for (unsigned int i = 0u; i < K; ++i) {{
+        FLAMEGPU->message_out.setIndex(svc_mi17[i]);
+            FLAMEGPU->message_out.setVariable<unsigned char>("action", 2u);
+            FLAMEGPU->message_out.setVariable<unsigned char>("group_by", 2u);
+            FLAMEGPU->message_out.setVariable<unsigned int>("line_id", 0xFFFFFFFFu);
+        }}
+        quota_left_mi17 -= K;
+    }}
+    
+    auto line_days_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto line_acn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    unsigned int line_ids[{REPAIR_LINES_MAX}u];
+    unsigned int line_days[{REPAIR_LINES_MAX}u];
+    unsigned int slots = 0u;
+    for (unsigned int i = 0u; i < {REPAIR_LINES_MAX}u; ++i) {{
+        line_ids[i] = 0xFFFFFFFFu;
+        line_days[i] = 0u;
+    }}
+    for (unsigned int i = 0u; i < {REPAIR_LINES_MAX}u; ++i) {{
+        const unsigned int acn = line_acn_mp[i];
+        if (acn != 0u) continue;
+        const unsigned int free_days = line_days_mp[i];
+        if (slots >= {REPAIR_LINES_MAX}u) break;
+        unsigned int pos = slots;
+        while (pos > 0u && free_days < line_days[pos - 1u]) {{
+            line_days[pos] = line_days[pos - 1u];
+            line_ids[pos] = line_ids[pos - 1u];
+            --pos;
+        }}
+        line_days[pos] = free_days;
+        line_ids[pos] = i;
+        ++slots;
+    }}
+    unsigned int slots_left = slots;
+    unsigned int used_slots[{REPAIR_LINES_MAX}u];
+    for (unsigned int i = 0u; i < {REPAIR_LINES_MAX}u; ++i) used_slots[i] = 0u;
+    
+    // P2: unsvc (youngest first)
+    if (unsvc_cnt > 1u) {{
+        for (unsigned int i = 0u; i + 1u < unsvc_cnt; ++i) {{
+            for (unsigned int j = 0u; j + 1u < unsvc_cnt - i; ++j) {{
+                if (unsvc_idx[j] < unsvc_idx[j + 1u]) {{
+                    unsigned short t_idx = unsvc_idx[j];
+                    unsigned char t_grp = unsvc_group[j];
+                    unsvc_idx[j] = unsvc_idx[j + 1u];
+                    unsvc_group[j] = unsvc_group[j + 1u];
+                    unsvc_idx[j + 1u] = t_idx;
+                    unsvc_group[j + 1u] = t_grp;
+                }}
+            }}
+        }}
+    }}
+    
+    for (unsigned int i = 0u; i < unsvc_cnt; ++i) {{
+        unsigned char g = unsvc_group[i];
+        if (g == 1u && quota_left_mi8 == 0u) continue;
+        if (g == 2u && quota_left_mi17 == 0u) continue;
+        if (slots_left == 0u) break;
+        
+        unsigned int repair_time = (g == 1u) ? mi8_rt : mi17_rt;
+        unsigned int chosen_line = 0xFFFFFFFFu;
+        for (unsigned int s = 0u; s < slots; ++s) {{
+            if (used_slots[s] == 1u) continue;
+            if (line_days[s] >= repair_time) {{
+                chosen_line = line_ids[s];
+                used_slots[s] = 1u;
+                break;
+            }}
+        }}
+        if (chosen_line == 0xFFFFFFFFu) continue;
+        
+        FLAMEGPU->message_out.setIndex(unsvc_idx[i]);
+        FLAMEGPU->message_out.setVariable<unsigned char>("action", 3u);
+        FLAMEGPU->message_out.setVariable<unsigned char>("group_by", g);
+        FLAMEGPU->message_out.setVariable<unsigned int>("line_id", chosen_line);
+        
+        if (g == 1u) quota_left_mi8--;
+        else quota_left_mi17--;
+        if (slots_left > 0u) slots_left--;
+    }}
+    
+    // P3: inactive (youngest first), после P2
+    if (ina_cnt > 1u) {{
+        for (unsigned int i = 0u; i + 1u < ina_cnt; ++i) {{
+            for (unsigned int j = 0u; j + 1u < ina_cnt - i; ++j) {{
+                if (ina_idx[j] < ina_idx[j + 1u]) {{
+                    unsigned short t_idx = ina_idx[j];
+                    unsigned char t_grp = ina_group[j];
+                    ina_idx[j] = ina_idx[j + 1u];
+                    ina_group[j] = ina_group[j + 1u];
+                    ina_idx[j + 1u] = t_idx;
+                    ina_group[j + 1u] = t_grp;
+                }}
+            }}
+        }}
+    }}
+    
+    for (unsigned int i = 0u; i < ina_cnt; ++i) {{
+        unsigned char g = ina_group[i];
+        if (g == 1u && quota_left_mi8 == 0u) continue;
+        if (g == 2u && quota_left_mi17 == 0u) continue;
+        if (slots_left == 0u) break;
+        
+        unsigned int repair_time = (g == 1u) ? mi8_rt : mi17_rt;
+        unsigned int chosen_line = 0xFFFFFFFFu;
+        for (unsigned int s = 0u; s < slots; ++s) {{
+            if (used_slots[s] == 1u) continue;
+            if (line_days[s] >= repair_time) {{
+                chosen_line = line_ids[s];
+                used_slots[s] = 1u;
+                break;
+            }}
+        }}
+        if (chosen_line == 0xFFFFFFFFu) continue;
+        
+        FLAMEGPU->message_out.setIndex(ina_idx[i]);
+        FLAMEGPU->message_out.setVariable<unsigned char>("action", 4u);
+        FLAMEGPU->message_out.setVariable<unsigned char>("group_by", g);
+        FLAMEGPU->message_out.setVariable<unsigned int>("line_id", chosen_line);
+        
+        if (g == 1u) quota_left_mi8--;
+        else quota_left_mi17--;
+        if (slots_left > 0u) slots_left--;
+    }}
+    
+    // Debug: итоги QM (по входному дефициту)
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_ops_mi8", ops_cnt_mi8);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_ops_mi17", ops_cnt_mi17);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_target_mi8", target_mi8);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_target_mi17", target_mi17);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_quota_left_mi8", deficit_mi8);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_quota_left_mi17", deficit_mi17);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_unsvc_cnt", unsvc_cnt);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_inactive_cnt", ina_cnt);
     
     return flamegpu::ALIVE;
 }}
@@ -314,7 +602,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     if (candidate == 0u) return flamegpu::ALIVE;
     
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
-    const unsigned int best_days = FLAMEGPU->getVariable<unsigned int>("repair_line_day");
+    if (line_id == 0xFFFFFFFFu) {{
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+        return flamegpu::ALIVE;
+    }}
+    
     auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
     auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
     auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
@@ -323,77 +615,35 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-    const unsigned int prev_last_acn = line_last_acn[line_id].exchange(0u);
-    const unsigned int prev_last_day = line_last_day[line_id].exchange(0u);
-    if (prev_last_acn == acn && prev_last_day == (current_day > 0u ? current_day - 1u : 0u)) {{
-        line_last_acn[line_id].exchange(prev_last_acn);
-        line_last_day[line_id].exchange(prev_last_day);
-        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
-        return flamegpu::ALIVE;
-    }}
     
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int repair_time = (group_by == 1u)
         ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
         : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
     
-    auto slots_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("repair_line_slots_count_mp");
-    const unsigned int slots_count = (group_by == 1u) ? slots_count_mp[0] : slots_count_mp[1];
-    auto slots = (group_by == 1u) ?
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_mi8") :
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_mi17");
-    auto unsvc_ready = (group_by == 1u) ?
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count") :
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    unsigned int rank = 0u;
-    for (unsigned int i = 0u; i < idx; ++i) {{
-        rank += unsvc_ready[i];
-    }}
-    if (rank >= slots_count) {{
-        line_last_acn[line_id].exchange(prev_last_acn);
-        line_last_day[line_id].exchange(prev_last_day);
-        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
-        return flamegpu::ALIVE;
-    }}
-    
-    bool claimed = false;
-    unsigned int chosen_line = 0xFFFFFFFFu;
-    unsigned int chosen_days = 0u;
-    for (unsigned int i = rank; i < slots_count; ++i) {{
-        const unsigned int try_line = slots[i];
-        if (try_line == 0xFFFFFFFFu) continue;
-        const unsigned int old_days = line_mp[try_line].exchange(0u);
-        if (old_days >= repair_time) {{
-            chosen_line = try_line;
-            chosen_days = old_days;
-            claimed = true;
-            break;
-        }}
-    }}
-    
-    if (claimed) {{
-        line_acn[chosen_line].exchange(acn);
-        line_rt[chosen_line].exchange(repair_time);
-        line_last_acn[chosen_line].exchange(acn);
-        line_last_day[chosen_line].exchange(current_day);
-        FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
-        FLAMEGPU->setVariable<unsigned int>("repair_line_day", chosen_days);
+    const unsigned int old_days = line_mp[line_id].exchange(0u);
+    if (old_days >= repair_time) {{
+        line_acn[line_id].exchange(acn);
+        line_rt[line_id].exchange(repair_time);
+        line_last_acn[line_id].exchange(acn);
+        line_last_day[line_id].exchange(current_day);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
+        
+        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
         if (group_by == 1u) {{
-            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve");
-            approve[idx].exchange(1u);
+            auto p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve");
+            p2[idx].exchange(1u);
         }} else {{
-            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve");
-            approve[idx].exchange(1u);
+            auto p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve");
+            p2[idx].exchange(1u);
         }}
     }} else {{
-        line_last_acn[line_id].exchange(prev_last_acn);
-        line_last_day[line_id].exchange(prev_last_day);
-        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+        line_mp[line_id].exchange(old_days);
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     }}
     
+    FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
     return flamegpu::ALIVE;
 }}
 """
@@ -549,7 +799,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     if (candidate == 0u) return flamegpu::ALIVE;
     
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
-    const unsigned int best_days = FLAMEGPU->getVariable<unsigned int>("repair_line_day");
+    if (line_id == 0xFFFFFFFFu) {{
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+        return flamegpu::ALIVE;
+    }}
     auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
     auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
     auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
@@ -558,77 +811,35 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-    const unsigned int prev_last_acn = line_last_acn[line_id].exchange(0u);
-    const unsigned int prev_last_day = line_last_day[line_id].exchange(0u);
-    if (prev_last_acn == acn && prev_last_day == (current_day > 0u ? current_day - 1u : 0u)) {{
-        line_last_acn[line_id].exchange(prev_last_acn);
-        line_last_day[line_id].exchange(prev_last_day);
-        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
-        return flamegpu::ALIVE;
-    }}
     
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int repair_time = (group_by == 1u)
         ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
         : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
     
-    auto slots_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("repair_line_slots_count_mp");
-    const unsigned int slots_count = (group_by == 1u) ? slots_count_mp[0] : slots_count_mp[1];
-    auto slots = (group_by == 1u) ?
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_mi8") :
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_mi17");
-    auto inactive_ready = (group_by == 1u) ?
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count") :
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    unsigned int rank = 0u;
-    for (unsigned int i = 0u; i < idx; ++i) {{
-        rank += inactive_ready[i];
-    }}
-    if (rank >= slots_count) {{
-        line_last_acn[line_id].exchange(prev_last_acn);
-        line_last_day[line_id].exchange(prev_last_day);
-        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
-        return flamegpu::ALIVE;
-    }}
-    
-    bool claimed = false;
-    unsigned int chosen_line = 0xFFFFFFFFu;
-    unsigned int chosen_days = 0u;
-    for (unsigned int i = rank; i < slots_count; ++i) {{
-        const unsigned int try_line = slots[i];
-        if (try_line == 0xFFFFFFFFu) continue;
-        const unsigned int old_days = line_mp[try_line].exchange(0u);
-        if (old_days >= repair_time) {{
-            chosen_line = try_line;
-            chosen_days = old_days;
-            claimed = true;
-            break;
-        }}
-    }}
-    
-    if (claimed) {{
-        line_acn[chosen_line].exchange(acn);
-        line_rt[chosen_line].exchange(repair_time);
-        line_last_acn[chosen_line].exchange(acn);
-        line_last_day[chosen_line].exchange(current_day);
-        FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
-        FLAMEGPU->setVariable<unsigned int>("repair_line_day", chosen_days);
+    const unsigned int old_days = line_mp[line_id].exchange(0u);
+    if (old_days >= repair_time) {{
+        line_acn[line_id].exchange(acn);
+        line_rt[line_id].exchange(repair_time);
+        line_last_acn[line_id].exchange(acn);
+        line_last_day[line_id].exchange(current_day);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
+        
+        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
         if (group_by == 1u) {{
-            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s1");
-            approve[idx].exchange(1u);
+            auto p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s1");
+            p3[idx].exchange(1u);
         }} else {{
-            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s1");
-            approve[idx].exchange(1u);
+            auto p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s1");
+            p3[idx].exchange(1u);
         }}
     }} else {{
-        line_last_acn[line_id].exchange(prev_last_acn);
-        line_last_day[line_id].exchange(prev_last_day);
-        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+        line_mp[line_id].exchange(old_days);
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     }}
     
+    FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
     return flamegpu::ALIVE;
 }}
 """
@@ -703,11 +914,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_debug_p2_v8, flamegpu::MessageNone, flamegpu::
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def setup_quota_v8_macroproperties(env):
-    """Создаёт MacroProperty для слотов RepairLine по типам"""
-    env.newMacroPropertyUInt("repair_line_slots_mi8", REPAIR_LINES_MAX)
-    env.newMacroPropertyUInt("repair_line_slots_mi17", REPAIR_LINES_MAX)
-    env.newMacroPropertyUInt("repair_line_slots_count_mp", 2)
-    print("  ✅ V8 MacroProperty: repair_line_slots_mi8/mi17 + counts_mp")
+    """Создаёт MacroProperty для остатков квот"""
+    env.newMacroPropertyUInt("qm_ops_mp", 2)
+    env.newMacroPropertyUInt("quota_left_mp", 2)
+    print("  ✅ V8 MacroProperty: qm_ops_mp + quota_left_mp")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -753,6 +963,59 @@ def register_quota_p2_p3_v8(model, agent):
     layer_p3_commit.addAgentFunction(fn)
     
     print("  ✅ V8 P2 (unsvc) + P3 (inactive)")
+
+
+def register_quota_v8_messages(model, agent, quota_agent):
+    """
+    V8 квотирование на сообщениях:
+    - publish_report (PlanerReport)
+    - RepairLine slots (общий пул)
+    - QuotaManager message-only
+    - apply_decisions
+    - commit P2/P3
+    """
+    print("\n📊 V8: Регистрация квотирования (message-only)...")
+    
+    # Сброс флагов
+    layer_reset_flags = model.newLayer("v8_reset_flags")
+    for state in ["inactive", "operations", "serviceable", "repair", "reserve", "storage", "unserviceable"]:
+        fn_name = f"rtc_reset_flags_v8_{state}"
+        fn = agent.newRTCFunction(fn_name, RTC_RESET_FLAGS)
+        fn.setInitialState(state)
+        fn.setEndState(state)
+        layer_reset_flags.addAgentFunction(fn)
+    print("  ✅ Сброс флагов")
+    
+    # Публикация PlanerReport (без storage)
+    register_publish_report(model, agent)
+    
+    # QuotaManager: PlanerReport -> QuotaDecision
+    layer_qm = model.newLayer("v8_quota_manager_msg")
+    fn = quota_agent.newRTCFunction("rtc_quota_manager_v8_msg", RTC_QUOTA_MANAGER_V8_MSG)
+    fn.setInitialState("default")
+    fn.setEndState("default")
+    fn.setMessageInput("PlanerReport")
+    fn.setMessageOutput("QuotaDecisionArray")
+    fn.setMessageOutputOptional(True)
+    layer_qm.addAgentFunction(fn)
+    
+    # Применение решений
+    register_apply_decisions(model, agent, message_name="QuotaDecisionArray")
+    
+    # Commit P2/P3
+    layer_p2_commit = model.newLayer("v8_promote_unsvc_commit")
+    fn = agent.newRTCFunction("rtc_promote_unsvc_commit_v8", RTC_PROMOTE_UNSVC_COMMIT_V8)
+    fn.setInitialState("unserviceable")
+    fn.setEndState("unserviceable")
+    layer_p2_commit.addAgentFunction(fn)
+    
+    layer_p3_commit = model.newLayer("v8_promote_inactive_commit")
+    fn = agent.newRTCFunction("rtc_promote_inactive_commit_v8", RTC_PROMOTE_INACTIVE_COMMIT_V8)
+    fn.setInitialState("inactive")
+    fn.setEndState("inactive")
+    layer_p3_commit.addAgentFunction(fn)
+    
+    print("  ✅ V8 message-only квоты зарегистрированы")
 
 
 def register_quota_v8_full(model, agent, quota_agent):

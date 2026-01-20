@@ -59,7 +59,7 @@ source config/load_env.sh
 export CUBE_CONFIG_PATH="$PWD/config"
 ```
 
-## LIMITER V8: текущий статус (18-01-2026)
+## LIMITER V8: текущий статус (20-01-2026)
 
 **Контекст:** `sim_masterv2_v8`, датасет `2025-07-04`, прогон 3650 дней, логирование по `prev_day`.
 
@@ -88,7 +88,7 @@ export CUBE_CONFIG_PATH="$PWD/config"
 - V8 квотирование использует target на текущий `day` (не на day+step).
 - Для инварианта `delta_sne` учитываем интервалы, где **prev_state = operations** или **state = operations** (адаптивный шаг может включать переход в ops внутри интервала).
 
-- **Известная проблема (V8, 3650 дней, 2025-07-04):** ops vs target — 112 ошибок по Mi‑17 из 268 шагов; Mi‑8 без ошибок. Инвариант Δsne нарушен в 2 бортах (delta вне ops).
+- **Известная проблема (V8, 3650 дней, 2025-07-04/2025-12-30):** message‑only квоты P2/P3 ограничены 1 решением на шаг (одно сообщение от QM‑агента), что создаёт дефицит ops и повышает spawns при наличии готовых unsvc/ina.
 
 **Результат исправления (02-12-2025):**
 - Было: 10-20 мин первичная компиляция с warning'ами
@@ -2308,7 +2308,8 @@ LIMITER — альтернативная архитектура симуляци
 - **Event-driven:** Квотирование выполняется только при изменении программы или выбытии агента
 - **GPU-оптимизация:** Ежедневные инкременты полностью на GPU, минимальные host-взаимодействия
 - **V8 adaptive:** `min_dynamic` сбрасывается в `rtc_compute_global_min_v8` без отдельного reset‑слоя; источник (limiter/repair_days) сохраняется в `adaptive_result_mp[1]` для логгера, шаги по `deterministic_dates` помечаются как `deterministic_date:<day>`
-- **V8 spawn:** дефицит считается как `target − curr_ops − used(P1/P2/P3 approve − demote)` без post‑quota counts
+- **V8 spawn:** дефицит считается как `target − qm_ops − used(P1/P2/P3 commit)`
+- **V8 debug QM:** ops/target/quota_left по типам пишутся в `sim_quota_mgr_v8` для проверки источника дефицита
 
 ### Сравнение с BASELINE (DS1: 2025-07-04, 3650 дней)
 

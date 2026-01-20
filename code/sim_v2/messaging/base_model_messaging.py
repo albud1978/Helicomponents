@@ -89,8 +89,10 @@ class V2BaseModelMessaging:
         self.msg_planer_report.newVariableUInt8("state")         # 1-6 (текущее состояние)
         self.msg_planer_report.newVariableUInt8("intent")        # Текущий intent после state_functions
         self.msg_planer_report.newVariableUInt16("mfg_date")     # Для ранжирования
-        self.msg_planer_report.newVariableUInt8("repair_ready")  # 1 если step_day >= repair_time
+        self.msg_planer_report.newVariableUInt8("repair_ready")  # 1 если day >= repair_time
         self.msg_planer_report.newVariableUInt8("skip_repair")   # 1 если Mi-17 && ppr < br2
+        self.msg_planer_report.newVariableUInt("repair_days")
+        self.msg_planer_report.newVariableUInt("repair_line_id")
         
         # ═══════════════════════════════════════════════════════════════
         # Message "PlanerEvent": EVENT-DRIVEN (только при изменениях!)
@@ -111,8 +113,16 @@ class V2BaseModelMessaging:
         # ═══════════════════════════════════════════════════════════════
         self.msg_quota_decision = self.model.newMessageBruteForce("QuotaDecision")
         self.msg_quota_decision.newVariableUInt16("idx")         # Кому адресовано
-        self.msg_quota_decision.newVariableUInt8("action")       # 0=none, 1=demote→3, 2=promote→2
+        self.msg_quota_decision.newVariableUInt8("action")       # 1=demote, 2=P1, 3=P2, 4=P3
         self.msg_quota_decision.newVariableUInt8("group_by")     # Для фильтрации
+        self.msg_quota_decision.newVariableUInt("line_id")       # Для P2/P3
+        
+        # Message "QuotaDecisionArray": QuotaManager → Планер (V8, message-array)
+        self.msg_quota_decision_array = self.model.newMessageArray("QuotaDecisionArray")
+        self.msg_quota_decision_array.setLength(model_build.RTC_MAX_FRAMES)
+        self.msg_quota_decision_array.newVariableUInt8("action")       # 0=none, 1=demote, 2=P1, 3=P2, 4=P3
+        self.msg_quota_decision_array.newVariableUInt8("group_by")     # Для фильтрации
+        self.msg_quota_decision_array.newVariableUInt("line_id")       # Для P2/P3
 
         # ═══════════════════════════════════════════════════════════════
         # Message "RepairLineStatus": RepairLine → QuotaManager (addressed)
@@ -155,6 +165,16 @@ class V2BaseModelMessaging:
         quota.newVariableUInt("debug_p2_slots")
         quota.newVariableUInt("debug_p2_svc")
         quota.newVariableUInt("debug_p2_unsvc")
+        
+        # Debug: итоги QM (ops/target/quota_left)
+        quota.newVariableUInt("debug_qm_ops_mi8")
+        quota.newVariableUInt("debug_qm_ops_mi17")
+        quota.newVariableUInt("debug_qm_target_mi8")
+        quota.newVariableUInt("debug_qm_target_mi17")
+        quota.newVariableUInt("debug_qm_quota_left_mi8")
+        quota.newVariableUInt("debug_qm_quota_left_mi17")
+        quota.newVariableUInt("debug_qm_unsvc_cnt")
+        quota.newVariableUInt("debug_qm_inactive_cnt")
         
         # MacroProperty буферы для хранения idx агентов (для масштабирования >1000)
         # Каждый QuotaManager хранит idx своей группы
@@ -482,6 +502,11 @@ class V2BaseModelMessaging:
         # V7: Флаги для однофазной архитектуры (без intent)
         agent.newVariableUInt("promoted", 0)     # 1 = получил промоут в этом шаге
         agent.newVariableUInt("needs_demote", 0) # 1 = должен выйти из operations
+        agent.newVariableUInt("commit_p1", 0)
+        agent.newVariableUInt("commit_p2", 0)
+        agent.newVariableUInt("commit_p3", 0)
+        agent.newVariableUInt("decision_p2", 0)
+        agent.newVariableUInt("decision_p3", 0)
         
         # V8: отладочные флаги (снимок решений квот)
         agent.newVariableUInt("debug_promoted", 0)
