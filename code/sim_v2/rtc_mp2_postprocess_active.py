@@ -4,15 +4,15 @@ RTC модуль для GPU постпроцессинга MP2: заполнен
 
 Назначение:
 - Обрабатывает переход inactive → operations (1→2), который происходит МГНОВЕННО в симуляции
-- На самом деле агент прошёл через ремонт (1→4→2), но это скрыто
+- Реальный путь: inactive → reserve → repair → operations
 - active_trigger=1 помечает день перехода 1→2
-- Постпроцессинг заполняет историю ремонта ЗАДНИМ ЧИСЛОМ
+- Постпроцессинг заполняет историю reserve/repair ЗАДНИМ ЧИСЛОМ
 
 Логика:
 1. Поиск дня d_event где active_trigger=1
 2. Вычисление окна ремонта: [d_event - repair_time .. d_event - 1]
-3. Заполнение state=4, repair_days=1..R для окна
-4. Установка assembly_trigger=1 в день (d_event - assembly_time)
+3. Заполнение state=4 для ремонта
+4. Установка assembly_trigger=1 в последние assembly_time дней ремонта
 5. Исправление transition флагов:
    - transition_1_to_4=1 в день начала ремонта (s)
    - transition_4_to_2=1 в день выхода из ремонта (d_event)
@@ -105,11 +105,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active, flamegpu::MessageNone, flame
             // ═══════════════════════════════════════════════════════════════════
             // УСТАНОВКА assembly_trigger
             // ═══════════════════════════════════════════════════════════════════
-            // 3. assembly_trigger=1 в день (d_event - A)
-            if (d_event >= A) {{
-                const unsigned int asm_day = d_event - A;
-                if (asm_day < days_total) {{
-                    const unsigned int pos_asm = asm_day * {MAX_FRAMES}u + idx;
+            // 3. assembly_trigger=1 в последние A дней ремонта
+            if (A > 0u) {{
+                int asm_start_signed = (int)d_event - (int)A;
+                unsigned int asm_start = (asm_start_signed < 0) ? 0u : (unsigned int)asm_start_signed;
+                unsigned int asm_end = (d_event > 0u) ? (d_event - 1u) : 0u;
+                for (unsigned int d = asm_start; d <= asm_end && d < days_total; ++d) {{
+                    const unsigned int pos_asm = d * {MAX_FRAMES}u + idx;
                     mp2_assembly_trigger[pos_asm].exchange(1u);
                 }}
             }}
