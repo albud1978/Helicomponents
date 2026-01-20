@@ -376,6 +376,16 @@ RTC_SVC_TO_OPS = """
 FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     // P1: PPR сохраняется
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (group_by == 1u) {
+        auto p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s3");
+        p1[idx].exchange(1u);
+    } else if (group_by == 2u) {
+        auto p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s3");
+        p1[idx].exchange(1u);
+    }
+    FLAMEGPU->setVariable<unsigned int>("commit_p1", 1u);
     FLAMEGPU->setVariable<unsigned int>("transition_3_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
@@ -383,6 +393,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::Mess
     return flamegpu::ALIVE;
 }
 """
+RTC_SVC_TO_OPS = RTC_SVC_TO_OPS.replace("{RTC_MAX_FRAMES}", str(RTC_MAX_FRAMES))
 
 # Условие: unserviceable промоутен (P2)
 COND_UNSVC_PROMOTED = """
@@ -400,6 +411,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_to_ops_v7, flamegpu::MessageNone, flamegpu::Me
     FLAMEGPU->setVariable<unsigned int>("transition_7_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
+    FLAMEGPU->setVariable<unsigned int>("commit_p2", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }
@@ -433,6 +445,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_v7, flamegpu::MessageNone, flamegpu:
     FLAMEGPU->setVariable<unsigned int>("transition_1_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
+    FLAMEGPU->setVariable<unsigned int>("commit_p3", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }}

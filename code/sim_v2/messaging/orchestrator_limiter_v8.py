@@ -142,6 +142,11 @@ def collect_agents_state(simulation, agent_desc, current_day, version_date_int, 
                 'debug_repair_candidate': agent.getVariableUInt('debug_repair_candidate'),
                 'debug_repair_line_id': agent.getVariableUInt('debug_repair_line_id'),
                 'debug_repair_line_day': agent.getVariableUInt('debug_repair_line_day'),
+                'commit_p1': agent.getVariableUInt('commit_p1'),
+                'commit_p2': agent.getVariableUInt('commit_p2'),
+                'commit_p3': agent.getVariableUInt('commit_p3'),
+                'decision_p2': agent.getVariableUInt('decision_p2'),
+                'decision_p3': agent.getVariableUInt('decision_p3'),
                 'spawn_debug_curr_ops': spawn_debug_curr_ops,
                 'spawn_debug_target': spawn_debug_target,
                 'spawn_debug_need': spawn_debug_need,
@@ -273,6 +278,14 @@ def collect_quota_manager_state(simulation, quota_desc, day_u16, version_date_in
             'debug_p2_slots': int(agent.getVariableUInt("debug_p2_slots")),
             'debug_p2_svc': int(agent.getVariableUInt("debug_p2_svc")),
             'debug_p2_unsvc': int(agent.getVariableUInt("debug_p2_unsvc")),
+            'debug_qm_ops_mi8': int(agent.getVariableUInt("debug_qm_ops_mi8")),
+            'debug_qm_ops_mi17': int(agent.getVariableUInt("debug_qm_ops_mi17")),
+            'debug_qm_target_mi8': int(agent.getVariableUInt("debug_qm_target_mi8")),
+            'debug_qm_target_mi17': int(agent.getVariableUInt("debug_qm_target_mi17")),
+            'debug_qm_quota_left_mi8': int(agent.getVariableUInt("debug_qm_quota_left_mi8")),
+            'debug_qm_quota_left_mi17': int(agent.getVariableUInt("debug_qm_quota_left_mi17")),
+            'debug_qm_unsvc_cnt': int(agent.getVariableUInt("debug_qm_unsvc_cnt")),
+            'debug_qm_inactive_cnt': int(agent.getVariableUInt("debug_qm_inactive_cnt")),
         })
     return rows
 
@@ -291,14 +304,14 @@ def collect_repair_slots_state(simulation, day_u16, version_date_int, version_id
     repair_quota = _get_env_u32("repair_quota", 0)
     
     try:
-        slots_mi17 = simulation.getEnvironmentMacroPropertyUInt("repair_line_slots_mi17")
+        slots_all = simulation.getEnvironmentMacroPropertyUInt("repair_line_slots_all")
         slots_count_mp = simulation.getEnvironmentMacroPropertyUInt("repair_line_slots_count_mp")
     except Exception:
         return []
     
-    slots_count = int(slots_count_mp[1]) if len(slots_count_mp) > 1 else 0
+    slots_count = int(slots_count_mp[0]) if len(slots_count_mp) > 0 else 0
     rows = []
-    limit = repair_quota if repair_quota > 0 else min(len(slots_mi17), REPAIR_LINES_MAX)
+    limit = repair_quota if repair_quota > 0 else min(len(slots_all), REPAIR_LINES_MAX)
     for i in range(limit):
         rows.append({
             'version_date': version_date_int,
@@ -309,7 +322,7 @@ def collect_repair_slots_state(simulation, day_u16, version_date_int, version_id
             'debug_adaptive_days': adaptive_days,
             'debug_current_day': env_current_day,
             'slot_idx': i,
-            'line_id': int(slots_mi17[i]),
+            'line_id': int(slots_all[i]),
             'slots_count': slots_count,
         })
     return rows
@@ -399,7 +412,7 @@ class LimiterV8Orchestrator:
         mp4_mi8 = self.env_data.get('mp4_ops_counter_mi8', [])
         mp4_mi17 = self.env_data.get('mp4_ops_counter_mi17', [])
         program_changes = find_program_change_days(mp4_mi8, mp4_mi17)
-        # Извлекаем только дни из tuples (day, target_mi8, target_mi17)
+        # Извлек только дни из tuples (day, target_mi8, target_mi17)
         self.program_change_days = [pc[0] for pc in program_changes if pc[0] <= self.end_day]
         
         # Добавляем end_day
@@ -564,7 +577,7 @@ class LimiterV8Orchestrator:
         
         # Фаза 2: V8 Квотирование с RepairLine
         rtc_quota_v8.setup_quota_v8_macroproperties(self.base_model.env)
-        rtc_quota_v8.register_quota_v8_full(self.model, heli_agent, self.base_model.quota_agent)
+        rtc_quota_v8.register_quota_v8_messages(self.model, heli_agent, self.base_model.quota_agent)
         
         # Фаза 3: Переходы после квотирования
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
@@ -1268,6 +1281,11 @@ def main():
                 debug_repair_candidate UInt8,
                 debug_repair_line_id UInt32,
                 debug_repair_line_day UInt32,
+                commit_p1 UInt32,
+                commit_p2 UInt32,
+                commit_p3 UInt32,
+                decision_p2 UInt32,
+                decision_p3 UInt32,
                 spawn_debug_curr_ops UInt32,
                 spawn_debug_target UInt32,
                 spawn_debug_need UInt32,
@@ -1284,6 +1302,8 @@ def main():
             ) ENGINE = MergeTree()
             ORDER BY (version_date, version_id, day_u16, idx)
         """)
+        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS decision_p2 UInt32")
+        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS decision_p3 UInt32")
         client.execute("""
             CREATE TABLE IF NOT EXISTS sim_repair_lines_v8 (
                 version_date UInt32,
@@ -1327,10 +1347,26 @@ def main():
                 debug_p2_needed UInt32,
                 debug_p2_slots UInt32,
                 debug_p2_svc UInt32,
-                debug_p2_unsvc UInt32
+                debug_p2_unsvc UInt32,
+                debug_qm_ops_mi8 UInt32,
+                debug_qm_ops_mi17 UInt32,
+                debug_qm_target_mi8 UInt32,
+                debug_qm_target_mi17 UInt32,
+                debug_qm_quota_left_mi8 UInt32,
+                debug_qm_quota_left_mi17 UInt32,
+                debug_qm_unsvc_cnt UInt32,
+                debug_qm_inactive_cnt UInt32
             ) ENGINE = MergeTree()
             ORDER BY (version_date, version_id, day_u16, group_by)
         """)
+        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_ops_mi8 UInt32")
+        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_ops_mi17 UInt32")
+        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_target_mi8 UInt32")
+        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_target_mi17 UInt32")
+        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_quota_left_mi8 UInt32")
+        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_quota_left_mi17 UInt32")
+        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_unsvc_cnt UInt32")
+        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_inactive_cnt UInt32")
         print("✅ Таблица sim_masterv2_v8 готова")
     
     orchestrator = LimiterV8Orchestrator(

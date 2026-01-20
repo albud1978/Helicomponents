@@ -4,8 +4,16 @@
 - V8 adaptive: убран отдельный слой `v8_reset_min_dynamic`; сброс `min_dynamic` перенесён в `rtc_compute_global_min_v8` (GPU-only, минус один слой).
 - V8 лог шагов: фиксируется источник `min_dynamic` (limiter/repair_days) через `adaptive_result_mp[1]`.
 - V8 лог шагов: шаги по `deterministic_dates` помечаются как `deterministic_date:<day>` (repair_time/spawn).
-- V8 spawn: дефицит считается как `target − curr_ops − used(P1/P2/P3 approve − demote)`; post‑quota counts удалены.
+- V8 spawn: дефицит считается как `target − curr_ops − used(P1/P2/P3 commit)`; storage не участвует, post‑quota counts удалены.
+- V8 debug: добавлены поля QM (ops/target/quota_left по типам) в `sim_quota_mgr_v8` для диагностики спавна.
+- V8 spawn: дефицит считается по `qm_ops_mp` и commit-флагам P1/P2/P3; `quota_left_mp` больше не используется для факта.
+- V8 debug: добавлены commit_p1/commit_p2/commit_p3 в MP2 для проверки факта переходов.
+- V8 debug: добавлены decision_p2/decision_p3 в MP2 для проверки выдачи решений QM.
+- V8 debug: добавлены debug_qm_unsvc_cnt/debug_qm_inactive_cnt в sim_quota_mgr_v8.
+- V8 quota: QuotaDecision переведён на MessageArray (`QuotaDecisionArray`) для адресных решений.
+- V8 unsvc readiness: для P2 используется `repair_days == 0` без day‑барьера.
 - V8: актуализирована таблица слоёв и примечания по adaptive шагу.
+- V8 issue: message‑only квоты P2/P3 ограничены 1 решением на шаг (одно сообщение от QM‑агента).
 
 ---
 ## [18-01-2026] - 🔧 LIMITER V8: readiness unsvc

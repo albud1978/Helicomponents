@@ -15,7 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 import pyflamegpu as fg
 
 
-def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
+def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription, message_name: str = "QuotaDecision"):
     """Регистрирует RTC функции применения QuotaDecision для всех состояний"""
     
     print("  📥 Регистрация модуля: apply_decisions (QuotaDecision сообщения)")
@@ -25,50 +25,38 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     # ═══════════════════════════════════════════════════════════════════════
     
     RTC_APPLY_DECISIONS = """
-FLAMEGPU_AGENT_FUNCTION(rtc_apply_decision, flamegpu::MessageBruteForce, flamegpu::MessageNone) {
+FLAMEGPU_AGENT_FUNCTION(rtc_apply_decision, flamegpu::MessageArray, flamegpu::MessageNone) {
     const unsigned int my_idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    auto msg = FLAMEGPU->message_in.at(my_idx);
+    const unsigned char action = msg.getVariable<unsigned char>("action");
+    const unsigned int line_id = msg.getVariable<unsigned int>("line_id");
     
-    // Читаем все сообщения и ищем своё
-    for (const auto& msg : FLAMEGPU->message_in) {
-        const unsigned short msg_idx = msg.getVariable<unsigned short>("idx");
-        
-        if (msg_idx == (unsigned short)my_idx) {
-            const unsigned char action = msg.getVariable<unsigned char>("action");
-            
-            if (action == 1u) {
-                // DEMOTE: intent → 3 (serviceable)
-                FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
-                
-                if (step_day < 10u || step_day == 180u) {
-                    const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-                    printf("  [APPLY Day %u] AC %u (idx=%u): DEMOTE intent→3\\n", 
-                           step_day, acn, my_idx);
-                }
-            }
-            else if (action == 2u) {
-                // PROMOTE: intent → 2 (operations)
-                FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
-                
-                if (step_day < 10u || step_day == 180u) {
-                    const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-                    printf("  [APPLY Day %u] AC %u (idx=%u): PROMOTE intent→2\\n", 
-                           step_day, acn, my_idx);
-                }
-            }
-            
-            break;  // Нашли своё решение
-        }
+    if (action == 1u) {
+        // DEMOTE: ops -> svc
+        FLAMEGPU->setVariable<unsigned int>("needs_demote", 1u);
+    } else if (action == 2u) {
+        // P1: svc -> ops
+        FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
+    } else if (action == 3u) {
+        // P2: unsvc -> ops (repair line assigned)
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", line_id);
+        FLAMEGPU->setVariable<unsigned int>("decision_p2", 1u);
+    } else if (action == 4u) {
+        // P3: inactive -> ops (repair line assigned)
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", line_id);
+        FLAMEGPU->setVariable<unsigned int>("decision_p3", 1u);
     }
     
     return flamegpu::ALIVE;
 }
-"""
+    """
     
     # Регистрируем для каждого состояния
     # ВАЖНО: FLAME GPU не позволяет нескольким функциям в одном слое
     # читать из одного MessageList. Используем отдельные слои.
-    states = ["inactive", "operations", "serviceable", "repair", "reserve", "storage"]
+    states = ["inactive", "operations", "serviceable", "repair", "reserve", "unserviceable"]
     
     for i, state_name in enumerate(states):
         layer = model.newLayer(f"apply_decisions_{state_name}")
@@ -76,7 +64,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_decision, flamegpu::MessageBruteForce, flamegp
         rtc_func = agent.newRTCFunction(func_name, RTC_APPLY_DECISIONS)
         rtc_func.setInitialState(state_name)
         rtc_func.setEndState(state_name)
-        rtc_func.setMessageInput("QuotaDecision")
+        rtc_func.setMessageInput(message_name)
         layer.addAgentFunction(rtc_func)
     
     print(f"    ✅ Зарегистрировано {len(states)} функций применения решений (каждая в своём слое)")
