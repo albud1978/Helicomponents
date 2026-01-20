@@ -40,12 +40,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
         return flamegpu::ALIVE;
     }
     
+    // ✅ Читаем глобальную квоту ремонта (общая для всех планеров)
+    const unsigned int global_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota_total");
+    const bool use_global_quota = (global_quota > 0u);
+    
     // ✅ Читаем repair_number из MacroProperty по idx (UInt32 для выравнивания)
     auto repair_number_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, $MAX_FRAMES>("repair_number_by_idx");
     const unsigned int repair_number = repair_number_by_idx[idx];
     
-    // 0 означает отсутствие квоты
-    if (repair_number == 0u) {
+    // 0 означает отсутствие квоты (если не задан глобальный лимит)
+    if (!use_global_quota && repair_number == 0u) {
         return flamegpu::ALIVE;
     }
     
@@ -55,25 +59,26 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
     unsigned int curr_in_repair = 0u;
     auto repair_state_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, $MAX_FRAMES>("repair_state_buffer");
     
-    // ✅ ТОЧНЫЙ подсчёт: только агенты с ТЕМ ЖЕ repair_number
+    // ✅ ТОЧНЫЙ подсчёт: либо по одной общей квоте, либо по repair_number
     for (unsigned int i = 0u; i < frames; ++i) {
         if (repair_state_buffer[i] != 1u) continue;  // Только агенты в repair
-        
-        // Проверяем repair_number агента i
-        const unsigned int rn_i = repair_number_by_idx[i];
-        if (rn_i == repair_number) {
-            ++curr_in_repair;
+        if (!use_global_quota) {
+            const unsigned int rn_i = repair_number_by_idx[i];
+            if (rn_i != repair_number) continue;
         }
+        ++curr_in_repair;
     }
     
     // Рассчитать available
-    const unsigned int quota = static_cast<unsigned int>(repair_number);
+    const unsigned int quota = use_global_quota ? static_cast<unsigned int>(global_quota)
+                                               : static_cast<unsigned int>(repair_number);
     const int available = static_cast<int>(quota) - static_cast<int>(curr_in_repair);
     
     // Early exit
     if (available <= 0) {
         if (intent == 4u) {
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
+            // Нет квоты на ремонт → уходим в unserviceable
+            FLAMEGPU->setVariable<unsigned int>("intent_state", 7u);
         }
         return flamegpu::ALIVE;
     }
@@ -91,9 +96,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
         const bool is_candidate = (reserve_queue_buffer[i] == 1u) || (ops_repair_buffer[i] == 1u);
         if (!is_candidate) continue;
         
-        // ✅ ТОЧНАЯ ФИЛЬТРАЦИЯ: проверяем что repair_number совпадает
+    // ✅ ТОЧНАЯ ФИЛЬТРАЦИЯ: если нет глобальной квоты, проверяем repair_number
+    if (!use_global_quota) {
         const unsigned int rn_i = repair_number_by_idx[i];
         if (rn_i != repair_number) continue;
+    }
         
         // Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx)
         if (i > idx) {
@@ -124,8 +131,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
     } else {
         // ❌ НЕ ОДОБРЕН
         if (intent == 4u) {
-            // operations&4 → intent=5 (отклонён)
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
+            // operations&4 → intent=7 (отклонён, очередь на ремонт)
+            FLAMEGPU->setVariable<unsigned int>("intent_state", 7u);
             if (step_day <= 10u || step_day == 180u || step_day == 181u || step_day == 182u) {
                 const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
                 printf("  [REPAIR REJECT Day %u] AC %u (idx %u): rank=%u, available=%d (quota=%u, in_repair=%u)\\n", 
@@ -160,5 +167,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
     rtc_func_ops.setInitialState("operations")
     rtc_func_ops.setEndState("operations")
     layer_repair.addAgentFunction(rtc_func_ops)
+
+    # RTC функция для unserviceable (очередь на ремонт)
+    rtc_func_uns = agent.newRTCFunction("rtc_quota_repair_unserviceable", rtc_code)
+    rtc_func_uns.setAllowAgentDeath(False)
+    rtc_func_uns.setInitialState("unserviceable")
+    rtc_func_uns.setEndState("unserviceable")
+    layer_repair.addAgentFunction(rtc_func_uns)
     
     print("  RTC модуль quota_repair зарегистрирован (1 слой, каскадное квотирование, youngest first)")

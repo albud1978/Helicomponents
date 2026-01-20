@@ -82,7 +82,8 @@ class AgentPopulationBuilder:
             'serviceable': fg.AgentVector(agent_def),   # state_3
             'repair': fg.AgentVector(agent_def),        # state_4
             'reserve': fg.AgentVector(agent_def),       # state_5
-            'storage': fg.AgentVector(agent_def)        # state_6
+            'storage': fg.AgentVector(agent_def),       # state_6
+            'unserviceable': fg.AgentVector(agent_def)  # state_7
         }
         
         # Маппинг status_id -> state name
@@ -93,7 +94,8 @@ class AgentPopulationBuilder:
             3: 'serviceable',
             4: 'repair',
             5: 'reserve',
-            6: 'storage'
+            6: 'storage',
+            7: 'unserviceable'
         }
         
         # Сначала фильтруем записи с group_by in [1,2]
@@ -273,7 +275,7 @@ class AgentPopulationBuilder:
         
         # Загружаем популяции в симуляцию по состояниям
         # ВАЖНО: Нужно инициализировать ВСЕ states, даже пустые (для spawn)
-        all_states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage']
+        all_states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage', 'unserviceable']
         
         # FIX 4: Используем agent_def, НЕ simulation.getAgentDescription (нет такого метода!)
         for state_name in all_states:

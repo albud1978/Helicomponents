@@ -1,6 +1,6 @@
 """
 State Manager для переходов из состояния repair
-Обрабатывает: 4->4 (остаться в ремонте), 4->5 (переход в резерв)
+Обрабатывает: 4->4 (остаться в ремонте), 4->2 (переход в operations)
 """
 
 import pyflamegpu as fg
@@ -12,10 +12,10 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_4) {
 }
 """
 
-# Условие для intent_state == 5 (переход в reserve)
-RTC_COND_INTENT_5 = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_5) {
-    return FLAMEGPU->getVariable<unsigned int>("intent_state") == 5u;
+# Условие для intent_state == 2 (переход в operations)
+RTC_COND_INTENT_2 = """
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_2) {
+    return FLAMEGPU->getVariable<unsigned int>("intent_state") == 2u;
 }
 """
 
@@ -27,9 +27,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_4, flamegpu::MessageNone, flamegpu::Messa
 }
 """
 
-# Функция для перехода repair -> reserve (4->5)
-RTC_APPLY_4_TO_5 = """
-FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_5, flamegpu::MessageNone, flamegpu::MessageNone) {
+# Функция для перехода repair -> operations (4->2)
+RTC_APPLY_4_TO_2 = """
+FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_2, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
@@ -39,10 +39,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_5, flamegpu::MessageNone, flamegpu::Messa
     
     // Логирование перехода (4→5) с типом вертолёта
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
-    printf("  [TRANSITION 4→5 Day %u] AC %u (idx %u, %s): repair -> reserve, repair_days=%u/%u\\n", 
+    printf("  [TRANSITION 4→2 Day %u] AC %u (idx %u, %s): repair -> operations, repair_days=%u/%u\\n", 
            step_day, aircraft_number, idx, type, repair_days, repair_time);
     
-    // Сбрасываем счетчики при переходе в резерв
+    // Сбрасываем счетчики при переходе в operations
     FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
     FLAMEGPU->setVariable<unsigned int>("assembly_trigger", 0u);
     
@@ -57,7 +57,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_5, flamegpu::MessageNone, flamegpu::Messa
 
 def register_state_manager_repair(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует state manager для переходов из repair"""
-    print("  Регистрация state manager для repair (4→4, 4→5)")
+    print("  Регистрация state manager для repair (4→4, 4→2)")
     
     # Layer 1: Transition 4->4 (stay in repair)
     layer_4_to_4 = model.newLayer("transition_4_to_4")
@@ -67,12 +67,12 @@ def register_state_manager_repair(model: fg.ModelDescription, agent: fg.AgentDes
     rtc_func_4_to_4.setEndState("repair")
     layer_4_to_4.addAgentFunction(rtc_func_4_to_4)
     
-    # Layer 2: Transition 4->5 (repair -> reserve)
-    layer_4_to_5 = model.newLayer("transition_4_to_5")
-    rtc_func_4_to_5 = agent.newRTCFunction("rtc_apply_4_to_5", RTC_APPLY_4_TO_5)
-    rtc_func_4_to_5.setRTCFunctionCondition(RTC_COND_INTENT_5)
-    rtc_func_4_to_5.setInitialState("repair")
-    rtc_func_4_to_5.setEndState("reserve")
-    layer_4_to_5.addAgentFunction(rtc_func_4_to_5)
+    # Layer 2: Transition 4->2 (repair -> operations)
+    layer_4_to_2 = model.newLayer("transition_4_to_2")
+    rtc_func_4_to_2 = agent.newRTCFunction("rtc_apply_4_to_2", RTC_APPLY_4_TO_2)
+    rtc_func_4_to_2.setRTCFunctionCondition(RTC_COND_INTENT_2)
+    rtc_func_4_to_2.setInitialState("repair")
+    rtc_func_4_to_2.setEndState("operations")
+    layer_4_to_2.addAgentFunction(rtc_func_4_to_2)
     
     print("  RTC модуль state_manager_repair зарегистрирован")

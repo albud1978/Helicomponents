@@ -668,7 +668,8 @@ class MP2DrainHostFunction(fg.HostFunction):
             3: 'serviceable',
             4: 'repair',
             5: 'reserve',
-            6: 'storage'
+            6: 'storage',
+            7: 'unserviceable'
         }
         return mapping.get(state_id, f'unknown_{state_id}')
     

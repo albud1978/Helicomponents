@@ -142,7 +142,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active, flamegpu::MessageNone, flame
         
         # ✅ КРИТИЧНО: Создаём функции для КАЖДОГО состояния
         # FLAME GPU не вызывает агентные функции без привязки к состояниям!
-        states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage']
+        states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage', 'unserviceable']
         
         for state_name in states:
             fn = agent.newRTCFunction(f"rtc_mp2_postprocess_active_{state_name}", rtc_code)

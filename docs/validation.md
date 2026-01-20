@@ -1,6 +1,6 @@
 # Валидация симуляции Heli
 
-> **Версия:** 2026-01-15  
+> **Версия:** 2026-01-20  
 > **Архив предыдущих версий:** `docs/archive/validation_legacy/`
 
 ## Оглавление
@@ -112,8 +112,9 @@
 | operations | 2 | Эксплуатация | Исправный, установлен на борт |
 | serviceable | 3 | Исправный на складе | Исправный, готов к установке |
 | repair | 4 | Ремонт | Неисправный, в ремонте |
-| reserve | 5 | Резерв | После ремонта, ожидает установки |
+| reserve | 5 | Резерв | Исходный статус из загрузки (новых переводов нет) |
 | storage | 6 | Хранение | sne >= ll или (ppr >= oh и sne >= br) |
+| unserviceable | 7 | Неисправный (очередь на ремонт) | Отказ квоты ремонта из operations |
 
 ### 2.5 Скрипт валидации heli_pandas
 
@@ -177,6 +178,24 @@ python code/analysis/sim_validation_runner.py --version-date YYYY-MM-DD
 
 > ⚠️ **Важно:** Этот валидатор проверяет **state vs transition flags**, НЕ intent!
 
+#### Поля transition в sim_masterv2 (MP2)
+
+Актуальные флаги переходов, которые пишутся в `sim_masterv2`:
+
+- `transition_0_to_2` — spawn → operations (динамический)
+- `transition_0_to_3` — spawn → serviceable (плановый)
+- `transition_1_to_2` — inactive → operations
+- `transition_1_to_4` — inactive → repair (постпроцессинг)
+- `transition_2_to_3` — operations → serviceable
+- `transition_2_to_4` — operations → repair
+- `transition_2_to_6` — operations → storage
+- `transition_3_to_2` — serviceable → operations
+- `transition_4_to_2` — repair → operations
+- `transition_4_to_5` — repair → reserve (колонка сохранена, переход не используется)
+- `transition_5_to_2` — reserve → operations
+
+> Переходы `transition_2_to_7` и `transition_7_to_4` удалены из схемы MP2.
+
 #### Проверка `validate_state_consistency()`
 
 Сопоставляет флаг перехода `transition_X_to_Y=1` с `state`:
@@ -196,11 +215,12 @@ WHERE transition_X_to_Y = 1
 ALLOWED_TRANSITIONS = {
     (0, 2), (0, 3),  # spawn
     (1, 1), (1, 2), (1, 4),  # inactive
-    (2, 2), (2, 3), (2, 4), (2, 5), (2, 6),  # operations
+    (2, 2), (2, 3), (2, 4), (2, 6), (2, 7),  # operations
     (3, 2), (3, 3),  # serviceable
-    (4, 2), (4, 4), (4, 5),  # repair
+    (4, 2), (4, 4),  # repair
     (5, 2), (5, 5),  # reserve
     (6, 6),  # storage
+    (7, 4), (7, 7),  # unserviceable
 }
 ```
 
@@ -211,6 +231,9 @@ ALLOWED_TRANSITIONS = {
 #### Инвариант dt (validate_dt_invariant)
 
 > ⚠️ **Важно:** dt > 0 вне operations — это **информационное сообщение**, НЕ ошибка!
+
+> Дополнительно: dt = 0 в день входа в operations допускается,
+> если `prev_state != operations` (переход в ops происходит в конце дня).
 
 | Состояние | dt > 0 | Статус | Описание |
 |-----------|--------|--------|----------|
@@ -369,7 +392,7 @@ WHERE transition_2_to_4 = 1 AND state != 'repair';
 
 **Файл:** `code/analysis/sim_validation_transitions.py`
 
-Матрица включает spawn и переходы через очереди:
+Матрица включает spawn и очередь ремонта через unserviceable:
 
 ```python
 ALLOWED_TRANSITIONS = {
@@ -381,19 +404,22 @@ ALLOWED_TRANSITIONS = {
     (1, 1), (1, 2), (1, 4),
     
     # Из operations (2)
-    (2, 2), (2, 3), (2, 4), (2, 5), (2, 6),
+    (2, 2), (2, 3), (2, 4), (2, 6), (2, 7),
     
     # Из serviceable (3)
     (3, 2), (3, 3),
     
     # Из repair (4)
-    (4, 2), (4, 4), (4, 5),
+    (4, 2), (4, 4),
     
     # Из reserve (5)
     (5, 2), (5, 5),
     
     # Из storage (6)
     (6, 6),
+    
+    # Из unserviceable (7)
+    (7, 4), (7, 7),
 }
 ```
 
@@ -401,7 +427,7 @@ ALLOWED_TRANSITIONS = {
 
 **Файл:** `code/sim_v2/components/validation_rules.py`
 
-Более узкая матрица **БЕЗ spawn и без переходов 1→4, 2→5, 4→2**:
+Более узкая матрица **БЕЗ spawn и без переходов 1→4, 4→2**:
 
 ```python
 StateTransitionValidator.ALLOWED_TRANSITIONS = {
@@ -410,13 +436,15 @@ StateTransitionValidator.ALLOWED_TRANSITIONS = {
     (2, 3),  # operations → serviceable
     (2, 4),  # operations → repair
     (2, 6),  # operations → storage
+    (2, 7),  # operations → unserviceable
     (3, 3),  # serviceable → serviceable
     (3, 2),  # serviceable → operations
     (4, 4),  # repair → repair
-    (4, 5),  # repair → reserve
     (5, 5),  # reserve → reserve
     (5, 2),  # reserve → operations
     (6, 6),  # storage → storage
+    (7, 7),  # unserviceable → unserviceable
+    (7, 4),  # unserviceable → repair
 }
 ```
 
@@ -430,9 +458,11 @@ StateTransitionValidator.ALLOWED_TRANSITIONS = {
 | 2→3 | `curr > target` | `quota_ops_excess` |
 | 2→4 | `ppr_next >= oh AND sne_next < br` | `state_2_operations` |
 | 2→6 | `sne_next >= ll` или BR ветка | `state_2_operations` |
+| 2→7 | отказ квоты ремонта | `quota_repair` → `state_manager_operations` |
 | 3→2 | `curr < target` + quota P1 | `quota_promote_serviceable` |
-| 4→5 | `repair_days >= repair_time` | `states_stub` |
+| 4→2 | `repair_days >= repair_time` | `states_stub` |
 | 5→2 | `curr < target` + quota P2 | `quota_promote_reserve` |
+| 7→4 | `intent=4` (квота ремонта одобрена) | `quota_repair` → `state_manager_unserviceable` |
 
 ### 7.4 Ранжирование
 

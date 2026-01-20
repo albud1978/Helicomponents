@@ -47,6 +47,7 @@ def register_compute_transitions(model, agent):
         'repair': (4, 'FLAMEGPU_STORE_FUNCTION_STATE_REPAIR'),
         'reserve': (5, 'FLAMEGPU_STORE_FUNCTION_STATE_RESERVE'),
         'storage': (6, 'FLAMEGPU_STORE_FUNCTION_STATE_STORAGE'),
+        'unserviceable': (7, 'FLAMEGPU_STORE_FUNCTION_STATE_UNSERVICEABLE'),
     }
     
     try:
@@ -114,7 +115,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_transitions_{state_name}, flamegpu::MessageN
             fn.setEndState(state_name)
             layer.addAgentFunction(fn)
         
-        print("  RTC модуль compute_transitions зарегистрирован (6 функций для 6 состояний)")
+        print("  RTC модуль compute_transitions зарегистрирован (7 функций для 7 состояний)")
         return layer
         
     except Exception as e:

@@ -172,6 +172,8 @@ class V2BaseModel:
         self.env.newMacroPropertyUInt32("mi17_reserve_count", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi8_inactive_count", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi17_inactive_count", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi8_unserviceable_count", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_unserviceable_count", model_build.MAX_FRAMES)
         
         # Демоут (operations → serviceable)
         self.env.newMacroPropertyUInt32("mi8_approve", model_build.MAX_FRAMES)
@@ -184,13 +186,15 @@ class V2BaseModel:
         self.env.newMacroPropertyUInt32("mi17_approve_s5", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi8_approve_s1", model_build.MAX_FRAMES)   # inactive → operations
         self.env.newMacroPropertyUInt32("mi17_approve_s1", model_build.MAX_FRAMES)
-        # Кандидаты P3 (inactive) — для централизованного аллокатора окна ремонта
+        # Кандидаты P3 (inactive) — для централизованного аллокатора
         self.env.newMacroPropertyUInt32("mi8_candidate_s1", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi17_candidate_s1", model_build.MAX_FRAMES)
-        self.env.newMacroPropertyUInt32("mi8_candidate_repair_time", model_build.MAX_FRAMES)
-        self.env.newMacroPropertyUInt32("mi17_candidate_repair_time", model_build.MAX_FRAMES)
-        self.env.newMacroPropertyUInt32("mi8_candidate_skip_repair", model_build.MAX_FRAMES)
-        self.env.newMacroPropertyUInt32("mi17_candidate_skip_repair", model_build.MAX_FRAMES)
+        
+        # Снимки ремонтных параметров и пул ремонтных линий (по дням)
+        self.env.newMacroPropertyUInt32("repair_time_by_idx", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("repair_days_by_idx", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("repair_line_busy_until", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("repair_line_free_days", model_build.MAX_FRAMES)
         
         # Динамический spawn (pending агенты, которые ещё не появились в operations)
         self.env.newMacroPropertyUInt32("mi8_spawn_pending", model_build.MAX_FRAMES)
@@ -271,6 +275,7 @@ class V2BaseModel:
         agent.newState("repair")        # state_4
         agent.newState("reserve")       # state_5
         agent.newState("storage")       # state_6
+        agent.newState("unserviceable") # state_7
         
         # Идентификаторы
         agent.newVariableUInt("idx", 0)
@@ -398,6 +403,10 @@ class V2BaseModel:
             elif module_name == "state_manager_reserve":
                 import rtc_state_manager_reserve
                 rtc_state_manager_reserve.register_state_manager_reserve(self.model, self.agent)
+            
+            elif module_name == "state_manager_unserviceable":
+                import rtc_state_manager_unserviceable
+                rtc_state_manager_unserviceable.register_state_manager_unserviceable(self.model, self.agent)
             
             elif module_name == "state_manager_storage":
                 import rtc_state_manager_storage

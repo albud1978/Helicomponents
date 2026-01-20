@@ -91,15 +91,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
     
     // Проверяем завершение ремонта
     if (repair_days == repair_time) {{
-        // Переход в резерв
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
+        // Переход в operations
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
         
         // Логирование перехода
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
         const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
         const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
-        printf("  [Step %u] AC %u: intent=5 (reserve), repair complete rd=%u/%u, ll=%u, oh=%u, br=%u\\n", 
+        printf("  [Step %u] AC %u: intent=2 (operations), repair complete rd=%u/%u, ll=%u, oh=%u, br=%u\\n", 
                step_day, aircraft_number, repair_days, repair_time, ll, oh, br);
 
         // Сбрасываем ppr и repair_days согласно требованию
@@ -117,16 +117,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
 # RTC функция для state_5 (reserve)
 RTC_STATE_5_RESERVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_5_reserve, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // ✅ КРИТИЧНО: НЕ трогаем intent=0 (очередь на ремонт)!
-    // Только агенты с другими intent переходят в intent=5 (общий резерв)
-    const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-    if (intent != 0u) {{
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
-    }}
-    // intent=0 остаётся без изменений (агент в очереди на ремонт)
+    // Резерв не участвует в очереди на ремонт
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 5u);
     
     // Обнуляем daily_today_u32 (нет налёта в reserve)
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+    
     
     // Увеличиваем счётчик дней в repair+reserve (s4_days)
     unsigned int s4_days = FLAMEGPU->getVariable<unsigned int>("s4_days");
@@ -150,6 +146,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_6_storage, flamegpu::MessageNone, flamegpu::Me
 }}
 """
 
+# RTC функция для state_7 (unserviceable)
+RTC_STATE_7_UNSERVICEABLE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_state_7_unserviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Очередь на ремонт
+    FLAMEGPU->setVariable<unsigned int>("intent_state", 0u);
+    
+    // Обнуляем daily_today_u32 (нет налёта)
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
 
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Регистрирует RTC функции для всех состояний с setEndState"""
@@ -160,7 +169,8 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
         ("rtc_state_3_serviceable", RTC_STATE_3_SERVICEABLE, "serviceable", "serviceable"),  # Остаётся  
         ("rtc_state_4_repair", RTC_STATE_4_REPAIR, "repair", None),  # Условные переходы внутри
         ("rtc_state_5_reserve", RTC_STATE_5_RESERVE, "reserve", "reserve"),  # Остаётся
-        ("rtc_state_6_storage", RTC_STATE_6_STORAGE, "storage", "storage")  # Остаётся
+        ("rtc_state_6_storage", RTC_STATE_6_STORAGE, "storage", "storage"),  # Остаётся
+        ("rtc_state_7_unserviceable", RTC_STATE_7_UNSERVICEABLE, "unserviceable", "unserviceable")
     ]
     
     for func_name, func_code, state_name, end_state in funcs:
