@@ -381,6 +381,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
         FLAMEGPU->setVariable<unsigned int>("repair_line_day", chosen_days);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
+        if (group_by == 1u) {{
+            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve");
+            approve[idx].exchange(1u);
+        }} else {{
+            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve");
+            approve[idx].exchange(1u);
+        }}
     }} else {{
         line_last_acn[line_id].exchange(prev_last_acn);
         line_last_day[line_id].exchange(prev_last_day);
@@ -609,6 +616,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
         FLAMEGPU->setVariable<unsigned int>("repair_line_day", chosen_days);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
+        if (group_by == 1u) {{
+            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s1");
+            approve[idx].exchange(1u);
+        }} else {{
+            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s1");
+            approve[idx].exchange(1u);
+        }}
     }} else {{
         line_last_acn[line_id].exchange(prev_last_acn);
         line_last_day[line_id].exchange(prev_last_day);

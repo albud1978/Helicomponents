@@ -1,3 +1,13 @@
+## [19-01-2026] - ⚙️ LIMITER V8: adaptive GPU-only
+
+### Изменения
+- V8 adaptive: убран отдельный слой `v8_reset_min_dynamic`; сброс `min_dynamic` перенесён в `rtc_compute_global_min_v8` (GPU-only, минус один слой).
+- V8 лог шагов: фиксируется источник `min_dynamic` (limiter/repair_days) через `adaptive_result_mp[1]`.
+- V8 лог шагов: шаги по `deterministic_dates` помечаются как `deterministic_date:<day>` (repair_time/spawn).
+- V8 spawn: дефицит считается как `target − curr_ops − used(P1/P2/P3 approve − demote)`; post‑quota counts удалены.
+- V8: актуализирована таблица слоёв и примечания по adaptive шагу.
+
+---
 ## [18-01-2026] - 🔧 LIMITER V8: readiness unsvc
 
 ### Изменения

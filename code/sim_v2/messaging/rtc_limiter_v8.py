@@ -6,6 +6,7 @@ RTC модуль: LIMITER V8 — Упрощённая архитектура с 
 1. deterministic_dates_mp — ОДИН MacroProperty со всеми фиксированными датами
    (program_changes + repair_exits + spawn_dates + day_0 + end_day)
 2. min_dynamic_mp — минимум от ops.limiter + repair.repair_days (ТОЛЬКО day-0 ремонт)
+   Хранится в виде (value << 1 | source), где source: 0=limiter, 1=repair_days
    (unsvc НЕ участвует!)
 3. adaptive_days = MIN(min_dynamic, days_to_deterministic)
 
@@ -151,25 +152,6 @@ class HF_InitV8(fg.HostFunction):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# RTC: Сброс min_dynamic_mp
-# ═══════════════════════════════════════════════════════════════════════════════
-
-RTC_RESET_MIN_DYNAMIC = """
-FLAMEGPU_AGENT_FUNCTION(rtc_reset_min_dynamic_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // V8: Сброс min_dynamic_mp перед сбором
-    // Только один агент (group_by=1) выполняет сброс
-    const uint8_t group_by = FLAMEGPU->getVariable<uint8_t>("group_by");
-    if (group_by != 1u) return flamegpu::ALIVE;
-    
-    auto mp_min = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_dynamic_mp");
-    mp_min[0].exchange(0xFFFFFFFFu);  // MAX = нет данных
-    
-    return flamegpu::ALIVE;
-}
-"""
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # RTC: Сбор min_dynamic от operations (limiter) и repair (repair_days, только day-0)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -180,7 +162,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_collect_min_dynamic_ops_v8, flamegpu::MessageNone, f
     
     if (limiter > 0u) {
         auto mp_min = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_dynamic_mp");
-        mp_min[0].min((unsigned int)limiter);  // atomicMin
+        // Кодируем источник: 0 = limiter
+        const unsigned int combined = ((unsigned int)limiter << 1u);
+        mp_min[0].min(combined);  // atomicMin
     }
     
     return flamegpu::ALIVE;
@@ -194,7 +178,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_collect_min_dynamic_repair_v8, flamegpu::MessageNone
     
     if (repair_days > 0u) {
         auto mp_min = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_dynamic_mp");
-        mp_min[0].min(repair_days);  // atomicMin
+        // Кодируем источник: 1 = repair_days
+        const unsigned int combined = (repair_days << 1u) | 1u;
+        mp_min[0].min(combined);  // atomicMin
     }
     
     return flamegpu::ALIVE;
@@ -228,9 +214,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v8, flamegpu::MessageNone, flameg
         return flamegpu::ALIVE;
     }}
     
-    // 1. Читаем min_dynamic (от ops.limiter + repair.repair_days)
+    // 1. Читаем и одновременно сбрасываем min_dynamic (атомарно, без отдельного reset-слоя)
     auto mp_min_dyn = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("min_dynamic_mp");
-    unsigned int min_dynamic = mp_min_dyn[0];
+    const unsigned int min_dynamic_combined = mp_min_dyn[0].exchange(0xFFFFFFFFu);
+    unsigned int min_dynamic = 0xFFFFFFFFu;
+    if (min_dynamic_combined != 0xFFFFFFFFu) {{
+        min_dynamic = (min_dynamic_combined >> 1u);
+    }}
     
     // 2. Находим ближайшую детерминированную дату
     auto mp_dates = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DETERMINISTIC_DATES}u>("deterministic_dates_mp");
@@ -271,6 +261,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_global_min_v8, flamegpu::MessageNone, flameg
     // 4. Записываем результат
     auto result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
     result[0].exchange(adaptive_days);
+    // [1] хранит источник min_dynamic для логгера (combined)
+    result[1].exchange(min_dynamic_combined);
     
     return flamegpu::ALIVE;
 }}
@@ -323,14 +315,13 @@ class HF_UpdateDayV8(fg.HostFunction):
 
 def register_v8_pre_quota_layers(model, agent, quota_agent, deterministic_dates: list, end_day: int):
     """
-    Регистрирует V8 слои до квотирования (reset/collect/compute).
+    Регистрирует V8 слои до квотирования (collect/compute).
     
     Слои:
     1. v8_init
-    2. v8_reset_min_dynamic
-    3. v8_collect_min_ops
-    4. v8_collect_min_repair
-    5. v8_compute_global_min
+    2. v8_collect_min_ops
+    3. v8_collect_min_repair
+    4. v8_compute_global_min
     """
     print("\n📦 V8: Регистрация adaptive pre-quota layers...")
     
@@ -339,35 +330,28 @@ def register_v8_pre_quota_layers(model, agent, quota_agent, deterministic_dates:
     layer_init = model.newLayer("v8_init")
     layer_init.addHostFunction(hf_init)
     
-    # 1. Reset min_dynamic
-    layer_reset = model.newLayer("v8_reset_min_dynamic")
-    fn = quota_agent.newRTCFunction("rtc_reset_min_dynamic_v8", RTC_RESET_MIN_DYNAMIC)
-    fn.setInitialState("default")
-    fn.setEndState("default")
-    layer_reset.addAgentFunction(fn)
-    
-    # 2. Collect min от operations
+    # 1. Collect min от operations
     layer_ops = model.newLayer("v8_collect_min_ops")
     fn = agent.newRTCFunction("rtc_collect_min_dynamic_ops_v8", RTC_COLLECT_MIN_DYNAMIC_OPS)
     fn.setInitialState("operations")
     fn.setEndState("operations")
     layer_ops.addAgentFunction(fn)
     
-    # 3. Collect min от repair
+    # 2. Collect min от repair
     layer_repair = model.newLayer("v8_collect_min_repair")
     fn = agent.newRTCFunction("rtc_collect_min_dynamic_repair_v8", RTC_COLLECT_MIN_DYNAMIC_REPAIR)
     fn.setInitialState("repair")
     fn.setEndState("repair")
     layer_repair.addAgentFunction(fn)
     
-    # 4. Compute global min
+    # 3. Compute global min
     layer_compute = model.newLayer("v8_compute_global_min")
     fn = quota_agent.newRTCFunction("rtc_compute_global_min_v8", RTC_COMPUTE_GLOBAL_MIN_V8)
     fn.setInitialState("default")
     fn.setEndState("default")
     layer_compute.addAgentFunction(fn)
     
-    print(f"  ✅ V8 adaptive pre-quota layers зарегистрированы (4 слоя)")
+    print(f"  ✅ V8 adaptive pre-quota layers зарегистрированы (3 слоя)")
     
     return hf_init
 

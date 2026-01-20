@@ -569,9 +569,6 @@ class LimiterV8Orchestrator:
         # Фаза 3: Переходы после квотирования
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
         
-        # Фаза 3.5: Пересчёт буферов после квотирования (для spawn)
-        rtc_quota_v8.register_post_quota_counts_v8(self.model, heli_agent)
-        
         # Синхронизация RepairLine после квотирования
         rtc_repair_lines_v8.register_repair_line_sync_post_quota(
             self.model, self.base_model.repair_line_agent
@@ -639,7 +636,8 @@ class LimiterV8Orchestrator:
             self.base_model.quota_agent,
             self.program_change_days,
             self.end_day,
-            verbose_logging=self.enable_mp2
+            verbose_logging=self.enable_mp2,
+            enable_v8_reason=True
         )
         
         # V8: Обновление дня — всегда в самом конце

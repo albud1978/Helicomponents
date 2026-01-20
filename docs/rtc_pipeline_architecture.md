@@ -3,13 +3,15 @@
 ## Примечания по LIMITER V8 (17-01-2026)
 - `deterministic_dates_mp` ограничен `MAX_DETERMINISTIC_DATES=500`; при превышении лимита даты обрезаются.
 - `unserviceable` не участвует в `min_dynamic` и не влияет на adaptive‑шаги.
+- `min_dynamic` сбрасывается в `rtc_compute_global_min_v8` (GPU‑only), отдельного reset‑слоя нет.
+- Для логгера шага `min_dynamic` кодируется с источником (limiter/repair_days) и сохраняется в `adaptive_result_mp[1]`.
+- Шаги по `deterministic_dates` фиксируются в логгере как `deterministic_date:<day>` (например repair_time/spawn).
 - RepairLine — общий пул линий, используется только в квотировании (P2/P3), не в scheduler.
 - P2/P3: условия `day >= repair_time`, `repair_days == 0`, линия с `free_days >= repair_time` и `aircraft_number == 0` (+ защита от повтора acn в соседние дни).
 - `repair_days` декрементируется только в `unserviceable`; для `inactive` всегда 0 и не участвует в шаге.
 - V8 readiness для `unserviceable`: `repair_days == 0`, `day >= repair_time` и `repair_line_id == 0xFFFFFFFF` (для квот и динамического спавна, включая post‑quota counts).
 - P2 ранжирует **только готовые** `unserviceable` по `unsvc_ready_count` (не по общему `unsvc_count`).
-- Динамический спавн Mi‑17 запускается по остаточному дефициту после квот (target=day), без повторного P1/P2/P3 каскада.
-- Перед spawn выполняется дополнительный reset+count буферов, чтобы учесть post‑промоуты.
+- Динамический спавн Mi‑17 запускается по дефициту `target − curr_ops − used`, где used = approve P1/P2/P3 **минус демоуты** (без post‑quota counts).
 - Debug спавна: `SpawnDynamicMgr.debug_curr_ops/target/need` + `debug_current_day` в MP2.
 - Временное логирование: `debug_step/debug_prev_day/debug_adaptive_days`, `debug_rl_*` и `debug_*_mi17` для диагностики RepairLine/квотирования; состояние линий пишется в `sim_repair_lines_v8` (включая `last_acn/last_day`), слоты и P2‑метрики — в `sim_quota_mgr_v8` (первые 6 слотов Mi‑17). P2/P3 commit при занятом слоте выбирает следующий доступный в пределах слотов.
 - V8 квоты используют локальные копии (rtc_quota_v8_base) и берут target по `current_day`.

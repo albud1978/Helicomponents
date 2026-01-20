@@ -2307,6 +2307,8 @@ LIMITER — альтернативная архитектура симуляци
 - **Limiter date:** Каждый агент вычисляет дату истощения ресурса (min(LL-SNE, OH-PPR) / avg_dt)
 - **Event-driven:** Квотирование выполняется только при изменении программы или выбытии агента
 - **GPU-оптимизация:** Ежедневные инкременты полностью на GPU, минимальные host-взаимодействия
+- **V8 adaptive:** `min_dynamic` сбрасывается в `rtc_compute_global_min_v8` без отдельного reset‑слоя; источник (limiter/repair_days) сохраняется в `adaptive_result_mp[1]` для логгера, шаги по `deterministic_dates` помечаются как `deterministic_date:<day>`
+- **V8 spawn:** дефицит считается как `target − curr_ops − used(P1/P2/P3 approve − demote)` без post‑quota counts
 
 ### Сравнение с BASELINE (DS1: 2025-07-04, 3650 дней)
 
