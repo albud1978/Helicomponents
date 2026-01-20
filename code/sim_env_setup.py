@@ -1064,6 +1064,31 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
     if mi17_br_const <= 0:
         raise ValueError(f"❌ Mi-17 br={mi17_br_const} <= 0 в справочнике md_components!")
 
+    # Квота ремонта: общая (глобальная) для всех планеров
+    # Берём уникальные ненулевые значения repair_number среди планеров,
+    # если их нет — используем fallback (18).
+    repair_quota_total = 18
+    repair_quota_candidates = []
+    mp3_gb = mp3_arrays.get('mp3_group_by', [])
+    mp3_psn = mp3_arrays.get('mp3_partseqno_i', [])
+    for i in range(len(mp3_gb)):
+        gb = int(mp3_gb[i] or 0)
+        if gb not in (1, 2):
+            continue
+        psn = int(mp3_psn[i] or 0)
+        if psn <= 0:
+            continue
+        rn = mp1_repair_number_map.get(psn, 255)
+        if rn and rn != 255:
+            repair_quota_candidates.append(int(rn))
+    if repair_quota_candidates:
+        uniq = sorted(set(repair_quota_candidates))
+        if len(uniq) > 1:
+            print(f"  ⚠️ repair_number для планеров неоднороден: {uniq}. Берём max как глобальную квоту.")
+        repair_quota_total = max(uniq)
+    else:
+        print("  ⚠️ repair_number для планеров не найден, используем fallback=18 как глобальную квоту.")
+
     env_data = {
         'version_date_u16': days_to_epoch_u16(vdate),
         'version_id_u32': int(vid),
@@ -1120,6 +1145,8 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         'mi17_br_const': int(mi17_br_const),
         'mi17_br2_const': int(mi17_br2_const),  # Порог межремонтного для подъёма из inactive
         'second_ll_sentinel': SECOND_LL_SENTINEL,
+        # Глобальная квота ремонта (общая для всех планеров)
+        'repair_quota_total_u16': int(repair_quota_total),
         # Параметры динамического spawn (расчёт по формуле агрегатов)
         'initial_mi17_count': int(initial_mi17_count),
         'deterministic_spawn_mi17': int(deterministic_spawn_mi17),
