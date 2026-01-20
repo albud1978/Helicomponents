@@ -123,13 +123,15 @@ class StateTransitionValidator:
         (2, 3),  # operations → serviceable
         (2, 4),  # operations → repair
         (2, 6),  # operations → storage
+        (2, 7),  # operations → unserviceable
         (3, 3),  # serviceable → serviceable
         (3, 2),  # serviceable → operations (квота)
         (4, 4),  # repair → repair
-        (4, 5),  # repair → reserve
         (5, 5),  # reserve → reserve
         (5, 2),  # reserve → operations (квота)
         (6, 6),  # storage → storage (вечный)
+        (7, 7),  # unserviceable → unserviceable
+        (7, 4),  # unserviceable → repair
     }
     
     @staticmethod

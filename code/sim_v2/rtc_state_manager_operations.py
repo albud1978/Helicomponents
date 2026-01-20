@@ -1,10 +1,10 @@
 """
 RTC модуль state manager для переходов из состояния operations
-Обрабатывает пять типов переходов:
+Обрабатывает шесть типов переходов:
 - 2→2 (operations → operations) при intent=2
 - 2→3 (operations → serviceable) при intent=3 (квотный демоут)
 - 2→4 (operations → repair) при intent=4
-- 2→5 (operations → reserve) при intent=5 (отклонение quota_repair → очередь с intent=0)
+- 2→7 (operations → unserviceable) при intent=7 (очередь на ремонт)
 - 2→6 (operations → storage) при intent=6
 
 А также переходы В operations с записью dt:
@@ -40,9 +40,9 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_4) {
 }
 """
 
-RTC_COND_INTENT_5 = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_5) {
-    return FLAMEGPU->getVariable<unsigned int>("intent_state") == 5u;
+RTC_COND_INTENT_7 = """
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_intent_7) {
+    return FLAMEGPU->getVariable<unsigned int>("intent_state") == 7u;
 }
 """
 
@@ -128,27 +128,26 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_4, flamegpu::MessageNone, flamegpu::Messa
 }
 """
 
-# Функция для перехода 2→5 (operations → reserve) при отклонении quota_repair
-RTC_APPLY_2_TO_5 = """
-FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_5, flamegpu::MessageNone, flamegpu::MessageNone) {
+# Функция для перехода 2→7 (operations → unserviceable)
+RTC_APPLY_2_TO_7 = """
+FLAMEGPU_AGENT_FUNCTION(rtc_apply_2_to_7, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
-    // ✅ КРИТИЧНО: Сброс active_trigger при переходе из operations
+    // Сброс active_trigger при переходе из operations
     unsigned int active_trigger = FLAMEGPU->getVariable<unsigned int>("active_trigger");
     if (active_trigger == 1u) {
         FLAMEGPU->setVariable<unsigned int>("active_trigger", 0u);
     }
     
-    // ✅ КРИТИЧНО: Устанавливаем intent=0 для очереди на ремонт
+    // Очередь на ремонт
     FLAMEGPU->setVariable<unsigned int>("intent_state", 0u);
     
-    // ✅ Начало отсчёта s4_days (repair+reserve)
+    // Начало отсчёта s4_days (repair+queue)
     FLAMEGPU->setVariable<unsigned int>("s4_days", 1u);
     
-    // Логирование перехода в очередь
-    printf("  [TRANSITION 2→5 Day %u] AC %u (idx %u): operations -> reserve (REPAIR QUEUE, intent=0)\\n", 
+    printf("  [TRANSITION 2→7 Day %u] AC %u (idx %u): operations -> unserviceable (REPAIR QUEUE)\\n", 
            step_day, aircraft_number, idx);
     
     return flamegpu::ALIVE;
@@ -404,13 +403,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::Messa
     rtc_func_2_to_4.setEndState("repair")
     layer_2_to_4.addAgentFunction(rtc_func_2_to_4)
     
-    # Слой 2b: Переход 2→5 (operations → reserve) для отклонённых quota_repair
-    layer_2_to_5 = model.newLayer("transition_2_to_5")
-    rtc_func_2_to_5 = agent.newRTCFunction("rtc_apply_2_to_5", RTC_APPLY_2_TO_5)
-    rtc_func_2_to_5.setRTCFunctionCondition(RTC_COND_INTENT_5)
-    rtc_func_2_to_5.setInitialState("operations")
-    rtc_func_2_to_5.setEndState("reserve")
-    layer_2_to_5.addAgentFunction(rtc_func_2_to_5)
+    # Слой 2b: Переход 2→7 (operations → unserviceable) для очереди на ремонт
+    layer_2_to_7 = model.newLayer("transition_2_to_7")
+    rtc_func_2_to_7 = agent.newRTCFunction("rtc_apply_2_to_7", RTC_APPLY_2_TO_7)
+    rtc_func_2_to_7.setRTCFunctionCondition(RTC_COND_INTENT_7)
+    rtc_func_2_to_7.setInitialState("operations")
+    rtc_func_2_to_7.setEndState("unserviceable")
+    layer_2_to_7.addAgentFunction(rtc_func_2_to_7)
     
     # Слой 3: Переход 2→6 (operations → storage)
     layer_2_to_6 = model.newLayer("transition_2_to_6")

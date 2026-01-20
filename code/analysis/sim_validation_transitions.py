@@ -14,15 +14,15 @@
     1→4 inactive → repair
     2→3 operations → serviceable (квотный демоут)
     2→4 operations → repair
-    2→5 operations → reserve (очередь на ремонт)
+    2→7 operations → unserviceable (очередь на ремонт)
     2→6 operations → storage
     3→2 serviceable → operations
     4→2 repair → operations
-    4→5 repair → reserve (очередь после ремонта)
     5→2 reserve → operations
+    7→4 unserviceable → repair
 
 Самопереходы (остаёмся в том же состоянии):
-    1→1, 2→2, 3→3, 4→4, 5→5, 6→6
+    1→1, 2→2, 3→3, 4→4, 5→5, 6→6, 7→7
 
 Usage:
     python3 code/analysis/sim_validation_transitions.py --version-date 2025-07-04
@@ -45,7 +45,8 @@ STATES = {
     3: 'serviceable',
     4: 'repair',
     5: 'reserve',
-    6: 'storage'
+    6: 'storage',
+    7: 'unserviceable'
 }
 
 STATE_TO_NUM = {v: k for k, v in STATES.items()}
@@ -66,8 +67,8 @@ ALLOWED_TRANSITIONS: Set[Tuple[int, int]] = {
     (2, 2),  # самопереход
     (2, 3),  # operations → serviceable (квотный демоут)
     (2, 4),  # operations → repair
-    (2, 5),  # operations → reserve (очередь на ремонт)
     (2, 6),  # operations → storage
+    (2, 7),  # operations → unserviceable (очередь на ремонт)
     
     # Из serviceable (3)
     (3, 2),  # serviceable → operations
@@ -76,7 +77,6 @@ ALLOWED_TRANSITIONS: Set[Tuple[int, int]] = {
     # Из repair (4)
     (4, 2),  # repair → operations
     (4, 4),  # самопереход
-    (4, 5),  # repair → reserve (очередь после ремонта)
     
     # Из reserve (5)
     (5, 2),  # reserve → operations
@@ -84,6 +84,10 @@ ALLOWED_TRANSITIONS: Set[Tuple[int, int]] = {
     
     # Из storage (6)
     (6, 6),  # самопереход (терминальный)
+    
+    # Из unserviceable (7)
+    (7, 4),  # unserviceable → repair
+    (7, 7),  # самопереход
 }
 
 # Колонки переходов в sim_masterv2 (реально существующие в таблице)

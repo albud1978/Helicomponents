@@ -45,6 +45,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto mi17_res = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_reserve_count");
         auto mi8_ina = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_inactive_count");
         auto mi17_ina = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_inactive_count");
+        auto mi8_uns = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_unserviceable_count");
+        auto mi17_uns = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_unserviceable_count");
         
         // Буферы approve для квотирования (демоут + промоуты P1/P2/P3)
         auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
@@ -57,10 +59,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
         auto mi8_candidate_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_s1");
         auto mi17_candidate_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_s1");
-        auto mi8_candidate_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_repair_time");
-        auto mi17_candidate_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_repair_time");
-        auto mi8_candidate_skip = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_skip_repair");
-        auto mi17_candidate_skip = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_skip_repair");
         
         // Spawn pending флаги
         auto mi8_spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_spawn_pending");
@@ -88,6 +86,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             mi17_res[i].exchange(0u);
             mi8_ina[i].exchange(0u);
             mi17_ina[i].exchange(0u);
+            mi8_uns[i].exchange(0u);
+            mi17_uns[i].exchange(0u);
             
             // Approve флаги (демоут + промоуты)
             mi8_approve[i].exchange(0u);
@@ -100,10 +100,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             mi17_approve_s1[i].exchange(0u);
             mi8_candidate_s1[i].exchange(0u);
             mi17_candidate_s1[i].exchange(0u);
-            mi8_candidate_rt[i].exchange(0u);
-            mi17_candidate_rt[i].exchange(0u);
-            mi8_candidate_skip[i].exchange(0u);
-            mi17_candidate_skip[i].exchange(0u);
             
             // Spawn pending флаги
             mi8_spawn_pending[i].exchange(0u);
@@ -268,6 +264,33 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive, flamegpu::MessageNone, flamegpu::Mes
     
     layer_count_ina = model.newLayer("count_inactive")
     layer_count_ina.addAgentFunction(rtc_func_ina)
+
+    # =========================================================================
+    # Слой 5b: Подсчёт агентов в unserviceable
+    # =========================================================================
+    RTC_COUNT_UNSERVICEABLE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_unserviceable, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    
+    if (group_by == 1u) {{
+        auto uns_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_unserviceable_count");
+        uns_count[idx].exchange(1u);
+    }} else if (group_by == 2u) {{
+        auto uns_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_unserviceable_count");
+        uns_count[idx].exchange(1u);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    rtc_func_uns = agent.newRTCFunction("rtc_count_unserviceable", RTC_COUNT_UNSERVICEABLE)
+    rtc_func_uns.setInitialState("unserviceable")
+    rtc_func_uns.setEndState("unserviceable")
+    
+    layer_count_uns = model.newLayer("count_unserviceable")
+    layer_count_uns.addAgentFunction(rtc_func_uns)
     
     # =========================================================================
     # Слой 6: Подсчёт агентов в repair (для квотирования ремонтов)
@@ -290,6 +313,28 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_repair, flamegpu::MessageNone, flamegpu::Messa
     
     layer_count_rep = model.newLayer("count_repair")
     layer_count_rep.addAgentFunction(rtc_func_rep)
+
+    # =========================================================================
+    # Слой 6a: Снимок repair_time/repair_days по idx (для менеджера линий)
+    # =========================================================================
+    RTC_SNAPSHOT_REPAIR = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_snapshot_repair_vars, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
+    const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
+    
+    auto repair_time_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_time_by_idx");
+    auto repair_days_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_days_by_idx");
+    repair_time_by_idx[idx].exchange(repair_time);
+    repair_days_by_idx[idx].exchange(repair_days);
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    rtc_snapshot = agent.newRTCFunction("rtc_snapshot_repair_vars", RTC_SNAPSHOT_REPAIR)
+    layer_snapshot = model.newLayer("snapshot_repair_vars")
+    layer_snapshot.addAgentFunction(rtc_snapshot)
 
     # =========================================================================
     # Слой 6b: Логирование количества в ремонте по дням (для backfill-квоты)
@@ -329,16 +374,85 @@ FLAMEGPU_AGENT_FUNCTION(rtc_log_repair_day_count, flamegpu::MessageNone, flamegp
     # Запускаем для всех агентов, но работает только idx==0
     layer_log_rep = model.newLayer("log_repair_day_count")
     layer_log_rep.addAgentFunction(rtc_func_rep_log)
+
+    # =========================================================================
+    # Слой 6c: Менеджер ремонтных линий (host)
+    # =========================================================================
+    class RepairLineManagerHost(fg.HostFunction):
+        def __init__(self, max_frames: int, max_days: int):
+            super().__init__()
+            self.max_frames = max_frames
+            self.max_days = max_days
+
+        def run(self, FLAMEGPU):
+            env = FLAMEGPU.environment
+            day = FLAMEGPU.getStepCounter()
+            frames = env.getPropertyUInt("frames_total")
+            quota = env.getPropertyUInt("repair_quota_total")
+            lines_total = min(int(quota), self.max_frames)
+            if lines_total == 0:
+                return
+
+            repair_state_buffer = env.getMacroPropertyUInt32("repair_state_buffer")
+            repair_time_by_idx = env.getMacroPropertyUInt32("repair_time_by_idx")
+            repair_days_by_idx = env.getMacroPropertyUInt32("repair_days_by_idx")
+            line_busy_until = env.getMacroPropertyUInt32("repair_line_busy_until")
+            line_free_days = env.getMacroPropertyUInt32("repair_line_free_days")
+
+            if day == 0:
+                for l in range(lines_total):
+                    line_busy_until[l] = 0
+                    line_free_days[l] = 0
+                assigned = 0
+                for i in range(frames):
+                    if assigned >= lines_total:
+                        break
+                    if repair_state_buffer[i] != 1:
+                        continue
+                    rt = int(repair_time_by_idx[i])
+                    rd = int(repair_days_by_idx[i])
+                    remaining = (rt - rd) if rt > rd else 0
+                    line_busy_until[assigned] = day + remaining
+                    line_free_days[assigned] = 0
+                    assigned += 1
+                return
+
+            for l in range(lines_total):
+                busy_until = int(line_busy_until[l])
+                if day < busy_until:
+                    line_free_days[l] = 0
+                else:
+                    fd = int(line_free_days[l])
+                    if fd < self.max_days:
+                        fd += 1
+                    line_free_days[l] = fd
+
+            # Новые ремонты: repair_days == 1
+            for i in range(frames):
+                if repair_state_buffer[i] != 1:
+                    continue
+                rd = int(repair_days_by_idx[i])
+                if rd != 1:
+                    continue
+                rt = int(repair_time_by_idx[i])
+                for l in range(lines_total):
+                    busy_until = int(line_busy_until[l])
+                    if day >= busy_until:
+                        line_busy_until[l] = day + rt
+                        line_free_days[l] = 0
+                        break
+
+    layer_line_mgr = model.newLayer("repair_line_manager_host")
+    layer_line_mgr.addHostFunction(RepairLineManagerHost(max_frames, max_days))
     
     # =========================================================================
-    # Слой 7: Подсчёт кандидатов в очереди на ремонт (reserve & intent=0)
+    # Слой 7: Подсчёт очереди на ремонт в unserviceable (intent=0)
     # =========================================================================
-    RTC_COUNT_RESERVE_QUEUE = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_count_reserve_queue, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    RTC_COUNT_UNSERVICEABLE_QUEUE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_count_unserviceable_queue, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
     
-    // Только агенты с intent=0 (в очереди на ремонт)
     if (intent == 0u) {{
         auto reserve_queue_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("reserve_queue_buffer");
         reserve_queue_buffer[idx].exchange(1u);
@@ -348,12 +462,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_reserve_queue, flamegpu::MessageNone, flamegpu
 }}
 """
     
-    rtc_func_rq = agent.newRTCFunction("rtc_count_reserve_queue", RTC_COUNT_RESERVE_QUEUE)
-    rtc_func_rq.setInitialState("reserve")
-    rtc_func_rq.setEndState("reserve")
+    rtc_func_urq = agent.newRTCFunction("rtc_count_unserviceable_queue", RTC_COUNT_UNSERVICEABLE_QUEUE)
+    rtc_func_urq.setInitialState("unserviceable")
+    rtc_func_urq.setEndState("unserviceable")
     
-    layer_count_rq = model.newLayer("count_reserve_queue")
-    layer_count_rq.addAgentFunction(rtc_func_rq)
+    layer_count_urq = model.newLayer("count_unserviceable_queue")
+    layer_count_urq.addAgentFunction(rtc_func_urq)
     
     # =========================================================================
     # Слой 8: Подсчёт запросов на ремонт (operations & intent=4)

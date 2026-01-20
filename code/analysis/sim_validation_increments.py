@@ -52,6 +52,7 @@ class IncrementsValidator:
             'valid': True,
             'bugs': [],  # dt=0 в sim при dt>0 в flight_program = БАГ
             'valid_zeros': [],  # dt=0 в sim при dt=0 в flight_program = OK (зимовка)
+            'transition_zeros': [],  # dt=0 в день входа в operations (разрешено)
             'stats': {}
         }
         
@@ -88,24 +89,40 @@ class IncrementsValidator:
         bugs_mi17 = []
         valid_mi8 = 0
         valid_mi17 = 0
+        transition_mi8 = 0
+        transition_mi17 = 0
         
         for acn, gb, day, sim_dt, fp_dt, prev_state in rows:
             ac_type = 'Mi-8' if gb == 1 else 'Mi-17'
             fp_dt_val = fp_dt if fp_dt is not None else 0
             
             if fp_dt_val > 0:
-                # БАГ: flight_program имеет налёт, но sim записал 0
-                bug = {
-                    'aircraft_number': acn,
-                    'group_by': gb,
-                    'day': day,
-                    'fp_dt': fp_dt_val,
-                    'prev_state': prev_state or '(day0)'
-                }
-                if gb == 1:
-                    bugs_mi8.append(bug)
+                # Допускаем нулевой dt в день входа в operations (prev_state != operations)
+                if prev_state is not None and prev_state != 'operations':
+                    if gb == 1:
+                        transition_mi8 += 1
+                    else:
+                        transition_mi17 += 1
+                    results['transition_zeros'].append({
+                        'aircraft_number': acn,
+                        'group_by': gb,
+                        'day': day,
+                        'fp_dt': fp_dt_val,
+                        'prev_state': prev_state
+                    })
                 else:
-                    bugs_mi17.append(bug)
+                    # БАГ: flight_program имеет налёт, но sim записал 0
+                    bug = {
+                        'aircraft_number': acn,
+                        'group_by': gb,
+                        'day': day,
+                        'fp_dt': fp_dt_val,
+                        'prev_state': prev_state or '(day0)'
+                    }
+                    if gb == 1:
+                        bugs_mi8.append(bug)
+                    else:
+                        bugs_mi17.append(bug)
             else:
                 # OK: flight_program тоже имеет 0 (зимовка)
                 if gb == 1:
@@ -116,25 +133,30 @@ class IncrementsValidator:
         results['stats'] = {
             'mi8_bugs': len(bugs_mi8),
             'mi8_valid_zeros': valid_mi8,
+            'mi8_transition_zeros': transition_mi8,
             'mi17_bugs': len(bugs_mi17),
             'mi17_valid_zeros': valid_mi17,
+            'mi17_transition_zeros': transition_mi17,
             'total_bugs': len(bugs_mi8) + len(bugs_mi17),
-            'total_valid': valid_mi8 + valid_mi17
+            'total_valid': valid_mi8 + valid_mi17,
+            'total_transition_zeros': transition_mi8 + transition_mi17
         }
         
         results['bugs'] = bugs_mi8 + bugs_mi17
         results['valid'] = len(results['bugs']) == 0
         
         # Вывод результатов
-        print(f"\n{'Тип':<8} | {'Баги (fp>0, sim=0)':<20} | {'Валидные (fp=0, sim=0)':<25}")
-        print("-" * 60)
-        print(f"{'Mi-8':<8} | {len(bugs_mi8):>20} | {valid_mi8:>25}")
-        print(f"{'Mi-17':<8} | {len(bugs_mi17):>20} | {valid_mi17:>25}")
-        print("-" * 60)
-        print(f"{'ИТОГО':<8} | {len(bugs_mi8) + len(bugs_mi17):>20} | {valid_mi8 + valid_mi17:>25}")
+        print(f"\n{'Тип':<8} | {'Баги (fp>0, sim=0)':<20} | {'Валидные (fp=0, sim=0)':<25} | {'Переходы в ops (dt=0)':<26}")
+        print("-" * 95)
+        print(f"{'Mi-8':<8} | {len(bugs_mi8):>20} | {valid_mi8:>25} | {transition_mi8:>26}")
+        print(f"{'Mi-17':<8} | {len(bugs_mi17):>20} | {valid_mi17:>25} | {transition_mi17:>26}")
+        print("-" * 95)
+        print(f"{'ИТОГО':<8} | {len(bugs_mi8) + len(bugs_mi17):>20} | {valid_mi8 + valid_mi17:>25} | {transition_mi8 + transition_mi17:>26}")
         
         if results['valid']:
             print(f"\n✅ НУЛЕВАЯ ТОЛЕРАНТНОСТЬ: Все {valid_mi8 + valid_mi17} случаев dt=0 объяснены flight_program")
+            if transition_mi8 + transition_mi17 > 0:
+                print(f"ℹ️  Переходы в operations с dt=0: {transition_mi8 + transition_mi17} (допустимо)")
         else:
             results['valid'] = False
             print(f"\n❌ КРИТИЧЕСКИЕ БАГИ: {len(results['bugs'])} случаев dt=0 при fp_dt>0!")

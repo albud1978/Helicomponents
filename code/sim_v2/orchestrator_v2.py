@@ -359,7 +359,7 @@ class V2Orchestrator:
                 print("\n" + "="*60)
                 print(f"ОТЛАДКА: Проверка агентов после динамического spawn (день {debug_spawn_day})")
                 print("="*60)
-                for state_name in ['operations', 'serviceable', 'inactive', 'repair', 'reserve', 'storage']:
+                for state_name in ['operations', 'serviceable', 'inactive', 'repair', 'reserve', 'storage', 'unserviceable']:
                     pop = fg.AgentVector(self.base_model.agent)
                     self.simulation.getPopulationData(pop, state_name)
                     
@@ -456,7 +456,8 @@ class V2Orchestrator:
             'serviceable': 3,
             'repair': 4,
             'reserve': 5,
-            'storage': 6
+            'storage': 6,
+            'unserviceable': 7
         }
         
         # Извлекаем агентов из каждого состояния
@@ -512,11 +513,13 @@ def main():
         'quota_promote_reserve',      # Промоут reserve → operations
         'quota_promote_inactive',     # Промоут inactive → operations
         'spawn_dynamic',              # Динамический спавн по дефициту (ПЕРЕД state_managers!)
+        'compute_transitions',        # Переходы state→intent (до state_managers)
         'state_manager_serviceable',  # Переходы serviceable
         'state_manager_operations',   # Переходы operations → repair/storage
         'state_manager_repair',       # Переходы repair → operations/reserve
         'state_manager_storage',      # Storage (терминальное)
         'state_manager_reserve',      # Переходы reserve → operations
+        'state_manager_unserviceable',  # Очередь на ремонт
         'state_manager_inactive',     # inactive → operations/repair
         'spawn_v2',                   # Детерминированный спавн (MP4 seed) — ПОСЛЕДНИМ!
     ]
