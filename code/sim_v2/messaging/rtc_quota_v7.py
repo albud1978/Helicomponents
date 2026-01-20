@@ -49,6 +49,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v7, flamegpu::MessageNone, flamegpu::Mes
     auto mi17_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
     auto mi8_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
     auto mi17_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
+    auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve");
+    auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve");
+    auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s3");
+    auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s3");
+    auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s1");
+    auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s1");
+    auto mi8_demote = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_demote");
+    auto mi17_demote = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_demote");
     
     for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
         mi8_ops[i].exchange(0u);
@@ -61,6 +69,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v7, flamegpu::MessageNone, flamegpu::Mes
         mi17_unsvc_ready[i].exchange(0u);
         mi8_inactive[i].exchange(0u);
         mi17_inactive[i].exchange(0u);
+        mi8_approve[i].exchange(0u);
+        mi17_approve[i].exchange(0u);
+        mi8_approve_s3[i].exchange(0u);
+        mi17_approve_s3[i].exchange(0u);
+        mi8_approve_s1[i].exchange(0u);
+        mi17_approve_s1[i].exchange(0u);
+        mi8_demote[i].exchange(0u);
+        mi17_demote[i].exchange(0u);
     }}
     
     return flamegpu::ALIVE;

@@ -368,7 +368,8 @@ class HF_SyncDayV5(fg.HostFunction):
     могли читать current_day/prev_day из Environment.
     """
     
-    def __init__(self, end_day: int, program_changes: list = None, verbose: bool = False):
+    def __init__(self, end_day: int, program_changes: list = None, verbose: bool = False,
+                 enable_v8_reason: bool = False):
         super().__init__()
         self.end_day = end_day
         # program_changes может быть списком tuples (day, mi8, mi17) или просто дней
@@ -380,6 +381,7 @@ class HF_SyncDayV5(fg.HostFunction):
         else:
             self.program_changes = set()
         self.verbose = verbose
+        self.enable_v8_reason = enable_v8_reason
         self.step_log = []  # Лог шагов: [(step, day, adaptive, причины)]
     
     def run(self, FLAMEGPU):
@@ -393,6 +395,25 @@ class HF_SyncDayV5(fg.HostFunction):
         
         mp_result = FLAMEGPU.environment.getMacroPropertyUInt("adaptive_result_mp")
         adaptive_days = int(mp_result[0])
+        min_dynamic_combined = None
+        next_det = None
+        current_is_det = False
+        if self.enable_v8_reason:
+            min_dynamic_combined = int(mp_result[1])
+            mp_dates = FLAMEGPU.environment.getMacroPropertyUInt("deterministic_dates_mp")
+            num_dates = int(FLAMEGPU.environment.getPropertyUInt("num_deterministic_dates"))
+            max_dates = 500
+            if num_dates > max_dates:
+                num_dates = max_dates
+            for i in range(num_dates):
+                det_day = int(mp_dates[i])
+                if det_day == current_day:
+                    current_is_det = True
+                if det_day > current_day:
+                    next_det = det_day
+                    break
+            if next_det is None:
+                next_det = self.end_day
         
         # Читаем источники для определения причины шага
         mp_min = FLAMEGPU.environment.getMacroPropertyUInt("mp_min_limiter")
@@ -426,7 +447,28 @@ class HF_SyncDayV5(fg.HostFunction):
         if current_day in self.program_changes:
             reasons.append("program_change")
         
-        # Если причина не определена — это limiter (ресурс агента)
+        # V8: если min_dynamic пришёл от repair_days/limiter, фиксируем конкретную причину
+        if self.enable_v8_reason and min_dynamic_combined is not None and min_dynamic_combined != 0xFFFFFFFF:
+            min_dynamic = (min_dynamic_combined >> 1)
+            source = (min_dynamic_combined & 1)
+            if min_dynamic == adaptive_days:
+                if source == 1:
+                    reasons.append(f"repair_days:{min_dynamic}")
+                else:
+                    has_limiter = any(r.startswith("limiter") for r in reasons)
+                    if not has_limiter:
+                        reasons.append(f"limiter:{min_dynamic}")
+        
+        # V8: детерминированная дата (repair_time/spawn/прочее из deterministic_dates)
+        if self.enable_v8_reason and not reasons:
+            if current_is_det and current_day > prev_day and (current_day - prev_day) == adaptive_days:
+                reasons.append(f"deterministic_date:{current_day}")
+            elif next_det is not None:
+                days_to_det = next_det - current_day if next_det > current_day else 0
+                if days_to_det == adaptive_days:
+                    reasons.append(f"deterministic_date:{next_det}")
+        
+        # Если причина не определена — это ресурсный шаг
         if not reasons:
             reasons.append(f"resource:{adaptive_days}")
         
@@ -461,7 +503,7 @@ class HF_SyncDayV5(fg.HostFunction):
 
 def register_v5(model: fg.ModelDescription, heli_agent: fg.AgentDescription, 
                 quota_agent: fg.AgentDescription, program_changes: list, end_day: int,
-                verbose_logging: bool = False):
+                verbose_logging: bool = False, enable_v8_reason: bool = False):
     """Регистрирует V5 RTC модули"""
     
     # Init HostFunction (один раз при старте)
@@ -470,7 +512,8 @@ def register_v5(model: fg.ModelDescription, heli_agent: fg.AgentDescription,
     
     # Step sync — единственный Python callback в step loop
     # Синхронизирует MacroProperty → Environment + логирование причин шагов
-    hf_sync = HF_SyncDayV5(end_day, program_changes, verbose=verbose_logging)
+    hf_sync = HF_SyncDayV5(end_day, program_changes, verbose=verbose_logging,
+                           enable_v8_reason=enable_v8_reason)
     model.addStepFunction(hf_sync)
     
     # V5 использует mp_min_limiter от V3 RTC (rtc_compute_min_limiter)

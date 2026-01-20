@@ -208,16 +208,32 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v8, flamegpu::MessageNone, flamegp
         if (ops_count[i] == 1u) ++curr_ops;
     }
     
+    // Одобренные в P1/P2/P3 (используем approve буферы вместо post-quota counts)
+    auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve_s3");
+    auto approve_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve");
+    auto approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve_s1");
+    auto demote = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_demote");
+    int used = 0;
+    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
+        used += (int)approve_s3[i];
+        used += (int)approve_p2[i];
+        used += (int)approve_s1[i];
+        used -= (int)demote[i];
+    }
+    
     // Целевое значение из MP4 (текущий день)
     const unsigned int target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
     FLAMEGPU->setVariable<unsigned int>("debug_curr_ops", curr_ops);
     FLAMEGPU->setVariable<unsigned int>("debug_target", target);
-    if (curr_ops >= target) {
+    if ((int)curr_ops + used >= (int)target) {
         FLAMEGPU->setVariable<unsigned int>("debug_need", 0u);
         return flamegpu::ALIVE;
     }
     
-    unsigned int deficit = target - curr_ops;
+    unsigned int deficit = 0u;
+    if ((int)target > (int)curr_ops + used) {
+        deficit = (unsigned int)((int)target - (int)curr_ops - used);
+    }
     FLAMEGPU->setVariable<unsigned int>("debug_need", deficit);
     
     // Курсоры

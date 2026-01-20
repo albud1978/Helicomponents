@@ -82,7 +82,7 @@ python3 code/extract_master.py
 ### 🚀 LIMITER V8 — основная архитектура (ветка feature/flame-messaging)
 
 > **⚠️ В этой ветке основной код — LIMITER V8 (`orchestrator_limiter_v8.py`)**
-> V8 = RepairLine + adaptive steps с deterministic_dates; P2 ранжирует только `unserviceable` в readiness; spawn считает дефицит по текущему дню на актуальных counts (после post‑промоутов); debug спавна и временные `debug_rl_*` фиксируются в MP2. Для диагностики RepairLine/квот используются `sim_repair_lines_v8` и `sim_quota_mgr_v8`.
+> V8 = RepairLine + adaptive steps с deterministic_dates; `min_dynamic` сбрасывается в `rtc_compute_global_min_v8` (без отдельного reset‑слоя), источник шага (limiter/repair_days) пишется в `adaptive_result_mp[1]`, а шаги по детерминированным датам помечаются как `deterministic_date:<day>`; P2 ранжирует только `unserviceable` в readiness; spawn считает дефицит как `target − curr_ops − used(P1/P2/P3 − demote)` без post‑quota counts; debug спавна и временные `debug_rl_*` фиксируются в MP2. Для диагностики RepairLine/квот используются `sim_repair_lines_v8` и `sim_quota_mgr_v8`.
 
 | Файл | Статус | Описание |
 |------|--------|----------|

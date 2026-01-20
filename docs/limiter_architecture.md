@@ -63,50 +63,43 @@
 | 11 | v8_ops_to_storage | `rtc_ops_to_storage_v8` | 2→6 | Списание по LL/BR |
 | 12 | v8_ops_to_unsvc | `rtc_ops_to_unsvc_v8` | 2→7 | Уход в unserviceable по OH (limiter=0 → выход) |
 | **ФАЗА 1.25: V8 pre‑quota adaptive (min_dynamic)** |||||
+|  |  |  |  | `min_dynamic` кодируется с источником (limiter/repair_days) для явной причины шага |
 | 13 | v8_init | `HF_InitV8` | Host | Подготовка `deterministic_dates` и синхронизация состояния |
-| 14 | v8_reset_min_dynamic | `rtc_reset_min_dynamic_v8` | QM | Сброс `min_dynamic` перед сбором |
-| 15 | v8_collect_min_ops | `rtc_collect_min_dynamic_ops_v8` | 2 | Сбор минимального лимитера по ops |
-| 16 | v8_collect_min_repair | `rtc_collect_min_dynamic_repair_v8` | 4 | Сбор минимальных `repair_days` для day0‑ремонта |
-| 17 | v8_compute_global_min | `rtc_compute_global_min_v8` | QM | Вычисление `adaptive_days` из min_dynamic + deterministic_dates |
+| 14 | v8_collect_min_ops | `rtc_collect_min_dynamic_ops_v8` | 2 | Сбор минимального лимитера по ops |
+| 15 | v8_collect_min_repair | `rtc_collect_min_dynamic_repair_v8` | 4 | Сбор минимальных `repair_days` для day0‑ремонта |
+| 16 | v8_compute_global_min | `rtc_compute_global_min_v8` | QM | Вычисление `adaptive_days` и сброс `min_dynamic` |
 | **ФАЗА 1.5: RepairLine (pre‑quota)** |||||
-| 18 | v8_repair_line_sync_pre | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линии из MacroProperty |
-| 19 | v8_repair_line_increment | `rtc_repair_line_increment_v8` | RepairLine | Наращивание `free_days` на шаг |
-| 20 | v8_repair_line_write | `rtc_repair_line_write_v8` | RepairLine | Запись состояния линий в MacroProperty |
-| 21 | v8_repair_line_publish_status | `rtc_repair_line_publish_status_v8` | RepairLine | Сообщение линий в QM (готовность/занятость) |
+| 17 | v8_repair_line_sync_pre | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линии из MacroProperty |
+| 18 | v8_repair_line_increment | `rtc_repair_line_increment_v8` | RepairLine | Наращивание `free_days` на шаг |
+| 19 | v8_repair_line_write | `rtc_repair_line_write_v8` | RepairLine | Запись состояния линий в MacroProperty |
+| 20 | v8_repair_line_publish_status | `rtc_repair_line_publish_status_v8` | RepairLine | Сообщение линий в QM (готовность/занятость) |
 | **ФАЗА 2: Квотирование** |||||
-| 22 | v8_reset_flags | `rtc_reset_flags_v7` | all | Сброс флагов промоута/демоута |
-| 23 | v8_reset_buffers | `rtc_reset_buffers_v7` | all | Сброс буферов подсчёта |
-| 24 | v8_count_agents | `rtc_count_*` | all | Подсчёт по состояниям + готовность unsvc/inactive |
-| 25 | v8_repair_line_slots | `rtc_repair_line_slots_v8` | QM | Сбор доступных RepairLine‑слотов |
-| 26 | v8_debug_p2 | `rtc_quota_debug_p2_v8` | QM | Debug‑метрики P2 (ops/target/deficit/needed/slots) |
-| 27 | v8_demote | `rtc_demote_ops_v7` | QM | Решение демоута ops→svc |
-| 28 | v8_promote_svc | `rtc_promote_svc_v7` | QM | Решение P1: svc→ops |
-| 29 | v8_promote_unsvc_decide | `rtc_promote_unsvc_v8` | QM | Решение P2: отбор unsvc по RepairLine (без повторного `repair_line_id`) |
-| 30 | v8_promote_unsvc_commit | `rtc_promote_unsvc_commit_v8` | QM | Бронирование линии и фиксация P2 (fallback на следующий слот) |
-| 31 | v8_promote_inactive_decide | `rtc_promote_inactive_v8` | QM | Решение P3: отбор inactive по условиям RepairLine |
-| 32 | v8_promote_inactive_commit | `rtc_promote_inactive_commit_v8` | QM | Бронирование линии и фиксация P3 (fallback на следующий слот) |
+| 21 | v8_reset_flags | `rtc_reset_flags_v7` | all | Сброс флагов промоута/демоута |
+| 22 | v8_reset_buffers | `rtc_reset_buffers_v7` | all | Сброс буферов подсчёта |
+| 23 | v8_count_agents | `rtc_count_*` | all | Подсчёт по состояниям + готовность unsvc/inactive |
+| 24 | v8_repair_line_slots | `rtc_repair_line_slots_v8` | QM | Сбор доступных RepairLine‑слотов |
+| 25 | v8_debug_p2 | `rtc_quota_debug_p2_v8` | QM | Debug‑метрики P2 (ops/target/deficit/needed/slots) |
+| 26 | v8_demote | `rtc_demote_ops_v7` | QM | Решение демоута ops→svc |
+| 27 | v8_promote_svc | `rtc_promote_svc_v7` | QM | Решение P1: svc→ops |
+| 28 | v8_promote_unsvc_decide | `rtc_promote_unsvc_v8` | QM | Решение P2: отбор unsvc по RepairLine (без повторного `repair_line_id`) |
+| 29 | v8_promote_unsvc_commit | `rtc_promote_unsvc_commit_v8` | QM | Бронирование линии и фиксация P2 (fallback на следующий слот) |
+| 30 | v8_promote_inactive_decide | `rtc_promote_inactive_v8` | QM | Решение P3: отбор inactive по условиям RepairLine |
+| 31 | v8_promote_inactive_commit | `rtc_promote_inactive_commit_v8` | QM | Бронирование линии и фиксация P3 (fallback на следующий слот) |
 | **ФАЗА 3: Применение квот** |||||
-| 33 | v7_ops_demote | `rtc_ops_demote_v7` | 2→3 | Применение демоута |
-| 34 | v7_svc_to_ops | `rtc_svc_to_ops_v7` | 3→2 | Применение P1 |
-| 35 | v7_unsvc_to_ops | `rtc_unsvc_to_ops_v7` | 7→2 | Применение P2, обнуление PPR |
-| 36 | v7_inactive_to_ops | `rtc_inactive_to_ops_v7` | 1→2 | Применение P3 |
-| **ФАЗА 3.5: Post‑quota counts (для спавна)** |||||
-| 37 | v8_reset_buffers_post_quota | `rtc_reset_buffers_v7` | all | Сброс буферов после переходов |
-| 38 | v8_count_agents_post_quota | `rtc_count_*` | all | Post‑quota counts для расчёта дефицита |
-| 39 | v8_promote_inactive_post | `rtc_promote_inactive_post_v7` | 1 | Дополнительный добор inactive |
-| 40 | v8_inactive_to_ops_post | `rtc_inactive_to_ops_post_v7` | 1→2 | Применение post‑добора |
-| 41 | v8_reset_buffers_spawn | `rtc_reset_buffers_v7` | all | Сброс буферов перед spawn |
-| 42 | v8_count_agents_spawn | `rtc_count_*` | all | Актуальные counts для spawn (после post‑добора) |
-| **ФАЗА 3.75: RepairLine (post‑quota)** |||||
-| 43 | v8_repair_line_sync_post | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линий после квот |
+| 32 | v7_ops_demote | `rtc_ops_demote_v7` | 2→3 | Применение демоута |
+| 33 | v7_svc_to_ops | `rtc_svc_to_ops_v7` | 3→2 | Применение P1 |
+| 34 | v7_unsvc_to_ops | `rtc_unsvc_to_ops_v7` | 7→2 | Применение P2, обнуление PPR |
+| 35 | v7_inactive_to_ops | `rtc_inactive_to_ops_v7` | 1→2 | Применение P3 |
+| **ФАЗА 3.5: RepairLine (post‑quota)** |||||
+| 36 | v8_repair_line_sync_post | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линий после квот |
 | **ФАЗА 4: Динамический спавн** |||||
-| 44 | v8_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr_v8` | SpawnMgr | Расчёт дефицита для спавна |
-| 45 | v8_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket_v7` | Ticket→ops | Создание новых агентов |
+| 37 | v8_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr_v8` | SpawnMgr | Дефицит = target − curr_ops − used (P1/P2/P3 approve) |
+| 38 | v8_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket_v7` | Ticket→ops | Создание новых агентов |
 | **ФАЗА 5: Limiter (min_limiter)** |||||
-| 46 | L_limiter_entry | `rtc_compute_limiter_on_entry` | 2→2 | Пересчёт limiter при входе/нулевом значении |
-| 47 | L_limiter_min | `rtc_compute_min_limiter` | 2→2 | Сбор минимального limiter по ops |
+| 39 | L_limiter_entry | `rtc_compute_limiter_on_entry` | 2→2 | Пересчёт limiter при входе/нулевом значении |
+| 40 | L_limiter_min | `rtc_compute_min_limiter` | 2→2 | Сбор минимального limiter по ops |
 | **ФАЗА 6: Update day** |||||
-| 48 | v8_update_day | `HF_UpdateDayV8` | Host | Обновление `current_day` по `adaptive_days` |
+| 41 | v8_update_day | `HF_UpdateDayV8` | Host | Обновление `current_day` по `adaptive_days` |
 
 ---
 

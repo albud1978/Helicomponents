@@ -169,6 +169,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_demote_ops_v8, flamegpu::MessageNone, flamegpu::Mess
     if (rank < excess) {{
         FLAMEGPU->setVariable<unsigned int>("needs_demote", 1u);
         FLAMEGPU->setVariable<unsigned int>("debug_needs_demote", 1u);
+        if (group_by == 1u) {{
+            auto demote = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_demote");
+            demote[idx].exchange(1u);
+        }} else {{
+            auto demote = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_demote");
+            demote[idx].exchange(1u);
+        }}
     }}
     
     return flamegpu::ALIVE;
@@ -248,6 +255,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v8, flamegpu::MessageNone, flamegpu::Mes
     if (rank < K) {{
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
+        if (group_by == 1u) {{
+            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s3");
+            approve[idx].exchange(1u);
+        }} else {{
+            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s3");
+            approve[idx].exchange(1u);
+        }}
     }}
     
     return flamegpu::ALIVE;
