@@ -40,6 +40,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
     // ═══════════════════════════════════════════════════════════
@@ -80,7 +81,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
     }}
     
     // Диагностика на ключевых днях
-    if ((day == 180u || day == 181u || day == 182u) && idx == 0u) {{
+    if (debug_enabled && (day == 180u || day == 181u || day == 182u) && idx == 0u) {{
         if (group_by == 1u) {{
             printf("  [PROMOTE P2 TARGET Day %u] Mi-8: Curr=%u, Used(P1)=%u, Target=%u\\n", day, curr, used, target);
         }} else if (group_by == 2u) {{
@@ -141,7 +142,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
     
     // Диагностика на день 149 для Mi-17
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-    if (day == 149u && group_by == 2u) {{
+    if (debug_enabled && day == 149u && group_by == 2u) {{
         printf("  [P2 RANK Day %u] AC %u (idx %u): rank=%u/%u, K=%u, total_in_reserve=%u\\n", 
                day, aircraft_number, idx, rank, total_in_reserve, K, total_in_reserve);
     }}
@@ -152,8 +153,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
         
         /* Логирование выбора для P2 */
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [PROMOTE P2→2 Day %u] AC %u (idx %u): rank=%u/%u reserve->operations\\n", 
-               day, aircraft_number, idx, rank, K);
+        if (debug_enabled) {{
+            printf("  [PROMOTE P2→2 Day %u] AC %u (idx %u): rank=%u/%u reserve->operations\\n", 
+                   day, aircraft_number, idx, rank, K);
+        }}
         
         // Записываем в ОТДЕЛЬНЫЙ буфер для reserve (избегаем race condition)
         if (group_by == 1u) {{

@@ -39,6 +39,7 @@ class AgentPopulationBuilder:
             self.env_data = env_data
         
         self.frames = self.adapter.dimensions.frames_total
+        self.debug = bool(self.env_data.get('debug_enabled', 0))
         
     def populate_agents(self, simulation: fg.CUDASimulation, agent_def: fg.AgentDescription):
         """
@@ -48,7 +49,8 @@ class AgentPopulationBuilder:
             simulation: объект симуляции FLAME GPU
             agent_def: определение агента из BaseModel
         """
-        print("Инициализация популяций агентов...")
+        if self.debug:
+            print("Инициализация популяций агентов...")
         
         # Извлекаем массивы MP3
         mp3 = self.env_data.get('mp3_arrays', {})
@@ -140,7 +142,8 @@ class AgentPopulationBuilder:
         self.env_data['n_mi8'] = n_mi8
         self.env_data['n_mi17'] = n_mi17
         
-        print(f"  Агенты по типам: Mi-8={n_mi8}, Mi-17={n_mi17}")
+        if self.debug:
+            print(f"  Агенты по типам: Mi-8={n_mi8}, Mi-17={n_mi17}")
         
         # Получаем информацию о зарезервированных слотах
         first_reserved_idx = self.env_data.get('first_reserved_idx', self.frames)
@@ -280,11 +283,14 @@ class AgentPopulationBuilder:
         # FIX 4: Используем agent_def, НЕ simulation.getAgentDescription (нет такого метода!)
         for state_name in all_states:
             pop = populations.get(state_name, fg.AgentVector(agent_def))
-            print(f"  🔍 DEBUG: Перед setPopulationData для '{state_name}', размер={len(pop)}")
+            if self.debug:
+                print(f"  🔍 DEBUG: Перед setPopulationData для '{state_name}', размер={len(pop)}")
             simulation.setPopulationData(pop, state_name)
-            print(f"  🔍 DEBUG: После setPopulationData для '{state_name}'")
+            if self.debug:
+                print(f"  🔍 DEBUG: После setPopulationData для '{state_name}'")
             if len(pop) > 0:
-                print(f"  Загружено {len(pop)} агентов в состояние '{state_name}'")
+                if self.debug:
+                    print(f"  Загружено {len(pop)} агентов в состояние '{state_name}'")
     
     def _build_norms_by_frame(self) -> Tuple[List[int], List[int], List[int]]:
         """

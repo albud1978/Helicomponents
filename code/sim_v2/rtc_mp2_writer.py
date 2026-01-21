@@ -132,6 +132,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
+    const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
+    
     
     // Получаем все MacroProperty для записи (ВСЕ поля)
     auto mp2_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_day_u16");
@@ -277,9 +279,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int pos = step_day * {MAX_FRAMES}u + idx;
+    const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
     
     // ОТЛАДКА: Логирование динамических агентов (ACN >= 100006)
-    if (aircraft_number >= 100006u && step_day <= 850u) {{
+    if (debug_enabled && aircraft_number >= 100006u && step_day <= 850u) {{
         const unsigned int partseqno_i = FLAMEGPU->getVariable<unsigned int>("partseqno_i");
         const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
         const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");

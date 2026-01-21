@@ -34,6 +34,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
     
     // Только планеры Mi-8/Mi-17
     if (group_by != 1u && group_by != 2u) {
@@ -119,21 +120,25 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
             // reserve&0 → intent=4 (из очереди в ремонт)
             FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
             const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-            printf("  [REPAIR APPROVE QUEUE Day %u] AC %u (idx %u): rank=%u/%u reserve->repair (quota=%u, in_repair=%u)\\n", 
-                   step_day, aircraft_number, idx, rank, K, quota, curr_in_repair);
+            if (debug_enabled) {
+                printf("  [REPAIR APPROVE QUEUE Day %u] AC %u (idx %u): rank=%u/%u reserve->repair (quota=%u, in_repair=%u)\\n", 
+                       step_day, aircraft_number, idx, rank, K, quota, curr_in_repair);
+            }
         }
         // operations&4 остаётся intent=4 (без изменений)
         if (intent == 4u) {
             const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-            printf("  [REPAIR APPROVE NEW Day %u] AC %u (idx %u): rank=%u/%u operations->repair (quota=%u, in_repair=%u)\\n", 
-                   step_day, aircraft_number, idx, rank, K, quota, curr_in_repair);
+            if (debug_enabled) {
+                printf("  [REPAIR APPROVE NEW Day %u] AC %u (idx %u): rank=%u/%u operations->repair (quota=%u, in_repair=%u)\\n", 
+                       step_day, aircraft_number, idx, rank, K, quota, curr_in_repair);
+            }
         }
     } else {
         // ❌ НЕ ОДОБРЕН
         if (intent == 4u) {
             // operations&4 → intent=7 (отклонён, очередь на ремонт)
             FLAMEGPU->setVariable<unsigned int>("intent_state", 7u);
-            if (step_day <= 10u || step_day == 180u || step_day == 181u || step_day == 182u) {
+            if (debug_enabled && (step_day <= 10u || step_day == 180u || step_day == 181u || step_day == 182u)) {
                 const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
                 printf("  [REPAIR REJECT Day %u] AC %u (idx %u): rank=%u, available=%d (quota=%u, in_repair=%u)\\n", 
                        step_day, aircraft_number, idx, rank, available, quota, curr_in_repair);

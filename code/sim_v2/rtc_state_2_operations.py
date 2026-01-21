@@ -38,9 +38,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     const unsigned int step_day = FLAMEGPU->getStepCounter();
     // Runtime frames_total из Environment (для индексации)
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
     
     // DEBUG для агента 100006 (idx=285) в день 824
-    if (step_day == 824u && idx == 285u) {{
+    if (debug_enabled && step_day == 824u && idx == 285u) {{
         const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
         const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
         printf("[DEBUG Day %u STATE_2] Agent idx=%u (ACN=%u): intent=%u (BEFORE setting)\\n", 
@@ -90,8 +91,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     if (s_next >= ll) {{
         FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-        printf("  [Step %u] AC %u: intent=6 (storage LL), sne_next=%u >= ll=%u\\n", 
-               step_day, aircraft_number, s_next, ll);
+        if (debug_enabled) {{
+            printf("  [Step %u] AC %u: intent=6 (storage LL), sne_next=%u >= ll=%u\\n", 
+                   step_day, aircraft_number, s_next, ll);
+        }}
         return flamegpu::ALIVE;
     }}
     
@@ -101,14 +104,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
             // Переход в ремонт
             FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
             const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-            printf("  [Step %u] AC %u: intent=4 (repair), ppr_next=%u >= oh=%u, sne_next=%u < br=%u\\n", 
-                   step_day, aircraft_number, p_next, oh, s_next, br);
+            if (debug_enabled) {{
+                printf("  [Step %u] AC %u: intent=4 (repair), ppr_next=%u >= oh=%u, sne_next=%u < br=%u\\n", 
+                       step_day, aircraft_number, p_next, oh, s_next, br);
+            }}
         }} else {{
             // Переход в хранение (BR достигнут)
             FLAMEGPU->setVariable<unsigned int>("intent_state", 6u);
             const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-            printf("  [Step %u] AC %u: intent=6 (storage BR), ppr_next=%u >= oh=%u, sne_next=%u >= br=%u\\n", 
-                   step_day, aircraft_number, p_next, oh, s_next, br);
+            if (debug_enabled) {{
+                printf("  [Step %u] AC %u: intent=6 (storage BR), ppr_next=%u >= oh=%u, sne_next=%u >= br=%u\\n", 
+                       step_day, aircraft_number, p_next, oh, s_next, br);
+            }}
         }}
         return flamegpu::ALIVE;
     }}

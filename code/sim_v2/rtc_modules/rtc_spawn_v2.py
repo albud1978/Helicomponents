@@ -62,6 +62,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     RTC_SPAWN_MGR = Template("""
     FLAMEGPU_AGENT_FUNCTION(rtc_spawn_mgr_v2, flamegpu::MessageNone, flamegpu::MessageNone) {
         const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
         
@@ -95,7 +96,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         bpsn_mp[safe_day].exchange(next_psn);
         
         // Логирование как в sim_master
-        if (need > 0u) {
+        if (debug_enabled && need > 0u) {
             printf("  [SPAWN MGR Day %u] need=%u, next_idx=%u->%u, next_acn=%u->%u\\n",
                    day, need, next_idx, next_idx + need, next_acn, next_acn + need);
         }
@@ -120,6 +121,8 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         const unsigned int frames_total = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
         const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
+        const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
+        const unsigned int mp2_enabled = FLAMEGPU->environment.getProperty<unsigned int>("mp2_enabled");
         
         // Читаем из MacroProperty МАССИВОВ
         auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_need_u32");
@@ -174,7 +177,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("repair_days", 0u);
         
         // Логирование начальной наработки (только для первого агента в батче)
-        if (ticket == 0u) {
+        if (debug_enabled && ticket == 0u) {
             printf("  [SPAWN Day %u] Creating %u agents Mi-17: idx %u-%u, acn %u-%u, sne=%u, ppr=%u\\n",
                    day, need, base_idx, base_idx + need - 1u, base_acn, base_acn + need - 1u, sne_initial, ppr_initial);
         }
@@ -218,9 +221,11 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         
         // 11. Запись флага spawn в MacroProperty (детерминированный spawn → serviceable)
         // ВАЖНО: используем фиксированный MAX_FRAMES для согласованности с MP2 Writer/Drain
-        const unsigned int pos = day * ${MAX_FRAMES}u + idx;
-        auto mp2_transition_0_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MP2_SIZE}u>("mp2_transition_0_to_3");
-        mp2_transition_0_to_3[pos].exchange(1u);
+        if (mp2_enabled) {
+            const unsigned int pos = day * ${MAX_FRAMES}u + idx;
+            auto mp2_transition_0_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MP2_SIZE}u>("mp2_transition_0_to_3");
+            mp2_transition_0_to_3[pos].exchange(1u);
+        }
         
         // ops_ticket НЕ устанавливаем (создаётся условно в base_model)
         

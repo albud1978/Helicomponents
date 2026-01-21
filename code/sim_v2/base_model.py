@@ -66,6 +66,12 @@ class V2BaseModel:
         # Фазовый флаг для постпроцессинга MP2
         # 0 = обычная симуляция, 2 = постпроцессинг active_trigger
         self.env.newPropertyUInt("export_phase", 0)
+
+        # Флаг отладочного логирования в RTC (0/1)
+        self.env.newPropertyUInt("debug_enabled", int(env_data.get('debug_enabled', 0)))
+
+        # Флаг включения MP2 (0/1) для RTC-гейтов
+        self.env.newPropertyUInt("mp2_enabled", int(env_data.get('mp2_enabled', 0)))
         
         # Константы нормативов из MP1
         # БЕЗ FALLBACK! Если ключа нет → ошибка

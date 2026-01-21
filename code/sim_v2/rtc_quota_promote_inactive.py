@@ -168,6 +168,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_inactive_approval, flamegpu::MessageNone, flam
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
     
     unsigned int approved = 0u;
     if (group_by == 1u) {{
@@ -189,8 +190,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_inactive_approval, flamegpu::MessageNone, flam
     
     // Логирование
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-    printf("  [PROMOTE P3→2 Day %u] AC %u (group=%u, ppr=%u): line_consumed\\n",
-           day, aircraft_number, group_by, ppr);
+    if (debug_enabled) {{
+        printf("  [PROMOTE P3→2 Day %u] AC %u (group=%u, ppr=%u): line_consumed\\n",
+               day, aircraft_number, group_by, ppr);
+    }}
     
     return flamegpu::ALIVE;
 }}

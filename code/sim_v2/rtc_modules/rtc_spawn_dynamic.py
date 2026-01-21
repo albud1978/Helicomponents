@@ -77,6 +77,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
     RTC_SPAWN_DYNAMIC_MGR = Template("""
     FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr, flamegpu::MessageNone, flamegpu::MessageNone) {
         const unsigned int day = FLAMEGPU->getStepCounter();
+        const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         // ИСПРАВЛЕНИЕ: Разделяем индексы для чтения target и записи параметров
         // target_day = D+1 (читаем целевую квоту на завтра, как в P1/P2/P3)
@@ -135,7 +136,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         const int deficit_signed = static_cast<int>(target_ops) - static_cast<int>(curr) - static_cast<int>(used);
         
         // DEBUG для дней 824-826 (проблемные дни)
-        if (day >= 824u && day <= 826u) {
+        if (debug_enabled && day >= 824u && day <= 826u) {
             printf("[DEBUG Day %u SPAWN] target[%u]=%u, curr=%u, used=%u, deficit=%d\\n", 
                    day, target_day, target_ops, curr, used, deficit_signed);
             
@@ -184,8 +185,10 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
             // Исчерпание резерва!
             if (exhausted_day == 0u) {
                 exhausted_day = day;  // Запоминаем день исчерпания
-                printf("  [SPAWN DYNAMIC WARNING] Day %u: Резерв исчерпан! deficit=%u, available=%u\\n",
-                       day, deficit, available);
+                if (debug_enabled) {
+                    printf("  [SPAWN DYNAMIC WARNING] Day %u: Резерв исчерпан! deficit=%u, available=%u\\n",
+                           day, deficit, available);
+                }
             }
             need = available;  // Создаём только доступные
         }
@@ -208,8 +211,10 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         bpsn_mp[write_day].exchange(next_psn);
         
         // Логирование
-        printf("  [SPAWN DYNAMIC Day %u] deficit=%u, need=%u, next_idx=%u->%u, next_acn=%u->%u\\n",
-               day, deficit, need, next_idx, next_idx + need, next_acn, next_acn + need);
+        if (debug_enabled) {
+            printf("  [SPAWN DYNAMIC Day %u] deficit=%u, need=%u, next_idx=%u->%u, next_acn=%u->%u\\n",
+                   day, deficit, need, next_idx, next_idx + need, next_acn, next_acn + need);
+        }
         
         // Сдвигаем курсоры
         next_idx += need;
@@ -234,6 +239,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
         const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
         const unsigned int ticket = FLAMEGPU->getVariable<unsigned int>("ticket");
+        const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
         
         // Читаем параметры из MacroProperty
         auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_need_u32");
@@ -319,9 +325,11 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 0u);
         
         // Запись флага spawn в MacroProperty (динамический spawn → operations)
-        const unsigned int pos = day * ${MAX_FRAMES}u + new_idx;
-        auto mp2_transition_0_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MP2_SIZE}u>("mp2_transition_0_to_2");
-        mp2_transition_0_to_2[pos].exchange(1u);
+        if (FLAMEGPU->environment.getProperty<unsigned int>("mp2_enabled")) {
+            const unsigned int pos = day * ${MAX_FRAMES}u + new_idx;
+            auto mp2_transition_0_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MP2_SIZE}u>("mp2_transition_0_to_2");
+            mp2_transition_0_to_2[pos].exchange(1u);
+        }
         
         // BI counter
         FLAMEGPU->agent_out.setVariable<unsigned int>("bi_counter", 1u);
@@ -353,7 +361,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("ppr", ppr_with_dt);
         
         // ОТЛАДКА: Детальное логирование созданного агента
-        if (day <= 850u) {
+        if (debug_enabled && day <= 850u) {
             printf("  [SPAWN DYNAMIC TICKET Day %u #%u] СОЗДАН АГЕНТ:\\n", day, ticket);
             printf("    idx=%u, acn=%u, psn=%u, group_by=%u\\n", new_idx, new_acn, base_psn, 2u);
             printf("    sne=%u (+dt=%u), ppr=%u (+dt=%u), cso=%u\\n", sne_with_dt, dt, ppr_with_dt, dt, 0u);

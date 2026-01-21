@@ -51,6 +51,7 @@ RTC_STATE_4_REPAIR = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // Агенты в ремонте
     const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
     
     // Обнуляем daily_today_u32 (нет налёта в repair)
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
@@ -99,8 +100,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
         const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
         const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
         const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
-        printf("  [Step %u] AC %u: intent=2 (operations), repair complete rd=%u/%u, ll=%u, oh=%u, br=%u\\n", 
-               step_day, aircraft_number, repair_days, repair_time, ll, oh, br);
+        if (debug_enabled) {{
+            printf("  [Step %u] AC %u: intent=2 (operations), repair complete rd=%u/%u, ll=%u, oh=%u, br=%u\\n", 
+                   step_day, aircraft_number, repair_days, repair_time, ll, oh, br);
+        }}
 
         // Сбрасываем ppr и repair_days согласно требованию
         FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
