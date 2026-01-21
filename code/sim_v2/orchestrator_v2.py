@@ -26,12 +26,14 @@ except ImportError as e:
 class V2Orchestrator:
     """Оркестратор для управления модульной симуляцией"""
     
-    def __init__(self, env_data: Dict[str, object], enable_mp2: bool = False, 
-                 enable_mp2_postprocess: bool = False, clickhouse_client = None):
+    def __init__(self, env_data: Dict[str, object], enable_mp2: bool = False,
+                 enable_mp2_postprocess: bool = False, clickhouse_client=None,
+                 debug: bool = False):
         self.env_data = env_data
         self.base_model = V2BaseModel()
         self.model = None
         self.simulation = None
+        self.debug = debug
         
         # Параметры из окружения
         self.frames = int(env_data['frames_total_u16'])
@@ -56,7 +58,8 @@ class V2Orchestrator:
         
     def build_model(self, rtc_modules: List[str]):
         """Строит модель с указанными RTC модулями"""
-        print(f"Построение модели с модулями: {', '.join(rtc_modules)}")
+        if self.debug:
+            print(f"Построение модели с модулями: {', '.join(rtc_modules)}")
         
         # Сохраняем список модулей для проверки в create_simulation
         self.modules = rtc_modules
@@ -82,7 +85,12 @@ class V2Orchestrator:
         
         # Подключаем RTC модули
         for module_name in rtc_modules:
-            print(f"  Подключение модуля: {module_name}")
+            if not self.enable_mp2 and module_name == "compute_transitions":
+                if self.debug:
+                    print("  Пропуск compute_transitions (MP2 выключен)")
+                continue
+            if self.debug:
+                print(f"  Подключение модуля: {module_name}")
             self.base_model.add_rtc_module(module_name)
             
             # Отмечаем если подключён спавн
@@ -91,27 +99,33 @@ class V2Orchestrator:
             
         # Добавляем MP2 writer если включен
         if self.enable_mp2:
-            print("  Подключение MP2 device-side export")
+            if self.debug:
+                print("  Подключение MP2 device-side export")
             import rtc_mp2_writer
             # Проверяем, не был ли mp2_writer уже подключен как модуль
             if "mp2_writer" not in rtc_modules:
                 self.mp2_drain_func = rtc_mp2_writer.register_mp2_writer(self.model, self.base_model.agent, self.clickhouse_client)
             else:
-                print("  ⚠️  mp2_writer уже подключен в списке модулей, пропускаем повторное подключение")
+                if self.debug:
+                    print("  ⚠️  mp2_writer уже подключен в списке модулей, пропускаем повторное подключение")
             
             # Transition флаги вычисляются на GPU
-            print("  ✅ Transition флаги вычисляются на GPU (слой compute_transitions → MacroProperty)")
+            if self.debug:
+                print("  ✅ Transition флаги вычисляются на GPU (слой compute_transitions → MacroProperty)")
             
             # Добавляем постпроцессинг active_trigger (если включен)
             if self.enable_mp2_postprocess:
-                print("  Подключение GPU постпроцессинга MP2 (active_trigger → repair history)")
+                if self.debug:
+                    print("  Подключение GPU постпроцессинга MP2 (active_trigger → repair history)")
                 import rtc_mp2_postprocess_active
                 rtc_mp2_postprocess_active.register_mp2_postprocess_active(self.model, self.base_model.agent)
-                print("  ⚠️  Слой mp2_postprocess_active будет активен ТОЛЬКО при export_phase=2")
+                if self.debug:
+                    print("  ⚠️  Слой mp2_postprocess_active будет активен ТОЛЬКО при export_phase=2")
             
             # Создаём финальный MP2 drain который работает только в конце
             if self.enable_mp2:
-                print("  Подключение финального дренажа MP2 (батчи в конце симуляции)")
+                if self.debug:
+                    print("  Подключение финального дренажа MP2 (батчи в конце симуляции)")
                 from mp2_drain_host import MP2DrainHostFunction
                 # interval_days=0 (по умолчанию) означает дренаж ТОЛЬКО в конце
                 self.mp2_drain_func = MP2DrainHostFunction(
@@ -160,7 +174,8 @@ class V2Orchestrator:
         if 'spawn_dynamic' in self.modules:
             from rtc_modules import rtc_spawn_dynamic
             rtc_spawn_dynamic.init_population(self.simulation, self.model, self.env_data)
-            print("  ✅ Динамический spawn инициализирован")
+            if self.debug:
+                print("  ✅ Динамический spawn инициализирован")
         
         # Инициализируем телеметрию (по умолчанию включена)
         self.telemetry = TelemetryCollector(
@@ -175,7 +190,8 @@ class V2Orchestrator:
     
     def _init_repair_number_buffer(self):
         """Инициализирует MacroProperty repair_number_by_idx для quota_repair"""
-        print("  Инициализация repair_number_by_idx для quota_repair...")
+        if self.debug:
+            print("  Инициализация repair_number_by_idx для quota_repair...")
 
         # Подготавливаем данные: для каждого frame_idx получаем repair_number
         mp1_index = self.env_data.get('mp1_index', {})
@@ -192,15 +208,16 @@ class V2Orchestrator:
         glider_count_mp3 = sum(1 for gb in mp3_group_by if gb == 1 or gb == 2)
         unique_gb = set(mp3_group_by) if mp3_group_by else set()
         
-        print(f"  📋 Диагностика входных данных:")
-        print(f"     - mp1_index size: {len(mp1_index)}")
-        print(f"     - mp1_repair_number size: {len(mp1_repair_number)}")
-        print(f"     - mp3_partseqno size: {len(mp3_partseqno)}")
-        print(f"     - mp3_group_by size: {len(mp3_group_by)}")
-        print(f"     - frames_index size: {len(frames_index)}")
-        print(f"     - Планеров в MP3 (group_by=1,2): {glider_count_mp3}")
-        print(f"     - Уникальные group_by в MP3: {sorted(unique_gb)}")
-        print(f"     - frames_total: {frames_total}")
+        if self.debug:
+            print(f"  📋 Диагностика входных данных:")
+            print(f"     - mp1_index size: {len(mp1_index)}")
+            print(f"     - mp1_repair_number size: {len(mp1_repair_number)}")
+            print(f"     - mp3_partseqno size: {len(mp3_partseqno)}")
+            print(f"     - mp3_group_by size: {len(mp3_group_by)}")
+            print(f"     - frames_index size: {len(frames_index)}")
+            print(f"     - Планеров в MP3 (group_by=1,2): {glider_count_mp3}")
+            print(f"     - Уникальные group_by в MP3: {sorted(unique_gb)}")
+            print(f"     - frames_total: {frames_total}")
         
         # Строим маппинг frame_idx → partseqno_i для планеров
         frame_to_partseqno = {}
@@ -214,14 +231,17 @@ class V2Orchestrator:
                         partseqno = mp3_partseqno[j] if j < len(mp3_partseqno) else 0
                         frame_to_partseqno[frame_idx] = partseqno
         
-        print(f"     - Построен маппинг frame_idx → partseqno для {len(frame_to_partseqno)} планеров")
+        if self.debug:
+            print(f"     - Построен маппинг frame_idx → partseqno для {len(frame_to_partseqno)} планеров")
         
         # Проверка ненулевых значений в mp1_repair_number
         non_zero_in_mp1 = sum(1 for x in mp1_repair_number if x > 0 and x != 255)
-        print(f"     - mp1_repair_number с значениями > 0 (не 255): {non_zero_in_mp1}")
+        if self.debug:
+            print(f"     - mp1_repair_number с значениями > 0 (не 255): {non_zero_in_mp1}")
         if non_zero_in_mp1 > 0:
             unique_rn = set(x for x in mp1_repair_number if x > 0 and x != 255)
-            print(f"     - Уникальные repair_number: {sorted(unique_rn)}")
+            if self.debug:
+                print(f"     - Уникальные repair_number: {sorted(unique_rn)}")
             # Покажем первые 10 partseqno с repair_number > 0
             partseqno_list = list(mp1_index.keys())
             sample = []
@@ -234,9 +254,10 @@ class V2Orchestrator:
                         if len(sample) >= 10:
                             break
             if sample:
-                print(f"     - Образцы (partseqno, pidx, repair_number):")
-                for psn, pidx, rn in sample:
-                    print(f"         partseqno={psn}, pidx={pidx}, repair_number={rn}")
+                if self.debug:
+                    print(f"     - Образцы (partseqno, pidx, repair_number):")
+                    for psn, pidx, rn in sample:
+                        print(f"         partseqno={psn}, pidx={pidx}, repair_number={rn}")
         
         # Создаём массив repair_number по idx (frame_idx)
         repair_number_by_idx = []
@@ -274,21 +295,24 @@ class V2Orchestrator:
                 # Будущий слот для spawn или не найдено
                 repair_number_by_idx.append(0)
         
-        print(f"  📊 Статистика repair_number:")
-        print(f"     - Агентов с repair_number > 0: {non_zero_count}/{frames_total}")
-        print(f"     - Уникальные значения: {sorted(repair_numbers_found)}")
-        print(f"     - Агентов БЕЗ соответствия в mp1_index: {missing_count}/{frames_total}")
+        if self.debug:
+            print(f"  📊 Статистика repair_number:")
+            print(f"     - Агентов с repair_number > 0: {non_zero_count}/{frames_total}")
+            print(f"     - Уникальные значения: {sorted(repair_numbers_found)}")
+            print(f"     - Агентов БЕЗ соответствия в mp1_index: {missing_count}/{frames_total}")
         if sample_mismatches:
-            print(f"     - Образцы несоответствий (frame_idx, partseqno, pidx):")
-            for fi, psn, pi in sample_mismatches[:5]:
-                print(f"         frame_idx={fi}, partseqno={psn}, pidx={pi} (НЕ найден в mp1_index)")
+            if self.debug:
+                print(f"     - Образцы несоответствий (frame_idx, partseqno, pidx):")
+                for fi, psn, pi in sample_mismatches[:5]:
+                    print(f"         frame_idx={fi}, partseqno={psn}, pidx={pi} (НЕ найден в mp1_index)")
         
         # Показываем планеры
-        print(f"     - Количество планеров в выборке: {len(glider_samples)}")
-        if glider_samples:
-            print(f"     - Образцы ПЛАНЕРОВ (frame_idx, partseqno, pidx, rn_raw, rn_final):")
-            for fi, psn, pi, rn_raw, rn_final in glider_samples:
-                print(f"         frame={fi}, psn={psn}, pidx={pi}, rn={rn_raw}, final={rn_final}")
+        if self.debug:
+            print(f"     - Количество планеров в выборке: {len(glider_samples)}")
+            if glider_samples:
+                print(f"     - Образцы ПЛАНЕРОВ (frame_idx, partseqno, pidx, rn_raw, rn_final):")
+                for fi, psn, pi, rn_raw, rn_final in glider_samples:
+                    print(f"         frame={fi}, psn={psn}, pidx={pi}, rn={rn_raw}, final={rn_final}")
         
         # Создаём HostFunction для инициализации
         class HF_InitRepairNumber(fg.HostFunction):
@@ -312,7 +336,8 @@ class V2Orchestrator:
         init_layer = self.model.newLayer()
         init_layer.addHostFunction(hf)
         
-        print(f"  ✅ repair_number_by_idx инициализирован ({len(repair_number_by_idx)} элементов)")
+        if self.debug:
+            print(f"  ✅ repair_number_by_idx инициализирован ({len(repair_number_by_idx)} элементов)")
     
     def _populate_agents(self):
         """Загружает агентов через AgentPopulationBuilder (делегирование)"""
@@ -349,13 +374,13 @@ class V2Orchestrator:
                 self.simulation.step()
             
             # Логирование spawn каждые 50 шагов
-            if self.spawn_enabled and step > 0 and step % 50 == 0:
+            if self.debug and self.spawn_enabled and step > 0 and step % 50 == 0:
                 serv_pop = fg.AgentVector(self.base_model.agent)
                 self.simulation.getPopulationData(serv_pop, 'serviceable')
                 print(f"  [Day {step}] serviceable={len(serv_pop)}")
             
             # ОТЛАДКА: Логирование после динамического spawn (выключено по умолчанию)
-            if debug_spawn and step == debug_spawn_day:
+            if self.debug and debug_spawn and step == debug_spawn_day:
                 print("\n" + "="*60)
                 print(f"ОТЛАДКА: Проверка агентов после динамического spawn (день {debug_spawn_day})")
                 print("="*60)
@@ -381,7 +406,8 @@ class V2Orchestrator:
         # GPU ПОСТПРОЦЕССИНГ MP2 (если включен)
         # ═══════════════════════════════════════════════════════════════════════════
         if self.enable_mp2_postprocess:
-            print("  🔄 Запуск GPU постпроцессинга MP2 (active_trigger → repair history)...")
+            if self.debug:
+                print("  🔄 Запуск GPU постпроцессинга MP2 (active_trigger → repair history)...")
             import time
             t_post_start = time.perf_counter()
             
@@ -396,11 +422,13 @@ class V2Orchestrator:
             self.simulation.setEnvironmentPropertyUInt("export_phase", 0)
             
             t_post = time.perf_counter() - t_post_start
-            print(f"  ✅ Постпроцессинг завершён за {t_post:.2f}с")
+            if self.debug:
+                print(f"  ✅ Постпроцессинг завершён за {t_post:.2f}с")
             
             # Теперь выполняем финальный дренаж вручную (ещё один шаг с export_phase=0)
             # Этот шаг сработает на mp2_final_drain т.к. step == simulation_steps - 1
-            print("  📤 Финальный дренаж MP2 после постпроцессинга...")
+            if self.debug:
+                print("  📤 Финальный дренаж MP2 после постпроцессинга...")
             self.simulation.step()
         
         # ═══════════════════════════════════════════════════════════════════════════
@@ -491,8 +519,14 @@ class V2Orchestrator:
         # Отладочная информация о пропущенных слотах
         actual_count = len(results)
         expected_count = self.env_data.get('first_reserved_idx', self.frames)
-        if actual_count != expected_count:
-            print(f"  Внимание: создано {actual_count} агентов из {expected_count} ожидаемых (без учета {self.frames - expected_count} зарезервированных слотов)")
+        reserved_slots = self.frames - expected_count
+        spawned_extra = actual_count - expected_count
+        if actual_count < expected_count:
+            print(f"  ⚠️  Меньше базового состава: {actual_count} из {expected_count} (зарезервировано {reserved_slots})")
+        elif actual_count > self.frames:
+            print(f"  ⚠️  Превышение лимита: {actual_count} > {self.frames} (база {expected_count}, зарезервировано {reserved_slots})")
+        elif spawned_extra > 0:
+            print(f"  ℹ️  Добавлены спавном: +{spawned_extra} (база {expected_count}, зарезервировано {reserved_slots}, всего {actual_count})")
         
         return results
 
@@ -537,6 +571,8 @@ def main():
                       help='Интервал дренажа MP2 (шаги). 0 = только финальный дренаж')
     parser.add_argument('--drop-table', action='store_true',
                       help='Перед запуском дропнуть таблицу sim_masterv2 (DROP TABLE IF EXISTS)')
+    parser.add_argument('--debug', action='store_true',
+                      help='Включить подробное логирование (включая RTC printf)')
     args = parser.parse_args()
     
     # Начало общего времени
@@ -587,6 +623,8 @@ def main():
             raise
 
     env_data = prepare_env_arrays(client, version_date)
+    env_data['debug_enabled'] = 1 if args.debug else 0
+    env_data['mp2_enabled'] = 1 if args.enable_mp2 else 0
     t_data_load = time.perf_counter() - t_data_start
     print(f"  Данные загружены за {t_data_load:.2f}с")
     
@@ -594,7 +632,8 @@ def main():
     orchestrator = V2Orchestrator(env_data, 
                                   enable_mp2=args.enable_mp2,
                                   enable_mp2_postprocess=args.enable_mp2_postprocess,
-                                  clickhouse_client=client if args.enable_mp2 else None)
+                                  clickhouse_client=client if args.enable_mp2 else None,
+                                  debug=args.debug)
     
     # Строим модель с указанными модулями
     orchestrator.build_model(args.modules)

@@ -42,6 +42,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->getStepCounter();
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = ((day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u));
     
@@ -128,7 +129,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
         }}
         
         // Диагностика
-        if (day == 180u || day == 181u || day == 182u) {{
+        if (debug_enabled && (day == 180u || day == 181u || day == 182u)) {{
             const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
             const unsigned int mfg = FLAMEGPU->getVariable<unsigned int>("mfg_date");
             printf("  [DEMOUNT Day %u] AC %u: rank=%u/%u (idx=%u, mfg=%u, balance=%d)\\n", 

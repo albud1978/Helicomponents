@@ -36,11 +36,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_4_to_2, flamegpu::MessageNone, flamegpu::Messa
     const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
     
     // Логирование перехода (4→5) с типом вертолёта
     const char* type = (group_by == 1u) ? "Mi-8" : (group_by == 2u) ? "Mi-17" : "Unknown";
-    printf("  [TRANSITION 4→2 Day %u] AC %u (idx %u, %s): repair -> operations, repair_days=%u/%u\\n", 
-           step_day, aircraft_number, idx, type, repair_days, repair_time);
+    if (debug_enabled) {
+        printf("  [TRANSITION 4→2 Day %u] AC %u (idx %u, %s): repair -> operations, repair_days=%u/%u\\n", 
+               step_day, aircraft_number, idx, type, repair_days, repair_time);
+    }
     
     // Сбрасываем счетчики при переходе в operations
     FLAMEGPU->setVariable<unsigned int>("repair_days", 0u);
