@@ -9,8 +9,8 @@
 - RepairLine — общий пул линий, используется только в квотировании (P2/P3), не в scheduler.
 - QM берёт free_days/acn напрямую из MacroProperty (`repair_line_free_days_mp`, `repair_line_acn_mp`) после pre‑quota sync.
 - QM пишет debug по ops/target/quota_left (Mi‑8/Mi‑17) в `sim_quota_mgr_v8` для диагностики спавна.
-- QuotaDecision в V8 отправляется через MessageArray (`QuotaDecisionArray`) по индексу агента.
-- Ограничение FLAME GPU: один агент‑отправитель может выдать только одно решение за шаг; это ограничивает P2/P3 в message‑only схеме (макс. 1 решение/шаг).
+- QuotaManager в V8 использует MessageBucket (`QuotaBucket`) и рассылает один broadcast‑пакет с квотами.
+- P1/P2/P3 решаются агентами по rank (youngest first) на основе MacroProperty‑буферов готовности.
 - Спавн использует `qm_ops_mp` и commit‑флаги P1/P2/P3 (по факту переходов).
 - P2/P3: условия `day >= repair_time`, `repair_days == 0`, линия с `free_days >= repair_time` и `aircraft_number == 0` (+ защита от повтора acn в соседние дни).
 - `repair_days` декрементируется только в `unserviceable`; для `inactive` всегда 0 и не участвует в шаге.
