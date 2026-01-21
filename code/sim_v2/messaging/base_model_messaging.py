@@ -123,6 +123,16 @@ class V2BaseModelMessaging:
         self.msg_quota_decision_array.newVariableUInt8("action")       # 0=none, 1=demote, 2=P1, 3=P2, 4=P3
         self.msg_quota_decision_array.newVariableUInt8("group_by")     # Для фильтрации
         self.msg_quota_decision_array.newVariableUInt("line_id")       # Для P2/P3
+        
+        # Message "QuotaBucket": QuotaManager → Планеры (broadcast, MessageBucket)
+        self.msg_quota_bucket = self.model.newMessageBucket("QuotaBucket")
+        self.msg_quota_bucket.setBounds(0, 1)  # один bucket (key=0)
+        self.msg_quota_bucket.newVariableUInt("promote_p1_mi8")
+        self.msg_quota_bucket.newVariableUInt("promote_p1_mi17")
+        self.msg_quota_bucket.newVariableUInt("promote_p2_total")
+        self.msg_quota_bucket.newVariableUInt("promote_p3_total")
+        self.msg_quota_bucket.newVariableUInt("deficit_mi8")
+        self.msg_quota_bucket.newVariableUInt("deficit_mi17")
 
         # ═══════════════════════════════════════════════════════════════
         # Message "RepairLineStatus": RepairLine → QuotaManager (addressed)
@@ -132,7 +142,7 @@ class V2BaseModelMessaging:
         self.msg_repair_line_status.newVariableUInt("free_days")
         self.msg_repair_line_status.newVariableUInt("aircraft_number")
         
-        print("  ✅ Messages: PlanerReport, PlanerEvent, QuotaDecision, RepairLineStatus")
+        print("  ✅ Messages: PlanerReport, PlanerEvent, QuotaDecision, QuotaBucket, RepairLineStatus")
     
     def _setup_quota_agent(self) -> fg.AgentDescription:
         """Настройка агента QuotaManager"""

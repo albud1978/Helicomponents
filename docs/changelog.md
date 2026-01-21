@@ -1,3 +1,10 @@
+## [21-01-2026] - ⚙️ LIMITER V8: MessageBucket квоты
+
+### Изменения
+- V8 квоты: переход на MessageBucket (`QuotaBucket`) с broadcast‑квотами и rank‑выбором P1/P2/P3.
+- V8: ранжирование по idx выполняется агентами, QM отправляет только квоты.
+
+---
 ## [19-01-2026] - ⚙️ LIMITER V8: adaptive GPU-only
 
 ### Изменения
