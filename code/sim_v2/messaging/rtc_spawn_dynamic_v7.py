@@ -34,8 +34,13 @@ RTC_SPAWN_DYNAMIC_MGR_V7 = Template("""
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    const unsigned int target_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-    const unsigned int write_day = target_day;
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    unsigned int step_days = mp_result[0];
+    if (step_days == 0u) step_days = 1u;
+    unsigned int safe_day = day + step_days;
+    if (safe_day >= days_total) safe_day = (days_total > 0u ? days_total - 1u : 0u);
+    const unsigned int target_day = safe_day;
+    const unsigned int write_day = safe_day;
     
     // Условие активации: day >= repair_time
     const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
@@ -201,72 +206,165 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v8, flamegpu::MessageNone, flamegp
         return flamegpu::ALIVE;
     }
     
-    // Целевое значение из MP4 (текущий день)
-    const unsigned int target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
-    auto qm_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("qm_ops_mp");
-    const unsigned int curr_ops = qm_ops[1];
-    
-    // Коммиты P1/P2/P3
-    auto p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve_s3");
-    auto p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve");
-    auto p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve_s1");
-    unsigned int used = 0u;
+    // Целевые значения из MP4 (текущий день)
+    const unsigned int target_mi8 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", target_day);
+    const unsigned int target_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
+    // Используем пересчитанные ops после post-квотных переходов
+    auto ops_mi8 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi8_ops_count");
+    auto ops_mi17 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_ops_count");
+    unsigned int curr_ops_mi8 = 0u;
+    unsigned int curr_ops_mi17 = 0u;
     for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
-        used += p1[i];
-        used += p2[i];
-        used += p3[i];
+        curr_ops_mi8 += ops_mi8[i];
+        curr_ops_mi17 += ops_mi17[i];
     }
     
-    unsigned int deficit = 0u;
-    if (target > curr_ops + used) {
-        deficit = target - curr_ops - used;
+    // Коммиты P1/P2/P3 (фактические переходы)
+    auto mi8_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi8_commit_p1");
+    auto mi8_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi8_commit_p2");
+    auto mi8_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi8_commit_p3");
+    auto mi17_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_commit_p1");
+    auto mi17_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_commit_p2");
+    auto mi17_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_commit_p3");
+    unsigned int used_mi8 = 0u;
+    unsigned int used_mi17 = 0u;
+    for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
+        used_mi8 += mi8_p1[i];
+        used_mi8 += mi8_p2[i];
+        used_mi8 += mi8_p3[i];
+        used_mi17 += mi17_p1[i];
+        used_mi17 += mi17_p2[i];
+        used_mi17 += mi17_p3[i];
     }
     
-    FLAMEGPU->setVariable<unsigned int>("debug_curr_ops", curr_ops);
-    FLAMEGPU->setVariable<unsigned int>("debug_target", target);
-    FLAMEGPU->setVariable<unsigned int>("debug_need", deficit);
-    
-    if (deficit == 0u) {
-        return flamegpu::ALIVE;
+    unsigned int deficit_mi8 = 0u;
+    unsigned int deficit_mi17 = 0u;
+    if (target_mi8 > curr_ops_mi8 + used_mi8) {
+        deficit_mi8 = target_mi8 - curr_ops_mi8 - used_mi8;
+    }
+    if (target_mi17 > curr_ops_mi17 + used_mi17) {
+        deficit_mi17 = target_mi17 - curr_ops_mi17 - used_mi17;
     }
     
-    // Курсоры
-    unsigned int next_idx = FLAMEGPU->getVariable<unsigned int>("next_idx");
-    unsigned int next_acn = FLAMEGPU->getVariable<unsigned int>("next_acn");
-    unsigned int total_spawned = FLAMEGPU->getVariable<unsigned int>("total_spawned");
-    const unsigned int dynamic_reserve = FLAMEGPU->environment.getProperty<unsigned int>("dynamic_reserve_mi17");
+    FLAMEGPU->setVariable<unsigned int>("debug_curr_ops", curr_ops_mi17);
+    FLAMEGPU->setVariable<unsigned int>("debug_target", target_mi17);
+    FLAMEGPU->setVariable<unsigned int>("debug_need", deficit_mi17);
+    FLAMEGPU->setVariable<unsigned int>("debug_curr_ops_mi8", curr_ops_mi8);
+    FLAMEGPU->setVariable<unsigned int>("debug_target_mi8", target_mi8);
+    FLAMEGPU->setVariable<unsigned int>("debug_need_mi8", deficit_mi8);
     
-    unsigned int available = (total_spawned < dynamic_reserve) ? (dynamic_reserve - total_spawned) : 0u;
-    unsigned int need = (deficit < available) ? deficit : available;
+    const unsigned int repair_time_mi8 = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
+    const unsigned int repair_time_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+    if (day < repair_time_mi8) deficit_mi8 = 0u;
+    if (day < repair_time_mi17) deficit_mi17 = 0u;
     
-    if (need == 0u) {
-        return flamegpu::ALIVE;
+    // Курсоры Mi-17
+    unsigned int next_idx_17 = FLAMEGPU->getVariable<unsigned int>("next_idx_mi17");
+    unsigned int next_acn_17 = FLAMEGPU->getVariable<unsigned int>("next_acn_mi17");
+    unsigned int total_spawned_17 = FLAMEGPU->getVariable<unsigned int>("total_spawned_mi17");
+    const unsigned int dynamic_reserve_17 = FLAMEGPU->environment.getProperty<unsigned int>("dynamic_reserve_mi17");
+    unsigned int available_17 = (total_spawned_17 < dynamic_reserve_17) ? (dynamic_reserve_17 - total_spawned_17) : 0u;
+    unsigned int need_17 = (deficit_mi17 < available_17) ? deficit_mi17 : available_17;
+    
+    if (need_17 > 0u) {
+        auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_need");
+        auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_idx");
+        auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_acn");
+        
+        need_mp[write_day].exchange(need_17);
+        bidx_mp[write_day].exchange(next_idx_17);
+        bacn_mp[write_day].exchange(next_acn_17);
+        
+        FLAMEGPU->setVariable<unsigned int>("next_idx_mi17", next_idx_17 + need_17);
+        FLAMEGPU->setVariable<unsigned int>("next_acn_mi17", next_acn_17 + need_17);
+        FLAMEGPU->setVariable<unsigned int>("total_spawned_mi17", total_spawned_17 + need_17);
     }
     
-    auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_need");
-    auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_idx");
-    auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_acn");
+    // Курсоры Mi-8
+    unsigned int next_idx_8 = FLAMEGPU->getVariable<unsigned int>("next_idx_mi8");
+    unsigned int next_acn_8 = FLAMEGPU->getVariable<unsigned int>("next_acn_mi8");
+    unsigned int total_spawned_8 = FLAMEGPU->getVariable<unsigned int>("total_spawned_mi8");
+    const unsigned int dynamic_reserve_8 = FLAMEGPU->environment.getProperty<unsigned int>("dynamic_reserve_mi8");
+    unsigned int available_8 = (total_spawned_8 < dynamic_reserve_8) ? (dynamic_reserve_8 - total_spawned_8) : 0u;
+    unsigned int need_8 = (deficit_mi8 < available_8) ? deficit_mi8 : available_8;
     
-    need_mp[write_day].exchange(need);
-    bidx_mp[write_day].exchange(next_idx);
-    bacn_mp[write_day].exchange(next_acn);
-    
-    FLAMEGPU->setVariable<unsigned int>("next_idx", next_idx + need);
-    FLAMEGPU->setVariable<unsigned int>("next_acn", next_acn + need);
-    FLAMEGPU->setVariable<unsigned int>("total_spawned", total_spawned + need);
+    if (need_8 > 0u) {
+        auto need_mp_8 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_need_mi8");
+        auto bidx_mp_8 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_idx_mi8");
+        auto bacn_mp_8 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_acn_mi8");
+        
+        need_mp_8[write_day].exchange(need_8);
+        bidx_mp_8[write_day].exchange(next_idx_8);
+        bacn_mp_8[write_day].exchange(next_acn_8);
+        
+        FLAMEGPU->setVariable<unsigned int>("next_idx_mi8", next_idx_8 + need_8);
+        FLAMEGPU->setVariable<unsigned int>("next_acn_mi8", next_acn_8 + need_8);
+        FLAMEGPU->setVariable<unsigned int>("total_spawned_mi8", total_spawned_8 + need_8);
+    }
     
     return flamegpu::ALIVE;
 }
 """).substitute(MAX_FRAMES=RTC_MAX_FRAMES, MAX_DAYS=MAX_DAYS)
 
+RTC_SPAWN_DYNAMIC_TICKET_V8_MI8 = Template("""
+FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8_mi8, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
+    const unsigned int ticket = FLAMEGPU->getVariable<unsigned int>("ticket");
+    
+    // Читаем параметры
+    auto need_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_need_mi8");
+    auto bidx_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_idx_mi8");
+    auto bacn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_dynamic_base_acn_mi8");
+    
+    const unsigned int need = need_mp[safe_day];
+    const unsigned int base_idx = bidx_mp[safe_day];
+    const unsigned int base_acn = bacn_mp[safe_day];
+    
+    if (ticket >= need) {
+        return flamegpu::ALIVE;
+    }
+    
+    // Создаём нового агента
+    const unsigned int new_idx = base_idx + ticket;
+    const unsigned int new_acn = base_acn + ticket;
+    
+    // Нормативы Mi-8
+    const unsigned int ll = FLAMEGPU->environment.getProperty<unsigned int>("mi8_ll_const");
+    const unsigned int oh = FLAMEGPU->environment.getProperty<unsigned int>("mi8_oh_const");
+    const unsigned int br = FLAMEGPU->environment.getProperty<unsigned int>("mi8_br_const");
+    const unsigned int repair_time = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
+    
+    // Начальная наработка (новый вертолёт)
+    const unsigned int sne = 0u;
+    const unsigned int ppr = 0u;
+    
+    // Создаём агента (state=operations)
+    FLAMEGPU->agent_out.setVariable<unsigned int>("idx", new_idx);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("aircraft_number", new_acn);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("group_by", 1u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("sne", sne);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("ppr", ppr);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("ll", ll);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("oh", oh);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("br", br);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_time", repair_time);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_days", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("status_change_day", day);
+    
+    FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 1u);
+    FLAMEGPU->agent_out.setVariable<unsigned short>("limiter", 0u);
+    
+    return flamegpu::ALIVE;
+}
+""").substitute(MAX_DAYS=MAX_DAYS)
+
 RTC_SPAWN_DYNAMIC_TICKET_V7 = Template("""
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
-    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
-    unsigned int step_days = mp_result[0];
-    if (step_days == 0u) step_days = 1u;
-    const unsigned int safe_day = ((day + step_days) < days_total ? (day + step_days) : (days_total > 0u ? days_total - 1u : 0u));
+    const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
     const unsigned int ticket = FLAMEGPU->getVariable<unsigned int>("ticket");
     
     // Читаем параметры
@@ -430,52 +528,79 @@ def register_spawn_dynamic_v8(model: fg.ModelDescription, heli_agent: fg.AgentDe
     
     first_dynamic_idx = env_data.get('first_dynamic_idx', 340)
     dynamic_reserve_mi17 = env_data.get('dynamic_reserve_mi17', 50)
-    base_acn_spawn = env_data.get('base_acn_spawn', 100000)
+    dynamic_reserve_mi8 = env_data.get('dynamic_reserve_mi8', 8)
+    first_dynamic_idx_mi17 = env_data.get('first_dynamic_idx_mi17', first_dynamic_idx)
+    first_dynamic_idx_mi8 = env_data.get('first_dynamic_idx_mi8', first_dynamic_idx_mi17 + dynamic_reserve_mi17)
+    base_acn_spawn_mi17 = env_data.get('base_acn_spawn_mi17', env_data.get('base_acn_spawn', 100000))
+    base_acn_spawn_mi8 = env_data.get('base_acn_spawn_mi8', base_acn_spawn_mi17 + dynamic_reserve_mi17)
     
     env.newPropertyUInt("first_dynamic_idx", first_dynamic_idx)
     env.newPropertyUInt("dynamic_reserve_mi17", dynamic_reserve_mi17)
+    env.newPropertyUInt("dynamic_reserve_mi8", dynamic_reserve_mi8)
     
     env.newMacroPropertyUInt("spawn_dynamic_need", MAX_DAYS)
     env.newMacroPropertyUInt("spawn_dynamic_base_idx", MAX_DAYS)
     env.newMacroPropertyUInt("spawn_dynamic_base_acn", MAX_DAYS)
+    env.newMacroPropertyUInt("spawn_dynamic_need_mi8", MAX_DAYS)
+    env.newMacroPropertyUInt("spawn_dynamic_base_idx_mi8", MAX_DAYS)
+    env.newMacroPropertyUInt("spawn_dynamic_base_acn_mi8", MAX_DAYS)
     
     spawn_mgr = model.newAgent("SpawnDynamicMgr")
     spawn_mgr.newState("default")
-    spawn_mgr.newVariableUInt("next_idx", first_dynamic_idx)
-    spawn_mgr.newVariableUInt("next_acn", base_acn_spawn)
-    spawn_mgr.newVariableUInt("total_spawned", 0)
+    spawn_mgr.newVariableUInt("next_idx_mi17", first_dynamic_idx_mi17)
+    spawn_mgr.newVariableUInt("next_acn_mi17", base_acn_spawn_mi17)
+    spawn_mgr.newVariableUInt("total_spawned_mi17", 0)
+    spawn_mgr.newVariableUInt("next_idx_mi8", first_dynamic_idx_mi8)
+    spawn_mgr.newVariableUInt("next_acn_mi8", base_acn_spawn_mi8)
+    spawn_mgr.newVariableUInt("total_spawned_mi8", 0)
     spawn_mgr.newVariableUInt("debug_curr_ops", 0)
     spawn_mgr.newVariableUInt("debug_target", 0)
     spawn_mgr.newVariableUInt("debug_need", 0)
+    spawn_mgr.newVariableUInt("debug_curr_ops_mi8", 0)
+    spawn_mgr.newVariableUInt("debug_target_mi8", 0)
+    spawn_mgr.newVariableUInt("debug_need_mi8", 0)
     
     spawn_ticket = model.newAgent("SpawnDynamicTicket")
     spawn_ticket.newState("default")
     spawn_ticket.newVariableUInt("ticket", 0)
+    spawn_ticket_mi8 = model.newAgent("SpawnDynamicTicketMi8")
+    spawn_ticket_mi8.newState("default")
+    spawn_ticket_mi8.newVariableUInt("ticket", 0)
     
     mgr_fn = spawn_mgr.newRTCFunction("rtc_spawn_dynamic_mgr_v8", RTC_SPAWN_DYNAMIC_MGR_V8)
     mgr_fn.setInitialState("default")
     mgr_fn.setEndState("default")
     
     ticket_fn = spawn_ticket.newRTCFunction("rtc_spawn_dynamic_ticket_v8", RTC_SPAWN_DYNAMIC_TICKET_V8)
+    ticket_fn_mi8 = spawn_ticket_mi8.newRTCFunction("rtc_spawn_dynamic_ticket_v8_mi8", RTC_SPAWN_DYNAMIC_TICKET_V8_MI8)
     ticket_fn.setAgentOutput(heli_agent, "operations")
     ticket_fn.setInitialState("default")
     ticket_fn.setEndState("default")
+    ticket_fn_mi8.setAgentOutput(heli_agent, "operations")
+    ticket_fn_mi8.setInitialState("default")
+    ticket_fn_mi8.setEndState("default")
     
     layer_mgr = model.newLayer("v8_spawn_dynamic_mgr")
     layer_mgr.addAgentFunction(mgr_fn)
     
     layer_ticket = model.newLayer("v8_spawn_dynamic_ticket")
     layer_ticket.addAgentFunction(ticket_fn)
+    layer_ticket_mi8 = model.newLayer("v8_spawn_dynamic_ticket_mi8")
+    layer_ticket_mi8.addAgentFunction(ticket_fn_mi8)
     
-    print(f"  ✅ Менеджер: first_idx={first_dynamic_idx}, reserve={dynamic_reserve_mi17}")
-    print(f"  ✅ Слои: v8_spawn_dynamic_mgr, v8_spawn_dynamic_ticket")
+    print(f"  ✅ Менеджер: first_idx_mi17={first_dynamic_idx_mi17}, reserve_mi17={dynamic_reserve_mi17}, reserve_mi8={dynamic_reserve_mi8}")
+    print(f"  ✅ Слои: v8_spawn_dynamic_mgr, v8_spawn_dynamic_ticket, v8_spawn_dynamic_ticket_mi8")
     
     return {
         'mgr_agent': spawn_mgr,
         'ticket_agent': spawn_ticket,
         'first_dynamic_idx': first_dynamic_idx,
-        'dynamic_reserve': dynamic_reserve_mi17,
-        'base_acn': base_acn_spawn
+        'first_dynamic_idx_mi17': first_dynamic_idx_mi17,
+        'first_dynamic_idx_mi8': first_dynamic_idx_mi8,
+        'dynamic_reserve_mi17': dynamic_reserve_mi17,
+        'dynamic_reserve_mi8': dynamic_reserve_mi8,
+        'base_acn_mi17': base_acn_spawn_mi17,
+        'base_acn_mi8': base_acn_spawn_mi8
     }
 
 
@@ -499,4 +624,40 @@ def init_spawn_dynamic_population_v7(simulation: fg.CUDASimulation, model: fg.Mo
     simulation.setPopulationData(ticket_pop, "default")
     
     print(f"  ✅ Spawn популяция: mgr next_idx={first_dynamic_idx}, тикетов={dynamic_reserve}")
+
+
+def init_spawn_dynamic_population_v8(simulation: fg.CUDASimulation, model: fg.ModelDescription,
+                                     first_dynamic_idx_mi17: int, dynamic_reserve_mi17: int, base_acn_mi17: int,
+                                     first_dynamic_idx_mi8: int, dynamic_reserve_mi8: int, base_acn_mi8: int):
+    """Инициализация популяции агентов спавна (V8: Mi-17 + Mi-8)."""
+    
+    # Менеджер (1 агент)
+    mgr_pop = fg.AgentVector(model.getAgent("SpawnDynamicMgr"))
+    mgr_pop.push_back()
+    mgr_pop[0].setVariableUInt("next_idx_mi17", first_dynamic_idx_mi17)
+    mgr_pop[0].setVariableUInt("next_acn_mi17", base_acn_mi17)
+    mgr_pop[0].setVariableUInt("total_spawned_mi17", 0)
+    mgr_pop[0].setVariableUInt("next_idx_mi8", first_dynamic_idx_mi8)
+    mgr_pop[0].setVariableUInt("next_acn_mi8", base_acn_mi8)
+    mgr_pop[0].setVariableUInt("total_spawned_mi8", 0)
+    simulation.setPopulationData(mgr_pop, "default")
+    
+    # Тикеты Mi-17
+    ticket_pop = fg.AgentVector(model.getAgent("SpawnDynamicTicket"))
+    for i in range(dynamic_reserve_mi17):
+        ticket_pop.push_back()
+        ticket_pop[i].setVariableUInt("ticket", i)
+    simulation.setPopulationData(ticket_pop, "default")
+    
+    # Тикеты Mi-8
+    ticket_pop_mi8 = fg.AgentVector(model.getAgent("SpawnDynamicTicketMi8"))
+    for i in range(dynamic_reserve_mi8):
+        ticket_pop_mi8.push_back()
+        ticket_pop_mi8[i].setVariableUInt("ticket", i)
+    simulation.setPopulationData(ticket_pop_mi8, "default")
+    
+    print(
+        f"  ✅ Spawn популяция: mi17_idx={first_dynamic_idx_mi17}, mi17_tickets={dynamic_reserve_mi17}, "
+        f"mi8_idx={first_dynamic_idx_mi8}, mi8_tickets={dynamic_reserve_mi8}"
+    )
 
