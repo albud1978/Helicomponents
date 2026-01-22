@@ -256,7 +256,11 @@ class IncrementsValidator:
             'summary': {}
         }
         
-        # Для каждого борта считаем сумму dt и изменение sne
+        # Для каждого борта считаем сумму dt и изменение sne.
+        # ВАЖНО: dt экспортируется только для operations.
+        # На днях, когда агент выходит из operations (demount/repair/storage),
+        # sne уже увеличен, но состояние дня не operations → dt = 0.
+        # Поэтому учитываем sne_diff на таких днях как фактический налёт.
         # ИСКЛЮЧАЕМ spawned aircraft (AC >= 100000) — у них другой жизненный цикл
         query = f"""
             WITH 
@@ -291,18 +295,24 @@ class IncrementsValidator:
                     JOIN bounds b ON s.aircraft_number = b.aircraft_number AND s.day_u16 = b.last_day
                     WHERE s.version_date = {self.version_date}
                 ),
-                -- Сумма dt по каждому борту (исключая день 0, т.к. sne[0] ещё не инкрементирована)
+                -- Эффективная сумма налёта по каждому борту (исключая день 0)
                 dt_sum AS (
                     SELECT 
-                        aircraft_number,
-                        group_by,
-                        sum(dt) as total_dt
-                    FROM sim_masterv2
-                    WHERE version_date = {self.version_date}
-                      AND group_by IN (1, 2)
-                      AND day_u16 > 0  -- dt[0] ещё не отражён в Δsne
-                      AND aircraft_number < 100000  -- Исключаем spawned aircraft
-                    GROUP BY aircraft_number, group_by
+                        s.aircraft_number,
+                        s.group_by,
+                        -- Налёт в operations (dt записан напрямую)
+                        sumIf(s.dt, s.state = 'operations' AND s.day_u16 > 0) as ops_dt,
+                        -- Налёт в дни выхода из operations (sne_diff > 0 при state != operations)
+                        sumIf(ifNull(s.sne - prev.sne, 0), s.state != 'operations' AND s.day_u16 > 0 AND (s.sne - prev.sne) > 0) as non_ops_dt
+                    FROM sim_masterv2 s
+                    LEFT JOIN sim_masterv2 prev
+                        ON prev.version_date = s.version_date
+                       AND prev.aircraft_number = s.aircraft_number
+                       AND prev.day_u16 = s.day_u16 - 1
+                    WHERE s.version_date = {self.version_date}
+                      AND s.group_by IN (1, 2)
+                      AND s.aircraft_number < 100000  -- Исключаем spawned aircraft
+                    GROUP BY s.aircraft_number, s.group_by
                 )
             SELECT 
                 d.aircraft_number,
@@ -310,12 +320,12 @@ class IncrementsValidator:
                 sf.sne_start,
                 sl.sne_end,
                 sl.sne_end - sf.sne_start as delta_sne,
-                d.total_dt,
-                d.total_dt - (sl.sne_end - sf.sne_start) as diff
+                (d.ops_dt + d.non_ops_dt) as total_dt,
+                (d.ops_dt + d.non_ops_dt) - (sl.sne_end - sf.sne_start) as diff
             FROM dt_sum d
             JOIN sne_first sf ON d.aircraft_number = sf.aircraft_number
             JOIN sne_last sl ON d.aircraft_number = sl.aircraft_number
-            ORDER BY abs(d.total_dt - (sl.sne_end - sf.sne_start)) DESC
+            ORDER BY abs((d.ops_dt + d.non_ops_dt) - (sl.sne_end - sf.sne_start)) DESC
             LIMIT 100
         """
         
@@ -353,12 +363,12 @@ class IncrementsValidator:
         }
         
         if violations:
-            # ПРИМЕЧАНИЕ: Расхождение вызвано тем, что dt записывается для всех состояний (см. DT_INVARIANT_WARNING)
-            # Σdt включает "лишний" налёт в repair/reserve/etc. Это WARNING, не ERROR.
+            # ПРИМЕЧАНИЕ: Расхождение означает несостыковку между sne и экспортом dt
+            # даже с учётом переходных дней (non_ops_dt).
             results['violations'] = violations[:10]
             
             print(f"\n⚠️ Найдено {len(violations)} бортов с расхождением Σdt ≠ Δsne:")
-            print(f"   (Причина: dt записывается для всех состояний, включая repair/reserve/storage)")
+            print(f"   (Причина: несостыковка sne vs dt даже с учётом переходов)")
             print(f"\n{'ACN':<10} | {'Тип':<6} | {'sne_start':>12} | {'sne_end':>12} | {'Δsne':>12} | {'Σdt':>12} | {'Разница':>10}")
             print("-" * 90)
             
