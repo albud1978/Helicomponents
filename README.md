@@ -71,6 +71,8 @@ python3 code/extract_master.py
 | **`.cursorrules`** | Правила разработки для Cursor AI (обновлено 04-01-2026) |
 | `docs/migration.md` | Промт для новых разработчиков |
 
+Методология отладки логики: см. `.cursorrules` (секция "Подход к дебагу логики").
+
 ### Архитектура
 | Файл | Описание |
 |------|----------|
@@ -83,6 +85,7 @@ python3 code/extract_master.py
 
 > **⚠️ В этой ветке основной код — LIMITER V8 (`orchestrator_limiter_v8.py`)**
 > V8 = RepairLine + adaptive steps с deterministic_dates; `min_dynamic` сбрасывается в `rtc_compute_global_min_v8` (без отдельного reset‑слоя), источник шага (limiter/repair_days) пишется в `adaptive_result_mp[1]`, а шаги по детерминированным датам помечаются как `deterministic_date:<day>`; P2/P3 ранжируются по idx без разделения по типам, выбор линии — минимальный `free_days >= repair_time` по MacroProperty (`repair_line_free_days_mp`/`repair_line_acn_mp`); spawn считает дефицит как `target − curr_ops − used(P1/P2/P3 commit)`, storage не участвует. Квоты распределяются через MessageBucket (`QuotaBucket`) по rank. Для диагностики RepairLine/квот используются `sim_repair_lines_v8` и `sim_quota_mgr_v8` (QM ops/target/quota_left).
+> Дополнительно: тикеты spawn читают параметры по текущему дню (один день/один шаг), Mi‑8 использует `mi8_ll/oh/br` из `md_components` (через env).
 
 | Файл | Статус | Описание |
 |------|--------|----------|

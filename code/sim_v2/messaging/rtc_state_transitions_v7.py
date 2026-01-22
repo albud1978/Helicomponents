@@ -380,10 +380,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::Mess
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     if (group_by == 1u) {
         auto p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s3");
+        auto c1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p1");
         p1[idx].exchange(1u);
+        c1[idx].exchange(1u);
     } else if (group_by == 2u) {
         auto p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s3");
+        auto c1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p1");
         p1[idx].exchange(1u);
+        c1[idx].exchange(1u);
     }
     FLAMEGPU->setVariable<unsigned int>("commit_p1", 1u);
     FLAMEGPU->setVariable<unsigned int>("transition_3_to_2", 1u);
@@ -406,16 +410,26 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_unsvc_promoted) {
 RTC_UNSVC_TO_OPS = """
 FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     FLAMEGPU->setVariable<unsigned int>("ppr", 0u);  // P2: PPR обнуляется!
     FLAMEGPU->setVariable<unsigned int>("exit_date", 0u);  // Сброс exit_date
     FLAMEGPU->setVariable<unsigned int>("transition_7_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
+    if (group_by == 1u) {
+        auto c2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p2");
+        c2[idx].exchange(1u);
+    } else if (group_by == 2u) {
+        auto c2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p2");
+        c2[idx].exchange(1u);
+    }
     FLAMEGPU->setVariable<unsigned int>("commit_p2", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;
 }
 """
+RTC_UNSVC_TO_OPS = RTC_UNSVC_TO_OPS.replace("{RTC_MAX_FRAMES}", str(RTC_MAX_FRAMES))
 
 # Условие: inactive промоутен (P3)
 COND_INACTIVE_PROMOTED = """
@@ -430,6 +444,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_v7, flamegpu::MessageNone, flamegpu:
     // P3: PPR по правилам group_by
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     
     // Mi-17: если PPR < br2_mi17, сохраняем; иначе обнуляем
@@ -445,6 +460,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_v7, flamegpu::MessageNone, flamegpu:
     FLAMEGPU->setVariable<unsigned int>("transition_1_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
+    if (group_by == 1u) {{
+        auto c3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p3");
+        c3[idx].exchange(1u);
+    }} else if (group_by == 2u) {{
+        auto c3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p3");
+        c3[idx].exchange(1u);
+    }}
     FLAMEGPU->setVariable<unsigned int>("commit_p3", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     return flamegpu::ALIVE;

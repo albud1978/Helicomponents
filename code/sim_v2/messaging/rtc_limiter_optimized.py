@@ -58,7 +58,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    // ВАЖНО: limiter рассчитываем на день входа в operations (до update_day)
+    // current_day в env уже обновлён, поэтому используем prev_day
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
     const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     
@@ -88,7 +90,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
     // Бинарный поиск: найти день когда накопленный налёт >= remaining_oh
     // Логика: найти минимальный day такой что cumsum[day] - cumsum[current] >= remaining
     // ═══════════════════════════════════════════════════════════════════
-    unsigned int days_to_oh = end_day - current_day;  // По умолчанию — до конца
+    unsigned int days_to_oh = end_day - current_day;  // Временное значение
+    bool found_oh = false;
     {{
         unsigned int lo = current_day + 1u;
         unsigned int hi = end_day;
@@ -106,14 +109,20 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
             unsigned int final_accumulated = cumsum[lo * frames + idx] - base_cumsum;
             if (final_accumulated >= remaining_oh) {{
                 days_to_oh = lo - current_day;
+                found_oh = true;
             }}
         }}
+    }}
+    if (!found_oh) {{
+        // Ресурс НЕ исчерпается в горизонте симуляции
+        days_to_oh = (end_day - current_day) + 1u;
     }}
     
     // ═══════════════════════════════════════════════════════════════════
     // Бинарный поиск: найти день когда накопленный налёт >= remaining_ll
     // ═══════════════════════════════════════════════════════════════════
     unsigned int days_to_ll = end_day - current_day;
+    bool found_ll = false;
     {{
         unsigned int lo = current_day + 1u;
         unsigned int hi = end_day;
@@ -130,8 +139,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
             unsigned int final_accumulated = cumsum[lo * frames + idx] - base_cumsum;
             if (final_accumulated >= remaining_ll) {{
                 days_to_ll = lo - current_day;
+                found_ll = true;
             }}
         }}
+    }}
+    if (!found_ll) {{
+        // Ресурс НЕ исчерпается в горизонте симуляции
+        days_to_ll = (end_day - current_day) + 1u;
     }}
     
     // ═══════════════════════════════════════════════════════════════════

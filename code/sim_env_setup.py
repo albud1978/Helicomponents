@@ -251,6 +251,37 @@ def fetch_mp1_ll(client) -> Dict[int, int]:
     return result
 
 
+def fetch_mp1_ll_mi8(client) -> Dict[int, int]:
+    """Возвращает карту partseq → ll_mi8 (минуты)."""
+    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
+    rows = []
+    last_err: Exception | None = None
+    for col in candidates:
+        try:
+            sql = (
+                "SELECT\n"
+                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
+                "  toUInt32OrZero(toString(ll_mi8)) AS ll_mi8\n"
+                "FROM md_components"
+            )
+            rows = client.execute(sql)
+            if rows:
+                break
+        except Exception as e:
+            last_err = e
+            rows = []
+            continue
+    if not rows and last_err is not None:
+        raise last_err
+    result: Dict[int, int] = {}
+    for p, ll in rows:
+        partseq = _to_uint(p)
+        if partseq == 0:
+            continue
+        result[partseq] = int(ll or 0)
+    return result
+
+
 def fetch_mp1_second_ll(client) -> Dict[int, int]:
     """Возвращает карту partseq → second_ll (минуты) c поддержкой sentinel для NULL."""
     candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
@@ -758,6 +789,7 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
     mp1_map = fetch_mp1_br_rt(client)
     mp1_oh_map = fetch_mp1_oh(client)
     mp1_ll_map = fetch_mp1_ll(client)
+    mp1_ll_mi8_map = fetch_mp1_ll_mi8(client)
     mp1_second_ll_map = fetch_mp1_second_ll(client)
     mp1_sne_ppr_map = fetch_mp1_sne_ppr_new(client)
     mp1_repair_number_map = fetch_mp1_repair_number(client)
@@ -884,11 +916,14 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         oh8, oh17 = mp1_oh_map.get(k, (0, 0))
         mp1_oh8_arr.append(int(oh8 or 0))
         mp1_oh17_arr.append(int(oh17 or 0))
-    # Соберём массив LL по индексу MP1 (для mi17)
+    # Соберём массив LL по индексу MP1 (mi8/mi17)
+    mp1_ll8_arr: List[int] = []
     mp1_ll17_arr: List[int] = []
     mp1_second_ll_arr: List[int] = []
     for k in keys_sorted:
+        ll8 = mp1_ll_mi8_map.get(k, 0)
         llv = mp1_ll_map.get(k, 0)
+        mp1_ll8_arr.append(int(ll8 or 0))
         mp1_ll17_arr.append(int(llv or 0))
         second_ll_val = mp1_second_ll_map.get(k, SECOND_LL_SENTINEL)
         mp1_second_ll_arr.append(int(second_ll_val))
@@ -934,7 +969,7 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         'assembly_time': mp1_at,
         'oh_mi8': mp1_oh8_arr,
         'oh_mi17': mp1_oh17_arr,
-        'll_mi8': [0] * len(keys_sorted),  # TODO: добавить загрузку ll_mi8
+        'll_mi8': mp1_ll8_arr,
         'll_mi17': mp1_ll17_arr,
         'second_ll': mp1_second_ll_arr,
         'sne_new': mp1_sne_new_arr,
@@ -968,6 +1003,23 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         raise ValueError(f"❌ Mi-8 partout_time={mi8_partout_time_const} <= 0 в справочнике md_components!")
     if mi8_assembly_time_const <= 0:
         raise ValueError(f"❌ Mi-8 assembly_time={mi8_assembly_time_const} <= 0 в справочнике md_components!")
+    
+    # Mi-8: partseqno=70387 (МИ-8Т, group_by=1)
+    mi8_pidx = mp1_index.get(SPAWN_PARTSEQNO_MI8, -1)
+    if mi8_pidx < 0:
+        raise ValueError(f"❌ partseqno={SPAWN_PARTSEQNO_MI8} (Mi-8) не найден в mp1_index!")
+    
+    mi8_ll_const = mp1_ll8_arr[mi8_pidx] if mi8_pidx < len(mp1_ll8_arr) else 0
+    mi8_oh_const = mp1_oh8_arr[mi8_pidx] if mi8_pidx < len(mp1_oh8_arr) else 0
+    mi8_br_const = int(mi8_tuple[0])
+    
+    # Валидация: нормативы Mi-8 должны быть > 0
+    if mi8_ll_const <= 0:
+        raise ValueError(f"❌ Mi-8 ll={mi8_ll_const} <= 0 в справочнике md_components!")
+    if mi8_oh_const <= 0:
+        raise ValueError(f"❌ Mi-8 oh={mi8_oh_const} <= 0 в справочнике md_components!")
+    if mi8_br_const <= 0:
+        raise ValueError(f"❌ Mi-8 br={mi8_br_const} <= 0 в справочнике md_components!")
     
     # Mi-17: partseqno=70386 (МИ-8АМТ, group_by=2)
     if SPAWN_PARTSEQNO_MI17 not in mp1_map:
@@ -1038,6 +1090,7 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         'mp1_oh_mi17': mp1_oh17_arr,
         'mp1_second_ll': mp1_second_ll_arr,
         'mp1_ll_mi17': mp1_ll17_arr,
+        'mp1_ll_mi8': mp1_ll8_arr,
         'mp1_sne_new': mp1_sne_new_arr,
         'mp1_ppr_new': mp1_ppr_new_arr,
         'mp1_repair_number': mp1_repair_number_arr,
@@ -1054,6 +1107,9 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         'mi8_repair_time_const': mi8_repair_time_const,
         'mi8_partout_time_const': mi8_partout_time_const,
         'mi8_assembly_time_const': mi8_assembly_time_const,
+        'mi8_ll_const': int(mi8_ll_const),
+        'mi8_oh_const': int(mi8_oh_const),
+        'mi8_br_const': int(mi8_br_const),
         'mi17_repair_time_const': mi17_repair_time_const,
         'mi17_partout_time_const': mi17_partout_time_const,
         'mi17_assembly_time_const': mi17_assembly_time_const,

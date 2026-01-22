@@ -34,6 +34,56 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8, flamegpu::MessageNone, flamegpu::Mes
     auto mi17_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
     auto mi8_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
     auto mi17_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
+    auto mi8_commit_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p1");
+    auto mi17_commit_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p1");
+    auto mi8_commit_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p2");
+    auto mi17_commit_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p2");
+    auto mi8_commit_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p3");
+    auto mi17_commit_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p3");
+    
+    for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
+        mi8_ops[i].exchange(0u);
+        mi17_ops[i].exchange(0u);
+        mi8_svc[i].exchange(0u);
+        mi17_svc[i].exchange(0u);
+        mi8_unsvc[i].exchange(0u);
+        mi17_unsvc[i].exchange(0u);
+        mi8_unsvc_ready[i].exchange(0u);
+        mi17_unsvc_ready[i].exchange(0u);
+        mi8_inactive[i].exchange(0u);
+        mi17_inactive[i].exchange(0u);
+        mi8_commit_p1[i].exchange(0u);
+        mi17_commit_p1[i].exchange(0u);
+        mi8_commit_p2[i].exchange(0u);
+        mi17_commit_p2[i].exchange(0u);
+        mi8_commit_p3[i].exchange(0u);
+        mi17_commit_p3[i].exchange(0u);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# СБРОС БУФЕРОВ (для spawn: без commit_* чтобы сохранить факты переходов)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RTC_RESET_BUFFERS_SPAWN = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8_spawn, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Сброс буферов для пересчёта (без commit_* чтобы spawn видел фактические коммиты)
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (idx != 0u) return flamegpu::ALIVE;
+    
+    auto mi8_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
+    auto mi17_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
+    auto mi8_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
+    auto mi17_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
+    auto mi8_unsvc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
+    auto mi17_unsvc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
+    auto mi8_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
+    auto mi17_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
+    auto mi8_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
+    auto mi17_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
     
     for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
         mi8_ops[i].exchange(0u);
@@ -351,6 +401,7 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_inactive_promoted_post_v8) {
 RTC_INACTIVE_TO_OPS_POST = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_post_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // P3 POST: PPR по правилам group_by
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     
@@ -367,6 +418,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_post_v8, flamegpu::MessageNone, flam
     FLAMEGPU->setVariable<unsigned int>("transition_1_to_2", 1u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);  // Будет вычислен
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
+    if (group_by == 1u) {{
+        auto c3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p3");
+        c3[idx].exchange(1u);
+    }} else if (group_by == 2u) {{
+        auto c3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p3");
+        c3[idx].exchange(1u);
+    }}
+    FLAMEGPU->setVariable<unsigned int>("commit_p3", 1u);
     return flamegpu::ALIVE;
 }}
 """
@@ -393,6 +452,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_flags_v8, flamegpu::MessageNone, flamegpu::Mes
     FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 0u);
     FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", 0xFFFFFFFFu);
     FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", 0xFFFFFFFFu);
+    FLAMEGPU->setVariable<unsigned int>("debug_bucket_seen", 0u);
     
     // Сброс transition флагов
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_3", 0u);
