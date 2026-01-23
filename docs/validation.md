@@ -394,6 +394,8 @@ WHERE transition_2_to_4 = 1 AND state != 'repair';
 
 Матрица включает spawn и очередь ремонта через unserviceable:
 
+> ✅ Проверено по коду `sim_validation_transitions.py` и `validation_rules.py` (актуально).
+
 ```python
 ALLOWED_TRANSITIONS = {
     # Spawn (виртуальный источник 0)
