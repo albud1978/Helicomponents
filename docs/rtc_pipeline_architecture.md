@@ -1912,7 +1912,7 @@ if (active_trigger == 1u) {
 
 ### 4. mp2_postprocess_active: Заполнение истории ремонта задним числом
 
-**Проблема:** При переходе inactive → operations (1→2) агент переходит "мгновенно", но реально он прошёл через ремонт длиной `repair_time` дней. Нужно заполнить историю в MP2 задним числом.
+**Проблема:** При переходе inactive → operations (1→2) и unserviceable → operations (7→2) агент переходит "мгновенно", но реально он прошёл через ремонт длиной `repair_time` дней. Нужно заполнить историю в MP2 задним числом.
 
 **Решение: GPU постпроцессинг через export_phase механизм**
 
@@ -1933,10 +1933,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active_operations, ...) {
     
     // Получаем MP2 MacroProperty для модификации
     auto mp2_active_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_active_trigger");
+    auto mp2_active_source = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_active_source");
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_state");
     auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_repair_days");
     auto mp2_assembly_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_assembly_trigger");
     auto mp2_transition_1_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_1_to_4");
+    auto mp2_transition_7_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_7_to_4");
     auto mp2_transition_4_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_4_to_2");
     
     // Поиск события active_trigger=1
@@ -1951,6 +1953,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active_operations, ...) {
                 unsigned int pos = d * MAX_FRAMES + idx;
                 mp2_state[pos].exchange(4u);  // state = repair
                 mp2_repair_days[pos].exchange(d - s + 1);  // 1..R
+                // Внутри окна ремонта transition-флаги очищаются
             }
             
             // Устанавливаем assembly_trigger
@@ -1958,8 +1961,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active_operations, ...) {
                 mp2_assembly_trigger[(d_event - A) * MAX_FRAMES + idx].exchange(1u);
             }
             
-            // Устанавливаем transition флаги
-            mp2_transition_1_to_4[s * MAX_FRAMES + idx].exchange(1u);  // Начало ремонта
+            // Устанавливаем transition флаги (по источнику active_trigger)
+            // if (mp2_active_source[pos_event] == 7) -> 7_to_4, иначе 1_to_4
             mp2_transition_4_to_2[d_event * MAX_FRAMES + idx].exchange(1u);  // Выход
             
             break;  // Один агент может иметь только одно событие

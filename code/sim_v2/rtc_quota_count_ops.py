@@ -33,6 +33,7 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
 FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     
     // Только первый агент (idx=0) обнуляет буферы
     if (idx == 0u) {{
@@ -53,12 +54,17 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
         auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s3");
         auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s3");
+        auto mi8_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s7");
+        auto mi17_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s7");
         auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s5");
         auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s5");
         auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
+        auto mi8_candidate_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_s7");
+        auto mi17_candidate_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_s7");
         auto mi8_candidate_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_s1");
         auto mi17_candidate_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_s1");
+        auto group_by_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("group_by_by_idx");
         
         // Spawn pending флаги
         auto mi8_spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_spawn_pending");
@@ -94,12 +100,17 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             mi17_approve[i].exchange(0u);
             mi8_approve_s3[i].exchange(0u);
             mi17_approve_s3[i].exchange(0u);
+            mi8_approve_s7[i].exchange(0u);
+            mi17_approve_s7[i].exchange(0u);
             mi8_approve_s5[i].exchange(0u);
             mi17_approve_s5[i].exchange(0u);
             mi8_approve_s1[i].exchange(0u);
             mi17_approve_s1[i].exchange(0u);
+            mi8_candidate_s7[i].exchange(0u);
+            mi17_candidate_s7[i].exchange(0u);
             mi8_candidate_s1[i].exchange(0u);
             mi17_candidate_s1[i].exchange(0u);
+            group_by_by_idx[i].exchange(0u);
             
             // Spawn pending флаги
             mi8_spawn_pending[i].exchange(0u);
@@ -124,6 +135,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             mp2_repair_full[{max_days}u].exchange(0u);
         }}
     }}
+    
+    // Обновляем group_by по idx для приоритетов (нужно всем агентам)
+    auto group_by_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("group_by_by_idx");
+    group_by_by_idx[idx].exchange(group_by);
     
     return flamegpu::ALIVE;
 }}

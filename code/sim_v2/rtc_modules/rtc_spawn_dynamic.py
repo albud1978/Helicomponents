@@ -110,10 +110,10 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
             if (approve_s3[i] == 1u) ++used;
         }
         
-        // Считаем одобренных в P2 (reserve → operations)
-        auto approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve_s5");
+        // Считаем одобренных в P2 (unserviceable → operations)
+        auto approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_FRAMES}u>("mi17_approve_s7");
         for (unsigned int i = 0u; i < ${MAX_FRAMES}u; ++i) {
-            if (approve_s5[i] == 1u) ++used;
+            if (approve_s7[i] == 1u) ++used;
         }
         
         // Считаем одобренных в P3 (inactive → operations)

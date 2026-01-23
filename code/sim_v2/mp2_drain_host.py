@@ -118,11 +118,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             transition_2_to_6   UInt8,   -- operations → storage
             transition_2_to_3   UInt8,   -- operations → serviceable
             transition_3_to_2   UInt8,   -- serviceable → operations
-            transition_5_to_2   UInt8,   -- reserve → operations
-            transition_1_to_2   UInt8,   -- inactive → operations
-            transition_4_to_5   UInt8,   -- repair → reserve
             transition_1_to_4   UInt8,   -- inactive → repair
             transition_4_to_2   UInt8,   -- repair → operations
+            transition_7_to_4   UInt8,   -- unserviceable → repair
+            transition_7_to_2   UInt8,   -- unserviceable → operations
             
             -- Временная метка записи
             export_timestamp DateTime DEFAULT now(),
@@ -304,18 +303,6 @@ class MP2DrainHostFunction(fg.HostFunction):
         except:
             mp2_transition_3_to_2 = None
         try:
-            mp2_transition_5_to_2 = env.getMacroPropertyUInt32("mp2_transition_5_to_2")
-        except:
-            mp2_transition_5_to_2 = None
-        try:
-            mp2_transition_1_to_2 = env.getMacroPropertyUInt32("mp2_transition_1_to_2")
-        except:
-            mp2_transition_1_to_2 = None
-        try:
-            mp2_transition_4_to_5 = env.getMacroPropertyUInt32("mp2_transition_4_to_5")
-        except:
-            mp2_transition_4_to_5 = None
-        try:
             mp2_transition_1_to_4 = env.getMacroPropertyUInt32("mp2_transition_1_to_4")
         except:
             mp2_transition_1_to_4 = None
@@ -323,6 +310,14 @@ class MP2DrainHostFunction(fg.HostFunction):
             mp2_transition_4_to_2 = env.getMacroPropertyUInt32("mp2_transition_4_to_2")
         except:
             mp2_transition_4_to_2 = None
+        try:
+            mp2_transition_7_to_4 = env.getMacroPropertyUInt32("mp2_transition_7_to_4")
+        except:
+            mp2_transition_7_to_4 = None
+        try:
+            mp2_transition_7_to_2 = env.getMacroPropertyUInt32("mp2_transition_7_to_2")
+        except:
+            mp2_transition_7_to_2 = None
         
         # Получаем days_total для safe_day логики
         days_total = env.getPropertyUInt32("days_total")
@@ -398,11 +393,10 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_transition_2_to_6[pos]) if mp2_transition_2_to_6 is not None else 0,
                         int(mp2_transition_2_to_3[pos]) if mp2_transition_2_to_3 is not None else 0,
                         int(mp2_transition_3_to_2[pos]) if mp2_transition_3_to_2 is not None else 0,
-                        int(mp2_transition_5_to_2[pos]) if mp2_transition_5_to_2 is not None else 0,
-                        int(mp2_transition_1_to_2[pos]) if mp2_transition_1_to_2 is not None else 0,
-                        int(mp2_transition_4_to_5[pos]) if mp2_transition_4_to_5 is not None else 0,
                         int(mp2_transition_1_to_4[pos]) if mp2_transition_1_to_4 is not None else 0,
-                        int(mp2_transition_4_to_2[pos]) if mp2_transition_4_to_2 is not None else 0
+                        int(mp2_transition_4_to_2[pos]) if mp2_transition_4_to_2 is not None else 0,
+                        int(mp2_transition_7_to_4[pos]) if mp2_transition_7_to_4 is not None else 0,
+                        int(mp2_transition_7_to_2[pos]) if mp2_transition_7_to_2 is not None else 0
                     )
                     self.batch.append(row)
                     rows_count += 1
@@ -558,18 +552,6 @@ class MP2DrainHostFunction(fg.HostFunction):
         except:
             mp2_transition_3_to_2 = None
         try:
-            mp2_transition_5_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_5_to_2")
-        except:
-            mp2_transition_5_to_2 = None
-        try:
-            mp2_transition_1_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_1_to_2")
-        except:
-            mp2_transition_1_to_2 = None
-        try:
-            mp2_transition_4_to_5 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_4_to_5")
-        except:
-            mp2_transition_4_to_5 = None
-        try:
             mp2_transition_1_to_4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_1_to_4")
         except:
             mp2_transition_1_to_4 = None
@@ -577,6 +559,14 @@ class MP2DrainHostFunction(fg.HostFunction):
             mp2_transition_4_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_4_to_2")
         except:
             mp2_transition_4_to_2 = None
+        try:
+            mp2_transition_7_to_4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_7_to_4")
+        except:
+            mp2_transition_7_to_4 = None
+        try:
+            mp2_transition_7_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_7_to_2")
+        except:
+            mp2_transition_7_to_2 = None
         
         # MP4 целевые значения (читаем НАПРЯМУЮ из mp4_ops_counter, т.к. это глобальные значения)
         try:
@@ -658,11 +648,10 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_transition_2_to_6[pos]) if mp2_transition_2_to_6 is not None else 0,
                         int(mp2_transition_2_to_3[pos]) if mp2_transition_2_to_3 is not None else 0,
                         int(mp2_transition_3_to_2[pos]) if mp2_transition_3_to_2 is not None else 0,
-                        int(mp2_transition_5_to_2[pos]) if mp2_transition_5_to_2 is not None else 0,
-                        int(mp2_transition_1_to_2[pos]) if mp2_transition_1_to_2 is not None else 0,
-                        int(mp2_transition_4_to_5[pos]) if mp2_transition_4_to_5 is not None else 0,
                         int(mp2_transition_1_to_4[pos]) if mp2_transition_1_to_4 is not None else 0,
-                        int(mp2_transition_4_to_2[pos]) if mp2_transition_4_to_2 is not None else 0
+                        int(mp2_transition_4_to_2[pos]) if mp2_transition_4_to_2 is not None else 0,
+                        int(mp2_transition_7_to_4[pos]) if mp2_transition_7_to_4 is not None else 0,
+                        int(mp2_transition_7_to_2[pos]) if mp2_transition_7_to_2 is not None else 0
                     )
                     self.batch.append(row)
                     rows_count += 1
@@ -692,10 +681,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             self.max_batch_rows = batch_rows
         t_start = time.perf_counter()
         # MATERIALIZED day_date вычисляется на стороне ClickHouse, не вставляем её явно
-        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,bi_counter,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s4_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,repair_quota_load,repair_quota_full,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_0_to_2,transition_0_to_3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_3_to_2,transition_5_to_2,transition_1_to_2,transition_4_to_5,transition_1_to_4,transition_4_to_2"
+        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,bi_counter,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s4_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,repair_quota_load,repair_quota_full,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_0_to_2,transition_0_to_3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_3_to_2,transition_1_to_4,transition_4_to_2,transition_7_to_4,transition_7_to_2"
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES"
         # Подаём данные в колоннарном формате для уменьшения накладных расходов драйвера
-        num_cols = 48  # 27 базовых + 2 MP4 целей + 2 gap + 2 repair_quota + 4 флага квот + 11 transition флагов
+        num_cols = 47  # 27 базовых + 2 MP4 целей + 2 gap + 2 repair_quota + 4 флага квот + 10 transition флагов
         cols = [[] for _ in range(num_cols)]
         for r in self.batch:
             for i, v in enumerate(r):
@@ -777,12 +766,9 @@ class MP2DrainHostFunction(fg.HostFunction):
                             transition_field = 'transition_2_to_3'
                         elif prev_state == 'serviceable' and curr_state == 'operations':
                             transition_field = 'transition_3_to_2'
-                        elif prev_state == 'reserve' and curr_state == 'operations':
-                            transition_field = 'transition_5_to_2'
-                        elif prev_state == 'inactive' and curr_state == 'operations':
-                            transition_field = 'transition_1_to_2'
-                        elif prev_state == 'repair' and curr_state == 'reserve':
-                            transition_field = 'transition_4_to_5'
+                        elif prev_state == 'unserviceable' and curr_state == 'operations':
+                            transition_field = 'transition_7_to_2'
+                        # transition_1_to_2, transition_4_to_5, transition_5_to_2 удалены из схемы
                         elif prev_state == 'inactive' and curr_state == 'repair':
                             transition_field = 'transition_1_to_4'
                         elif prev_state == 'repair' and curr_state == 'operations':

@@ -4,6 +4,7 @@ RTC модуль для GPU постпроцессинга MP2: заполнен
 
 Назначение:
 - Обрабатывает переход inactive → operations (1→2), который происходит МГНОВЕННО в симуляции
+- Также используется для unserviceable → operations (7→2) с тем же backfill окна ремонта
 - Реальный путь: inactive → reserve → repair → operations
 - active_trigger=1 помечает день перехода 1→2
 - Постпроцессинг заполняет историю reserve/repair ЗАДНИМ ЧИСЛОМ
@@ -60,11 +61,20 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active, flamegpu::MessageNone, flame
     
     // Получаем MP2 MacroProperty для чтения и модификации
     auto mp2_active_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_active_trigger");
+    auto mp2_active_source = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_active_source");
     auto mp2_state = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_state");
     auto mp2_repair_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_repair_days");
     auto mp2_assembly_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_assembly_trigger");
+    auto mp2_transition_0_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_0_to_2");
+    auto mp2_transition_0_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_0_to_3");
+    auto mp2_transition_2_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_3");
+    auto mp2_transition_2_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_4");
+    auto mp2_transition_2_to_6 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_6");
+    auto mp2_transition_3_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_3_to_2");
     auto mp2_transition_1_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_1_to_4");
     auto mp2_transition_4_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_4_to_2");
+    auto mp2_transition_7_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_7_to_4");
+    auto mp2_transition_7_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_7_to_2");
     
     // ═══════════════════════════════════════════════════════════════════════════
     // Поиск события active_trigger=1 (переход inactive → operations)
@@ -77,6 +87,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active, flamegpu::MessageNone, flame
         if (act_flag == 1u) {{
             // Нашли день перехода 1→2!
             // Реально агент прошёл через ремонт: 1→4 (день s) → 4→2 (день d_event)
+            
+            // Определяем источник: 1 (inactive) или 7 (unserviceable)
+            unsigned int src_state = 1u;  // default: inactive
+            const unsigned int src_val = mp2_active_source[pos_event];
+            if (src_val == 7u) {{
+                src_state = 7u;
+            }}
             
             // ═══════════════════════════════════════════════════════════════════
             // Вычисление окна ремонта [s..e]
@@ -100,6 +117,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active, flamegpu::MessageNone, flame
                 // 2. Устанавливаем repair_days от 1 с инкрементом
                 const unsigned int rdv = (d - s + 1u);
                 mp2_repair_days[pos].exchange(rdv);
+                
+                // 3. Очищаем transition-флаги внутри окна ремонта
+                mp2_transition_0_to_2[pos].exchange(0u);
+                mp2_transition_0_to_3[pos].exchange(0u);
+                mp2_transition_2_to_3[pos].exchange(0u);
+                mp2_transition_2_to_4[pos].exchange(0u);
+                mp2_transition_2_to_6[pos].exchange(0u);
+                mp2_transition_3_to_2[pos].exchange(0u);
+                mp2_transition_1_to_4[pos].exchange(0u);
+                mp2_transition_4_to_2[pos].exchange(0u);
+                mp2_transition_7_to_4[pos].exchange(0u);
+                mp2_transition_7_to_2[pos].exchange(0u);
             }}
             
             // ═══════════════════════════════════════════════════════════════════
@@ -119,10 +148,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active, flamegpu::MessageNone, flame
             // ═══════════════════════════════════════════════════════════════════
             // ИСПРАВЛЕНИЕ TRANSITION ФЛАГОВ
             // ═══════════════════════════════════════════════════════════════════
-            // 4. Устанавливаем transition_1_to_4=1 в день начала ремонта (s)
+            // 4. Устанавливаем transition_1_to_4 ИЛИ transition_7_to_4 в день начала ремонта (s)
             if (s < days_total) {{
                 const unsigned int pos_s = s * {MAX_FRAMES}u + idx;
-                mp2_transition_1_to_4[pos_s].exchange(1u);
+                if (src_state == 7u) {{
+                    mp2_transition_7_to_4[pos_s].exchange(1u);
+                }} else {{
+                    mp2_transition_1_to_4[pos_s].exchange(1u);
+                }}
             }}
             
             // 5. Устанавливаем transition_4_to_2=1 в день выхода из ремонта (d_event)

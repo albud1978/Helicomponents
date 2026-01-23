@@ -25,8 +25,8 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::MessageNone) {
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
     
-    // Фильтр: только кандидаты (reserve&0 или operations&4)
-    if (intent != 0u && intent != 4u) {
+    // Фильтр: только кандидаты (operations&4)
+    if (intent != 4u) {
         return flamegpu::ALIVE;
     }
     
@@ -90,11 +90,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
     unsigned int rank = 0u;
     auto reserve_queue_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, $MAX_FRAMES>("reserve_queue_buffer");
     auto ops_repair_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, $MAX_FRAMES>("ops_repair_buffer");
+    auto group_by_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, $MAX_FRAMES>("group_by_by_idx");
     
     for (unsigned int i = 0u; i < frames; ++i) {
         if (i == idx) continue;
         
-        const bool is_candidate = (reserve_queue_buffer[i] == 1u) || (ops_repair_buffer[i] == 1u);
+        const bool is_candidate = (ops_repair_buffer[i] == 1u);
         if (!is_candidate) continue;
         
     // ✅ ТОЧНАЯ ФИЛЬТРАЦИЯ: если нет глобальной квоты, проверяем repair_number
@@ -103,8 +104,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_repair, flamegpu::MessageNone, flamegpu::Messa
         if (rn_i != repair_number) continue;
     }
         
-        // Youngest first: rank растёт если other (i) МОЛОЖЕ меня (больший idx)
-        if (i > idx) {
+        // Приоритет Mi-17 над Mi-8, затем youngest first по idx
+        const unsigned int gb_i = group_by_by_idx[i];
+        bool higher = false;
+        if (gb_i == 2u && group_by == 1u) {
+            higher = true;  // Mi-17 всегда выше приоритета Mi-8
+        } else if (gb_i == group_by && i > idx) {
+            higher = true;  // Внутри группы: младшие (больший idx) выше
+        }
+        if (higher) {
             ++rank;
         }
     }
