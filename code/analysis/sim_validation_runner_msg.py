@@ -30,8 +30,9 @@ TABLE_NAME = "sim_masterv2_msg"
 DEDUP_TABLES = {"sim_masterv2_v8"}
 
 
-def get_table_expr(table: str, version_date_value: str) -> str:
-    """Возвращает SQL-выражение таблицы с фильтром version_date и дедупликацией."""
+def get_table_expr(table: str, version_date_value: str, version_id: int | None) -> str:
+    """Возвращает SQL-выражение таблицы с фильтрами и дедупликацией."""
+    version_id_filter = f" AND version_id = {version_id}" if version_id is not None else ""
     if table in DEDUP_TABLES:
         return f"""(
             SELECT
@@ -48,11 +49,11 @@ def get_table_expr(table: str, version_date_value: str) -> str:
                 repair_days,
                 repair_time
             FROM {table}
-            WHERE version_date = {version_date_value}
+            WHERE version_date = {version_date_value}{version_id_filter}
             ORDER BY sne DESC
             LIMIT 1 BY day_u16, idx
         )"""
-    return f"(SELECT * FROM {table} WHERE version_date = {version_date_value})"
+    return f"(SELECT * FROM {table} WHERE version_date = {version_date_value}{version_id_filter})"
 
 
 def get_version_date_int(version_date_str: str) -> int:
@@ -66,12 +67,13 @@ class MessagingQuotaValidator:
     
     WARN_DAYS = 180
     
-    def __init__(self, client, version_date_value, version_date_str: str, table: str = TABLE_NAME):
+    def __init__(self, client, version_date_value, version_date_str: str, table: str = TABLE_NAME, version_id: int | None = None):
         self.client = client
         self.version_date = version_date_value
         self.version_date_str = version_date_str
         self.table = table
-        self.table_expr = get_table_expr(table, version_date_value)
+        self.version_id = version_id
+        self.table_expr = get_table_expr(table, version_date_value, version_id)
         self.errors: List[Dict] = []
         self.warnings: List[Dict] = []
         self.stats: Dict = {}
@@ -94,6 +96,7 @@ class MessagingQuotaValidator:
         quota_map = {row[0]: (row[1], row[2]) for row in quota_data}
         
         # ops_count из sim_masterv2_msg
+        version_id_filter = f" AND version_id = {self.version_id}" if self.version_id is not None else ""
         if self.table in DEDUP_TABLES:
             ops_query = f"""
                 SELECT 
@@ -101,7 +104,7 @@ class MessagingQuotaValidator:
                     group_by,
                     countDistinctIf(idx, state = 'operations') as ops_count
                 FROM {self.table}
-                WHERE version_date = {self.version_date} AND group_by IN (1, 2)
+                WHERE version_date = {self.version_date}{version_id_filter} AND group_by IN (1, 2)
                 GROUP BY day_u16, group_by
                 ORDER BY day_u16, group_by
             """
@@ -233,12 +236,13 @@ class MessagingTransitionsValidator:
         'transition_0_to_2': ('spawn', 'operations'),   # spawn (динамический)
     }
     
-    def __init__(self, client, version_date_value, version_date_str: str, table: str = TABLE_NAME):
+    def __init__(self, client, version_date_value, version_date_str: str, table: str = TABLE_NAME, version_id: int | None = None):
         self.client = client
         self.version_date = version_date_value
         self.version_date_str = version_date_str
         self.table = table
-        self.table_expr = get_table_expr(table, version_date_value)
+        self.version_id = version_id
+        self.table_expr = get_table_expr(table, version_date_value, version_id)
         self.errors: List[Dict] = []
         self.warnings: List[Dict] = []
         self.stats: Dict = {}
@@ -361,12 +365,13 @@ class MessagingTransitionsValidator:
 class MessagingIncrementsValidator:
     """Валидатор инкрементов для MESSAGING архитектуры"""
     
-    def __init__(self, client, version_date_value, version_date_str: str, table: str = TABLE_NAME):
+    def __init__(self, client, version_date_value, version_date_str: str, table: str = TABLE_NAME, version_id: int | None = None):
         self.client = client
         self.version_date = version_date_value
         self.version_date_str = version_date_str
         self.table = table
-        self.table_expr = get_table_expr(table, version_date_value)
+        self.version_id = version_id
+        self.table_expr = get_table_expr(table, version_date_value, version_id)
         self.errors: List[Dict] = []
         self.warnings: List[Dict] = []
         self.stats: Dict = {}
@@ -790,6 +795,7 @@ def generate_report(version_date_str: str, results: Dict, table: str) -> str:
 def main():
     parser = argparse.ArgumentParser(description='Валидация симуляции MESSAGING архитектуры')
     parser.add_argument('--version-date', required=True, help='Дата версии (YYYY-MM-DD)')
+    parser.add_argument('--version-id', type=int, default=None, help='version_id для фильтрации (опционально)')
     parser.add_argument('--table', default=TABLE_NAME, help=f'Таблица (default: {TABLE_NAME})')
     args = parser.parse_args()
     
@@ -825,17 +831,17 @@ def main():
     else:
         version_date_value = str(version_date_ymd)
     
-    quota_validator = MessagingQuotaValidator(client, version_date_value, version_date_str, table)
+    quota_validator = MessagingQuotaValidator(client, version_date_value, version_date_str, table, args.version_id)
     results['quota'] = quota_validator.validate()
     
     # 2. Переходы
     print("\n" + "-"*60)
-    transitions_validator = MessagingTransitionsValidator(client, version_date_value, version_date_str, table)
+    transitions_validator = MessagingTransitionsValidator(client, version_date_value, version_date_str, table, args.version_id)
     results['transitions'] = transitions_validator.run_all()
     
     # 3. Инкременты
     print("\n" + "-"*60)
-    increments_validator = MessagingIncrementsValidator(client, version_date_value, version_date_str, table)
+    increments_validator = MessagingIncrementsValidator(client, version_date_value, version_date_str, table, args.version_id)
     results['increments'] = increments_validator.run_all()
     
     # Генерация отчёта

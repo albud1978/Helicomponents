@@ -486,19 +486,21 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     unsigned int p1_17 = (deficit17 < svc17) ? deficit17 : svc17;
     deficit17 -= p1_17;
     
-    unsigned int deficit_total = deficit8 + deficit17;
-    const unsigned int unsvc_total = unsvc8 + unsvc17;
-    unsigned int p2_total = (deficit_total < unsvc_total) ? deficit_total : unsvc_total;
-    deficit_total -= p2_total;
+    unsigned int p2_8 = (deficit8 < unsvc8) ? deficit8 : unsvc8;
+    unsigned int p2_17 = (deficit17 < unsvc17) ? deficit17 : unsvc17;
+    deficit8 -= p2_8;
+    deficit17 -= p2_17;
     
-    const unsigned int ina_total = ina_ready8 + ina_ready17;
-    const unsigned int p3_total = (deficit_total < ina_total) ? deficit_total : ina_total;
+    unsigned int p3_8 = (deficit8 < ina_ready8) ? deficit8 : ina_ready8;
+    unsigned int p3_17 = (deficit17 < ina_ready17) ? deficit17 : ina_ready17;
     
     FLAMEGPU->message_out.setKey(0);
     FLAMEGPU->message_out.setVariable<unsigned int>("promote_p1_mi8", p1_8);
     FLAMEGPU->message_out.setVariable<unsigned int>("promote_p1_mi17", p1_17);
-    FLAMEGPU->message_out.setVariable<unsigned int>("promote_p2_total", p2_total);
-    FLAMEGPU->message_out.setVariable<unsigned int>("promote_p3_total", p3_total);
+    FLAMEGPU->message_out.setVariable<unsigned int>("promote_p2_mi8", p2_8);
+    FLAMEGPU->message_out.setVariable<unsigned int>("promote_p2_mi17", p2_17);
+    FLAMEGPU->message_out.setVariable<unsigned int>("promote_p3_mi8", p3_8);
+    FLAMEGPU->message_out.setVariable<unsigned int>("promote_p3_mi17", p3_17);
     FLAMEGPU->message_out.setVariable<unsigned int>("deficit_mi8", deficit8);
     FLAMEGPU->message_out.setVariable<unsigned int>("deficit_mi17", deficit17);
     
@@ -509,12 +511,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     FLAMEGPU->setVariable<unsigned int>("debug_qm_target_mi17", target_mi17);
     FLAMEGPU->setVariable<unsigned int>("debug_qm_quota_left_mi8", deficit8);
     FLAMEGPU->setVariable<unsigned int>("debug_qm_quota_left_mi17", deficit17);
-    FLAMEGPU->setVariable<unsigned int>("debug_qm_unsvc_cnt", unsvc_total);
-    FLAMEGPU->setVariable<unsigned int>("debug_qm_inactive_cnt", ina_total);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_unsvc_cnt", unsvc8 + unsvc17);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_inactive_cnt", ina_ready8 + ina_ready17);
     FLAMEGPU->setVariable<unsigned int>("debug_qm_p1_mi8", p1_8);
     FLAMEGPU->setVariable<unsigned int>("debug_qm_p1_mi17", p1_17);
-    FLAMEGPU->setVariable<unsigned int>("debug_qm_p2_total", p2_total);
-    FLAMEGPU->setVariable<unsigned int>("debug_qm_p3_total", p3_total);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_p2_total", p2_8 + p2_17);
+    FLAMEGPU->setVariable<unsigned int>("debug_qm_p3_total", p3_8 + p3_17);
     FLAMEGPU->setVariable<int>("debug_qm_balance_mi8", (int)target_mi8 - (int)ops8);
     FLAMEGPU->setVariable<int>("debug_qm_balance_mi17", (int)target_mi17 - (int)ops17);
     FLAMEGPU->setVariable<unsigned int>("debug_qm_target_day", target_day);
@@ -579,30 +581,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_bucket_v8, flamegpu::MessageBucket, fl
     if (repair_days != 0u || repair_line_id != 0xFFFFFFFFu) return flamegpu::ALIVE;
     
     unsigned int promote_total = 0u;
-    unsigned int deficit8 = 0u;
-    unsigned int deficit17 = 0u;
     for (auto &msg : FLAMEGPU->message_in(0)) {{
         FLAMEGPU->setVariable<unsigned int>("debug_bucket_seen", 1u);
-        promote_total = msg.getVariable<unsigned int>("promote_p2_total");
-        deficit8 = msg.getVariable<unsigned int>("deficit_mi8");
-        deficit17 = msg.getVariable<unsigned int>("deficit_mi17");
+        promote_total = (group_by == 1u)
+            ? msg.getVariable<unsigned int>("promote_p2_mi8")
+            : msg.getVariable<unsigned int>("promote_p2_mi17");
         break;
     }}
     if (promote_total == 0u) return flamegpu::ALIVE;
-    if (group_by == 1u && deficit8 == 0u) return flamegpu::ALIVE;
-    if (group_by == 2u && deficit17 == 0u) return flamegpu::ALIVE;
     
     const unsigned int frames = {RTC_MAX_FRAMES}u;
     auto unsvc8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
     auto unsvc17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
-    const unsigned int enable8 = (deficit8 > 0u) ? 1u : 0u;
-    const unsigned int enable17 = (deficit17 > 0u) ? 1u : 0u;
     
     unsigned int rank = 0u;
     for (unsigned int i = 0u; i < frames; ++i) {{
         if (i <= idx) continue;
-        rank += (enable8 ? unsvc8[i] : 0u);
-        rank += (enable17 ? unsvc17[i] : 0u);
+        rank += (group_by == 1u) ? unsvc8[i] : unsvc17[i];
     }}
     
     if (rank < promote_total) {{
@@ -629,30 +624,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_bucket_v8, flamegpu::MessageBucket,
     if (day < rt) return flamegpu::ALIVE;
     
     unsigned int promote_total = 0u;
-    unsigned int deficit8 = 0u;
-    unsigned int deficit17 = 0u;
     for (auto &msg : FLAMEGPU->message_in(0)) {{
         FLAMEGPU->setVariable<unsigned int>("debug_bucket_seen", 1u);
-        promote_total = msg.getVariable<unsigned int>("promote_p3_total");
-        deficit8 = msg.getVariable<unsigned int>("deficit_mi8");
-        deficit17 = msg.getVariable<unsigned int>("deficit_mi17");
+        promote_total = (group_by == 1u)
+            ? msg.getVariable<unsigned int>("promote_p3_mi8")
+            : msg.getVariable<unsigned int>("promote_p3_mi17");
         break;
     }}
     if (promote_total == 0u) return flamegpu::ALIVE;
-    if (group_by == 1u && deficit8 == 0u) return flamegpu::ALIVE;
-    if (group_by == 2u && deficit17 == 0u) return flamegpu::ALIVE;
     
     const unsigned int frames = {RTC_MAX_FRAMES}u;
     auto ina8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
     auto ina17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
-    const unsigned int enable8 = (deficit8 > 0u) ? 1u : 0u;
-    const unsigned int enable17 = (deficit17 > 0u) ? 1u : 0u;
     
     unsigned int rank = 0u;
     for (unsigned int i = 0u; i < frames; ++i) {{
         if (i <= idx) continue;
-        rank += (enable8 ? ina8[i] : 0u);
-        rank += (enable17 ? ina17[i] : 0u);
+        rank += (group_by == 1u) ? ina8[i] : ina17[i];
     }}
     
     if (rank < promote_total) {{

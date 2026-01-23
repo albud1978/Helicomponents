@@ -129,8 +129,10 @@ class V2BaseModelMessaging:
         self.msg_quota_bucket.setBounds(0, 1)  # один bucket (key=0)
         self.msg_quota_bucket.newVariableUInt("promote_p1_mi8")
         self.msg_quota_bucket.newVariableUInt("promote_p1_mi17")
-        self.msg_quota_bucket.newVariableUInt("promote_p2_total")
-        self.msg_quota_bucket.newVariableUInt("promote_p3_total")
+        self.msg_quota_bucket.newVariableUInt("promote_p2_mi8")
+        self.msg_quota_bucket.newVariableUInt("promote_p2_mi17")
+        self.msg_quota_bucket.newVariableUInt("promote_p3_mi8")
+        self.msg_quota_bucket.newVariableUInt("promote_p3_mi17")
         self.msg_quota_bucket.newVariableUInt("deficit_mi8")
         self.msg_quota_bucket.newVariableUInt("deficit_mi17")
 

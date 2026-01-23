@@ -17,8 +17,9 @@
 - V8 readiness для `unserviceable`: `repair_days == 0` и `repair_line_id == 0xFFFFFFFF` (day‑барьер не нужен, т.к. repair_days уже отсчитывает ожидание).
 - P2 ранжирует **только готовые** `unserviceable` по `unsvc_ready_count` (не по общему `unsvc_count`).
 - Динамический спавн Mi‑17 запускается по дефициту `target − curr_ops − used`, где used = commit P1/P2/P3; storage не участвует, post‑quota counts отсутствуют.
-- Приоритет P2/P3 по idx (молодые раньше), тип не важен; RepairLine выбирается по минимальному `free_days >= repair_time`.
+- Приоритет P2/P3 по idx (молодые раньше) внутри своего типа с раздельными квотами; RepairLine выбирается по минимальному `free_days >= repair_time`.
 - Debug спавна: `SpawnDynamicMgr.debug_curr_ops/target/need` + `debug_current_day` в MP2.
+- Валидация MESSAGING поддерживает фильтр `version_id` для изоляции прогонов без DROP.
 - V8 spawn: тикеты читают параметры по текущему `day` (один день/один шаг).
 - V8 spawn Mi-8: константы `mi8_ll/oh/br` берутся из `md_components` через env.
 - Методология дебага логики: см. `.cursorrules` (секция "Подход к дебагу логики").

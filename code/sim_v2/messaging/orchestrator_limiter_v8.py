@@ -619,6 +619,9 @@ class LimiterV8Orchestrator:
             self.model, self.base_model.repair_line_agent
         )
         
+        # Пересчёт буферов ПОСЛЕ пост-квотных переходов (нужно для корректного спавна)
+        rtc_quota_v8.register_post_quota_counts_v8(self.model, heli_agent)
+        
         # ═══════════════════════════════════════════════════════════════
         # Динамический спавн Mi-17 (после P3)
         # ═══════════════════════════════════════════════════════════════
