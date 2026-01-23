@@ -251,8 +251,16 @@ cd code/sim_v2/units && python3 orchestrator_units.py \
 | `--steps` | ✅ | ✅ | Дней симуляции (3650 = 10 лет) |
 | `--enable-mp2` | ✅ | — | Экспорт в sim_masterv2 |
 | `--enable-mp2-postprocess` | ✅ | — | GPU постпроцессинг (1→4→2) |
+| `--mp2-export-full` | ✅ | — | Полная история MP2 (sim_masterv2) |
+| `--mp2-export-short` | ✅ | — | Только дни изменений (sim_masterv2_short) |
+| `--mp2-table-base-name` | ✅ | — | Базовое имя таблицы MP2 |
+| `--mp2-short-table-suffix` | ✅ | — | Суффикс short-таблицы |
 | `--export` | — | ✅ | Экспорт в sim_units_v2 |
 | `--drop-table` | DS1 | DS1 | Очистка таблицы (только первый датасет!) |
+
+Примечания по MP2:
+- Если `--mp2-export-short` не указан, **полная выгрузка включена по умолчанию**.
+- Если заданы оба флага (`--mp2-export-short` и `--mp2-export-full`), выгрузка идёт в две таблицы: short → full.
 
 ### Ключевые правила порядка модулей
 1. `spawn_dynamic` ПЕРЕД state_managers (динамический спавн по дефициту)

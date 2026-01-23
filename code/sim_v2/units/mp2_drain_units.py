@@ -27,7 +27,8 @@ class MP2DrainUnitsHostFunction(fg.HostFunction):
     
     def __init__(self, client, table_name: str = 'sim_units_v2',
                  batch_size: int = 500000, simulation_steps: int = 3650,
-                 version_date: date = None, version_id: int = 1):
+                 version_date: date = None, version_id: int = 1,
+                 export_mode: str = "full"):
         super().__init__()
         self.client = client
         self.table_name = table_name
@@ -36,6 +37,7 @@ class MP2DrainUnitsHostFunction(fg.HostFunction):
         self.version_date = version_date or date.today()
         self.version_id = version_id
         self.version_date_int = (self.version_date - date(1970, 1, 1)).days
+        self.export_mode = export_mode
         
         # Статистика
         self.total_rows_written = 0
@@ -186,9 +188,21 @@ class MP2DrainUnitsHostFunction(fg.HostFunction):
         batch = []
         rows_this_drain = 0
         
-        print(f"   📝 Drain дней {start_day}-{end_day}, max_frames={max_frames}, drain_interval={drain_interval}", flush=True)
+        export_days = None
+        if self.export_mode == "changes":
+            export_days = self._collect_change_days(
+                mp2_psn, mp2_state, max_frames, drain_interval, start_day, end_day
+            )
+            if export_days:
+                print(f"   📝 Drain только дней с изменениями: {len(export_days)} из {end_day - start_day}", flush=True)
+            else:
+                print(f"   📝 Drain: изменений нет в диапазоне {start_day}-{end_day}", flush=True)
+        else:
+            print(f"   📝 Drain дней {start_day}-{end_day}, max_frames={max_frames}, drain_interval={drain_interval}", flush=True)
         
         for day in range(start_day, end_day):
+            if export_days is not None and day not in export_days:
+                continue
             # Циклическая позиция в буфере
             buffer_day = day % (drain_interval + 1)
             
@@ -278,6 +292,30 @@ class MP2DrainUnitsHostFunction(fg.HostFunction):
         self.flush_count += 1
         
         print(f"   🔄 Drain дней {start_day}-{end_day}: {rows_this_drain:,} записей за {elapsed:.2f}с")
+
+    def _collect_change_days(self, mp2_psn, mp2_state, max_frames: int, drain_interval: int,
+                              start_day: int, end_day: int):
+        """Собирает дни, где хотя бы один агрегат сменил state (для export_mode=changes)."""
+        export_days = set()
+        if start_day == 0:
+            export_days.add(0)
+
+        for day in range(max(start_day, 1), end_day):
+            buffer_day = day % (drain_interval + 1)
+            prev_buffer_day = (day - 1) % (drain_interval + 1)
+            changed = False
+            for idx in range(max_frames):
+                pos = buffer_day * max_frames + idx
+                prev_pos = prev_buffer_day * max_frames + idx
+                if int(mp2_psn[pos]) == 0 and int(mp2_psn[prev_pos]) == 0:
+                    continue
+                if int(mp2_state[pos]) != int(mp2_state[prev_pos]):
+                    changed = True
+                    break
+            if changed:
+                export_days.add(day)
+
+        return sorted(export_days)
     
     def _flush_batch(self, batch):
         """Вставляет батч в ClickHouse"""
@@ -293,7 +331,8 @@ class MP2DrainUnitsHostFunction(fg.HostFunction):
         )
 
 
-def register_mp2_drain_units(model, env_data, client, version_date, version_id=1):
+def register_mp2_drain_units(model, env_data, client, version_date, version_id=1,
+                             export_mode: str = "full", table_name: str = "sim_units_v2"):
     """
     Регистрирует host функцию для дренажа MP2 агрегатов
     
@@ -303,11 +342,12 @@ def register_mp2_drain_units(model, env_data, client, version_date, version_id=1
     
     drain_fn = MP2DrainUnitsHostFunction(
         client=client,
-        table_name='sim_units_v2',
+        table_name=table_name,
         batch_size=500000,
         simulation_steps=simulation_steps,
         version_date=version_date,
-        version_id=version_id
+        version_id=version_id,
+        export_mode=export_mode
     )
     
     # Регистрируем как step function
