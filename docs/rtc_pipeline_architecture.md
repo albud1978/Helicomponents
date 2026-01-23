@@ -398,10 +398,15 @@ if (intent == 0u) {
 
 3. **Host функция дренажа**: выгружает данные в ClickHouse **один раз в конце симуляции**
    - По умолчанию финальный дренаж: `--mp2-drain-interval=0` (интервальные выключены)
-   - Размер батча: 250000 записей (стандарт из sim_master)
-   - Таблица: sim_masterv2 (создаётся автоматически)
-   - Колоннарные INSERT (`columnar=True`) для снижения накладных расходов драйвера
-   - Поле `day_date` вычисляется на стороне ClickHouse (`Date MATERIALIZED addDays(...)`), в Python не считается
+   - Размер батча: 500000 записей (в orchestrator_v2), колоннарные INSERT для снижения накладных расходов
+   - Таблицы:
+     - `sim_masterv2` — полная история (режим `--mp2-export-full`, включён по умолчанию)
+     - `sim_masterv2_short` — только дни с изменениями (режим `--mp2-export-short`)
+   - Для short/full используются отдельные host-слои (`mp2_final_drain_short` / `mp2_final_drain_full`)
+     чтобы избежать конфликтов слоя при регистрации host-функций
+   - Поле `day_date` вычисляется на стороне ClickHouse (`Date MATERIALIZED addDays(...)`)
+   - Для ClickHouse устанавливается `max_partitions_per_insert_block=1000` во вставке
+     (иначе при 10-летнем горизонте возможен лимит 100 партиций на блок)
 
 4. **Инварианты пайплайна**:
    - MP2 формируется и живёт на GPU всю симуляцию
@@ -420,6 +425,10 @@ if (intent == 0u) {
 ### Параметры запуска (актуально)
 - `--enable-mp2` — включает device-side экспорт (MP2)
 - `--mp2-drain-interval 0` — финальный дренаж без интервалов (значение по умолчанию)
+- `--mp2-export-full` — выгрузка полной истории в `sim_masterv2`
+- `--mp2-export-short` — выгрузка только дней с изменениями в `sim_masterv2_short`
+- `--mp2-table-base-name` — базовое имя таблицы MP2
+- `--mp2-short-table-suffix` — суффикс short-таблицы
 - При включённом MP2 печатаются сводные метрики дренажа: `rows`, `flushes`, `max_batch`, `flush_time`, `rows/s`
 
 ## Инвентаризация Env (Mode A + Spawn, MP2=off)

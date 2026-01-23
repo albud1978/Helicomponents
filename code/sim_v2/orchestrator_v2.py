@@ -28,7 +28,9 @@ class V2Orchestrator:
     
     def __init__(self, env_data: Dict[str, object], enable_mp2: bool = False,
                  enable_mp2_postprocess: bool = False, clickhouse_client=None,
-                 debug: bool = False):
+                 debug: bool = False, mp2_export_full: bool = True,
+                 mp2_export_short: bool = False, mp2_table_base_name: str = "sim_masterv2",
+                 mp2_short_suffix: str = "_short"):
         self.env_data = env_data
         self.base_model = V2BaseModel()
         self.model = None
@@ -47,6 +49,11 @@ class V2Orchestrator:
         self.enable_mp2_postprocess = enable_mp2_postprocess
         self.clickhouse_client = clickhouse_client
         self.mp2_drain_func = None
+        self.mp2_drain_funcs = []
+        self.mp2_export_full = mp2_export_full
+        self.mp2_export_short = mp2_export_short
+        self.mp2_table_base_name = mp2_table_base_name
+        self.mp2_short_suffix = mp2_short_suffix
         
         # Компоненты
         self.population_builder = AgentPopulationBuilder(env_data)
@@ -127,18 +134,30 @@ class V2Orchestrator:
                 if self.debug:
                     print("  Подключение финального дренажа MP2 (батчи в конце симуляции)")
                 from mp2_drain_host import MP2DrainHostFunction
-                # interval_days=0 (по умолчанию) означает дренаж ТОЛЬКО в конце
-                self.mp2_drain_func = MP2DrainHostFunction(
-                    self.clickhouse_client,
-                    table_name='sim_masterv2',
-                    batch_size=500000,
-                    simulation_steps=self.days
-                )
-                # Добавляем в слой модели - будет вызывать run() на каждом шаге
-                # но дренаж происходит только когда step == simulation_steps - 1 (финальный шаг)
-                # На шагах 0..simulation_steps-2 проверка if is_final очень дешева
-                layer_drain = self.model.newLayer("mp2_final_drain")
-                layer_drain.addHostFunction(self.mp2_drain_func)
+                self.mp2_drain_funcs = []
+                if self.mp2_export_short:
+                    short_table = f"{self.mp2_table_base_name}{self.mp2_short_suffix}"
+                    short_fn = MP2DrainHostFunction(
+                        self.clickhouse_client,
+                        table_name=short_table,
+                        batch_size=500000,
+                        simulation_steps=self.days,
+                        export_mode="changes"
+                    )
+                    layer_drain_short = self.model.newLayer("mp2_final_drain_short")
+                    layer_drain_short.addHostFunction(short_fn)
+                    self.mp2_drain_funcs.append(short_fn)
+                if self.mp2_export_full:
+                    full_fn = MP2DrainHostFunction(
+                        self.clickhouse_client,
+                        table_name=self.mp2_table_base_name,
+                        batch_size=500000,
+                        simulation_steps=self.days,
+                        export_mode="full"
+                    )
+                    layer_drain_full = self.model.newLayer("mp2_final_drain_full")
+                    layer_drain_full.addHostFunction(full_fn)
+                    self.mp2_drain_funcs.append(full_fn)
         else:
             pass
         
@@ -358,8 +377,9 @@ class V2Orchestrator:
         # Обновляем количество шагов в MP2 drain функции
         # Если включён постпроцессинг, дренаж будет на шаге steps+1
         actual_drain_step = steps + 1 if self.enable_mp2_postprocess else steps
-        if self.mp2_drain_func:
-            self.mp2_drain_func.simulation_steps = actual_drain_step
+        if self.mp2_drain_funcs:
+            for fn in self.mp2_drain_funcs:
+                fn.simulation_steps = actual_drain_step
         
         # Инициализация телеметрии
         if self.telemetry:
@@ -567,6 +587,14 @@ def main():
                       help='Включить MP2 device-side export')
     parser.add_argument('--enable-mp2-postprocess', action='store_true',
                       help='Включить GPU постпроцессинг MP2 (active_trigger → repair history)')
+    parser.add_argument('--mp2-export-full', action='store_true',
+                      help='Экспортировать полную историю MP2 в базовую таблицу')
+    parser.add_argument('--mp2-export-short', action='store_true',
+                      help='Экспортировать только дни изменений в short-таблицу')
+    parser.add_argument('--mp2-short-table-suffix', type=str, default='_short',
+                      help='Суффикс для короткой таблицы (по умолчанию _short)')
+    parser.add_argument('--mp2-table-base-name', type=str, default='sim_masterv2',
+                      help='Базовое имя таблицы MP2 (по умолчанию sim_masterv2)')
     parser.add_argument('--mp2-drain-interval', type=int, default=0,
                       help='Интервал дренажа MP2 (шаги). 0 = только финальный дренаж')
     parser.add_argument('--drop-table', action='store_true',
@@ -612,14 +640,23 @@ def main():
             print("❌ Нет доступных версий данных!")
             return 1
     
+    # Определяем режим экспорта (раздельные флаги)
+    mp2_export_full = args.mp2_export_full or (not args.mp2_export_short)
+
     # Опционально дропаем таблицу проекта перед запуском
     if args.drop_table:
         try:
-            print("Удаление таблицы sim_masterv2 (DROP TABLE IF EXISTS)...")
-            client.execute("DROP TABLE IF EXISTS sim_masterv2")
-            print("  Таблица sim_masterv2 удалена (если существовала)")
+            if mp2_export_full:
+                print(f"Удаление таблицы {args.mp2_table_base_name} (DROP TABLE IF EXISTS)...")
+                client.execute(f"DROP TABLE IF EXISTS {args.mp2_table_base_name}")
+                print(f"  Таблица {args.mp2_table_base_name} удалена (если существовала)")
+            if args.mp2_export_short:
+                short_table = f"{args.mp2_table_base_name}{args.mp2_short_table_suffix}"
+                print(f"Удаление таблицы {short_table} (DROP TABLE IF EXISTS)...")
+                client.execute(f"DROP TABLE IF EXISTS {short_table}")
+                print(f"  Таблица {short_table} удалена (если существовала)")
         except Exception as e:
-            print(f"  Ошибка удаления таблицы sim_masterv2: {e}")
+            print(f"  Ошибка удаления таблицы: {e}")
             raise
 
     env_data = prepare_env_arrays(client, version_date)
@@ -633,7 +670,11 @@ def main():
                                   enable_mp2=args.enable_mp2,
                                   enable_mp2_postprocess=args.enable_mp2_postprocess,
                                   clickhouse_client=client if args.enable_mp2 else None,
-                                  debug=args.debug)
+                                  debug=args.debug,
+                                  mp2_export_full=mp2_export_full,
+                                  mp2_export_short=args.mp2_export_short,
+                                  mp2_table_base_name=args.mp2_table_base_name,
+                                  mp2_short_suffix=args.mp2_short_table_suffix)
     
     # Строим модель с указанными модулями
     orchestrator.build_model(args.modules)
@@ -641,11 +682,12 @@ def main():
     # Создаем симуляцию
     orchestrator.create_simulation()
     # Настраиваем интервал инкрементального дренажа MP2 (если подключен)
-    if args.enable_mp2 and orchestrator.mp2_drain_func:
-        try:
-            orchestrator.mp2_drain_func.interval_days = max(0, int(args.mp2_drain_interval))
-        except Exception:
-            pass
+    if args.enable_mp2 and getattr(orchestrator, "mp2_drain_funcs", None):
+        for fn in orchestrator.mp2_drain_funcs:
+            try:
+                fn.interval_days = max(0, int(args.mp2_drain_interval))
+            except Exception:
+                pass
     
     # Замеряем время GPU обработки
     t_gpu_start = time.perf_counter()
@@ -658,8 +700,8 @@ def main():
     
     # Получаем время дренажа если MP2 включен
     t_db_total = 0.0
-    if args.enable_mp2 and orchestrator.mp2_drain_func:
-        t_db_total = orchestrator.mp2_drain_func.total_drain_time
+    if args.enable_mp2 and getattr(orchestrator, "mp2_drain_funcs", None):
+        t_db_total = sum(fn.total_drain_time for fn in orchestrator.mp2_drain_funcs)
     
     # Общее время
     t_total = time.perf_counter() - t_total_start
@@ -681,14 +723,14 @@ def main():
         print(f"Среднее время на шаг: {t_gpu_total/steps*1000:.1f}мс")
     
     # Статистика дренажа MP2
-    if args.enable_mp2 and orchestrator.mp2_drain_func:
-        d = orchestrator.mp2_drain_func
-        rows = getattr(d, 'total_rows_written', 0)
-        flushes = getattr(d, 'flush_count', 0)
-        t_flush = getattr(d, 'total_flush_time', 0.0)
-        max_batch = getattr(d, 'max_batch_rows', 0)
-        rps = (rows / t_db_total) if t_db_total > 0 else 0.0
-        print(f"Дренаж MP2: rows={rows}, flushes={flushes}, max_batch={max_batch}, flush_time={t_flush:.2f}с, rows/s≈{rps:,.0f}")
+    if args.enable_mp2 and getattr(orchestrator, "mp2_drain_funcs", None):
+        for d in orchestrator.mp2_drain_funcs:
+            rows = getattr(d, 'total_rows_written', 0)
+            flushes = getattr(d, 'flush_count', 0)
+            t_flush = getattr(d, 'total_flush_time', 0.0)
+            max_batch = getattr(d, 'max_batch_rows', 0)
+            rps = (rows / d.total_drain_time) if d.total_drain_time > 0 else 0.0
+            print(f"Дренаж MP2 ({d.table_name}): rows={rows}, flushes={flushes}, max_batch={max_batch}, flush_time={t_flush:.2f}с, rows/s≈{rps:,.0f}")
     
     # Получаем результаты (без подробного печатного вывода)
     _ = orchestrator.get_results()

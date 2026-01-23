@@ -33,6 +33,9 @@ python3 code/utils/test_db_connection.py
 python3 code/extract_master.py
 
 # 4. Запустить симуляцию — см. полную команду в .cursorrules
+#    MP2 экспорт:
+#    - --mp2-export-short → sim_masterv2_short (только дни с изменениями)
+#    - --mp2-export-full  → sim_masterv2 (полная история, включена по умолчанию)
 ```
 
 > **Полные команды с параметрами:** см. `.cursorrules` (секции "Загрузка данных" и "Команда запуска симуляции")
