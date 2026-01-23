@@ -14,12 +14,14 @@ class MP2DrainHostFunction(fg.HostFunction):
     """Host функция для батчевой выгрузки MP2 с GPU в СУБД"""
     
     def __init__(self, client, table_name: str = 'sim_masterv2', 
-                 batch_size: int = 250000, simulation_steps: int = 365):
+                 batch_size: int = 250000, simulation_steps: int = 365,
+                 export_mode: str = "full"):
         super().__init__()
         self.client = client
         self.table_name = table_name
         self.batch_size = batch_size
         self.simulation_steps = simulation_steps
+        self.export_mode = export_mode
         self.batch = []
         self.total_rows_written = 0
         self.total_drain_time = 0.0
@@ -328,8 +330,19 @@ class MP2DrainHostFunction(fg.HostFunction):
         rows_count = 0
         # day_date вычисляется в ClickHouse (MATERIALIZED), в Python не считаем
         
+        export_days = None
+        if self.export_mode == "changes":
+            export_days = self._collect_change_days(
+                mp2_aircraft, mp2_state, frames, start_day, end_day
+            )
+            if export_days:
+                print(f"  🔎 MP2 short: дней с изменениями {len(export_days)} из {end_day - start_day}")
+            else:
+                print(f"  🔎 MP2 short: изменений нет в диапазоне {start_day}-{end_day}")
         # Собираем батч
         for day in range(start_day, end_day):
+            if export_days is not None and day not in export_days:
+                continue
             # Прямая адресация в плотной матрице
             day_offset = day * frames
             
@@ -403,6 +416,29 @@ class MP2DrainHostFunction(fg.HostFunction):
             self._flush_batch()
             
         return rows_count
+
+    def _collect_change_days(self, mp2_aircraft, mp2_state, frames: int, start_day: int, end_day: int):
+        """Собирает дни, где хотя бы один планер сменил state или aircraft_number."""
+        export_days = set()
+        if start_day == 0:
+            export_days.add(0)
+        for day in range(max(start_day, 1), end_day):
+            day_offset = day * frames
+            prev_offset = (day - 1) * frames
+            changed = False
+            for idx in range(frames):
+                pos = day_offset + idx
+                prev_pos = prev_offset + idx
+                ac = int(mp2_aircraft[pos])
+                prev_ac = int(mp2_aircraft[prev_pos])
+                if ac == 0 and prev_ac == 0:
+                    continue
+                if ac != prev_ac or int(mp2_state[pos]) != int(mp2_state[prev_pos]):
+                    changed = True
+                    break
+            if changed:
+                export_days.add(day)
+        return export_days
 
     def _drain_mp2_budgeted(self, FLAMEGPU, start_day_inclusive: int, end_day_inclusive: int, 
                              start_idx: int, max_rows: int):
@@ -555,12 +591,21 @@ class MP2DrainHostFunction(fg.HostFunction):
         # Получаем days_total для safe_day логики
         days_total = FLAMEGPU.environment.getPropertyUInt32("days_total")
         
+        export_days = None
+        if self.export_mode == "changes":
+            export_days = self._collect_change_days(
+                mp2_aircraft, mp2_state, frames, max(0, int(start_day_inclusive)), int(end_day_inclusive) + 1
+            )
         rows_count = 0
         day = max(0, int(start_day_inclusive))
         end_day = int(end_day_inclusive)
         idx_cursor = int(start_idx)
         
         while day <= end_day:
+            if export_days is not None and day not in export_days:
+                day += 1
+                idx_cursor = 0
+                continue
             day_offset = day * frames
             # Итерируем по индексам начиная с текущего курсора
             for idx in range(idx_cursor, frames):
@@ -655,7 +700,12 @@ class MP2DrainHostFunction(fg.HostFunction):
         for r in self.batch:
             for i, v in enumerate(r):
                 cols[i].append(v)
-        self.client.execute(query, cols, columnar=True)
+        self.client.execute(
+            query,
+            cols,
+            columnar=True,
+            settings={"max_partitions_per_insert_block": 1000}
+        )
         self.flush_count += 1
         self.total_flush_time += (time.perf_counter() - t_start)
         self.batch.clear()
