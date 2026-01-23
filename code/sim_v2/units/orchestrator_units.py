@@ -58,9 +58,14 @@ MAX_PLANERS = 400  # Максимум планеров для assembly
 class UnitsOrchestrator:
     """Оркестратор симуляции агрегатов"""
     
-    def __init__(self, version_date: date, version_id: int = 1):
+    def __init__(self, version_date: date, version_id: int = 1,
+                 export_mode: str = "full", short_table_suffix: str = "_short",
+                 table_base_name: str = "sim_units_v2"):
         self.version_date = version_date
         self.version_id = version_id
+        self.export_mode = export_mode
+        self.short_table_suffix = short_table_suffix
+        self.table_base_name = table_base_name
         
         self.base_model: Optional[V2BaseModelUnits] = None
         self.simulation: Optional[fg.CUDASimulation] = None
@@ -474,17 +479,49 @@ class UnitsOrchestrator:
             from utils.config_loader import get_clickhouse_client
             
             client = get_clickhouse_client()
-            self.mp2_drain_fn = MP2DrainUnitsHostFunction(
-                client=client,
-                table_name='sim_units_v2',
-                batch_size=500000,
-                simulation_steps=max_days,
-                version_date=self.version_date,
-                version_id=self.version_id
-            )
-            # Регистрируем как StepFunction (вызывается после каждого step)
-            model.addStepFunction(self.mp2_drain_fn)
-            print(f"  RTC модуль mp2_drain зарегистрирован (drain каждые 100 дней)")
+            self.mp2_drain_fns = []
+            if self.export_mode == "both":
+                short_table = f"{self.table_base_name}{self.short_table_suffix}"
+                short_fn = MP2DrainUnitsHostFunction(
+                    client=client,
+                    table_name=short_table,
+                    batch_size=500000,
+                    simulation_steps=max_days,
+                    version_date=self.version_date,
+                    version_id=self.version_id,
+                    export_mode="changes"
+                )
+                model.addStepFunction(short_fn)
+                self.mp2_drain_fns.append(short_fn)
+                
+                full_fn = MP2DrainUnitsHostFunction(
+                    client=client,
+                    table_name=self.table_base_name,
+                    batch_size=500000,
+                    simulation_steps=max_days,
+                    version_date=self.version_date,
+                    version_id=self.version_id,
+                    export_mode="full"
+                )
+                model.addStepFunction(full_fn)
+                self.mp2_drain_fns.append(full_fn)
+                print(f"  RTC модуль mp2_drain зарегистрирован (short -> full)")
+            else:
+                table_name = self.table_base_name
+                if self.export_mode == "changes":
+                    table_name = f"{self.table_base_name}{self.short_table_suffix}"
+                fn = MP2DrainUnitsHostFunction(
+                    client=client,
+                    table_name=table_name,
+                    batch_size=500000,
+                    simulation_steps=max_days,
+                    version_date=self.version_date,
+                    version_id=self.version_id,
+                    export_mode=self.export_mode
+                )
+                model.addStepFunction(fn)
+                self.mp2_drain_fns.append(fn)
+                print(f"  RTC модуль mp2_drain зарегистрирован (mode={self.export_mode})")
             modules_ok += 1
         except Exception as e:
             print(f"  ⚠️ mp2_drain: {e} (история будет только финальная)")
@@ -633,6 +670,13 @@ def parse_args():
                        help='Экспортировать результаты в ClickHouse')
     parser.add_argument('--drop-table', action='store_true',
                        help='Удалить таблицу перед экспортом')
+    parser.add_argument('--export-mode', type=str, default='full',
+                       choices=['full', 'changes', 'both'],
+                       help='Режим экспорта: full / changes / both (short->full)')
+    parser.add_argument('--short-table-suffix', type=str, default='_short',
+                       help='Суффикс для короткой таблицы (по умолчанию _short)')
+    parser.add_argument('--table-base-name', type=str, default='sim_units_v2',
+                       help='Базовое имя таблицы для агрегатов')
     return parser.parse_args()
 
 
@@ -648,7 +692,10 @@ def main():
     print(f"   Шагов: {args.steps}")
     print("=" * 60)
     
-    orchestrator = UnitsOrchestrator(version_date, args.version_id)
+    orchestrator = UnitsOrchestrator(
+        version_date, args.version_id, args.export_mode,
+        args.short_table_suffix, args.table_base_name
+    )
     
     try:
         orchestrator.load_data()
@@ -663,13 +710,14 @@ def main():
             print("📤 ФИНАЛЬНЫЙ DRAIN MP2 В CLICKHOUSE")
             print("=" * 60)
             
-            if orchestrator.mp2_drain_fn is not None:
+            if getattr(orchestrator, "mp2_drain_fns", None):
                 # Финальный дренаж уже должен был сработать на последнем step
                 # Но для надёжности запускаем ещё один step
                 print("   🔄 Запуск финального drain step...")
                 orchestrator.simulation.step()  # Это вызовет HostFunction.run()
-                print(f"   ✅ Итого записей: {orchestrator.mp2_drain_fn.total_rows_written:,}")
-                print(f"   ⏱️ Время drain: {orchestrator.mp2_drain_fn.total_drain_time:.2f}с")
+                for fn in orchestrator.mp2_drain_fns:
+                    print(f"   ✅ {fn.table_name}: {fn.total_rows_written:,} записей")
+                    print(f"   ⏱️ {fn.table_name}: {fn.total_drain_time:.2f}с")
             else:
                 # Fallback: старый метод экспорта
                 try:

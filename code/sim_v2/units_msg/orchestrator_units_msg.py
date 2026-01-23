@@ -68,9 +68,13 @@ from utils.config_loader import get_clickhouse_client
 
 
 class UnitsMsgOrchestrator:
-    def __init__(self, version_date: date, version_id: int = 1):
+    def __init__(self, version_date: date, version_id: int = 1, export_mode: str = "full",
+                 short_table_suffix: str = "_short", table_base_name: str = "sim_units_v2"):
         self.version_date = version_date
         self.version_id = version_id
+        self.export_mode = export_mode
+        self.short_table_suffix = short_table_suffix
+        self.table_base_name = table_base_name
         self.base_model: Optional[V2BaseModelUnitsMsg] = None
         self.simulation: Optional[fg.CUDASimulation] = None
         self.env_data: Dict = {}
@@ -137,7 +141,29 @@ class UnitsMsgOrchestrator:
         days_total = int(self.env_data.get('days_total_u16', 3650))
         rtc_units_mp2_writer.register_rtc(model, self.base_model.agent_units, max_frames=max_frames, max_days=days_total, drain_interval=10)
         client = get_clickhouse_client()
-        self.mp2_drain_fn = register_mp2_drain_units(model, self.env_data, client, self.version_date, self.version_id)
+        self.mp2_drain_fns = []
+        if self.export_mode == "both":
+            short_table = f"{self.table_base_name}{self.short_table_suffix}"
+            short_fn = register_mp2_drain_units(
+                model, self.env_data, client, self.version_date, self.version_id,
+                export_mode="changes", table_name=short_table
+            )
+            self.mp2_drain_fns.append(short_fn)
+            
+            full_fn = register_mp2_drain_units(
+                model, self.env_data, client, self.version_date, self.version_id,
+                export_mode="full", table_name=self.table_base_name
+            )
+            self.mp2_drain_fns.append(full_fn)
+        else:
+            table_name = self.table_base_name
+            if self.export_mode == "changes":
+                table_name = f"{self.table_base_name}{self.short_table_suffix}"
+            fn = register_mp2_drain_units(
+                model, self.env_data, client, self.version_date, self.version_id,
+                export_mode=self.export_mode, table_name=table_name
+            )
+            self.mp2_drain_fns.append(fn)
 
         self.simulation = fg.CUDASimulation(model)
 
@@ -171,11 +197,21 @@ def main():
     parser.add_argument('--version-date', required=True, help='Дата версии (YYYY-MM-DD)')
     parser.add_argument('--version-id', type=int, default=1)
     parser.add_argument('--steps', type=int, default=3650)
+    parser.add_argument('--export-mode', type=str, default='full',
+                        choices=['full', 'changes', 'both'],
+                        help='Режим экспорта: full / changes / both (short->full)')
+    parser.add_argument('--short-table-suffix', type=str, default='_short',
+                        help='Суффикс для короткой таблицы (по умолчанию _short)')
+    parser.add_argument('--table-base-name', type=str, default='sim_units_v2',
+                        help='Базовое имя таблицы для агрегатов')
     args = parser.parse_args()
 
     vd = date.fromisoformat(args.version_date)
 
-    orch = UnitsMsgOrchestrator(vd, args.version_id)
+    orch = UnitsMsgOrchestrator(
+        vd, args.version_id, args.export_mode,
+        args.short_table_suffix, args.table_base_name
+    )
     orch.load_data()
     orch.build_model()
     orch.populate_agents()
