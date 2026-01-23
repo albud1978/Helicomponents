@@ -101,11 +101,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_2_operations, flamegpu::MessageNone, flamegpu:
     // 2. Потом проверяем OH с учётом BR
     if (p_next >= oh) {{
         if (s_next < br) {{
-            // Переход в ремонт
-            FLAMEGPU->setVariable<unsigned int>("intent_state", 4u);
+            // Переход в очередь на ремонт (unserviceable)
+            FLAMEGPU->setVariable<unsigned int>("intent_state", 7u);
             const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
             if (debug_enabled) {{
-                printf("  [Step %u] AC %u: intent=4 (repair), ppr_next=%u >= oh=%u, sne_next=%u < br=%u\\n", 
+                printf("  [Step %u] AC %u: intent=7 (unserviceable), ppr_next=%u >= oh=%u, sne_next=%u < br=%u\\n", 
                        step_day, aircraft_number, p_next, oh, s_next, br);
             }}
         }} else {{

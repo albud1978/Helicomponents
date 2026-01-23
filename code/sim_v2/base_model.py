@@ -188,13 +188,20 @@ class V2BaseModel:
         # Промоут (раздельные буферы для каждого приоритета)
         self.env.newMacroPropertyUInt32("mi8_approve_s3", model_build.MAX_FRAMES)   # serviceable → operations
         self.env.newMacroPropertyUInt32("mi17_approve_s3", model_build.MAX_FRAMES)
-        self.env.newMacroPropertyUInt32("mi8_approve_s5", model_build.MAX_FRAMES)   # reserve → operations
+        self.env.newMacroPropertyUInt32("mi8_approve_s7", model_build.MAX_FRAMES)   # unserviceable → operations
+        self.env.newMacroPropertyUInt32("mi17_approve_s7", model_build.MAX_FRAMES)
+        # Legacy: reserve → operations (не используется в текущем пайплайне)
+        self.env.newMacroPropertyUInt32("mi8_approve_s5", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi17_approve_s5", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi8_approve_s1", model_build.MAX_FRAMES)   # inactive → operations
         self.env.newMacroPropertyUInt32("mi17_approve_s1", model_build.MAX_FRAMES)
-        # Кандидаты P3 (inactive) — для централизованного аллокатора
+        # Кандидаты P2/P3 (unserviceable/inactive) — для централизованных аллокаторов
+        self.env.newMacroPropertyUInt32("mi8_candidate_s7", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("mi17_candidate_s7", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi8_candidate_s1", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("mi17_candidate_s1", model_build.MAX_FRAMES)
+        # Снимок group_by по idx (для приоритетов в ремонте)
+        self.env.newMacroPropertyUInt32("group_by_by_idx", model_build.MAX_FRAMES)
         
         # Снимки ремонтных параметров и пул ремонтных линий (по дням)
         self.env.newMacroPropertyUInt32("repair_time_by_idx", model_build.MAX_FRAMES)
@@ -425,6 +432,10 @@ class V2BaseModel:
             elif module_name == "quota_promote_serviceable":
                 import rtc_quota_promote_serviceable
                 rtc_quota_promote_serviceable.register_rtc(self.model, self.agent)
+            
+            elif module_name == "quota_promote_unserviceable":
+                import rtc_quota_promote_unserviceable
+                rtc_quota_promote_unserviceable.register_rtc(self.model, self.agent)
             
             elif module_name == "quota_promote_reserve":
                 import rtc_quota_promote_reserve

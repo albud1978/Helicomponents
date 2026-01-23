@@ -356,6 +356,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_1_to_2, flamegpu::MessageNone, flamegpu::Messa
     
     // ✅ КРИТИЧНО: Устанавливаем active_trigger=1 при переходе inactive → operations
     FLAMEGPU->setVariable<unsigned int>("active_trigger", 1u);
+    const unsigned int mp2_enabled = FLAMEGPU->environment.getProperty<unsigned int>("mp2_enabled");
+    if (mp2_enabled) {{
+        const unsigned int pos = step_day * {RTC_MAX_FRAMES}u + idx;
+        auto mp2_active_source = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_SIZE}u>("mp2_active_source");
+        mp2_active_source[pos].exchange(1u);
+    }}
     
     // br2_mi17 — порог межремонтного для подъёма из inactive
     // Если ppr >= br2_mi17 → обнуляем ppr (ремонт)

@@ -18,7 +18,7 @@
     2→6 operations → storage
     3→2 serviceable → operations
     4→2 repair → operations
-    5→2 reserve → operations
+    7→2 unserviceable → operations
     7→4 unserviceable → repair
 
 Самопереходы (остаёмся в том же состоянии):
@@ -79,13 +79,13 @@ ALLOWED_TRANSITIONS: Set[Tuple[int, int]] = {
     (4, 4),  # самопереход
     
     # Из reserve (5)
-    (5, 2),  # reserve → operations
     (5, 5),  # самопереход
     
     # Из storage (6)
     (6, 6),  # самопереход (терминальный)
     
     # Из unserviceable (7)
+    (7, 2),  # unserviceable → operations
     (7, 4),  # unserviceable → repair
     (7, 7),  # самопереход
 }
@@ -95,7 +95,6 @@ ALLOWED_TRANSITIONS: Set[Tuple[int, int]] = {
 TRANSITION_COLUMNS = [
     'transition_0_to_2',
     'transition_0_to_3',
-    'transition_1_to_2',
     'transition_1_to_4',
     'transition_2_to_3',
     'transition_2_to_4',
@@ -103,8 +102,8 @@ TRANSITION_COLUMNS = [
     'transition_2_to_6',
     'transition_3_to_2',
     'transition_4_to_2',
-    'transition_4_to_5',
-    'transition_5_to_2',
+    'transition_7_to_4',
+    'transition_7_to_2',
 ]
 
 
@@ -259,6 +258,129 @@ class TransitionsValidator:
             print("✅ Все флаги переходов консистентны с состояниями агентов")
         
         self.stats['consistency'] = results
+        return results
+
+    def validate_state_balance(self) -> Dict:
+        """Проверяет баланс по состояниям: start + in - out = end (без 0 и 6)"""
+        print("\n" + "="*80)
+        print("4. ВАЛИДАЦИЯ БАЛАНСА ПО СОСТОЯНИЯМ")
+        print("="*80)
+
+        state_expr = """
+            multiIf(
+                state='inactive', 1,
+                state='operations', 2,
+                state='serviceable', 3,
+                state='repair', 4,
+                state='reserve', 5,
+                state='storage', 6,
+                state='unserviceable', 7,
+                0
+            )
+        """
+
+        # Последний день в данных
+        last_day = self.client.execute(
+            "SELECT max(day_u16) FROM sim_masterv2 WHERE version_date = %(v)s",
+            {"v": self.version_date}
+        )[0][0]
+
+        # start/end counts (только реальные планеры)
+        start_counts = dict(self.client.execute(
+            f"""
+            SELECT {state_expr} AS s, count()
+            FROM sim_masterv2
+            WHERE version_date = %(v)s AND day_u16 = 0 AND aircraft_number > 0
+            GROUP BY s
+            """,
+            {"v": self.version_date}
+        ))
+        end_counts = dict(self.client.execute(
+            f"""
+            SELECT {state_expr} AS s, count()
+            FROM sim_masterv2
+            WHERE version_date = %(v)s AND day_u16 = %(d)s AND aircraft_number > 0
+            GROUP BY s
+            """,
+            {"v": self.version_date, "d": last_day}
+        ))
+
+        # transitions state->state без учёта спавна (исключаем пустые слоты)
+        transitions = self.client.execute(
+            f"""
+            SELECT from_state, to_state, count() AS cnt
+            FROM (
+                SELECT idx,
+                       aircraft_number,
+                       {state_expr} AS to_state,
+                       lagInFrame(aircraft_number, 1) OVER (PARTITION BY idx ORDER BY day_u16) AS prev_aircraft,
+                       lagInFrame({state_expr}, 1) OVER (PARTITION BY idx ORDER BY day_u16) AS from_state
+                FROM sim_masterv2
+                WHERE version_date = %(v)s
+            )
+            WHERE prev_aircraft > 0 AND aircraft_number > 0
+              AND from_state > 0 AND to_state > 0 AND from_state != to_state
+            GROUP BY from_state, to_state
+            """,
+            {"v": self.version_date}
+        )
+
+        in_counts = defaultdict(int)
+        out_counts = defaultdict(int)
+        for from_s, to_s, cnt in transitions:
+            out_counts[int(from_s)] += int(cnt)
+            in_counts[int(to_s)] += int(cnt)
+
+        # Добавляем спавн как входы в 2 и 3
+        spawn = self.client.execute(
+            """
+            SELECT sum(transition_0_to_2), sum(transition_0_to_3)
+            FROM sim_masterv2
+            WHERE version_date = %(v)s AND aircraft_number > 0
+            """,
+            {"v": self.version_date}
+        )[0]
+        in_counts[2] += int(spawn[0]) if spawn[0] is not None else 0
+        in_counts[3] += int(spawn[1]) if spawn[1] is not None else 0
+
+        results = {
+            'last_day': last_day,
+            'by_state': {},
+            'valid': True
+        }
+
+        # Проверяем состояния 1,2,3,4,5,7 (исключаем 0 и 6)
+        for s in (1, 2, 3, 4, 5, 7):
+            start = int(start_counts.get(s, 0))
+            end = int(end_counts.get(s, 0))
+            inc = int(in_counts.get(s, 0))
+            out = int(out_counts.get(s, 0))
+            lhs = start + inc - out
+            diff = lhs - end
+            results['by_state'][s] = {
+                'start': start,
+                'in': inc,
+                'out': out,
+                'end': end,
+                'diff': diff
+            }
+            if diff != 0:
+                results['valid'] = False
+                self.errors.append({
+                    'type': 'STATE_BALANCE_MISMATCH',
+                    'state': s,
+                    'message': f"Баланс state={s}: start({start}) + in({inc}) - out({out}) = {lhs}, end={end} (diff {diff:+d})"
+                })
+
+        # Вывод
+        for s, data in results['by_state'].items():
+            status = "✅ OK" if data['diff'] == 0 else f"❌ DIFF {data['diff']:+d}"
+            print(f"state {s}: start={data['start']}, in={data['in']}, out={data['out']}, end={data['end']} => {status}")
+
+        if results['valid']:
+            print("✅ Баланс по состояниям выдержан (без 0 и 6)")
+
+        self.stats['balance'] = results
         return results
     
     def validate_repair_duration(self) -> Dict:
@@ -515,6 +637,7 @@ class TransitionsValidator:
         self.validate_state_consistency()
         self.validate_repair_duration()
         self.validate_no_impossible_transitions()
+        self.validate_state_balance()
         
         # Итоговая сводка
         print("\n" + "="*80)

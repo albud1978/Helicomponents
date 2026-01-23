@@ -83,6 +83,7 @@ def setup_mp2_macroproperties(model: fg.ModelDescription):
     model.Environment().newMacroPropertyUInt32("mp2_quota_target_ops", MP2_SIZE)
     model.Environment().newMacroPropertyUInt32("mp2_quota_svc_count", MP2_SIZE)
     model.Environment().newMacroPropertyInt("mp2_quota_deficit", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_active_source", MP2_SIZE)
     
     # Флаги квотирования (per-agent per-day)
     model.Environment().newMacroPropertyUInt("mp2_quota_demount", MP2_SIZE)
@@ -97,11 +98,10 @@ def setup_mp2_macroproperties(model: fg.ModelDescription):
     model.Environment().newMacroPropertyUInt("mp2_transition_2_to_6", MP2_SIZE)
     model.Environment().newMacroPropertyUInt("mp2_transition_2_to_3", MP2_SIZE)
     model.Environment().newMacroPropertyUInt("mp2_transition_3_to_2", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_transition_5_to_2", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_transition_1_to_2", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_transition_4_to_5", MP2_SIZE)
     model.Environment().newMacroPropertyUInt("mp2_transition_1_to_4", MP2_SIZE)
     model.Environment().newMacroPropertyUInt("mp2_transition_4_to_2", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_7_to_4", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_7_to_2", MP2_SIZE)
     
     _mp2_macroproperties_created = True
     print("  ✅ MP2 MacroProperties созданы (setup_mp2_macroproperties)")
@@ -231,22 +231,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_inactive, flamegpu::MessageNone, flamegpu:
     if (group_by == 1u) {{
         auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
         auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
-        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s7");
         auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
         
         demount_flag = mi8_approve[idx];
         promote_p1_flag = mi8_approve_s3[idx];
-        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p2_flag = mi8_approve_s7[idx];
         promote_p3_flag = mi8_approve_s1[idx];
     }} else if (group_by == 2u) {{
         auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
         auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
-        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s7");
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
         
         demount_flag = mi17_approve[idx];
         promote_p1_flag = mi17_approve_s3[idx];
-        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p2_flag = mi17_approve_s7[idx];
         promote_p3_flag = mi17_approve_s1[idx];
     }}
     
@@ -386,22 +386,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_operations, flamegpu::MessageNone, flamegp
     if (group_by == 1u) {{
         auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
         auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
-        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s7");
         auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
         
         demount_flag = mi8_approve[idx];
         promote_p1_flag = mi8_approve_s3[idx];
-        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p2_flag = mi8_approve_s7[idx];
         promote_p3_flag = mi8_approve_s1[idx];
     }} else if (group_by == 2u) {{
         auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
         auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
-        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s7");
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
         
         demount_flag = mi17_approve[idx];
         promote_p1_flag = mi17_approve_s3[idx];
-        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p2_flag = mi17_approve_s7[idx];
         promote_p3_flag = mi17_approve_s1[idx];
     }}
     
@@ -532,22 +532,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_serviceable, flamegpu::MessageNone, flameg
     if (group_by == 1u) {{
         auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
         auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
-        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s7");
         auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
         
         demount_flag = mi8_approve[idx];
         promote_p1_flag = mi8_approve_s3[idx];
-        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p2_flag = mi8_approve_s7[idx];
         promote_p3_flag = mi8_approve_s1[idx];
     }} else if (group_by == 2u) {{
         auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
         auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
-        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s7");
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
         
         demount_flag = mi17_approve[idx];
         promote_p1_flag = mi17_approve_s3[idx];
-        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p2_flag = mi17_approve_s7[idx];
         promote_p3_flag = mi17_approve_s1[idx];
     }}
     
@@ -678,22 +678,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_repair, flamegpu::MessageNone, flamegpu::M
     if (group_by == 1u) {{
         auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
         auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
-        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s7");
         auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
         
         demount_flag = mi8_approve[idx];
         promote_p1_flag = mi8_approve_s3[idx];
-        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p2_flag = mi8_approve_s7[idx];
         promote_p3_flag = mi8_approve_s1[idx];
     }} else if (group_by == 2u) {{
         auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
         auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
-        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s7");
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
         
         demount_flag = mi17_approve[idx];
         promote_p1_flag = mi17_approve_s3[idx];
-        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p2_flag = mi17_approve_s7[idx];
         promote_p3_flag = mi17_approve_s1[idx];
     }}
     
@@ -824,22 +824,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_reserve, flamegpu::MessageNone, flamegpu::
     if (group_by == 1u) {{
         auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
         auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
-        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s7");
         auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
         
         demount_flag = mi8_approve[idx];
         promote_p1_flag = mi8_approve_s3[idx];
-        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p2_flag = mi8_approve_s7[idx];
         promote_p3_flag = mi8_approve_s1[idx];
     }} else if (group_by == 2u) {{
         auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
         auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
-        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s7");
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
         
         demount_flag = mi17_approve[idx];
         promote_p1_flag = mi17_approve_s3[idx];
-        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p2_flag = mi17_approve_s7[idx];
         promote_p3_flag = mi17_approve_s1[idx];
     }}
     
@@ -970,22 +970,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_storage, flamegpu::MessageNone, flamegpu::
     if (group_by == 1u) {{
         auto mi8_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve");
         auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s3");
-        auto mi8_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s5");
+        auto mi8_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s7");
         auto mi8_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi8_approve_s1");
         
         demount_flag = mi8_approve[idx];
         promote_p1_flag = mi8_approve_s3[idx];
-        promote_p2_flag = mi8_approve_s5[idx];
+        promote_p2_flag = mi8_approve_s7[idx];
         promote_p3_flag = mi8_approve_s1[idx];
     }} else if (group_by == 2u) {{
         auto mi17_approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve");
         auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s3");
-        auto mi17_approve_s5 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s5");
+        auto mi17_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s7");
         auto mi17_approve_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("mi17_approve_s1");
         
         demount_flag = mi17_approve[idx];
         promote_p1_flag = mi17_approve_s3[idx];
-        promote_p2_flag = mi17_approve_s5[idx];
+        promote_p2_flag = mi17_approve_s7[idx];
         promote_p3_flag = mi17_approve_s1[idx];
     }}
     

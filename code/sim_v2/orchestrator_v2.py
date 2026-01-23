@@ -563,9 +563,9 @@ def main():
         'count_ops',               # Подсчёт агентов в operations
         'quota_repair',            # Квота на repair
         'quota_ops_excess',        # Избыток operations
-        'quota_promote_serviceable',  # Промоут serviceable → operations
-        'quota_promote_reserve',      # Промоут reserve → operations
-        'quota_promote_inactive',     # Промоут inactive → operations
+        'quota_promote_serviceable',   # Промоут serviceable → operations
+        'quota_promote_unserviceable', # Промоут unserviceable → operations (через repair quota)
+        'quota_promote_inactive',      # Промоут inactive → operations
         'spawn_dynamic',              # Динамический спавн по дефициту (ПЕРЕД state_managers!)
         'compute_transitions',        # Переходы state→intent (до state_managers)
         'state_manager_serviceable',  # Переходы serviceable

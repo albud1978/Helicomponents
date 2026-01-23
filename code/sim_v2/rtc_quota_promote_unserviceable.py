@@ -1,7 +1,6 @@
 """
-RTC модуль для промоута inactive → operations (приоритет 3)
-Каскадная архитектура: использует mi8_approve/mi17_approve для подсчёта used
-ВАЖНО: Может остаться deficit > 0 (допустимо по бизнес-логике)
+RTC модуль для промоута unserviceable → operations (приоритет 2)
+Каскадная архитектура: использует repair quota и линии ремонта
 """
 import sys
 import os
@@ -10,36 +9,29 @@ import model_build
 
 import pyflamegpu as fg
 
+
 def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
-    """Регистрирует RTC функции для промоута inactive → operations (приоритет 3)"""
-    print("  Регистрация модуля квотирования: промоут inactive (приоритет 3)")
+    """Регистрирует RTC функции для промоута unserviceable → operations (приоритет 2)"""
+    print("  Регистрация модуля квотирования: промоут unserviceable (приоритет 2)")
     
     # ФИКСИРОВАННЫЙ MAX_FRAMES для RTC кэширования
     max_frames = model_build.RTC_MAX_FRAMES
-    
-    # MAX_DAYS для MacroProperty deficit
     MAX_DAYS = model_build.MAX_DAYS
     
-    # Создаём MacroProperty для публикации deficit (для динамического spawn)
-    env = model.Environment()
-    env.newMacroPropertyUInt("quota_deficit_mi8_u32", MAX_DAYS)
-    env.newMacroPropertyUInt("quota_deficit_mi17_u32", MAX_DAYS)
-    
     # ═══════════════════════════════════════════════════════════════
-    # ПРОМОУТ ПРИОРИТЕТ 3: inactive → operations
+    # ПРОМОУТ ПРИОРИТЕТ 2: unserviceable → operations (через repair quota)
     # ═══════════════════════════════════════════════════════════════
     # Логика:
-    # 1. Маркируем кандидатов (inactive)
-    # 2. Один агент (idx=0) считает дефицит и аллоцирует top-K по idx (youngest first)
-    # 3. Каждый утверждённый агент применяет intent=2 и потребляет линию/окно
-    # 4. ⚠️ Может остаться deficit > 0 (допустимо!)
+    # 1. Маркируем кандидатов (unserviceable, intent=0)
+    # 2. Один host-агент считает дефицит и аллоцирует топ-K по idx (youngest first)
+    # 3. Каждый утверждённый агент получает intent=2
     # ═══════════════════════════════════════════════════════════════
     
-    RTC_MARK_INACTIVE_CANDIDATES = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_mark_inactive_candidates, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Фильтр: только агенты с intent=1 (замороженные в inactive)
+    RTC_MARK_UNSERVICEABLE_CANDIDATES = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mark_unserviceable_candidates, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Фильтр: очередь на ремонт (intent=0)
     const unsigned int intent = FLAMEGPU->getVariable<unsigned int>("intent_state");
-    if (intent != 1u) {{
+    if (intent != 0u) {{
         return flamegpu::ALIVE;
     }}
     
@@ -47,10 +39,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mark_inactive_candidates, flamegpu::MessageNone, fla
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     
     if (group_by == 1u) {{
-        auto cand = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_s1");
+        auto cand = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_s7");
         cand[idx].exchange(1u);
     }} else if (group_by == 2u) {{
-        auto cand = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_s1");
+        auto cand = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_s7");
         cand[idx].exchange(1u);
     }}
     
@@ -81,20 +73,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mark_inactive_candidates, flamegpu::MessageNone, fla
             mi17_ops = env.getMacroPropertyUInt32("mi17_ops_count")
             mi8_approve_s3 = env.getMacroPropertyUInt32("mi8_approve_s3")
             mi17_approve_s3 = env.getMacroPropertyUInt32("mi17_approve_s3")
-            mi8_approve_s7 = env.getMacroPropertyUInt32("mi8_approve_s7")
-            mi17_approve_s7 = env.getMacroPropertyUInt32("mi17_approve_s7")
 
-            cand8 = env.getMacroPropertyUInt32("mi8_candidate_s1")
-            cand17 = env.getMacroPropertyUInt32("mi17_candidate_s1")
-            approve8 = env.getMacroPropertyUInt32("mi8_approve_s1")
-            approve17 = env.getMacroPropertyUInt32("mi17_approve_s1")
+            cand8 = env.getMacroPropertyUInt32("mi8_candidate_s7")
+            cand17 = env.getMacroPropertyUInt32("mi17_candidate_s7")
+            approve8 = env.getMacroPropertyUInt32("mi8_approve_s7")
+            approve17 = env.getMacroPropertyUInt32("mi17_approve_s7")
 
             repair_time_by_idx = env.getMacroPropertyUInt32("repair_time_by_idx")
             line_free_days = env.getMacroPropertyUInt32("repair_line_free_days")
             repair_day_count = env.getMacroPropertyUInt32("repair_day_count")
             repair_backfill = env.getMacroPropertyUInt32("repair_backfill_load")
 
-            # Подсчёт curr/used по группам
+            # Подсчёт curr/used по группам (used = P1 serviceable)
             curr8 = curr17 = used8 = used17 = 0
             for i in range(frames):
                 if mi8_ops[i] == 1:
@@ -105,10 +95,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mark_inactive_candidates, flamegpu::MessageNone, fla
                     used8 += 1
                 if mi17_approve_s3[i] == 1:
                     used17 += 1
-                if mi8_approve_s7[i] == 1:
-                    used8 += 1
-                if mi17_approve_s7[i] == 1:
-                    used17 += 1
 
             target8 = env.getPropertyUInt("mp4_ops_counter_mi8", safe_day)
             target17 = env.getPropertyUInt("mp4_ops_counter_mi17", safe_day)
@@ -117,18 +103,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mark_inactive_candidates, flamegpu::MessageNone, fla
             K8 = deficit8 if deficit8 > 0 else 0
             K17 = deficit17 if deficit17 > 0 else 0
 
-            # Публикуем deficit для динамического spawn
-            deficit_mp8 = env.getMacroPropertyUInt32("quota_deficit_mi8_u32")
-            deficit_mp17 = env.getMacroPropertyUInt32("quota_deficit_mi17_u32")
-            deficit_mp8[safe_day] = K8
-            deficit_mp17[safe_day] = K17
-
             # Аллокация: youngest first (idx desc) с проверкой глобального окна
             approved8 = approved17 = 0
             for i in range(frames - 1, -1, -1):
                 if approved8 < K8 and cand8[i] == 1:
                     rt = int(repair_time_by_idx[i])
-                    # Проверяем окно [day-rt, day-1]
                     start = day - rt if day > rt else 0
                     ok = True
                     for d in range(start, day):
@@ -162,20 +141,19 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mark_inactive_candidates, flamegpu::MessageNone, fla
                                     repair_backfill[d] = repair_backfill[d] + 1
                                 break
     
-    RTC_APPLY_INACTIVE_APPROVAL = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_apply_inactive_approval, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    RTC_APPLY_UNSERVICEABLE_APPROVAL = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_apply_unserviceable_approval, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int day = FLAMEGPU->getStepCounter();
-    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     const unsigned int debug_enabled = FLAMEGPU->environment.getProperty<unsigned int>("debug_enabled");
     
     unsigned int approved = 0u;
     if (group_by == 1u) {{
-        auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
+        auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s7");
         approved = approve[idx];
     }} else if (group_by == 2u) {{
-        auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
+        auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s7");
         approved = approve[idx];
     }} else {{
         return flamegpu::ALIVE;
@@ -185,14 +163,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_inactive_approval, flamegpu::MessageNone, flam
         return flamegpu::ALIVE;
     }}
     
-    // Меняем intent на operations
+    // Меняем intent на operations (дальше обработает state_manager_unserviceable)
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
     
-    // Логирование
-    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     if (debug_enabled) {{
-        printf("  [PROMOTE P3→2 Day %u] AC %u (group=%u, ppr=%u): line_consumed\\n",
-               day, aircraft_number, group_by, ppr);
+        const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+        printf("  [PROMOTE P2→2 Day %u] AC %u (group=%u): unserviceable->operations\\n",
+               day, aircraft_number, group_by);
     }}
     
     return flamegpu::ALIVE;
@@ -200,23 +177,24 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_inactive_approval, flamegpu::MessageNone, flam
 """
     
     # ═══════════════════════════════════════════════════════════
-    # Регистрация слоя
+    # Регистрация слоёв
     # ═══════════════════════════════════════════════════════════
-    layer_candidates = model.newLayer("quota_promote_inactive_candidates")
-    fn_candidates = agent.newRTCFunction("rtc_mark_inactive_candidates", RTC_MARK_INACTIVE_CANDIDATES)
+    layer_candidates = model.newLayer("quota_promote_unserviceable_candidates")
+    fn_candidates = agent.newRTCFunction("rtc_mark_unserviceable_candidates", RTC_MARK_UNSERVICEABLE_CANDIDATES)
     fn_candidates.setAllowAgentDeath(False)
-    fn_candidates.setInitialState("inactive")
-    fn_candidates.setEndState("inactive")
+    fn_candidates.setInitialState("unserviceable")
+    fn_candidates.setEndState("unserviceable")
     layer_candidates.addAgentFunction(fn_candidates)
     
-    layer_allocate = model.newLayer("quota_promote_inactive_allocate_host")
+    layer_allocate = model.newLayer("quota_promote_unserviceable_allocate_host")
     layer_allocate.addHostFunction(RepairLineAllocatorHost(max_frames, MAX_DAYS))
     
-    layer_apply = model.newLayer("quota_promote_inactive_apply")
-    fn_apply = agent.newRTCFunction("rtc_apply_inactive_approval", RTC_APPLY_INACTIVE_APPROVAL)
+    layer_apply = model.newLayer("quota_promote_unserviceable_apply")
+    fn_apply = agent.newRTCFunction("rtc_apply_unserviceable_approval", RTC_APPLY_UNSERVICEABLE_APPROVAL)
     fn_apply.setAllowAgentDeath(False)
-    fn_apply.setInitialState("inactive")
-    fn_apply.setEndState("inactive")
+    fn_apply.setInitialState("unserviceable")
+    fn_apply.setEndState("unserviceable")
     layer_apply.addAgentFunction(fn_apply)
     
-    print("  RTC модуль quota_promote_inactive зарегистрирован (3 слоя, приоритет 3)")
+    print("  RTC модуль quota_promote_unserviceable зарегистрирован (3 слоя, приоритет 2)")
+

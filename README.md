@@ -153,6 +153,7 @@ export FLAMEGPU_RTC_EXPORT_CACHE_PATH="$(pwd)/.rtc_cache"
 | Диагностика БД | `python3 code/utils/test_db_connection.py` | — |
 | Очистка словарей | `python3 code/utils/cleanup_dictionaries.py` | — |
 | Полная очистка | `python3 code/utils/database_cleanup.py` | — |
+| Валидация переходов | `python3 code/analysis/sim_validation_transitions.py --version-date YYYY-MM-DD` | `output/sim_validation_YYYY-MM-DD.md` |
 
 > **Подробнее:** `.cursorrules` (секция "Штатные процедуры проверки данных")
 
