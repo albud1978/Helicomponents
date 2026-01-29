@@ -1,0 +1,22 @@
+---
+description: sim_v2 pipeline invariants (RTC, layers order, MP5 rules)
+globs:
+  - "code/sim_v2/**"
+alwaysApply: false
+---
+
+# sim_v2 pipeline invariants
+
+## MP5 / MacroProperty
+- MP5 (`mp5_lin`) инициализируется только на host до первых RTC.
+- После начала чтения агентами MP5 становится read-only (никаких записей/RTC-копирования).
+- Размеры MacroProperty фиксированы: `RTC_MAX_FRAMES=400`, `MAX_DAYS=4000`, `MAX_SIZE=1_600_400`.
+
+## Архитектура state-based
+- RTC функции состояний не меняют state, только выставляют intent.
+- Переходы state применяются централизованно и атомарно в единой функции переходов.
+- Для квот — единый менеджер без атомарных операций.
+
+## Порядок слоёв
+- Модули обязаны выполняться в строгом порядке согласно матрице состояний.
+- Любое изменение порядка модулей = обновление `docs/rtc_pipeline_architecture.md` и `docs/validation.md`.

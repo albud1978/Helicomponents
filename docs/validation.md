@@ -106,15 +106,7 @@
 
 ### 2.4 Рабочие статусы (только при error_flags = 0)
 
-| Status | ID | Название | Условие |
-|--------|-----|----------|---------|
-| inactive | 1 | Неактивный | Исправный, не в эксплуатации |
-| operations | 2 | Эксплуатация | Исправный, установлен на борт |
-| serviceable | 3 | Исправный на складе | Исправный, готов к установке |
-| repair | 4 | Ремонт | Неисправный, в ремонте |
-| reserve | 5 | Резерв | Исходный статус из загрузки (новых переводов нет) |
-| storage | 6 | Хранение | sne >= ll или (ppr >= oh и sne >= br) |
-| unserviceable | 7 | Неисправный (очередь на ремонт) | Отказ квоты ремонта из operations |
+Источник истины по статусам: `README.md` → раздел "Статусы агентов".
 
 ### 2.5 Скрипт валидации heli_pandas
 
@@ -194,18 +186,33 @@ python code/analysis/sim_validation_runner.py --version-date YYYY-MM-DD
 - `transition_2_to_3` — operations → serviceable
 - `transition_2_to_4` — operations → repair
 - `transition_2_to_6` — operations → storage
+- `transition_2_to_7` — operations → unserviceable
 - `transition_3_to_2` — serviceable → operations
-- `transition_4_to_2` — repair → operations
+- `transition_4_to_3` — repair → serviceable
 - `transition_7_to_4` — unserviceable → repair
 - `transition_7_to_2` — unserviceable → operations
 
-> Переходы `transition_2_to_7`, `transition_4_to_5`, `transition_5_to_2`, `transition_1_to_2` удалены из схемы MP2.
+Примечание: для backfill по `active_trigger=1` в MP2 может фиксироваться цепочка `4→3` и `3→2` в один день (мгновенное промоутирование), при этом `state` в этом дне остаётся `operations`.
+
+> Переходы `transition_4_to_5`, `transition_5_to_2`, `transition_1_to_2` удалены из схемы MP2.
+
+#### Квота ops (intent-based)
+
+Валидация квот использует **операции с intent=2**:
+
+```sql
+countIf(state = 'operations' AND intent_state = 2)
+```
+
+Это синхронизирует проверку с фактической логикой демоута/промоута.
 
 #### Проверка `validate_state_consistency()`
 
 Сопоставляет флаг перехода `transition_X_to_Y=1` с `state`:
 - Если `transition_2_to_4=1`, то `state` должен быть `'repair'` (4)
 - Intent **НЕ проверяется** в этом валидаторе
+
+> Для перехода `7→2` PPR всегда обнуляется (ремонт обязателен), независимо от `br2_mi17`.
 
 ```sql
 SELECT aircraft_number, day_u16, state
@@ -467,7 +474,7 @@ StateTransitionValidator.ALLOWED_TRANSITIONS = {
 | 2→6 | `sne_next >= ll` или BR ветка | `state_2_operations` |
 | 2→7 | отказ квоты ремонта | `quota_repair` → `state_manager_operations` |
 | 3→2 | `curr < target` + quota P1 | `quota_promote_serviceable` |
-| 4→2 | `repair_days >= repair_time` | `state_manager_repair` |
+| 4→3 | `repair_days >= repair_time` | `state_manager_repair` |
 | 7→2 | квота P2 (очередь) + backfill | `quota_promote_unserviceable` |
 | 7→4 | `intent=4` (квота ремонта одобрена) | `quota_repair` → `state_manager_unserviceable` |
 
@@ -498,7 +505,7 @@ count_start(state) + входы(state) - выходы(state) = count_end(state)
 
 | Документ | Описание |
 |----------|----------|
-| `.cursorrules` | Главный источник правил |
+| `.cursor/rules/*.mdc` | Главный источник правил |
 | `docs/rtc_pipeline_architecture.md` | Архитектура модулей |
 | `docs/rtc_components.md` | Архитектура агрегатов |
 | `docs/spawn_dynamic_architecture.md` | Динамический spawn |

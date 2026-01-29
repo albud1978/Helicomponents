@@ -288,7 +288,7 @@ if (repair_days >= repair_time) {
 
 - `docs/rtc_pipeline_architecture.md` — Архитектура планеров (baseline)
 - `Helicomponents-messaging/docs/limiter_architecture.md` — V7 Limiter
-- `.cursorrules` — Правила проекта
+- `.cursor/rules/*.mdc` — Правила проекта
 
 ---
 

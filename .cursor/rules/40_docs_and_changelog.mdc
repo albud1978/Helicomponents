@@ -1,0 +1,22 @@
+---
+description: Docs duties (4 core docs must be consistent)
+globs:
+  - "README.md"
+  - "docs/**"
+alwaysApply: false
+---
+
+# Docs rules
+
+При любых изменениях кода должны быть актуальны:
+1) `docs/validation.md`
+2) `docs/changelog.md`
+3) `docs/rtc_pipeline_architecture.md`
+4) `README.md`
+
+Ссылки/термины/матрицы должны быть согласованы между этими файлами.
+
+## Отчёты прогонов и тестов
+- В `docs/**` не храним результаты прогонов/тестов.
+- Единственное место для результатов — `docs/reports/`.
+- В `docs/reports/` можно создавать файлы **без согласования**, но их нужно удалять после закрытия задачи.

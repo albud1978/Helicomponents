@@ -1,14 +1,18 @@
 ---
-description: Правила проекта Helicopter Component Lifecycle (Cursor AI)
+description: Helicomponents — Project Rules entrypoint
 globs:
   - "**/*"
 alwaysApply: true
 ---
 
-# Правила проекта (Cursor AI)
+# Helicomponents Rules
 
-Единственный источник правил проекта: **корневой файл** `.cursorrules`.
+Источник истины по правилам: `.cursor/rules/*.mdc` (модульно).
 
 Этот `project.mdc` — служебная “обвязка” для auto-apply в Cursor и **не содержит** копии правил,
 чтобы исключить дрейф и конфликты требований.
+
+Всегда применяются:
+- `00_global_always.mdc`
+- плюс scoped-правила по globs для затронутых файлов.
 

@@ -1,0 +1,82 @@
+version: 1
+states:
+  1: inactive
+  2: operations
+  3: serviceable
+  4: repair
+  5: reserve
+  6: storage
+  7: unserviceable
+
+variables:
+  - state
+  - intent_state
+  - sne
+  - ppr
+  - dt
+  - dn
+  - oh
+  - br
+  - ll
+  - curr
+  - target
+  - repair_days
+  - repair_time
+
+derived:
+  - name: s_next
+    expr: sne + dt + dn
+  - name: p_next
+    expr: ppr + dt + dn
+  - name: balance
+    expr: curr - target
+  - name: deficit
+    expr: target - curr
+
+rules:
+  - id: ops_to_repair
+    from: 2
+    to: 4
+    precedence: 50
+    pre:
+      all:
+        - expr: p_next >= oh
+        - expr: s_next < br
+        - expr: intent_state == 4
+    post:
+      all:
+        - expr: state == 4
+    owner_module: state_2_operations
+    notes: Основной вход в ремонт
+
+  - id: ops_to_storage
+    from: 2
+    to: 6
+    precedence: 60
+    pre:
+      any:
+        - expr: s_next >= ll
+        - expr: p_next >= oh && s_next >= br
+    post:
+      all:
+        - expr: state == 6
+    owner_module: state_2_operations
+    notes: Списание по ресурсу
+
+  - id: repair_to_serviceable
+    from: 4
+    to: 3
+    precedence: 40
+    pre:
+      all:
+        - expr: repair_days >= repair_time
+    post:
+      all:
+        - expr: state == 3
+    owner_module: state_manager_repair
+    notes: Завершение ремонта
+
+exceptions:
+  - id: intent_zero_queue
+    expr: state == 5 && intent_state == 0
+    notes: Очередь ремонта (intent=0 в reserve)
