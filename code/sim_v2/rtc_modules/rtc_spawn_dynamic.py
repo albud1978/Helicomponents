@@ -320,7 +320,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_2_to_4", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_2_to_6", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_3_to_2", 0u);
-        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_2", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_3", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_5", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 0u);
         

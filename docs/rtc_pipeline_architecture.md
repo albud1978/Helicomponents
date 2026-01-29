@@ -693,7 +693,7 @@ if (intent == 4u) {
 #### State Managers (применение переходов):
 - `rtc_state_manager_serviceable.py` — переход 3→2 (serviceable → operations)
 - `rtc_state_manager_operations.py` — переходы 2→2, 2→3, 2→4, 2→6
-- `rtc_state_manager_repair.py` — переходы 4→4, 4→5 (repair → reserve)
+- `rtc_state_manager_repair.py` — переходы 4→4, 4→3 (repair → serviceable)
 - `rtc_state_manager_storage.py` — переход 6→6 (storage → storage)
 
 #### Вспомогательные модули:
@@ -1418,7 +1418,7 @@ print(telemetry.get_summary())
 9. spawn_dynamic              — ⚠️ динамический спавн по дефициту (ПЕРЕД state_managers!)
 10. state_manager_serviceable — переход 3→2 (serviceable → operations)
 11. state_manager_operations  — переходы из operations (2→2, 2→3, 2→4, 2→6)
-12. state_manager_repair      — переходы из repair (4→4, 4→5)
+12. state_manager_repair      — переходы из repair (4→4, 4→3)
 13. state_manager_storage     — переход 6→6 (storage → storage)
 14. state_manager_reserve     — переход 5→5 (reserve → reserve)
 15. state_manager_inactive    — переход 1→1 (inactive → inactive)
@@ -1722,7 +1722,7 @@ cd code/sim_v2 && python3 orchestrator_v2.py \
 | 9 | `spawn_dynamic` | ⚠️ Динамический спавн по дефициту | 0→2 при нехватке Mi-17 (ПЕРЕД state_managers!) |
 | 10 | `state_manager_serviceable` | Переход serviceable→operations | 3→2 для промоутированных |
 | 11 | `state_manager_operations` | Применение переходов из operations | 2→2, 2→3, 2→4, 2→6, 3→2, 5→2, 1→2 |
-| 12 | `state_manager_repair` | Состояния ремонта | 4→4, 4→5 (с intent=5 при выходе) |
+| 12 | `state_manager_repair` | Состояния ремонта | 4→4, 4→3 (с intent=3 при выходе) |
 | 13 | `state_manager_storage` | Неизменяемое хранение | 6→6 (immutable) |
 | 14 | `state_manager_reserve` | Холдинг в reserve | 5→5 для intent=5 (остаются в холдинге) |
 | 15 | `state_manager_inactive` | Холдинг в inactive | 1→1 для intent=1 (остаются заморожены) |
@@ -1743,7 +1743,7 @@ cd code/sim_v2 && python3 orchestrator_v2.py \
 | inactive | 1 | operations | 2 | Выбран quota_promote (P3) + step_day >= repair_time | state_manager_operations |
 | inactive | 1 | inactive | 1 | Не готов или не выбран (заморозка) | state_manager_inactive |
 | repair | 4 | repair | 4 | Ремонт идет | state_manager_repair |
-| repair | 4 | reserve | 5 | Ремонт завершен | state_manager_repair |
+| repair | 4 | serviceable | 3 | Ремонт завершен | state_manager_repair |
 | storage | 6 | storage | 6 | Immutable | state_manager_storage |
 | (новорожденные) | 3 | serviceable | 3 | Spawn создание | spawn_v2 |
 
@@ -1760,7 +1760,7 @@ cd code/sim_v2 && python3 orchestrator_v2.py \
 8. state_manager_operations  — применение 2→2, 2→3, 2→4, 2→6, 3→2, 5→2, 1→2
 9. state_manager_serviceable — холдинг 3→3
 10. state_manager_inactive   — холдинг 1→1
-11. state_manager_repair     — 4→4, 4→5 с intent=5
+11. state_manager_repair     — 4→4, 4→3 с intent=3
 12. state_manager_reserve    — холдинг 5→5
 13. state_manager_storage    — immutable 6→6
 14. spawn_v2                 — рождение в serviceable&intent=3
@@ -1819,7 +1819,7 @@ cd code/sim_v2 && python3 orchestrator_v2.py \
 | **state_manager_serviceable** | (svc, 3) | (svc, 3) | ничего (холдинг) |
 | **state_manager_inactive** | (inactive, 1) | (inactive, 1) | ничего (холдинг) |
 | **state_manager_repair** | (repair, 4) | (repair, 4) | ничего (идет ремонт) |
-| | (repair, 5) | (reserve, 5) | state: repair→reserve, intent неизменен |
+| | (repair, 3) | (serviceable, 3) | state: repair→serviceable, intent неизменен |
 | **state_manager_reserve** | (reserve, 5) | (reserve, 5) | ничего (холдинг) |
 | **state_manager_storage** | (storage, 6) | (storage, 6) | ничего (immutable) |
 | **spawn_v2** | (NEW) | (serviceable, 3) | новые агенты рождаются в холдинге |
@@ -1939,7 +1939,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active_operations, ...) {
     auto mp2_assembly_trigger = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_assembly_trigger");
     auto mp2_transition_1_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_1_to_4");
     auto mp2_transition_7_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_7_to_4");
-    auto mp2_transition_4_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_4_to_2");
+    auto mp2_transition_4_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_4_to_3");
     
     // Поиск события active_trigger=1
     for (unsigned int d_event = 0; d_event < days_total; d_event++) {
@@ -1963,7 +1963,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_postprocess_active_operations, ...) {
             
             // Устанавливаем transition флаги (по источнику active_trigger)
             // if (mp2_active_source[pos_event] == 7) -> 7_to_4, иначе 1_to_4
-            mp2_transition_4_to_2[d_event * MAX_FRAMES + idx].exchange(1u);  // Выход
+            mp2_transition_4_to_3[d_event * MAX_FRAMES + idx].exchange(1u);  // Выход
             
             break;  // Один агент может иметь только одно событие
         }
@@ -2019,7 +2019,7 @@ if self.enable_mp2_postprocess:
 - 23 события `active_trigger=1` обработано
 - 23 окна ремонта заполнено (по 180 дней каждое)
 - 23 `assembly_trigger` установлено
-- 46 transition флагов (23×1→4 + 23×4→2)
+- 46 transition флагов (23×1→4 + 23×4→3)
 - Время постпроцессинга: **0.02с** (overhead ~0.02%)
 
 **Файлы:**
@@ -2048,7 +2048,7 @@ const unsigned int pos = step_day * MAX_FRAMES + idx;
 
 // Получаем MacroProperty для transition флагов
 auto mp2_transition_2_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, MP2_SIZE>("mp2_transition_2_to_4");
-// ... еще 8 MacroProperty для всех типов переходов
+// ... еще 9 MacroProperty для всех типов переходов (включая 2→7)
 
 // Если state ≠ intent → записываем переход
 if (state == 2u && intent == 4u) {  // operations → repair
@@ -2071,6 +2071,9 @@ if (state == 2u && intent == 4u) {  // operations → repair
 ```
 quota_modules → compute_transitions → state_managers → mp2_writer
 ```
+
+**Валидация квот (intent-based):**
+Счётчик ops для квотирования и валидации считается по `state=operations` и `intent_state=2`.
 
 **Изменения:**
 
@@ -2100,7 +2103,7 @@ quota_modules → compute_transitions → state_managers → mp2_writer
 - 2→3 (ops→serviceable): 173
 - 3→2 (serviceable→ops): 179
 - 5→2 (reserve→ops): 188
-- 4→5 (repair→reserve): 198
+- 4→3 (repair→serviceable): 198
 - **Всего переходов: 987** ✅
 
 **Валидация:**
@@ -2121,6 +2124,9 @@ quota_modules → compute_transitions → state_managers → mp2_writer
 > 
 > В текущей рабочей конфигурации `compute_transitions` **НЕ включён** в `--modules`, симуляция корректно работает с `--enable-mp2-postprocess`.
 
+**Правило ремонта (state 7):**
+Переход `unserviceable → operations (7→2)` всегда обнуляет PPR (ремонт обязателен, без порога `br2_mi17`).
+
 ---
 
 ## Порядок слоёв (Layers Order) - КРИТИЧНО ВАЖЕН!
@@ -2140,7 +2146,7 @@ python3 orchestrator_v2.py --modules \
   spawn_dynamic \                # 9. Динамический спавн (0→2)
   state_manager_serviceable \    # 10. Холдинг serviceable (3→3)
   state_manager_operations \     # 11. Переходы из operations (2→*,3→2,5→2,1→2)
-  state_manager_repair \         # 12. Переходы из repair (4→4,4→5)
+  state_manager_repair \         # 12. Переходы из repair (4→4,4→3)
   state_manager_storage \        # 13. Холдинг storage (6→6)
   state_manager_reserve \        # 14. Холдинг reserve (5→5,5→4)
   state_manager_inactive \       # 15. Холдинг inactive (1→1)

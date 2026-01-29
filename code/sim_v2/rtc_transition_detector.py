@@ -59,7 +59,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_transitions, flamegpu::MessageNone, flamegpu
     auto mp2_transition_1_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, MAX_SIZE_CALC>("mp2_transition_1_to_2");
     auto mp2_transition_4_to_5 = FLAMEGPU->environment.getMacroProperty<unsigned int, MAX_SIZE_CALC>("mp2_transition_4_to_5");
     auto mp2_transition_1_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, MAX_SIZE_CALC>("mp2_transition_1_to_4");
-    auto mp2_transition_4_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, MAX_SIZE_CALC>("mp2_transition_4_to_2");
+    auto mp2_transition_4_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, MAX_SIZE_CALC>("mp2_transition_4_to_3");
     
     // Читаем состояния текущего и предыдущего дня
     unsigned int state_current = mp2_state[pos_current];
@@ -84,8 +84,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_transitions, flamegpu::MessageNone, flamegpu
             mp2_transition_4_to_5[pos_current].exchange(1u);
         }} else if (state_prev == 1u && state_current == 4u) {{  // inactive → repair
             mp2_transition_1_to_4[pos_current].exchange(1u);
-        }} else if (state_prev == 4u && state_current == 2u) {{  // repair → operations
-            mp2_transition_4_to_2[pos_current].exchange(1u);
+        }} else if (state_prev == 4u && state_current == 3u) {{  // repair → serviceable
+            mp2_transition_4_to_3[pos_current].exchange(1u);
         }}
     }}
     

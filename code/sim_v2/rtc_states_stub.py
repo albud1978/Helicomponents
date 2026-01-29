@@ -76,7 +76,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
     //   0 = нет сигнала (планер не в последней стадии ремонта)
     //   1 = ONE-SHOT сигнал на комплектацию (существует ровно 1 день!)
     //   2 = комплектация завершена (агрегаты уже забраны, не повторять)
-    // Сброс в 0 происходит в rtc_state_manager_repair при переходе 4→5 или 4→2
+    // Сброс в 0 происходит в rtc_state_manager_repair при переходе 4→3
     const unsigned int assembly_trigger = FLAMEGPU->getVariable<unsigned int>("assembly_trigger");
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     const unsigned int assembly_time = FLAMEGPU->getVariable<unsigned int>("assembly_time");
@@ -92,8 +92,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
     
     // Проверяем завершение ремонта
     if (repair_days == repair_time) {{
-        // Переход в operations
-        FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+        // Переход в serviceable
+        FLAMEGPU->setVariable<unsigned int>("intent_state", 3u);
         
         // Логирование перехода
         const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -101,7 +101,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_state_4_repair, flamegpu::MessageNone, flamegpu::Mes
         const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
         const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
         if (debug_enabled) {{
-            printf("  [Step %u] AC %u: intent=2 (operations), repair complete rd=%u/%u, ll=%u, oh=%u, br=%u\\n", 
+            printf("  [Step %u] AC %u: intent=3 (serviceable), repair complete rd=%u/%u, ll=%u, oh=%u, br=%u\\n", 
                    step_day, aircraft_number, repair_days, repair_time, ll, oh, br);
         }}
 

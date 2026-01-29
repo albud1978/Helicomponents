@@ -27,7 +27,7 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
     # 5. ИНАЧЕ: Демоут K самых старых → intent=3 + mi*_approve=1
     # ═══════════════════════════════════════════════════════════════
     
-    RTC_QUOTA_DEMOUNT = f"""
+    RTC_QUOTA_DEMOUNT = """
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // ═══════════════════════════════════════════════════════════
     // ШАГ 0: Фильтр intent (работаем ТОЛЬКО с intent=2)
@@ -54,7 +54,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
     
     if (group_by == 1u) {{
         // Mi-8: считаем из ops_count буфера (заполненного в count_ops)
-        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, RTC_MAX_FRAMES_PLACEHOLDERu>("mi8_ops_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
         }}
@@ -62,7 +62,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
         
     }} else if (group_by == 2u) {{
         // Mi-17: аналогично
-        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, RTC_MAX_FRAMES_PLACEHOLDERu>("mi17_ops_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
         }}
@@ -72,6 +72,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
     }}
     
     const int balance = (int)curr - (int)target;
+    if (debug_enabled && day == 26u) {
+        printf("  [DEBUG DEMOUNT Day %u] group=%u curr=%u target=%u balance=%d\\n",
+               day, group_by, curr, target, balance);
+    }
     
     // ═══════════════════════════════════════════════════════════
     // ШАГ 2: Early exit при отсутствии избытка
@@ -92,7 +96,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
     unsigned int rank = 0u;
     
     if (group_by == 1u) {{
-        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, RTC_MAX_FRAMES_PLACEHOLDERu>("mi8_ops_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (i == idx) continue;
             if (ops_count[i] != 1u) continue;  // ✅ Только агенты в operations
@@ -103,7 +107,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
             }}
         }}
     }} else if (group_by == 2u) {{
-        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
+        auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, RTC_MAX_FRAMES_PLACEHOLDERu>("mi17_ops_count");
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (i == idx) continue;
             if (ops_count[i] != 1u) continue;  // ✅ Только агенты в operations
@@ -121,10 +125,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
         
         // Записываем в каскадный буфер для учёта в промоуте
         if (group_by == 1u) {{
-            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
+            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, RTC_MAX_FRAMES_PLACEHOLDERu>("mi8_approve");
             approve[idx].exchange(1u);  // ✅ Помечаем (для подсчёта used в промоуте)
         }} else if (group_by == 2u) {{
-            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
+            auto approve = FLAMEGPU->environment.getMacroProperty<unsigned int, RTC_MAX_FRAMES_PLACEHOLDERu>("mi17_approve");
             approve[idx].exchange(1u);
         }}
         
@@ -141,6 +145,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_demount, flamegpu::MessageNone, flamegpu::Mess
     return flamegpu::ALIVE;
 }}
 """
+    RTC_QUOTA_DEMOUNT = RTC_QUOTA_DEMOUNT.replace("RTC_MAX_FRAMES_PLACEHOLDER", str(max_frames))
     
     # ═══════════════════════════════════════════════════════════
     # Регистрация единого слоя

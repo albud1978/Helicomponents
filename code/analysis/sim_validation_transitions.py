@@ -17,7 +17,7 @@
     2→7 operations → unserviceable (очередь на ремонт)
     2→6 operations → storage
     3→2 serviceable → operations
-    4→2 repair → operations
+    4→3 repair → serviceable
     7→2 unserviceable → operations
     7→4 unserviceable → repair
 
@@ -75,7 +75,7 @@ ALLOWED_TRANSITIONS: Set[Tuple[int, int]] = {
     (3, 3),  # самопереход
     
     # Из repair (4)
-    (4, 2),  # repair → operations
+    (4, 3),  # repair → serviceable
     (4, 4),  # самопереход
     
     # Из reserve (5)
@@ -101,7 +101,7 @@ TRANSITION_COLUMNS = [
     # 'transition_2_to_5',  # Не записывается в таблицу
     'transition_2_to_6',
     'transition_3_to_2',
-    'transition_4_to_2',
+    'transition_4_to_3',
     'transition_7_to_4',
     'transition_7_to_2',
 ]
@@ -213,6 +213,10 @@ class TransitionsValidator:
         for col in TRANSITION_COLUMNS:
             from_state, to_state = parse_transition_col(col)
             expected_state = STATES.get(to_state, str(to_state))
+            extra_filter = ""
+            if col == 'transition_4_to_3':
+                # Допускаем chain 4→3→2 в один день (active_trigger=1), когда state уже operations
+                extra_filter = "AND NOT (state = 'operations' AND transition_3_to_2 = 1 AND active_trigger = 1)"
             
             query = f"""
                 SELECT 
@@ -224,6 +228,7 @@ class TransitionsValidator:
                 WHERE version_date = {self.version_date}
                   AND {col} = 1
                   AND state != '{expected_state}'
+                  {extra_filter}
                 LIMIT 10
             """
             
@@ -417,7 +422,7 @@ class TransitionsValidator:
             return results
         
         # Ищем агентов, которые вошли в repair и вышли из него
-        # Используем transition_2_to_4 (или 1_to_4) как вход, transition_4_to_2 как выход
+        # Используем transition_2_to_4 (или 1_to_4) как вход, transition_4_to_3 как выход
         for gb, expected_rt in repair_time_map.items():
             ac_type = 'Mi-8' if gb == 1 else 'Mi-17'
             
@@ -431,12 +436,12 @@ class TransitionsValidator:
                         day_u16,
                         transition_1_to_4,
                         transition_2_to_4,
-                        transition_4_to_2,
+                        transition_4_to_3,
                         state
                     FROM sim_masterv2
                     WHERE version_date = {self.version_date}
                       AND group_by = {gb}
-                      AND (transition_1_to_4 = 1 OR transition_4_to_2 = 1)
+                      AND (transition_1_to_4 = 1 OR transition_4_to_3 = 1)
                 )
                 SELECT 
                     r1.aircraft_number,
@@ -447,14 +452,14 @@ class TransitionsValidator:
                 INNER JOIN repairs r2 
                     ON r1.aircraft_number = r2.aircraft_number
                     AND r2.day_u16 > r1.day_u16
-                    AND r2.transition_4_to_2 = 1
+                    AND r2.transition_4_to_3 = 1
                     AND r1.transition_1_to_4 = 1
                 WHERE r2.day_u16 = (
                     SELECT min(day_u16) 
                     FROM repairs r3 
                     WHERE r3.aircraft_number = r1.aircraft_number 
                       AND r3.day_u16 > r1.day_u16
-                      AND r3.transition_4_to_2 = 1
+                      AND r3.transition_4_to_3 = 1
                 )
                 ORDER BY r1.aircraft_number, r1.day_u16
             """
@@ -465,12 +470,12 @@ class TransitionsValidator:
                 # Fallback: более простой подсчёт через windowFunnel или агрегации
                 print(f"   ⚠️ Сложный запрос не поддерживается, используем упрощённый подход")
                 
-                # Просто считаем transition_4_to_2=1 и проверяем, что они есть
+                # Просто считаем transition_4_to_3=1 и проверяем, что они есть
                 simple_query = f"""
                     SELECT 
                         aircraft_number,
                         countIf(transition_1_to_4 = 1) as entries,
-                        countIf(transition_4_to_2 = 1) as exits
+                        countIf(transition_4_to_3 = 1) as exits
                     FROM sim_masterv2
                     WHERE version_date = {self.version_date}
                       AND group_by = {gb}

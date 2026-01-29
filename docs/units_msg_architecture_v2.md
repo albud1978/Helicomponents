@@ -141,7 +141,7 @@
 | `operations → operations` | `dt > 0` | Инкременты `sne/ppr` | `operations` |
 | `operations → serviceable|reserve|inactive|storage` | `assembly_trigger != 1` | Разрешить демоут, агрегаты остаются на месте или отвязываются по менеджеру | `serviceable` (привязка опциональна) |
 | `operations → repair` | `assembly_trigger = 1` | Блокировать перестановки, разрешить только комплектование | `serviceable` на планере |
-| `repair → operations` | `assembly_trigger = 0` | Дособрать до нормы, перевод в `operations` | `operations/serviceable` |
+| `repair → serviceable` | `assembly_trigger = 0` | Дособрать до нормы, перевод в `serviceable` | `operations/serviceable` |
 | `repair → *` | `assembly_trigger = 1` | Перестановки запрещены | `serviceable` |
 | Любое | агрегат уходит в `repair` | Сброс `aircraft_number = 0`, запрет привязки до завершения ремонта | `repair` |
 | Любое | агрегат уходит в `storage` | Привязка опциональна (по правилам менеджера) | `storage` |

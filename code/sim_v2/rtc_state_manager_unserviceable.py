@@ -63,17 +63,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_7_to_2, flamegpu::MessageNone, flamegpu::Messa
         mp2_active_source[pos].exchange(7u);
     }}
     
-    // br2_mi17 — порог межремонтного для подъёма из очереди
-    const unsigned int br2_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mi17_br2_const");
-    
-    // Логика обнуления PPR как при ремонте
-    if (group_by == 1u) {{
-        ppr = 0u;
-        FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
-    }} else if (group_by == 2u && ppr >= br2_mi17) {{
-        ppr = 0u;
-        FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
-    }}
+    // Для 7→2 всегда обнуляем PPR (ремонт обязателен)
+    ppr = 0u;
+    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
     
     // Читаем dt из MP5 при переходе в operations
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");

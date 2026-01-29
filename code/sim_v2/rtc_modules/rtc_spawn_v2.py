@@ -217,7 +217,7 @@ def register_rtc(model: 'fg.ModelDescription', agent: 'fg.AgentDescription', env
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_1_to_2", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_5", 0u);
         FLAMEGPU->agent_out.setVariable<unsigned int>("transition_1_to_4", 0u);
-        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_2", 0u);
+        FLAMEGPU->agent_out.setVariable<unsigned int>("transition_4_to_3", 0u);
         
         // 11. Запись флага spawn в MacroProperty (детерминированный spawn → serviceable)
         // ВАЖНО: используем фиксированный MAX_FRAMES для согласованности с MP2 Writer/Drain
