@@ -28,10 +28,10 @@ class UniversalAutoConfig:
     def __init__(self, project_root: Optional[Path] = None):
         """Инициализация с автодетекцией корня проекта"""
         if project_root is None:
-            # Автодетекция корня проекта (ищем .cursorrules или .git)
+            # Автодетекция корня проекта (ищем .cursor/rules или .git)
             current = Path(__file__).resolve()
             while current.parent != current:
-                if (current / '.cursorrules').exists() or (current / '.git').exists():
+                if (current / '.cursor' / 'rules' / 'project.mdc').exists() or (current / '.git').exists():
                     project_root = current
                     break
                 current = current.parent

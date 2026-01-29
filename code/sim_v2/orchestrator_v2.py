@@ -158,6 +158,34 @@ class V2Orchestrator:
                     layer_drain_full = self.model.newLayer("mp2_final_drain_full")
                     layer_drain_full.addHostFunction(full_fn)
                     self.mp2_drain_funcs.append(full_fn)
+                
+                # MP7: ремонтные линии (full + short)
+                from mp2_drain_host import MP7DrainHostFunction
+                self.mp7_drain_funcs = []
+                mp7_base = "sim_masterv2_repair_lines"
+                if self.mp2_export_short:
+                    short_table = f"{mp7_base}{self.mp2_short_suffix}"
+                    short_fn = MP7DrainHostFunction(
+                        self.clickhouse_client,
+                        table_name=short_table,
+                        batch_size=500000,
+                        simulation_steps=self.days,
+                        export_mode="changes"
+                    )
+                    layer_mp7_short = self.model.newLayer("mp7_final_drain_short")
+                    layer_mp7_short.addHostFunction(short_fn)
+                    self.mp7_drain_funcs.append(short_fn)
+                if self.mp2_export_full:
+                    full_fn = MP7DrainHostFunction(
+                        self.clickhouse_client,
+                        table_name=mp7_base,
+                        batch_size=500000,
+                        simulation_steps=self.days,
+                        export_mode="full"
+                    )
+                    layer_mp7_full = self.model.newLayer("mp7_final_drain_full")
+                    layer_mp7_full.addHostFunction(full_fn)
+                    self.mp7_drain_funcs.append(full_fn)
         else:
             pass
         
@@ -380,6 +408,9 @@ class V2Orchestrator:
         if self.mp2_drain_funcs:
             for fn in self.mp2_drain_funcs:
                 fn.simulation_steps = actual_drain_step
+        if getattr(self, "mp7_drain_funcs", None):
+            for fn in self.mp7_drain_funcs:
+                fn.simulation_steps = actual_drain_step
         
         # Инициализация телеметрии
         if self.telemetry:
@@ -555,7 +586,7 @@ def main():
     """Главная функция оркестратора"""
     parser = argparse.ArgumentParser(description='V2 Orchestrator с модульной архитектурой')
     # Полный набор модулей для симуляции планеров
-    # КРИТИЧНО: порядок должен соответствовать .cursorrules!
+    # КРИТИЧНО: порядок должен соответствовать правилам sim_v2 (см. .cursor/rules/20_sim_v2_pipeline.mdc)
     # spawn_dynamic ПЕРЕД state_managers, spawn_v2 ПОСЛЕДНИМ
     DEFAULT_MODULES = [
         'state_2_operations',      # Инкремент sne/ppr для operations
@@ -570,7 +601,7 @@ def main():
         'compute_transitions',        # Переходы state→intent (до state_managers)
         'state_manager_serviceable',  # Переходы serviceable
         'state_manager_operations',   # Переходы operations → repair/storage
-        'state_manager_repair',       # Переходы repair → operations/reserve
+        'state_manager_repair',       # Переходы repair → serviceable
         'state_manager_storage',      # Storage (терминальное)
         'state_manager_reserve',      # Переходы reserve → operations
         'state_manager_unserviceable',  # Очередь на ремонт

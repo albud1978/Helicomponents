@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Transition Contract",
+  "type": "object",
+  "required": [
+    "version",
+    "states",
+    "variables",
+    "rules"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "states": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "derived": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "expr"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "expr": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "from",
+          "to",
+          "precedence",
+          "pre"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "from": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "to": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "precedence": {
+            "type": "integer"
+          },
+          "pre": {
+            "$ref": "#/$defs/condition"
+          },
+          "post": {
+            "$ref": "#/$defs/condition"
+          },
+          "owner_module": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "expr"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "expr": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "condition": {
+      "type": "object",
+      "properties": {
+        "all": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expr"
+          }
+        },
+        "any": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expr"
+          }
+        }
+      }
+    },
+    "expr": {
+      "type": "object",
+      "required": [
+        "expr"
+      ],
+      "properties": {
+        "expr": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

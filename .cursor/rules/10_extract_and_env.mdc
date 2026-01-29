@@ -1,0 +1,23 @@
+---
+description: Environment setup + Extract pipeline rules
+globs:
+  - "config/**"
+  - "code/extract_master.py"
+  - "code/**/loader*.py"
+  - "code/**/dual_loader*.py"
+alwaysApply: false
+---
+
+# Env + Extract rules
+
+## Перед любыми командами
+```bash
+cd /path/to/Helicomponents
+source .venv/bin/activate
+source config/load_env.sh
+export CUBE_CONFIG_PATH="$PWD/config"
+```
+
+## Extract
+- Extract запускается только целиком через `python3 code/extract_master.py`.
+- Запрещено запускать отдельные loader-ы вручную без `extract_master.py`.
