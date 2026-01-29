@@ -52,8 +52,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
     
     if (group_by == 1u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
+        auto demount = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
+        unsigned int demount_cnt = 0u;
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
+            if (demount[i] == 1u) ++demount_cnt;
+        }}
+        if (demount_cnt < curr) {{
+            curr -= demount_cnt;
+        }} else {{
+            curr = 0u;
         }}
         
         // Считаем сколько уже одобрено из serviceable (P1)
@@ -66,8 +74,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_reserve, flamegpu::MessageNone, flameg
         
     }} else if (group_by == 2u) {{
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
+        auto demount = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
+        unsigned int demount_cnt = 0u;
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
+            if (demount[i] == 1u) ++demount_cnt;
+        }}
+        if (demount_cnt < curr) {{
+            curr -= demount_cnt;
+        }} else {{
+            curr = 0u;
         }}
         
         auto approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s3");

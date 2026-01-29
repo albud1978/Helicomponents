@@ -33,6 +33,7 @@ def setup_mp2_macroproperties(model: fg.ModelDescription):
     MAX_FRAMES = model_build.RTC_MAX_FRAMES
     MAX_DAYS = model_build.MAX_DAYS
     MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Плотная матрица с D+1 паддингом
+    MP7_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
     
     # Основные колонки MP2 (ВСЕ агентные переменные)
     model.Environment().newMacroPropertyUInt("mp2_day_u16", MP2_SIZE)
@@ -97,11 +98,16 @@ def setup_mp2_macroproperties(model: fg.ModelDescription):
     model.Environment().newMacroPropertyUInt("mp2_transition_2_to_4", MP2_SIZE)
     model.Environment().newMacroPropertyUInt("mp2_transition_2_to_6", MP2_SIZE)
     model.Environment().newMacroPropertyUInt("mp2_transition_2_to_3", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_2_to_7", MP2_SIZE)
     model.Environment().newMacroPropertyUInt("mp2_transition_3_to_2", MP2_SIZE)
     model.Environment().newMacroPropertyUInt("mp2_transition_1_to_4", MP2_SIZE)
-    model.Environment().newMacroPropertyUInt("mp2_transition_4_to_2", MP2_SIZE)
+    model.Environment().newMacroPropertyUInt("mp2_transition_4_to_3", MP2_SIZE)
     model.Environment().newMacroPropertyUInt("mp2_transition_7_to_4", MP2_SIZE)
     model.Environment().newMacroPropertyUInt("mp2_transition_7_to_2", MP2_SIZE)
+    
+    # MP7: ремонтные линии (по дням)
+    model.Environment().newMacroPropertyUInt("mp7_line_free_days", MP7_SIZE)
+    model.Environment().newMacroPropertyUInt("mp7_line_aircraft_number", MP7_SIZE)
     
     _mp2_macroproperties_created = True
     print("  ✅ MP2 MacroProperties созданы (setup_mp2_macroproperties)")
@@ -114,6 +120,7 @@ def register_mp2_writer(model: fg.ModelDescription, agent: fg.AgentDescription, 
     MAX_FRAMES = model_build.RTC_MAX_FRAMES
     MAX_DAYS = model_build.MAX_DAYS
     MP2_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # Плотная матрица с D+1 паддингом
+    MP7_SIZE = MAX_FRAMES * (MAX_DAYS + 1)
     
     # Убеждаемся что MacroProperties созданы
     setup_mp2_macroproperties(model)
@@ -1102,6 +1109,36 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_unserviceable, flamegpu::MessageNone, flam
         rtc_write_unserviceable.setInitialState("unserviceable")
         rtc_write_unserviceable.setEndState("unserviceable")
 
+        # MP7: запись ремонтных линий (один агент)
+        rtc_write_mp7 = agent.newRTCFunction("rtc_mp7_write_lines", f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_mp7_write_lines, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (idx != 0u) return flamegpu::ALIVE;
+    
+    const unsigned int step_day = FLAMEGPU->getStepCounter();
+    const unsigned int quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota_total");
+    const unsigned int lines_total = (quota < {MAX_FRAMES}u) ? quota : {MAX_FRAMES}u;
+    
+    auto line_free_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("repair_line_free_days");
+    auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_FRAMES}u>("repair_line_aircraft_number");
+    auto mp7_free = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP7_SIZE}u>("mp7_line_free_days");
+    auto mp7_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP7_SIZE}u>("mp7_line_aircraft_number");
+    
+    for (unsigned int l = 0u; l < {MAX_FRAMES}u; ++l) {{
+        const unsigned int pos = step_day * {MAX_FRAMES}u + l;
+        if (l < lines_total) {{
+            mp7_free[pos].exchange(line_free_days[l]);
+            mp7_acn[pos].exchange(line_acn[l]);
+        }} else {{
+            mp7_free[pos].exchange(0u);
+            mp7_acn[pos].exchange(0u);
+        }}
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+""")
+
         # Создаем layer для записи снимков (все states)
         layer_snapshot = model.newLayer("mp2_write_snapshot")
         layer_snapshot.addAgentFunction(rtc_write_inactive)
@@ -1111,6 +1148,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_unserviceable, flamegpu::MessageNone, flam
         layer_snapshot.addAgentFunction(rtc_write_reserve)
         layer_snapshot.addAgentFunction(rtc_write_storage)
         layer_snapshot.addAgentFunction(rtc_write_unserviceable)
+        
+        layer_mp7 = model.newLayer("mp7_write_lines")
+        layer_mp7.addAgentFunction(rtc_write_mp7)
         
         # Host функция для дренажа (если нужна)
         # ⚠️ ОТКЛЮЧЕНО: дренаж теперь происходит в конце симуляции одним батчем

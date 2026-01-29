@@ -16,7 +16,7 @@ RTC модуль для вычисления переходов между со�
 
 ⚠️ ИСКЛЮЧЕНИЯ:
 - transition_1_to_4 (inactive→repair) — заполняется ПОСТПРОЦЕССИНГОМ (mp2_postprocess_active)
-- transition_4_to_2 (repair→operations) — заполняется ПОСТПРОЦЕССИНГОМ (mp2_postprocess_active)
+- transition_4_to_3 (repair→serviceable) — заполняется ПОСТПРОЦЕССИНГОМ для active_trigger (mp2_postprocess_active)
 
 Эти переходы НЕ происходят напрямую в симуляции, а восстанавливаются по active_trigger.
 """
@@ -80,10 +80,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_transitions_{state_name}, flamegpu::MessageN
     auto mp2_transition_2_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_4");
     auto mp2_transition_2_to_6 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_6");
     auto mp2_transition_2_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_3");
+    auto mp2_transition_2_to_7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_2_to_7");
     auto mp2_transition_3_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_3_to_2");
     auto mp2_transition_7_to_4 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_7_to_4");
     auto mp2_transition_7_to_2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_7_to_2");
-    // ⚠️ transition_1_to_4, transition_4_to_2 НЕ обрабатываются здесь
+    auto mp2_transition_4_to_3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MP2_SIZE}u>("mp2_transition_4_to_3");
+    // ⚠️ transition_1_to_4 НЕ обрабатывается здесь
     // Они заполняются ПОСТПРОЦЕССИНГОМ (mp2_postprocess_active)
     
     // Записываем нужный флаг в зависимости от (state, intent)
@@ -93,17 +95,21 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_transitions_{state_name}, flamegpu::MessageN
         mp2_transition_2_to_6[pos].exchange(1u);
     }} else if (state == 2u && intent == 3u) {{  // operations → serviceable
         mp2_transition_2_to_3[pos].exchange(1u);
+    }} else if (state == 2u && intent == 7u) {{  // operations → unserviceable
+        mp2_transition_2_to_7[pos].exchange(1u);
     }} else if (state == 3u && intent == 2u) {{  // serviceable → operations
         mp2_transition_3_to_2[pos].exchange(1u);
     }} else if (state == 7u && intent == 4u) {{  // unserviceable → repair
         mp2_transition_7_to_4[pos].exchange(1u);
     }} else if (state == 7u && intent == 2u) {{  // unserviceable → operations
         mp2_transition_7_to_2[pos].exchange(1u);
+    }} else if (state == 4u && intent == 3u) {{  // repair → serviceable
+        mp2_transition_4_to_3[pos].exchange(1u);
     }}
     // НЕ обрабатываем:
-    // - state==1 && intent==2 (inactive→operations) - заполняется как transition_4_to_2 постпроцессингом
+    // - state==1 && intent==2 (inactive→operations) - заполняется как transition_4_to_3 постпроцессингом
     // - state==1 && intent==4 (inactive→repair) - не происходит в симуляции
-    // - state==4 && intent==2 (repair→operations) - заполняется постпроцессингом
+    // - state==4 && intent==3 (repair→serviceable) - дополняется постпроцессингом для active_trigger
     
     return flamegpu::ALIVE;
 }}

@@ -58,109 +58,152 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mark_inactive_candidates, flamegpu::MessageNone, fla
 }}
 """
     
-    class RepairLineAllocatorHost(fg.HostFunction):
-        def __init__(self, max_frames: int, max_days: int):
-            super().__init__()
-            self.max_frames = max_frames
-            self.max_days = max_days
-
-        def run(self, FLAMEGPU):
-            env = FLAMEGPU.environment
-            day = FLAMEGPU.getStepCounter()
-            frames = env.getPropertyUInt("frames_total")
-            days_total = env.getPropertyUInt("days_total")
-            safe_day = (day + 1) if (day + 1) < days_total else (days_total - 1 if days_total > 0 else 0)
-
-            quota = env.getPropertyUInt("repair_quota_total")
-            lines_total = min(int(quota), self.max_frames)
-            if lines_total == 0:
-                return
-
-            # Буферы для подсчёта и кандидатов
-            mi8_ops = env.getMacroPropertyUInt32("mi8_ops_count")
-            mi17_ops = env.getMacroPropertyUInt32("mi17_ops_count")
-            mi8_approve_s3 = env.getMacroPropertyUInt32("mi8_approve_s3")
-            mi17_approve_s3 = env.getMacroPropertyUInt32("mi17_approve_s3")
-            mi8_approve_s7 = env.getMacroPropertyUInt32("mi8_approve_s7")
-            mi17_approve_s7 = env.getMacroPropertyUInt32("mi17_approve_s7")
-
-            cand8 = env.getMacroPropertyUInt32("mi8_candidate_s1")
-            cand17 = env.getMacroPropertyUInt32("mi17_candidate_s1")
-            approve8 = env.getMacroPropertyUInt32("mi8_approve_s1")
-            approve17 = env.getMacroPropertyUInt32("mi17_approve_s1")
-
-            repair_time_by_idx = env.getMacroPropertyUInt32("repair_time_by_idx")
-            line_free_days = env.getMacroPropertyUInt32("repair_line_free_days")
-            repair_day_count = env.getMacroPropertyUInt32("repair_day_count")
-            repair_backfill = env.getMacroPropertyUInt32("repair_backfill_load")
-
-            # Подсчёт curr/used по группам
-            curr8 = curr17 = used8 = used17 = 0
-            for i in range(frames):
-                if mi8_ops[i] == 1:
-                    curr8 += 1
-                if mi17_ops[i] == 1:
-                    curr17 += 1
-                if mi8_approve_s3[i] == 1:
-                    used8 += 1
-                if mi17_approve_s3[i] == 1:
-                    used17 += 1
-                if mi8_approve_s7[i] == 1:
-                    used8 += 1
-                if mi17_approve_s7[i] == 1:
-                    used17 += 1
-
-            target8 = env.getPropertyUInt("mp4_ops_counter_mi8", safe_day)
-            target17 = env.getPropertyUInt("mp4_ops_counter_mi17", safe_day)
-            deficit8 = int(target8) - int(curr8) - int(used8)
-            deficit17 = int(target17) - int(curr17) - int(used17)
-            K8 = deficit8 if deficit8 > 0 else 0
-            K17 = deficit17 if deficit17 > 0 else 0
-
-            # Публикуем deficit для динамического spawn
-            deficit_mp8 = env.getMacroPropertyUInt32("quota_deficit_mi8_u32")
-            deficit_mp17 = env.getMacroPropertyUInt32("quota_deficit_mi17_u32")
-            deficit_mp8[safe_day] = K8
-            deficit_mp17[safe_day] = K17
-
-            # Аллокация: youngest first (idx desc) с проверкой глобального окна
-            approved8 = approved17 = 0
-            for i in range(frames - 1, -1, -1):
-                if approved8 < K8 and cand8[i] == 1:
-                    rt = int(repair_time_by_idx[i])
-                    # Проверяем окно [day-rt, day-1]
-                    start = day - rt if day > rt else 0
-                    ok = True
-                    for d in range(start, day):
-                        if repair_day_count[d] + repair_backfill[d] >= lines_total:
-                            ok = False
-                            break
-                    if ok:
-                        for l in range(lines_total):
-                            if line_free_days[l] >= rt:
-                                line_free_days[l] = 0
-                                approve8[i] = 1
-                                approved8 += 1
-                                for d in range(start, day):
-                                    repair_backfill[d] = repair_backfill[d] + 1
-                                break
-                if approved17 < K17 and cand17[i] == 1:
-                    rt = int(repair_time_by_idx[i])
-                    start = day - rt if day > rt else 0
-                    ok = True
-                    for d in range(start, day):
-                        if repair_day_count[d] + repair_backfill[d] >= lines_total:
-                            ok = False
-                            break
-                    if ok:
-                        for l in range(lines_total):
-                            if line_free_days[l] >= rt:
-                                line_free_days[l] = 0
-                                approve17[i] = 1
-                                approved17 += 1
-                                for d in range(start, day):
-                                    repair_backfill[d] = repair_backfill[d] + 1
-                                break
+    RTC_ALLOCATE_INACTIVE = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_allocate_inactive_lines, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (idx != 0u) return flamegpu::ALIVE;
+    
+    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
+    const unsigned int safe_day = (day + 1u) < days_total ? (day + 1u) : (days_total > 0u ? days_total - 1u : 0u);
+    
+    const unsigned int quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota_total");
+    const unsigned int lines_total = (quota < {max_frames}u) ? quota : {max_frames}u;
+    if (lines_total == 0u) return flamegpu::ALIVE;
+    
+    auto mi8_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
+    auto mi17_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
+    auto mi8_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s3");
+    auto mi17_approve_s3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s3");
+    auto mi8_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s7");
+    auto mi17_approve_s7 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s7");
+    auto cand8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_s1");
+    auto cand17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_s1");
+    auto approve8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
+    auto approve17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
+    auto repair_time_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_time_by_idx");
+    auto aircraft_number_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("aircraft_number_by_idx");
+    auto line_free_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_free_days");
+    auto line_assign = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_assign_by_idx");
+    
+    unsigned int curr8 = 0u, curr17 = 0u, used8 = 0u, used17 = 0u;
+    unsigned int demount8 = 0u, demount17 = 0u;
+    auto demount8_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
+    auto demount17_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
+    for (unsigned int i = 0u; i < frames; ++i) {{
+        if (mi8_ops[i] == 1u) curr8++;
+        if (mi17_ops[i] == 1u) curr17++;
+        if (mi8_approve_s3[i] == 1u) used8++;
+        if (mi17_approve_s3[i] == 1u) used17++;
+        if (mi8_approve_s7[i] == 1u) used8++;
+        if (mi17_approve_s7[i] == 1u) used17++;
+        if (demount8_mp[i] == 1u) demount8++;
+        if (demount17_mp[i] == 1u) demount17++;
+    }}
+    if (demount8 < curr8) curr8 -= demount8; else curr8 = 0u;
+    if (demount17 < curr17) curr17 -= demount17; else curr17 = 0u;
+    
+    const unsigned int target8 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
+    const unsigned int target17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);
+    const int deficit8 = (int)target8 - (int)curr8 - (int)used8;
+    const int deficit17 = (int)target17 - (int)curr17 - (int)used17;
+    unsigned int K8 = deficit8 > 0 ? (unsigned int)deficit8 : 0u;
+    unsigned int K17 = deficit17 > 0 ? (unsigned int)deficit17 : 0u;
+    
+    auto deficit_mp8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("quota_deficit_mi8_u32");
+    auto deficit_mp17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("quota_deficit_mi17_u32");
+    deficit_mp8[safe_day].exchange(K8);
+    deficit_mp17[safe_day].exchange(K17);
+    
+    unsigned int line_ids[{max_frames}u];
+    unsigned int line_days[{max_frames}u];
+    unsigned int lines = 0u;
+    for (unsigned int i = 0u; i < lines_total; ++i) {{
+        line_ids[i] = 0xFFFFFFFFu;
+        line_days[i] = 0u;
+    }}
+    for (unsigned int i = 0u; i < lines_total; ++i) {{
+        const unsigned int free_days = line_free_days[i];
+        if (lines >= {max_frames}u) break;
+        unsigned int pos = lines;
+        while (pos > 0u && free_days < line_days[pos - 1u]) {{
+            line_days[pos] = line_days[pos - 1u];
+            line_ids[pos] = line_ids[pos - 1u];
+            --pos;
+        }}
+        line_days[pos] = free_days;
+        line_ids[pos] = i;
+        ++lines;
+    }}
+    unsigned int used_lines[{max_frames}u];
+    for (unsigned int i = 0u; i < lines_total; ++i) used_lines[i] = 0u;
+    
+    unsigned int approved8 = 0u, approved17 = 0u;
+    for (int i = (int)frames - 1; i >= 0; --i) {{
+        if (approved8 < K8 && cand8[i] == 1u) {{
+            const unsigned int rt = repair_time_by_idx[i];
+            unsigned int chosen = 0xFFFFFFFFu;
+            for (unsigned int s = 0u; s < lines; ++s) {{
+                if (used_lines[s] == 1u) continue;
+                if (line_days[s] >= rt) {{ chosen = line_ids[s]; used_lines[s] = 1u; break; }}
+            }}
+            if (chosen != 0xFFFFFFFFu) {{
+                const unsigned int acn = aircraft_number_by_idx[i];
+                if (acn == 0u) continue;
+                approve8[i].exchange(1u);
+                line_assign[i].exchange(chosen);
+                approved8++;
+            }}
+        }}
+        if (approved17 < K17 && cand17[i] == 1u) {{
+            const unsigned int rt = repair_time_by_idx[i];
+            unsigned int chosen = 0xFFFFFFFFu;
+            for (unsigned int s = 0u; s < lines; ++s) {{
+                if (used_lines[s] == 1u) continue;
+                if (line_days[s] >= rt) {{ chosen = line_ids[s]; used_lines[s] = 1u; break; }}
+            }}
+            if (chosen != 0xFFFFFFFFu) {{
+                const unsigned int acn = aircraft_number_by_idx[i];
+                if (acn == 0u) continue;
+                approve17[i].exchange(1u);
+                line_assign[i].exchange(chosen);
+                approved17++;
+            }}
+        }}
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    RTC_APPLY_INACTIVE_LINES = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_apply_inactive_lines, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (idx != 0u) return flamegpu::ALIVE;
+    
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    auto approve8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve_s1");
+    auto approve17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve_s1");
+    auto line_assign = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_assign_by_idx");
+    auto aircraft_number_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("aircraft_number_by_idx");
+    auto line_free_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_free_days");
+    auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_aircraft_number");
+    
+    for (unsigned int i = 0u; i < frames; ++i) {{
+        if (approve8[i] == 1u || approve17[i] == 1u) {{
+            const unsigned int line_id = line_assign[i];
+            if (line_id == 0xFFFFFFFFu) continue;
+            const unsigned int acn = aircraft_number_by_idx[i];
+            if (acn == 0u) continue;
+            line_free_days[line_id].exchange(0u);
+            line_acn[line_id].exchange(acn);
+        }}
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
     
     RTC_APPLY_INACTIVE_APPROVAL = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_apply_inactive_approval, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -187,6 +230,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_inactive_approval, flamegpu::MessageNone, flam
     
     // Меняем intent на operations
     FLAMEGPU->setVariable<unsigned int>("intent_state", 2u);
+    auto line_assign = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_assign_by_idx");
+    const unsigned int line_id = line_assign[idx];
+    if (line_id != 0xFFFFFFFFu) {{
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", line_id);
+    }}
     
     // Логирование
     const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -209,8 +257,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_apply_inactive_approval, flamegpu::MessageNone, flam
     fn_candidates.setEndState("inactive")
     layer_candidates.addAgentFunction(fn_candidates)
     
-    layer_allocate = model.newLayer("quota_promote_inactive_allocate_host")
-    layer_allocate.addHostFunction(RepairLineAllocatorHost(max_frames, MAX_DAYS))
+    layer_allocate = model.newLayer("quota_promote_inactive_allocate_rtc")
+    fn_allocate = agent.newRTCFunction("rtc_allocate_inactive_lines", RTC_ALLOCATE_INACTIVE)
+    layer_allocate.addAgentFunction(fn_allocate)
+    
+    layer_apply_lines = model.newLayer("quota_promote_inactive_apply_lines")
+    fn_apply_lines = agent.newRTCFunction("rtc_apply_inactive_lines", RTC_APPLY_INACTIVE_LINES)
+    layer_apply_lines.addAgentFunction(fn_apply_lines)
     
     layer_apply = model.newLayer("quota_promote_inactive_apply")
     fn_apply = agent.newRTCFunction("rtc_apply_inactive_approval", RTC_APPLY_INACTIVE_APPROVAL)

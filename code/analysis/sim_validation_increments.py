@@ -392,10 +392,10 @@ class IncrementsValidator:
         """
         Проверяет: ppr сброшен после выхода из repair.
         
-        ВАЖНО: После сброса ppr=0 на переходе 4→2, применяется dt текущего дня.
+        ВАЖНО: После сброса ppr=0 на переходе 4→3, применяется dt текущего дня.
         Поэтому в день перехода ppr = dt (а не 0).
         
-        Правильная проверка: ppr == dt в день transition_4_to_2=1
+        Правильная проверка: ppr == dt в день transition_4_to_3=1
         """
         print("\n" + "="*80)
         print("3. PPR RESET ПОСЛЕ ВЫХОДА ИЗ РЕМОНТА")
@@ -407,7 +407,7 @@ class IncrementsValidator:
             'summary': {}
         }
         
-        # Находим записи с transition_4_to_2=1 и проверяем ppr == dt
+        # Находим записи с transition_4_to_3=1 и проверяем ppr == dt
         # После ремонта: ppr сбрасывается в 0, затем применяется dt дня → ppr = dt
         query = f"""
             SELECT 
@@ -420,7 +420,7 @@ class IncrementsValidator:
             FROM sim_masterv2
             WHERE version_date = {self.version_date}
               AND group_by IN (1, 2)
-              AND transition_4_to_2 = 1
+              AND transition_4_to_3 = 1
             ORDER BY group_by, aircraft_number, day_u16
             LIMIT 200
         """

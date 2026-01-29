@@ -52,16 +52,32 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_promote_serviceable, flamegpu::MessageNone, fl
     if (group_by == 1u) {{
         /* Mi-8: считаем текущих в operations */
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_ops_count");
+        auto demount = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_approve");
+        unsigned int demount_cnt = 0u;
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
+            if (demount[i] == 1u) ++demount_cnt;
+        }}
+        if (demount_cnt < curr) {{
+            curr -= demount_cnt;
+        }} else {{
+            curr = 0u;
         }}
         
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", safe_day);
     }} else if (group_by == 2u) {{
         /* Mi-17: аналогично */
         auto ops_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_ops_count");
+        auto demount = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_approve");
+        unsigned int demount_cnt = 0u;
         for (unsigned int i = 0u; i < frames; ++i) {{
             if (ops_count[i] == 1u) ++curr;
+            if (demount[i] == 1u) ++demount_cnt;
+        }}
+        if (demount_cnt < curr) {{
+            curr -= demount_cnt;
+        }} else {{
+            curr = 0u;
         }}
         
         target = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", safe_day);

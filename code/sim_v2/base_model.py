@@ -206,8 +206,14 @@ class V2BaseModel:
         # Снимки ремонтных параметров и пул ремонтных линий (по дням)
         self.env.newMacroPropertyUInt32("repair_time_by_idx", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("repair_days_by_idx", model_build.MAX_FRAMES)
-        self.env.newMacroPropertyUInt32("repair_line_busy_until", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("aircraft_number_by_idx", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("repair_line_idx", model_build.MAX_FRAMES)
         self.env.newMacroPropertyUInt32("repair_line_free_days", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("repair_line_aircraft_number", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("repair_line_free_days_next", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("repair_line_aircraft_number_next", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("repair_line_assign_by_idx", model_build.MAX_FRAMES)
+        self.env.newMacroPropertyUInt32("repair_backfill_next", model_build.MAX_DAYS)
         
         # Динамический spawn (pending агенты, которые ещё не появились в operations)
         self.env.newMacroPropertyUInt32("mi8_spawn_pending", model_build.MAX_FRAMES)
@@ -315,7 +321,7 @@ class V2BaseModel:
         agent.newVariableUInt("transition_1_to_2", 0)   # inactive → operations
         agent.newVariableUInt("transition_4_to_5", 0)   # repair → reserve
         agent.newVariableUInt("transition_1_to_4", 0)   # inactive → repair
-        agent.newVariableUInt("transition_4_to_2", 0)   # repair → operations
+        agent.newVariableUInt("transition_4_to_3", 0)   # repair → serviceable
         
         # Наработки
         agent.newVariableUInt("sne", 0)
@@ -333,6 +339,7 @@ class V2BaseModel:
         agent.newVariableUInt("assembly_time", 180)
         agent.newVariableUInt("partout_time", 180)
         agent.newVariableUInt("repair_days", 0)
+        agent.newVariableUInt("repair_line_id", 4294967295)
         agent.newVariableUInt("assembly_trigger", 0)
         agent.newVariableUInt("active_trigger", 0)
         agent.newVariableUInt("partout_trigger", 0)

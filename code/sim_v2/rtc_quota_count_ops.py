@@ -65,6 +65,12 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         auto mi8_candidate_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_candidate_s1");
         auto mi17_candidate_s1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi17_candidate_s1");
         auto group_by_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("group_by_by_idx");
+        auto aircraft_number_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("aircraft_number_by_idx");
+        auto repair_line_assign_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_assign_by_idx");
+        auto repair_line_free_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_free_days");
+        auto repair_line_aircraft_number = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_aircraft_number");
+        auto repair_line_free_days_next = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_free_days_next");
+        auto repair_line_aircraft_number_next = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_aircraft_number_next");
         
         // Spawn pending флаги
         auto mi8_spawn_pending = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("mi8_spawn_pending");
@@ -78,6 +84,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
         // Дневные счётчики квоты ремонта (инициализация только на d=0)
         auto repair_day_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days}u>("repair_day_count");
         auto repair_backfill = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days}u>("repair_backfill_load");
+        auto repair_backfill_next = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days}u>("repair_backfill_next");
         auto mp2_repair_load = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days + 1}u>("mp2_repair_quota_load");
         auto mp2_repair_full = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days + 1}u>("mp2_repair_quota_full");
         
@@ -111,6 +118,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             mi8_candidate_s1[i].exchange(0u);
             mi17_candidate_s1[i].exchange(0u);
             group_by_by_idx[i].exchange(0u);
+            aircraft_number_by_idx[i].exchange(0u);
+            repair_line_assign_by_idx[i].exchange(0xFFFFFFFFu);
             
             // Spawn pending флаги
             mi8_spawn_pending[i].exchange(0u);
@@ -127,6 +136,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
             for (unsigned int d = 0u; d < {max_days}u; ++d) {{
                 repair_day_count[d].exchange(0u);
                 repair_backfill[d].exchange(0u);
+                repair_backfill_next[d].exchange(0u);
                 mp2_repair_load[d].exchange(0u);
                 mp2_repair_full[d].exchange(0u);
             }}
@@ -144,14 +154,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_buffers, flamegpu::MessageNone, flamegpu
 }}
 """
     
-    rtc_reset = agent.newRTCFunction("rtc_reset_quota_buffers", RTC_RESET_BUFFERS)
-    # ✅ ИСПРАВЛЕНИЕ: Убираем фильтр по state, чтобы reset срабатывал для ВСЕХ агентов
-    # Только первый агент (idx=0) сбросит буферы, остальные просто пройдут
-    # rtc_reset.setInitialState("operations")  ← УДАЛЕНО
-    # rtc_reset.setEndState("operations")      ← УДАЛЕНО
-    
     layer_reset = model.newLayer("reset_quota_buffers")
-    layer_reset.addAgentFunction(rtc_reset)
+    # ✅ В state-based архитектуре глобальные функции нужно регистрировать для ВСЕХ состояний
+    global_states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage', 'unserviceable']
+    for state_name in global_states:
+        rtc_reset = agent.newRTCFunction(f"rtc_reset_quota_buffers_{state_name}", RTC_RESET_BUFFERS)
+        rtc_reset.setInitialState(state_name)
+        rtc_reset.setEndState(state_name)
+        layer_reset.addAgentFunction(rtc_reset)
     
     # =========================================================================
     # Слой 2: Подсчёт агентов в operations с intent=2
@@ -338,19 +348,25 @@ FLAMEGPU_AGENT_FUNCTION(rtc_snapshot_repair_vars, flamegpu::MessageNone, flamegp
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int repair_time = FLAMEGPU->getVariable<unsigned int>("repair_time");
     const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
+    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     
     auto repair_time_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_time_by_idx");
     auto repair_days_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_days_by_idx");
+    auto aircraft_number_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("aircraft_number_by_idx");
     repair_time_by_idx[idx].exchange(repair_time);
     repair_days_by_idx[idx].exchange(repair_days);
+    aircraft_number_by_idx[idx].exchange(aircraft_number);
     
     return flamegpu::ALIVE;
 }}
 """
     
-    rtc_snapshot = agent.newRTCFunction("rtc_snapshot_repair_vars", RTC_SNAPSHOT_REPAIR)
     layer_snapshot = model.newLayer("snapshot_repair_vars")
-    layer_snapshot.addAgentFunction(rtc_snapshot)
+    for state_name in global_states:
+        rtc_snapshot = agent.newRTCFunction(f"rtc_snapshot_repair_vars_{state_name}", RTC_SNAPSHOT_REPAIR)
+        rtc_snapshot.setInitialState(state_name)
+        rtc_snapshot.setEndState(state_name)
+        layer_snapshot.addAgentFunction(rtc_snapshot)
 
     # =========================================================================
     # Слой 6b: Логирование количества в ремонте по дням (для backfill-квоты)
@@ -386,80 +402,153 @@ FLAMEGPU_AGENT_FUNCTION(rtc_log_repair_day_count, flamegpu::MessageNone, flamegp
 }}
 """
     
-    rtc_func_rep_log = agent.newRTCFunction("rtc_log_repair_day_count", RTC_LOG_REPAIR_DAY)
-    # Запускаем для всех агентов, но работает только idx==0
     layer_log_rep = model.newLayer("log_repair_day_count")
-    layer_log_rep.addAgentFunction(rtc_func_rep_log)
+    # Запускаем для всех агентов, но работает только idx==0
+    for state_name in global_states:
+        rtc_func_rep_log = agent.newRTCFunction(f"rtc_log_repair_day_count_{state_name}", RTC_LOG_REPAIR_DAY)
+        rtc_func_rep_log.setInitialState(state_name)
+        rtc_func_rep_log.setEndState(state_name)
+        layer_log_rep.addAgentFunction(rtc_func_rep_log)
 
     # =========================================================================
-    # Слой 6c: Менеджер ремонтных линий (host)
+    # Слой 6c: Менеджер ремонтных линий (RTC, без host)
     # =========================================================================
-    class RepairLineManagerHost(fg.HostFunction):
-        def __init__(self, max_frames: int, max_days: int):
-            super().__init__()
-            self.max_frames = max_frames
-            self.max_days = max_days
-
-        def run(self, FLAMEGPU):
-            env = FLAMEGPU.environment
-            day = FLAMEGPU.getStepCounter()
-            frames = env.getPropertyUInt("frames_total")
-            quota = env.getPropertyUInt("repair_quota_total")
-            lines_total = min(int(quota), self.max_frames)
-            if lines_total == 0:
-                return
-
-            repair_state_buffer = env.getMacroPropertyUInt32("repair_state_buffer")
-            repair_time_by_idx = env.getMacroPropertyUInt32("repair_time_by_idx")
-            repair_days_by_idx = env.getMacroPropertyUInt32("repair_days_by_idx")
-            line_busy_until = env.getMacroPropertyUInt32("repair_line_busy_until")
-            line_free_days = env.getMacroPropertyUInt32("repair_line_free_days")
-
-            if day == 0:
-                for l in range(lines_total):
-                    line_busy_until[l] = 0
-                    line_free_days[l] = 0
-                assigned = 0
-                for i in range(frames):
-                    if assigned >= lines_total:
-                        break
-                    if repair_state_buffer[i] != 1:
-                        continue
-                    rt = int(repair_time_by_idx[i])
-                    rd = int(repair_days_by_idx[i])
-                    remaining = (rt - rd) if rt > rd else 0
-                    line_busy_until[assigned] = day + remaining
-                    line_free_days[assigned] = 0
-                    assigned += 1
-                return
-
-            for l in range(lines_total):
-                busy_until = int(line_busy_until[l])
-                if day < busy_until:
-                    line_free_days[l] = 0
-                else:
-                    fd = int(line_free_days[l])
-                    if fd < self.max_days:
-                        fd += 1
-                    line_free_days[l] = fd
-
-            # Новые ремонты: repair_days == 1
-            for i in range(frames):
-                if repair_state_buffer[i] != 1:
-                    continue
-                rd = int(repair_days_by_idx[i])
-                if rd != 1:
-                    continue
-                rt = int(repair_time_by_idx[i])
-                for l in range(lines_total):
-                    busy_until = int(line_busy_until[l])
-                    if day >= busy_until:
-                        line_busy_until[l] = day + rt
-                        line_free_days[l] = 0
-                        break
-
-    layer_line_mgr = model.newLayer("repair_line_manager_host")
-    layer_line_mgr.addHostFunction(RepairLineManagerHost(max_frames, max_days))
+    RTC_REPAIR_LINE_MANAGER = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_manager, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (idx != 0u) return flamegpu::ALIVE;
+    
+    const unsigned int day = FLAMEGPU->getStepCounter();
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    const unsigned int quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota_total");
+    const unsigned int lines_total = (quota < {max_frames}u) ? quota : {max_frames}u;
+    if (lines_total == 0u) return flamegpu::ALIVE;
+    
+    auto repair_state_buffer = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_state_buffer");
+    auto repair_time_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_time_by_idx");
+    auto repair_days_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_days_by_idx");
+    auto aircraft_number_by_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("aircraft_number_by_idx");
+    auto line_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_idx");
+    auto line_free_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_free_days");
+    auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_aircraft_number");
+    auto line_free_days_next = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_free_days_next");
+    auto line_acn_next = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_aircraft_number_next");
+    
+    if (day == 0u) {{
+        for (unsigned int l = 0u; l < lines_total; ++l) {{
+            line_idx[l].exchange(l);
+            line_free_days[l].exchange(0u);
+            line_acn[l].exchange(0u);
+            line_free_days_next[l].exchange(0u);
+            line_acn_next[l].exchange(0u);
+        }}
+        unsigned int assigned = 0u;
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            if (assigned >= lines_total) break;
+            if (repair_state_buffer[i] != 1u) continue;
+            const unsigned int acn = aircraft_number_by_idx[i];
+            if (acn == 0u) continue;
+            const unsigned int rt = repair_time_by_idx[i];
+            const unsigned int rd = repair_days_by_idx[i];
+            const unsigned int elapsed = (rd < rt) ? rd : rt;
+            line_idx[assigned].exchange(assigned);
+            line_free_days[assigned].exchange(elapsed);
+            line_acn[assigned].exchange(acn);
+            line_free_days_next[assigned].exchange(elapsed);
+            line_acn_next[assigned].exchange(acn);
+            assigned++;
+        }}
+        return flamegpu::ALIVE;
+    }}
+    
+    for (unsigned int l = 0u; l < lines_total; ++l) {{
+        unsigned int fd = line_free_days[l];
+        if (fd < {max_days}u) {{
+            fd += 1u;
+        }}
+        line_free_days_next[l].exchange(fd);
+        
+        const unsigned int acn = line_acn[l];
+        if (acn != 0u) {{
+            unsigned int rt = 0u;
+            for (unsigned int i = 0u; i < frames; ++i) {{
+                if (aircraft_number_by_idx[i] == acn) {{
+                    rt = repair_time_by_idx[i];
+                    break;
+                }}
+            }}
+            if (rt > 0u && fd >= rt) {{
+                line_acn_next[l].exchange(0u);
+            }} else {{
+                line_acn_next[l].exchange(acn);
+            }}
+        }} else {{
+            line_acn_next[l].exchange(0u);
+        }}
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    layer_line_mgr = model.newLayer("repair_line_manager_rtc")
+    for state_name in global_states:
+        rtc_line_mgr = agent.newRTCFunction(f"rtc_repair_line_manager_{state_name}", RTC_REPAIR_LINE_MANAGER)
+        rtc_line_mgr.setInitialState(state_name)
+        rtc_line_mgr.setEndState(state_name)
+        layer_line_mgr.addAgentFunction(rtc_line_mgr)
+    
+    RTC_REPAIR_LINE_COMMIT = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_commit, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (idx != 0u) return flamegpu::ALIVE;
+    
+    const unsigned int quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota_total");
+    const unsigned int lines_total = (quota < {max_frames}u) ? quota : {max_frames}u;
+    if (lines_total == 0u) return flamegpu::ALIVE;
+    
+    auto line_free_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_free_days");
+    auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_aircraft_number");
+    auto line_free_days_next = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_free_days_next");
+    auto line_acn_next = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_frames}u>("repair_line_aircraft_number_next");
+    
+    for (unsigned int l = 0u; l < lines_total; ++l) {{
+        line_free_days[l].exchange(line_free_days_next[l]);
+        line_acn[l].exchange(line_acn_next[l]);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    layer_line_commit = model.newLayer("repair_line_commit_rtc")
+    for state_name in global_states:
+        rtc_line_commit = agent.newRTCFunction(f"rtc_repair_line_commit_{state_name}", RTC_REPAIR_LINE_COMMIT)
+        rtc_line_commit.setInitialState(state_name)
+        rtc_line_commit.setEndState(state_name)
+        layer_line_commit.addAgentFunction(rtc_line_commit)
+    
+    RTC_REPAIR_BACKFILL_COMMIT = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_repair_backfill_commit, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    if (idx != 0u) return flamegpu::ALIVE;
+    
+    auto repair_backfill = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days}u>("repair_backfill_load");
+    auto repair_backfill_next = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_days}u>("repair_backfill_next");
+    for (unsigned int d = 0u; d < {max_days}u; ++d) {{
+        repair_backfill[d].exchange(repair_backfill_next[d]);
+    }}
+    
+    return flamegpu::ALIVE;
+}}
+"""
+    
+    layer_backfill_commit = model.newLayer("repair_backfill_commit_rtc")
+    for state_name in global_states:
+        rtc_backfill_commit = agent.newRTCFunction(f"rtc_repair_backfill_commit_{state_name}", RTC_REPAIR_BACKFILL_COMMIT)
+        rtc_backfill_commit.setInitialState(state_name)
+        rtc_backfill_commit.setEndState(state_name)
+        layer_backfill_commit.addAgentFunction(rtc_backfill_commit)
     
     # =========================================================================
     # Слой 7: Подсчёт очереди на ремонт в unserviceable (intent=0)
@@ -592,19 +681,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_log_quota_gap, flamegpu::MessageNone, flamegpu::Mess
 }}
 """
     
-    rtc_log_mp4 = agent.newRTCFunction("rtc_log_mp4_targets", RTC_LOG_MP4_TARGETS)
-    # Запускаем для ВСЕХ агентов (exchange атомарна, поэтому безопасна многократная запись)
-    
     layer_log_mp4 = model.newLayer("log_mp4_targets")
-    layer_log_mp4.addAgentFunction(rtc_log_mp4)
+    # Запускаем для ВСЕХ агентов (exchange атомарна, поэтому безопасна многократная запись)
+    for state_name in global_states:
+        rtc_log_mp4 = agent.newRTCFunction(f"rtc_log_mp4_targets_{state_name}", RTC_LOG_MP4_TARGETS)
+        rtc_log_mp4.setInitialState(state_name)
+        rtc_log_mp4.setEndState(state_name)
+        layer_log_mp4.addAgentFunction(rtc_log_mp4)
     
     # =========================================================================
     # Регистрация слоя для логирования gap
     # =========================================================================
-    rtc_log_gap = agent.newRTCFunction("rtc_log_quota_gap", RTC_LOG_GAP)
-    
     layer_log_gap = model.newLayer("log_quota_gap")
-    layer_log_gap.addAgentFunction(rtc_log_gap)
+    for state_name in global_states:
+        rtc_log_gap = agent.newRTCFunction(f"rtc_log_quota_gap_{state_name}", RTC_LOG_GAP)
+        rtc_log_gap.setInitialState(state_name)
+        rtc_log_gap.setEndState(state_name)
+        layer_log_gap.addAgentFunction(rtc_log_gap)
     
     print("  RTC модуль count_ops зарегистрирован (обнуление + подсчёт ops/svc/reserve/inactive/repair/queue + логирование MP4 целей + gap)")
 

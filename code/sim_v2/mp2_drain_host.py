@@ -117,9 +117,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             transition_2_to_4   UInt8,   -- operations → repair
             transition_2_to_6   UInt8,   -- operations → storage
             transition_2_to_3   UInt8,   -- operations → serviceable
+            transition_2_to_7   UInt8,   -- operations → unserviceable
             transition_3_to_2   UInt8,   -- serviceable → operations
             transition_1_to_4   UInt8,   -- inactive → repair
-            transition_4_to_2   UInt8,   -- repair → operations
+            transition_4_to_3   UInt8,   -- repair → serviceable
             transition_7_to_4   UInt8,   -- unserviceable → repair
             transition_7_to_2   UInt8,   -- unserviceable → operations
             
@@ -135,6 +136,13 @@ class MP2DrainHostFunction(fg.HostFunction):
         ORDER BY (version_date, day_u16, idx)
         """
         self.client.execute(ddl)
+        # Если таблица уже существовала, добавляем новые флаги переходов
+        self.client.execute(
+            f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS transition_2_to_7 UInt8 DEFAULT 0"
+        )
+        self.client.execute(
+            f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS transition_4_to_3 UInt8 DEFAULT 0"
+        )
         
     def run(self, FLAMEGPU):
         """HostFunction слой - вызывается каждый шаг, но дренаж только на финальном"""
@@ -174,7 +182,8 @@ class MP2DrainHostFunction(fg.HostFunction):
         self._last_drained_day = actual_end_day + 1
         self._pending = False
         return
-            
+
+
     def _drain_mp2_range(self, FLAMEGPU, start_day_inclusive: int, end_day_inclusive: int) -> int:
         """Выгружает MP2 данные с GPU за диапазон дней [start..end]"""
         # HostFunction контекст - FLAMEGPU.environment доступен напрямую
@@ -296,8 +305,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             mp2_transition_2_to_6 = None
         try:
             mp2_transition_2_to_3 = env.getMacroPropertyUInt32("mp2_transition_2_to_3")
+            mp2_transition_2_to_7 = env.getMacroPropertyUInt32("mp2_transition_2_to_7")
         except:
             mp2_transition_2_to_3 = None
+            mp2_transition_2_to_7 = None
         try:
             mp2_transition_3_to_2 = env.getMacroPropertyUInt32("mp2_transition_3_to_2")
         except:
@@ -307,9 +318,9 @@ class MP2DrainHostFunction(fg.HostFunction):
         except:
             mp2_transition_1_to_4 = None
         try:
-            mp2_transition_4_to_2 = env.getMacroPropertyUInt32("mp2_transition_4_to_2")
+            mp2_transition_4_to_3 = env.getMacroPropertyUInt32("mp2_transition_4_to_3")
         except:
-            mp2_transition_4_to_2 = None
+            mp2_transition_4_to_3 = None
         try:
             mp2_transition_7_to_4 = env.getMacroPropertyUInt32("mp2_transition_7_to_4")
         except:
@@ -392,9 +403,10 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_transition_2_to_4[pos]) if mp2_transition_2_to_4 is not None else 0,
                         int(mp2_transition_2_to_6[pos]) if mp2_transition_2_to_6 is not None else 0,
                         int(mp2_transition_2_to_3[pos]) if mp2_transition_2_to_3 is not None else 0,
+                        int(mp2_transition_2_to_7[pos]) if mp2_transition_2_to_7 is not None else 0,
                         int(mp2_transition_3_to_2[pos]) if mp2_transition_3_to_2 is not None else 0,
                         int(mp2_transition_1_to_4[pos]) if mp2_transition_1_to_4 is not None else 0,
-                        int(mp2_transition_4_to_2[pos]) if mp2_transition_4_to_2 is not None else 0,
+                        int(mp2_transition_4_to_3[pos]) if mp2_transition_4_to_3 is not None else 0,
                         int(mp2_transition_7_to_4[pos]) if mp2_transition_7_to_4 is not None else 0,
                         int(mp2_transition_7_to_2[pos]) if mp2_transition_7_to_2 is not None else 0
                     )
@@ -545,8 +557,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             mp2_transition_2_to_6 = None
         try:
             mp2_transition_2_to_3 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_3")
+            mp2_transition_2_to_7 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_2_to_7")
         except:
             mp2_transition_2_to_3 = None
+            mp2_transition_2_to_7 = None
         try:
             mp2_transition_3_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_3_to_2")
         except:
@@ -556,9 +570,9 @@ class MP2DrainHostFunction(fg.HostFunction):
         except:
             mp2_transition_1_to_4 = None
         try:
-            mp2_transition_4_to_2 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_4_to_2")
+            mp2_transition_4_to_3 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_4_to_3")
         except:
-            mp2_transition_4_to_2 = None
+            mp2_transition_4_to_3 = None
         try:
             mp2_transition_7_to_4 = FLAMEGPU.environment.getMacroPropertyUInt32("mp2_transition_7_to_4")
         except:
@@ -647,9 +661,10 @@ class MP2DrainHostFunction(fg.HostFunction):
                         int(mp2_transition_2_to_4[pos]) if mp2_transition_2_to_4 is not None else 0,
                         int(mp2_transition_2_to_6[pos]) if mp2_transition_2_to_6 is not None else 0,
                         int(mp2_transition_2_to_3[pos]) if mp2_transition_2_to_3 is not None else 0,
+                        int(mp2_transition_2_to_7[pos]) if mp2_transition_2_to_7 is not None else 0,
                         int(mp2_transition_3_to_2[pos]) if mp2_transition_3_to_2 is not None else 0,
                         int(mp2_transition_1_to_4[pos]) if mp2_transition_1_to_4 is not None else 0,
-                        int(mp2_transition_4_to_2[pos]) if mp2_transition_4_to_2 is not None else 0,
+                        int(mp2_transition_4_to_3[pos]) if mp2_transition_4_to_3 is not None else 0,
                         int(mp2_transition_7_to_4[pos]) if mp2_transition_7_to_4 is not None else 0,
                         int(mp2_transition_7_to_2[pos]) if mp2_transition_7_to_2 is not None else 0
                     )
@@ -681,10 +696,10 @@ class MP2DrainHostFunction(fg.HostFunction):
             self.max_batch_rows = batch_rows
         t_start = time.perf_counter()
         # MATERIALIZED day_date вычисляется на стороне ClickHouse, не вставляем её явно
-        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,bi_counter,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s4_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,repair_quota_load,repair_quota_full,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_0_to_2,transition_0_to_3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_3_to_2,transition_1_to_4,transition_4_to_2,transition_7_to_4,transition_7_to_2"
+        columns = "version_date,version_id,day_u16,idx,aircraft_number,partseqno,group_by,state,intent_state,bi_counter,sne,ppr,cso,ll,oh,br,repair_time,assembly_time,partout_time,repair_days,s4_days,assembly_trigger,active_trigger,partout_trigger,mfg_date_days,dt,dn,quota_target_mi8,quota_target_mi17,quota_gap_mi8,quota_gap_mi17,repair_quota_load,repair_quota_full,quota_demount,quota_promote_p1,quota_promote_p2,quota_promote_p3,transition_0_to_2,transition_0_to_3,transition_2_to_4,transition_2_to_6,transition_2_to_3,transition_2_to_7,transition_3_to_2,transition_1_to_4,transition_4_to_3,transition_7_to_4,transition_7_to_2"
         query = f"INSERT INTO {self.table_name} ({columns}) VALUES"
         # Подаём данные в колоннарном формате для уменьшения накладных расходов драйвера
-        num_cols = 47  # 27 базовых + 2 MP4 целей + 2 gap + 2 repair_quota + 4 флага квот + 10 transition флагов
+        num_cols = 48  # 27 базовых + 2 MP4 целей + 2 gap + 2 repair_quota + 4 флага квот + 11 transition флагов
         cols = [[] for _ in range(num_cols)]
         for r in self.batch:
             for i, v in enumerate(r):
@@ -771,8 +786,8 @@ class MP2DrainHostFunction(fg.HostFunction):
                         # transition_1_to_2, transition_4_to_5, transition_5_to_2 удалены из схемы
                         elif prev_state == 'inactive' and curr_state == 'repair':
                             transition_field = 'transition_1_to_4'
-                        elif prev_state == 'repair' and curr_state == 'operations':
-                            transition_field = 'transition_4_to_2'
+                        elif prev_state == 'repair' and curr_state == 'serviceable':
+                            transition_field = 'transition_4_to_3'
                         
                         if transition_field:
                             updates_list.append((transition_field, curr_aircraft, curr_day, version_date))
@@ -864,3 +879,131 @@ class MP2EventDrainHostFunction(fg.HostFunction):
                 self.client.execute(query, batch)
                 
             self.last_event_pos = event_counter
+
+
+class MP7DrainHostFunction(fg.HostFunction):
+    """Host функция для выгрузки MP7 (ремонтные линии) в СУБД"""
+    
+    def __init__(self, client, table_name: str = 'sim_masterv2_repair_lines',
+                 batch_size: int = 250000, simulation_steps: int = 365,
+                 export_mode: str = "full"):
+        super().__init__()
+        self.client = client
+        self.table_name = table_name
+        self.batch_size = batch_size
+        self.simulation_steps = simulation_steps
+        self.export_mode = export_mode
+        self.batch = []
+        self.total_rows_written = 0
+        self.total_drain_time = 0.0
+        self.flush_count = 0
+        self.total_flush_time = 0.0
+        self.max_batch_rows = 0
+        self._ensure_table()
+    
+    def _ensure_table(self):
+        ddl = f"""
+        CREATE TABLE IF NOT EXISTS {self.table_name} (
+            version_date      UInt32,
+            version_id        UInt32,
+            day_u16           UInt16,
+            day_date          Date MATERIALIZED addDays(toDate('1970-01-01'), toUInt32(version_date) + toUInt32(day_u16)),
+            line_id           UInt16,
+            free_days         UInt32,
+            aircraft_number   UInt32,
+            export_timestamp  DateTime DEFAULT now(),
+            INDEX idx_version (version_date, version_id) TYPE minmax GRANULARITY 1,
+            INDEX idx_day (day_u16) TYPE minmax GRANULARITY 1
+        ) ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(day_date)
+        ORDER BY (version_date, day_u16, line_id)
+        """
+        self.client.execute(ddl)
+    
+    def run(self, FLAMEGPU):
+        step = FLAMEGPU.getStepCounter()
+        env = FLAMEGPU.environment
+        export_phase = env.getPropertyUInt("export_phase")
+        if export_phase != 0:
+            return
+        end_day = self.simulation_steps - 1
+        if step < end_day:
+            return
+        actual_end_day = end_day - 1 if step > end_day else end_day
+        print(f"  Начинаем финальный дренаж MP7: дни 0..{actual_end_day} ({actual_end_day + 1} дней)")
+        
+        t_start = time.perf_counter()
+        rows = self._drain_mp7_range(FLAMEGPU, 0, actual_end_day)
+        self.total_rows_written += rows
+        self.total_drain_time += (time.perf_counter() - t_start)
+        print(f"  ✅ Выгружено {rows} строк MP7 за {self.total_drain_time:.2f}с")
+        return
+    
+    def _collect_change_days(self, env, start_day: int, end_day: int, lines_total: int, mp7_free, mp7_acn):
+        change_days = []
+        prev_free = [0] * lines_total
+        prev_acn = [0] * lines_total
+        for day in range(start_day, end_day + 1):
+            changed = False
+            base = day * model_build.RTC_MAX_FRAMES
+            for line_id in range(lines_total):
+                pos = base + line_id
+                free_days = int(mp7_free[pos])
+                acn = int(mp7_acn[pos])
+                if day == start_day:
+                    prev_free[line_id] = free_days
+                    prev_acn[line_id] = acn
+                    changed = True
+                elif free_days != prev_free[line_id] or acn != prev_acn[line_id]:
+                    prev_free[line_id] = free_days
+                    prev_acn[line_id] = acn
+                    changed = True
+            if changed:
+                change_days.append(day)
+        return change_days
+    
+    def _drain_mp7_range(self, FLAMEGPU, start_day_inclusive: int, end_day_inclusive: int) -> int:
+        env = FLAMEGPU.environment
+        version_date = env.getPropertyUInt("version_date")
+        version_id = env.getPropertyUInt("version_id")
+        quota = env.getPropertyUInt("repair_quota_total")
+        lines_total = min(int(quota), model_build.RTC_MAX_FRAMES)
+        if lines_total == 0:
+            return 0
+        
+        start_day = max(0, int(start_day_inclusive))
+        end_day = int(end_day_inclusive) + 1
+        
+        mp7_free = env.getMacroPropertyUInt32("mp7_line_free_days")
+        mp7_acn = env.getMacroPropertyUInt32("mp7_line_aircraft_number")
+        
+        if self.export_mode == "changes":
+            days = self._collect_change_days(env, start_day, end_day - 1, lines_total, mp7_free, mp7_acn)
+        else:
+            days = list(range(start_day, end_day))
+        
+        total_rows = 0
+        for day in days:
+            base = day * model_build.RTC_MAX_FRAMES
+            for line_id in range(lines_total):
+                pos = base + line_id
+                free_days = int(mp7_free[pos])
+                acn = int(mp7_acn[pos])
+                self.batch.append((version_date, version_id, day, line_id, free_days, acn))
+                total_rows += 1
+                if len(self.batch) >= self.batch_size:
+                    self._flush()
+        if self.batch:
+            self._flush()
+        return total_rows
+    
+    def _flush(self):
+        if not self.batch:
+            return
+        t0 = time.perf_counter()
+        query = f"INSERT INTO {self.table_name} (version_date, version_id, day_u16, line_id, free_days, aircraft_number) VALUES"
+        self.client.execute(query, self.batch, settings={"max_partitions_per_insert_block": 1000})
+        self.flush_count += 1
+        self.total_flush_time += (time.perf_counter() - t0)
+        self.max_batch_rows = max(self.max_batch_rows, len(self.batch))
+        self.batch = []
