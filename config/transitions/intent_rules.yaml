@@ -1,0 +1,204 @@
+version: 1
+matrix:
+  from: state
+  to: intent
+states:
+  0: spawn
+  1: inactive
+  2: operations
+  3: serviceable
+  4: repair
+  5: reserve
+  6: storage
+  7: unserviceable
+intents:
+  0: spawn
+  1: inactive
+  2: operations
+  3: serviceable
+  4: repair
+  5: reserve
+  6: storage
+  7: unserviceable
+variables:
+  - state
+  - intent_state
+  - sne
+  - ppr
+  - dt
+  - dn
+  - ll
+  - oh
+  - br
+  - repair_days
+  - repair_time
+  - group_by
+  - daily_today_u32
+  - daily_next_u32
+  - s4_days
+  - active_trigger
+  - assembly_trigger
+derived:
+  - name: s_next
+    expr: sne + dt + dn
+  - name: p_next
+    expr: ppr + dt + dn
+rules:
+  - id: spawn_intent_operations
+    from: 0
+    to: 2
+    pre:
+      all:
+        - expr: true
+    post:
+      all:
+        - expr: intent_state == 2
+    owner_module: rtc_spawn_dynamic
+    notes: Динамический спавн с интентом operations
+
+  - id: spawn_intent_serviceable
+    from: 0
+    to: 3
+    pre:
+      all:
+        - expr: true
+    post:
+      all:
+        - expr: intent_state == 3
+    owner_module: rtc_spawn_v2
+    notes: Детерминированный спавн с интентом serviceable
+
+  - id: inactive_intent_hold
+    from: 1
+    to: 1
+    pre:
+      all:
+        - expr: true
+    post:
+      all:
+        - expr: intent_state == 1
+    owner_module: rtc_states_stub
+    notes: Удержание в inactive
+
+  - id: operations_intent_storage_ll
+    from: 2
+    to: 6
+    pre:
+      all:
+        - expr: s_next >= ll
+    post:
+      all:
+        - expr: intent_state == 6
+    owner_module: rtc_state_2_operations
+    notes: Списание по LL
+
+  - id: operations_intent_unserviceable_oh
+    from: 2
+    to: 7
+    pre:
+      all:
+        - expr: p_next >= oh
+        - expr: s_next < br
+    post:
+      all:
+        - expr: intent_state == 7
+    owner_module: rtc_state_2_operations
+    notes: Очередь на ремонт (unserviceable)
+
+  - id: operations_intent_storage_oh_br
+    from: 2
+    to: 6
+    pre:
+      all:
+        - expr: p_next >= oh
+        - expr: s_next >= br
+    post:
+      all:
+        - expr: intent_state == 6
+    owner_module: rtc_state_2_operations
+    notes: Списание по OH+BR
+
+  - id: operations_intent_hold
+    from: 2
+    to: 2
+    pre:
+      all:
+        - expr: s_next < ll
+        - expr: p_next < oh
+    post:
+      all:
+        - expr: intent_state == 2
+    owner_module: rtc_state_2_operations
+    notes: Остаётся в operations
+
+  - id: serviceable_intent_hold
+    from: 3
+    to: 3
+    pre:
+      all:
+        - expr: true
+    post:
+      all:
+        - expr: intent_state == 3
+    owner_module: rtc_states_stub
+    notes: Holding в serviceable
+
+  - id: repair_intent_serviceable
+    from: 4
+    to: 3
+    pre:
+      all:
+        - expr: repair_days >= repair_time
+    post:
+      all:
+        - expr: intent_state == 3
+    owner_module: rtc_states_stub
+    notes: Готовность к выходу из ремонта
+
+  - id: repair_intent_hold
+    from: 4
+    to: 4
+    pre:
+      all:
+        - expr: repair_days < repair_time
+    post:
+      all:
+        - expr: intent_state == 4
+    owner_module: rtc_states_stub
+    notes: Остаётся в ремонте
+
+  - id: reserve_intent_hold
+    from: 5
+    to: 5
+    pre:
+      all:
+        - expr: true
+    post:
+      all:
+        - expr: intent_state == 5
+    owner_module: rtc_states_stub
+    notes: Остаётся в reserve
+
+  - id: storage_intent_hold
+    from: 6
+    to: 6
+    pre:
+      all:
+        - expr: true
+    post:
+      all:
+        - expr: intent_state == 6
+    owner_module: rtc_states_stub
+    notes: Storage immutable
+
+  - id: unserviceable_intent_queue
+    from: 7
+    to: 0
+    pre:
+      all:
+        - expr: true
+    post:
+      all:
+        - expr: intent_state == 0
+    owner_module: rtc_states_stub
+    notes: Очередь на ремонт

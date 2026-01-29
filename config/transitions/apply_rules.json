@@ -1,6 +1,21 @@
 {
   "version": 1,
+  "matrix": {
+    "from": "intent",
+    "to": "state"
+  },
   "states": {
+    "0": "spawn",
+    "1": "inactive",
+    "2": "operations",
+    "3": "serviceable",
+    "4": "repair",
+    "5": "reserve",
+    "6": "storage",
+    "7": "unserviceable"
+  },
+  "intents": {
+    "0": "spawn",
     "1": "inactive",
     "2": "operations",
     "3": "serviceable",
@@ -12,81 +27,20 @@
   "variables": [
     "state",
     "intent_state",
-    "sne",
-    "ppr",
-    "dt",
-    "dn",
-    "oh",
-    "br",
-    "ll",
-    "curr",
-    "target",
     "repair_days",
-    "repair_time"
-  ],
-  "derived": [
-    {
-      "name": "s_next",
-      "expr": "sne + dt + dn"
-    },
-    {
-      "name": "p_next",
-      "expr": "ppr + dt + dn"
-    },
-    {
-      "name": "balance",
-      "expr": "curr - target"
-    },
-    {
-      "name": "deficit",
-      "expr": "target - curr"
-    }
+    "repair_time",
+    "assembly_trigger",
+    "active_trigger",
+    "s4_days",
+    "repair_line_id",
+    "ppr",
+    "group_by",
+    "daily_today_u32",
+    "daily_next_u32"
   ],
   "rules": [
     {
-      "id": "spawn_to_operations",
-      "from": 0,
-      "to": 2,
-      "pre": {
-        "all": [
-          {
-            "expr": "true"
-          }
-        ]
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 2"
-          }
-        ]
-      },
-      "owner_module": "rtc_spawn_dynamic",
-      "notes": "Динамический спавн в operations"
-    },
-    {
-      "id": "spawn_to_serviceable",
-      "from": 0,
-      "to": 3,
-      "pre": {
-        "all": [
-          {
-            "expr": "true"
-          }
-        ]
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 3"
-          }
-        ]
-      },
-      "owner_module": "rtc_spawn_v2",
-      "notes": "Детерминированный спавн в serviceable (holding)"
-    },
-    {
-      "id": "inactive_hold",
+      "id": "inactive_apply_hold",
       "from": 1,
       "to": 1,
       "pre": {
@@ -103,15 +57,18 @@
           }
         ]
       },
-      "owner_module": "rtc_states_stub",
-      "notes": "Удержание в inactive"
+      "owner_module": "rtc_state_manager_inactive",
+      "notes": "Подтверждение inactive"
     },
     {
-      "id": "inactive_to_operations",
-      "from": 1,
+      "id": "inactive_apply_to_operations",
+      "from": 2,
       "to": 2,
       "pre": {
         "all": [
+          {
+            "expr": "state == 1"
+          },
           {
             "expr": "intent_state == 2"
           }
@@ -121,18 +78,24 @@
         "all": [
           {
             "expr": "state == 2"
+          },
+          {
+            "expr": "active_trigger == 1"
           }
         ]
       },
       "owner_module": "rtc_state_manager_operations",
-      "notes": "Промоут из inactive в operations (P3)"
+      "notes": "Промоут из inactive в operations"
     },
     {
-      "id": "operations_hold",
+      "id": "operations_apply_hold",
       "from": 2,
       "to": 2,
       "pre": {
         "all": [
+          {
+            "expr": "state == 2"
+          },
           {
             "expr": "intent_state == 2"
           }
@@ -149,11 +112,14 @@
       "notes": "Остаётся в operations"
     },
     {
-      "id": "operations_to_serviceable",
-      "from": 2,
+      "id": "operations_apply_to_serviceable",
+      "from": 3,
       "to": 3,
       "pre": {
         "all": [
+          {
+            "expr": "state == 2"
+          },
           {
             "expr": "intent_state == 3"
           }
@@ -166,15 +132,18 @@
           }
         ]
       },
-      "owner_module": "rtc_quota_ops_excess",
+      "owner_module": "rtc_state_manager_operations",
       "notes": "Квотный демоут operations → serviceable"
     },
     {
-      "id": "operations_to_repair",
-      "from": 2,
+      "id": "operations_apply_to_repair",
+      "from": 4,
       "to": 4,
       "pre": {
         "all": [
+          {
+            "expr": "state == 2"
+          },
           {
             "expr": "intent_state == 4"
           }
@@ -187,23 +156,20 @@
           }
         ]
       },
-      "owner_module": "rtc_quota_repair",
-      "notes": "Вход в ремонт через квоту"
+      "owner_module": "rtc_state_manager_operations",
+      "notes": "Переход в ремонт"
     },
     {
-      "id": "operations_to_unserviceable",
-      "from": 2,
+      "id": "operations_apply_to_unserviceable",
+      "from": 7,
       "to": 7,
       "pre": {
         "all": [
           {
+            "expr": "state == 2"
+          },
+          {
             "expr": "intent_state == 7"
-          },
-          {
-            "expr": "p_next >= oh"
-          },
-          {
-            "expr": "s_next < br"
           }
         ]
       },
@@ -211,26 +177,29 @@
         "all": [
           {
             "expr": "state == 7"
+          },
+          {
+            "expr": "intent_state == 0"
+          },
+          {
+            "expr": "s4_days == 1"
           }
         ]
       },
-      "owner_module": "rtc_state_2_operations",
+      "owner_module": "rtc_state_manager_operations",
       "notes": "Очередь на ремонт (unserviceable)"
     },
     {
-      "id": "operations_to_storage",
-      "from": 2,
+      "id": "operations_apply_to_storage",
+      "from": 6,
       "to": 6,
       "pre": {
-        "any": [
+        "all": [
+          {
+            "expr": "state == 2"
+          },
           {
             "expr": "intent_state == 6"
-          },
-          {
-            "expr": "s_next >= ll"
-          },
-          {
-            "expr": "p_next >= oh && s_next >= br"
           }
         ]
       },
@@ -241,15 +210,18 @@
           }
         ]
       },
-      "owner_module": "rtc_state_2_operations",
-      "notes": "Списание по ресурсу"
+      "owner_module": "rtc_state_manager_operations",
+      "notes": "Переход в storage"
     },
     {
-      "id": "serviceable_hold",
+      "id": "serviceable_apply_hold",
       "from": 3,
       "to": 3,
       "pre": {
         "all": [
+          {
+            "expr": "state == 3"
+          },
           {
             "expr": "intent_state == 3"
           }
@@ -262,15 +234,18 @@
           }
         ]
       },
-      "owner_module": "rtc_states_stub",
+      "owner_module": "rtc_state_manager_serviceable",
       "notes": "Holding в serviceable"
     },
     {
-      "id": "serviceable_to_operations",
-      "from": 3,
+      "id": "serviceable_apply_to_operations",
+      "from": 2,
       "to": 2,
       "pre": {
         "all": [
+          {
+            "expr": "state == 3"
+          },
           {
             "expr": "intent_state == 2"
           }
@@ -283,15 +258,18 @@
           }
         ]
       },
-      "owner_module": "rtc_quota_promote_serviceable",
+      "owner_module": "rtc_state_manager_operations",
       "notes": "Промоут P1: serviceable → operations"
     },
     {
-      "id": "repair_hold",
+      "id": "repair_apply_hold",
       "from": 4,
       "to": 4,
       "pre": {
         "all": [
+          {
+            "expr": "state == 4"
+          },
           {
             "expr": "intent_state == 4"
           }
@@ -308,13 +286,16 @@
       "notes": "Остаётся в ремонте"
     },
     {
-      "id": "repair_to_serviceable",
-      "from": 4,
+      "id": "repair_apply_to_serviceable",
+      "from": 3,
       "to": 3,
       "pre": {
         "all": [
           {
-            "expr": "repair_days >= repair_time"
+            "expr": "state == 4"
+          },
+          {
+            "expr": "intent_state == 3"
           }
         ]
       },
@@ -322,6 +303,12 @@
         "all": [
           {
             "expr": "state == 3"
+          },
+          {
+            "expr": "repair_days == 0"
+          },
+          {
+            "expr": "assembly_trigger == 0"
           }
         ]
       },
@@ -329,11 +316,14 @@
       "notes": "Завершение ремонта"
     },
     {
-      "id": "reserve_hold",
+      "id": "reserve_apply_hold",
       "from": 5,
       "to": 5,
       "pre": {
         "all": [
+          {
+            "expr": "state == 5"
+          },
           {
             "expr": "intent_state == 5"
           }
@@ -350,11 +340,14 @@
       "notes": "Общий hold в reserve"
     },
     {
-      "id": "reserve_hold_queue",
+      "id": "reserve_apply_queue_hold",
       "from": 5,
       "to": 5,
       "pre": {
         "all": [
+          {
+            "expr": "state == 5"
+          },
           {
             "expr": "intent_state == 0"
           }
@@ -368,14 +361,17 @@
         ]
       },
       "owner_module": "rtc_state_manager_reserve",
-      "notes": "Очередь ремонта внутри reserve (intent=0)"
+      "notes": "Очередь ремонта внутри reserve"
     },
     {
-      "id": "reserve_to_repair",
-      "from": 5,
+      "id": "reserve_apply_to_repair",
+      "from": 4,
       "to": 4,
       "pre": {
         "all": [
+          {
+            "expr": "state == 5"
+          },
           {
             "expr": "intent_state == 4"
           }
@@ -392,11 +388,14 @@
       "notes": "Одобрение очереди в ремонт"
     },
     {
-      "id": "reserve_to_operations",
-      "from": 5,
+      "id": "reserve_apply_to_operations",
+      "from": 2,
       "to": 2,
       "pre": {
         "all": [
+          {
+            "expr": "state == 5"
+          },
           {
             "expr": "intent_state == 2"
           }
@@ -413,11 +412,14 @@
       "notes": "Промоут из reserve → operations"
     },
     {
-      "id": "storage_hold",
+      "id": "storage_apply_hold",
       "from": 6,
       "to": 6,
       "pre": {
         "all": [
+          {
+            "expr": "state == 6"
+          },
           {
             "expr": "intent_state == 6"
           }
@@ -430,15 +432,18 @@
           }
         ]
       },
-      "owner_module": "rtc_states_stub",
+      "owner_module": "rtc_state_manager_storage",
       "notes": "Storage immutable"
     },
     {
-      "id": "unserviceable_hold",
+      "id": "unserviceable_apply_hold",
       "from": 7,
       "to": 7,
       "pre": {
         "all": [
+          {
+            "expr": "state == 7"
+          },
           {
             "expr": "intent_state == 0"
           }
@@ -455,11 +460,14 @@
       "notes": "Очередь ремонта в unserviceable"
     },
     {
-      "id": "unserviceable_to_repair",
-      "from": 7,
+      "id": "unserviceable_apply_to_repair",
+      "from": 4,
       "to": 4,
       "pre": {
         "all": [
+          {
+            "expr": "state == 7"
+          },
           {
             "expr": "intent_state == 4"
           }
@@ -476,11 +484,14 @@
       "notes": "Одобрение очереди в ремонт"
     },
     {
-      "id": "unserviceable_to_operations",
-      "from": 7,
+      "id": "unserviceable_apply_to_operations",
+      "from": 2,
       "to": 2,
       "pre": {
         "all": [
+          {
+            "expr": "state == 7"
+          },
           {
             "expr": "intent_state == 2"
           }
@@ -493,15 +504,8 @@
           }
         ]
       },
-      "owner_module": "rtc_quota_promote_unserviceable",
+      "owner_module": "rtc_state_manager_unserviceable",
       "notes": "Промоут P2: unserviceable → operations"
-    }
-  ],
-  "exceptions": [
-    {
-      "id": "intent_zero_queue",
-      "expr": "state == 5 && intent_state == 0",
-      "notes": "Очередь ремонта (intent=0 в reserve)"
     }
   ]
 }
