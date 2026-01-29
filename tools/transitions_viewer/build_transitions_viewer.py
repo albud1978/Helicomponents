@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-INPUT_JSON = os.path.join(ROOT_DIR, "config", "transitions", "transitions.json")
-OUTPUT_HTML = os.path.join(ROOT_DIR, "output", "transitions_matrix.html")
+INPUT_INTENT_JSON = os.path.join(ROOT_DIR, "config", "transitions", "intent_rules.json")
+INPUT_APPLY_JSON = os.path.join(ROOT_DIR, "config", "transitions", "apply_rules.json")
+OUTPUT_HTML = os.path.join(ROOT_DIR, "tools", "transitions_viewer", "index.html")
 
 
 def escape_html(text: str) -> str:
@@ -21,7 +22,6 @@ def escape_html(text: str) -> str:
 
 def render_rule_card(rule: dict) -> str:
     rule_id = escape_html(str(rule.get("id", "")))
-    precedence = rule.get("precedence", "")
     owner = escape_html(str(rule.get("owner_module", ""))) if rule.get("owner_module") else ""
     notes = escape_html(str(rule.get("notes", ""))) if rule.get("notes") else ""
 
@@ -46,16 +46,15 @@ def render_rule_card(rule: dict) -> str:
 
     html = []
     html.append('<details class="rule-card">')
-    html.append(
-        f'<summary><span class="badge">rule</span><span class="rule-id">{rule_id}</span>'
-        f'<span class="rule-prec">prec: {precedence}</span></summary>'
-    )
+    if owner:
+        html.append(
+            f'<summary><span class="badge">rule</span><span class="rule-owner">{owner}</span></summary>'
+        )
+    else:
+        html.append(
+            f'<summary><span class="badge">rule</span><span class="rule-id">{rule_id}</span></summary>'
+        )
     html.append('<div class="rule-body">')
-    html.append('<div class="rule-section"><div class="label">transition</div>')
-    html.append(
-        f'<div class="value">{rule.get("from")} <span class="arrow">→</span> {rule.get("to")}</div>'
-    )
-    html.append("</div>")
     if pre_text:
         html.append('<div class="rule-section"><div class="label">pre</div>')
         html.append(f'<div class="value pre">{pre_text}</div></div>')
@@ -64,9 +63,6 @@ def render_rule_card(rule: dict) -> str:
         html.append(f'<div class="value post">{post_text}</div></div>')
     html.append('<div class="rule-section"><div class="label">effects</div>')
     html.append(f'<div class="value">set state := {rule.get("to")}</div></div>')
-    if owner:
-        html.append('<div class="rule-section"><div class="label">owner</div>')
-        html.append(f'<div class="value owner">{owner}</div></div>')
     if notes:
         html.append(f'<div class="notes">{notes}</div>')
     html.append("</div>")
@@ -74,11 +70,10 @@ def render_rule_card(rule: dict) -> str:
     return "\n".join(html)
 
 
-def build_html(data: dict) -> str:
-    states = data.get("states", {})
-    rules = data.get("rules", [])
-    derived = data.get("derived", [])
-    exceptions = data.get("exceptions", [])
+def build_html(intent_data: dict, apply_data: dict) -> str:
+    embedded = json.dumps(
+        {"intent": intent_data, "apply": apply_data}, ensure_ascii=False
+    )
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
@@ -88,7 +83,7 @@ def build_html(data: dict) -> str:
     html.append("<head>")
     html.append('  <meta charset="utf-8" />')
     html.append('  <meta name="viewport" content="width=device-width, initial-scale=1" />')
-    html.append("  <title>Transitions Matrix 7x7</title>")
+    html.append("  <title>Transitions Viewer</title>")
     html.append("  <style>")
     html.append("    :root { color-scheme: light dark; }")
     html.append("    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; }")
@@ -109,7 +104,7 @@ def build_html(data: dict) -> str:
     html.append("    summary::-webkit-details-marker { display: none; }")
     html.append("    .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; background: #2a5bd7; color: white; font-size: 11px; margin-right: 6px; }")
     html.append("    .rule-id { font-weight: 600; margin-right: 8px; }")
-    html.append("    .rule-prec { color: #666; font-size: 11px; }")
+    html.append("    .rule-owner { color: #666; font-size: 11px; }")
     html.append("    .rule-body { margin-top: 8px; }")
     html.append("    .rule-section { margin-bottom: 6px; }")
     html.append("    .label { font-size: 11px; color: #444; text-transform: uppercase; }")
@@ -120,71 +115,114 @@ def build_html(data: dict) -> str:
     html.append("  </style>")
     html.append("</head>")
     html.append("<body>")
-    html.append("  <h1>Transitions Matrix 7x7</h1>")
-    html.append(f'  <div class="meta">Generated from config/transitions/transitions.json at {generated_at}</div>')
-    html.append("  <div class=\"section\">")
-    html.append("    <h2>States</h2>")
-    html.append("    <div class=\"states\">")
-    for i in range(1, 8):
-        name = escape_html(str(states.get(str(i), f"state_{i}")))
-        html.append(f'      <div class="state-badge">{i}: {name}</div>')
-    html.append("    </div>")
-    html.append("  </div>")
-
-    if derived:
-        html.append("  <div class=\"section\">")
-        html.append("    <h2>Derived</h2>")
-        for item in derived:
-            name = escape_html(str(item.get("name", "")))
-            expr = escape_html(str(item.get("expr", "")))
-            html.append(f"    <div>{name} = {expr}</div>")
-        html.append("  </div>")
-
-    html.append("  <div class=\"section\">")
-    html.append("    <h2>Matrix (from → to)</h2>")
-    html.append("    <table class=\"matrix\">")
-    html.append("      <thead>")
-    html.append("        <tr>")
-    html.append("          <th>FROM \\ TO</th>")
-    for to_state in range(1, 8):
-        name = escape_html(str(states.get(str(to_state), f"state_{to_state}")))
-        html.append(f"          <th>{to_state}<br><small>{name}</small></th>")
-    html.append("        </tr>")
-    html.append("      </thead>")
-    html.append("      <tbody>")
-    for from_state in range(1, 8):
-        name = escape_html(str(states.get(str(from_state), f"state_{from_state}")))
-        html.append("        <tr>")
-        html.append(f'          <th class="from-header">{from_state}<br><small>{name}</small></th>')
-        for to_state in range(1, 8):
-            cell_rules = [r for r in rules if r.get("from") == from_state and r.get("to") == to_state]
-            html.append("          <td>")
-            if not cell_rules:
-                html.append('            <div class="empty">—</div>')
-            else:
-                for rule in cell_rules:
-                    html.append(render_rule_card(rule))
-            html.append("          </td>")
-        html.append("        </tr>")
-    html.append("      </tbody>")
-    html.append("    </table>")
-    html.append("  </div>")
-
-    if exceptions:
-        html.append("  <div class=\"section\">")
-        html.append("    <h2>Exceptions</h2>")
-        for ex in exceptions:
-            ex_id = escape_html(str(ex.get("id", "")))
-            ex_expr = escape_html(str(ex.get("expr", "")))
-            ex_notes = escape_html(str(ex.get("notes", ""))) if ex.get("notes") else ""
-            html.append(f"    <div><strong>{ex_id}</strong>: {ex_expr}</div>")
-            if ex_notes:
-                html.append(f"    <div class=\"notes\">{ex_notes}</div>")
-        html.append("  </div>")
-
+    html.append("  <h1>Transitions Viewer</h1>")
+    html.append(
+        "  <div class=\"meta\">Generated from "
+        "config/transitions/intent_rules.json and apply_rules.json at "
+        f"{generated_at}</div>"
+    )
+    html.append('  <div class="meta">Run: python3 tools/transitions_viewer/build_transitions_viewer.py</div>')
+    html.append("  <div id=\"app\"></div>")
     html.append("  <script>")
-    html.append("    const AUTO_RELOAD_MS = 5000;")
-    html.append("    setInterval(() => location.reload(), AUTO_RELOAD_MS);")
+    html.append(f"    const TRANSITIONS_DATA = {embedded};")
+    html.append("    function escapeHtml(text) {")
+    html.append("      const div = document.createElement('div');")
+    html.append("      div.textContent = text ?? '';")
+    html.append("      return div.innerHTML;")
+    html.append("    }")
+    html.append("    function formatCondition(cond) {")
+    html.append("      if (!cond) return '';")
+    html.append("      if (cond.all) return cond.all.map(c => escapeHtml(c.expr)).join('\\nAND\\n');")
+    html.append("      if (cond.any) return cond.any.map(c => escapeHtml(c.expr)).join('\\nOR\\n');")
+    html.append("      if (cond.expr) return escapeHtml(cond.expr);")
+    html.append("      return '';")
+    html.append("    }")
+    html.append("    function renderRuleCard(rule, targetLabel) {")
+    html.append("      let html = '<details class=\"rule-card\">';")
+    html.append("      const owner = rule.owner_module ? escapeHtml(rule.owner_module) : '';")
+    html.append("      html += owner")
+    html.append("        ? `<summary><span class=\\\"badge\\\">rule</span><span class=\\\"rule-owner\\\">${owner}</span></summary>`")
+    html.append("        : `<summary><span class=\\\"badge\\\">rule</span><span class=\\\"rule-id\\\">${escapeHtml(rule.id)}</span></summary>`;")
+    html.append("      html += '<div class=\"rule-body\">';")
+    html.append("      if (rule.pre) html += `<div class=\"rule-section\"><div class=\"label\">pre</div><div class=\"value pre\">${formatCondition(rule.pre)}</div></div>`;")
+    html.append("      if (rule.post) html += `<div class=\"rule-section\"><div class=\"label\">post</div><div class=\"value post\">${formatCondition(rule.post)}</div></div>`;")
+    html.append("      if (rule.effects) html += `<div class=\\\"rule-section\\\"><div class=\\\"label\\\">effects</div><div class=\\\"value\\\">${escapeHtml(JSON.stringify(rule.effects))}</div></div>`;")
+    html.append("      if (rule.notes) html += `<div class=\"notes\">${escapeHtml(rule.notes)}</div>`;")
+    html.append("      html += '</div></details>';")
+    html.append("      return html;")
+    html.append("    }")
+    html.append("    function getIds(mapObj, rules, key) {")
+    html.append("      const ids = Object.keys(mapObj || {}).map(Number).filter(n => !Number.isNaN(n));")
+    html.append("      if (ids.length) return ids.sort((a, b) => a - b);")
+    html.append("      const vals = (rules || []).map(r => r[key]);")
+    html.append("      return Array.from(new Set(vals)).filter(n => n !== undefined).sort((a, b) => a - b);")
+    html.append("    }")
+    html.append("    function renderLegend(title, mapObj) {")
+    html.append("      const ids = Object.keys(mapObj || {}).map(Number).filter(n => !Number.isNaN(n)).sort((a, b) => a - b);")
+    html.append("      if (!ids.length) return '';")
+    html.append("      let html = `<div class=\\\"section\\\"><h2>${escapeHtml(title)}</h2><div class=\\\"states\\\">`;")
+    html.append("      ids.forEach(id => {")
+    html.append("        const name = mapObj?.[String(id)] || `${title.toLowerCase()}_${id}`;")
+    html.append("        html += `<div class=\\\"state-badge\\\">${id}: ${escapeHtml(name)}</div>`;")
+    html.append("      });")
+    html.append("      html += '</div></div>';")
+    html.append("      return html;")
+    html.append("    }")
+    html.append("    function renderMatrixBlock(data, title) {")
+    html.append("      const app = document.getElementById('app');")
+    html.append("      const matrix = data.matrix || { from: 'state', to: 'state' };")
+    html.append("      const fromMap = matrix.from === 'intent' ? (data.intents || {}) : (data.states || {});")
+    html.append("      const toMap = matrix.to === 'intent' ? (data.intents || {}) : (data.states || {});")
+    html.append("      const fromIds = getIds(fromMap, data.rules, 'from');")
+    html.append("      const toIds = getIds(toMap, data.rules, 'to');")
+    html.append("      let html = '';")
+    html.append("      html += `<div class=\\\"section\\\"><h2>${escapeHtml(title)}</h2></div>`;")
+    html.append("      html += renderLegend('States', data.states);")
+    html.append("      if (data.intents) html += renderLegend('Intents', data.intents);")
+    html.append("      if (data.derived?.length) {")
+    html.append("        html += '<div class=\\\"section\\\"><h2>Derived</h2>';")
+    html.append("        data.derived.forEach(item => {")
+    html.append("          html += `<div>${escapeHtml(item.name)} = ${escapeHtml(item.expr)}</div>`;")
+    html.append("        });")
+    html.append("        html += '</div>';")
+    html.append("      }")
+    html.append("      html += `<div class=\\\"section\\\"><h2>Matrix (${escapeHtml(matrix.from)} → ${escapeHtml(matrix.to)})</h2><table class=\\\"matrix\\\">`;")
+    html.append("      html += `<thead><tr><th>${escapeHtml(matrix.from)} \\\\ ${escapeHtml(matrix.to)}</th>`;")
+    html.append("      toIds.forEach(id => {")
+    html.append("        const name = toMap?.[String(id)] || `${matrix.to}_${id}`;")
+    html.append("        html += `<th>${id}<br><small>${escapeHtml(name)}</small></th>`;")
+    html.append("      });")
+    html.append("      html += '</tr></thead><tbody>';")
+    html.append("      fromIds.forEach(fromId => {")
+    html.append("        const fromName = fromMap?.[String(fromId)] || `${matrix.from}_${fromId}`;")
+    html.append("        html += `<tr><th class=\\\"from-header\\\">${fromId}<br><small>${escapeHtml(fromName)}</small></th>`;")
+    html.append("        toIds.forEach(toId => {")
+    html.append("          const cellRules = (data.rules || []).filter(r => r.from === fromId && r.to === toId);")
+    html.append("          html += '<td>';")
+    html.append("          if (!cellRules.length) {")
+    html.append("            html += '<div class=\\\"empty\\\">—</div>';")
+    html.append("          } else {")
+    html.append("            cellRules.forEach(rule => {")
+    html.append("              html += renderRuleCard(rule);")
+    html.append("            });")
+    html.append("          }")
+    html.append("          html += '</td>';")
+    html.append("        });")
+    html.append("        html += '</tr>';")
+    html.append("      });")
+    html.append("      html += '</tbody></table></div>';")
+    html.append("      if ((data.rules || []).length === 0) {")
+    html.append("        html = '<div class=\\\"section\\\"><div class=\\\"notes\\\">Rules list is empty.</div></div>' + html;")
+    html.append("      }")
+    html.append("      app.innerHTML += html;")
+    html.append("    }")
+    html.append("    function renderViewer(data) {")
+    html.append("      const app = document.getElementById('app');")
+    html.append("      app.innerHTML = '';")
+    html.append("      renderMatrixBlock(data.intent, 'Intent Rules (state → intent)');")
+    html.append("      renderMatrixBlock(data.apply, 'Apply Rules (intent → state)');")
+    html.append("    }")
+    html.append("    renderViewer(TRANSITIONS_DATA);")
     html.append("  </script>")
     html.append("</body>")
     html.append("</html>")
@@ -193,9 +231,11 @@ def build_html(data: dict) -> str:
 
 
 def main() -> None:
-    with open(INPUT_JSON, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    html = build_html(data)
+    with open(INPUT_INTENT_JSON, "r", encoding="utf-8") as f:
+        intent_data = json.load(f)
+    with open(INPUT_APPLY_JSON, "r", encoding="utf-8") as f:
+        apply_data = json.load(f)
+    html = build_html(intent_data, apply_data)
     os.makedirs(os.path.dirname(OUTPUT_HTML), exist_ok=True)
     with open(OUTPUT_HTML, "w", encoding="utf-8") as f:
         f.write(html)
