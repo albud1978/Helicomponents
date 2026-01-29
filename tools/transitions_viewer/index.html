@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transitions Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            font-size: 13px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #4ec9b0;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #4ec9b0;
+            padding-bottom: 10px;
+        }
+        .info-section {
+            margin-bottom: 30px;
+            background: #252526;
+            padding: 15px;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+        }
+        .info-section h2 {
+            color: #569cd6;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .states-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .state-badge {
+            background: #007acc;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .derived-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .derived-item {
+            background: #2d2d30;
+            padding: 8px;
+            border-left: 3px solid #b5cea8;
+        }
+        .derived-name {
+            color: #4ec9b0;
+            font-weight: bold;
+        }
+        .derived-expr {
+            color: #ce9178;
+            margin-top: 3px;
+        }
+        .matrix-container {
+            overflow-x: auto;
+            margin-bottom: 30px;
+        }
+        .matrix {
+            border-collapse: collapse;
+            width: 100%;
+            background: #252526;
+        }
+        .matrix th {
+            background: #3e3e42;
+            color: #d4d4d4;
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #555;
+            font-weight: bold;
+        }
+        .matrix td {
+            border: 1px solid #555;
+            padding: 5px;
+            vertical-align: top;
+            min-width: 120px;
+            background: #1e1e1e;
+        }
+        .matrix .from-header {
+            background: #2d2d30;
+            font-weight: bold;
+        }
+        .cell-empty {
+            background: #1e1e1e;
+            color: #555;
+            text-align: center;
+            font-style: italic;
+        }
+        .rule-card {
+            background: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .rule-card:hover {
+            background: #3e3e42;
+        }
+        .rule-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .rule-id {
+            color: #4ec9b0;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .rule-prec {
+            color: #b5cea8;
+            font-size: 11px;
+        }
+        .rule-expanded {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #3e3e42;
+            display: none;
+        }
+        .rule-expanded.active {
+            display: block;
+        }
+        .rule-section {
+            margin-bottom: 8px;
+        }
+        .rule-label {
+            color: #569cd6;
+            font-weight: bold;
+            font-size: 11px;
+            margin-bottom: 3px;
+        }
+        .rule-content {
+            color: #ce9178;
+            font-size: 11px;
+            margin-left: 10px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+        }
+        .rule-owner {
+            color: #dcdcaa;
+            font-size: 11px;
+        }
+        .rule-notes {
+            color: #858585;
+            font-style: italic;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+        .arrow {
+            color: #4ec9b0;
+            margin: 0 5px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #858585;
+        }
+        .error {
+            background: #5a1d1d;
+            color: #f48771;
+            padding: 15px;
+            border: 1px solid #a1260d;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Transitions Viewer</h1>
+        <div id="content">
+            <div class="loading">Загрузка данных...</div>
+        </div>
+    </div>
+
+    <!--
+    ИНСТРУКЦИЯ ПО ЗАПУСКУ:
+    
+    1. Откройте терминал в директории tools/transitions_viewer/
+    2. Запустите локальный HTTP сервер:
+       python3 -m http.server 8000
+       (или python -m http.server 8000 на Windows)
+    3. Откройте в браузере: http://localhost:8000
+    4. Данные загружаются из ../../config/transitions/transitions.json
+    
+    Примечание: Использование HTTP сервера необходимо из-за CORS ограничений
+    при работе с fetch() и file:// протоколом.
+    -->
+
+    <script>
+        async function loadTransitions() {
+            try {
+                const response = await fetch('../../config/transitions/transitions.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                renderViewer(data);
+            } catch (error) {
+                document.getElementById('content').innerHTML = 
+                    `<div class="error">Ошибка загрузки данных: ${error.message}</div>`;
+            }
+        }
+
+        function renderViewer(data) {
+            const content = document.getElementById('content');
+            let html = '';
+
+            // States section
+            html += '<div class="info-section">';
+            html += '<h2>States (1-7)</h2>';
+            html += '<div class="states-list">';
+            for (let i = 1; i <= 7; i++) {
+                const stateName = data.states[i.toString()] || `State ${i}`;
+                html += `<span class="state-badge">${i}: ${stateName}</span>`;
+            }
+            html += '</div></div>';
+
+            // Derived variables
+            if (data.derived && data.derived.length > 0) {
+                html += '<div class="info-section">';
+                html += '<h2>Derived Variables</h2>';
+                html += '<div class="derived-list">';
+                data.derived.forEach(derived => {
+                    html += `<div class="derived-item">`;
+                    html += `<div class="derived-name">${derived.name}</div>`;
+                    html += `<div class="derived-expr">${escapeHtml(derived.expr)}</div>`;
+                    html += `</div>`;
+                });
+                html += '</div></div>';
+            }
+
+            // Transition matrix
+            html += '<div class="info-section">';
+            html += '<h2>Transition Matrix (7×7)</h2>';
+            html += '<div class="matrix-container">';
+            html += '<table class="matrix">';
+            
+            // Header row
+            html += '<tr>';
+            html += '<th class="from-header">From \\ To</th>';
+            for (let to = 1; to <= 7; to++) {
+                const toName = data.states[to.toString()] || `State ${to}`;
+                html += `<th>${to}<br><small>${toName}</small></th>`;
+            }
+            html += '</tr>';
+
+            // Matrix rows
+            for (let from = 1; from <= 7; from++) {
+                const fromName = data.states[from.toString()] || `State ${from}`;
+                html += '<tr>';
+                html += `<th class="from-header">${from}<br><small>${fromName}</small></th>`;
+                
+                for (let to = 1; to <= 7; to++) {
+                    const rules = data.rules.filter(r => r.from === from && r.to === to);
+                    html += '<td>';
+                    
+                    if (rules.length === 0) {
+                        html += '<div class="cell-empty">-</div>';
+                    } else {
+                        rules.forEach((rule, idx) => {
+                            html += renderRuleCard(rule, idx);
+                        });
+                    }
+                    
+                    html += '</td>';
+                }
+                html += '</tr>';
+            }
+            
+            html += '</table></div></div>';
+
+            content.innerHTML = html;
+
+            // Attach click handlers
+            document.querySelectorAll('.rule-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    const expanded = this.querySelector('.rule-expanded');
+                    expanded.classList.toggle('active');
+                });
+            });
+        }
+
+        function renderRuleCard(rule, idx) {
+            let html = `<div class="rule-card" data-rule-id="${rule.id}">`;
+            
+            // Header
+            html += '<div class="rule-header">';
+            html += `<span class="rule-id">${escapeHtml(rule.id)}</span>`;
+            html += `<span class="rule-prec">prec: ${rule.precedence}</span>`;
+            html += '</div>';
+
+            // Expanded content
+            html += '<div class="rule-expanded">';
+            
+            // From -> To
+            html += '<div class="rule-section">';
+            html += '<div class="rule-label">Transition:</div>';
+            html += `<div class="rule-content">${rule.from} <span class="arrow">→</span> ${rule.to}</div>`;
+            html += '</div>';
+
+            // Pre conditions
+            if (rule.pre) {
+                html += '<div class="rule-section">';
+                html += '<div class="rule-label">Pre:</div>';
+                html += `<div class="rule-content">${formatCondition(rule.pre)}</div>`;
+                html += '</div>';
+            }
+
+            // Post conditions
+            if (rule.post) {
+                html += '<div class="rule-section">';
+                html += '<div class="rule-label">Post:</div>';
+                html += `<div class="rule-content">${formatCondition(rule.post)}</div>`;
+                html += '</div>';
+            }
+
+            // Effects (as "set state := to")
+            html += '<div class="rule-section">';
+            html += '<div class="rule-label">Effects:</div>';
+            html += `<div class="rule-content">set state := ${rule.to}</div>`;
+            html += '</div>';
+
+            // Owner
+            if (rule.owner_module) {
+                html += '<div class="rule-section">';
+                html += '<div class="rule-label">Owner:</div>';
+                html += `<div class="rule-owner">${escapeHtml(rule.owner_module)}</div>`;
+                html += '</div>';
+            }
+
+            // Notes
+            if (rule.notes) {
+                html += `<div class="rule-notes">${escapeHtml(rule.notes)}</div>`;
+            }
+
+            html += '</div>'; // rule-expanded
+            html += '</div>'; // rule-card
+
+            return html;
+        }
+
+        function formatCondition(cond) {
+            if (cond.all) {
+                return cond.all.map(c => escapeHtml(c.expr)).join('\nAND\n');
+            } else if (cond.any) {
+                return cond.any.map(c => escapeHtml(c.expr)).join('\nOR\n');
+            } else if (cond.expr) {
+                return escapeHtml(cond.expr);
+            }
+            return '';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load data on page load
+        loadTransitions();
+    </script>
+</body>
+</html>
