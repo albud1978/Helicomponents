@@ -1,3 +1,23 @@
+## [30-01-2026] - 🏗️ Multi-agent workflow + Transitions Viewer
+
+### Изменения
+- Модульные правила проекта: синхронизированы из master и адаптированы под LIMITER V8.
+- Субагенты Cursor: `coder-flame`, `reviewer-flame`, `validator-judge` для секвентального workflow.
+- Transitions Viewer: `tools/transitions_viewer/` — HTML визуализация матрицы переходов V8.
+- JSON правила V8: `config/transitions/intent_rules.json` и `apply_rules.json` с next-day dt логикой.
+
+### Новые файлы
+- `.cursor/rules/*.mdc` — модульные правила (00_global_always, 20_sim_v2_pipeline, 90_multiagent_workflow и др.)
+- `.cursor/agents/*.md` — субагенты (coder-flame, reviewer-flame, validator-judge)
+- `tools/transitions_viewer/build_transitions_viewer.py` — генератор HTML матрицы
+- `config/transitions/*.json` — JSON правила переходов V8
+
+### Архитектура workflow
+- Sequential: Architect → coder-flame → reviewer-flame → validator-judge → Architect
+- Централизованный репортинг через Архитектора
+- Timeout/recovery/context management в правилах
+
+---
 ## [23-01-2026] - ⚙️ LIMITER V8: P2/P3 по типам
 
 ### Изменения

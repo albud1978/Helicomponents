@@ -1,0 +1,152 @@
+{
+  "version": 8,
+  "architecture": "LIMITER V8 (RepairLine + Quota MessageBucket)",
+  "matrix": {
+    "from": "intent",
+    "to": "state"
+  },
+  "states": {
+    "0": "spawn",
+    "1": "inactive",
+    "2": "operations",
+    "3": "serviceable",
+    "4": "repair",
+    "5": "reserve",
+    "6": "storage",
+    "7": "unserviceable"
+  },
+  "intents": {
+    "0": "spawn",
+    "1": "inactive",
+    "2": "operations",
+    "3": "serviceable",
+    "4": "repair",
+    "5": "reserve",
+    "6": "storage",
+    "7": "unserviceable"
+  },
+  "variables": [
+    "state",
+    "intent_state",
+    "repair_days",
+    "repair_time",
+    "repair_line_id",
+    "free_days",
+    "ppr",
+    "group_by",
+    "idx",
+    "threshold",
+    "demote_threshold",
+    "quota_left",
+    "current_day"
+  ],
+  "rules": [
+    {
+      "id": "demote_ops_to_svc_v8",
+      "from": 3,
+      "to": 3,
+      "pre": {"all": [{"expr": "state == 2"}, {"expr": "idx < demote_threshold"}]},
+      "post": {"all": [{"expr": "state == 3"}]},
+      "owner_module": "rtc_demote_ops_v7",
+      "notes": "Демоут: ops → serviceable при избытке. Агенты с меньшим idx демоутятся первыми."
+    },
+    {
+      "id": "p1_svc_to_ops_v8",
+      "from": 2,
+      "to": 2,
+      "pre": {"all": [{"expr": "state == 3"}, {"expr": "idx >= threshold_s3"}, {"expr": "quota_left > 0"}]},
+      "post": {"all": [{"expr": "state == 2"}, {"expr": "quota_left -= 1"}]},
+      "owner_module": "rtc_svc_to_ops_v7",
+      "notes": "P1 промоут: serviceable → operations. Высший приоритет. По idx >= threshold."
+    },
+    {
+      "id": "p2_unsvc_to_ops_v8",
+      "from": 2,
+      "to": 2,
+      "pre": {"all": [
+        {"expr": "state == 7"},
+        {"expr": "repair_days == 0"},
+        {"expr": "repair_line_id == 0xFFFFFFFF"},
+        {"expr": "free_days >= repair_time"},
+        {"expr": "quota_left > 0"}
+      ]},
+      "post": {"all": [
+        {"expr": "state == 2"},
+        {"expr": "ppr == 0"},
+        {"expr": "repair_line_id = line_id"},
+        {"expr": "line.free_days = 0"},
+        {"expr": "line.aircraft_number = acn"}
+      ]},
+      "owner_module": "rtc_promote_unsvc_v8",
+      "notes": "P2 промоут: unserviceable → operations. Условие: repair_days==0, линия с free_days >= repair_time. PPR сбрасывается."
+    },
+    {
+      "id": "p3_inactive_to_ops_v8",
+      "from": 2,
+      "to": 2,
+      "pre": {"all": [
+        {"expr": "state == 1"},
+        {"expr": "free_days >= repair_time"},
+        {"expr": "quota_left > 0"}
+      ]},
+      "post": {"all": [
+        {"expr": "state == 2"},
+        {"expr": "repair_line_id = line_id"},
+        {"expr": "line.free_days = 0"}
+      ]},
+      "owner_module": "rtc_promote_inactive_v8",
+      "notes": "P3 промоут: inactive → operations. Условие: линия с free_days >= repair_time."
+    },
+    {
+      "id": "p4_spawn_dynamic_v8",
+      "from": 2,
+      "to": 2,
+      "pre": {"all": [
+        {"expr": "deficit > 0"},
+        {"expr": "p1_used + p2_used + p3_used < deficit"}
+      ]},
+      "post": {"all": [
+        {"expr": "new_agent.state == 2"},
+        {"expr": "new_agent.idx = base_idx + spawn_ticket_id"}
+      ]},
+      "owner_module": "rtc_spawn_dynamic_v7",
+      "notes": "P4: Динамический spawn новых агентов при дефиците. SpawnMgr выдаёт тикеты."
+    },
+    {
+      "id": "repair_line_assign_v8",
+      "from": 4,
+      "to": 4,
+      "pre": {"all": [{"expr": "state == 4"}, {"expr": "repair_line_id == 0xFFFFFFFF"}]},
+      "post": {"all": [{"expr": "repair_line_id = line_id"}, {"expr": "line.free_days = 0"}, {"expr": "line.aircraft_number = acn"}]},
+      "owner_module": "rtc_repair_line_assign_repair_v8",
+      "notes": "V8: Привязка RepairLine для day0-ремонта. Однократно при входе в repair."
+    },
+    {
+      "id": "repair_line_increment_v8",
+      "from": 4,
+      "to": 4,
+      "pre": {"all": [{"expr": "true"}]},
+      "post": {"all": [{"expr": "free_days += adaptive_days"}]},
+      "owner_module": "rtc_repair_line_increment_v8",
+      "notes": "V8: RepairLine наращивает free_days на каждом шаге."
+    },
+    {
+      "id": "repair_line_available_v8",
+      "from": 4,
+      "to": 4,
+      "pre": {"all": [{"expr": "aircraft_number == 0"}, {"expr": "free_days >= repair_time"}]},
+      "post": {"all": [{"expr": "available_for_p2_p3 == true"}]},
+      "owner_module": "rtc_repair_line_slots_v8",
+      "notes": "V8: RepairLine доступна для P2/P3 если свободна и free_days >= repair_time."
+    },
+    {
+      "id": "adaptive_step_v8",
+      "from": 0,
+      "to": 0,
+      "pre": {"all": [{"expr": "true"}]},
+      "post": {"all": [{"expr": "adaptive_days = min(min_dynamic, days_to_deterministic)"}]},
+      "owner_module": "rtc_compute_global_min_v8",
+      "notes": "V8: Adaptive step = MIN(min_limiter для ops/repair, deterministic_dates). unsvc НЕ участвует."
+    }
+  ]
+}

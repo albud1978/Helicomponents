@@ -1,0 +1,13 @@
+---
+description: Validation discipline (DB-first, SQL invariants)
+globs:
+  - "code/analysis/sim_validation_*.py"
+  - "docs/validation.md"
+alwaysApply: false
+---
+
+# Validation (SQL-first)
+
+- Истина — данные в СУБД после MP2.
+- Логирование в RTC добавляется только по явному согласованию и удаляется после фикса.
+- Критерий успеха: инварианты подтверждены SQL (0 нарушений).
