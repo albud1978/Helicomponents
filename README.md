@@ -56,10 +56,10 @@ python3 code/utils/test_db_connection.py
 # 4. Запустить ETL (интерактивный выбор датасета и режима)
 python3 code/extract_master.py
 
-# 5. Запустить симуляцию — см. полную команду в .cursorrules
+# 5. Запустить симуляцию — см. полную команду в .cursor/rules/
 ```
 
-> **Полные команды с параметрами:** см. `.cursorrules` (секции "Загрузка данных" и "Команда запуска симуляции")
+> **Полные команды с параметрами:** см. `.cursor/rules/` (секции "Загрузка данных" и "Команда запуска симуляции")
 
 ---
 
@@ -68,10 +68,11 @@ python3 code/extract_master.py
 ### Правила и методология
 | Файл | Описание |
 |------|----------|
-| **`.cursorrules`** | Правила разработки для Cursor AI (обновлено 04-01-2026) |
+| **`.cursor/rules/`** | Модульные правила разработки для Cursor AI |
+| **`.cursor/agents/`** | Субагенты проекта (coder-flame, reviewer-flame, validator-judge) |
 | `docs/migration.md` | Промт для новых разработчиков |
 
-Методология отладки логики: см. `.cursorrules` (секция "Подход к дебагу логики").
+Методология отладки логики: см. `.cursor/rules/00_global_always.mdc`.
 
 ### Архитектура
 | Файл | Описание |
@@ -225,7 +226,7 @@ export FLAMEGPU_RTC_EXPORT_CACHE_PATH="$(pwd)/.rtc_cache"
 | Очистка словарей | `python3 code/utils/cleanup_dictionaries.py` | — |
 | Полная очистка | `python3 code/utils/database_cleanup.py` | — |
 
-> **Подробнее:** `.cursorrules` (секция "Штатные процедуры проверки данных")
+> **Подробнее:** `.cursor/rules/` (секция "Штатные процедуры проверки данных")
 
 ---
 

@@ -22,7 +22,9 @@
 - Валидация MESSAGING поддерживает фильтр `version_id` для изоляции прогонов без DROP.
 - V8 spawn: тикеты читают параметры по текущему `day` (один день/один шаг).
 - V8 spawn Mi-8: константы `mi8_ll/oh/br` берутся из `md_components` через env.
-- Методология дебага логики: см. `.cursorrules` (секция "Подход к дебагу логики").
+- Методология дебага логики: см. `.cursor/rules/00_global_always.mdc`.
+- Визуализация переходов и квот: `tools/transitions_viewer/index.html`.
+- Канонические JSON: `config/transitions/transitions_rules.json`, `config/transitions/quota_rules.json`.
 - Временное логирование: `debug_step/debug_prev_day/debug_adaptive_days`, `debug_rl_*` и `debug_*_mi17` для диагностики RepairLine/квотирования; состояние линий пишется в `sim_repair_lines_v8` (включая `last_acn/last_day`), слоты и P2‑метрики — в `sim_quota_mgr_v8` (первые 6 слотов Mi‑17). P2/P3 commit при занятом слоте выбирает следующий доступный в пределах слотов.
 - V8 квоты используют локальные копии (rtc_quota_v8_base) и берут target по `current_day`.
 

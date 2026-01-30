@@ -27,6 +27,11 @@
 
 **⚠️ V8 квоты (сообщения):** один QM шлёт broadcast через MessageBucket (`QuotaBucket`), агенты принимают решения по rank.
 
+### Канонические артефакты V8
+- `config/transitions/transitions_rules.json` — единая матрица переходов state→state
+- `config/transitions/quota_rules.json` — логика квотирования (MessageBucket/RepairLine)
+- `tools/transitions_viewer/index.html` — визуализация переходов и квот
+
 ---
 
 ## 📊 Таблица слоёв модели (фактический порядок V8)
@@ -336,7 +341,7 @@ adaptive_days = min(min_dynamic, days_to_deterministic)
 
 - `docs/rtc_pipeline_architecture.md` — Baseline архитектура (intent-based)
 - `docs/validation.md` — Инварианты и тесты
-- `.cursorrules` — Правила проекта
+- `.cursor/rules/` — Правила проекта
 
 ---
 

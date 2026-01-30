@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-INPUT_INTENT_JSON = os.path.join(ROOT_DIR, "config", "transitions", "intent_rules.json")
-INPUT_APPLY_JSON = os.path.join(ROOT_DIR, "config", "transitions", "apply_rules.json")
+INPUT_TRANSITIONS_JSON = os.path.join(
+    ROOT_DIR, "config", "transitions", "transitions_rules.json"
+)
+INPUT_QUOTA_JSON = os.path.join(ROOT_DIR, "config", "transitions", "quota_rules.json")
 OUTPUT_HTML = os.path.join(ROOT_DIR, "tools", "transitions_viewer", "index.html")
 
 
@@ -70,9 +72,9 @@ def render_rule_card(rule: dict) -> str:
     return "\n".join(html)
 
 
-def build_html(intent_data: dict, apply_data: dict) -> str:
+def build_html(transitions_data: dict, quota_data: dict) -> str:
     embedded = json.dumps(
-        {"intent": intent_data, "apply": apply_data}, ensure_ascii=False
+        {"transitions": transitions_data, "quota": quota_data}, ensure_ascii=False
     )
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -118,7 +120,7 @@ def build_html(intent_data: dict, apply_data: dict) -> str:
     html.append("  <h1>Transitions Viewer</h1>")
     html.append(
         "  <div class=\"meta\">Generated from "
-        "config/transitions/intent_rules.json and apply_rules.json at "
+        "config/transitions/transitions_rules.json and quota_rules.json at "
         f"{generated_at}</div>"
     )
     html.append('  <div class="meta">Run: python3 tools/transitions_viewer/build_transitions_viewer.py</div>')
@@ -216,11 +218,50 @@ def build_html(intent_data: dict, apply_data: dict) -> str:
     html.append("      }")
     html.append("      app.innerHTML += html;")
     html.append("    }")
+    html.append("    function renderQuotaSection(title, items) {")
+    html.append("      if (!items || !items.length) return '';")
+    html.append("      let html = `<div class=\\\"section\\\"><h2>${escapeHtml(title)}</h2>`;")
+    html.append("      items.forEach(item => {")
+    html.append("        html += '<details class=\\\"rule-card\\\">';")
+    html.append("        const owner = item.owner_module ? escapeHtml(item.owner_module) : '';")
+    html.append("        const id = item.id ? escapeHtml(item.id) : 'item';")
+    html.append("        html += owner")
+    html.append("          ? `<summary><span class=\\\"badge\\\">rule</span><span class=\\\"rule-owner\\\">${owner}</span></summary>`")
+    html.append("          : `<summary><span class=\\\"badge\\\">rule</span><span class=\\\"rule-id\\\">${id}</span></summary>`;")
+    html.append("        html += '<div class=\\\"rule-body\\\">';")
+    html.append("        if (item.expr) html += `<div class=\\\"rule-section\\\"><div class=\\\"label\\\">expr</div><div class=\\\"value pre\\\">${escapeHtml(item.expr)}</div></div>`;")
+    html.append("        if (item.notes) html += `<div class=\\\"notes\\\">${escapeHtml(item.notes)}</div>`;")
+    html.append("        html += '</div></details>';")
+    html.append("      });")
+    html.append("      html += '</div>';")
+    html.append("      return html;")
+    html.append("    }")
+    html.append("    function renderMessageBucket(bucket, title) {")
+    html.append("      if (!bucket) return '';")
+    html.append("      let html = `<div class=\\\"section\\\"><h2>${escapeHtml(title)}</h2>`;")
+    html.append("      html += `<div><strong>keys</strong>: ${escapeHtml((bucket.keys || []).join(', '))}</div>`;")
+    html.append("      html += `<div><strong>payload</strong>: ${escapeHtml((bucket.payload || []).join(', '))}</div>`;")
+    html.append("      if (bucket.notes) html += `<div class=\\\"notes\\\">${escapeHtml(bucket.notes)}</div>`;")
+    html.append("      html += '</div>';")
+    html.append("      return html;")
+    html.append("    }")
+    html.append("    function renderQuotaBlock(quota) {")
+    html.append("      let html = '<div class=\\\"section\\\"><h2>Quota Logic</h2></div>';")
+    html.append("      html += renderQuotaSection('Quota Flow', quota.quota_flow || []);")
+    html.append("      html += renderQuotaSection('Selection Rules', quota.selection_rules || []);")
+    html.append("      html += renderQuotaSection('RepairLine Rules', quota.repair_line_rules || []);")
+    html.append("      html += renderQuotaSection('Spawn Rules', quota.spawn_rules || []);")
+    html.append("      if (quota.message_bucket) {")
+    html.append("        html += renderMessageBucket(quota.message_bucket.quota_bucket, 'MessageBucket: Quota');")
+    html.append("        html += renderMessageBucket(quota.message_bucket.spawn_bucket, 'MessageBucket: Spawn');")
+    html.append("      }")
+    html.append("      return html;")
+    html.append("    }")
     html.append("    function renderViewer(data) {")
     html.append("      const app = document.getElementById('app');")
     html.append("      app.innerHTML = '';")
-    html.append("      renderMatrixBlock(data.intent, 'Intent Rules (state → intent)');")
-    html.append("      renderMatrixBlock(data.apply, 'Apply Rules (intent → state)');")
+    html.append("      renderMatrixBlock(data.transitions, 'Transitions (state → state)');")
+    html.append("      app.innerHTML += renderQuotaBlock(data.quota || {});")
     html.append("    }")
     html.append("    renderViewer(TRANSITIONS_DATA);")
     html.append("  </script>")
@@ -231,11 +272,11 @@ def build_html(intent_data: dict, apply_data: dict) -> str:
 
 
 def main() -> None:
-    with open(INPUT_INTENT_JSON, "r", encoding="utf-8") as f:
-        intent_data = json.load(f)
-    with open(INPUT_APPLY_JSON, "r", encoding="utf-8") as f:
-        apply_data = json.load(f)
-    html = build_html(intent_data, apply_data)
+    with open(INPUT_TRANSITIONS_JSON, "r", encoding="utf-8") as f:
+        transitions_data = json.load(f)
+    with open(INPUT_QUOTA_JSON, "r", encoding="utf-8") as f:
+        quota_data = json.load(f)
+    html = build_html(transitions_data, quota_data)
     os.makedirs(os.path.dirname(OUTPUT_HTML), exist_ok=True)
     with open(OUTPUT_HTML, "w", encoding="utf-8") as f:
         f.write(html)
