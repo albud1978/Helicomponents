@@ -1,0 +1,48 @@
+---
+description: sim_v2 pipeline invariants (RTC, layers order, MP5 rules, LIMITER/Messaging)
+globs:
+  - "code/sim_v2/**"
+alwaysApply: false
+---
+
+# sim_v2 pipeline invariants
+
+## MP5 / MacroProperty
+- MP5 (`mp5_lin`) инициализируется только на host до первых RTC.
+- После начала чтения агентами MP5 становится read-only (никаких записей/RTC-копирования).
+- Размеры MacroProperty фиксированы: `RTC_MAX_FRAMES=400`, `MAX_DAYS=4000`, `MAX_SIZE=1_600_400`.
+
+## Архитектура state-based (baseline)
+- RTC функции состояний не меняют state, только выставляют intent.
+- Переходы state применяются централизованно и атомарно в единой функции переходов.
+- Для квот — единый менеджер без атомарных операций.
+
+## LIMITER архитектура (messaging)
+- Финальная архитектура: **LIMITER V8** с RepairLine и adaptive steps.
+- Оркестратор: `code/sim_v2/messaging/orchestrator_limiter_v8.py`.
+- Базовая модель: `code/sim_v2/messaging/base_model_messaging.py`.
+
+### Ключевые инварианты LIMITER
+- Adaptive time step: пропуск дней без изменений через `rtc_limiter_v8.py`.
+- QuotaManager: 2 агента (Mi-8, Mi-17) для централизованного квотирования.
+- RepairLine: пул ремонтных линий для управления ремонтами.
+- Соответствие baseline: **100%** совпадение переходов и состояний.
+
+### RTC модули messaging
+- `rtc_quota_v8*.py` — квотирование через сообщения.
+- `rtc_state_transitions_v8.py` — переходы состояний.
+- `rtc_repair_lines_v8.py` — управление ремонтными линиями.
+- `rtc_spawn_dynamic_v7.py` — динамический спавн агентов.
+
+### Таблицы БД
+- Результаты messaging: таблица `sim_masterv2_msg`.
+- Структура идентична `sim_masterv2` (для сравнения с baseline).
+
+## Порядок слоёв
+- Модули обязаны выполняться в строгом порядке согласно матрице состояний.
+- Любое изменение порядка модулей = обновление `docs/rtc_pipeline_architecture.md` и `docs/validation.md`.
+- Для LIMITER: порядок определён в `docs/limiter_architecture.md`.
+
+## Запуски
+- НЕЛЬЗЯ запускать `orchestrator_limiter_v8.py` без явного разрешения в текущем чате.
+- Валидация: `code/analysis/sim_validation_runner_msg.py`.

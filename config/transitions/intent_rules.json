@@ -1,0 +1,169 @@
+{
+  "version": 8,
+  "architecture": "LIMITER V8 (RepairLine + Adaptive Steps)",
+  "matrix": {
+    "from": "state",
+    "to": "intent"
+  },
+  "states": {
+    "0": "spawn",
+    "1": "inactive",
+    "2": "operations",
+    "3": "serviceable",
+    "4": "repair",
+    "5": "reserve",
+    "6": "storage",
+    "7": "unserviceable"
+  },
+  "intents": {
+    "0": "spawn",
+    "1": "inactive",
+    "2": "operations",
+    "3": "serviceable",
+    "4": "repair",
+    "5": "reserve",
+    "6": "storage",
+    "7": "unserviceable"
+  },
+  "variables": [
+    "state",
+    "intent_state",
+    "sne",
+    "ppr",
+    "dt_next",
+    "ll",
+    "oh",
+    "br",
+    "limiter",
+    "repair_days",
+    "repair_time",
+    "repair_line_id",
+    "free_days",
+    "group_by",
+    "current_day",
+    "exit_date"
+  ],
+  "derived": [
+    {"name": "sne_next", "expr": "sne + dt_next"},
+    {"name": "ppr_next", "expr": "ppr + dt_next"}
+  ],
+  "rules": [
+    {
+      "id": "ops_to_storage_ll_v8",
+      "from": 2,
+      "to": 6,
+      "pre": {"all": [{"expr": "sne_next >= ll"}]},
+      "post": {"all": [{"expr": "state == 6"}, {"expr": "limiter == 0"}]},
+      "owner_module": "rtc_state_transitions_v8",
+      "notes": "V8: Списание по LL (next-day dt проверка). Приоритет 1."
+    },
+    {
+      "id": "ops_to_storage_br_v8",
+      "from": 2,
+      "to": 6,
+      "pre": {"all": [{"expr": "ppr_next >= oh"}, {"expr": "br > 0"}, {"expr": "sne_next >= br"}]},
+      "post": {"all": [{"expr": "state == 6"}, {"expr": "limiter == 0"}]},
+      "owner_module": "rtc_state_transitions_v8",
+      "notes": "V8: Списание по BR (ремонт нерентабелен). Приоритет 2."
+    },
+    {
+      "id": "ops_to_unsvc_oh_v8",
+      "from": 2,
+      "to": 7,
+      "pre": {"all": [{"expr": "ppr_next >= oh"}, {"expr": "sne_next < ll"}, {"expr": "!(br > 0 && sne_next >= br)"}]},
+      "post": {"all": [{"expr": "state == 7"}, {"expr": "ppr == 0"}, {"expr": "limiter == 0"}, {"expr": "repair_days == repair_time"}, {"expr": "repair_line_id == 0xFFFFFFFF"}]},
+      "owner_module": "rtc_state_transitions_v8",
+      "notes": "V8: Уход в ремонт по OH. PPR сбрасывается. repair_days = repair_time."
+    },
+    {
+      "id": "ops_to_unsvc_limiter_v8",
+      "from": 2,
+      "to": 7,
+      "pre": {"all": [{"expr": "limiter == 0"}, {"expr": "sne_next < ll"}, {"expr": "!(br > 0 && sne_next >= br)"}]},
+      "post": {"all": [{"expr": "state == 7"}, {"expr": "ppr == 0"}, {"expr": "repair_days == repair_time"}]},
+      "owner_module": "rtc_state_transitions_v8",
+      "notes": "V8: limiter=0 → обязательный выход (если не storage). EXCEPTION если нет перехода."
+    },
+    {
+      "id": "ops_hold_v8",
+      "from": 2,
+      "to": 2,
+      "pre": {"all": [{"expr": "sne_next < ll"}, {"expr": "ppr_next < oh"}, {"expr": "limiter > 0"}]},
+      "post": {"all": [{"expr": "state == 2"}]},
+      "owner_module": "rtc_state_transitions_v8",
+      "notes": "V8: Остаётся в operations. Инкремент SNE/PPR, декремент limiter."
+    },
+    {
+      "id": "repair_to_svc_v8",
+      "from": 4,
+      "to": 3,
+      "pre": {"all": [{"expr": "current_day >= exit_date"}]},
+      "post": {"all": [{"expr": "state == 3"}, {"expr": "repair_days == 0"}]},
+      "owner_module": "rtc_repair_to_svc_v7",
+      "notes": "Детерминированный выход из ремонта по exit_date."
+    },
+    {
+      "id": "repair_hold_v8",
+      "from": 4,
+      "to": 4,
+      "pre": {"all": [{"expr": "current_day < exit_date"}]},
+      "post": {"all": [{"expr": "state == 4"}]},
+      "owner_module": "rtc_repair_to_svc_v7",
+      "notes": "Остаётся в ремонте до exit_date."
+    },
+    {
+      "id": "reserve_to_ops_v8",
+      "from": 5,
+      "to": 2,
+      "pre": {"all": [{"expr": "current_day >= exit_date"}]},
+      "post": {"all": [{"expr": "state == 2"}, {"expr": "transition_5_to_2 == 1"}]},
+      "owner_module": "rtc_spawn_to_ops_v7",
+      "notes": "Детерминированный spawn из reserve в operations."
+    },
+    {
+      "id": "reserve_hold_v8",
+      "from": 5,
+      "to": 5,
+      "pre": {"all": [{"expr": "current_day < exit_date"}]},
+      "post": {"all": [{"expr": "state == 5"}]},
+      "owner_module": "rtc_spawn_to_ops_v7",
+      "notes": "Ожидание планового spawn."
+    },
+    {
+      "id": "unsvc_decrement_v8",
+      "from": 7,
+      "to": 7,
+      "pre": {"all": [{"expr": "repair_days > 0"}]},
+      "post": {"all": [{"expr": "repair_days -= adaptive_days"}]},
+      "owner_module": "rtc_state_transitions_v8",
+      "notes": "V8: Декремент repair_days в unserviceable (NOT exit_date)."
+    },
+    {
+      "id": "unsvc_ready_v8",
+      "from": 7,
+      "to": 7,
+      "pre": {"all": [{"expr": "repair_days == 0"}]},
+      "post": {"all": [{"expr": "ready_for_p2 == true"}]},
+      "owner_module": "rtc_quota_v8",
+      "notes": "V8: unsvc готов к P2 промоуту (repair_days==0, ждёт RepairLine)."
+    },
+    {
+      "id": "inactive_hold_v8",
+      "from": 1,
+      "to": 1,
+      "pre": {"all": [{"expr": "true"}]},
+      "post": {"all": [{"expr": "state == 1"}, {"expr": "repair_days == 0"}]},
+      "owner_module": "rtc_states_stub",
+      "notes": "V8: inactive НЕ декрементирует repair_days (всегда 0)."
+    },
+    {
+      "id": "storage_hold_v8",
+      "from": 6,
+      "to": 6,
+      "pre": {"all": [{"expr": "true"}]},
+      "post": {"all": [{"expr": "state == 6"}]},
+      "owner_module": "rtc_states_stub",
+      "notes": "Storage — терминальное состояние. Не участвует в квотировании."
+    }
+  ]
+}

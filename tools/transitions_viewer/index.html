@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Transitions Viewer</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; }
+    h1, h2 { margin: 0 0 8px; }
+    .meta { color: #666; font-size: 12px; margin-bottom: 16px; }
+    .section { margin-bottom: 20px; }
+    .states { display: flex; flex-wrap: wrap; gap: 8px; }
+    .state-badge { background: #2a5bd7; color: white; padding: 3px 8px; border-radius: 10px; font-size: 12px; }
+    table.matrix { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    table.matrix th, table.matrix td { border: 1px solid #ccc; padding: 6px; vertical-align: top; }
+    table.matrix th { background: #f3f3f3; }
+    .from-header { text-align: left; }
+    .empty { color: #888; text-align: center; }
+    details.rule-card { margin: 6px 0; border: 1px solid #ddd; border-radius: 6px; padding: 6px; background: #fafafa; }
+    summary { cursor: pointer; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; background: #2a5bd7; color: white; font-size: 11px; margin-right: 6px; }
+    .rule-id { font-weight: 600; margin-right: 8px; }
+    .rule-owner { color: #666; font-size: 11px; }
+    .rule-body { margin-top: 8px; }
+    .rule-section { margin-bottom: 6px; }
+    .label { font-size: 11px; color: #444; text-transform: uppercase; }
+    .value { font-size: 12px; white-space: pre-wrap; }
+    .value.pre, .value.post { font-family: monospace; }
+    .notes { font-size: 11px; color: #666; }
+    .arrow { color: #2a5bd7; }
+  </style>
+</head>
+<body>
+  <h1>Transitions Viewer</h1>
+  <div class="meta">Generated from config/transitions/intent_rules.json and apply_rules.json at 2026-01-30 09:53:51 UTC</div>
+  <div class="meta">Run: python3 tools/transitions_viewer/build_transitions_viewer.py</div>
+  <div id="app"></div>
+  <script>
+    const TRANSITIONS_DATA = {"intent": {"version": 8, "architecture": "LIMITER V8 (RepairLine + Adaptive Steps)", "matrix": {"from": "state", "to": "intent"}, "states": {"0": "spawn", "1": "inactive", "2": "operations", "3": "serviceable", "4": "repair", "5": "reserve", "6": "storage", "7": "unserviceable"}, "intents": {"0": "spawn", "1": "inactive", "2": "operations", "3": "serviceable", "4": "repair", "5": "reserve", "6": "storage", "7": "unserviceable"}, "variables": ["state", "intent_state", "sne", "ppr", "dt_next", "ll", "oh", "br", "limiter", "repair_days", "repair_time", "repair_line_id", "free_days", "group_by", "current_day", "exit_date"], "derived": [{"name": "sne_next", "expr": "sne + dt_next"}, {"name": "ppr_next", "expr": "ppr + dt_next"}], "rules": [{"id": "ops_to_storage_ll_v8", "from": 2, "to": 6, "pre": {"all": [{"expr": "sne_next >= ll"}]}, "post": {"all": [{"expr": "state == 6"}, {"expr": "limiter == 0"}]}, "owner_module": "rtc_state_transitions_v8", "notes": "V8: Списание по LL (next-day dt проверка). Приоритет 1."}, {"id": "ops_to_storage_br_v8", "from": 2, "to": 6, "pre": {"all": [{"expr": "ppr_next >= oh"}, {"expr": "br > 0"}, {"expr": "sne_next >= br"}]}, "post": {"all": [{"expr": "state == 6"}, {"expr": "limiter == 0"}]}, "owner_module": "rtc_state_transitions_v8", "notes": "V8: Списание по BR (ремонт нерентабелен). Приоритет 2."}, {"id": "ops_to_unsvc_oh_v8", "from": 2, "to": 7, "pre": {"all": [{"expr": "ppr_next >= oh"}, {"expr": "sne_next < ll"}, {"expr": "!(br > 0 && sne_next >= br)"}]}, "post": {"all": [{"expr": "state == 7"}, {"expr": "ppr == 0"}, {"expr": "limiter == 0"}, {"expr": "repair_days == repair_time"}, {"expr": "repair_line_id == 0xFFFFFFFF"}]}, "owner_module": "rtc_state_transitions_v8", "notes": "V8: Уход в ремонт по OH. PPR сбрасывается. repair_days = repair_time."}, {"id": "ops_to_unsvc_limiter_v8", "from": 2, "to": 7, "pre": {"all": [{"expr": "limiter == 0"}, {"expr": "sne_next < ll"}, {"expr": "!(br > 0 && sne_next >= br)"}]}, "post": {"all": [{"expr": "state == 7"}, {"expr": "ppr == 0"}, {"expr": "repair_days == repair_time"}]}, "owner_module": "rtc_state_transitions_v8", "notes": "V8: limiter=0 → обязательный выход (если не storage). EXCEPTION если нет перехода."}, {"id": "ops_hold_v8", "from": 2, "to": 2, "pre": {"all": [{"expr": "sne_next < ll"}, {"expr": "ppr_next < oh"}, {"expr": "limiter > 0"}]}, "post": {"all": [{"expr": "state == 2"}]}, "owner_module": "rtc_state_transitions_v8", "notes": "V8: Остаётся в operations. Инкремент SNE/PPR, декремент limiter."}, {"id": "repair_to_svc_v8", "from": 4, "to": 3, "pre": {"all": [{"expr": "current_day >= exit_date"}]}, "post": {"all": [{"expr": "state == 3"}, {"expr": "repair_days == 0"}]}, "owner_module": "rtc_repair_to_svc_v7", "notes": "Детерминированный выход из ремонта по exit_date."}, {"id": "repair_hold_v8", "from": 4, "to": 4, "pre": {"all": [{"expr": "current_day < exit_date"}]}, "post": {"all": [{"expr": "state == 4"}]}, "owner_module": "rtc_repair_to_svc_v7", "notes": "Остаётся в ремонте до exit_date."}, {"id": "reserve_to_ops_v8", "from": 5, "to": 2, "pre": {"all": [{"expr": "current_day >= exit_date"}]}, "post": {"all": [{"expr": "state == 2"}, {"expr": "transition_5_to_2 == 1"}]}, "owner_module": "rtc_spawn_to_ops_v7", "notes": "Детерминированный spawn из reserve в operations."}, {"id": "reserve_hold_v8", "from": 5, "to": 5, "pre": {"all": [{"expr": "current_day < exit_date"}]}, "post": {"all": [{"expr": "state == 5"}]}, "owner_module": "rtc_spawn_to_ops_v7", "notes": "Ожидание планового spawn."}, {"id": "unsvc_decrement_v8", "from": 7, "to": 7, "pre": {"all": [{"expr": "repair_days > 0"}]}, "post": {"all": [{"expr": "repair_days -= adaptive_days"}]}, "owner_module": "rtc_state_transitions_v8", "notes": "V8: Декремент repair_days в unserviceable (NOT exit_date)."}, {"id": "unsvc_ready_v8", "from": 7, "to": 7, "pre": {"all": [{"expr": "repair_days == 0"}]}, "post": {"all": [{"expr": "ready_for_p2 == true"}]}, "owner_module": "rtc_quota_v8", "notes": "V8: unsvc готов к P2 промоуту (repair_days==0, ждёт RepairLine)."}, {"id": "inactive_hold_v8", "from": 1, "to": 1, "pre": {"all": [{"expr": "true"}]}, "post": {"all": [{"expr": "state == 1"}, {"expr": "repair_days == 0"}]}, "owner_module": "rtc_states_stub", "notes": "V8: inactive НЕ декрементирует repair_days (всегда 0)."}, {"id": "storage_hold_v8", "from": 6, "to": 6, "pre": {"all": [{"expr": "true"}]}, "post": {"all": [{"expr": "state == 6"}]}, "owner_module": "rtc_states_stub", "notes": "Storage — терминальное состояние. Не участвует в квотировании."}]}, "apply": {"version": 8, "architecture": "LIMITER V8 (RepairLine + Quota MessageBucket)", "matrix": {"from": "intent", "to": "state"}, "states": {"0": "spawn", "1": "inactive", "2": "operations", "3": "serviceable", "4": "repair", "5": "reserve", "6": "storage", "7": "unserviceable"}, "intents": {"0": "spawn", "1": "inactive", "2": "operations", "3": "serviceable", "4": "repair", "5": "reserve", "6": "storage", "7": "unserviceable"}, "variables": ["state", "intent_state", "repair_days", "repair_time", "repair_line_id", "free_days", "ppr", "group_by", "idx", "threshold", "demote_threshold", "quota_left", "current_day"], "rules": [{"id": "demote_ops_to_svc_v8", "from": 3, "to": 3, "pre": {"all": [{"expr": "state == 2"}, {"expr": "idx < demote_threshold"}]}, "post": {"all": [{"expr": "state == 3"}]}, "owner_module": "rtc_demote_ops_v7", "notes": "Демоут: ops → serviceable при избытке. Агенты с меньшим idx демоутятся первыми."}, {"id": "p1_svc_to_ops_v8", "from": 2, "to": 2, "pre": {"all": [{"expr": "state == 3"}, {"expr": "idx >= threshold_s3"}, {"expr": "quota_left > 0"}]}, "post": {"all": [{"expr": "state == 2"}, {"expr": "quota_left -= 1"}]}, "owner_module": "rtc_svc_to_ops_v7", "notes": "P1 промоут: serviceable → operations. Высший приоритет. По idx >= threshold."}, {"id": "p2_unsvc_to_ops_v8", "from": 2, "to": 2, "pre": {"all": [{"expr": "state == 7"}, {"expr": "repair_days == 0"}, {"expr": "repair_line_id == 0xFFFFFFFF"}, {"expr": "free_days >= repair_time"}, {"expr": "quota_left > 0"}]}, "post": {"all": [{"expr": "state == 2"}, {"expr": "ppr == 0"}, {"expr": "repair_line_id = line_id"}, {"expr": "line.free_days = 0"}, {"expr": "line.aircraft_number = acn"}]}, "owner_module": "rtc_promote_unsvc_v8", "notes": "P2 промоут: unserviceable → operations. Условие: repair_days==0, линия с free_days >= repair_time. PPR сбрасывается."}, {"id": "p3_inactive_to_ops_v8", "from": 2, "to": 2, "pre": {"all": [{"expr": "state == 1"}, {"expr": "free_days >= repair_time"}, {"expr": "quota_left > 0"}]}, "post": {"all": [{"expr": "state == 2"}, {"expr": "repair_line_id = line_id"}, {"expr": "line.free_days = 0"}]}, "owner_module": "rtc_promote_inactive_v8", "notes": "P3 промоут: inactive → operations. Условие: линия с free_days >= repair_time."}, {"id": "p4_spawn_dynamic_v8", "from": 2, "to": 2, "pre": {"all": [{"expr": "deficit > 0"}, {"expr": "p1_used + p2_used + p3_used < deficit"}]}, "post": {"all": [{"expr": "new_agent.state == 2"}, {"expr": "new_agent.idx = base_idx + spawn_ticket_id"}]}, "owner_module": "rtc_spawn_dynamic_v7", "notes": "P4: Динамический spawn новых агентов при дефиците. SpawnMgr выдаёт тикеты."}, {"id": "repair_line_assign_v8", "from": 4, "to": 4, "pre": {"all": [{"expr": "state == 4"}, {"expr": "repair_line_id == 0xFFFFFFFF"}]}, "post": {"all": [{"expr": "repair_line_id = line_id"}, {"expr": "line.free_days = 0"}, {"expr": "line.aircraft_number = acn"}]}, "owner_module": "rtc_repair_line_assign_repair_v8", "notes": "V8: Привязка RepairLine для day0-ремонта. Однократно при входе в repair."}, {"id": "repair_line_increment_v8", "from": 4, "to": 4, "pre": {"all": [{"expr": "true"}]}, "post": {"all": [{"expr": "free_days += adaptive_days"}]}, "owner_module": "rtc_repair_line_increment_v8", "notes": "V8: RepairLine наращивает free_days на каждом шаге."}, {"id": "repair_line_available_v8", "from": 4, "to": 4, "pre": {"all": [{"expr": "aircraft_number == 0"}, {"expr": "free_days >= repair_time"}]}, "post": {"all": [{"expr": "available_for_p2_p3 == true"}]}, "owner_module": "rtc_repair_line_slots_v8", "notes": "V8: RepairLine доступна для P2/P3 если свободна и free_days >= repair_time."}, {"id": "adaptive_step_v8", "from": 0, "to": 0, "pre": {"all": [{"expr": "true"}]}, "post": {"all": [{"expr": "adaptive_days = min(min_dynamic, days_to_deterministic)"}]}, "owner_module": "rtc_compute_global_min_v8", "notes": "V8: Adaptive step = MIN(min_limiter для ops/repair, deterministic_dates). unsvc НЕ участвует."}]}};
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text ?? '';
+      return div.innerHTML;
+    }
+    function formatCondition(cond) {
+      if (!cond) return '';
+      if (cond.all) return cond.all.map(c => escapeHtml(c.expr)).join('\nAND\n');
+      if (cond.any) return cond.any.map(c => escapeHtml(c.expr)).join('\nOR\n');
+      if (cond.expr) return escapeHtml(cond.expr);
+      return '';
+    }
+    function renderRuleCard(rule, targetLabel) {
+      let html = '<details class="rule-card">';
+      const owner = rule.owner_module ? escapeHtml(rule.owner_module) : '';
+      html += owner
+        ? `<summary><span class=\"badge\">rule</span><span class=\"rule-owner\">${owner}</span></summary>`
+        : `<summary><span class=\"badge\">rule</span><span class=\"rule-id\">${escapeHtml(rule.id)}</span></summary>`;
+      html += '<div class="rule-body">';
+      if (rule.pre) html += `<div class="rule-section"><div class="label">pre</div><div class="value pre">${formatCondition(rule.pre)}</div></div>`;
+      if (rule.post) html += `<div class="rule-section"><div class="label">post</div><div class="value post">${formatCondition(rule.post)}</div></div>`;
+      if (rule.effects) html += `<div class=\"rule-section\"><div class=\"label\">effects</div><div class=\"value\">${escapeHtml(JSON.stringify(rule.effects))}</div></div>`;
+      if (rule.notes) html += `<div class="notes">${escapeHtml(rule.notes)}</div>`;
+      html += '</div></details>';
+      return html;
+    }
+    function getIds(mapObj, rules, key) {
+      const ids = Object.keys(mapObj || {}).map(Number).filter(n => !Number.isNaN(n));
+      if (ids.length) return ids.sort((a, b) => a - b);
+      const vals = (rules || []).map(r => r[key]);
+      return Array.from(new Set(vals)).filter(n => n !== undefined).sort((a, b) => a - b);
+    }
+    function renderLegend(title, mapObj) {
+      const ids = Object.keys(mapObj || {}).map(Number).filter(n => !Number.isNaN(n)).sort((a, b) => a - b);
+      if (!ids.length) return '';
+      let html = `<div class=\"section\"><h2>${escapeHtml(title)}</h2><div class=\"states\">`;
+      ids.forEach(id => {
+        const name = mapObj?.[String(id)] || `${title.toLowerCase()}_${id}`;
+        html += `<div class=\"state-badge\">${id}: ${escapeHtml(name)}</div>`;
+      });
+      html += '</div></div>';
+      return html;
+    }
+    function renderMatrixBlock(data, title) {
+      const app = document.getElementById('app');
+      const matrix = data.matrix || { from: 'state', to: 'state' };
+      const fromMap = matrix.from === 'intent' ? (data.intents || {}) : (data.states || {});
+      const toMap = matrix.to === 'intent' ? (data.intents || {}) : (data.states || {});
+      const fromIds = getIds(fromMap, data.rules, 'from');
+      const toIds = getIds(toMap, data.rules, 'to');
+      let html = '';
+      html += `<div class=\"section\"><h2>${escapeHtml(title)}</h2></div>`;
+      html += renderLegend('States', data.states);
+      if (data.intents) html += renderLegend('Intents', data.intents);
+      if (data.derived?.length) {
+        html += '<div class=\"section\"><h2>Derived</h2>';
+        data.derived.forEach(item => {
+          html += `<div>${escapeHtml(item.name)} = ${escapeHtml(item.expr)}</div>`;
+        });
+        html += '</div>';
+      }
+      html += `<div class=\"section\"><h2>Matrix (${escapeHtml(matrix.from)} → ${escapeHtml(matrix.to)})</h2><table class=\"matrix\">`;
+      html += `<thead><tr><th>${escapeHtml(matrix.from)} \\ ${escapeHtml(matrix.to)}</th>`;
+      toIds.forEach(id => {
+        const name = toMap?.[String(id)] || `${matrix.to}_${id}`;
+        html += `<th>${id}<br><small>${escapeHtml(name)}</small></th>`;
+      });
+      html += '</tr></thead><tbody>';
+      fromIds.forEach(fromId => {
+        const fromName = fromMap?.[String(fromId)] || `${matrix.from}_${fromId}`;
+        html += `<tr><th class=\"from-header\">${fromId}<br><small>${escapeHtml(fromName)}</small></th>`;
+        toIds.forEach(toId => {
+          const cellRules = (data.rules || []).filter(r => r.from === fromId && r.to === toId);
+          html += '<td>';
+          if (!cellRules.length) {
+            html += '<div class=\"empty\">—</div>';
+          } else {
+            cellRules.forEach(rule => {
+              html += renderRuleCard(rule);
+            });
+          }
+          html += '</td>';
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+      if ((data.rules || []).length === 0) {
+        html = '<div class=\"section\"><div class=\"notes\">Rules list is empty.</div></div>' + html;
+      }
+      app.innerHTML += html;
+    }
+    function renderViewer(data) {
+      const app = document.getElementById('app');
+      app.innerHTML = '';
+      renderMatrixBlock(data.intent, 'Intent Rules (state → intent)');
+      renderMatrixBlock(data.apply, 'Apply Rules (intent → state)');
+    }
+    renderViewer(TRANSITIONS_DATA);
+  </script>
+</body>
+</html>

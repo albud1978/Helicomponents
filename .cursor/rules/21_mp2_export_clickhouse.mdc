@@ -1,0 +1,16 @@
+---
+description: MP2 export + ClickHouse insert constraints
+globs:
+  - "code/sim_v2/**mp2**"
+  - "code/**/mp2_*.py"
+alwaysApply: false
+---
+
+# MP2 / ClickHouse rules
+
+## Экспорт
+- Финальные host-функции short/full должны быть разнесены по слоям (без host/agent конфликта).
+- При 10-летнем горизонте учитывать лимиты партиций при вставке в ClickHouse.
+
+## Переходы и постпроцессинг
+- Любые изменения transition-флагов/постпроцессинга → синхронизировать DDL/валидацию/доки.
