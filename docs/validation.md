@@ -1,13 +1,15 @@
 # Validation (V2)
 
 ## Связи документации
-- **Источник правил**: `.cursorrules` (корень проекта)
-- **Методология дебага логики**: `.cursorrules` (секция "Подход к дебагу логики")
+- **Источник правил**: `.cursor/rules/` (корень проекта)
+- **Методология дебага логики**: `.cursor/rules/00_global_always.mdc`
 - **Архитектура**: `docs/rtc_pipeline_architecture.md`
 - **Архитектура агрегатов**: `docs/rtc_components.md`
 - **Проверка комплектности**: `docs/completeness_check.md` — алгоритм аналитического слоя
 - **Команды запуска**: `docs/README.md`
 - **История изменений**: `docs/changelog.md`
+- **Визуализация переходов**: `tools/transitions_viewer/index.html`
+- **Канонические JSON**: `config/transitions/transitions_rules.json`, `config/transitions/quota_rules.json`
 
 ## Правила валидации (обновлено 13.10.2025)
 
@@ -1329,7 +1331,7 @@ Operations → Storage        :  18 раз  (5.5%)   [списание: sne >= b
 - `docs/rtc_pipeline_architecture.md` — архитектура модулей
 
 **Связанные файлы:**
-- `.cursorrules` (корень) — главный источник правил
+- `.cursor/rules/` (корень) — главный источник правил
 - `docs/README.md` — команды запуска
 - `docs/changelog.md` — история изменений
 
@@ -2036,7 +2038,7 @@ WHERE sne_new IS NULL OR ppr_new IS NULL;
 
 ### Связанные документы
 - `docs/rtc_components.md` — полная архитектура агрегатов
-- `.cursorrules` — правила работы с типами данных (запрет Float64, предпочтение UInt32)
+- `.cursor/rules/00_global_always.mdc` — правила работы с типами данных (запрет Float64, предпочтение UInt32)
 
 ---
 
@@ -2156,7 +2158,7 @@ if (repair_num == 255u) {
 
 ### Связанные документы
 - `docs/changelog.md` — история изменений
-- `.cursorrules` — правила работы с типами данных
+- `.cursor/rules/00_global_always.mdc` — правила работы с типами данных
 
 ---
 
@@ -2301,7 +2303,7 @@ HAVING cnt > 0;
 
 - `docs/spawn_dynamic_architecture.md` — детальная архитектура динамического spawn
 - `docs/rtc_pipeline_architecture.md` — общая архитектура пайплайна
-- `.cursorrules` — правила разработки (state-based архитектура, каскадное квотирование)
+- `.cursor/rules/20_sim_v2_pipeline.mdc` — правила разработки (state-based архитектура, каскадное квотирование)
 
 ---
 

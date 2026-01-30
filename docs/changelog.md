@@ -3,14 +3,16 @@
 ### Изменения
 - Модульные правила проекта: синхронизированы из master и адаптированы под LIMITER V8.
 - Субагенты Cursor: `coder-flame`, `reviewer-flame`, `validator-judge` для секвентального workflow.
-- Transitions Viewer: `tools/transitions_viewer/` — HTML визуализация матрицы переходов V8.
-- JSON правила V8: `config/transitions/intent_rules.json` и `apply_rules.json` с next-day dt логикой.
+- Transitions Viewer: `tools/transitions_viewer/` — HTML визуализация матрицы переходов + панель квотирования.
+- JSON правила V8: `config/transitions/transitions_rules.json` (state→state) и `quota_rules.json`.
+- Удалены legacy JSON: `intent_rules.json`, `apply_rules.json` (двухфазная модель).
 
 ### Новые файлы
 - `.cursor/rules/*.mdc` — модульные правила (00_global_always, 20_sim_v2_pipeline, 90_multiagent_workflow и др.)
 - `.cursor/agents/*.md` — субагенты (coder-flame, reviewer-flame, validator-judge)
 - `tools/transitions_viewer/build_transitions_viewer.py` — генератор HTML матрицы
-- `config/transitions/*.json` — JSON правила переходов V8
+- `config/transitions/transitions_rules.json` — единая матрица переходов V8
+- `config/transitions/quota_rules.json` — логика квотирования V8 (MessageBucket/RepairLine)
 
 ### Архитектура workflow
 - Sequential: Architect → coder-flame → reviewer-flame → validator-judge → Architect
