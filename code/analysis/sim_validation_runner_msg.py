@@ -348,11 +348,96 @@ class MessagingTransitionsValidator:
             self.stats['repair_duration'] = {'error': str(e)}
         
         return {'valid': True}
+
+    def validate_limiter_exit(self) -> Dict:
+        """Проверяет, что выход в storage/unserviceable не происходит при limiter > 0"""
+        print(f"\n📊 Валидация limiter при выходе в storage/unserviceable (таблица: {self.table})")
+        
+        # Лимитер есть только в limiter-таблицах, иначе пропускаем
+        cols = self.client.execute(f"DESCRIBE TABLE {self.table}")
+        has_limiter = any(row[0] == 'limiter' for row in cols)
+        if not has_limiter:
+            self.stats['limiter_exit'] = {'skipped': True, 'reason': 'no limiter column'}
+            print("  ⚠️ Пропуск: колонка limiter отсутствует")
+            return {'valid': True, 'skipped': True}
+        
+        query = f"""
+            SELECT
+                count() as cnt,
+                countIf(group_by = 1) as mi8_cnt,
+                countIf(group_by = 2) as mi17_cnt
+            FROM (
+                SELECT
+                    day_u16,
+                    idx,
+                    group_by,
+                    state,
+                    limiter,
+                    lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state
+                FROM {self.table_expr}
+            )
+            WHERE prev_state IS NOT NULL
+              AND prev_state != state
+              AND state IN ('storage', 'unserviceable')
+              AND limiter > 0
+        """
+        
+        cnt, mi8, mi17 = self.client.execute(query)[0]
+        if cnt > 0:
+            self.errors.append({
+                'type': 'LIMITER_EXIT',
+                'message': f"Выход в storage/unserviceable при limiter>0: {cnt} (Mi-8={mi8}, Mi-17={mi17})"
+            })
+            self.stats['limiter_exit'] = {'valid': False, 'total': cnt, 'mi8': mi8, 'mi17': mi17}
+            print(f"  ❌ Найдено: {cnt} (Mi-8={mi8}, Mi-17={mi17})")
+
+            detail_query = f"""
+                SELECT
+                    day_u16,
+                    idx,
+                    aircraft_number,
+                    group_by,
+                    prev_state,
+                    state,
+                    limiter
+                FROM (
+                    SELECT
+                        day_u16,
+                        idx,
+                        aircraft_number,
+                        group_by,
+                        state,
+                        limiter,
+                        lagInFrame(state) OVER (PARTITION BY idx ORDER BY day_u16) as prev_state
+                    FROM {self.table_expr}
+                )
+                WHERE prev_state IS NOT NULL
+                  AND prev_state != state
+                  AND state IN ('storage', 'unserviceable')
+                  AND limiter > 0
+                ORDER BY day_u16, idx
+                LIMIT 50
+            """
+            details = self.client.execute(detail_query)
+            for day_u16, idx, acn, gb, prev_state, state, limiter in details:
+                self.errors.append({
+                    'type': 'LIMITER_EXIT_DETAIL',
+                    'message': (
+                        f"Day {day_u16}: idx={idx}, acn={acn}, group_by={gb}, "
+                        f"{prev_state}->{state}, limiter={limiter}"
+                    )
+                })
+            return {'valid': False}
+        
+        self.stats['limiter_exit'] = {'valid': True, 'total': 0}
+        print("  ✅ Нарушений нет")
+        return {'valid': True}
     
     def run_all(self) -> Dict:
         """Запуск всех валидаций переходов"""
         self.validate_matrix()
         self.validate_repair_duration()
+        self.validate_limiter_exit()
         
         return {
             'valid': len(self.errors) == 0,

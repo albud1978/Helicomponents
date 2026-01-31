@@ -167,22 +167,13 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
-    
-    const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int dt_next = FLAMEGPU->getVariable<unsigned int>("daily_next_u32");
     
     const unsigned int sne_next = sne + dt_next;
     const unsigned int ppr_next = ppr + dt_next;
     
-    // Приоритет: storage важнее unserviceable
-    // Если SNE + dt_next >= LL → это storage
-    if (sne_next >= ll) return false;
-    // Если ремонт нерентабелен → это storage
+    // Если ремонт нерентабелен → это storage (unsvc не нужен)
     if (br > 0u && ppr_next >= oh && sne_next >= br) return false;
-    
-    // Если limiter=0, выход обязателен (storage уже отфильтрован выше)
-    const unsigned short limiter = FLAMEGPU->getVariable<unsigned short>("limiter");
-    if (limiter == 0u) return true;
     
     // OH проверка на следующий день
     return (ppr_next >= oh);
@@ -211,18 +202,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v8, flamegpu::MessageNone, flamegpu::
 RTC_OPS_TO_UNSVC_V8 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
     // V8: Переход в unserviceable
-    // PPR=0 (сброс межремонтной наработки)
     // exit_date НЕ используется в V8 (квотирование через RepairLine)
     
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    const unsigned int repair_time = (group_by == 1u)
-        ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
-        : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
-    FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
-    FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
-    FLAMEGPU->setVariable<unsigned int>("repair_days", repair_time);
     FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     

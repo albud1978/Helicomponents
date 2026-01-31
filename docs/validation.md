@@ -97,6 +97,7 @@ export CUBE_CONFIG_PATH="$PWD/config"
 - V8 динамический спавн Mi‑17 учитывает лимит RepairLine слотов при расчёте дефицита.
 - V8 квотирование использует target на текущий `day` (не на day+step).
 - Для инварианта `delta_sne` учитываем интервалы, где **prev_state = operations** или **state = operations** (адаптивный шаг может включать переход в ops внутри интервала).
+- **Инвариант limiter выхода:** переходы в `storage` или `unserviceable` запрещены при `limiter > 0` (проверяется SQL в `sim_validation_runner_msg.py` по `sim_masterv2_v8`, детект — по смене `state`).
 
 - **Известная проблема (V8, 3650 дней, 2025-07-04/2025-12-30):** дефицит ops при наличии готовых unsvc/ina — переход на MessageBucket (`QuotaBucket`) с rank‑квотированием в работе.
 
