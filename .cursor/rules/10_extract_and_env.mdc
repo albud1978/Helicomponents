@@ -5,6 +5,7 @@ globs:
   - "code/extract_master.py"
   - "code/**/loader*.py"
   - "code/**/dual_loader*.py"
+  - "code/heli_pandas_ops_*.py"
 alwaysApply: false
 ---
 
@@ -21,3 +22,57 @@ export CUBE_CONFIG_PATH="$PWD/config"
 ## Extract
 - Extract запускается только целиком через `python3 code/extract_master.py`.
 - Запрещено запускать отдельные loader-ы вручную без `extract_master.py`.
+
+### Режимы запуска
+**Интерактивный режим (в терминале):**
+```bash
+python3 code/extract_master.py
+```
+
+**Автоматический режим (для скриптов/AI):**
+```bash
+# Датасет 1 (2025-07-04), режим TEST (полная очистка)
+printf "1\n1\n" | python3 code/extract_master.py --mode TEST
+
+# Датасет 2 (2025-12-30), режим PROD (версионирование, сохраняет данные других версий)
+printf "2\n2\n" | python3 code/extract_master.py --mode PROD
+```
+
+**Важно:** первый датасет грузить в режиме TEST, последующие — в режиме PROD.
+
+### Правила выбора
+- Интерактивный выбор: 1=датасет 1, 2=датасет 2; 1=TEST, 2=PROD
+- Запрещено запускать отдельные loader-ы вручную без extract_master.py
+
+### Структура датасетов
+- Каждый датасет в отдельной папке: `v_2025-07-04/`, `v_2025-12-30/` и т.д.
+- Обязательные файлы: `Status_Components.xlsx`, `Status_Overhaul.xlsx`, `Program_AC.xlsx`
+- Статические файлы (Program_heli.xlsx, Program.xlsx) копируются из первого датасета
+
+## Проверка комплектности вертолётов
+Документация: `docs/extract.md` (секция "Проверка комплектности вертолётов")
+
+**Основная проверка (какие вертолёты с некомплектом):**
+```bash
+python3 code/heli_pandas_ops_other_groups.py --version-date 2025-07-04 --version-id 1 --skip-pdf
+```
+
+**Детальная инвентаризация (каждый агрегат на каждом планере):**
+```bash
+python3 code/heli_pandas_ops_inventory.py --version-date 2025-07-04 --version-id 1
+```
+
+**Результаты:**
+- `output/heli_pandas_ops_other_groups_YYYY-MM-DD.md`
+- `output/heli_pandas_ops_inventory_YYYY-MM-DD.md`
+
+## Доступные датасеты (январь 2026)
+| Датасет | Планеров | В ops | heli_pandas | flight_program_fl |
+|---------|----------|-------|-------------|-------------------|
+| `v_2025-07-04` | 279 | 154 | 10,913 | 1,164,000 (dates: 2025-07-04 — 2036-06-15) |
+| `v_2025-12-30` | 285 (+6) | 158 | 11,389 | 1,164,000 (dates: 2025-12-30 — 2036-12-11) |
+
+**Мультиверсионность:**
+- Каждый датасет имеет свой `version_date` в таблицах `flight_program_fl`, `flight_program_ac`
+- При симуляции `preload_mp5_maps` и `preload_mp4_by_day` фильтруют по `version_date`
+- `day_0` симуляции = `version_date` датасета (автоматический маппинг)

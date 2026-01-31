@@ -11,11 +11,26 @@ alwaysApply: false
 - MP5 (`mp5_lin`) инициализируется только на host до первых RTC.
 - После начала чтения агентами MP5 становится read-only (никаких записей/RTC-копирования).
 - Размеры MacroProperty фиксированы: `RTC_MAX_FRAMES=400`, `MAX_DAYS=4000`, `MAX_SIZE=1_600_400`.
+- FRAMES = |MP3 ∪ MP5| (без расширения «впрок»). Индексы для будущих бортов берутся из объединения.
+- Runtime `frames_total` передаётся через Environment для индексации внутри ядер (реальное количество агентов).
+
+## Transform / RTC инварианты (v3 - state-based)
+- **Фильтрация планеров**: агентами становятся только планеры с group_by ∈ {1,2}.
+- **OH при создании**: значения oh определять при создании агентов из MP1 по group_by, НЕ в RTC (в минутах, без умножения на 60).
+  - `pidx = mp1_index.get(partseqno, -1)`
+  - Mi-8: `mp1_oh_mi8[pidx]`, Mi-17: `mp1_oh_mi17[pidx]`
+- **Assembly trigger при создании**: для статуса 4 проверять `repair_time - repair_days > assembly_time` → `assembly_trigger = 1`.
 
 ## Архитектура state-based (baseline)
 - RTC функции состояний не меняют state, только выставляют intent.
 - Переходы state применяются централизованно и атомарно в единой функции переходов.
 - Для квот — единый менеджер без атомарных операций.
+- **br2_mi17 (порог межремонтного)**: при подъёме Mi‑17 из inactive: если ppr < br2_mi17 → комплектация без ремонта (ppr сохраняется) + пропуск ожидания repair_time, иначе → ремонт (ppr = 0) + ожидание repair_time. Для Mi‑8 всегда ремонт.
+
+## RTC компиляция (NVRTC)
+- **Никакие warning'и в JIT логе NVRTC не допускаются.**
+- При КАЖДОЙ компиляции ядер — анализировать JIT лог на warning'и.
+- Типовые причины: `return;` вместо `return flamegpu::ALIVE;`, неиспользуемые переменные.
 
 ## LIMITER архитектура (messaging)
 - Финальная архитектура: **LIMITER V8** с RepairLine и adaptive steps.
@@ -44,5 +59,59 @@ alwaysApply: false
 - Для LIMITER: порядок определён в `docs/limiter_architecture.md`.
 
 ## Запуски
+- НЕЛЬЗЯ запускать `code/sim_v2/orchestrator_v2.py` без явного разрешения в текущем чате.
 - НЕЛЬЗЯ запускать `orchestrator_limiter_v8.py` без явного разрешения в текущем чате.
 - Валидация: `code/analysis/sim_validation_runner_msg.py`.
+
+### LIMITER V8 — порядок двух прогонов в одной таблице
+Перед первым датасетом делаем DROP `sim_masterv2_v8`, затем подряд два прогона (DS1 → DS2), затем две валидации.
+```bash
+# DROP таблицы перед DS1 (по явному согласованию)
+python3 - << 'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path('/path/to/Helicomponents-messaging/code')))
+from utils.config_loader import get_clickhouse_client
+client = get_clickhouse_client()
+client.execute("DROP TABLE IF EXISTS sim_masterv2_v8")
+print("DROP sim_masterv2_v8: OK")
+PY
+
+# Прогон DS1
+python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
+  --version-date 2025-07-04 --end-day 3650 --enable-mp2
+
+# Прогон DS2 (в ту же таблицу)
+python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
+  --version-date 2025-12-30 --end-day 3650 --enable-mp2
+
+# Валидация DS1/DS2 в общей таблице
+python3 code/analysis/sim_validation_runner_msg.py --version-date 2025-07-04 --table sim_masterv2_v8
+python3 code/analysis/sim_validation_runner_msg.py --version-date 2025-12-30 --table sim_masterv2_v8
+```
+
+### Симуляция LIMITER V5 (FLAME GPU)
+```bash
+cd code/sim_v2/messaging && python3 orchestrator_limiter_v5.py \
+  --version-date 2025-07-04 \
+  --end-day 3650
+```
+
+### Резервная версия V3 (while step + HF)
+```bash
+cd code/sim_v2/messaging && python3 orchestrator_limiter_v3.py \
+  --version-date 2025-07-04 \
+  --end-day 3650
+```
+
+### Симуляция агрегатов (после планеров)
+```bash
+cd code/sim_v2/units && python3 orchestrator_units.py \
+  --version-date 2025-07-04 \
+  --steps 3650 --export
+```
+
+### Очистка RTC кэша (только при изменении RTC кода)
+```bash
+rm -rf .rtc_cache/* ~/.cache/flamegpu/* /tmp/flamegpu/*
+```
