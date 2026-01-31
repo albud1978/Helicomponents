@@ -115,7 +115,7 @@ def build_markdown(version: VersionInfo, rows: Sequence[Tuple[str, int, int]]) -
     lines = [
         "# Агрегация `heli_pandas` по `partno`",
         "",
-        "- Источник: `heli_pandas` после `extract_master.py`",
+        "- Источник: `heli_pandas` после `code/extract/extract_master.py`",
         f"- Версия данных: `{version.version_date} v{version.version_id}`",
         f"- Сгенерировано: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "",

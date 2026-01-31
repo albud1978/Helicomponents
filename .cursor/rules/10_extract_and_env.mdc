@@ -4,7 +4,7 @@ globs:
   - "config/**"
   - "code/extract/**"
   - "code/**/extract/**"
-  - "code/extract_master.py"
+  - "code/extract/extract_master.py"
   - "code/**/loader*.py"
   - "code/**/dual_loader*.py"
   - "code/heli_pandas_ops_*.py"
@@ -22,22 +22,22 @@ export CUBE_CONFIG_PATH="$PWD/config"
 ```
 
 ## Extract
-- Extract запускается только целиком через `python3 code/extract_master.py`.
+- Extract запускается только целиком через `python3 code/extract/extract_master.py`.
 - Запрещено запускать отдельные loader-ы вручную без `extract_master.py`.
 
 ### Режимы запуска
 **Интерактивный режим (в терминале):**
 ```bash
-python3 code/extract_master.py
+python3 code/extract/extract_master.py
 ```
 
 **Автоматический режим (для скриптов/AI):**
 ```bash
 # Датасет 1 (2025-07-04), режим TEST (полная очистка)
-printf "1\n1\n" | python3 code/extract_master.py --mode TEST
+printf "1\n1\n" | python3 code/extract/extract_master.py --mode TEST
 
 # Датасет 2 (2025-12-30), режим PROD (версионирование, сохраняет данные других версий)
-printf "2\n2\n" | python3 code/extract_master.py --mode PROD
+printf "2\n2\n" | python3 code/extract/extract_master.py --mode PROD
 ```
 
 **Важно:** первый датасет грузить в режиме TEST, последующие — в режиме PROD.
@@ -52,7 +52,7 @@ printf "2\n2\n" | python3 code/extract_master.py --mode PROD
 - Статические файлы (Program_heli.xlsx, Program.xlsx) копируются из первого датасета
 
 ## Проверка комплектности вертолётов
-Документация: `docs/extract.md` (секция "Проверка комплектности вертолётов")
+Документация: `docs/architecture/extract.md` (секция "Проверка комплектности вертолётов")
 
 **Основная проверка (какие вертолёты с некомплектом):**
 ```bash

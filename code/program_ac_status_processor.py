@@ -47,7 +47,7 @@ def get_program_ac_data(client):
         
         if not table_exists:
             print("❌ Таблица program_ac не найдена в ClickHouse!")
-            print("💡 Сначала запустите: python3 code/program_ac_loader.py")
+            print("💡 Сначала запустите: python3 code/extract/program_ac_loader.py")
             return None
         
         # Получаем все данные о ВС в эксплуатации
