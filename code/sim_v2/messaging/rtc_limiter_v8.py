@@ -15,7 +15,7 @@ RTC модуль: LIMITER V8 — Упрощённая архитектура с 
 - Упрощённая логика compute_global_min
 - unserviceable управляется через RepairLine (квотирование), не через exit_date
 
-См. docs/adaptive_steps_logic.md для полной архитектуры.
+См. docs/architecture/adaptive_steps_logic.md для полной архитектуры.
 
 Дата: 16.01.2026
 """

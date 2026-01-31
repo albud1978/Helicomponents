@@ -149,7 +149,7 @@ python3 code/heli_pandas_ops_inventory.py [--skip-md]
 
 **Выход:**
 - Консольный отчёт: количество компонентов на каждом борту
-- Markdown: `docs/heli_pandas_ops_inventory_<version>.md`
+- Markdown: `output/heli_pandas_ops_inventory_<version>.md`
 
 ### 2. `heli_pandas_ops_other_groups.py`
 **Назначение:** Проверка комплектности по группам агрегатов (group_by > 2)
@@ -161,8 +161,8 @@ python3 code/heli_pandas_ops_other_groups.py [--skip-md]
 
 **Выход:**
 - Консольный отчёт с дефицитами (delta < 0)
-- PDF: `docs/heli_pandas_ops_other_groups_<version>.pdf`
-- Markdown: `docs/heli_pandas_ops_other_groups_<version>.md`
+- PDF: `output/heli_pandas_ops_other_groups_<version>.pdf`
+- Markdown: `output/heli_pandas_ops_other_groups_<version>.md`
 
 **Формат вывода дефицитов:**
 ```

@@ -77,9 +77,9 @@ python3 code/extract_master.py
 ### Архитектура
 | Файл | Описание |
 |------|----------|
-| `docs/rtc_pipeline_architecture.md` | **Baseline** — архитектура RTC пайплайна (intent-based, orchestrator_v2) |
-| `docs/limiter_architecture.md` | **LIMITER V8** — RepairLine + repair_days в unsvc/inactive (readiness/спавн учитывают RepairLine) |
-| `docs/validation.md` | Инварианты и процедуры тестирования (включая `--version-id` для изоляции прогонов) |
+| `docs/architecture/rtc_pipeline_architecture.md` | **Baseline** — архитектура RTC пайплайна (intent-based, orchestrator_v2) |
+| `docs/architecture/limiter_architecture.md` | **LIMITER V8** — RepairLine + repair_days в unsvc/inactive (readiness/спавн учитывают RepairLine) |
+| `docs/architecture/validation_rules.md` | Инварианты и процедуры тестирования (включая `--version-id` для изоляции прогонов) |
 | `docs/spawn_dynamic_architecture.md` | Архитектура динамического спавна |
 
 ### 🚀 LIMITER V8 — основная архитектура (ветка feature/flame-messaging)
@@ -97,7 +97,7 @@ python3 code/extract_master.py
 | `code/sim_v2/messaging/rtc_state_transitions_v7.py` | ✅ Актуальный | Однофазные переходы состояний |
 | `code/sim_v2/messaging/rtc_limiter_optimized.py` | ✅ Актуальный | Бинарный поиск limiter через mp5_cumsum |
 | `code/sim_v2/messaging/rtc_limiter_v5.py` | ✅ Актуальный | GPU-only модули (current_day, adaptive) |
-| **`docs/limiter_architecture.md`** | 📄 Документ | **Архитектура LIMITER V8 с таблицей слоёв** |
+| **`docs/architecture/limiter_architecture.md`** | 📄 Документ | **Архитектура LIMITER V8 с таблицей слоёв** |
 
 **Архивные** (не использовать):
 | Файл | Описание |
@@ -133,9 +133,9 @@ python3 code/extract_master.py
 | Файл | Описание |
 |------|----------|
 | `docs/extract.md` | Извлечение данных (включает проверку комплектности) |
-| `docs/data_validation.md` | Правила валидации данных |
-| `docs/transform.md` | Трансформация данных |
-| `docs/load.md` | Загрузка результатов |
+| `docs/architecture/validation_rules.md` | Правила валидации данных |
+| `docs/architecture/transform.md` | Трансформация данных |
+| `docs/architecture/load.md` | Загрузка результатов |
 
 ### История
 | Файл | Описание |
@@ -291,7 +291,7 @@ export FLAMEGPU_RTC_EXPORT_CACHE_PATH="$(pwd)/.rtc_cache"
 | 14 | 16 | 4 | `condition NOT IN (...)` | Некорректное condition |
 | 15 | 32 | 5 | `ДОНОР AND sne < br` | Донор при ремонтопригодном (warning) |
 
-> **Подробнее:** `docs/data_validation.md`
+> **Подробнее:** `docs/architecture/validation_rules.md`
 
 ### Бизнес-логика (параметризуемые)
 

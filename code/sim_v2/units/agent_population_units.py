@@ -177,7 +177,7 @@ class AgentPopulationUnitsBuilder:
         """
         Расчёт количества резервных слотов для spawn агрегатов
         
-        Формула из docs/rtc_components.md (оборот определяет восполнение):
+        Формула из docs/architecture/rtc_components.md (оборот определяет восполнение):
         1. aggregates_consumed = flight_by_type / ll_aggregate
         2. aggregates_needed = aggregates_consumed × 1.2 (+20% запас)
         3. reserve_slots = max(10, aggregates_needed - existing_count)

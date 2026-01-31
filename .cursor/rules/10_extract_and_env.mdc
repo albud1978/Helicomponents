@@ -2,6 +2,8 @@
 description: Environment setup + Extract pipeline rules
 globs:
   - "config/**"
+  - "code/extract/**"
+  - "code/**/extract/**"
   - "code/extract_master.py"
   - "code/**/loader*.py"
   - "code/**/dual_loader*.py"
