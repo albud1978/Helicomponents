@@ -6,6 +6,7 @@
 - Transitions Viewer: `tools/transitions_viewer/` — HTML визуализация матрицы переходов + панель квотирования.
 - JSON правила V8: `config/transitions/transitions_rules.json` (state→state) и `quota_rules.json`.
 - Удалены legacy JSON: `intent_rules.json`, `apply_rules.json` (двухфазная модель).
+- Валидация limiter: добавлена SQL‑проверка запрета выхода в `storage`/`unserviceable` при `limiter > 0` (sim_masterv2_v8).
 
 ### Новые файлы
 - `.cursor/rules/*.mdc` — модульные правила (00_global_always, 20_sim_v2_pipeline, 90_multiagent_workflow и др.)

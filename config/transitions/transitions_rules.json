@@ -6,13 +6,13 @@
     "to": "state"
   },
   "states": {
-    "0": "spawn",
+    "0": "spawn (boundary)",
     "1": "inactive",
     "2": "operations",
     "3": "serviceable",
     "4": "repair",
-    "5": "reserve",
-    "6": "storage",
+    "5": "reserve (unused)",
+    "6": "storage (terminal)",
     "7": "unserviceable"
   },
   "variables": [
@@ -98,7 +98,7 @@
       "from": 2,
       "to": 7,
       "pre": {
-        "expr": "(limiter == 0 OR ppr_next >= oh) AND sne_next < ll AND NOT (br > 0 AND sne_next >= br)"
+        "expr": "ppr_next >= oh AND NOT (br > 0 AND sne_next >= br)"
       },
       "post": {
         "all": [
@@ -106,21 +106,12 @@
             "expr": "state == 7"
           },
           {
-            "expr": "ppr == 0"
-          },
-          {
-            "expr": "limiter == 0"
-          },
-          {
-            "expr": "repair_days == repair_time"
-          },
-          {
             "expr": "repair_line_id == 0xFFFFFFFF"
           }
         ]
       },
       "owner_module": "rtc_state_transitions_v8",
-      "notes": "V8: уход в unserviceable по OH или limiter=0 (storage уже отфильтрован)."
+      "notes": "V8: уход в unserviceable по OH; storage отфильтрован по BR."
     },
     {
       "id": "ops_hold_v8",
@@ -263,63 +254,6 @@
       "notes": "Остаётся в ремонте до exit_date."
     },
     {
-      "id": "reserve_to_ops_v8",
-      "from": 5,
-      "to": 2,
-      "pre": {
-        "expr": "current_day >= exit_date"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 2"
-          },
-          {
-            "expr": "transition_5_to_2 == 1"
-          }
-        ]
-      },
-      "owner_module": "rtc_spawn_to_ops_v7",
-      "notes": "Детерминированный spawn из reserve в operations."
-    },
-    {
-      "id": "reserve_hold_v8",
-      "from": 5,
-      "to": 5,
-      "pre": {
-        "expr": "current_day < exit_date"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 5"
-          }
-        ]
-      },
-      "owner_module": "rtc_spawn_to_ops_v7",
-      "notes": "Ожидание планового spawn."
-    },
-    {
-      "id": "inactive_hold_v8",
-      "from": 1,
-      "to": 1,
-      "pre": {
-        "expr": "true"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 1"
-          },
-          {
-            "expr": "repair_days == 0"
-          }
-        ]
-      },
-      "owner_module": "rtc_states_stub",
-      "notes": "inactive не декрементирует repair_days."
-    },
-    {
       "id": "serviceable_hold_v8",
       "from": 3,
       "to": 3,
@@ -352,23 +286,7 @@
       },
       "owner_module": "rtc_states_stub",
       "notes": "Holding в unserviceable (ожидание RepairLine)."
-    },
-    {
-      "id": "storage_hold_v8",
-      "from": 6,
-      "to": 6,
-      "pre": {
-        "expr": "true"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 6"
-          }
-        ]
-      },
-      "owner_module": "rtc_states_stub",
-      "notes": "Storage терминален."
     }
+    
   ]
 }
