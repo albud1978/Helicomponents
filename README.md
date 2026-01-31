@@ -54,7 +54,7 @@ export CUBE_CONFIG_PATH="$PWD/config"
 python3 code/utils/test_db_connection.py
 
 # 4. Запустить ETL (интерактивный выбор датасета и режима)
-python3 code/extract_master.py
+python3 code/extract/extract_master.py
 
 # 5. Запустить симуляцию — см. полную команду в .cursor/rules/
 ```
@@ -193,7 +193,7 @@ cp .env.example .env
 # Добавить: CLICKHOUSE_PASSWORD=your_password
 
 # 5. Первый запуск ETL
-python3 code/extract_master.py  # → выбрать 1 (ТЕСТ)
+python3 code/extract/extract_master.py  # → выбрать 1 (ТЕСТ)
 ```
 
 > Для воспроизводимости используйте `constraints.txt`: он фиксирует проверенные версии ключевых библиотек,

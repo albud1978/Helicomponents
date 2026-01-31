@@ -124,21 +124,21 @@ python3 code/heli_pandas_ops_inventory.py --version-date YYYY-MM-DD --version-id
 ### **Основной Extract цикл (интерактивный)**
 ```bash
 # Тестовый режим (очистка всех таблиц + единая версионность)
-python3 code/extract_master.py
+python3 code/extract/extract_master.py
 # Выбрать: 1 (датасет), затем 1 (ТЕСТ)
 
 # Продуктивный режим (добавление новых версий данных + единая версионность)  
-python3 code/extract_master.py
+python3 code/extract/extract_master.py
 # Выбрать: 2 (датасет), затем 2 (ПРОД)
 ```
 
 ### **Автоматический режим (для скриптов/CI)**
 ```bash
 # Датасет 1 (2025-07-04), режим TEST (полная очистка)
-printf "1\n1\n" | python3 code/extract_master.py
+printf "1\n1\n" | python3 code/extract/extract_master.py
 
 # Датасет 2 (2025-12-30), режим PROD (сохраняет данные других версий)
-printf "2\n2\n" | python3 code/extract_master.py
+printf "2\n2\n" | python3 code/extract/extract_master.py
 ```
 
 > **Важно:** Первый датасет грузить в режиме TEST, последующие — в режиме PROD!
@@ -161,7 +161,7 @@ python3 code/utils/auto_config.py --info
 python3 code/utils/display_manager.py
 
 # Принудительный текстовый режим (для Windows)
-EMOJI_MODE=text python3 code/extract_master.py
+EMOJI_MODE=text python3 code/extract/extract_master.py
 
 # Очистка аддитивной грязи в словарях
 python3 code/utils/cleanup_dictionaries.py
@@ -174,11 +174,11 @@ python3 code/utils/database_cleanup.py
 
 ### **Ежедневный/еженедельный запуск**
 1. **Обновление исходных Excel файлов** в `data_input/source_data/`
-2. **Запуск Extract в продуктивном режиме**: `python3 code/extract_master.py` → выбор 2
+2. **Запуск Extract в продуктивном режиме**: `python3 code/extract/extract_master.py` → выбор 2
 3. **Проверка результатов** через валидацию в extract_master.py
 
 ### **При разработке/отладке**  
-1. **Запуск Extract в тестовом режиме**: `python3 code/extract_master.py` → выбор 1
+1. **Запуск Extract в тестовом режиме**: `python3 code/extract/extract_master.py` → выбор 1
 2. **Анализ результатов** и отладка проблем
 3. **Повторный запуск** после исправлений
 
@@ -186,7 +186,7 @@ python3 code/utils/database_cleanup.py
 1. **Диагностика**: `python3 code/utils/test_db_connection.py`
 2. **Очистка словарей**: `python3 code/utils/cleanup_dictionaries.py` 
 3. **Полная очистка**: `python3 code/utils/database_cleanup.py`
-4. **Перезапуск Extract**: `python3 code/extract_master.py`
+4. **Перезапуск Extract**: `python3 code/extract/extract_master.py`
 
 ## 🎯 Результирующие таблицы Extract
 
@@ -624,9 +624,9 @@ repair_days = repair_time - (target_date - version_date).days  # Дни ремо
 ```
 
 **Файлы изменений:**
-- `code/repair_days_calculator.py` - новый скрипт расчета
+- `code/extract/repair_days_calculator.py` - новый скрипт расчета
 - `code/overhaul_status_processor.py` - убран расчет repair_days  
-- `code/extract_master.py` - repair_days_calculator.py перемещен в конец (этап 12)
+- `code/extract/extract_master.py` - repair_days_calculator.py перемещен в конец (этап 12)
 - `docs/extract.md` - обновлена документация
 
 **Тестирование:** ✅ Все 7 ВС в ремонте получили корректные положительные значения repair_days

@@ -177,7 +177,7 @@ def main():
     
     if success:
         print("\n✅ Словари очищены! Теперь можно запускать Extract.")
-        print("💡 Запустите: python3 code/extract_master.py")
+        print("💡 Запустите: python3 code/extract/extract_master.py")
     else:
         print("\n❌ Очистка завершилась с ошибками")
 

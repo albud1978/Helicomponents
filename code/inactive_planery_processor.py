@@ -95,4 +95,4 @@ def process_inactive_planery_status(pandas_df, client):
 if __name__ == "__main__":
     print("🧪 Тестирование процессора неактивности планеров")
     print("💡 Этот модуль используется в dual_loader.py")
-    print("💡 Для тестирования запустите: python3 code/dual_loader.py") 
+    print("💡 Для тестирования запустите: python3 code/extract/dual_loader.py")

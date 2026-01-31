@@ -356,7 +356,7 @@ MAX_FRAMES = sum([frames_total_group for group_by in [1, 2, 3, 4, ..., 24]])
 ### 6.2. Решение
 
 **Этап 1: ETL (Extract)**
-- **Файл:** `code/md_components_loader.py`
+- **Файл:** `code/extract/md_components_loader.py`
 - **Изменения:**
   1. Добавлена конвертация `sne_new` и `ppr_new` из часов в минуты (× 60)
   2. Сохранение `NULL` значений (признак "агрегат не выпускается")

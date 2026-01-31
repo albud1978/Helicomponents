@@ -27,8 +27,8 @@ from pathlib import Path
 from datetime import date, datetime
 from typing import List, Dict, Optional
 
-# Добавляем путь к утилитам
-sys.path.append(str(Path(__file__).parent / 'utils'))
+# Добавляем путь к утилитам (code/utils)
+sys.path.append(str(Path(__file__).resolve().parents[1] / 'utils'))
 from config_loader import get_clickhouse_client
 from etl_version_manager import ETLVersionManager
 from dataset_manager import DatasetManager, DatasetInfo
@@ -497,7 +497,7 @@ class ExtractMaster:
         logger.info(f"🚀 Запуск микросервиса: {script_name}")
         logger.info(f"📋 Описание: {description}")
         
-        script_path = Path('code') / script_name
+        script_path = Path(__file__).parent / script_name
         
         if not script_path.exists():
             logger.error(f"❌ Скрипт не найден: {script_path}")
@@ -529,13 +529,19 @@ class ExtractMaster:
             # Добавляем дополнительные аргументы шага
             cmd_with_params.extend(extra_args)
             
+            # Поддержка импорта utils при запуске скрипта из code/extract
+            env = os.environ.copy()
+            code_root = str(Path(__file__).resolve().parents[1])
+            env["PYTHONPATH"] = f"{code_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
+
             # Сначала пробуем с параметрами версионирования
             result = subprocess.run(
                 cmd_with_params,
                 capture_output=True,
                 text=True,
                 timeout=1800,  # 30 минут максимум
-                cwd=Path.cwd()  # Запускаем из корневой директории
+                cwd=Path.cwd(),  # Запускаем из корневой директории
+                env=env
             )
             
             # Если скрипт не поддерживает версионирование, пробуем без параметров
@@ -549,7 +555,8 @@ class ExtractMaster:
                     capture_output=True,
                     text=True,
                     timeout=1800,
-                    cwd=Path.cwd()
+                    cwd=Path.cwd(),
+                    env=env
                 )
             
             execution_time = time.time() - start_time

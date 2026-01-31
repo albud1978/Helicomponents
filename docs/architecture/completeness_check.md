@@ -252,7 +252,7 @@ WHERE hp.group_by != md.group_by AND hp.group_by > 2
 
 1. **Перезагрузить данные (Extract):**
    ```bash
-   python3 code/extract_master.py --mode TEST
+   python3 code/extract/extract_master.py --mode TEST
    ```
 
 2. **Запустить симуляцию (Transform):**

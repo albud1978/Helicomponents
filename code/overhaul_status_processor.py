@@ -56,7 +56,7 @@ def get_status_overhaul_data(client, version_date):
         
         if not table_exists:
             print("❌ Таблица status_overhaul не найдена в ClickHouse!")
-            print("💡 Сначала запустите: python3 code/status_overhaul_loader.py")
+            print("💡 Сначала запустите: python3 code/extract/status_overhaul_loader.py")
             return None
         
         # Получаем данные с фильтром по version_date (ВСЕ записи, включая Закрыто)

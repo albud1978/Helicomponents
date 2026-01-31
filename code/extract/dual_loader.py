@@ -13,7 +13,7 @@
 - lease_restricted оптимизировано до UInt8 (Y/1→1, остальное→0)
 
 Использование:
-    python3 dual_loader.py
+    python3 code/extract/dual_loader.py
 """
 
 import pandas as pd
@@ -40,7 +40,7 @@ def get_md_partnos(client):
         
         if not table_exists:
             print("❌ Таблица md_components не найдена в ClickHouse!")
-            print("💡 Сначала запустите: python3 code/md_components_loader.py")
+        print("💡 Сначала запустите: python3 code/extract/md_components_loader.py")
             sys.exit(1)
         
         # Получаем все партномера из таблицы
@@ -80,7 +80,7 @@ def get_md_partnos(client):
         
     except Exception as e:
         print(f"❌ Ошибка чтения данных из md_components: {e}")
-        print("💡 Убедитесь что данные загружены: python3 code/md_components_loader.py")
+        print("💡 Убедитесь что данные загружены: python3 code/extract/md_components_loader.py")
         sys.exit(1)
 
 def load_status_components():
