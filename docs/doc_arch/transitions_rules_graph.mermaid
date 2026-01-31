@@ -1,0 +1,51 @@
+graph TD
+  subgraph States
+    S0["0 spawn (boundary)"]
+    S1["1 inactive"]
+    S2["2 operations"]
+    S3["3 serviceable"]
+    S4["4 repair"]
+    S5["5 reserve (unused)"]
+    S6["6 storage (terminal)"]
+    S7["7 unserviceable"]
+  end
+
+  subgraph Rules
+    R_ops_to_storage_ll_v8["ops_to_storage_ll_v8"]
+    R_ops_to_storage_br_v8["ops_to_storage_br_v8"]
+    R_ops_to_unsvc_v8["ops_to_unsvc_v8"]
+    R_ops_hold_v8["ops_hold_v8"]
+    R_demote_ops_to_svc_v8["demote_ops_to_svc_v8"]
+    R_p1_svc_to_ops_v8["p1_svc_to_ops_v8"]
+    R_p2_unsvc_to_ops_v8["p2_unsvc_to_ops_v8"]
+    R_p3_inactive_to_ops_v8["p3_inactive_to_ops_v8"]
+    R_repair_to_svc_v8["repair_to_svc_v8"]
+    R_repair_hold_v8["repair_hold_v8"]
+    R_serviceable_hold_v8["serviceable_hold_v8"]
+    R_unserviceable_hold_v8["unserviceable_hold_v8"]
+  end
+
+  R_ops_to_storage_ll_v8 -->|FROM| S2
+  R_ops_to_storage_ll_v8 -->|TO| S6
+  R_ops_to_storage_br_v8 -->|FROM| S2
+  R_ops_to_storage_br_v8 -->|TO| S6
+  R_ops_to_unsvc_v8 -->|FROM| S2
+  R_ops_to_unsvc_v8 -->|TO| S7
+  R_ops_hold_v8 -->|FROM| S2
+  R_ops_hold_v8 -->|TO| S2
+  R_demote_ops_to_svc_v8 -->|FROM| S2
+  R_demote_ops_to_svc_v8 -->|TO| S3
+  R_p1_svc_to_ops_v8 -->|FROM| S3
+  R_p1_svc_to_ops_v8 -->|TO| S2
+  R_p2_unsvc_to_ops_v8 -->|FROM| S7
+  R_p2_unsvc_to_ops_v8 -->|TO| S2
+  R_p3_inactive_to_ops_v8 -->|FROM| S1
+  R_p3_inactive_to_ops_v8 -->|TO| S2
+  R_repair_to_svc_v8 -->|FROM| S4
+  R_repair_to_svc_v8 -->|TO| S3
+  R_repair_hold_v8 -->|FROM| S4
+  R_repair_hold_v8 -->|TO| S4
+  R_serviceable_hold_v8 -->|FROM| S3
+  R_serviceable_hold_v8 -->|TO| S3
+  R_unserviceable_hold_v8 -->|FROM| S7
+  R_unserviceable_hold_v8 -->|TO| S7
