@@ -34,7 +34,7 @@
 ## Быстрый старт
 
 ```bash
-cd infra/
+cd docs/archive/infra/
 cp .env.example .env   # выставьте CLICKHOUSE_PASSWORD
 
 # Запуск ClickHouse + ETL dev (без GPU)

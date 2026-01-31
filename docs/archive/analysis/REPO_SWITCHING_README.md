@@ -22,12 +22,12 @@
 
 ### Переключение на GitLab:
 ```cmd
-.\switch_to_gitlab.bat
+.\tools\git\switch_to_gitlab.bat
 ```
 
 ### Переключение на GitHub:
 ```cmd
-.\switch_to_github.bat
+.\tools\git\switch_to_github.bat
 ```
 
 ## ЦЕЛЕВЫЕ РЕПОЗИТОРИИ
@@ -51,8 +51,8 @@
 
 ## РЕКОМЕНДАЦИИ
 
-1. **Сначала попробуйте GitLab:** `.\switch_to_gitlab.bat`
-2. **Если проблемы с паролем GitLab:** `.\switch_to_github.bat`
+1. **Сначала попробуйте GitLab:** `.\tools\git\switch_to_gitlab.bat`
+2. **Если проблемы с паролем GitLab:** `.\tools\git\switch_to_github.bat`
 3. **Для работы с AI агентами:** используйте GitHub
 4. **Для корпоративной синхронизации:** используйте GitLab
 
