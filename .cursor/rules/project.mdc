@@ -8,6 +8,7 @@ alwaysApply: true
 # Helicomponents Rules
 
 Источник истины по правилам: `.cursor/rules/*.mdc` (модульно).
+`.cursorrules` — указатель и не содержит копию правил.
 
 Этот `project.mdc` — служебная "обвязка" для auto-apply в Cursor и **не содержит** копии правил,
 чтобы исключить дрейф и конфликты требований.
