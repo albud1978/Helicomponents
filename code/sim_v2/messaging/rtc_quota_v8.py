@@ -16,7 +16,7 @@ RTC модуль V8: Квотирование через RepairLine
 5. P2 промоут: unserviceable → operations — V8!
 6. P3 промоут: inactive → operations — V8!
 
-См. docs/adaptive_steps_logic.md для полной архитектуры.
+См. docs/architecture/adaptive_steps_logic.md для полной архитектуры.
 
 Дата: 16.01.2026
 """

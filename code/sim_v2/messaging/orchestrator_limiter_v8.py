@@ -18,7 +18,7 @@ LIMITER V8 Orchestrator — Архитектура с RepairLine
 5. Квотирование через RepairLine
 6. Limiter + adaptive steps
 
-См. docs/adaptive_steps_logic.md для полной архитектуры.
+См. docs/architecture/adaptive_steps_logic.md для полной архитектуры.
 
 Дата: 16.01.2026
 """

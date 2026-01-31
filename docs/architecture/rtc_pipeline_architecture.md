@@ -1,5 +1,10 @@
 # RTC Pipeline Architecture
 
+## Статус baseline (sim_masterv2)
+- Baseline остановлен: выявлены критические баги, разработка прекращена из‑за сближения в adaptive.
+- Baseline не является источником истины и не используется для обязательного сравнения.
+- Актуальные источники: LIMITER V8 (`sim_masterv2_v8`), `config/transitions/transitions_rules.json`.
+
 ## Примечания по LIMITER V8 (17-01-2026)
 - `deterministic_dates_mp` ограничен `MAX_DETERMINISTIC_DATES=500`; при превышении лимита даты обрезаются.
 - `unserviceable` не участвует в `min_dynamic` и не влияет на adaptive‑шаги.
@@ -1289,7 +1294,7 @@ class ValidationSuite:                     # Набор валидаций
 **Ключевые особенности**:
 - Детальные условия для переходов (2→4: `ppr_next≥oh AND sne_next<br`)
 - Контекстная валидация с проверкой бизнес-правил
-- Связь с `docs/validation.md` (источник правил)
+- Связь с `docs/architecture/validation_rules.md` (источник правил)
 - Гибкий strict mode (warnings → errors)
 
 ### Метрики рефакторинга

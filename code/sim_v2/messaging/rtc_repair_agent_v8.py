@@ -17,7 +17,7 @@ RepairAgent управляет квотой ремонта через счётч
 3. QuotaManager → RepairAgent: { to_deduct }
 4. RepairAgent списывает capacity
 
-См. docs/adaptive_steps_logic.md для полной архитектуры.
+См. docs/architecture/adaptive_steps_logic.md для полной архитектуры.
 
 Дата: 16.01.2026
 """

@@ -172,7 +172,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v7, ...) {
 - unsvc декрементирует `repair_days` до 0
 - P2/P3 проверяют одновременно: `day >= repair_time`, `repair_days == 0`, линия с `free_days >= repair_time`
 - Если условия не выполнены → P4 (spawn)
-- См. `docs/adaptive_steps_logic.md` для деталей
+- См. `docs/architecture/adaptive_steps_logic.md` для деталей
 
 **Демоут:** operations → serviceable (при избытке)
 
@@ -339,8 +339,8 @@ adaptive_days = min(min_dynamic, days_to_deterministic)
 
 ## 🔗 Связанная документация
 
-- `docs/rtc_pipeline_architecture.md` — Baseline архитектура (intent-based)
-- `docs/validation.md` — Инварианты и тесты
+- `docs/architecture/rtc_pipeline_architecture.md` — Baseline архитектура (intent-based)
+- `docs/architecture/validation_rules.md` — Инварианты и тесты
 - `.cursor/rules/` — Правила проекта
 
 ---
@@ -348,7 +348,7 @@ adaptive_days = min(min_dynamic, days_to_deterministic)
 ## ✅ V8: RepairLine (АКТУАЛЬНАЯ АРХИТЕКТУРА)
 
 > **Статус:** основная архитектура  
-> **Документация:** `docs/adaptive_steps_logic.md`  
+> **Документация:** `docs/architecture/adaptive_steps_logic.md`  
 > **Цель:** квотирование ремонта через RepairLine + адаптивные шаги
 
 ### Ключевые изменения V8 vs V7

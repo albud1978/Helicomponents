@@ -72,7 +72,13 @@ if [ -f "$SCRIPT_DIR/load_env.local.sh" ]; then
 elif [ -d "$HOME/miniconda3/targets/x86_64-linux/include" ]; then
     # Conda с CUDA toolkit (например, для RTX 5090 + CUDA 13)
     source "$HOME/miniconda3/etc/profile.d/conda.sh" 2>/dev/null
-    conda activate base 2>/dev/null
+    if [ -d "$HOME/miniconda3/envs/cuda13" ]; then
+        conda activate cuda13 2>/dev/null
+        echo "🐍 Conda env: cuda13"
+    else
+        conda activate base 2>/dev/null
+        echo "🐍 Conda env: base"
+    fi
     export CUDA_PATH="$HOME/miniconda3/targets/x86_64-linux"
     export LD_LIBRARY_PATH="$HOME/miniconda3/lib:$LD_LIBRARY_PATH"
     echo "🚀 CUDA (conda): $CUDA_PATH"

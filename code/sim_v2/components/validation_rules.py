@@ -14,7 +14,7 @@ ValidationRules - правила валидации симуляции
 - Разделение на уровни: критичные, предупреждения, информационные
 
 Источник:
-- docs/validation.md
+- docs/architecture/validation_rules.md
 """
 
 from typing import Dict, List, Optional, Tuple

@@ -18,7 +18,7 @@
 | `dict_digital_values_flat` | Мета-словарь Extract | **152** |
 
 > Сумма первых четырёх таблиц = **11 035** — это итог из логов `extract_master`.  
-> Из них **10 736** строк приходится непосредственно на `heli_pandas`. Детальная разбивка по `partno` сохраняется в `docs/heli_pandas_partno_stats_2025-07-04.md`, см. скрипт `heli_pandas_partno_stats.py`.
+> Из них **10 736** строк приходится непосредственно на `heli_pandas`. Детальная разбивка по `partno` сохраняется в `output/heli_pandas_partno_stats_2025-07-04.md` (см. `heli_pandas_partno_stats.py`, параметр `--md-path`).
 > Аналитику по летящим бортам (`status_id=2`) и установленным агрегатам см. в `output/heli_pandas_ops_inventory_YYYY-MM-DD.md`.
 
 ## 🔍 Проверка комплектности вертолётов
@@ -222,7 +222,7 @@ python3 code/utils/database_cleanup.py
 17. **`utils/test_db_connection.py`** - тестирование подключений к СУБД  
 18. **`utils/cleanup_dictionaries.py`** - принудительная очистка всех словарей (для решения проблем с аддитивной грязью)
 19. **`code/archive/aircraft_number_dict_creator.py`** - устаревший создатель справочника номеров ВС (заархивирован)
-20. **`heli_pandas_partno_stats.py`** - агрегирует `heli_pandas` по `partno`, выводит статистику (`components`, `aircrafts`) и автоматически сохраняет отчёт в `docs/heli_pandas_partno_stats_<version>.md`.
+20. **`heli_pandas_partno_stats.py`** - агрегирует `heli_pandas` по `partno`, выводит статистику (`components`, `aircrafts`) и сохраняет отчёт в `output/heli_pandas_partno_stats_<version>.md` (через `--md-path`).
 21. **`heli_pandas_ops_inventory.py`** - инвентаризация агрегатов на бортах в статусе `status_id=2`, считает количество установленных компонентов по каждому `aircraft_number` и сохраняет отчёт `docs/heli_pandas_ops_inventory_<version>.md`.
 22. **`heli_pandas_ops_other_groups.py`** - для планеров `status_id=2` подсчитывает агрегаты `group_by>2`, сравнивает их количество с нормой `md_components.comp_number`, подсвечивает дефицитные группы и сохраняет отчёт `docs/heli_pandas_ops_other_groups_<version>.md`.
 
