@@ -1,5 +1,35 @@
 # Changelog
 
+## [02-02-2026] - Coordination Patterns Formalization
+
+### Изменения
+- **analyst-sql-graph**: добавлена явная Researcher-функция (сбор контекста перед реализацией).
+- **90_multiagent_workflow.mdc**: добавлены секции «Паттерны координации» и «Разрешение конфликтов».
+- **graph.schema.json**: расширен типами `WorkflowState`, `HandoffNode`, `ContextNode` для hand-off через граф.
+- **graph.json**: добавлены Process-узлы (Sequential/Parallel/Iterative/Hybrid), роль Researcher, версия 2.
+- **context_capsule_builder.py**: добавлены функции управления workflow state:
+  - `--init-workflow` — инициализация нового workflow
+  - `--write-handoff` — запись hand-off агента в граф
+  - `--read-state` — чтение текущего состояния workflow
+  - `--write-context` — запись контекста для передачи между чатами
+  - `--read-context` — чтение контекста workflow
+
+### Разделение графов (Domain vs Agent KG)
+- **.env**: добавлены `DOMAIN_NEO4J_*` для облачного Neo4j Aura.
+- **Agent KG** (локальный Neo4j): шина коммуникации агентов/оркестратора, НЕ связан с конфигами.
+- **Domain Graph** (облачный Neo4j Aura): производная от конфигов/JSON/кода, только визуализация.
+- **SSoT для домена**: `config/transitions/*.json`, `code/sim_v2/**`.
+
+### Архитектура
+- Формализован механизм переключения агентов: **Hybrid (Orchestrator Dispatch + Graph Context)**.
+- Orchestrator явно вызывает агентов через Task tool, агенты читают/пишут контекст из графа.
+- Граф — для персистентности и передачи между чатами, не для polling.
+
+### Паттерны координации
+- **Sequential Pipeline** (по умолчанию): Analysis → Research → Implementation → Review → Validation → Capsule
+- **Parallel Workers** (по запросу): несколько Implementer-ов на независимых подзадачах
+- **Iterative Loop** (для сложных задач): Research ↔ Implementation ↔ Review цикл (лимит 3 итерации)
+
 ## [01-02-2026] - Local KG tooling
 
 ### Изменения

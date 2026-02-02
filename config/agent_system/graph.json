@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "version": 1,
-    "updated_at": "2026-01-30",
-    "description": "Project agent system graph (roles, agents, canonical rules)"
+    "version": 2,
+    "updated_at": "2026-02-02",
+    "description": "Project agent system graph (roles, agents, processes, coordination patterns)"
   },
   "nodes": [
     { "id": "role_orchestrator", "type": "Role", "name": "Orchestrator" },
@@ -11,18 +11,42 @@
     { "id": "role_validator", "type": "Role", "name": "Validator" },
     { "id": "role_general_coder", "type": "Role", "name": "GeneralCoder" },
     { "id": "role_sql_graph", "type": "Role", "name": "SQLGraphAnalyst" },
+    { "id": "role_researcher", "type": "Role", "name": "Researcher" },
     { "id": "role_capsule_builder", "type": "Role", "name": "CapsuleBuilder" },
     { "id": "human_owner", "type": "Human", "name": "Alexey" },
 
     { "id": "agent_orchestrator", "type": "Agent", "name": "orchestrator" },
     { "id": "agent_coder_flame", "type": "Agent", "name": "coder-flame" },
-    { "from": "agent_orchestrator", "to": "role_orchestrator", "type": "implements" },
-    { "from": "rule_multiagent_workflow", "to": "agent_orchestrator", "type": "applies_to" },
     { "id": "agent_reviewer_flame", "type": "Agent", "name": "reviewer-flame" },
     { "id": "agent_validator_judge", "type": "Agent", "name": "validator-judge" },
     { "id": "agent_coder_general", "type": "Agent", "name": "coder-general" },
     { "id": "agent_analyst_sql_graph", "type": "Agent", "name": "analyst-sql-graph" },
     { "id": "agent_capsule_builder", "type": "Agent", "name": "capsule-builder" },
+
+    {
+      "id": "process_sequential",
+      "type": "Process",
+      "name": "Sequential Pipeline",
+      "notes": "Default pattern: Analysis → Research → Implementation → Review → Validation → Capsule"
+    },
+    {
+      "id": "process_parallel",
+      "type": "Process",
+      "name": "Parallel Workers",
+      "notes": "Multiple Implementers on independent subtasks, Judge selects best result"
+    },
+    {
+      "id": "process_iterative",
+      "type": "Process",
+      "name": "Iterative Loop",
+      "notes": "Research ↔ Implementation ↔ Review cycle until criteria met (max 3 iterations)"
+    },
+    {
+      "id": "process_hybrid_dispatch",
+      "type": "Process",
+      "name": "Hybrid Orchestrator Dispatch",
+      "notes": "Orchestrator calls agents via Task tool, agents read/write context from graph"
+    },
 
     {
       "id": "rule_multiagent_workflow",
@@ -47,18 +71,27 @@
       "type": "Artifact",
       "name": "Context Capsule limiter_v8",
       "path": "docs/limiter_v8_capsule.md"
+    },
+    {
+      "id": "artifact_capsule_builder_py",
+      "type": "Artifact",
+      "name": "Context Capsule Builder",
+      "path": "code/analysis/context_capsule_builder.py"
     }
   ],
   "edges": [
+    { "from": "agent_orchestrator", "to": "role_orchestrator", "type": "implements" },
     { "from": "agent_coder_flame", "to": "role_coder", "type": "implements" },
     { "from": "agent_reviewer_flame", "to": "role_reviewer", "type": "implements" },
     { "from": "agent_validator_judge", "to": "role_validator", "type": "implements" },
     { "from": "agent_coder_general", "to": "role_general_coder", "type": "implements" },
     { "from": "agent_analyst_sql_graph", "to": "role_sql_graph", "type": "implements" },
+    { "from": "agent_analyst_sql_graph", "to": "role_researcher", "type": "implements" },
     { "from": "agent_capsule_builder", "to": "role_capsule_builder", "type": "implements" },
 
     { "from": "role_orchestrator", "to": "human_owner", "type": "governed_by" },
     { "from": "rule_multiagent_workflow", "to": "role_orchestrator", "type": "defines" },
+    { "from": "rule_multiagent_workflow", "to": "agent_orchestrator", "type": "applies_to" },
     { "from": "rule_multiagent_workflow", "to": "agent_coder_flame", "type": "applies_to" },
     { "from": "rule_multiagent_workflow", "to": "agent_reviewer_flame", "type": "applies_to" },
     { "from": "rule_multiagent_workflow", "to": "agent_validator_judge", "type": "applies_to" },
@@ -66,6 +99,12 @@
     { "from": "rule_multiagent_workflow", "to": "agent_analyst_sql_graph", "type": "applies_to" },
     { "from": "rule_multiagent_workflow", "to": "agent_capsule_builder", "type": "applies_to" },
 
-    { "from": "artifact_graph_schema", "to": "artifact_graph_json", "type": "schema_for" }
+    { "from": "artifact_graph_schema", "to": "artifact_graph_json", "type": "schema_for" },
+
+    { "from": "process_hybrid_dispatch", "to": "process_sequential", "type": "enables" },
+    { "from": "process_hybrid_dispatch", "to": "process_parallel", "type": "enables" },
+    { "from": "process_hybrid_dispatch", "to": "process_iterative", "type": "enables" },
+    { "from": "rule_multiagent_workflow", "to": "process_hybrid_dispatch", "type": "defines" },
+    { "from": "agent_orchestrator", "to": "process_hybrid_dispatch", "type": "executes" }
   ]
 }
