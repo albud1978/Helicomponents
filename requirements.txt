@@ -13,6 +13,10 @@ clickhouse-connect>=0.7.0
 # Конфигурация и YAML
 PyYAML>=6.0
 
+# Оркестрация контекстных капсул и KG
+langgraph
+neo4j
+
 # Системные зависимости
 pathlib2>=2.3.0
 

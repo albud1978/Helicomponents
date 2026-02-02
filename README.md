@@ -46,6 +46,9 @@ source .venv/bin/activate
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate cuda13
 
+# 1.1 Локальный Neo4j KG (опционально)
+make kg-up
+
 # 2. Загрузить переменные окружения
 source config/load_env.sh
 export CUBE_CONFIG_PATH="$PWD/config"
@@ -69,8 +72,10 @@ python3 code/extract/extract_master.py
 | Файл | Описание |
 |------|----------|
 | **`.cursor/rules/`** | Модульные правила разработки для Cursor AI |
-| **`.cursor/agents/`** | Субагенты проекта (coder-flame, reviewer-flame, validator-judge) |
+| **`.cursor/agents/`** | Субагенты проекта (coder-flame, coder-general, reviewer-flame, validator-judge, capsule-builder) |
+| `docs/backlog.md` | Короткие идеи на будущее (формат и правила внутри файла) |
 | `docs/migration.md` | Промт для новых разработчиков |
+| `docs/limiter_v8_capsule.md` | Контекстная капсула LIMITER V8 (handoff) |
 
 Методология отладки логики: см. `.cursor/rules/00_global_always.mdc`.
 

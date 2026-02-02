@@ -33,6 +33,12 @@
 - Временное логирование: `debug_step/debug_prev_day/debug_adaptive_days`, `debug_rl_*` и `debug_*_mi17` для диагностики RepairLine/квотирования; состояние линий пишется в `sim_repair_lines_v8` (включая `last_acn/last_day`), слоты и P2‑метрики — в `sim_quota_mgr_v8` (первые 6 слотов Mi‑17). P2/P3 commit при занятом слоте выбирает следующий доступный в пределах слотов.
 - V8 квоты используют локальные копии (rtc_quota_v8_base) и берут target по `current_day`.
 
+## Контекстные капсулы (handoff)
+- После приёмки оркестратора обновляется `docs/limiter_v8_capsule.md`.
+- Формат капсулы фиксирован; lint: `python code/analysis/context_capsule_builder.py --lint docs/limiter_v8_capsule.md`.
+- Капсула может быть загружена в локальный Neo4j KG как производный артефакт.
+- Локальный KG запускается через `make kg-up` (параметры подключения в `.env`: `KG_NEO4J_*`).
+
 ## Анализ всех RTC функций системы
 
 ### Полная таблица RTC функций

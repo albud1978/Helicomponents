@@ -15,7 +15,9 @@ def main() -> int:
     print("🚀 === PROGRAM AC PRECHECK RUNNER ===")
     try:
         # Подключение к ClickHouse
-        sys.path.append(str(Path(__file__).parent / 'utils'))
+        code_root = Path(__file__).resolve().parents[1]
+        sys.path.append(str(code_root / 'utils'))
+        sys.path.append(str(code_root))
         from config_loader import get_clickhouse_client
         client = get_clickhouse_client()
 
@@ -35,7 +37,6 @@ def main() -> int:
                 return 0
 
         # Импортируем функцию precheck
-        sys.path.append(str(Path(__file__).parent))
         from extract.program_ac_precheck_next_day import process_program_ac_precheck_d1
 
         # Загружаем данные heli_pandas в память
@@ -100,5 +101,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
