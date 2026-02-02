@@ -17,7 +17,9 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, Tuple
 
-sys.path.append(str(Path(__file__).parent / 'utils'))
+code_root = Path(__file__).resolve().parents[1]
+sys.path.append(str(code_root / 'utils'))
+sys.path.append(str(code_root))
 from config_loader import get_clickhouse_client  # type: ignore
 
 

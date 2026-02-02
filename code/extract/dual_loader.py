@@ -40,7 +40,7 @@ def get_md_partnos(client):
         
         if not table_exists:
             print("❌ Таблица md_components не найдена в ClickHouse!")
-        print("💡 Сначала запустите: python3 code/extract/md_components_loader.py")
+            print("💡 Сначала запустите: python3 code/extract/md_components_loader.py")
             sys.exit(1)
         
         # Получаем все партномера из таблицы
@@ -686,7 +686,9 @@ def main(version_date=None, version_id=None):
         # 1. Подключение к ClickHouse через безопасную систему
         print(f"🔗 [ЭТАП 1] Подключение к ClickHouse...")
         import sys
-        sys.path.append(str(Path(__file__).parent))
+        code_root = Path(__file__).resolve().parents[1]
+        sys.path.append(str(code_root))
+        sys.path.append(str(code_root / 'utils'))
         from utils.config_loader import get_clickhouse_client
         client = get_clickhouse_client()
         print(f"✅ [ЭТАП 1] Подключение установлено за {time.time() - start_time:.2f}с")
@@ -806,7 +808,7 @@ def main(version_date=None, version_id=None):
         # Добавляем поле aircraft_number через извлечение из location
         print(f"🚁 Добавление aircraft_number из поля location...")
         try:
-            from aircraft_number_processor import process_aircraft_numbers_in_memory
+            from extract.aircraft_number_processor import process_aircraft_numbers_in_memory
             pandas_df, aircraft_count, invalid_count = process_aircraft_numbers_in_memory(pandas_df)
             if invalid_count > 0:
                 print(f"⚠️ Найдено {invalid_count} значений неправильного формата")
@@ -829,29 +831,29 @@ def main(version_date=None, version_id=None):
             # ЭТАП 1: Обработка статусов капремонта (status_overhaul) + repair_days
             # Фильтрация по PLANER_PARTNOS (как в других процессорах, не по group_by)
             print(f"🔧 Этап 1: Статусы капремонта + repair_days...")
-            from overhaul_status_processor import process_status_field
+            from extract.overhaul_status_processor import process_status_field
             pandas_df = process_status_field(pandas_df, client)
             
             # ЭТАП 2: Обработка статусов эксплуатации (program_ac)
             print(f"🔧 Этап 2: Статусы эксплуатации...")
-            from program_ac_status_processor import process_program_ac_status_field
+            from extract.program_ac_status_processor import process_program_ac_status_field
             pandas_df = process_program_ac_status_field(pandas_df, client)
             # ЭТАП 2b: Precheck D1 для записей со статусом 2 (исключить овершут на первый день)
             print(f"🔧 Этап 2b: Пред‑проверка D1 (LL/OH/BR) для status_id=2...")
             try:
-                from program_ac_precheck_next_day import process_program_ac_precheck_d1
+                from extract.program_ac_precheck_next_day import process_program_ac_precheck_d1
                 pandas_df = process_program_ac_precheck_d1(pandas_df, client)
             except Exception as e:
                 print(f"⚠️ Ошибка precheck D1: {e}")
             
             # ЭТАП 3: Обработка статусов неактивности планеров (МИ-8Т, МИ-8П и т.д.)
             print(f"🔧 Этап 3: Статусы неактивности планеров...")
-            from inactive_planery_processor import process_inactive_planery_status
+            from extract.inactive_planery_processor import process_inactive_planery_status
             pandas_df = process_inactive_planery_status(pandas_df, client)
             
         except ImportError as e:
             print(f"⚠️ Модуль статусов не найден: {e}")
-            print(f"💡 Убедитесь что созданы: overhaul_status_processor.py, program_ac_status_processor.py, inactive_planery_processor.py")
+            print(f"💡 Убедитесь что созданы: extract/overhaul_status_processor.py, program_ac_status_processor.py, inactive_planery_processor.py")
         except Exception as e:
             print(f"❌ Ошибка обработки статусов: {e}")
         

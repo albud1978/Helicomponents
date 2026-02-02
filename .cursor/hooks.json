@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUseFailure": [
+      {
+        "command": "python3 .cursor/hooks/connection_fail_set.py",
+        "matcher": "Shell|MCP"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "python3 .cursor/hooks/connection_fail_block.py"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "python3 .cursor/hooks/connection_fail_clear.py"
+      }
+    ]
+  }
+}
+{
+  "version": 1,
+  "hooks": {
+    "postToolUseFailure": [
+      {
+        "command": "python3 .cursor/hooks/connection_fail_set.py",
+        "matcher": "Shell|MCP"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "python3 .cursor/hooks/connection_fail_block.py"
+      }
+    ]
+  }
+}

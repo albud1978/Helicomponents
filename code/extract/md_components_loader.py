@@ -517,7 +517,9 @@ def main(version_date=None, version_id=None):
     
     try:
         # 1. Подключение к ClickHouse (безопасная конфигурация)
-        sys.path.append(str(Path(__file__).parent))
+        code_root = Path(__file__).resolve().parents[1]
+        sys.path.append(str(code_root))
+        sys.path.append(str(code_root / 'utils'))
         from utils.config_loader import get_clickhouse_client
         client = get_clickhouse_client()
         

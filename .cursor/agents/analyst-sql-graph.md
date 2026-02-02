@@ -1,5 +1,6 @@
 ---
 name: analyst-sql-graph
+model: gpt-5.2-codex
 description: Аналитик по SQL и графам. Используй для SELECT‑запросов, графа знаний/изменений и Neo4j‑экспорта.
 ---
 
