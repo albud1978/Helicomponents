@@ -11,6 +11,7 @@
     { "id": "role_validator", "type": "Role", "name": "Validator" },
     { "id": "role_general_coder", "type": "Role", "name": "GeneralCoder" },
     { "id": "role_sql_graph", "type": "Role", "name": "SQLGraphAnalyst" },
+    { "id": "role_capsule_builder", "type": "Role", "name": "CapsuleBuilder" },
     { "id": "human_owner", "type": "Human", "name": "Alexey" },
 
     { "id": "agent_orchestrator", "type": "Agent", "name": "orchestrator" },
@@ -21,6 +22,7 @@
     { "id": "agent_validator_judge", "type": "Agent", "name": "validator-judge" },
     { "id": "agent_coder_general", "type": "Agent", "name": "coder-general" },
     { "id": "agent_analyst_sql_graph", "type": "Agent", "name": "analyst-sql-graph" },
+    { "id": "agent_capsule_builder", "type": "Agent", "name": "capsule-builder" },
 
     {
       "id": "rule_multiagent_workflow",
@@ -39,6 +41,12 @@
       "type": "Artifact",
       "name": "Agent system graph",
       "path": "config/agent_system/graph.json"
+    },
+    {
+      "id": "artifact_capsule_limiter_v8",
+      "type": "Artifact",
+      "name": "Context Capsule limiter_v8",
+      "path": "docs/limiter_v8_capsule.md"
     }
   ],
   "edges": [
@@ -47,6 +55,7 @@
     { "from": "agent_validator_judge", "to": "role_validator", "type": "implements" },
     { "from": "agent_coder_general", "to": "role_general_coder", "type": "implements" },
     { "from": "agent_analyst_sql_graph", "to": "role_sql_graph", "type": "implements" },
+    { "from": "agent_capsule_builder", "to": "role_capsule_builder", "type": "implements" },
 
     { "from": "role_orchestrator", "to": "human_owner", "type": "governed_by" },
     { "from": "rule_multiagent_workflow", "to": "role_orchestrator", "type": "defines" },
@@ -55,6 +64,7 @@
     { "from": "rule_multiagent_workflow", "to": "agent_validator_judge", "type": "applies_to" },
     { "from": "rule_multiagent_workflow", "to": "agent_coder_general", "type": "applies_to" },
     { "from": "rule_multiagent_workflow", "to": "agent_analyst_sql_graph", "type": "applies_to" },
+    { "from": "rule_multiagent_workflow", "to": "agent_capsule_builder", "type": "applies_to" },
 
     { "from": "artifact_graph_schema", "to": "artifact_graph_json", "type": "schema_for" }
   ]

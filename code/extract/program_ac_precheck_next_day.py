@@ -27,14 +27,18 @@ def _load_daily_map_for_d1(client) -> Dict[int, int]:
         "SELECT aircraft_number, daily_hours FROM flight_program_fl WHERE dates = %(d)s",
         {"d": d1},
     )
-    return {int(ac): int(h or 0) for ac, h in rows}
+    return {int(ac): int(h or 0) for ac, h in rows if ac is not None}
 
 
 def _load_br_map(client) -> Dict[int, tuple]:
     rows = client.execute(
         "SELECT partno_comp, br_mi8, br_mi17 FROM md_components"
     )
-    return {int(p): (int(b8 or 0), int(b17 or 0)) for p, b8, b17 in rows}
+    return {
+        int(p): (int(b8 or 0), int(b17 or 0))
+        for p, b8, b17 in rows
+        if p is not None
+    }
 
 
 # Минимальный словарь масок по ac_typ (текст)

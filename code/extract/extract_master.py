@@ -27,8 +27,10 @@ from pathlib import Path
 from datetime import date, datetime
 from typing import List, Dict, Optional
 
-# Добавляем путь к утилитам (code/utils)
-sys.path.append(str(Path(__file__).resolve().parents[1] / 'utils'))
+# Добавляем пути для utils и общего кода (code/)
+code_root = Path(__file__).resolve().parents[1]
+sys.path.append(str(code_root / 'utils'))
+sys.path.append(str(code_root))
 from config_loader import get_clickhouse_client
 from etl_version_manager import ETLVersionManager
 from dataset_manager import DatasetManager, DatasetInfo
@@ -218,6 +220,13 @@ class ExtractMaster:
             'result_table': 'heli_pandas',
             'critical': False,
             'args': ['--apply']
+        },
+        {
+            'script': 'program_ac_precheck_runner.py',
+            'description': 'Program AC Precheck D1 - корректировка status_id для D1',
+            'dependencies': ['heli_pandas', 'md_components', 'flight_program_fl'],
+            'result_table': 'heli_pandas',
+            'critical': False
         },
         {
             'script': 'heli_pandas_component_status.py',
@@ -519,11 +528,12 @@ class ExtractMaster:
             # Добавляем путь к датасету для скриптов которые его поддерживают
             # md_components_loader НЕ использует датасет (мастер-данные универсальны)
             if self.dataset_path and script_name not in ['md_components_loader.py', 'calculate_beyond_repair.py', 
-                                                          'md_components_enricher.py', 'enrich_heli_pandas.py',
-                                                          'dictionary_creator.py', 'digital_values_dictionary_creator.py',
-                                                          'heli_pandas_group_by_enricher.py', 'heli_pandas_component_status.py',
-                                                          'heli_pandas_serviceable_status.py', 'heli_pandas_repair_status.py',
-                                                          'heli_pandas_storage_status.py', 'repair_days_calculator.py']:
+                                                         'md_components_enricher.py', 'enrich_heli_pandas.py',
+                                                         'dictionary_creator.py', 'digital_values_dictionary_creator.py',
+                                                         'heli_pandas_group_by_enricher.py', 'program_ac_precheck_runner.py',
+                                                         'heli_pandas_component_status.py', 'heli_pandas_serviceable_status.py',
+                                                         'heli_pandas_repair_status.py', 'heli_pandas_storage_status.py',
+                                                         'repair_days_calculator.py']:
                 cmd_with_params.extend(['--dataset-path', self.dataset_path])
             
             # Добавляем дополнительные аргументы шага
@@ -531,8 +541,7 @@ class ExtractMaster:
             
             # Поддержка импорта utils при запуске скрипта из code/extract
             env = os.environ.copy()
-            code_root = str(Path(__file__).resolve().parents[1])
-            env["PYTHONPATH"] = f"{code_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
+            env["PYTHONPATH"] = f"{str(code_root)}{os.pathsep}{env.get('PYTHONPATH', '')}"
 
             # Сначала пробуем с параметрами версионирования
             result = subprocess.run(
@@ -743,6 +752,8 @@ class ExtractMaster:
         all_ready = True
         total_records = 0
         
+        non_versioned_tables = {'md_components'}
+        
         for table in critical_tables:
             try:
                 exists = self.client.execute(f"EXISTS TABLE {table}")[0][0]
@@ -757,7 +768,12 @@ class ExtractMaster:
                         WHERE table = '{table}' AND name = 'version_id'
                     """)[0][0] > 0
                     
-                    if has_version_id:
+                    if table in non_versioned_tables:
+                        logger.info(f"✅ {table}: {count:,} записей (единый справочник)")
+                        
+                        if count == 0:
+                            all_ready = False
+                    elif has_version_id:
                         version_count = self.client.execute(
                             f"SELECT count() FROM {table} WHERE version_date = '{self.version_date}' AND version_id = {self.version_id}"
                         )[0][0]

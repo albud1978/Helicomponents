@@ -1,5 +1,72 @@
 # Changelog
 
+## [01-02-2026] - Local KG tooling
+
+### Изменения
+- В `.env` добавлены переменные `KG_NEO4J_*` для локального Neo4j KG.
+- Добавлен `Makefile` с командами `kg-up/kg-down/kg-logs/kg-status`.
+- В `README.md`, `docs/validation.md`, `docs/architecture/rtc_pipeline_architecture.md` добавлены ссылки на запуск локального KG.
+
+## [01-02-2026] - Backlog
+
+### Изменения
+- Добавлен `docs/backlog.md` для фиксации будущих идей.
+- Определён формат записи (включая поле «Фаза»), добавлена первая идея.
+
+## [01-02-2026] - Extract: D1 precheck step
+
+### Изменения
+- `program_ac_precheck_runner.py` перенесён в `code/extract/`.
+- Шаг D1 precheck добавлен в `extract_master.py` после `flight_program_fl` и `heli_pandas_group_by_enricher`.
+- В precheck D1 добавлена явная фильтрация `None` для ключей `aircraft_number` и `partno_comp`.
+
+## [01-02-2026] - Перенос overhaul_status_processor
+
+### Изменения
+- `overhaul_status_processor.py` перенесён в `code/extract/`, импорты обновлены.
+
+## [01-02-2026] - Архивирование legacy sim_master
+
+### Изменения
+- Legacy артефакты `sim_master` перенесены в `code/archive/sim_master_legacy/`.
+- Обновлена инвентаризация корня `code/` с новыми путями и пометкой архивирования.
+
+## [01-02-2026] - Handoff → Orchestrator
+
+### Изменения
+- Уточнено, что handoff subagents адресуется оркестратору, а оркестратор фиксирует краткие следы ревью/валидации в `docs/changelog.md`.
+- В профиле оркестратора уточнены разрешённые правки (правила/доки/конфиги) при запрете на `code/**` и `tools/**`.
+
+## [01-02-2026] - Validation run
+
+### Изменения
+- `validate_heli_pandas.py`: убран жёсткий путь к другому репозиторию, теперь берёт `code/` из текущего проекта.
+
+### Тесты
+- `python3 code/analysis/validate_heli_pandas.py --all`
+
+## [31-01-2026] - Extract pipeline fixes
+
+### Изменения
+- Обновлены пути импорта utils для extract‑скриптов после переноса в `code/extract/`.
+- Исправлена ошибка отступов в `dual_loader.py`, приводившая к падению пайплайна.
+- В финальной валидации `extract_master.py` `md_components` учитывается как единый справочник (без версионирования).
+
+### Тесты
+- `printf "1\n1\n" | python3 code/extract/extract_master.py --mode TEST`
+- `printf "2\n2\n" | python3 code/extract/extract_master.py --mode PROD`
+
+## [30-01-2026] - Context Capsule pipeline
+
+### Изменения
+- Добавлен subagent `capsule-builder` для формирования `docs/*_capsule.md` по шаблону.
+- В `90_multiagent_workflow` зафиксирован этап Capsule после приёмки оркестратором.
+- В графе агентов добавлен `capsule-builder` и артефакт капсулы.
+- Добавлен LangGraph‑сборщик `code/analysis/context_capsule_builder.py` с режимами build/lint/push-local.
+- Введены зависимости `langgraph` и `neo4j` для сборки и записи капсул в локальный Neo4j KG.
+- Создана капсула `docs/limiter_v8_capsule.md`.
+- Добавлен индекс `docs/validation.md` для ссылок на правила и lint капсул.
+
 ## [30-01-2026] - Архитектура и валидация
 
 ### Изменения
@@ -3413,7 +3480,7 @@ python3 code/sim_v2/orchestrator_v2.py \
 **Последнее обновление:** 04-09-2025
 ## [04-09-2025] - Разрыв цикла Extract: D1 precheck после FL и утилита очистки
 ### Добавлено
-- Новый микрошаг Extract: `code/program_ac_precheck_runner.py` — безопасный D1 precheck после формирования `flight_program_fl`; при отсутствии зависимостей шаг пропускается.
+- Новый микрошаг Extract: `code/extract/program_ac_precheck_runner.py` — безопасный D1 precheck после формирования `flight_program_fl`; при отсутствии зависимостей шаг пропускается.
 - Утилита целевой очистки Extract объектов: `code/utils/drop_extract_objects.py` — удаляет только таблицы/Dictionary текущего Extract.
 
 ### Изменено

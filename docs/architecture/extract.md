@@ -1151,6 +1151,8 @@ repair_days = repair_time - (sched_end_date - version_date)
 
 - Точечные `ALTER ... UPDATE` по `serialno` в `heli_pandas`.
 - Разрывает цикл ожидания FL на ранних этапах: precheck выполняется после формирования FL.
+ 
+**Путь:** `code/extract/program_ac_precheck_runner.py`
 
 ### СКРИПТ 12: `digital_values_dictionary_creator.py` (исправлено 28-07-2025)
 
