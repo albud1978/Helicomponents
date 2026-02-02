@@ -33,8 +33,10 @@ from typing import Dict, List, Tuple, Any, Optional
 import openpyxl
 import calendar
 
-# Добавляем путь к утилитам
-sys.path.append(str(Path(__file__).parent / 'utils'))
+# Добавляем пути к utils и общему коду
+code_root = Path(__file__).resolve().parents[1]
+sys.path.append(str(code_root / 'utils'))
+sys.path.append(str(code_root))
 from config_loader import get_clickhouse_client
 
 class ProgramHeliAnalyzer:

@@ -19,8 +19,10 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Any
 from datetime import datetime
 
-# Добавляем путь к утилитам
-sys.path.append(str(Path(__file__).parent / 'utils'))
+# Добавляем пути к utils и общему коду
+code_root = Path(__file__).resolve().parents[1]
+sys.path.append(str(code_root / 'utils'))
+sys.path.append(str(code_root))
 from config_loader import load_clickhouse_config
 import clickhouse_connect
 
@@ -603,7 +605,7 @@ class DictionaryCreator:
         
         try:
             # Импортируем словарь статусов из процессора
-            from overhaul_status_processor import load_dict_status_flat
+            from extract.overhaul_status_processor import load_dict_status_flat
             
             # Удаляем старые таблицы/словари если существуют
             try:

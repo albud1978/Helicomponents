@@ -6,7 +6,9 @@ import openpyxl
 import os
 
 # Безопасная конфигурация через utils.config_loader
-sys.path.append(str(Path(__file__).parent))
+code_root = Path(__file__).resolve().parents[1]
+sys.path.append(str(code_root))
+sys.path.append(str(code_root / 'utils'))
 from utils.config_loader import get_clickhouse_client
 
 # Функция extract_version_date_from_excel удалена - используется общая utils.version_utils.extract_unified_version_date()

@@ -20,8 +20,10 @@ Status 0: новый неучтённый случай
 import sys
 import time
 import argparse
+from pathlib import Path
 
-sys.path.insert(0, '/media/albud/8C327EB0327E9F40/Projects/Heli/Helicomponents/code')
+code_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(code_root))
 
 from utils.config_loader import get_clickhouse_client
 
