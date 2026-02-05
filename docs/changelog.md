@@ -1,5 +1,28 @@
 # Changelog
 
+## [03-02-2026] - Transitions rules sync
+
+### Изменения
+- Обновлены условия переходов ops→storage/unsvc и добавлены spawn-переходы в `config/transitions/transitions_rules.json`.
+- Пересобран `tools/transitions_viewer/index.html`.
+- В `docs/architecture/rtc_pipeline_architecture.md` удалены устаревшие V2/holding-разделы; в `docs/architecture/validation_rules.md` убран intent-based инвариант.
+- В `docs/architecture/limiter_architecture.md` зафиксирована зависимость слоя `v8_repair_line_slots` от порядка слоёв (после publish, до P2/P3).
+- В `rtc_state_transitions_v7.py` заменены литералы `64u` на `REPAIR_LINES_MAX` в `RTC_REPAIR_TO_SVC`.
+- В `config/transitions/quota_rules.json` уточнён `spawn_ticket`: используется MacroProperty, а не MessageBucket; viewer пересобран.
+- В `config/transitions/quota_rules.json` исправлено описание `MessageBucket`: QuotaBucket key=0 и реальные поля; spawn через MacroProperty, viewer пересобран.
+- Приведены в соответствие описания сообщений: QuotaBucket key=0, spawn через MacroProperty; обновлены `docs/architecture/limiter_architecture.md` и `docs/architecture/adaptive_steps_logic.md`, viewer пересобран.
+- В `quota_rules.json` расширено описание `Quota Flow` (expr‑логика шагов); viewer пересобран.
+- Порядок RTC сверен с кодом: обновлены `transitions_rules.json` и таблица в `docs/architecture/limiter_architecture.md` (message‑bucket квоты, update_day до квот, post‑quota counts); viewer пересобран.
+- Сверка с кодом: обновлены `quota_rules.json` (deficit по commit), `rtc_pipeline_architecture.md` и описание в changelog (post‑quota counts используются).
+- Обновлены V8 валидаторы: ops→storage/unsvc проверяются по текущим значениям, Δppr исключает commit_p2/commit_p3.
+
+### Ревью/Валидация
+- reviewer-flame: OK (логика переходов ops→storage/unsvc и BR==0).
+- reviewer-flame: OK (MacroProperty `repair_line_slots_*`; риски: порядок слоёв, несоответствие `REPAIR_LINES_MAX`).
+- reviewer-flame: OK (V7 `RTC_REPAIR_TO_SVC` — `REPAIR_LINES_MAX` вместо `64u`).
+- validator-judge: FAIL (`validate_state2ops_transitions.py`, `validate_state2ops_increments.py`).
+- validator-judge: OK (`validate_state2ops_transitions.py`, `validate_state2ops_increments.py`).
+
 ## [01-02-2026] - Local KG tooling
 
 ### Изменения
@@ -151,7 +174,7 @@
 - V8 adaptive: убран отдельный слой `v8_reset_min_dynamic`; сброс `min_dynamic` перенесён в `rtc_compute_global_min_v8` (GPU-only, минус один слой).
 - V8 лог шагов: фиксируется источник `min_dynamic` (limiter/repair_days) через `adaptive_result_mp[1]`.
 - V8 лог шагов: шаги по `deterministic_dates` помечаются как `deterministic_date:<day>` (repair_time/spawn).
-- V8 spawn: дефицит считается как `target − curr_ops − used(P1/P2/P3 commit)`; storage не участвует, post‑quota counts удалены.
+- V8 spawn: дефицит считается как `target − curr_ops − used(P1/P2/P3 commit)`; storage не участвует, post‑quota counts используются для актуального ops.
 - V8 debug: добавлены поля QM (ops/target/quota_left по типам) в `sim_quota_mgr_v8` для диагностики спавна.
 - V8 spawn: дефицит считается по `qm_ops_mp` и commit-флагам P1/P2/P3; `quota_left_mp` больше не используется для факта.
 - V8 debug: добавлены commit_p1/commit_p2/commit_p3 в MP2 для проверки факта переходов.

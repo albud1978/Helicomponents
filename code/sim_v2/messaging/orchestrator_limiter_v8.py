@@ -539,6 +539,9 @@ class LimiterV8Orchestrator:
         self.base_model.env.newMacroPropertyUInt("repair_line_rt_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_last_acn_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_last_day_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_slots_all", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_slots_days", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_slots_count_mp", 1)
         
         # Environment properties
         self.base_model.env.newPropertyUInt("end_day", self.end_day)

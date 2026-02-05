@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-01-30",
+    "updated_at": "2026-02-03",
     "description": "Project agent system graph (roles, agents, canonical rules)"
   },
   "nodes": [
@@ -47,7 +47,14 @@
       "type": "Artifact",
       "name": "Context Capsule limiter_v8",
       "path": "docs/limiter_v8_capsule.md"
-    }
+    },
+    { "id": "status_inactive", "type": "Artifact", "name": "Status: inactive", "tags": ["status", "heli"] },
+    { "id": "status_operations", "type": "Artifact", "name": "Status: operations", "tags": ["status", "heli"] },
+    { "id": "status_serviceable", "type": "Artifact", "name": "Status: serviceable", "tags": ["status", "heli"] },
+    { "id": "status_repair", "type": "Artifact", "name": "Status: repair", "tags": ["status", "heli"] },
+    { "id": "status_reserve", "type": "Artifact", "name": "Status: reserve", "tags": ["status", "heli"] },
+    { "id": "status_storage", "type": "Artifact", "name": "Status: storage", "tags": ["status", "heli"] },
+    { "id": "status_unserviceable", "type": "Artifact", "name": "Status: unserviceable", "tags": ["status", "heli"] }
   ],
   "edges": [
     { "from": "agent_coder_flame", "to": "role_coder", "type": "implements" },
@@ -66,6 +73,54 @@
     { "from": "rule_multiagent_workflow", "to": "agent_analyst_sql_graph", "type": "applies_to" },
     { "from": "rule_multiagent_workflow", "to": "agent_capsule_builder", "type": "applies_to" },
 
-    { "from": "artifact_graph_schema", "to": "artifact_graph_json", "type": "schema_for" }
+    { "from": "artifact_graph_schema", "to": "artifact_graph_json", "type": "schema_for" },
+    {
+      "from": "status_operations",
+      "to": "status_storage",
+      "type": "transition_if",
+      "notes": "V8 next-day: sne_next>=ll OR (ppr_next>=oh AND sne_next>=br)."
+    },
+    {
+      "from": "status_operations",
+      "to": "status_unserviceable",
+      "type": "transition_if",
+      "notes": "V8 next-day: ppr_next>=oh AND sne_next<br."
+    },
+    {
+      "from": "status_repair",
+      "to": "status_serviceable",
+      "type": "transition_if",
+      "notes": "exit_date>0 AND current_day>=exit_date (repair complete)."
+    },
+    {
+      "from": "status_reserve",
+      "to": "status_operations",
+      "type": "transition_if",
+      "notes": "exit_date>0 AND current_day>=exit_date (spawn)."
+    },
+    {
+      "from": "status_operations",
+      "to": "status_serviceable",
+      "type": "transition_if",
+      "notes": "needs_demote==1 (quota excess demote)."
+    },
+    {
+      "from": "status_serviceable",
+      "to": "status_operations",
+      "type": "transition_if",
+      "notes": "promoted==1 (P1 quota promote)."
+    },
+    {
+      "from": "status_unserviceable",
+      "to": "status_operations",
+      "type": "transition_if",
+      "notes": "promoted==1 (P2 quota promote; repair line available)."
+    },
+    {
+      "from": "status_inactive",
+      "to": "status_operations",
+      "type": "transition_if",
+      "notes": "promoted==1 (P3 quota promote)."
+    }
   ]
 }

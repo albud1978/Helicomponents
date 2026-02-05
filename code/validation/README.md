@@ -23,11 +23,11 @@ code/validation/
 
 **Статус:** Все проверки пройдены. Модуль работает корректно.
 
-### Метод 1: Проверка переходов intent_state
+### Метод 1: Проверка переходов intent_state / state (V8)
 
 **Скрипт:** `validate_state2ops_transitions.py`
 
-**Что проверяет:**
+**Что проверяет (V7 intent_state):**
 1. Количество агентов в operations на начало (день 0)
 2. Количество агентов с intent=2 на конец (день 3649)
 3. Количество реальных переходов 2→4 и 2→6
@@ -36,11 +36,20 @@ code/validation/
    - intent=4: `(ppr + dn) >= oh AND (sne + dn) < br`
    - intent=6: `(sne + dn) >= ll OR ((ppr + dn) >= oh AND (sne + dn) >= br)`
 
+**Режим V8 (state-based):**
+- Если таблица `sim_masterv2_v8` или нет `intent_state`, проверка ведётся по смене `state` через `lagInFrame`
+- Переходы считаются как ops→storage/unsvc при `prev_state='operations'`
+- Условия корректности:
+  - storage: `prev_sne+prev_dt_next>=prev_ll OR (prev_ppr+prev_dt_next>=prev_oh AND prev_sne+prev_dt_next>=prev_br)`
+  - unsvc: `prev_ppr+prev_dt_next>=prev_oh AND prev_sne+prev_dt_next<prev_br`
+- `prev_dt_next` берётся из `daily_next_u32`
+
 **Использование:**
 ```bash
 cd "/home/budnik_an/cube linux/cube"
-python3 code/validation/validate_state2ops_transitions.py
+python3 code/validation/validate_state2ops_transitions.py --table sim_masterv2_v8
 ```
+Параметр `--table` опционален (по умолчанию `sim_masterv2_v8`).
 
 **Фактический результат (3650 дней):**
 - Начало: 154 агента в operations ✅
@@ -63,16 +72,20 @@ python3 code/validation/validate_state2ops_transitions.py
 **Скрипт:** `validate_state2ops_increments.py`
 
 **Что проверяет:**
-1. `Δsne = Σdt` для 10 агентов Mi-8
-2. `Δppr = Σdt` для 10 агентов Mi-17
-3. Монотонность роста наработок (каждый день `sne` увеличивается на `dt`)
-4. Учитывает особенность дня 0: `Σdt - Δsne = dt(день 0)`
+1. Baseline (таблицы с `dt`): `Δsne = Σdt` и `Δppr = Σdt` по агентам
+2. V8 (без `dt`): построчная проверка по `lagInFrame`
+3. Для V8: `sne - prev_sne == daily_today_u32` и `ppr - prev_ppr == daily_today_u32`
+4. Порядок для V8: `debug_step` (если есть), иначе `day_u16`
+5. Учитывает особенность дня 0 в baseline режиме
 
 **Использование:**
 ```bash
 cd "/home/budnik_an/cube linux/cube"
-python3 code/validation/validate_state2ops_increments.py
+python3 code/validation/validate_state2ops_increments.py --table sim_masterv2_v8
 ```
+Параметры:
+- `--table` опционален (по умолчанию `sim_masterv2_v8`)
+- `--dt-column` опционален (по умолчанию `daily_today_u32` для V8, иначе `dt`)
 
 **Ожидаемый результат:**
 - Типичная разница: 103-153 минут (= dt дня 0)
@@ -90,10 +103,10 @@ python3 code/validation/validate_state2ops_increments.py
 cd "/home/budnik_an/cube linux/cube"
 
 # Метод 1: Переходы
-python3 code/validation/validate_state2ops_transitions.py
+python3 code/validation/validate_state2ops_transitions.py --table sim_masterv2_v8
 
 # Метод 2: Инкременты
-python3 code/validation/validate_state2ops_increments.py
+python3 code/validation/validate_state2ops_increments.py --table sim_masterv2_v8
 ```
 
 Оба скрипта должны завершиться с кодом 0 и сообщением "✅ ВАЛИДАЦИЯ УСПЕШНА".

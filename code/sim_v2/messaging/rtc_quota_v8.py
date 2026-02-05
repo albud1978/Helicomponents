@@ -727,12 +727,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
     }}
     
     // Доступные линии ремонта (слоты) по типу
-    auto slots_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("repair_line_slots_count_mp");
-    const unsigned int slots_count = (group_by == 1u) ? slots_count_mp[0] : slots_count_mp[1];
-    auto slots = (group_by == 1u) ?
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_mi8") :
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_mi17");
-    auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto slots_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("repair_line_slots_count_mp");
+    const unsigned int slots_count = slots_count_mp[0];
+    auto slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_all");
+    auto slots_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_days");
     
     unsigned int available_lines = slots_count;
     if (available_lines == 0u) {{
@@ -805,17 +803,28 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
     }}
     
     if (rank < needed) {{
-        const unsigned int line_id = slots[rank];
-        if (line_id != 0xFFFFFFFFu) {{
-            const unsigned int best_days = line_mp[line_id];
-            if (best_days >= repair_time) {{
-                FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
-                FLAMEGPU->setVariable<unsigned int>("repair_line_id", line_id);
-                FLAMEGPU->setVariable<unsigned int>("repair_line_day", best_days);
-                FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
-                FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", line_id);
-                FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", best_days);
+        unsigned int chosen_line = 0xFFFFFFFFu;
+        unsigned int chosen_days = 0u;
+        unsigned int valid_rank = 0u;
+        for (unsigned int s = 0u; s < slots_count; ++s) {{
+            const unsigned int line_id = slots[s];
+            if (line_id == 0xFFFFFFFFu) continue;
+            const unsigned int free_days = slots_days[s];
+            if (free_days < repair_time) continue;
+            if (valid_rank == rank) {{
+                chosen_line = line_id;
+                chosen_days = free_days;
+                break;
             }}
+            ++valid_rank;
+        }}
+        if (chosen_line != 0xFFFFFFFFu) {{
+            FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
+            FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
+            FLAMEGPU->setVariable<unsigned int>("repair_line_day", chosen_days);
+            FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
+            FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", chosen_line);
+            FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", chosen_days);
         }}
     }}
     
@@ -948,12 +957,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     }}
     
     // Доступные линии ремонта: free_days >= repair_time
-    auto slots_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("repair_line_slots_count_mp");
-    const unsigned int slots_count = (group_by == 1u) ? slots_count_mp[0] : slots_count_mp[1];
-    auto slots = (group_by == 1u) ?
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_mi8") :
-        FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_mi17");
-    auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto slots_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("repair_line_slots_count_mp");
+    const unsigned int slots_count = slots_count_mp[0];
+    auto slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_all");
+    auto slots_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_days");
     
     if (slots_count == 0u) {{
         return flamegpu::ALIVE;
@@ -1036,18 +1043,29 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     }}
     
     if (rank < needed) {{
-        const unsigned int slot_idx = p2_will_promote + rank;
-        const unsigned int line_id = slots[slot_idx];
-        if (line_id != 0xFFFFFFFFu) {{
-            const unsigned int best_days = line_mp[line_id];
-            if (best_days >= repair_time) {{
-                FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
-                FLAMEGPU->setVariable<unsigned int>("repair_line_id", line_id);
-                FLAMEGPU->setVariable<unsigned int>("repair_line_day", best_days);
-                FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
-                FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", line_id);
-                FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", best_days);
+        const unsigned int target_rank = p2_will_promote + rank;
+        unsigned int chosen_line = 0xFFFFFFFFu;
+        unsigned int chosen_days = 0u;
+        unsigned int valid_rank = 0u;
+        for (unsigned int s = 0u; s < slots_count; ++s) {{
+            const unsigned int line_id = slots[s];
+            if (line_id == 0xFFFFFFFFu) continue;
+            const unsigned int free_days = slots_days[s];
+            if (free_days < repair_time) continue;
+            if (valid_rank == target_rank) {{
+                chosen_line = line_id;
+                chosen_days = free_days;
+                break;
             }}
+            ++valid_rank;
+        }}
+        if (chosen_line != 0xFFFFFFFFu) {{
+            FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
+            FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
+            FLAMEGPU->setVariable<unsigned int>("repair_line_day", chosen_days);
+            FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
+            FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", chosen_line);
+            FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", chosen_days);
         }}
     }}
     
@@ -1189,8 +1207,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_debug_p2_v8, flamegpu::MessageNone, flamegpu::
     const unsigned int curr_after_p1 = ops_curr + p1_will_promote;
     const unsigned int deficit = (target > curr_after_p1) ? (target - curr_after_p1) : 0u;
     
-    auto slots_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("repair_line_slots_count_mp");
-    const unsigned int slots_count = (group_by == 1u) ? slots_count_mp[0] : slots_count_mp[1];
+    auto slots_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("repair_line_slots_count_mp");
+    const unsigned int slots_count = slots_count_mp[0];
     unsigned int needed = (deficit < unsvc_available) ? deficit : unsvc_available;
     if (slots_count < needed) needed = slots_count;
     
