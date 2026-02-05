@@ -211,7 +211,47 @@ CLICKHOUSE_PORT=9000
 CLICKHOUSE_PASSWORD=your_password
 WORK_MODE=dev
 LOG_LEVEL=INFO
+
+# Neo4j — см. секцию "Графы знаний"
+KG_NEO4J_URI=bolt://localhost:7687
+KG_NEO4J_USER=neo4j
+KG_NEO4J_PASSWORD=your_password
 ```
+
+### Графы знаний (Neo4j)
+
+Проект использует два раздельных графа:
+
+| Граф | Хранилище | Назначение |
+|------|-----------|------------|
+| **Agent KG** | Local Neo4j (localhost:7687) | Шина коммуникации агентов/оркестратора |
+| **Domain Graph** | Cloud Neo4j Aura | Визуализация доменной модели (производная от кода) |
+
+**Agent KG — шина агентов:**
+```bash
+make kg-up      # Запуск локального Neo4j
+make kg-down    # Остановка
+make kg-status  # Статус контейнера
+```
+
+**Команды workflow:**
+```bash
+# Инициализация workflow
+python3 code/analysis/context_capsule_builder.py --init-workflow --workflow-id "task-123" --goal "..."
+
+# Запись hand-off
+python3 code/analysis/context_capsule_builder.py --write-handoff --workflow-id "task-123" --agent "coder-flame" --goal "..." --changes "..."
+
+# Чтение состояния
+python3 code/analysis/context_capsule_builder.py --read-state --workflow-id "task-123"
+```
+
+**Проверка подключений:**
+```bash
+python3 code/utils/test_neo4j_connections.py
+```
+
+**SSoT для домена** — код и JSON в репозитории (`config/transitions/*.json`, `code/sim_v2/**`). Domain Graph — только визуализация.
 
 ### RTC кэширование (ускоряет повторные запуски симуляции)
 ```bash

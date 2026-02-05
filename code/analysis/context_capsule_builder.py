@@ -508,24 +508,287 @@ FOREACH (_ IN CASE WHEN ch IS NULL THEN [] ELSE [1] END |
     driver.close()
 
 
+# =============================================================================
+# Workflow State Management (Hybrid Orchestrator Dispatch + Graph Context)
+# =============================================================================
+
+
+def init_workflow(args: argparse.Namespace) -> None:
+    """Initialize a new workflow state in the knowledge graph."""
+    if not args.workflow_id:
+        raise ValueError("--workflow-id is required for init-workflow")
+    if not args.goal:
+        raise ValueError("--goal is required for init-workflow")
+
+    uri, user, password, db = _require_kg_env()
+    driver = GraphDatabase.driver(uri, auth=(user, password))
+
+    query = """
+MERGE (w:WorkflowState {workflow_id: $workflow_id})
+SET w.goal = $goal,
+    w.phase = $phase,
+    w.owner = $owner,
+    w.status = 'active',
+    w.created_at = datetime(),
+    w.updated_at = datetime()
+RETURN w.workflow_id as id
+"""
+    with driver.session(database=db) as session:
+        result = session.run(
+            query,
+            workflow_id=args.workflow_id,
+            goal=args.goal,
+            phase=args.phase or "analysis",
+            owner=args.owner or "orchestrator",
+        )
+        record = result.single()
+        if record:
+            print(f"Workflow initialized: {record['id']}")
+    driver.close()
+
+
+def write_handoff(args: argparse.Namespace) -> None:
+    """Write a handoff node to the knowledge graph."""
+    if not args.workflow_id:
+        raise ValueError("--workflow-id is required for write-handoff")
+    if not args.agent:
+        raise ValueError("--agent is required for write-handoff")
+    if not args.goal:
+        raise ValueError("--goal is required for write-handoff")
+
+    uri, user, password, db = _require_kg_env()
+    driver = GraphDatabase.driver(uri, auth=(user, password))
+
+    # Generate unique handoff ID
+    import uuid
+    handoff_id = f"handoff_{args.workflow_id}_{args.agent}_{uuid.uuid4().hex[:8]}"
+
+    query = """
+MATCH (w:WorkflowState {workflow_id: $workflow_id})
+CREATE (h:HandoffNode {
+    handoff_id: $handoff_id,
+    workflow_id: $workflow_id,
+    agent: $agent,
+    goal: $goal,
+    changes: $changes,
+    evidence: $evidence,
+    risks: $risks,
+    next_owner: $next_owner,
+    open_questions: $open_questions,
+    graph_update: $graph_update,
+    created_at: datetime()
+})
+CREATE (h)-[:BELONGS_TO]->(w)
+WITH w, h
+SET w.phase = $phase,
+    w.owner = $next_owner,
+    w.updated_at = datetime()
+RETURN h.handoff_id as id
+"""
+    with driver.session(database=db) as session:
+        result = session.run(
+            query,
+            handoff_id=handoff_id,
+            workflow_id=args.workflow_id,
+            agent=args.agent,
+            goal=args.goal,
+            changes=args.changes or "",
+            evidence=args.evidence or "не запускалось",
+            risks=args.risks or "нет",
+            next_owner=args.next_owner or "orchestrator",
+            open_questions=args.open_questions or "",
+            graph_update=args.graph_update or "нет",
+            phase=args.phase or "implementation",
+        )
+        record = result.single()
+        if record:
+            print(f"Handoff written: {record['id']}")
+    driver.close()
+
+
+def read_state(args: argparse.Namespace) -> None:
+    """Read current workflow state and recent handoffs from the knowledge graph."""
+    if not args.workflow_id:
+        raise ValueError("--workflow-id is required for read-state")
+
+    uri, user, password, db = _require_kg_env()
+    driver = GraphDatabase.driver(uri, auth=(user, password))
+
+    query = """
+MATCH (w:WorkflowState {workflow_id: $workflow_id})
+OPTIONAL MATCH (h:HandoffNode)-[:BELONGS_TO]->(w)
+WITH w, h ORDER BY h.created_at DESC
+WITH w, collect(h)[0..5] as recent_handoffs
+RETURN w.workflow_id as workflow_id,
+       w.goal as goal,
+       w.phase as phase,
+       w.owner as owner,
+       w.status as status,
+       w.created_at as created_at,
+       w.updated_at as updated_at,
+       [h IN recent_handoffs | {
+           handoff_id: h.handoff_id,
+           agent: h.agent,
+           goal: h.goal,
+           changes: h.changes,
+           evidence: h.evidence,
+           risks: h.risks,
+           next_owner: h.next_owner,
+           created_at: toString(h.created_at)
+       }] as handoffs
+"""
+    with driver.session(database=db) as session:
+        result = session.run(query, workflow_id=args.workflow_id)
+        record = result.single()
+        if not record:
+            print(f"Workflow not found: {args.workflow_id}")
+            return
+
+        print(f"=== Workflow State: {record['workflow_id']} ===")
+        print(f"Goal: {record['goal']}")
+        print(f"Phase: {record['phase']}")
+        print(f"Owner: {record['owner']}")
+        print(f"Status: {record['status']}")
+        print(f"Created: {record['created_at']}")
+        print(f"Updated: {record['updated_at']}")
+        print()
+
+        handoffs = record["handoffs"]
+        if handoffs:
+            print(f"=== Recent Handoffs ({len(handoffs)}) ===")
+            for h in handoffs:
+                print(f"\n--- {h['handoff_id']} ---")
+                print(f"Agent: {h['agent']}")
+                print(f"Goal: {h['goal']}")
+                print(f"Changes: {h['changes']}")
+                print(f"Evidence: {h['evidence']}")
+                print(f"Risks: {h['risks']}")
+                print(f"Next Owner: {h['next_owner']}")
+                print(f"Created: {h['created_at']}")
+        else:
+            print("No handoffs yet.")
+    driver.close()
+
+
+def write_context(args: argparse.Namespace) -> None:
+    """Write a context node for sharing between chats/agents."""
+    if not args.workflow_id:
+        raise ValueError("--workflow-id is required for write-context")
+    if not args.context_type:
+        raise ValueError("--context-type is required for write-context")
+    if not args.content:
+        raise ValueError("--content is required for write-context")
+
+    uri, user, password, db = _require_kg_env()
+    driver = GraphDatabase.driver(uri, auth=(user, password))
+
+    import uuid
+    context_id = f"ctx_{args.workflow_id}_{args.context_type}_{uuid.uuid4().hex[:8]}"
+
+    query = """
+MATCH (w:WorkflowState {workflow_id: $workflow_id})
+MERGE (c:ContextNode {workflow_id: $workflow_id, context_type: $context_type})
+SET c.context_id = $context_id,
+    c.content = $content,
+    c.agent = $agent,
+    c.updated_at = datetime()
+MERGE (c)-[:BELONGS_TO]->(w)
+RETURN c.context_id as id
+"""
+    with driver.session(database=db) as session:
+        result = session.run(
+            query,
+            context_id=context_id,
+            workflow_id=args.workflow_id,
+            context_type=args.context_type,
+            content=args.content,
+            agent=args.agent or "unknown",
+        )
+        record = result.single()
+        if record:
+            print(f"Context written: {record['id']}")
+    driver.close()
+
+
+def read_context(args: argparse.Namespace) -> None:
+    """Read context nodes for a workflow."""
+    if not args.workflow_id:
+        raise ValueError("--workflow-id is required for read-context")
+
+    uri, user, password, db = _require_kg_env()
+    driver = GraphDatabase.driver(uri, auth=(user, password))
+
+    query = """
+MATCH (c:ContextNode {workflow_id: $workflow_id})
+OPTIONAL MATCH (c)-[:BELONGS_TO]->(w:WorkflowState)
+RETURN c.context_id as context_id,
+       c.context_type as context_type,
+       c.content as content,
+       c.agent as agent,
+       c.updated_at as updated_at
+ORDER BY c.updated_at DESC
+"""
+    with driver.session(database=db) as session:
+        results = list(session.run(query, workflow_id=args.workflow_id))
+        if not results:
+            print(f"No context found for workflow: {args.workflow_id}")
+            return
+
+        print(f"=== Context Nodes for {args.workflow_id} ({len(results)}) ===")
+        for record in results:
+            print(f"\n--- {record['context_type']} ---")
+            print(f"ID: {record['context_id']}")
+            print(f"Agent: {record['agent']}")
+            print(f"Updated: {record['updated_at']}")
+            print(f"Content:\n{record['content'][:500]}...")
+    driver.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Context capsule builder")
+    parser = argparse.ArgumentParser(description="Context capsule builder and workflow state manager")
     mode = parser.add_mutually_exclusive_group(required=True)
+    # Capsule modes
     mode.add_argument("--build", action="store_true", help="Build context capsule")
     mode.add_argument("--lint", action="store_true", help="Lint context capsule")
     mode.add_argument("--push-local", action="store_true", help="Push capsule to local KG")
+    # Workflow state modes (Hybrid Orchestrator Dispatch + Graph Context)
+    mode.add_argument("--init-workflow", action="store_true", help="Initialize new workflow state")
+    mode.add_argument("--write-handoff", action="store_true", help="Write agent handoff to graph")
+    mode.add_argument("--read-state", action="store_true", help="Read current workflow state")
+    mode.add_argument("--write-context", action="store_true", help="Write context node for sharing")
+    mode.add_argument("--read-context", action="store_true", help="Read context nodes for workflow")
+
+    # Capsule arguments
     parser.add_argument("--topic", type=str, help="Capsule topic")
     parser.add_argument("--sha", type=str, help="Git commit sha")
     parser.add_argument("--branch", type=str, help="Git branch")
     parser.add_argument("--artifact", type=str, help="Artifact path")
     parser.add_argument("--k-hops", type=int, default=2, help="KG hops")
     parser.add_argument("--out", type=str, help="Output markdown path")
+
+    # Workflow state arguments
+    parser.add_argument("--workflow-id", type=str, help="Workflow identifier")
+    parser.add_argument("--goal", type=str, help="Workflow/handoff goal")
+    parser.add_argument("--phase", type=str, help="Current phase (analysis/research/implementation/review/validation/capsule)")
+    parser.add_argument("--owner", type=str, help="Current owner (agent name)")
+    parser.add_argument("--agent", type=str, help="Agent name for handoff")
+    parser.add_argument("--changes", type=str, help="Changes description for handoff")
+    parser.add_argument("--evidence", type=str, help="Evidence for handoff")
+    parser.add_argument("--risks", type=str, help="Risks for handoff")
+    parser.add_argument("--next-owner", type=str, help="Next owner for handoff")
+    parser.add_argument("--open-questions", type=str, help="Open questions for handoff")
+    parser.add_argument("--graph-update", type=str, help="Graph update required (да/нет)")
+    parser.add_argument("--context-type", type=str, help="Context type (research/specification/decision)")
+    parser.add_argument("--content", type=str, help="Content for context node")
+
     return parser
 
 
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+
+    # Capsule modes
     if args.build:
         if not args.out:
             raise ValueError("--out is required for build")
@@ -537,7 +800,25 @@ def main() -> None:
     if args.push_local:
         push_local(args)
         return
-    raise ValueError("Mode is required: --build, --lint, or --push-local")
+
+    # Workflow state modes
+    if args.init_workflow:
+        init_workflow(args)
+        return
+    if args.write_handoff:
+        write_handoff(args)
+        return
+    if args.read_state:
+        read_state(args)
+        return
+    if args.write_context:
+        write_context(args)
+        return
+    if args.read_context:
+        read_context(args)
+        return
+
+    raise ValueError("Mode is required")
 
 
 if __name__ == "__main__":
