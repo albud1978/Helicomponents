@@ -32,7 +32,10 @@
               "Decision",
               "ChangeSet",
               "Process",
-              "Policy"
+              "Policy",
+              "WorkflowState",
+              "HandoffNode",
+              "ContextNode"
             ]
           },
           "name": { "type": "string" },
@@ -43,7 +46,16 @@
           "tags": {
             "type": "array",
             "items": { "type": "string" }
-          }
+          },
+          "goal": { "type": "string", "description": "Goal for WorkflowState/HandoffNode" },
+          "phase": { "type": "string", "description": "Current phase for WorkflowState" },
+          "changes": { "type": "string", "description": "Changes description for HandoffNode" },
+          "evidence": { "type": "string", "description": "Evidence for HandoffNode" },
+          "risks": { "type": "string", "description": "Risks for HandoffNode" },
+          "next_owner": { "type": "string", "description": "Next owner for HandoffNode" },
+          "content": { "type": "string", "description": "Content for ContextNode" },
+          "created_at": { "type": "string", "description": "Creation timestamp" },
+          "workflow_id": { "type": "string", "description": "Reference to parent workflow" }
         },
         "additionalProperties": false
       }
