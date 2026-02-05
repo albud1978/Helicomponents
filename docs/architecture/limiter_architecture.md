@@ -44,6 +44,7 @@
 > 2. **Reset перед сбором** — `reset_exit_date` (→MAX) должен быть ДО `copy_exit_date` (atomicMin), иначе останутся данные предыдущего шага
 > 3. **Квотирование** — строгая последовательность: подсчёт → решения QM → применение к агентам
 > 4. **Adaptive steps** — источники `min_dynamic` и `deterministic_dates` должны быть готовы ДО вычисления `adaptive_days`
+> 5. **RepairLine slots** — `v8_repair_line_slots` обязан идти ПОСЛЕ `v8_repair_line_publish_status` и ДО P2/P3 (`v8_promote_*`), иначе слоты будут устаревшими
 
 > **Оптимизации:**
 > - Функции `_stay` удалены — FLAME GPU автоматически оставляет агентов в состоянии
@@ -70,43 +71,53 @@
 | 11 | v8_ops_to_storage | `rtc_ops_to_storage_v8` | 2→6 | Списание по LL/BR |
 | 12 | v8_ops_to_unsvc | `rtc_ops_to_unsvc_v8` | 2→7 | Уход в unserviceable по OH (limiter=0 → выход) |
 | **ФАЗА 1.25: V8 pre‑quota adaptive (min_dynamic)** |||||
-|  |  |  |  | `min_dynamic` кодируется с источником (limiter/repair_days) для явной причины шага |
 | 13 | v8_init | `HF_InitV8` | Host | Подготовка `deterministic_dates` и синхронизация состояния |
 | 14 | v8_collect_min_ops | `rtc_collect_min_dynamic_ops_v8` | 2 | Сбор минимального лимитера по ops |
 | 15 | v8_collect_min_repair | `rtc_collect_min_dynamic_repair_v8` | 4 | Сбор минимальных `repair_days` для day0‑ремонта |
 | 16 | v8_compute_global_min | `rtc_compute_global_min_v8` | QM | Вычисление `adaptive_days` и сброс `min_dynamic` |
+| **ФАЗА 1.3: Update day (вариант B)** |||||
+| 17 | v8_update_day | `HF_UpdateDayV8` | Host | Update day ДО квотирования |
 | **ФАЗА 1.5: RepairLine (pre‑quota)** |||||
-| 17 | v8_repair_line_sync_pre | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линии из MacroProperty |
-| 18 | v8_repair_line_increment | `rtc_repair_line_increment_v8` | RepairLine | Наращивание `free_days` на шаг |
-| 19 | v8_repair_line_write | `rtc_repair_line_write_v8` | RepairLine | Запись состояния линий в MacroProperty |
-| 20 | v8_repair_line_publish_status | `rtc_repair_line_publish_status_v8` | RepairLine | Сообщение линий в QM (готовность/занятость) |
-| **ФАЗА 2: Квотирование** |||||
-| 21 | v8_reset_flags | `rtc_reset_flags_v7` | all | Сброс флагов промоута/демоута |
-| 22 | v8_reset_buffers | `rtc_reset_buffers_v7` | all | Сброс буферов подсчёта |
-| 23 | v8_count_agents | `rtc_count_*` | all | Подсчёт по состояниям + готовность unsvc/inactive |
-| 24 | v8_repair_line_slots | `rtc_repair_line_slots_v8` | QM | Сбор доступных RepairLine‑слотов |
-| 25 | v8_debug_p2 | `rtc_quota_debug_p2_v8` | QM | Debug‑метрики P2 (ops/target/deficit/needed/slots) |
-| 26 | v8_demote | `rtc_demote_ops_v7` | QM | Решение демоута ops→svc |
-| 27 | v8_promote_svc | `rtc_promote_svc_v7` | QM | Решение P1: svc→ops |
-| 28 | v8_promote_unsvc_decide | `rtc_promote_unsvc_v8` | QM | Решение P2: отбор unsvc по RepairLine (без повторного `repair_line_id`) |
-| 29 | v8_promote_unsvc_commit | `rtc_promote_unsvc_commit_v8` | QM | Бронирование линии и фиксация P2 (fallback на следующий слот) |
-| 30 | v8_promote_inactive_decide | `rtc_promote_inactive_v8` | QM | Решение P3: отбор inactive по условиям RepairLine |
-| 31 | v8_promote_inactive_commit | `rtc_promote_inactive_commit_v8` | QM | Бронирование линии и фиксация P3 (fallback на следующий слот) |
+| 18 | v8_repair_line_sync_pre | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линии из MacroProperty |
+| 19 | v8_repair_line_increment | `rtc_repair_line_increment_v8` | RepairLine | Наращивание `free_days` на шаг |
+| 20 | v8_repair_line_write | `rtc_repair_line_write_v8` | RepairLine | Запись состояния линий в MacroProperty |
+| 21 | v8_repair_line_publish_status | `rtc_repair_line_publish_status_v8` | RepairLine | Сообщение линий в QM (RepairLineStatus) |
+| **ФАЗА 2: Квотирование (MessageBucket)** |||||
+| 22 | v8_reset_flags | `rtc_reset_flags_v8_*` | all | Сброс флагов промоута/демоута |
+| 23 | v8_reset_buffers | `rtc_reset_quota_v8_*` | all | Сброс буферов подсчёта |
+| 24 | v8_count_ops | `rtc_count_ops_v8` | 2 | Подсчёт ops |
+| 25 | v8_count_svc | `rtc_count_svc_v8` | 3 | Подсчёт serviceable |
+| 26 | v8_count_unsvc | `rtc_count_unsvc_v8` | 7 | Подсчёт unserviceable (readiness по `repair_days`) |
+| 27 | v8_count_inactive | `rtc_count_inactive_v8` | 1 | Подсчёт inactive |
+| 28 | v8_quota_manager_bucket | `rtc_quota_manager_v8_bucket` | QM | QuotaManager → QuotaBucket (key=0) |
+| 29 | v8_demote | `rtc_demote_ops_v8` | 2 | Решение демоута ops→svc |
+| 30 | v8_promote_svc_bucket | `rtc_promote_svc_bucket_v8` | 3 | P1 решение по rank (MessageBucket) |
+| 31 | v8_promote_unsvc_bucket | `rtc_promote_unsvc_bucket_v8` | 7 | P2 решение по rank (MessageBucket) |
+| 32 | v8_promote_inactive_bucket | `rtc_promote_inactive_bucket_v8` | 1 | P3 решение по rank (MessageBucket) |
+| 33 | v8_promote_unsvc_commit | `rtc_promote_unsvc_commit_v8` | 7 | Commit P2: бронирование RepairLine |
+| 34 | v8_promote_inactive_commit | `rtc_promote_inactive_commit_v8` | 1 | Commit P3: бронирование RepairLine |
 | **ФАЗА 3: Применение квот** |||||
-| 32 | v7_ops_demote | `rtc_ops_demote_v7` | 2→3 | Применение демоута |
-| 33 | v7_svc_to_ops | `rtc_svc_to_ops_v7` | 3→2 | Применение P1 |
-| 34 | v7_unsvc_to_ops | `rtc_unsvc_to_ops_v7` | 7→2 | Применение P2, обнуление PPR |
-| 35 | v7_inactive_to_ops | `rtc_inactive_to_ops_v7` | 1→2 | Применение P3 |
+| 35 | v7_ops_demote | `rtc_ops_demote_v7` | 2→3 | Применение демоута |
+| 36 | v7_svc_to_ops | `rtc_svc_to_ops_v7` | 3→2 | Применение P1 |
+| 37 | v7_unsvc_to_ops | `rtc_unsvc_to_ops_v7` | 7→2 | Применение P2, обнуление PPR |
+| 38 | v7_inactive_to_ops | `rtc_inactive_to_ops_v7` | 1→2 | Применение P3 |
 | **ФАЗА 3.5: RepairLine (post‑quota)** |||||
-| 36 | v8_repair_line_sync_post | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линий после квот |
+| 39 | v8_repair_line_sync_post | `rtc_repair_line_sync_post_v8` | RepairLine | Синхронизация линий после квот |
+| **ФАЗА 3.7: Post‑quota пересчёт** |||||
+| 40 | v8_reset_buffers_post_quota | `rtc_reset_quota_v8_post_*` | all | Сброс буферов после пост‑квотных переходов |
+| 41 | v8_count_agents_post_quota | `rtc_count_*_v8_post` | all | Подсчёт ops/svc/unsvc/inactive после квот |
+| 42 | v8_promote_inactive_post | `rtc_promote_inactive_post_v8` | 1 | Доп. добор из inactive после пост‑квотных переходов |
+| 43 | v8_inactive_to_ops_post | `rtc_inactive_to_ops_post_v8` | 1→2 | Применение post‑добора inactive |
+| **ФАЗА 3.8: Spawn counts** |||||
+| 44 | v8_reset_buffers_spawn | `rtc_reset_quota_v8_spawn_*` | all | Сброс буферов перед spawn |
+| 45 | v8_count_agents_spawn | `rtc_count_*_v8_spawn` | all | Подсчёт ops/svc/unsvc/inactive перед spawn |
 | **ФАЗА 4: Динамический спавн** |||||
-| 37 | v8_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr_v8` | SpawnMgr | Дефицит = target − curr_ops − used (P1/P2/P3 approve) |
-| 38 | v8_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket_v7` | Ticket→ops | Создание новых агентов |
-| **ФАЗА 5: Limiter (min_limiter)** |||||
-| 39 | L_limiter_entry | `rtc_compute_limiter_on_entry` | 2→2 | Пересчёт limiter при входе/нулевом значении |
-| 40 | L_limiter_min | `rtc_compute_min_limiter` | 2→2 | Сбор минимального limiter по ops |
-| **ФАЗА 6: Update day** |||||
-| 41 | v8_update_day | `HF_UpdateDayV8` | Host | Обновление `current_day` по `adaptive_days` |
+| 46 | v8_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr_v8` | SpawnMgr | Дефицит = target − curr_ops − used (P1/P2/P3 commit) |
+| 47 | v8_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket_v8` | Ticket→ops | Создание новых агентов (Mi‑17) |
+| 48 | v8_spawn_dynamic_ticket_mi8 | `rtc_spawn_dynamic_ticket_v8_mi8` | Ticket→ops | Создание новых агентов (Mi‑8) |
+| **ФАЗА 5: Limiter (бинарный поиск)** |||||
+| 49 | L_limiter_entry | `rtc_compute_limiter_on_entry` | 2→2 | Пересчёт limiter при входе/нулевом значении |
+| 50 | L_limiter_min | `rtc_compute_min_limiter` | 2→2 | Сбор минимального limiter по ops |
 
 ---
 
@@ -194,6 +205,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v7, ...) {
 - Spawn‑индексы выдаёт **один SpawnMgr** (плотный выделенный диапазон).
 - Ранний выход: **если 0 агентов/сообщений или квота=0**, модуль сразу завершает работу.
 - Выбор RepairLine: **минимальный free_days при условии free_days ≥ repair_time** (анти‑фрагментация).
+- Используется **только message‑only квотирование** (`register_quota_v8_messages`). Альтернативные agent‑based P2/P3 (`rtc_promote_unsvc_v8`/`rtc_promote_inactive_v8` из legacy‑ветки) **не применять**.
 
 ### Каскад квот (единый модуль, несколько слоёв)
 1) **Reset/Prepare** — сброс флагов у агентов.  
@@ -386,16 +398,16 @@ RepairLine (для каждой линии):
 
 ### Мотивация (из V7)
 
-V7 использует большие MacroProperty буферы `promote[MAX_AGENTS]` для передачи решений QM → агенты. V8 заменяет их на адресные сообщения `MessageBucket`.
+V7 использует большие MacroProperty буферы `promote[MAX_AGENTS]` для передачи решений QM → агенты. V8 заменяет их на один broadcast MessageBucket (`QuotaBucket`, key=0). Динамический spawn остаётся на MacroProperty (`spawn_dynamic_*`).
 
 ### Типы сообщений FLAME GPU
 
 | Тип | Сложность | Применение | Использование в V8 |
 |-----|-----------|------------|-------------------|
 | **MessageNone** | O(1) | Без коммуникации | Текущий подход |
-| **MessageBruteForce** | O(N²) | Все → Все | ❌ Запрещён |
-| **MessageBucket** | O(N/K) | По ключу | ✅ Квотирование |
-| **MessageArray** | O(1) | По индексу | Возможно для spawn |
+| **MessageBruteForce** | O(N²) | Все → Все | ⚠️ PlanerReport (legacy, дорогой) |
+| **MessageBucket** | O(N/K) | По ключу | ✅ QuotaBucket (key=0) |
+| **MessageArray** | O(1) | По индексу | ✅ RepairLineStatus; QuotaDecisionArray (legacy) |
 | **MessageSpatial** | O(K) | По радиусу | Не применимо |
 
 ### Архитектура V8
@@ -411,24 +423,21 @@ V7 использует большие MacroProperty буферы `promote[MAX_A
 │  │ collect_idx   → запись idx в очереди для вычисления threshold     │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
-│  Слой 2: РЕШЕНИЯ QM → MessageBucket                                     │
+│  Слой 2: РЕШЕНИЯ QM → MessageBucket (QuotaBucket)                       │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │ QM_mi8  → MessageBucket[key=1] = {quotas, thresholds}              │ │
-│  │ QM_mi17 → MessageBucket[key=2] = {quotas, thresholds}              │ │
+│  │ QM → MessageBucket[key=0] = {promote_p1/p2/p3, deficit}            │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 │  Слой 3: ПРИМЕНЕНИЕ (агенты читают сообщения)                           │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │ Агенты читают MessageBucket[свой group_by]                         │ │
-│  │ Берут threshold по своему state                                    │ │
-│  │ if (my_idx >= threshold) → promote                                 │ │
-│  │ if (my_idx < demote_threshold) → demote                            │ │
+│  │ Агенты читают MessageBucket[key=0]                                 │ │
+│  │ Берут свой promote_* по group_by и rank                            │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
-│  Слой 4: ДИНАМИЧЕСКИЙ SPAWN (отдельное сообщение)                       │
+│  Слой 4: ДИНАМИЧЕСКИЙ SPAWN (MacroProperty)                             │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │ SpawnMgr → MessageBucket[key=100+group] = {need, base_idx}         │ │
-│  │ SpawnTickets читают сообщение, создают агентов                     │ │
+│  │ SpawnMgr → MacroProperty spawn_dynamic_* (need/base_idx/base_acn)  │ │
+│  │ SpawnTickets читают MacroProperty, создают агентов                 │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -441,47 +450,47 @@ V7 использует большие MacroProperty буферы `promote[MAX_A
 ```cpp
 // Определение
 MessageBucket quota_msg;
-quota_msg.setBounds(1, 2);  // ключи 1=Mi-8, 2=Mi-17
-quota_msg.newVariable<int>("quota_s3");      // serviceable
-quota_msg.newVariable<int>("quota_s7");      // unserviceable
-quota_msg.newVariable<int>("quota_s5");      // inactive
-quota_msg.newVariable<uint>("threshold_s3"); // min idx для promote из s3
-quota_msg.newVariable<uint>("threshold_s7"); // min idx для promote из s7
-quota_msg.newVariable<uint>("threshold_s5"); // min idx для promote из s5
-quota_msg.newVariable<uint>("demote_threshold"); // max idx для demote
+quota_msg.setBounds(0, 1);  // один broadcast (key=0)
+quota_msg.newVariable<uint>("promote_p1_mi8");
+quota_msg.newVariable<uint>("promote_p1_mi17");
+quota_msg.newVariable<uint>("promote_p2_mi8");
+quota_msg.newVariable<uint>("promote_p2_mi17");
+quota_msg.newVariable<uint>("promote_p3_mi8");
+quota_msg.newVariable<uint>("promote_p3_mi17");
+quota_msg.newVariable<uint>("deficit_mi8");
+quota_msg.newVariable<uint>("deficit_mi17");
 
 // QM отправляет
-FLAMEGPU->message_out.setKey(my_group_by);  // 1 или 2
-FLAMEGPU->message_out.setVariable<int>("quota_s3", quota_serviceable);
+FLAMEGPU->message_out.setKey(0);
+FLAMEGPU->message_out.setVariable<uint>("promote_p1_mi8", p1_8);
 // ...
 
 // Агент читает
-for (auto &msg : FLAMEGPU->message_in(my_group_by)) {
-    uint threshold = msg.getVariable<uint>("threshold_s3");
-    if (my_state == 3 && my_idx >= threshold) {
+for (auto &msg : FLAMEGPU->message_in(0)) {
+    uint promote = (group_by == 1u)
+        ? msg.getVariable<uint>("promote_p1_mi8")
+        : msg.getVariable<uint>("promote_p1_mi17");
+    if (rank < promote) {
         // Promote: serviceable → operations
     }
+    break;
 }
 ```
 
-#### 2. Динамический spawn (отдельное сообщение)
+#### 2. Динамический spawn (MacroProperty)
 
 ```cpp
-// Определение
-MessageBucket spawn_msg;
-spawn_msg.setBounds(101, 102);  // ключи 101=Mi-8 spawn, 102=Mi-17 spawn
-spawn_msg.newVariable<int>("need");       // сколько нужно создать
-spawn_msg.newVariable<uint>("base_idx");  // базовый idx для новых агентов
+// SpawnMgr пишет параметры по дню
+spawn_dynamic_need_*[day] = need;
+spawn_dynamic_base_idx_*[day] = next_idx;
+spawn_dynamic_base_acn_*[day] = next_acn;
 
-// SpawnMgr отправляет
-FLAMEGPU->message_out.setKey(100 + my_group_by);
-FLAMEGPU->message_out.setVariable<int>("need", deficit);
-// ...
-
-// SpawnTicket читает
-for (auto &msg : FLAMEGPU->message_in(100 + my_group_by)) {
-    int need = msg.getVariable<int>("need");
-    // Создаём агентов
+// SpawnTicket читает параметры
+need = spawn_dynamic_need_*[day];
+base_idx = spawn_dynamic_base_idx_*[day];
+base_acn = spawn_dynamic_base_acn_*[day];
+if (ticket < need) {
+    // Создаём агента
 }
 ```
 

@@ -10,6 +10,7 @@
 4. Учитывает инкремент дня 0
 """
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -18,32 +19,147 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.config_loader import get_clickhouse_client
 
 
+def split_table_name(table: str):
+    if "." in table:
+        db_name, table_name = table.split(".", 1)
+        return db_name, table_name
+    return None, table
+
+
+def has_column(client, table: str, column_name: str) -> bool:
+    db_name, table_name = split_table_name(table)
+    if db_name:
+        query = (
+            "SELECT count() FROM system.columns "
+            f"WHERE database = '{db_name}' AND table = '{table_name}' "
+            f"AND name = '{column_name}'"
+        )
+    else:
+        query = (
+            "SELECT count() FROM system.columns "
+            "WHERE database = currentDatabase() "
+            f"AND table = '{table_name}' AND name = '{column_name}'"
+        )
+    return client.execute(query)[0][0] > 0
+
+
 def main():
+    parser = argparse.ArgumentParser(
+        description="Валидация: state_2_operations (инкременты)"
+    )
+    parser.add_argument(
+        "--table",
+        default="sim_masterv2_v8",
+        help="Таблица ClickHouse (по умолчанию: sim_masterv2_v8)",
+    )
+    parser.add_argument(
+        "--dt-column",
+        default=None,
+        help="Колонка dt (по умолчанию: daily_today_u32 для sim_masterv2_v8, иначе dt)",
+    )
+    args = parser.parse_args()
+    table = args.table
     client = get_clickhouse_client()
+    has_dt = has_column(client, table, "dt")
+    has_debug_step = has_column(client, table, "debug_step")
+    dt_column = args.dt_column or ("dt" if has_dt else "daily_today_u32")
+
+    if not has_dt:
+        order_column = "debug_step" if has_debug_step else "day_u16"
+        debug_step_select = (
+            "debug_step" if has_debug_step else "CAST(NULL AS UInt32) AS debug_step"
+        )
+
+        print("=" * 80)
+        print("ВАЛИДАЦИЯ ЭТАП 1: state_2_operations")
+        print("Метод 2: Проверка инкрементов (построчно, V8)")
+        print(f"Колонка dt: {dt_column}")
+        print(f"Порядок lagInFrame: {order_column}")
+        print("Примечание: проверка Δppr исключает commit_p2/commit_p3")
+        print("=" * 80)
+
+        result = client.execute(f"""
+        WITH transitions AS (
+            SELECT 
+                idx,
+                group_by,
+                day_u16,
+                {debug_step_select},
+                state,
+                sne,
+                ppr,
+                commit_p2,
+                commit_p3,
+                {dt_column} AS dt_current,
+                lagInFrame(state) OVER (PARTITION BY idx ORDER BY {order_column}) AS prev_state,
+                lagInFrame(sne) OVER (PARTITION BY idx ORDER BY {order_column}) AS prev_sne,
+                lagInFrame(ppr) OVER (PARTITION BY idx ORDER BY {order_column}) AS prev_ppr
+            FROM {table}
+        )
+        SELECT 
+            group_by,
+            countIf(prev_state = 'operations' AND state = 'operations') AS rows_checked,
+            countIf(
+                prev_state = 'operations'
+                AND state = 'operations'
+                AND (sne - prev_sne) != dt_current
+            ) AS errors_sne,
+            countIf(
+                prev_state = 'operations'
+                AND state = 'operations'
+                AND commit_p2 = 0
+                AND commit_p3 = 0
+                AND (ppr - prev_ppr) != dt_current
+            ) AS errors_ppr
+        FROM transitions
+        GROUP BY group_by
+        ORDER BY group_by
+        """)
+
+        print(f"{'Type':>10} | {'Rows':>10} | {'Errors Δsne':>12} | {'Errors Δppr':>12}")
+        print("-" * 55)
+        total_errors = 0
+        for row in result:
+            group_by, rows_checked, errors_sne, errors_ppr = row
+            type_name = "Mi-8" if group_by == 1 else "Mi-17"
+            total_errors += errors_sne + errors_ppr
+            print(
+                f"{type_name:>10} | {rows_checked:>10} | {errors_sne:>12} | {errors_ppr:>12}"
+            )
+
+        print("\n" + "=" * 80)
+        if total_errors == 0:
+            print("✅ ВАЛИДАЦИЯ УСПЕШНА: Все инкременты корректны!")
+            print("=" * 80)
+            return 0
+        print(f"❌ ВАЛИДАЦИЯ ПРОВАЛЕНА: Обнаружено {total_errors} ошибок!")
+        print("=" * 80)
+        return 1
     
     print("=" * 80)
     print("ВАЛИДАЦИЯ ЭТАП 1: state_2_operations")
     print("Метод 2: Проверка инкрементов")
+    print(f"Колонка dt: {dt_column}")
     print("=" * 80)
     
     # 1. Проверка инкрементов для Mi-8
     print("\n1. ПРОВЕРКА ИНКРЕМЕНТОВ: Mi-8")
     print("-" * 80)
     
-    result = client.execute("""
+    result = client.execute(f"""
     WITH agent_stats AS (
         SELECT 
             idx,
             aircraft_number,
             MIN(sne) AS sne_start,
             MAX(sne) AS sne_end,
-            SUM(dt) AS total_dt,
+            SUM({dt_column}) AS total_dt,
             (MAX(sne) - MIN(sne)) AS delta_sne,
             MIN(ppr) AS ppr_start,
             MAX(ppr) AS ppr_end,
             (MAX(ppr) - MIN(ppr)) AS delta_ppr,
             COUNT(*) AS days_tracked
-        FROM sim_masterv2
+        FROM {table}
         WHERE state = 'operations' AND group_by = 1
         GROUP BY idx, aircraft_number
     )
@@ -82,20 +198,20 @@ def main():
     print("\n2. ПРОВЕРКА ИНКРЕМЕНТОВ: Mi-17")
     print("-" * 80)
     
-    result = client.execute("""
+    result = client.execute(f"""
     WITH agent_stats AS (
         SELECT 
             idx,
             aircraft_number,
             MIN(sne) AS sne_start,
             MAX(sne) AS sne_end,
-            SUM(dt) AS total_dt,
+            SUM({dt_column}) AS total_dt,
             (MAX(sne) - MIN(sne)) AS delta_sne,
             MIN(ppr) AS ppr_start,
             MAX(ppr) AS ppr_end,
             (MAX(ppr) - MIN(ppr)) AS delta_ppr,
             COUNT(*) AS days_tracked
-        FROM sim_masterv2
+        FROM {table}
         WHERE state = 'operations' AND group_by = 2
         GROUP BY idx, aircraft_number
     )
@@ -134,9 +250,9 @@ def main():
     print("\n3. ПРОВЕРКА МОНОТОННОСТИ (idx=0, первые 30 дней)")
     print("-" * 80)
     
-    result = client.execute("""
-    SELECT day_u16, sne, dt
-    FROM sim_masterv2
+    result = client.execute(f"""
+    SELECT day_u16, sne, {dt_column}
+    FROM {table}
     WHERE idx = 0 AND group_by = 2 AND state = 'operations'
     ORDER BY day_u16
     LIMIT 30
