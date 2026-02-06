@@ -141,8 +141,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_to_svc_v7, flamegpu::MessageNone, flamegpu::M
     if (candidate == 1u) {
         const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
         const unsigned int best_days = FLAMEGPU->getVariable<unsigned int>("repair_line_day");
-        auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, 64u>("repair_line_free_days_mp");
-        auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, 64u>("repair_line_acn_mp");
+        auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, __REPAIR_LINES_MAX__u>("repair_line_free_days_mp");
+        auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, __REPAIR_LINES_MAX__u>("repair_line_acn_mp");
         const unsigned int old_days = mp_days[line_id].exchange(0u);
         if (old_days == best_days) {
             const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -160,6 +160,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_to_svc_v7, flamegpu::MessageNone, flamegpu::M
     return flamegpu::ALIVE;
 }
 """
+RTC_REPAIR_TO_SVC = RTC_REPAIR_TO_SVC.replace("__REPAIR_LINES_MAX__", str(REPAIR_LINES_MAX))
 
 # УДАЛЕНО: RTC_REPAIR_STAY — избыточно, агенты остаются автоматически
 
