@@ -150,7 +150,7 @@ deterministic_dates = [0, 28, 89, 103, 120, 150, 181, ..., 3649, 3650]
   - Для rank < needed берёт line_id из списка слотов
 ```
 
-**⚠️ Сообщения — только адресные (MessageArray), без brute-force.**
+**⚠️ Сообщения в V8:** RepairLine → QM использует MessageArray; квоты P1/P2/P3 — MessageBucket (`QuotaBucket`, key=0); PlanerReport — MessageBruteForce (legacy, дорогой).
 
 ### 2.3. Инициализация (день 0)
 

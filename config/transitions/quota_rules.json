@@ -5,46 +5,55 @@
     {
       "id": "reset_flags",
       "owner_module": "rtc_reset_flags_v7",
+      "expr": "promoted=0; commit_p1/p2/p3=0; repair_candidate=0; repair_line_id=0xFFFFFFFF; transition_* = 0",
       "notes": "Сброс promote/demote флагов перед квотированием."
     },
     {
       "id": "reset_buffers",
       "owner_module": "rtc_reset_buffers_v7",
+      "expr": "mi*_ops/svc/unsvc/inactive_count[*]=0; ready_count[*]=0",
       "notes": "Сброс буферов подсчёта перед сбором."
     },
     {
       "id": "count_agents",
       "owner_module": "rtc_count_*",
+      "expr": "count by state/group_by; unsvc_ready: repair_days==0 && repair_line_id==0xFFFFFFFF",
       "notes": "Подсчёт по состояниям и готовность unsvc/inactive."
     },
     {
       "id": "repair_line_slots",
       "owner_module": "rtc_repair_line_slots_v8",
-      "notes": "Сбор доступных RepairLine слотов."
+      "expr": "slots = lines where aircraft_number==0 && free_days>=repair_time; sort by free_days; slots_count=...",
+      "notes": "Сбор доступных RepairLine слотов (используется в full‑варианте квот; в message‑only не вызывается)."
     },
     {
       "id": "demote_ops",
       "owner_module": "rtc_demote_ops_v7",
+      "expr": "needs_demote=1 if idx < demote_threshold",
       "notes": "Решение демоута ops → serviceable."
     },
     {
       "id": "promote_p1_serviceable",
       "owner_module": "rtc_promote_svc_v7",
+      "expr": "promoted=1 if rank < promote_p1_* (по group_by)",
       "notes": "P1: serviceable → operations (по типам)."
     },
     {
       "id": "promote_p2_unsvc",
       "owner_module": "rtc_promote_unsvc_v8",
-      "notes": "P2: unserviceable → operations (общий RepairLine пул)."
+      "expr": "repair_candidate=1 if rank < promote_p2_*; choose line by min free_days>=repair_time",
+      "notes": "P2: unserviceable → operations (общий RepairLine пул). Выбор линии: минимальный free_days при free_days >= repair_time; квотирование только message-only, agent-based не применять."
     },
     {
       "id": "promote_p3_inactive",
       "owner_module": "rtc_promote_inactive_v8",
-      "notes": "P3: inactive → operations (после P2)."
+      "expr": "repair_candidate=1 if rank < promote_p3_*; choose line by min free_days>=repair_time",
+      "notes": "P3: inactive → operations (после P2). Выбор линии: минимальный free_days при free_days >= repair_time; квотирование только message-only, agent-based не применять."
     },
     {
       "id": "spawn_p4_dynamic",
       "owner_module": "rtc_spawn_dynamic_mgr_v8",
+      "expr": "deficit = target - curr_ops - used(P1,P2,P3); write spawn_dynamic_*[day]",
       "notes": "P4: динамический spawn при оставшемся дефиците."
     }
   ],
@@ -82,6 +91,11 @@
       "notes": "Линия доступна, если свободна и накопила repair_time."
     },
     {
+      "id": "line_selection_min_free_days",
+      "expr": "choose min free_days where free_days >= repair_time (P2/P3)",
+      "notes": "Анти-фрагментация: выбирать линию с минимальным free_days при free_days >= repair_time; квотирование только message-only, agent-based не применять."
+    },
+    {
       "id": "assign_on_promote",
       "expr": "on promote: free_days = 0; aircraft_number = acn; repair_line_id = line_id",
       "notes": "Назначение RepairLine при P2/P3."
@@ -90,36 +104,29 @@
   "spawn_rules": [
     {
       "id": "deficit_formula",
-      "expr": "deficit = target_ops - curr_ops - used(P1,P2,P3)",
+      "expr": "deficit = target_ops - curr_ops - used(P1/P2/P3 commit)",
       "notes": "Дефицит считается после commit P1/P2/P3."
     },
     {
       "id": "spawn_ticket",
-      "expr": "SpawnMgr -> MessageBucket(key=100+group_by) with {need, base_idx}",
-      "notes": "Тикеты создают агентов сразу в operations."
+      "expr": "SpawnMgr -> MacroProperty (need/base_idx/base_acn по day); Ticket создаёт агента при ticket < need",
+      "notes": "V8 использует MacroProperty (не MessageBucket). Ticket-агенты читают параметры спавна и создают HELI в operations."
     }
   ],
   "message_bucket": {
     "quota_bucket": {
-      "keys": [1, 2],
+      "keys": [0],
       "payload": [
-        "quota_s3",
-        "quota_s7",
-        "quota_s5",
-        "threshold_s3",
-        "threshold_s7",
-        "threshold_s5",
-        "demote_threshold"
+        "promote_p1_mi8",
+        "promote_p1_mi17",
+        "promote_p2_mi8",
+        "promote_p2_mi17",
+        "promote_p3_mi8",
+        "promote_p3_mi17",
+        "deficit_mi8",
+        "deficit_mi17"
       ],
-      "notes": "QM отправляет broadcast по ключу group_by (Mi-8/Mi-17)."
-    },
-    "spawn_bucket": {
-      "keys": [101, 102],
-      "payload": [
-        "need",
-        "base_idx"
-      ],
-      "notes": "SpawnMgr отправляет дефицит и базовый idx."
+      "notes": "QM пишет один broadcast (key=0) с квотами для Mi-8/Mi-17; агент выбирает поле по group_by."
     }
   }
 }
