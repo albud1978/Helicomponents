@@ -1,5 +1,22 @@
 # Changelog
 
+## [06-02-2026] - Multiagent workflow update + universal template
+
+### Изменения
+- В `90_multiagent_workflow.mdc`:
+  - Добавлена секция «Observability и аудит» (логирование reasoning-шагов, трассировка решений, аудит действий, борьба с дрейфом контекста).
+  - Sequential Pipeline зафиксирован как **единственный допустимый паттерн**; Parallel Workers и Iterative Loop явно запрещены.
+  - Добавлен «Лимит итераций и эскалация»: максимум 3 итерации implement→review, при достижении — остановка и эскалация человеку с отчётом.
+  - `researcher` убран как отдельная роль; исследование кодовой базы — инструмент оркестратора (встроенный `explore` subagent).
+  - В Sequential Pipeline уточнён порядок: Анализ (orchestrator + explore) → Research/SQL (analyst-sql-graph) → Реализация → Ревью → Валидация → Capsule.
+- В `analyst-sql-graph.md`: модель выровнена на `gpt-5.2-codex-high` (как у всех остальных агентов).
+- Создан универсальный шаблон мультиагентной настройки `output/multiagent_template/` (10 файлов: README, 3 rules, 6 agents) с рекомендациями по внедрению на новых проектах.
+- Шаблон скопирован в `C:\Users\Budnik_AN\Nextcloud\Projects\multiagent_template\` для синхронизации.
+- `tools/` скопированы в `C:\Users\Budnik_AN\Nextcloud\Projects\tools\Helicomponents\`.
+
+### Ревью/Валидация
+- Изменения в правилах/конфигах — ревью не требуется (оркестратор, не код).
+
 ## [03-02-2026] - Transitions rules sync
 
 ### Изменения
