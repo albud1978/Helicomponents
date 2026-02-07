@@ -46,9 +46,6 @@ source .venv/bin/activate
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate cuda13
 
-# 1.1 Локальный Neo4j KG (опционально)
-make kg-up
-
 # 2. Загрузить переменные окружения
 source config/load_env.sh
 export CUBE_CONFIG_PATH="$PWD/config"
@@ -212,46 +209,47 @@ CLICKHOUSE_PASSWORD=your_password
 WORK_MODE=dev
 LOG_LEVEL=INFO
 
-# Neo4j — см. секцию "Графы знаний"
-KG_NEO4J_URI=bolt://localhost:7687
-KG_NEO4J_USER=neo4j
-KG_NEO4J_PASSWORD=your_password
+# Domain Graph (Neo4j Aura) — см. секцию "Графы"
+DOMAIN_NEO4J_URI=neo4j+s://...
+DOMAIN_NEO4J_USER=neo4j
+DOMAIN_NEO4J_PASSWORD=your_password
 ```
 
-### Графы знаний (Neo4j)
+### Графы
 
-Проект использует два раздельных графа:
+Проект использует два графа с разным хранилищем:
 
 | Граф | Хранилище | Назначение |
 |------|-----------|------------|
-| **Agent KG** | Local Neo4j (localhost:7687) | Шина коммуникации агентов/оркестратора |
-| **Domain Graph** | Cloud Neo4j Aura | Визуализация доменной модели (производная от кода) |
+| **Agent KG** | `config/agent_kg.json` | JSON-шина координации агентов (workflow, handoff, context) |
+| **Domain Graph** | Cloud Neo4j Aura | Визуализация доменной модели (производная от JSON SSoT) |
 
-**Agent KG — шина агентов:**
-```bash
-make kg-up      # Запуск локального Neo4j
-make kg-down    # Остановка
-make kg-status  # Статус контейнера
-```
-
-**Команды workflow:**
+**Agent KG — JSON-шина агентов:**
 ```bash
 # Инициализация workflow
-python3 code/analysis/context_capsule_builder.py --init-workflow --workflow-id "task-123" --goal "..."
+python3 code/utils/agent_kg.py --init-workflow --workflow-id "task-123" --goal "..."
 
 # Запись hand-off
-python3 code/analysis/context_capsule_builder.py --write-handoff --workflow-id "task-123" --agent "coder-flame" --goal "..." --changes "..."
+python3 code/utils/agent_kg.py --write-handoff --workflow-id "task-123" --agent "coder-flame" --goal "..." --changes "..."
 
 # Чтение состояния
-python3 code/analysis/context_capsule_builder.py --read-state --workflow-id "task-123"
+python3 code/utils/agent_kg.py --read-state --workflow-id "task-123"
+
+# Визуализация
+make agent-kg-viewer   # -> tools/agent_kg_viewer/index.html
 ```
 
-**Проверка подключений:**
+**Domain Graph — синхронизация в Aura:**
 ```bash
+make sync-domain-graph        # MERGE из JSON
+make sync-domain-graph-clear  # Очистить и перезаписать
+make sync-domain-graph-dry    # Показать Cypher без записи
+
+# Проверка подключения
 python3 code/utils/test_neo4j_connections.py
 ```
 
-**SSoT для домена** — код и JSON в репозитории (`config/transitions/*.json`, `code/sim_v2/**`). Domain Graph — только визуализация.
+**SSoT для домена** — JSON в репозитории (`config/transitions/*.json`) и код (`code/sim_v2/**`). Domain Graph в Aura — производная для визуализации.
 
 ### RTC кэширование (ускоряет повторные запуски симуляции)
 ```bash

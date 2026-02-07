@@ -12,7 +12,7 @@ description: Сборщик/редактор Context Capsule (docs/*_capsule.md)
 
 - `docs/capsules/**`
 - `docs/*_capsule.md`
-- Чтение: `docs/**`, `.cursor/skills/**`, `.cursor/rules/**`, `config/agent_system/graph.json`
+- Чтение: `docs/**`, `.cursor/skills/**`, `.cursor/rules/**`, `config/agent_kg.json`
 - Запрещено: `code/**`, `config/**` (кроме чтения), `tools/**`
 
 ## При выполнении задачи
