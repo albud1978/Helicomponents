@@ -4,7 +4,7 @@
 - `docs/architecture/validation_rules.md` — канон SQL‑first валидации и инвариантов.
 
 ## Контекстные капсулы
-- Линт капсулы: `python code/analysis/context_capsule_builder.py --lint docs/limiter_v8_capsule.md`
+- Формат капсулы проверяется вручную по шаблону секций (8 обязательных секций с лимитами).
 - Формат капсулы: `docs/limiter_v8_capsule.md` (строгий шаблон и лимиты секций).
 
 ## Графы знаний

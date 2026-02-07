@@ -51,7 +51,7 @@
 - Проверка отсутствия NVRTC warning'ов (log clean) — `docs/architecture/validation_rules.md`
 - Инварианты MP5: длина `(DAYS+1)*FRAMES`, индексация `row = day*FRAMES + idx` — `docs/architecture/validation_rules.md`
 - `mp5_lin` доступен только на чтение после инициализации — `docs/architecture/validation_rules.md`
-- Линт капсулы: `python code/analysis/context_capsule_builder.py --lint docs/limiter_v8_capsule.md` — формат и лимиты — `docs/validation.md`
+- Формат капсулы проверяется по шаблону (8 обязательных секций с лимитами) — `docs/validation.md`
 
 ## Risks (≤7) + Mitigations
 - Переполнение `MAX_DETERMINISTIC_DATES` → потеря событий → контролировать число дат и лимит — `docs/architecture/limiter_architecture.md`
@@ -71,7 +71,7 @@
 - `docs/architecture/limiter_architecture.md`
 - `docs/architecture/rtc_pipeline_architecture.md`
 - `docs/architecture/validation_rules.md`
-- `code/analysis/context_capsule_builder.py`
+- `code/utils/agent_kg.py`
 - `docs/validation.md`
 - `config/transitions/transitions_rules.json`
 - `config/transitions/quota_rules.json`
