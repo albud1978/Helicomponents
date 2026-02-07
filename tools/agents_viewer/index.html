@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agents Interaction Viewer</title>
+  <style>
+
+    :root { color-scheme: light dark; }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; max-width: 1400px; }
+    h1 { margin: 0 0 4px; }
+    h2 { margin: 20px 0 8px; border-bottom: 2px solid #2a5bd7; padding-bottom: 4px; }
+    h3 { margin: 12px 0 6px; }
+    .meta { color: #666; font-size: 12px; margin-bottom: 16px; }
+    .section { margin-bottom: 20px; }
+
+    /* Agent cards */
+    .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+    .agent-card { border: 1px solid #ccc; border-radius: 8px; padding: 12px; background: #fafafa; }
+    .agent-card.orchestrator { border-color: #2a5bd7; border-width: 2px; background: #f0f4ff; }
+    .agent-card.human { border-color: #d72a2a; border-width: 2px; background: #fff0f0; }
+    .agent-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .agent-desc { font-size: 12px; color: #555; margin-bottom: 8px; }
+    .agent-section { margin-bottom: 6px; }
+    .agent-section .label { font-size: 11px; color: #444; text-transform: uppercase; font-weight: 600; }
+    .agent-section ul { margin: 2px 0 0 16px; padding: 0; font-size: 12px; }
+    .agent-section li { margin-bottom: 2px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-right: 4px; color: white; }
+    .badge-role { background: #2a5bd7; }
+    .badge-zone { background: #27a844; }
+    .badge-restrict { background: #d72a2a; }
+    .badge-perm { background: #e89b0c; }
+
+    /* Pipeline */
+    .pipeline { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+    .pipeline-step { background: #2a5bd7; color: white; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+    .pipeline-arrow { font-size: 20px; color: #2a5bd7; }
+
+    /* Interaction matrix */
+    table.matrix { border-collapse: collapse; font-size: 12px; }
+    table.matrix th, table.matrix td { border: 1px solid #ccc; padding: 6px 8px; text-align: center; }
+    table.matrix th { background: #f3f3f3; font-size: 11px; }
+    table.matrix td.task { background: #e8f0fe; }
+    table.matrix td.handoff { background: #e6f4ea; }
+    table.matrix td.escalation { background: #fce8e6; }
+    table.matrix td.goal { background: #fff3e0; }
+    table.matrix td.empty { color: #ccc; }
+    .matrix-legend { display: flex; gap: 16px; margin: 8px 0; font-size: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .legend-box { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #ccc; }
+
+    /* Governance */
+    .gate-list { list-style: none; padding: 0; }
+    .gate-list li { padding: 4px 0; font-size: 13px; border-bottom: 1px solid #eee; }
+    .gate-list li:before { content: "\26A0"; margin-right: 6px; }
+
+    /* Handoff */
+    .handoff-table { border-collapse: collapse; font-size: 13px; width: 100%; }
+    .handoff-table th, .handoff-table td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+    .handoff-table th { background: #f3f3f3; width: 160px; }
+
+    /* Conflict priorities */
+    .priority-list { list-style: none; padding: 0; counter-reset: prio; }
+    .priority-list li { padding: 4px 0; font-size: 13px; border-bottom: 1px solid #eee; counter-increment: prio; }
+    .priority-list li:before { content: counter(prio) ". "; font-weight: 700; color: #2a5bd7; }
+    
+  </style>
+</head>
+<body>
+  <h1>Agents Interaction Viewer</h1>
+  <div class="meta">Generated from config/agent_system/graph.json and .cursor/agents/*.md at 2026-02-07 04:48:13 UTC</div>
+  <div class="meta">Run: python3 tools/agents_viewer/build_agents_viewer.py</div>
+  <div id="app"></div>
+  <script>
+    const DATA = {"agents": [{"file": "analyst-sql-graph.md", "name": "analyst-sql-graph", "model": "gpt-5.2-codex-high", "description": "Аналитик по SQL и графам + Researcher. Используй для SELECT‑запросов, графа знаний/изменений, Neo4j‑экспорта и сбора контекста перед реализацией.", "zones": ["SQL (ClickHouse) — только SELECT", "Граф знаний/изменений (JSON/Cypher)", "`config/agent_system/**`", "`config/transitions/graph/**`"], "restrictions": ["НЕ выполнять INSERT/UPDATE/DELETE в СУБД", "НЕ запускать симуляцию"], "permissions": []}, {"file": "capsule-builder.md", "name": "capsule-builder", "model": "gpt-5.2-codex-high", "description": "Сборщик/редактор Context Capsule (docs/*_capsule.md). Используй после приёмки оркестратором.", "zones": ["`docs/capsules/**`", "`docs/*_capsule.md`", "Чтение: `docs/**`, `.cursor/skills/**`, `.cursor/rules/**`, `config/agent_system/graph.json`", "Запрещено: `code/**`, `config/**` (кроме чтения), `tools/**`"], "restrictions": ["НЕ менять `code/**`, `config/**`, `tools/**`", "НЕ добавлять факты без источника", "НЕ использовать Float64 без согласования"], "permissions": []}, {"file": "coder-flame.md", "name": "coder-flame", "model": "gpt-5.2-codex-high", "description": "FLAME GPU/CUDA разработчик для RTC модулей и симуляции. Вызывай для написания кода в code/sim_v2/messaging/. Используй проактивно при задачах на реализацию CUDA/RTC кода.", "zones": ["`code/sim_v2/messaging/**` (LIMITER архитектура)", "`code/sim_v2/components/**`", "RTC модули (`rtc_*.py`)", "Вопросы ETL/Extract/СУБД — вне зоны (обрабатывает главный агент)", "Общий код вне GPU — зона `coder-general`"], "restrictions": ["Симуляцию (`orchestrator_limiter_v8.py`) запускать только по задаче оркестратора", "НЕ менять файлы вне своей зоны", "НЕ использовать Float64 без согласования"], "permissions": []}, {"file": "coder-general.md", "name": "coder-general", "model": "gpt-5.2-codex-high", "description": "Разработчик общего кода (не FLAME GPU). Используй для ETL/Extract/analysis/utils/config/docs.", "zones": ["`code/**` (кроме RTC/FLAME GPU модулей)", "`config/**`", "`docs/**`", "`tools/**`"], "restrictions": ["Симуляцию запускать только по задаче оркестратора", "НЕ использовать Float64 без согласования"], "permissions": []}, {"file": "orchestrator.md", "name": "orchestrator", "model": "gpt-5.2-codex-high", "description": "Главный агент‑оркестратор. Планирование, маршрутизация, governance. Кодинг запрещён.", "zones": ["Постановка задачи и планирование", "Декомпозиция и маршрутизация subagents", "Governance‑гейты и согласование с человеком", "Итоговый синтез результатов и handoff", "Приём handoff от subagents, решение о завершении", "Краткая фиксация следов работы reviewer/validator в `docs/changelog.md`", "**Анализ процесса**: выявление сбоев, неэффективностей и рисков в мультиагентном цикле"], "restrictions": ["НЕ писать код в `code/**`", "НЕ править `tools/**`", "НЕ запускать симуляции/прогоны/валидации/ETL **напрямую** (только делегировать через subagents)", "НЕ создавать отдельные ветки и PR"], "permissions": ["Правки правил (`.cursor/rules/**`) и профилей агентов (`.cursor/agents/**`)", "Правки конфигов (`config/**`) и графа знаний (`config/agent_system/**`)", "Правки документации (`docs/**`)"]}, {"file": "reviewer-flame.md", "name": "reviewer-flame", "model": "gpt-5.2-codex-high", "description": "Ревьюер FLAME GPU/CUDA кода. Вызывай для code review RTC модулей и симуляции. Используй проактивно после написания или изменения CUDA/RTC кода.", "zones": [], "restrictions": ["НЕ писать код (только указывать что исправить)", "НЕ менять файлы", "НЕ запускать симуляцию"], "permissions": []}, {"file": "validator-judge.md", "name": "validator-judge", "model": "gpt-5.2-codex-high", "description": "Валидатор результатов симуляции. SQL-first проверка инвариантов в ClickHouse. Используй проактивно после прогона симуляции для верификации результатов.", "zones": [], "restrictions": ["НЕ выполнять мутирующие запросы (INSERT, UPDATE, DELETE)", "НЕ игнорировать расхождения"], "permissions": []}], "graph": {"metadata": {"version": 1, "updated_at": "2026-02-03", "description": "Project agent system graph (roles, agents, canonical rules)"}, "nodes": [{"id": "role_orchestrator", "type": "Role", "name": "Orchestrator"}, {"id": "role_coder", "type": "Role", "name": "Coder"}, {"id": "role_reviewer", "type": "Role", "name": "Reviewer"}, {"id": "role_validator", "type": "Role", "name": "Validator"}, {"id": "role_general_coder", "type": "Role", "name": "GeneralCoder"}, {"id": "role_sql_graph", "type": "Role", "name": "SQLGraphAnalyst"}, {"id": "role_capsule_builder", "type": "Role", "name": "CapsuleBuilder"}, {"id": "human_owner", "type": "Human", "name": "Alexey"}, {"id": "agent_orchestrator", "type": "Agent", "name": "orchestrator"}, {"id": "agent_coder_flame", "type": "Agent", "name": "coder-flame"}, {"from": "agent_orchestrator", "to": "role_orchestrator", "type": "implements"}, {"from": "rule_multiagent_workflow", "to": "agent_orchestrator", "type": "applies_to"}, {"id": "agent_reviewer_flame", "type": "Agent", "name": "reviewer-flame"}, {"id": "agent_validator_judge", "type": "Agent", "name": "validator-judge"}, {"id": "agent_coder_general", "type": "Agent", "name": "coder-general"}, {"id": "agent_analyst_sql_graph", "type": "Agent", "name": "analyst-sql-graph"}, {"id": "agent_capsule_builder", "type": "Agent", "name": "capsule-builder"}, {"id": "rule_multiagent_workflow", "type": "Rule", "name": "Multiagent workflow", "path": ".cursor/rules/90_multiagent_workflow.mdc"}, {"id": "artifact_graph_schema", "type": "Artifact", "name": "Agent system graph schema", "path": "config/agent_system/graph.schema.json"}, {"id": "artifact_graph_json", "type": "Artifact", "name": "Agent system graph", "path": "config/agent_system/graph.json"}, {"id": "artifact_capsule_limiter_v8", "type": "Artifact", "name": "Context Capsule limiter_v8", "path": "docs/limiter_v8_capsule.md"}, {"id": "status_inactive", "type": "Artifact", "name": "Status: inactive", "tags": ["status", "heli"]}, {"id": "status_operations", "type": "Artifact", "name": "Status: operations", "tags": ["status", "heli"]}, {"id": "status_serviceable", "type": "Artifact", "name": "Status: serviceable", "tags": ["status", "heli"]}, {"id": "status_repair", "type": "Artifact", "name": "Status: repair", "tags": ["status", "heli"]}, {"id": "status_reserve", "type": "Artifact", "name": "Status: reserve", "tags": ["status", "heli"]}, {"id": "status_storage", "type": "Artifact", "name": "Status: storage", "tags": ["status", "heli"]}, {"id": "status_unserviceable", "type": "Artifact", "name": "Status: unserviceable", "tags": ["status", "heli"]}], "edges": [{"from": "agent_coder_flame", "to": "role_coder", "type": "implements"}, {"from": "agent_reviewer_flame", "to": "role_reviewer", "type": "implements"}, {"from": "agent_validator_judge", "to": "role_validator", "type": "implements"}, {"from": "agent_coder_general", "to": "role_general_coder", "type": "implements"}, {"from": "agent_analyst_sql_graph", "to": "role_sql_graph", "type": "implements"}, {"from": "agent_capsule_builder", "to": "role_capsule_builder", "type": "implements"}, {"from": "role_orchestrator", "to": "human_owner", "type": "governed_by"}, {"from": "rule_multiagent_workflow", "to": "role_orchestrator", "type": "defines"}, {"from": "rule_multiagent_workflow", "to": "agent_coder_flame", "type": "applies_to"}, {"from": "rule_multiagent_workflow", "to": "agent_reviewer_flame", "type": "applies_to"}, {"from": "rule_multiagent_workflow", "to": "agent_validator_judge", "type": "applies_to"}, {"from": "rule_multiagent_workflow", "to": "agent_coder_general", "type": "applies_to"}, {"from": "rule_multiagent_workflow", "to": "agent_analyst_sql_graph", "type": "applies_to"}, {"from": "rule_multiagent_workflow", "to": "agent_capsule_builder", "type": "applies_to"}, {"from": "artifact_graph_schema", "to": "artifact_graph_json", "type": "schema_for"}, {"from": "status_operations", "to": "status_storage", "type": "transition_if", "notes": "V8 next-day: sne_next>=ll OR (ppr_next>=oh AND sne_next>=br)."}, {"from": "status_operations", "to": "status_unserviceable", "type": "transition_if", "notes": "V8 next-day: ppr_next>=oh AND sne_next<br."}, {"from": "status_repair", "to": "status_serviceable", "type": "transition_if", "notes": "exit_date>0 AND current_day>=exit_date (repair complete)."}, {"from": "status_reserve", "to": "status_operations", "type": "transition_if", "notes": "exit_date>0 AND current_day>=exit_date (spawn)."}, {"from": "status_operations", "to": "status_serviceable", "type": "transition_if", "notes": "needs_demote==1 (quota excess demote)."}, {"from": "status_serviceable", "to": "status_operations", "type": "transition_if", "notes": "promoted==1 (P1 quota promote)."}, {"from": "status_unserviceable", "to": "status_operations", "type": "transition_if", "notes": "promoted==1 (P2 quota promote; repair line available)."}, {"from": "status_inactive", "to": "status_operations", "type": "transition_if", "notes": "promoted==1 (P3 quota promote)."}]}, "workflow": {"pipeline": ["**Анализ** — сбор фактов и контекста.", "**Предложение** — архитектурное решение и план.", "**Согласование** — явное подтверждение человеком.", "**Реализация** — изменения по согласованному плану.", "**Ревью** — проверка качества и рисков.", "**Валидация** — SQL‑first проверки (если применимо).", "**Capsule** — обновление контекстной капсулы (после приёмки оркестратора).", "**Handoff/Close** — отчёт и фиксация изменений."], "governance_gates": ["архитектура, алгоритмы, схемы данных;", "изменение жизненного цикла и инвариантов;", "удаление объектов проекта;", "новые публичные API."], "handoff_fields": [{"name": "Goal", "desc": "цель и ограничения"}, {"name": "Changes", "desc": "что сделано (файлы/модули/логика)"}, {"name": "Evidence", "desc": "тесты/SQL/проверки (или “не запускалось”)"}, {"name": "OpenQuestions", "desc": "что осталось неясным"}, {"name": "NextOwner", "desc": "кто следующий (роль)"}, {"name": "GraphUpdate", "desc": "требуется ли запись в граф (да/нет; что именно)"}, {"name": "Risks", "desc": "1–3 пункта"}, {"name": "ProcessInsights", "desc": "(только оркестратор): сбои, неэффективности, риски процесса, предложения по улучшению workflow (или `OK, замечаний нет`)"}], "sequential_order": "Анализ (orchestrator + explore) → Research/SQL (analyst-sql-graph) → Реализация (coder-flame / coder-general) → Ревью (reviewer-flame) → Валидация (validator-judge) → Capsule (capsule-builder)", "iteration_limit": 3, "conflict_priorities": []}, "interactions": [{"from": "orchestrator", "to": "coder-flame", "type": "task", "label": "Задача на реализацию (FLAME GPU/RTC)"}, {"from": "orchestrator", "to": "coder-general", "type": "task", "label": "Задача на реализацию (общий код/ETL)"}, {"from": "orchestrator", "to": "analyst-sql-graph", "type": "task", "label": "Сбор контекста, SQL-запросы, граф"}, {"from": "orchestrator", "to": "reviewer-flame", "type": "task", "label": "Запрос на code review"}, {"from": "orchestrator", "to": "validator-judge", "type": "task", "label": "Запрос на валидацию результатов"}, {"from": "orchestrator", "to": "capsule-builder", "type": "task", "label": "Обновление контекстной капсулы"}, {"from": "coder-flame", "to": "orchestrator", "type": "handoff", "label": "Handoff: результат реализации"}, {"from": "coder-general", "to": "orchestrator", "type": "handoff", "label": "Handoff: результат реализации"}, {"from": "analyst-sql-graph", "to": "orchestrator", "type": "handoff", "label": "Handoff: контекст и данные"}, {"from": "reviewer-flame", "to": "orchestrator", "type": "handoff", "label": "Handoff: вердикт ревью"}, {"from": "validator-judge", "to": "orchestrator", "type": "handoff", "label": "Handoff: PASS/FAIL"}, {"from": "capsule-builder", "to": "orchestrator", "type": "handoff", "label": "Handoff: капсула обновлена"}, {"from": "orchestrator", "to": "human", "type": "escalation", "label": "Эскалация / governance / финальный отчёт"}, {"from": "human", "to": "orchestrator", "type": "goal", "label": "Цель + ограничения"}]};
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text ?? '';
+      return div.innerHTML;
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      let h = '';
+
+      // --- Sequential Pipeline ---
+      h += '<h2>Sequential Pipeline</h2>';
+      const order = DATA.workflow.sequential_order || '';
+      if (order) {
+        const steps = order.split(/\s*→\s*/);
+        h += '<div class="pipeline">';
+        steps.forEach((s, i) => {
+          h += `<div class="pipeline-step">${escapeHtml(s)}</div>`;
+          if (i < steps.length - 1) h += '<div class="pipeline-arrow">→</div>';
+        });
+        h += '</div>';
+      }
+      if (DATA.workflow.iteration_limit) {
+        h += `<div style="font-size:13px;margin-top:6px;">Лимит итераций (implement→review): <b>${DATA.workflow.iteration_limit}</b> — затем эскалация человеку.</div>`;
+      }
+
+      // --- Agent Cards ---
+      h += '<h2>Агенты</h2>';
+      h += '<div class="agents-grid">';
+
+      // Human card
+      h += '<div class="agent-card human">';
+      h += '<div class="agent-name">Человек (Alexey)</div>';
+      h += '<div class="agent-desc">Утверждает архитектурные/алгоритмические решения и решения с высоким риском</div>';
+      h += '<div class="agent-section"><div class="label">Роль</div>';
+      h += '<span class="badge badge-role">Owner / Governance</span></div>';
+      h += '</div>';
+
+      DATA.agents.forEach(a => {
+        const isOrch = a.name === 'orchestrator';
+        h += `<div class="agent-card${isOrch ? ' orchestrator' : ''}">`;
+        h += `<div class="agent-name">${escapeHtml(a.name)}</div>`;
+        if (a.description) h += `<div class="agent-desc">${escapeHtml(a.description)}</div>`;
+        if (a.model) h += `<div style="font-size:11px;color:#888;">model: ${escapeHtml(a.model)}</div>`;
+
+        if (a.zones && a.zones.length) {
+          h += '<div class="agent-section"><div class="label">Зона</div><ul>';
+          a.zones.forEach(z => { h += `<li>${escapeHtml(z)}</li>`; });
+          h += '</ul></div>';
+        }
+        if (a.restrictions && a.restrictions.length) {
+          h += '<div class="agent-section"><div class="label">Запреты</div><ul>';
+          a.restrictions.forEach(r => { h += `<li style="color:#c62828;">${escapeHtml(r)}</li>`; });
+          h += '</ul></div>';
+        }
+        if (a.permissions && a.permissions.length) {
+          h += '<div class="agent-section"><div class="label">Разрешено</div><ul>';
+          a.permissions.forEach(p => { h += `<li style="color:#2e7d32;">${escapeHtml(p)}</li>`; });
+          h += '</ul></div>';
+        }
+        h += '</div>';
+      });
+      h += '</div>';
+
+      // --- Interaction Matrix ---
+      h += '<h2>Матрица взаимодействий</h2>';
+      h += '<div class="matrix-legend">';
+      h += '<div class="legend-item"><div class="legend-box" style="background:#e8f0fe;"></div> Задача (task)</div>';
+      h += '<div class="legend-item"><div class="legend-box" style="background:#e6f4ea;"></div> Handoff</div>';
+      h += '<div class="legend-item"><div class="legend-box" style="background:#fce8e6;"></div> Эскалация</div>';
+      h += '<div class="legend-item"><div class="legend-box" style="background:#fff3e0;"></div> Цель от человека</div>';
+      h += '</div>';
+
+      const participants = ['human', 'orchestrator'];
+      DATA.agents.forEach(a => { if (a.name !== 'orchestrator') participants.push(a.name); });
+      const labels = { human: 'Человек' };
+      DATA.agents.forEach(a => { labels[a.name] = a.name; });
+
+      h += '<table class="matrix"><tr><th></th>';
+      participants.forEach(p => { h += `<th>${escapeHtml(labels[p] || p)}</th>`; });
+      h += '</tr>';
+
+      participants.forEach(from => {
+        h += `<tr><th style="text-align:left;">${escapeHtml(labels[from] || from)}</th>`;
+        participants.forEach(to => {
+          const ints = DATA.interactions.filter(i => i.from === from && i.to === to);
+          if (ints.length === 0) {
+            h += '<td class="empty">—</td>';
+          } else {
+            const cls = ints[0].type;
+            const text = ints.map(i => escapeHtml(i.label)).join('<br/>');
+            h += `<td class="${cls}">${text}</td>`;
+          }
+        });
+        h += '</tr>';
+      });
+      h += '</table>';
+
+      // --- Handoff Template ---
+      h += '<h2>Handoff-шаблон</h2>';
+      if (DATA.workflow.handoff_fields && DATA.workflow.handoff_fields.length) {
+        h += '<table class="handoff-table"><tr><th>Поле</th><th>Описание</th></tr>';
+        DATA.workflow.handoff_fields.forEach(f => {
+          h += `<tr><td><b>${escapeHtml(f.name)}</b></td><td>${escapeHtml(f.desc)}</td></tr>`;
+        });
+        h += '</table>';
+      }
+
+      // --- Governance Gates ---
+      h += '<h2>Governance-гейты (требуют подтверждения человека)</h2>';
+      if (DATA.workflow.governance_gates && DATA.workflow.governance_gates.length) {
+        h += '<ul class="gate-list">';
+        DATA.workflow.governance_gates.forEach(g => { h += `<li>${escapeHtml(g)}</li>`; });
+        h += '</ul>';
+      }
+
+      // --- Conflict Resolution ---
+      h += '<h2>Приоритеты разрешения конфликтов</h2>';
+      if (DATA.workflow.conflict_priorities && DATA.workflow.conflict_priorities.length) {
+        h += '<ol class="priority-list">';
+        DATA.workflow.conflict_priorities.forEach(p => {
+          h += `<li>${escapeHtml(p)}</li>`;
+        });
+        h += '</ol>';
+      }
+
+      // --- Canonical Cycle ---
+      h += '<h2>Канонический цикл</h2>';
+      if (DATA.workflow.pipeline && DATA.workflow.pipeline.length) {
+        h += '<div class="pipeline">';
+        DATA.workflow.pipeline.forEach((s, i) => {
+          const parts = s.split(' — ');
+          const name = parts[0].replace(/\*\*/g, '');
+          h += `<div class="pipeline-step">${escapeHtml(name)}</div>`;
+          if (i < DATA.workflow.pipeline.length - 1) h += '<div class="pipeline-arrow">→</div>';
+        });
+        h += '</div>';
+        h += '<table class="handoff-table" style="margin-top:8px;"><tr><th>Этап</th><th>Описание</th></tr>';
+        DATA.workflow.pipeline.forEach(s => {
+          const parts = s.split(' — ');
+          const name = parts[0].replace(/\*\*/g, '');
+          const desc = parts.length > 1 ? parts[1] : '';
+          h += `<tr><td><b>${escapeHtml(name)}</b></td><td>${escapeHtml(desc)}</td></tr>`;
+        });
+        h += '</table>';
+      }
+
+      app.innerHTML = h;
+    }
+    render();
+    
+  </script>
+</body>
+</html>
