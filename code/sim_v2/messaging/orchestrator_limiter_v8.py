@@ -1320,6 +1320,7 @@ def main():
                 version_date UInt32,
                 version_id UInt8,
                 day_u16 UInt16,
+                day_date Date MATERIALIZED addDays(toDate('1970-01-01'), toUInt32(version_date) + toUInt32(day_u16)),
                 debug_step UInt32,
                 debug_prev_day UInt32,
                 debug_adaptive_days UInt32,
@@ -1383,6 +1384,7 @@ def main():
         client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS spawn_debug_curr_ops_mi8 UInt32")
         client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS spawn_debug_target_mi8 UInt32")
         client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS spawn_debug_need_mi8 UInt32")
+        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS day_date Date MATERIALIZED addDays(toDate('1970-01-01'), toUInt32(version_date) + toUInt32(day_u16))")
         client.execute("""
             CREATE TABLE IF NOT EXISTS sim_repair_lines_v8 (
                 version_date UInt32,
