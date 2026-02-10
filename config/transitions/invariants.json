@@ -1,0 +1,195 @@
+{
+  "version": 8,
+  "meta": {
+    "description": "Глобальные инварианты, temporal-контракты и GPU-ограничения модели V8",
+    "ssot": true,
+    "created": "2026-02-10",
+    "related": ["transitions_rules.json", "quota_rules.json"]
+  },
+
+  "forbidden_transitions": {
+    "description": "Все переходы, не перечисленные в transitions_rules.json → rules, ЗАПРЕЩЕНЫ",
+    "rule": "DENY_ALL_EXCEPT_LISTED",
+    "max_transitions_per_step": 1,
+    "notes": "Один агент делает максимум один переход за шаг (без каскадов)"
+  },
+
+  "global_invariants": [
+    {
+      "id": "INV-1",
+      "claim": "СНЭ не превышает life limit",
+      "expr": "forall agent where state == 2: sne <= ll",
+      "scope": "per_agent",
+      "severity": "CRITICAL",
+      "validation_sql": "SELECT count() FROM sim_masterv2 WHERE sne > ll AND state = 'operations' AND version_date = {version_date}",
+      "expected": 0,
+      "notes": "sne всегда <= ll в operations. Механизм: rtc_ops_to_storage_v8 проверяет sne + dt >= ll и переводит в storage ДО превышения"
+    },
+    {
+      "id": "INV-2",
+      "claim": "Количество в операциях соответствует программе",
+      "expr": "abs(ops_count - target) <= tolerance",
+      "scope": "per_day_per_type",
+      "severity": "CRITICAL",
+      "tolerance": 1,
+      "critical_threshold": 3,
+      "exception": "Допустимо отклонение в минус на период <= repair_time от начала симуляции (разогрев)",
+      "validator": "code/analysis/sim_validation_quota.py",
+      "notes": "Проверяется по типам Mi-8 / Mi-17 отдельно"
+    },
+    {
+      "id": "INV-3",
+      "claim": "Одновременно в ремонте <= repair_number",
+      "expr": "count(state == 4) + count(busy_repair_lines) <= repair_number",
+      "scope": "per_step_global",
+      "severity": "CRITICAL",
+      "validation_sql": "SELECT day_u16, countIf(state = 'repair') AS n_repair FROM sim_masterv2 WHERE version_date = {version_date} GROUP BY day_u16 HAVING n_repair > {repair_number}",
+      "expected": 0,
+      "notes": "repair_number берётся из MP (MacroProperty), определяет число RepairLine",
+      "validator": "TODO: добавить скрипт или секцию в sim_validation_runner_msg.py"
+    },
+    {
+      "id": "INV-4",
+      "claim": "Возврат из unserviceable в operations не раньше repair_time",
+      "expr": "forall agent: if transition 2->7 at step T, then state != 2 until repair_days decremented to 0",
+      "scope": "per_agent_trajectory",
+      "severity": "CRITICAL",
+      "mechanism": "repair_days decrement (rtc_unsvc_decrement_v8) + condition precedent P2 (repair_days == 0)",
+      "notes": "Обеспечивается двумя слоями: декремент в ФАЗА 1 и guard в ФАЗА 2"
+    },
+    {
+      "id": "INV-5",
+      "claim": "Баланс наработок: сумма инкрементов = разница СНЭ",
+      "expr": "sum(sne_end) - sum(sne_start) == sum(dt за все шаги для всех агентов в operations)",
+      "scope": "fleet_total",
+      "severity": "CRITICAL",
+      "validator": "code/validation/validate_state2ops_increments.py",
+      "notes": "Закон сохранения. Применяется ко всему флоту, включая агентов, не летавших (их dt = 0)"
+    },
+    {
+      "id": "INV-6",
+      "claim": "Налёт (dt) > 0 только в operations; вне operations dt == 0",
+      "expr": "forall agent: if state != 2: dt == 0",
+      "scope": "per_agent_per_step",
+      "severity": "CRITICAL",
+      "validator": "code/analysis/sim_validation_increments.py",
+      "validation_sql": "SELECT count() FROM sim_masterv2 WHERE state != 'operations' AND delta_sne > 0 AND version_date = {version_date}",
+      "expected": 0,
+      "notes": "Агенты вне operations не летают и не накапливают ресурс"
+    },
+    {
+      "id": "INV-7",
+      "claim": "Фактический налёт в operations = программе полётов (mp5_lin)",
+      "expr": "forall agent in state 2: dt == mp5_lin[day * FRAMES + idx]",
+      "scope": "per_agent_per_step",
+      "severity": "CRITICAL",
+      "validator": "code/sim_v2/messaging/validate_limiter_flight_hours.py",
+      "notes": "delta_sne строго соответствует запланированной программе полётов; при program=0 → delta_sne=0"
+    },
+    {
+      "id": "INV-8",
+      "claim": "sne/ppr frozen в storage (терминальное состояние)",
+      "expr": "forall agent in state 6: sne[t+1] == sne[t] AND ppr[t+1] == ppr[t]",
+      "scope": "per_agent_trajectory",
+      "severity": "CRITICAL",
+      "validator": "code/sim_v2/components/validation_rules.py (InvariantValidator)",
+      "notes": "Storage — терминальное состояние; значения повторяются, агент не участвует в переходах"
+    },
+    {
+      "id": "INV-9",
+      "claim": "limiter=0 обязан приводить к выходу из operations",
+      "expr": "forall agent in state 2: if limiter == 0 then agent must exit operations on this step (2->6 or 2->7)",
+      "scope": "per_agent",
+      "severity": "CRITICAL",
+      "exception": "При инициализации/входе в ops limiter=0 допустим (пересчитывается rtc_compute_limiter_on_entry)",
+      "validator": "code/analysis/sim_validation_runner_msg.py (validate_limiter_exit)",
+      "notes": "Если limiter=0 и агент остаётся в ops — EXCEPTION"
+    }
+  ],
+
+  "temporal_invariants": [
+    {
+      "id": "TEMP-1",
+      "claim": "Длительность ремонта: выход строго по exit_date",
+      "expr": "forall agent in state 4: exit at step where current_day >= exit_date; no early exit, no late exit (+-1 adaptive step)",
+      "scope": "per_agent",
+      "severity": "HIGH",
+      "mechanism": "rtc_repair_to_svc_v7 проверяет current_day >= exit_date",
+      "tolerance": "+-1 шаг (из-за adaptive_days > 1)"
+    },
+    {
+      "id": "TEMP-2",
+      "claim": "Минимальное время в unserviceable до промоута",
+      "expr": "forall agent in state 7: promote P2 impossible while repair_days > 0",
+      "scope": "per_agent",
+      "severity": "CRITICAL",
+      "mechanism": "repair_days декрементируется каждый шаг (rtc_unsvc_decrement_v8); P2 pre: repair_days == 0 AND repair_line_id == 0xFFFFFFFF"
+    },
+    {
+      "id": "TEMP-3",
+      "claim": "Окно допустимого недобора при старте симуляции",
+      "expr": "ops_count < target допустимо только если sim_day < max(repair_time) (период разогрева)",
+      "scope": "per_day",
+      "severity": "MEDIUM",
+      "notes": "В начале симуляции агенты могут быть в ремонте/unsvc без свободных RepairLine; недобор сокращается по мере появления слотов"
+    },
+    {
+      "id": "TEMP-4",
+      "claim": "Liveness: нет бесконечного ремонта",
+      "expr": "forall agent in state 4: exists step T where agent exits state 4; max duration = repair_time",
+      "scope": "per_agent_trajectory",
+      "severity": "CRITICAL",
+      "mechanism": "exit_date = entry_day + repair_time; rtc_repair_to_svc_v7 гарантирует выход",
+      "notes": "Если агент застревает в state 4 дольше repair_time + adaptive_days — это баг"
+    }
+  ],
+
+  "gpu_constraints": [
+    {
+      "id": "GPU-1",
+      "claim": "Запрет read+write одной переменной агента внутри одной RTC-функции",
+      "scope": "per_rtc_function",
+      "severity": "CRITICAL",
+      "check": "static_analysis_or_code_review",
+      "notes": "FLAME GPU гарантирует детерминизм только при разделении read/write по слоям"
+    },
+    {
+      "id": "GPU-2",
+      "claim": "mp5_lin read-only после инициализации",
+      "scope": "global",
+      "severity": "CRITICAL",
+      "init_phase": "HF_InitMP5Cumsum (order 0)",
+      "notes": "MacroProperty mp5_lin записывается один раз в ФАЗА -1, далее только чтение"
+    },
+    {
+      "id": "GPU-3",
+      "claim": "Float64 запрещён без явного согласования Алексея",
+      "scope": "all_code",
+      "severity": "CRITICAL",
+      "allowed_types": ["UInt8", "UInt16", "UInt32", "Float32"],
+      "notes": "Относится к СУБД, GPU Env, расчётным функциям, кэшам"
+    },
+    {
+      "id": "GPU-4",
+      "claim": "NVRTC warnings = дефект",
+      "scope": "compilation",
+      "severity": "CRITICAL",
+      "action": "fix RTC code -> clear .rtc_cache/* -> recompile -> verify log clean"
+    },
+    {
+      "id": "GPU-5",
+      "claim": "Reset перед сбором (atomicMin/atomicAdd)",
+      "scope": "per_phase",
+      "severity": "CRITICAL",
+      "reason": "Без reset остаются stale данные предыдущего шага",
+      "example": "reset_exit_date → MAX перед copy_exit_date (atomicMin); reset_buffers → 0 перед count_agents (atomicAdd)"
+    },
+    {
+      "id": "GPU-6",
+      "claim": "Один агент — максимум один переход за шаг",
+      "scope": "per_agent_per_step",
+      "severity": "CRITICAL",
+      "mechanism": "FunctionCondition + setInitialState/setEndState; порядок RTC гарантирует отсутствие каскадов"
+    }
+  ]
+}

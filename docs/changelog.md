@@ -1,5 +1,40 @@
 # Changelog
 
+## [10-02-2026] - RLM: создание системы контекстных капсул
+
+### Изменения
+- Создан `config/capsules_manifest.json` — индекс всех капсул проекта (6 записей).
+- Создано 5 новых капсул по единому шаблону (8 секций):
+  - `docs/transitions_capsule.md` — матрица переходов, condition precedent/subsequent, порядок RTC.
+  - `docs/quota_capsule.md` — квотирование P1/P2/P3/P4, RepairLine, MessageBucket, spawn.
+  - `docs/validation_capsule.md` — валидация, скрипты, маппинг инвариант→валидатор.
+  - `docs/flame_gpu_capsule.md` — ограничения FLAME GPU, RTC-паттерны, MacroProperty, типы данных.
+  - `docs/etl_extract_capsule.md` — ETL пайплайн, 18 стадий, ClickHouse таблицы.
+- Обновлён `docs/limiter_v8_capsule.md` — ранее обновлён на этапе формализации инвариантов (уже актуален).
+- Обновлён `.cursor/agents/capsule-builder.md` — обязанность читать manifest и invariants.json, обновлять manifest.
+
+### Контекст
+Реализация RLM-архитектуры (Recursive Language Models): вместо загрузки всего контекста (10M+ токенов) агенты читают манифест → выбирают нужную капсулу → работают в узком фокусе. Каждая капсула — сжатый артефакт (~100-200 строк) с инвариантами, решениями, рисками и указателями.
+
+### Ревью/Валидация
+- Изменения в доках/конфигах — ревью не требуется (оркестратор, не код).
+
+## [10-02-2026] - Формализация инвариантов (invariants.json)
+
+### Изменения
+- Создан `config/transitions/invariants.json` — единый реестр: 9 глобальных инвариантов (INV-1..INV-9), 4 temporal-контракта (TEMP-1..TEMP-4), 6 GPU-ограничений (GPU-1..GPU-6).
+- Дополнены post-условия в `config/transitions/transitions_rules.json`: spawn (repair_days=0, repair_line_id=sentinel), demote (limiter=0), storage (frozen sne/ppr).
+- Добавлены зависимости `reads_from`/`writes_to` к ключевым слоям квотирования (28-31, 46) в `transitions_rules.json`.
+- Создан `.cursor/rules/25_invariants_contract.mdc` — scoped-правило для автоматического подключения invariants.json при работе с sim_v2/validation/analysis/transitions.
+- Обновлены профили агентов: `validator-judge.md` (SSoT → invariants.json), `coder-flame.md` (читать перед кодированием), `reviewer-flame.md` (проверять по invariants.json).
+- Обновлены документы: `docs/validation.md`, `docs/limiter_v8_capsule.md`, `docs/architecture/validation_rules.md`.
+
+### Контекст
+Формализация «существенных условий» (essential conditions) модели V8 по аналогии с юридическими контрактами: condition precedent, condition subsequent, temporal obligations, execution constraints. Подготовка к RLM-пайплайну (капсулы проверяются на соответствие инвариантам).
+
+### Ревью/Валидация
+- Изменения в правилах/конфигах/доках — ревью не требуется (оркестратор, не код).
+
 ## [06-02-2026] - Multiagent workflow update + universal template
 
 ### Изменения

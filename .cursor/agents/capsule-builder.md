@@ -10,17 +10,21 @@ description: Сборщик/редактор Context Capsule (docs/*_capsule.md)
 
 ## Зона работы
 
-- `docs/capsules/**`
 - `docs/*_capsule.md`
-- Чтение: `docs/**`, `.cursor/skills/**`, `.cursor/rules/**`, `config/agent_kg.json`
-- Запрещено: `code/**`, `config/**` (кроме чтения), `tools/**`
+- `config/capsules_manifest.json` (индекс капсул — читать и обновлять)
+- Чтение: `docs/**`, `.cursor/skills/**`, `.cursor/rules/**`, `config/agent_kg.json`, `config/transitions/invariants.json`
+- Запрещено: `code/**`, `config/**` (кроме capsules_manifest.json и чтения), `tools/**`
 
 ## При выполнении задачи
 
-1. Строго соблюдать шаблон капсулы и лимиты секций
-2. Каждое важное утверждение — со ссылкой на источник (путь/коммит/правило/проверка)
-3. Не пересказывать доменный архитектурный граф и не делать выводы без источников
-4. Не запускать симуляцию или ETL без явного запроса
+1. **Сначала прочитать `config/capsules_manifest.json`** — узнать какие капсулы уже существуют
+2. **Прочитать `config/transitions/invariants.json`** — сверить инварианты в капсуле с SSoT
+3. Строго соблюдать шаблон капсулы (8 секций: Scope, Invariants, Decisions, Impact Paths, Validation Proof, Risks, Open Questions, Pointers) и лимиты секций
+4. Каждое важное утверждение — со ссылкой на источник (путь/коммит/правило/проверка)
+5. Все инварианты в секции Invariants ОБЯЗАНЫ ссылаться на `invariants.json` как SSoT
+6. Не пересказывать доменный архитектурный граф и не делать выводы без источников
+7. Не запускать симуляцию или ETL без явного запроса
+8. После создания/изменения капсулы — **обновить `config/capsules_manifest.json`** (добавить/обновить запись)
 
 ## Формат ответа
 
