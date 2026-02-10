@@ -31,7 +31,7 @@
 | `docs/` | Документация проекта |
 | `data_input/source_data/` | Входные датасеты (`v_YYYY-MM-DD/`) |
 | `output/` | Выходные отчёты и результаты |
-| `config/` | Конфигурационные файлы |
+| `config/` | Конфигурационные файлы (transitions, quotas, invariants) |
 | `logs/` | Логи работы системы |
 
 ---
@@ -81,8 +81,31 @@ python3 code/extract/extract_master.py
 |------|----------|
 | `docs/architecture/rtc_pipeline_architecture.md` | **Baseline** — архитектура RTC пайплайна (intent-based, orchestrator_v2) |
 | `docs/architecture/limiter_architecture.md` | **LIMITER V8** — RepairLine + repair_days в unsvc/inactive (readiness/спавн учитывают RepairLine) |
-| `docs/architecture/validation_rules.md` | Инварианты и процедуры тестирования (включая `--version-id` для изоляции прогонов) |
+| `docs/architecture/validation_rules.md` | Методология SQL-first валидации и процедуры тестирования |
 | `docs/spawn_dynamic_architecture.md` | Архитектура динамического спавна |
+
+### Контракты и инварианты (SSoT)
+| Файл | Описание |
+|------|----------|
+| **`config/transitions/invariants.json`** | Формализованные инварианты (INV-1..9), temporal-контракты (TEMP-1..4), GPU-ограничения (GPU-1..6) |
+| `config/transitions/transitions_rules.json` | Матрица переходов state→state, condition precedent/subsequent, порядок RTC (51 слой) |
+| `config/transitions/quota_rules.json` | Логика квотирования, RepairLine, spawn |
+
+### Контекстные капсулы (RLM)
+
+Капсулы — сжатые проекции доменного знания (~100-200 строк), read-only производные от JSON SSoT. Агенты читают манифест → выбирают нужную капсулу → работают в узком фокусе вместо загрузки всего проекта.
+
+| Файл | Домен |
+|------|-------|
+| **`config/capsules_manifest.json`** | **Индекс всех капсул** (точка входа для агентов) |
+| `docs/limiter_v8_capsule.md` | Оркестратор V8, адаптивные шаги, RTC слои |
+| `docs/transitions_capsule.md` | Матрица переходов, condition precedent/subsequent |
+| `docs/quota_capsule.md` | Квотирование P1/P2/P3/P4, RepairLine, spawn |
+| `docs/validation_capsule.md` | Валидация, скрипты, маппинг инвариант→валидатор |
+| `docs/flame_gpu_capsule.md` | Ограничения FLAME GPU, RTC-паттерны, типы данных |
+| `docs/etl_extract_capsule.md` | ETL пайплайн, 18 стадий, ClickHouse таблицы |
+
+**Иерархия источников:** JSON (SSoT) → Neo4j (визуализация) → Капсулы (контекст для агентов). Капсулы не являются SSoT; при расхождении — верить JSON.
 
 ### 🚀 LIMITER V8 — основная архитектура (ветка feature/flame-messaging)
 
@@ -249,7 +272,7 @@ make sync-domain-graph-dry    # Показать Cypher без записи
 python3 code/utils/test_neo4j_connections.py
 ```
 
-**SSoT для домена** — JSON в репозитории (`config/transitions/*.json`) и код (`code/sim_v2/**`). Domain Graph в Aura — производная для визуализации.
+**SSoT для домена** — JSON в репозитории (`config/transitions/*.json`, включая `invariants.json`) и код (`code/sim_v2/**`). Domain Graph в Aura — производная для визуализации.
 
 ### RTC кэширование (ускоряет повторные запуски симуляции)
 ```bash

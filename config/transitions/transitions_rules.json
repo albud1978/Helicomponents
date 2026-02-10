@@ -287,7 +287,9 @@
       "layer": "v8_quota_manager_bucket",
       "function": "rtc_quota_manager_v8_bucket",
       "state": "QM",
-      "notes": "QuotaManager → QuotaBucket (key=0)"
+      "reads_from": [24, 25, 26, 27],
+      "writes_to": ["QuotaBucket(key=0)"],
+      "notes": "QuotaManager → QuotaBucket (key=0). Читает результаты count_ops/svc/unsvc/inactive"
     },
     {
       "order": 29,
@@ -295,7 +297,9 @@
       "layer": "v8_demote",
       "function": "rtc_demote_ops_v8",
       "state": "2",
-      "notes": "Решение демоута ops→svc"
+      "reads_from": [28],
+      "writes_to": ["agent.needs_demote"],
+      "notes": "Решение демоута ops→svc. Читает QuotaBucket от QM"
     },
     {
       "order": 30,
@@ -303,7 +307,9 @@
       "layer": "v8_promote_svc_bucket",
       "function": "rtc_promote_svc_bucket_v8",
       "state": "3",
-      "notes": "P1 решение по rank (MessageBucket)"
+      "reads_from": [28],
+      "writes_to": ["agent.promoted"],
+      "notes": "P1 решение по rank (MessageBucket). Читает promote_p1_* из QuotaBucket"
     },
     {
       "order": 31,
@@ -311,7 +317,9 @@
       "layer": "v8_promote_unsvc_bucket",
       "function": "rtc_promote_unsvc_bucket_v8",
       "state": "7",
-      "notes": "P2 решение по rank (MessageBucket)"
+      "reads_from": [28],
+      "writes_to": ["agent.repair_candidate"],
+      "notes": "P2 решение по rank (MessageBucket). Читает promote_p2_* из QuotaBucket"
     },
     {
       "order": 32,
@@ -431,7 +439,9 @@
       "layer": "v8_spawn_dynamic_mgr",
       "function": "rtc_spawn_dynamic_mgr_v8",
       "state": "SpawnMgr",
-      "notes": "Дефицит = target − curr_ops − used(P1/P2/P3 commit)"
+      "reads_from": [45],
+      "writes_to": ["MacroProperty spawn_dynamic_need_*/base_idx_*/base_acn_*"],
+      "notes": "Дефицит = target − curr_ops − used(P1/P2/P3 commit). Читает post-quota counts"
     },
     {
       "order": 47,
@@ -478,8 +488,15 @@
         "all": [
           {
             "expr": "state == 2"
+          },
+          {
+            "expr": "repair_days == 0"
+          },
+          {
+            "expr": "repair_line_id == 0xFFFFFFFF"
           }
-        ]
+        ],
+        "notes": "Новый агент: sne/ppr/idx/acn задаются из параметров SpawnMgr (base_idx, base_acn)"
       },
       "owner_module": "rtc_spawn_dynamic_v7",
       "notes": "Динамический spawn → operations."
@@ -516,7 +533,8 @@
           {
             "expr": "limiter == 0"
           }
-        ]
+        ],
+        "notes": "Терминальное состояние: sne и ppr сохраняются (frozen), агент не участвует в дальнейших переходах"
       },
       "owner_module": "rtc_state_transitions_v8",
       "notes": "V8: списание по LL (next-day dt). Приоритет 1."
@@ -536,7 +554,8 @@
           {
             "expr": "limiter == 0"
           }
-        ]
+        ],
+        "notes": "Терминальное состояние: sne и ppr сохраняются (frozen), агент не участвует в дальнейших переходах"
       },
       "owner_module": "rtc_state_transitions_v8",
       "notes": "V8: списание по BR при SNE>=BR. Приоритет 2."
@@ -572,8 +591,12 @@
         "all": [
           {
             "expr": "state == 3"
+          },
+          {
+            "expr": "limiter == 0"
           }
-        ]
+        ],
+        "notes": "Агент покидает operations; limiter обнуляется (неактуален вне ops, пересчитывается при re-entry через P1)"
       },
       "owner_module": "rtc_demote_ops_v7",
       "notes": "Квоты: демоут ops → serviceable при избытке (по idx)."

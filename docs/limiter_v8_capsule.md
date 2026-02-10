@@ -5,9 +5,10 @@
 - `code/sim_v2/messaging/orchestrator_limiter_v8.py` (основной оркестратор V8) — `README.md`
 - `docs/architecture/limiter_architecture.md` (источник истины V8) — `docs/architecture/limiter_architecture.md`
 - `docs/architecture/rtc_pipeline_architecture.md` (MP5/mp5_lin инварианты) — `docs/architecture/rtc_pipeline_architecture.md`
-- `docs/architecture/validation_rules.md` (валидация/инварианты/SQL-first) — `docs/architecture/validation_rules.md`
+- `docs/architecture/validation_rules.md` (методология валидации/SQL-first) — `docs/architecture/validation_rules.md`
 - `config/transitions/transitions_rules.json` (матрица переходов state→state) — `docs/architecture/limiter_architecture.md`
 - `config/transitions/quota_rules.json` (логика квот/RepairLine) — `docs/architecture/limiter_architecture.md`
+- `config/transitions/invariants.json` (формализованные инварианты INV/TEMP/GPU) — SSoT инвариантов
 - `tools/transitions_viewer/index.html` (визуализация переходов/квот) — `docs/architecture/limiter_architecture.md`
 
 Не трогаем:
@@ -15,16 +16,23 @@
 - Архивные версии оркестраторов V1–V7 (не использовать) — `README.md`
 
 ## Invariants (≤12)
+
+**SSoT**: `config/transitions/invariants.json` (INV-1..INV-9, TEMP-1..TEMP-4, GPU-1..GPU-6)
+
+Ключевые (из invariants.json):
+- INV-1: sne ≤ ll в operations — `invariants.json`
+- INV-2: ops_count ≈ target (±1) — `invariants.json`
+- INV-3: в ремонте ≤ repair_number — `invariants.json`
+- INV-5: баланс наработок Σdt = Δsne — `invariants.json`
+- INV-9: limiter=0 → выход из ops — `invariants.json`
+- GPU-2: mp5_lin read-only после init — `invariants.json`
+- GPU-6: один переход за шаг — `invariants.json`
+
+Архитектурные (не в invariants.json):
 - V8 — источник истины; противоречия в других документах считаются устаревшими — `docs/architecture/limiter_architecture.md`
 - Для unsvc exit_date удалён; RepairLine — основной механизм ремонта — `docs/architecture/limiter_architecture.md`
 - `repair_days`: для unsvc декрементируется до 0; для inactive всегда 0 — `docs/architecture/limiter_architecture.md`
-- Ресурс: проверка `sne + dt >= ll` (next-day dt), а не post-increment — `docs/architecture/limiter_architecture.md`
-- `limiter=0` обязан приводить к выходу; инициализация допускает 0 — `docs/architecture/limiter_architecture.md`
 - `MAX_DETERMINISTIC_DATES=500`; лишние даты отбрасываются — `docs/architecture/limiter_architecture.md`
-- MP5 длиной `(DAYS+1)*FRAMES`, индексация `row = day*FRAMES + idx` — `docs/architecture/validation_rules.md`
-- `mp5_lin` read-only после инициализации — `docs/architecture/validation_rules.md`
-- Warning'и NVRTC запрещены; при обнаружении — исправить и очистить кэш — `docs/architecture/validation_rules.md`
-- Один агент делает максимум один переход за шаг — `docs/architecture/validation_rules.md`
 - Порядок слоёв = порядок регистрации, критичен для логики — `docs/architecture/limiter_architecture.md`
 
 ## Decisions (≤7)
@@ -47,10 +55,10 @@
 - `README.md` → статус V8 как основной архитектуры → зона ответственности — `README.md`
 
 ## Validation Proof
+- Формализованные инварианты: `config/transitions/invariants.json` (INV-1..INV-9, TEMP-1..TEMP-4, GPU-1..GPU-6) — SSoT
+- Скрипты валидации: `code/analysis/sim_validation_runner_msg.py`, `code/analysis/sim_validation_quota.py`, `code/validation/validate_state2ops_*.py`
 - `python code/analysis/validate_heli_pandas.py --analyze/--update/--all` — базовая валидация `heli_pandas` — `docs/architecture/validation_rules.md`
 - Проверка отсутствия NVRTC warning'ов (log clean) — `docs/architecture/validation_rules.md`
-- Инварианты MP5: длина `(DAYS+1)*FRAMES`, индексация `row = day*FRAMES + idx` — `docs/architecture/validation_rules.md`
-- `mp5_lin` доступен только на чтение после инициализации — `docs/architecture/validation_rules.md`
 - Формат капсулы проверяется по шаблону (8 обязательных секций с лимитами) — `docs/validation.md`
 
 ## Risks (≤7) + Mitigations
@@ -71,9 +79,10 @@
 - `docs/architecture/limiter_architecture.md`
 - `docs/architecture/rtc_pipeline_architecture.md`
 - `docs/architecture/validation_rules.md`
-- `code/utils/agent_kg.py`
-- `docs/validation.md`
+- `config/transitions/invariants.json`
 - `config/transitions/transitions_rules.json`
 - `config/transitions/quota_rules.json`
+- `code/utils/agent_kg.py`
+- `docs/validation.md`
 - `tools/transitions_viewer/index.html`
 - `README.md`

@@ -1,7 +1,12 @@
 # Validation Rules
 
 ## Назначение
-Консолидированные правила валидации симуляции и данных `heli_pandas`.
+Методология валидации симуляции и данных `heli_pandas`.
+
+**SSoT инвариантов**: `config/transitions/invariants.json` — формализованный реестр всех инвариантов (INV-1..INV-9), temporal-контрактов (TEMP-1..TEMP-4) и GPU-ограничений (GPU-1..GPU-6).
+
+Данный документ описывает **методологию** (SQL-first, JIT-правила, типы данных), а не перечень инвариантов.
+
 Источники: `docs/archive/validation_legacy.md`, `docs/archive/data_validation_legacy.md`.
 
 ## Принципы валидации

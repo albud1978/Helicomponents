@@ -24,9 +24,10 @@ description: Ревьюер FLAME GPU/CUDA кода. Вызывай для code 
 
 ### Архитектура
 
+- Прочитай `config/capsules_manifest.json` → выбери релевантные капсулы (обычно `flame_gpu_capsule.md` + доменная)
 - Соответствие LIMITER V8
-- Соблюдение инвариантов QuotaManager/RepairLine
-- Порядок слоёв RTC
+- Соблюдение инвариантов из `config/transitions/invariants.json` (INV-1..INV-9, TEMP-1..TEMP-4, GPU-1..GPU-6)
+- Порядок слоёв RTC (по `transitions_rules.json → rtc_execution_order`)
 
 ### Производительность
 
