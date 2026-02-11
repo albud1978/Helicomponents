@@ -1,6 +1,6 @@
 {
-  "version": 8,
-  "architecture": "LIMITER V8 (single-phase, RepairLine + Adaptive Steps)",
+  "version": 9,
+  "architecture": "LIMITER V9 (message-based, 18 RTC + 1 HF_StepController)",
   "matrix": {
     "from": "state",
     "to": "state"
@@ -11,7 +11,7 @@
     "2": "operations",
     "3": "serviceable",
     "4": "repair",
-    "5": "reserve (unused)",
+    "5": "reserve (не используется в V9, рудимент V2)",
     "6": "storage (terminal)",
     "7": "unserviceable"
   },
@@ -36,7 +36,6 @@
     "idx",
     "threshold_s3",
     "threshold_s7",
-    "threshold_s5",
     "demote_threshold",
     "quota_left",
     "line_id",
@@ -56,429 +55,175 @@
       "expr": "ppr + dt_next"
     }
   ],
+
+  "init_at_model_build": {
+    "description": "Инициализация выполняется в Python ДО simulate(), заменяет старые HostFunction layers 0, 1, 13",
+    "items": [
+      "mp5_cumsum MacroProperty — заполнить из Python-списка кумулятивных часов",
+      "deterministic_dates_mp — заполнить из финализированного списка дат",
+      "RepairLine агенты — создать repair_quota штук, day-0 занятые привязать к агентам в state 4",
+      "mp_min_limiter = 0xFFFFFFFF, current_day_mp, adaptive_result_mp — инициализировать"
+    ]
+  },
+
   "rtc_execution_order": [
     {
       "order": 0,
-      "phase": "ФАЗА -1: Инициализация (Host)",
-      "layer": "layer_init_mp5_cumsum",
-      "function": "HF_InitMP5Cumsum",
-      "state": "Host",
-      "notes": "Готовит кумулятивные часы MP5 для лимитера"
+      "phase": "ФАЗА 0: Детерминированные переходы",
+      "layer": "repair_to_svc",
+      "function": "rtc_repair_to_svc_v7",
+      "state": "4→3",
+      "notes": "repair→serviceable по exit_date. PPR=0, limiter=0."
     },
     {
       "order": 1,
-      "phase": "ФАЗА -1: Инициализация (Host)",
-      "layer": "layer_init_repair_lines",
-      "function": "HF_InitRepairLines",
-      "state": "Host",
-      "notes": "Инициализирует RepairLine по repair_number"
+      "phase": "ФАЗА 0: Детерминированные переходы",
+      "layer": "spawn_to_svc",
+      "function": "rtc_spawn_to_svc",
+      "state": "0→3",
+      "notes": "Детерминированный spawn по exit_date → serviceable. PPR=0, SNE=0, limiter=0. P1 поднимет в ops."
     },
     {
       "order": 2,
-      "phase": "ФАЗА 0: Детерминированные переходы",
-      "layer": "v8_repair_line_assign_repair",
-      "function": "rtc_repair_line_assign_repair_v8",
-      "state": "4→4",
-      "notes": "Привязка линий для day0-ремонта"
+      "phase": "ФАЗА 1: Operations и ремонтные счётчики",
+      "layer": "ops_increment",
+      "function": "rtc_ops_increment_v8",
+      "state": "2→2",
+      "notes": "SNE+=dt, PPR+=dt, limiter-=adaptive_days. dt из mp5_cumsum (адаптивный)."
     },
     {
       "order": 3,
-      "phase": "ФАЗА 0: Детерминированные переходы",
-      "layer": "v7_repair_to_svc",
-      "function": "rtc_repair_to_svc_v7",
-      "state": "4→3",
-      "notes": "Завершение day0-ремонта по exit_date"
+      "phase": "ФАЗА 1: Operations и ремонтные счётчики",
+      "layer": "unsvc_decrement",
+      "function": "rtc_unsvc_decrement_v8",
+      "state": "7→7",
+      "notes": "repair_days-=adaptive_days. Обратный отсчёт ремонтного окна."
     },
     {
       "order": 4,
-      "phase": "ФАЗА 0: Детерминированные переходы",
-      "layer": "v7_spawn_to_ops",
-      "function": "rtc_spawn_to_ops_v7",
-      "state": "5→2",
-      "notes": "Плановый spawn по exit_date"
+      "phase": "ФАЗА 1: Operations и ремонтные счётчики",
+      "layer": "ops_to_storage",
+      "function": "rtc_ops_to_storage_v8",
+      "state": "2→6",
+      "notes": "cond: limiter==0 + sne>=LL. Early-out: if limiter>0 return false."
     },
     {
       "order": 5,
-      "phase": "ФАЗА 0.5: Сбор min_exit_date (совместимость)",
-      "layer": "v7_reset_exit_date",
-      "function": "rtc_reset_exit_date_v7",
-      "state": "QM",
-      "notes": "Сброс min_exit_date перед сбором"
+      "phase": "ФАЗА 1: Operations и ремонтные счётчики",
+      "layer": "ops_to_unsvc",
+      "function": "rtc_ops_to_unsvc_v8",
+      "state": "2→7",
+      "notes": "cond: limiter==0 + ppr>=OH + sne<BR. Устанавливает repair_days=repair_time. Early-out: if limiter>0 return false."
     },
     {
       "order": 6,
-      "phase": "ФАЗА 0.5: Сбор min_exit_date (совместимость)",
-      "layer": "v7_copy_exit_date_repair",
-      "function": "rtc_copy_exit_date_repair_v7",
-      "state": "4",
-      "notes": "Сбор ближайшего выхода из ремонта"
+      "phase": "ФАЗА 1.5: RepairLine pre-quota",
+      "layer": "repair_line_increment",
+      "function": "rtc_repair_line_increment_v8",
+      "state": "RepairLine",
+      "notes": "free_days+=adaptive_days."
     },
     {
       "order": 7,
-      "phase": "ФАЗА 0.5: Сбор min_exit_date (совместимость)",
-      "layer": "v7_copy_exit_date_spawn",
-      "function": "rtc_copy_exit_date_spawn_v7",
-      "state": "5",
-      "notes": "Сбор ближайшего spawn-события"
+      "phase": "ФАЗА 1.5: RepairLine pre-quota",
+      "layer": "repair_line_publish",
+      "function": "rtc_repair_line_publish_status_v8",
+      "state": "RepairLine",
+      "notes": "message RepairLineStatus: line_id, free_days. Только если free_days>=repair_time."
     },
     {
       "order": 8,
-      "phase": "ФАЗА 0.5: Сбор min_exit_date (совместимость)",
-      "layer": "v7_copy_exit_date_unsvc",
-      "function": "rtc_copy_exit_date_unsvc_v7",
-      "state": "7",
-      "notes": "Сбор exit_date из unsvc (в V8 не влияет на шаг)"
+      "phase": "ФАЗА 2: Квотирование (message-based)",
+      "layer": "publish_planer_report",
+      "function": "rtc_publish_planer_report",
+      "state": "all",
+      "notes": "Каждый агент публикует статус через MessageBucket/MessageArray. Тип уточнить при реализации QM."
     },
     {
       "order": 9,
-      "phase": "ФАЗА 1: Operations и ремонтные счётчики",
-      "layer": "v8_ops_increment",
-      "function": "rtc_ops_increment_v8",
-      "state": "2→2",
-      "notes": "Начисление налёта и ресурса, шаговый декремент лимитера"
+      "phase": "ФАЗА 2: Квотирование (message-based)",
+      "layer": "QM_central_decision",
+      "function": "rtc_quota_manager_v9",
+      "state": "QM",
+      "notes": "QM читает PlanerReport + RepairLineStatus. Каскадный дефицит: demote→P1→P2→P3→spawn_deficit. P2/P3: shared pool, Mi-17 first. Отправляет QuotaDecision + LineAssignment."
     },
     {
       "order": 10,
-      "phase": "ФАЗА 1: Operations и ремонтные счётчики",
-      "layer": "v8_unsvc_decrement",
-      "function": "rtc_unsvc_decrement_v8",
-      "state": "7→7",
-      "notes": "Декремент repair_days для unserviceable"
+      "phase": "ФАЗА 3: Применение квот",
+      "layer": "demote_apply",
+      "function": "rtc_ops_demote_v7",
+      "state": "2→3",
+      "notes": "cond: decision==demote. limiter=0 принудительно."
     },
     {
       "order": 11,
-      "phase": "ФАЗА 1: Operations и ремонтные счётчики",
-      "layer": "v8_ops_to_storage",
-      "function": "rtc_ops_to_storage_v8",
-      "state": "2→6",
-      "notes": "Списание по LL/BR"
+      "phase": "ФАЗА 3: Применение квот",
+      "layer": "P1_apply",
+      "function": "rtc_svc_to_ops_v7",
+      "state": "3→2",
+      "notes": "cond: decision==P1. PPR сохраняется. limiter=0→inline binary search."
     },
     {
       "order": 12,
-      "phase": "ФАЗА 1: Operations и ремонтные счётчики",
-      "layer": "v8_ops_to_unsvc",
-      "function": "rtc_ops_to_unsvc_v8",
-      "state": "2→7",
-      "notes": "Уход в unserviceable по OH (limiter=0 → выход)"
+      "phase": "ФАЗА 3: Применение квот",
+      "layer": "P2_apply",
+      "function": "rtc_unsvc_to_ops_v7",
+      "state": "7→2",
+      "notes": "cond: decision==P2. PPR=0. Inline limiter. QM уже назначил line_id."
     },
     {
       "order": 13,
-      "phase": "ФАЗА 1.25: V8 pre-quota adaptive (min_dynamic)",
-      "layer": "v8_init",
-      "function": "HF_InitV8",
-      "state": "Host",
-      "notes": "Подготовка deterministic_dates и синхронизация состояния"
+      "phase": "ФАЗА 3: Применение квот",
+      "layer": "P3_apply",
+      "function": "rtc_inactive_to_ops_v7",
+      "state": "1→2",
+      "notes": "cond: decision==P3. PPR по правилу Mi-17. Inline limiter."
     },
     {
       "order": 14,
-      "phase": "ФАЗА 1.25: V8 pre-quota adaptive (min_dynamic)",
-      "layer": "v8_collect_min_ops",
-      "function": "rtc_collect_min_dynamic_ops_v8",
-      "state": "2",
-      "notes": "Сбор минимального лимитера по ops"
+      "phase": "ФАЗА 3: Применение квот",
+      "layer": "repair_line_apply_assign",
+      "function": "rtc_repair_line_apply_assignment_v8",
+      "state": "RepairLine",
+      "notes": "RepairLine читает LineAssignment: обновляет aircraft_number, обнуляет free_days. Release: aircraft_number=0."
     },
     {
       "order": 15,
-      "phase": "ФАЗА 1.25: V8 pre-quota adaptive (min_dynamic)",
-      "layer": "v8_collect_min_repair",
-      "function": "rtc_collect_min_dynamic_repair_v8",
-      "state": "4",
-      "notes": "Сбор минимальных repair_days для day0-ремонта"
+      "phase": "ФАЗА 4: Динамический спавн",
+      "layer": "spawn_ticket_mi17",
+      "function": "rtc_spawn_dynamic_ticket_v8",
+      "state": "0→2",
+      "notes": "Создаёт НОВЫХ агентов (Mi-17) в ops по spawn_deficit. Inline limiter."
     },
     {
       "order": 16,
-      "phase": "ФАЗА 1.25: V8 pre-quota adaptive (min_dynamic)",
-      "layer": "v8_compute_global_min",
-      "function": "rtc_compute_global_min_v8",
-      "state": "QM",
-      "notes": "Вычисление adaptive_days и сброс min_dynamic"
+      "phase": "ФАЗА 4: Динамический спавн",
+      "layer": "spawn_ticket_mi8",
+      "function": "rtc_spawn_dynamic_ticket_v8_mi8",
+      "state": "0→2",
+      "notes": "Создаёт НОВЫХ агентов (Mi-8) в ops по spawn_deficit. Inline limiter."
     },
     {
       "order": 17,
-      "phase": "ФАЗА 1.3: Update day (variant B)",
-      "layer": "v8_update_day",
-      "function": "HF_UpdateDayV8",
-      "state": "Host",
-      "notes": "Update day ДО квотирования (по коду orchestrator_limiter_v8)"
-    },
-    {
-      "order": 18,
-      "phase": "ФАЗА 1.5: RepairLine (pre-quota)",
-      "layer": "v8_repair_line_sync_pre",
-      "function": "rtc_repair_line_sync_v8",
-      "state": "RepairLine",
-      "notes": "Синхронизация линии из MacroProperty"
-    },
-    {
-      "order": 19,
-      "phase": "ФАЗА 1.5: RepairLine (pre-quota)",
-      "layer": "v8_repair_line_increment",
-      "function": "rtc_repair_line_increment_v8",
-      "state": "RepairLine",
-      "notes": "Наращивание free_days на шаг"
-    },
-    {
-      "order": 20,
-      "phase": "ФАЗА 1.5: RepairLine (pre-quota)",
-      "layer": "v8_repair_line_write",
-      "function": "rtc_repair_line_write_v8",
-      "state": "RepairLine",
-      "notes": "Запись состояния линий в MacroProperty"
-    },
-    {
-      "order": 21,
-      "phase": "ФАЗА 1.5: RepairLine (pre-quota)",
-      "layer": "v8_repair_line_publish_status",
-      "function": "rtc_repair_line_publish_status_v8",
-      "state": "RepairLine",
-      "notes": "Сообщение линий в QM (RepairLineStatus)"
-    },
-    {
-      "order": 22,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_reset_flags",
-      "function": "rtc_reset_flags_v8_*",
-      "state": "all",
-      "notes": "Сброс флагов промоута/демоута"
-    },
-    {
-      "order": 23,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_reset_buffers",
-      "function": "rtc_reset_quota_v8_*",
-      "state": "all",
-      "notes": "Сброс буферов подсчёта"
-    },
-    {
-      "order": 24,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_count_ops",
-      "function": "rtc_count_ops_v8",
-      "state": "2",
-      "notes": "Подсчёт ops"
-    },
-    {
-      "order": 25,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_count_svc",
-      "function": "rtc_count_svc_v8",
-      "state": "3",
-      "notes": "Подсчёт serviceable"
-    },
-    {
-      "order": 26,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_count_unsvc",
-      "function": "rtc_count_unsvc_v8",
-      "state": "7",
-      "notes": "Подсчёт unserviceable (readiness по repair_days)"
-    },
-    {
-      "order": 27,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_count_inactive",
-      "function": "rtc_count_inactive_v8",
-      "state": "1",
-      "notes": "Подсчёт inactive"
-    },
-    {
-      "order": 28,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_quota_manager_bucket",
-      "function": "rtc_quota_manager_v8_bucket",
-      "state": "QM",
-      "reads_from": [24, 25, 26, 27],
-      "writes_to": ["QuotaBucket(key=0)"],
-      "notes": "QuotaManager → QuotaBucket (key=0). Читает результаты count_ops/svc/unsvc/inactive"
-    },
-    {
-      "order": 29,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_demote",
-      "function": "rtc_demote_ops_v8",
-      "state": "2",
-      "reads_from": [28],
-      "writes_to": ["agent.needs_demote"],
-      "notes": "Решение демоута ops→svc. Читает QuotaBucket от QM"
-    },
-    {
-      "order": 30,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_promote_svc_bucket",
-      "function": "rtc_promote_svc_bucket_v8",
-      "state": "3",
-      "reads_from": [28],
-      "writes_to": ["agent.promoted"],
-      "notes": "P1 решение по rank (MessageBucket). Читает promote_p1_* из QuotaBucket"
-    },
-    {
-      "order": 31,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_promote_unsvc_bucket",
-      "function": "rtc_promote_unsvc_bucket_v8",
-      "state": "7",
-      "reads_from": [28],
-      "writes_to": ["agent.repair_candidate"],
-      "notes": "P2 решение по rank (MessageBucket). Читает promote_p2_* из QuotaBucket"
-    },
-    {
-      "order": 32,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_promote_inactive_bucket",
-      "function": "rtc_promote_inactive_bucket_v8",
-      "state": "1",
-      "notes": "P3 решение по rank (MessageBucket)"
-    },
-    {
-      "order": 33,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_promote_unsvc_commit",
-      "function": "rtc_promote_unsvc_commit_v8",
-      "state": "7",
-      "notes": "Commit P2: бронирование RepairLine"
-    },
-    {
-      "order": 34,
-      "phase": "ФАЗА 2: Квотирование (MessageBucket)",
-      "layer": "v8_promote_inactive_commit",
-      "function": "rtc_promote_inactive_commit_v8",
-      "state": "1",
-      "notes": "Commit P3: бронирование RepairLine"
-    },
-    {
-      "order": 35,
-      "phase": "ФАЗА 3: Применение квот",
-      "layer": "v7_ops_demote",
-      "function": "rtc_ops_demote_v7",
-      "state": "2→3",
-      "notes": "Применение демоута"
-    },
-    {
-      "order": 36,
-      "phase": "ФАЗА 3: Применение квот",
-      "layer": "v7_svc_to_ops",
-      "function": "rtc_svc_to_ops_v7",
-      "state": "3→2",
-      "notes": "Применение P1"
-    },
-    {
-      "order": 37,
-      "phase": "ФАЗА 3: Применение квот",
-      "layer": "v7_unsvc_to_ops",
-      "function": "rtc_unsvc_to_ops_v7",
-      "state": "7→2",
-      "notes": "Применение P2, обнуление PPR"
-    },
-    {
-      "order": 38,
-      "phase": "ФАЗА 3: Применение квот",
-      "layer": "v7_inactive_to_ops",
-      "function": "rtc_inactive_to_ops_v7",
-      "state": "1→2",
-      "notes": "Применение P3"
-    },
-    {
-      "order": 39,
-      "phase": "ФАЗА 3.5: RepairLine (post-quota)",
-      "layer": "v8_repair_line_sync_post",
-      "function": "rtc_repair_line_sync_post_v8",
-      "state": "RepairLine",
-      "notes": "Синхронизация линий после квот"
-    },
-    {
-      "order": 40,
-      "phase": "ФАЗА 3.7: Post-quota пересчёт",
-      "layer": "v8_reset_buffers_post_quota",
-      "function": "rtc_reset_quota_v8_post_*",
-      "state": "all",
-      "notes": "Сброс буферов после пост-квотных переходов"
-    },
-    {
-      "order": 41,
-      "phase": "ФАЗА 3.7: Post-quota пересчёт",
-      "layer": "v8_count_agents_post_quota",
-      "function": "rtc_count_*_v8_post",
-      "state": "all",
-      "notes": "Подсчёт ops/svc/unsvc/inactive после квот"
-    },
-    {
-      "order": 42,
-      "phase": "ФАЗА 3.7: Post-quota добор",
-      "layer": "v8_promote_inactive_post",
-      "function": "rtc_promote_inactive_post_v8",
-      "state": "1",
-      "notes": "Доп. добор из inactive после пост-квотных переходов"
-    },
-    {
-      "order": 43,
-      "phase": "ФАЗА 3.7: Post-quota добор",
-      "layer": "v8_inactive_to_ops_post",
-      "function": "rtc_inactive_to_ops_post_v8",
-      "state": "1→2",
-      "notes": "Применение post-добора inactive"
-    },
-    {
-      "order": 44,
-      "phase": "ФАЗА 3.8: Spawn counts",
-      "layer": "v8_reset_buffers_spawn",
-      "function": "rtc_reset_quota_v8_spawn_*",
-      "state": "all",
-      "notes": "Сброс буферов перед spawn"
-    },
-    {
-      "order": 45,
-      "phase": "ФАЗА 3.8: Spawn counts",
-      "layer": "v8_count_agents_spawn",
-      "function": "rtc_count_*_v8_spawn",
-      "state": "all",
-      "notes": "Подсчёт ops/svc/unsvc/inactive перед spawn"
-    },
-    {
-      "order": 46,
-      "phase": "ФАЗА 4: Динамический спавн",
-      "layer": "v8_spawn_dynamic_mgr",
-      "function": "rtc_spawn_dynamic_mgr_v8",
-      "state": "SpawnMgr",
-      "reads_from": [45],
-      "writes_to": ["MacroProperty spawn_dynamic_need_*/base_idx_*/base_acn_*"],
-      "notes": "Дефицит = target − curr_ops − used(P1/P2/P3 commit). Читает post-quota counts"
-    },
-    {
-      "order": 47,
-      "phase": "ФАЗА 4: Динамический спавн",
-      "layer": "v8_spawn_dynamic_ticket",
-      "function": "rtc_spawn_dynamic_ticket_v8",
-      "state": "Ticket→ops",
-      "notes": "Создание новых агентов (Mi-17)"
-    },
-    {
-      "order": 48,
-      "phase": "ФАЗА 4: Динамический спавн",
-      "layer": "v8_spawn_dynamic_ticket_mi8",
-      "function": "rtc_spawn_dynamic_ticket_v8_mi8",
-      "state": "Ticket→ops",
-      "notes": "Создание новых агентов (Mi-8)"
-    },
-    {
-      "order": 49,
-      "phase": "ФАЗА 5: Limiter (бинарный поиск)",
-      "layer": "L_limiter_entry",
-      "function": "rtc_compute_limiter_on_entry",
-      "state": "2→2",
-      "notes": "Пересчёт limiter при входе/нулевом значении"
-    },
-    {
-      "order": 50,
-      "phase": "ФАЗА 5: Limiter (бинарный поиск)",
-      "layer": "L_limiter_min",
+      "phase": "ФАЗА 5: Adaptive step (финал)",
+      "layer": "min_limiter_reduction",
       "function": "rtc_compute_min_limiter",
       "state": "2→2",
-      "notes": "Сбор минимального limiter по ops"
+      "notes": "atomicMin по всем ops → mp_min_limiter[0]. Сброс в HF_StepController."
+    },
+    {
+      "order": "HF",
+      "phase": "ФАЗА 5: Adaptive step (финал)",
+      "layer": "HF_StepController",
+      "function": "HF_StepController",
+      "state": "Host (step function)",
+      "notes": "adaptive_days=MIN(mp_min_limiter, days_to_next_det). prev_day=current_day. current_day+=adaptive_days. Sync MacroProperty→Environment. Reset mp_min_limiter=0xFFFFFFFF."
     }
   ],
+
   "rules": [
     {
-      "id": "spawn_to_ops_v8",
+      "id": "spawn_to_ops_v9",
       "from": 0,
       "to": 2,
       "pre": {
@@ -486,213 +231,153 @@
       },
       "post": {
         "all": [
-          {
-            "expr": "state == 2"
-          },
-          {
-            "expr": "repair_days == 0"
-          },
-          {
-            "expr": "repair_line_id == 0xFFFFFFFF"
-          }
+          { "expr": "state == 2" },
+          { "expr": "repair_days == 0" },
+          { "expr": "repair_line_id == 0xFFFFFFFF" }
         ],
-        "notes": "Новый агент: sne/ppr/idx/acn задаются из параметров SpawnMgr (base_idx, base_acn)"
+        "notes": "Динамический spawn: новый агент сразу в ops. sne/ppr/idx/acn из SpawnMgr."
       },
       "owner_module": "rtc_spawn_dynamic_v7",
-      "notes": "Динамический spawn → operations."
+      "notes": "Динамический spawn 0→2 (operations)."
     },
     {
-      "id": "spawn_to_svc_v2",
+      "id": "spawn_to_svc_v9",
       "from": 0,
-      "to": 3,
-      "pre": {
-        "expr": "ticket < spawn_need_u32"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 3"
-          }
-        ]
-      },
-      "owner_module": "rtc_spawn_v2",
-      "notes": "Детерминированный spawn → serviceable."
-    },
-    {
-      "id": "ops_to_storage_ll_v8",
-      "from": 2,
-      "to": 6,
-      "pre": {
-        "expr": "sne_next >= ll"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 6"
-          },
-          {
-            "expr": "limiter == 0"
-          }
-        ],
-        "notes": "Терминальное состояние: sne и ppr сохраняются (frozen), агент не участвует в дальнейших переходах"
-      },
-      "owner_module": "rtc_state_transitions_v8",
-      "notes": "V8: списание по LL (next-day dt). Приоритет 1."
-    },
-    {
-      "id": "ops_to_storage_br_v8",
-      "from": 2,
-      "to": 6,
-      "pre": {
-        "expr": "ppr_next >= oh AND sne_next >= br"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 6"
-          },
-          {
-            "expr": "limiter == 0"
-          }
-        ],
-        "notes": "Терминальное состояние: sne и ppr сохраняются (frozen), агент не участвует в дальнейших переходах"
-      },
-      "owner_module": "rtc_state_transitions_v8",
-      "notes": "V8: списание по BR при SNE>=BR. Приоритет 2."
-    },
-    {
-      "id": "ops_to_unsvc_v8",
-      "from": 2,
-      "to": 7,
-      "pre": {
-        "expr": "ppr_next >= oh AND sne_next < br"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 7"
-          },
-          {
-            "expr": "repair_line_id == 0xFFFFFFFF"
-          }
-        ]
-      },
-      "owner_module": "rtc_state_transitions_v8",
-      "notes": "V8: уход в unserviceable по OH при SNE<BR. Приоритет 3."
-    },
-    {
-      "id": "demote_ops_to_svc_v8",
-      "from": 2,
-      "to": 3,
-      "pre": {
-        "expr": "idx < demote_threshold"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 3"
-          },
-          {
-            "expr": "limiter == 0"
-          }
-        ],
-        "notes": "Агент покидает operations; limiter обнуляется (неактуален вне ops, пересчитывается при re-entry через P1)"
-      },
-      "owner_module": "rtc_demote_ops_v7",
-      "notes": "Квоты: демоут ops → serviceable при избытке (по idx)."
-    },
-    {
-      "id": "p1_svc_to_ops_v8",
-      "from": 3,
-      "to": 2,
-      "pre": {
-        "expr": "idx >= threshold_s3 AND quota_left > 0"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 2"
-          }
-        ]
-      },
-      "owner_module": "rtc_svc_to_ops_v7",
-      "notes": "Квоты P1: serviceable → operations (threshold_s3)."
-    },
-    {
-      "id": "p2_unsvc_to_ops_v8",
-      "from": 7,
-      "to": 2,
-      "pre": {
-        "expr": "repair_days == 0 AND repair_line_id == 0xFFFFFFFF AND free_days >= repair_time AND quota_left > 0"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 2"
-          },
-          {
-            "expr": "ppr == 0"
-          },
-          {
-            "expr": "repair_line_id = line_id"
-          },
-          {
-            "expr": "repair_line.free_days = 0"
-          },
-          {
-            "expr": "repair_line.aircraft_number = acn"
-          }
-        ]
-      },
-      "owner_module": "rtc_promote_unsvc_v8",
-      "notes": "Квоты P2: unserviceable → operations (RepairLine). repair_line.* — переменные агента RepairLine (MacroProperty)."
-    },
-    {
-      "id": "p3_inactive_to_ops_v8",
-      "from": 1,
-      "to": 2,
-      "pre": {
-        "expr": "free_days >= repair_time AND quota_left > 0"
-      },
-      "post": {
-        "all": [
-          {
-            "expr": "state == 2"
-          },
-          {
-            "expr": "repair_line_id = line_id"
-          },
-          {
-            "expr": "repair_line.free_days = 0"
-          },
-          {
-            "expr": "repair_line.aircraft_number = acn"
-          }
-        ]
-      },
-      "owner_module": "rtc_promote_inactive_v8",
-      "notes": "Квоты P3: inactive → operations (RepairLine). repair_line.* — переменные агента RepairLine (MacroProperty)."
-    },
-    {
-      "id": "repair_to_svc_v8",
-      "from": 4,
       "to": 3,
       "pre": {
         "expr": "current_day >= exit_date"
       },
       "post": {
         "all": [
-          {
-            "expr": "state == 3"
-          },
-          {
-            "expr": "repair_days == 0"
-          }
+          { "expr": "state == 3" },
+          { "expr": "limiter == 0" }
+        ]
+      },
+      "owner_module": "rtc_spawn_to_svc",
+      "notes": "Детерминированный spawn 0→3 (serviceable). P1 поднимет в ops."
+    },
+    {
+      "id": "ops_to_storage_ll_v8",
+      "from": 2,
+      "to": 6,
+      "pre": { "expr": "sne_next >= ll" },
+      "post": {
+        "all": [
+          { "expr": "state == 6" },
+          { "expr": "limiter == 0" }
+        ],
+        "notes": "Терминальное состояние: sne и ppr frozen"
+      },
+      "owner_module": "rtc_state_transitions_v8",
+      "notes": "Списание по LL (next-day dt). Приоритет 1."
+    },
+    {
+      "id": "ops_to_storage_br_v8",
+      "from": 2,
+      "to": 6,
+      "pre": { "expr": "ppr_next >= oh AND sne_next >= br" },
+      "post": {
+        "all": [
+          { "expr": "state == 6" },
+          { "expr": "limiter == 0" }
+        ],
+        "notes": "Терминальное состояние: sne и ppr frozen"
+      },
+      "owner_module": "rtc_state_transitions_v8",
+      "notes": "Списание по BR при SNE>=BR. Приоритет 2."
+    },
+    {
+      "id": "ops_to_unsvc_v8",
+      "from": 2,
+      "to": 7,
+      "pre": { "expr": "ppr_next >= oh AND sne_next < br" },
+      "post": {
+        "all": [
+          { "expr": "state == 7" },
+          { "expr": "repair_line_id == 0xFFFFFFFF" },
+          { "expr": "repair_days == repair_time" }
+        ]
+      },
+      "owner_module": "rtc_state_transitions_v8",
+      "notes": "Уход в unsvc по OH при SNE<BR. repair_days=repair_time. Приоритет 3."
+    },
+    {
+      "id": "demote_ops_to_svc_v8",
+      "from": 2,
+      "to": 3,
+      "pre": { "expr": "idx < demote_threshold" },
+      "post": {
+        "all": [
+          { "expr": "state == 3" },
+          { "expr": "limiter == 0" }
+        ],
+        "notes": "limiter обнуляется принудительно (пересчитывается при re-entry через P1)"
+      },
+      "owner_module": "rtc_demote_ops_v7",
+      "notes": "Демоут ops→svc при избытке (по idx)."
+    },
+    {
+      "id": "p1_svc_to_ops_v8",
+      "from": 3,
+      "to": 2,
+      "pre": { "expr": "idx >= threshold_s3 AND quota_left > 0" },
+      "post": {
+        "all": [
+          { "expr": "state == 2" },
+          { "expr": "limiter = compute_limiter_inline()" }
+        ]
+      },
+      "owner_module": "rtc_svc_to_ops_v7",
+      "notes": "P1: svc→ops. PPR сохраняется. Inline limiter."
+    },
+    {
+      "id": "p2_unsvc_to_ops_v8",
+      "from": 7,
+      "to": 2,
+      "pre": { "expr": "repair_days == 0 AND repair_line_id == 0xFFFFFFFF AND free_days >= repair_time AND quota_left > 0" },
+      "post": {
+        "all": [
+          { "expr": "state == 2" },
+          { "expr": "ppr == 0" },
+          { "expr": "repair_line_id = line_id" },
+          { "expr": "repair_line.free_days = 0" },
+          { "expr": "repair_line.aircraft_number = acn" },
+          { "expr": "limiter = compute_limiter_inline()" }
+        ]
+      },
+      "owner_module": "rtc_promote_unsvc_v8",
+      "notes": "P2: unsvc→ops. PPR=0. RepairLine. Inline limiter."
+    },
+    {
+      "id": "p3_inactive_to_ops_v8",
+      "from": 1,
+      "to": 2,
+      "pre": { "expr": "free_days >= repair_time AND quota_left > 0" },
+      "post": {
+        "all": [
+          { "expr": "state == 2" },
+          { "expr": "repair_line_id = line_id" },
+          { "expr": "repair_line.free_days = 0" },
+          { "expr": "repair_line.aircraft_number = acn" },
+          { "expr": "limiter = compute_limiter_inline()" }
+        ]
+      },
+      "owner_module": "rtc_promote_inactive_v8",
+      "notes": "P3: inactive→ops. PPR по правилу Mi-17. RepairLine. Inline limiter."
+    },
+    {
+      "id": "repair_to_svc_v8",
+      "from": 4,
+      "to": 3,
+      "pre": { "expr": "current_day >= exit_date" },
+      "post": {
+        "all": [
+          { "expr": "state == 3" },
+          { "expr": "repair_days == 0" }
         ]
       },
       "owner_module": "rtc_repair_to_svc_v7",
       "notes": "Детерминированный выход из ремонта по exit_date."
     }
-    
   ]
 }

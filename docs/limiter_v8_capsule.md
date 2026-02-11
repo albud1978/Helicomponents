@@ -39,13 +39,13 @@
 - V8 использует RepairLine вместо exit_date (пул линий из MP) — `docs/architecture/limiter_architecture.md`
 - `repair_days` введён для unsvc, inactive не декрементируется — `docs/architecture/limiter_architecture.md`
 - Правило ресурса — next-day dt (чтобы исключить переналёт) — `docs/architecture/limiter_architecture.md`
-- V8 не эквивалентен V7 по переходам (осознанно) — `docs/architecture/limiter_architecture.md`
-- Дет. даты ограничены 500 (с отбрасыванием лишних) — `docs/architecture/limiter_architecture.md`
-- Основной код ветки — `orchestrator_limiter_v8.py` — `README.md`
-- Квоты идут через MessageBucket/QuotaBucket, решения по rank — `README.md`
+- **HF_StepController** (вместо HF_UpdateDayV8) выполняется в конце шага после layer 50 (после квотирования): adaptive_days = MIN(mp_min_limiter, days_to_next_deterministic_date), prev_day = current_day, current_day += adaptive_days; синхронизация MacroProperty → Environment; reset mp_min_limiter = 0xFFFFFFFF. Layers 14–16 удалены — `code/sim_v2/messaging/orchestrator_limiter_v8.py`.
+- **HF_InitV8 убран**; deterministic_dates_mp инициализируется при сборке модели — `code/sim_v2/messaging/orchestrator_limiter_v8.py`.
+- **Inline limiter**: layer 49 убран как отдельный слой; бинарный поиск встроен в X→ops; early-out в layers 11–12: if (limiter > 0) return false — `code/sim_v2/messaging/rtc_limiter_v8.py`.
+- V8 не эквивалентен V7 по переходам; MAX_DETERMINISTIC_DATES=500 (лишние даты отбрасываются) — `docs/architecture/limiter_architecture.md`
 
 ## Impact Paths
-- `code/sim_v2/messaging/orchestrator_limiter_v8.py` → порядок слоёв V8 → поведение симуляции — `README.md`, `docs/architecture/limiter_architecture.md`
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py` → порядок слоёв V8, HF_StepController (end-of-step adaptive), стабильный current_day в шаге → поведение симуляции — `code/sim_v2/messaging/orchestrator_limiter_v8.py`
 - `docs/architecture/limiter_architecture.md` → канон V8 → правила/слои — `docs/architecture/limiter_architecture.md`
 - `config/transitions/transitions_rules.json` → матрица state→state → переходы — `docs/architecture/limiter_architecture.md`
 - `config/transitions/quota_rules.json` → логика квот/RepairLine → P1/P2/P3 решения — `docs/architecture/limiter_architecture.md`
@@ -76,6 +76,7 @@
 
 ## Pointers (≤15)
 - `code/sim_v2/messaging/orchestrator_limiter_v8.py`
+- `code/sim_v2/messaging/rtc_limiter_v8.py`
 - `docs/architecture/limiter_architecture.md`
 - `docs/architecture/rtc_pipeline_architecture.md`
 - `docs/architecture/validation_rules.md`

@@ -31,6 +31,12 @@ REPAIR_LINES_MAX = 64
 
 import pyflamegpu as fg
 
+# TODO(message-based-qm): перевести QM на RepairLineStatus/LineAssignment, убрать CAS на MacroProperty.
+
+# REMOVED (cleanup-dead-quota-code): register_quota_v8_full, RTC_REPAIR_LINE_SLOTS_V8,
+# RTC_QUOTA_MANAGER_V8_MSG, RTC_QUOTA_DEBUG_P2 — не вызываются оркестратором V8.
+# Активный путь: register_quota_v8_messages (MessageBucket).
+
 # Локальные копии V7-квот для V8 (reset/count/demote/P1/post)
 from rtc_quota_v8_base import (
     RTC_RESET_FLAGS,
@@ -52,6 +58,7 @@ from rtc_apply_decisions import register_rtc as register_apply_decisions
 # V8: Слоты RepairLine (RepairLine → QM, адресные MessageArray)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+'''
 RTC_REPAIR_LINE_SLOTS_V8 = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_slots_v8, flamegpu::MessageArray, flamegpu::MessageNone) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
@@ -102,12 +109,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_slots_v8, flamegpu::MessageArray, flameg
     return flamegpu::ALIVE;
 }}
 """
+'''
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # V8: QuotaManager (message-only, единый модуль)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+'''
 RTC_QUOTA_MANAGER_V8_MSG = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_msg, flamegpu::MessageBruteForce, flamegpu::MessageArray) {{
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
@@ -424,6 +433,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_msg, flamegpu::MessageBruteForce, f
     return flamegpu::ALIVE;
 }}
 """
+'''
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # V8: QuotaManager (MessageBucket broadcast)
@@ -475,6 +485,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     qm_ops_mp[0].exchange(ops8);
     qm_ops_mp[1].exchange(ops17);
     
+    // Подсчет доступных слотов ремонта (shared pool)
+    auto line_days_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto line_acn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
+    const unsigned int max_lines = (repair_quota < {REPAIR_LINES_MAX}u) ? repair_quota : {REPAIR_LINES_MAX}u;
+    
+    // min repair_time для порога доступности
+    const unsigned int min_rt = (mi8_rt < mi17_rt) ? mi8_rt : mi17_rt;
+    
+    unsigned int available_slots = 0u;
+    for (unsigned int i = 0u; i < max_lines; ++i) {{
+        if (line_acn_mp[i] == 0u && line_days_mp[i] >= min_rt) {{
+            available_slots++;
+        }}
+    }}
+    
     const unsigned int ina_ready8 = (day >= mi8_rt) ? ina8 : 0u;
     const unsigned int ina_ready17 = (day >= mi17_rt) ? ina17 : 0u;
     
@@ -486,13 +512,26 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     unsigned int p1_17 = (deficit17 < svc17) ? deficit17 : svc17;
     deficit17 -= p1_17;
     
-    unsigned int p2_8 = (deficit8 < unsvc8) ? deficit8 : unsvc8;
+    // P2/P3 shared pool: Mi-17 first, Mi-8 second
+    unsigned int slots_left = available_slots;
+    
     unsigned int p2_17 = (deficit17 < unsvc17) ? deficit17 : unsvc17;
-    deficit8 -= p2_8;
+    p2_17 = (p2_17 < slots_left) ? p2_17 : slots_left;
     deficit17 -= p2_17;
+    slots_left -= p2_17;
+    
+    unsigned int p3_17 = (deficit17 < ina_ready17) ? deficit17 : ina_ready17;
+    p3_17 = (p3_17 < slots_left) ? p3_17 : slots_left;
+    deficit17 -= p3_17;
+    slots_left -= p3_17;
+    
+    unsigned int p2_8 = (deficit8 < unsvc8) ? deficit8 : unsvc8;
+    p2_8 = (p2_8 < slots_left) ? p2_8 : slots_left;
+    deficit8 -= p2_8;
+    slots_left -= p2_8;
     
     unsigned int p3_8 = (deficit8 < ina_ready8) ? deficit8 : ina_ready8;
-    unsigned int p3_17 = (deficit17 < ina_ready17) ? deficit17 : ina_ready17;
+    p3_8 = (p3_8 < slots_left) ? p3_8 : slots_left;
     
     FLAMEGPU->message_out.setKey(0);
     FLAMEGPU->message_out.setVariable<unsigned int>("promote_p1_mi8", p1_8);
@@ -517,6 +556,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     FLAMEGPU->setVariable<unsigned int>("debug_qm_p1_mi17", p1_17);
     FLAMEGPU->setVariable<unsigned int>("debug_qm_p2_total", p2_8 + p2_17);
     FLAMEGPU->setVariable<unsigned int>("debug_qm_p3_total", p3_8 + p3_17);
+    // FLAMEGPU->setVariable<unsigned int>("debug_qm_available_slots", available_slots); // add variable if declared
     FLAMEGPU->setVariable<int>("debug_qm_balance_mi8", (int)target_mi8 - (int)ops8);
     FLAMEGPU->setVariable<int>("debug_qm_balance_mi17", (int)target_mi17 - (int)ops17);
     FLAMEGPU->setVariable<unsigned int>("debug_qm_target_day", target_day);
@@ -1165,6 +1205,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
 # DEBUG: P2 показатели в QuotaManager (без влияния на логику)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+'''
 RTC_QUOTA_DEBUG_P2 = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_quota_debug_p2_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned char group_by = FLAMEGPU->getVariable<unsigned char>("group_by");
@@ -1223,6 +1264,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_debug_p2_v8, flamegpu::MessageNone, flamegpu::
     return flamegpu::ALIVE;
 }}
 """
+'''
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1390,6 +1432,7 @@ def register_quota_v8_messages(model, agent, quota_agent):
     print("  ✅ V8 MessageBucket квоты зарегистрированы")
 
 
+'''
 def register_quota_v8_full(model, agent, quota_agent):
     """
     Полная регистрация V8 квотирования.
@@ -1505,6 +1548,7 @@ def register_quota_v8_full(model, agent, quota_agent):
     print("  ✅ P3 промоут (inactive → RepairLine)")
     
     print("✅ Квотирование V8 зарегистрировано\n")
+'''
 
 
 def register_post_quota_counts_v8(model: fg.ModelDescription, agent: fg.AgentDescription):

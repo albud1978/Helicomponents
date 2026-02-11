@@ -78,23 +78,24 @@ def setup_v8_macroproperties(env, deterministic_dates: list):
     except:
         pass  # Уже существует
     
-    # Environment properties
-    num_dates = min(len(deterministic_dates), MAX_DETERMINISTIC_DATES)
+    # Environment properties (значения будут заполнены после populate_agents)
     try:
-        env.newPropertyUInt("num_deterministic_dates", num_dates)
-    except:
-        env.setPropertyUInt("num_deterministic_dates", num_dates)
+        env.newPropertyUInt("num_deterministic_dates", 0)
+    except Exception:
+        pass
     
     print(f"  ✅ V8 MacroProperty: deterministic_dates_mp[{MAX_DETERMINISTIC_DATES}], "
-          f"min_dynamic_mp, num_dates={num_dates}")
+          f"min_dynamic_mp, num_dates=deferred")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # HostFunction для инициализации V8
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# HF_InitV8: единственный способ инициализировать MacroProperty до simulate()
+# (CUDASimulation не имеет API для MacroProperty, только HostFunction.environment)
 class HF_InitV8(fg.HostFunction):
-    """HostFunction для инициализации V8 MacroProperty"""
+    """HostFunction для инициализации V8 MacroProperty (addInitFunction)."""
     
     def __init__(self, deterministic_dates: list, end_day: int):
         super().__init__()
@@ -318,17 +319,13 @@ def register_v8_pre_quota_layers(model, agent, quota_agent, deterministic_dates:
     Регистрирует V8 слои до квотирования (collect/compute).
     
     Слои:
-    1. v8_init
-    2. v8_collect_min_ops
-    3. v8_collect_min_repair
-    4. v8_compute_global_min
+    1. v8_collect_min_ops
+    2. v8_collect_min_repair
+    3. v8_compute_global_min
     """
     print("\n📦 V8: Регистрация adaptive pre-quota layers...")
     
-    # HostFunction для инициализации
-    hf_init = HF_InitV8(deterministic_dates, end_day)
-    layer_init = model.newLayer("v8_init")
-    layer_init.addHostFunction(hf_init)
+    # REMOVED (move-hf-init-v8): HF_InitV8 заменён прямой инициализацией MacroProperty.
     
     # 1. Collect min от operations
     layer_ops = model.newLayer("v8_collect_min_ops")
@@ -353,7 +350,7 @@ def register_v8_pre_quota_layers(model, agent, quota_agent, deterministic_dates:
     
     print(f"  ✅ V8 adaptive pre-quota layers зарегистрированы (3 слоя)")
     
-    return hf_init
+    return None
 
 
 def register_v8_update_day_layer(model, end_day: int):

@@ -23,9 +23,10 @@ ETL-специфичные инварианты (не в invariants.json, обе
 
 1. **18-стадийный sequential pipeline** — жёсткий порядок: MD → Status → Program → Dual → Enrich → Dictionaries → Tensors → Final. Причина: каждая стадия зависит от предыдущей.
 2. **Dual Loader** (стадия 4) — одновременная загрузка heli_raw (все данные, ~10736) и heli_pandas (фильтрованные). Причина: разделение архивных и рабочих данных.
-3. **Native ClickHouse driver** (порт 9000) — clickhouse_driver вместо clickhouse_connect (HTTP). Причина: производительность + совместимость с типами.
-4. **Additive vs Rewrite** — словари (dict_*) additive (append-only); status_flat — rewrite. Причина: словари растут монотонно, статусы перезаписываются.
-5. **Excel как входные данные** — Status_Components.xlsx, Status_Overhaul.xlsx, Program_AC.xlsx, Program.xlsx из `data_input/source_data/v_YYYY-MM-DD/`. Причина: бизнес-формат заказчика.
+3. **Блок 4 статус‑маппинг** — неисправные агрегаты без target_date получают status_id=1 (inactive), а не status_id=4 (repair); без target_date нет плана ремонта — `code/extract/heli_pandas_storage_status.py`.
+4. **Native ClickHouse driver** (порт 9000) — clickhouse_driver вместо clickhouse_connect (HTTP). Причина: производительность + совместимость с типами.
+5. **Additive vs Rewrite** — словари (dict_*) additive (append-only); status_flat — rewrite. Причина: словари растут монотонно, статусы перезаписываются.
+6. **Excel как входные данные** — Status_Components.xlsx, Status_Overhaul.xlsx, Program_AC.xlsx, Program.xlsx из `data_input/source_data/v_YYYY-MM-DD/`. Причина: бизнес-формат заказчика.
 
 ## Impact Paths
 - `data_input/source_data/v_*/*.xlsx` → extract_master.py → ClickHouse tables → симуляция читает из ClickHouse
@@ -70,6 +71,7 @@ Excel files (data_input/)
 - Некорректные Excel → ошибка начальных данных → precheck стадия (D1) + validate_heli_pandas.py
 - Пропуск стадии → неконсистентные данные → sequential pipeline (ошибка останавливает всё)
 - Дубли version_date → смешение прогонов → etl_version_manager: уникальный version_date per run
+- Ретроспективные сверки статусов: блок 4 изменён (status_id=4 → status_id=1 для неисправных без target_date) → учитывать смену классификации — `code/extract/heli_pandas_storage_status.py`
 
 ## Open Questions (≤7)
 - Миграция с Excel на API-источник данных?
@@ -78,6 +80,7 @@ Excel files (data_input/)
 ## Pointers (≤15)
 - `code/extract/extract_master.py`
 - `code/extract/dual_loader.py`
+- `code/extract/heli_pandas_storage_status.py`
 - `code/extract/md_components_loader.py`
 - `code/extract/status_overhaul_loader.py`
 - `code/extract/program_fl_direct_loader.py`
