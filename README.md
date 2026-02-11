@@ -56,9 +56,13 @@ python3 code/utils/test_db_connection.py
 # 4. Запустить ETL (интерактивный выбор датасета и режима)
 python3 code/extract/extract_master.py
 
-# 5. Запустить симуляцию — см. полную команду в .cursor/rules/
+# 5. Запустить симуляцию V8 (LIMITER)
+python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
+  --version-date YYYY-MM-DD --steps 3650 --enable-mp2 --drop-table
 ```
 
+> **Эталонная команда V8:** V8 НЕ использует `--modules` (порядок слоёв зашит в `build_model()`).  
+> **SSoT по порядку слоёв:** `config/transitions/transitions_rules.json` (секция `rtc_execution_order`).  
 > **Полные команды с параметрами:** см. `.cursor/rules/` (секции "Загрузка данных" и "Команда запуска симуляции")
 
 ---

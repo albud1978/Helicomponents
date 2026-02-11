@@ -12,21 +12,21 @@ import pyflamegpu as fg
 # Максимум ремонтных линий (MacroProperty размер)
 REPAIR_LINES_MAX = 64
 
-RTC_REPAIR_LINE_SYNC = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_sync_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("line_id");
-    auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
-    auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
-    auto mp_last_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_acn_mp");
-    auto mp_last_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_day_mp");
-    const unsigned int free_days = mp_days[line_id];
-    FLAMEGPU->setVariable<unsigned int>("free_days", free_days);
-    FLAMEGPU->setVariable<unsigned int>("aircraft_number", mp_acn[line_id]);
-    FLAMEGPU->setVariable<unsigned int>("last_acn", mp_last_acn[line_id]);
-    FLAMEGPU->setVariable<unsigned int>("last_day", mp_last_day[line_id]);
-    return flamegpu::ALIVE;
-}}
-"""
+# RTC_REPAIR_LINE_SYNC = f"""
+# FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_sync_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+#     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("line_id");
+#     auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+#     auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+#     auto mp_last_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_acn_mp");
+#     auto mp_last_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_day_mp");
+#     const unsigned int free_days = mp_days[line_id];
+#     FLAMEGPU->setVariable<unsigned int>("free_days", free_days);
+#     FLAMEGPU->setVariable<unsigned int>("aircraft_number", mp_acn[line_id]);
+#     FLAMEGPU->setVariable<unsigned int>("last_acn", mp_last_acn[line_id]);
+#     FLAMEGPU->setVariable<unsigned int>("last_day", mp_last_day[line_id]);
+#     return flamegpu::ALIVE;
+# }}
+# """
 
 RTC_REPAIR_LINE_INCREMENT = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_increment_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -84,29 +84,52 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_publish_status_v8, flamegpu::MessageNone
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("line_id");
     const unsigned int free_days = FLAMEGPU->getVariable<unsigned int>("free_days");
     const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
-    
+    const unsigned int mi8_rt = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
+    const unsigned int mi17_rt = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+    const unsigned int repair_time = (mi8_rt < mi17_rt) ? mi8_rt : mi17_rt;
+    if (acn != 0u || free_days < repair_time) {{
+        return flamegpu::ALIVE;
+    }}
+
     FLAMEGPU->message_out.setIndex(line_id);
     FLAMEGPU->message_out.setVariable<unsigned int>("free_days", free_days);
-    FLAMEGPU->message_out.setVariable<unsigned int>("aircraft_number", acn);
+    return flamegpu::ALIVE;
+}}
+"""
+
+RTC_REPAIR_LINE_APPLY_ASSIGNMENT = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_apply_assignment_v8, flamegpu::MessageArray, flamegpu::MessageNone) {{
+    const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("line_id");
+    auto msg = FLAMEGPU->message_in.at(line_id);
+    const unsigned int msg_acn = msg.getVariable<unsigned int>("aircraft_number");
+
+    if (msg_acn != 0u) {{
+        // Назначение линии: обновляем aircraft_number и сбрасываем free_days
+        FLAMEGPU->setVariable<unsigned int>("aircraft_number", msg_acn);
+        FLAMEGPU->setVariable<unsigned int>("free_days", 0u);
+    }} else {{
+        // Освобождение линии: обнуляем aircraft_number
+        FLAMEGPU->setVariable<unsigned int>("aircraft_number", 0u);
+    }}
     return flamegpu::ALIVE;
 }}
 """
 
 
 def register_repair_line_pre_quota_layers(model: fg.ModelDescription, repair_line_agent: fg.AgentDescription):
-    """Слои RepairLine до квотирования: sync -> increment -> write"""
-    layer_sync = model.newLayer("v8_repair_line_sync_pre")
-    fn = repair_line_agent.newRTCFunction("rtc_repair_line_sync_v8", RTC_REPAIR_LINE_SYNC)
-    fn.setInitialState("default")
-    fn.setEndState("default")
-    layer_sync.addAgentFunction(fn)
-    
+    """Слои RepairLine до квотирования: increment -> write -> publish"""
+    # layer_sync = model.newLayer("v8_repair_line_sync_pre")
+    # fn = repair_line_agent.newRTCFunction("rtc_repair_line_sync_v8", RTC_REPAIR_LINE_SYNC)
+    # fn.setInitialState("default")
+    # fn.setEndState("default")
+    # layer_sync.addAgentFunction(fn)
+
     layer_inc = model.newLayer("v8_repair_line_increment")
     fn = repair_line_agent.newRTCFunction("rtc_repair_line_increment_v8", RTC_REPAIR_LINE_INCREMENT)
     fn.setInitialState("default")
     fn.setEndState("default")
     layer_inc.addAgentFunction(fn)
-    
+
     layer_write = model.newLayer("v8_repair_line_write")
     fn = repair_line_agent.newRTCFunction("rtc_repair_line_write_v8", RTC_REPAIR_LINE_WRITE)
     fn.setInitialState("default")
@@ -132,13 +155,23 @@ def register_repair_line_assign_for_repair_exit(model: fg.ModelDescription, heli
     layer.addAgentFunction(fn)
     print("  ✅ V8: RepairLine assign (repair) слой зарегистрирован")
 
+def register_repair_line_apply_assignment(model: fg.ModelDescription, repair_line_agent: fg.AgentDescription):
+    """Слой применения назначений линий (LineAssignment)"""
+    layer = model.newLayer("v8_repair_line_apply_assignment")
+    fn = repair_line_agent.newRTCFunction("rtc_repair_line_apply_assignment_v8", RTC_REPAIR_LINE_APPLY_ASSIGNMENT)
+    fn.setInitialState("default")
+    fn.setEndState("default")
+    fn.setMessageInput("LineAssignment")
+    layer.addAgentFunction(fn)
+    print("  ✅ V8: RepairLine apply assignment слой зарегистрирован")
+
 
 def register_repair_line_sync_post_quota(model: fg.ModelDescription, repair_line_agent: fg.AgentDescription):
     """Слой синхронизации RepairLine после квотирования"""
-    layer = model.newLayer("v8_repair_line_sync_post")
-    fn = repair_line_agent.newRTCFunction("rtc_repair_line_sync_post_v8", RTC_REPAIR_LINE_SYNC)
-    fn.setInitialState("default")
-    fn.setEndState("default")
-    layer.addAgentFunction(fn)
-    print("  ✅ V8: RepairLine post-quota sync слой зарегистрирован")
+    # layer = model.newLayer("v8_repair_line_sync_post")
+    # fn = repair_line_agent.newRTCFunction("rtc_repair_line_sync_post_v8", RTC_REPAIR_LINE_SYNC)
+    # fn.setInitialState("default")
+    # fn.setEndState("default")
+    # layer.addAgentFunction(fn)
+    # print("  ✅ V8: RepairLine post-quota sync слой зарегистрирован")
 

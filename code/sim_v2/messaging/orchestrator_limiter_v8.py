@@ -53,7 +53,7 @@ def collect_agents_state(simulation, agent_desc, current_day, version_date_int, 
                          step_id=0, prev_day=0, adaptive_days=0,
                          spawn_mgr_desc=None, repair_line_desc=None):
     """Собирает состояние всех агентов в текущий момент"""
-    states = ['inactive', 'operations', 'serviceable', 'repair', 'reserve', 'storage', 'unserviceable']
+    states = ['inactive', 'operations', 'serviceable', 'repair', 'storage', 'unserviceable']  # DISABLED (state5-unused): reserve removed
     rows = []
     
     def _get_env_u32(name: str, default: int = 0) -> int:
@@ -588,24 +588,30 @@ class LimiterV8Orchestrator:
         rtc_state_transitions_v7.register_phase0_deterministic(self.model, heli_agent)
         
         # Фаза 0.5: Копирование exit_date (repair, spawn, unsvc) — V8 compute_global_min игнорирует unsvc
-        rtc_state_transitions_v7.register_exit_date_copy(self.model, heli_agent, self.base_model.quota_agent)
+        # REMOVED (remove-phase05): Фаза 0.5 — мёртвый код в V8.
+        # min_exit_date_mp не читается вычислительными функциями V8.
+        # register_exit_date_copy(self.model, heli_agent, self.base_model.quota_agent)
         
         # Фаза 1: V8 Operations (next-day dt проверка!)
         rtc_state_transitions_v8.register_ops_transitions_v8(self.model, heli_agent)
         
-        # Фаза 1.5: V8 adaptive (до квотирования) — вычисление adaptive_days
-        self.hf_init_v8 = rtc_limiter_v8.register_v8_pre_quota_layers(
-            self.model,
-            self.base_model.agent,
-            self.base_model.quota_agent,
-            self.deterministic_dates,
-            self.end_day
-        )
+        # Фаза 1.5: V8 adaptive (до квотирования) — REMOVED (move-adaptive-to-end)
+        # REMOVED (move-hf-init-v8): HF_InitV8 заменён прямой инициализацией MacroProperty при сборке.
+        # rtc_limiter_v8.register_v8_init(self.model, ...)
+        # REMOVED (move-adaptive-to-end): Слои 14-16 удалены.
+        # Layer 14 дублировал layer 50; layer 15 избыточен; layer 16 перенесён в HF_StepController.
+        # rtc_limiter_v8.register_v8_pre_quota_layers(
+        #     self.model,
+        #     self.base_model.agent,
+        #     self.base_model.quota_agent,
+        #     self.deterministic_dates,
+        #     self.end_day
+        # )
         
-        # V8: Обновление дня — перед квотированием (вариант B)
-        rtc_limiter_v8.register_v8_update_day_layer(self.model, self.end_day)
+        # REMOVED (remove-hf-update-day): Заменён HF_StepController после layer 50.
+        # rtc_limiter_v8.register_v8_update_day_layer(self.model, self.end_day)
 
-        # RepairLine: sync -> increment -> write (до квотирования)
+        # RepairLine: increment -> publish (до квотирования)
         rtc_repair_lines_v8.register_repair_line_pre_quota_layers(
             self.model, self.base_model.repair_line_agent
         )
@@ -617,10 +623,15 @@ class LimiterV8Orchestrator:
         # Фаза 3: Переходы после квотирования
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
         
-        # Синхронизация RepairLine после квотирования
-        rtc_repair_lines_v8.register_repair_line_sync_post_quota(
+        # Применение назначений RepairLine после квотирования
+        rtc_repair_lines_v8.register_repair_line_apply_assignment(
             self.model, self.base_model.repair_line_agent
         )
+        
+        # Синхронизация RepairLine после квотирования (deprecated)
+        # rtc_repair_lines_v8.register_repair_line_sync_post_quota(
+        #     self.model, self.base_model.repair_line_agent
+        # )
         
         # Пересчёт буферов ПОСЛЕ пост-квотных переходов (нужно для корректного спавна)
         rtc_quota_v8.register_post_quota_counts_v8(self.model, heli_agent)
@@ -653,11 +664,25 @@ class LimiterV8Orchestrator:
             self.base_model.env,
             self.program_change_days
         )
-        rtc_limiter_optimized.register_limiter_optimized(
-            self.model,
-            heli_agent,
-            skip_decrement=True
+        # REMOVED (inline-limiter-entry): бинарный поиск встроен в X→ops функции.
+        # rtc_limiter_optimized.register_limiter_optimized(
+        #     self.model,
+        #     heli_agent,
+        #     skip_decrement=True
+        # )
+        fn_min = heli_agent.newRTCFunction(
+            "rtc_compute_min_limiter",
+            rtc_limiter_optimized.RTC_COMPUTE_ADAPTIVE_DAYS
         )
+        fn_min.setInitialState("operations")
+        fn_min.setEndState("operations")
+        layer_min = self.model.newLayer("L_limiter_min")
+        layer_min.addAgentFunction(fn_min)
+        
+        # V8 StepController (move-adaptive-to-end): после layer 50 (rtc_compute_min_limiter)
+        self.hf_step_controller = rtc_limiter_optimized.HF_StepController()
+        self.model.addStepFunction(self.hf_step_controller)
+        print("  ✅ V8 HF_StepController зарегистрирован (step function)")
         
         # ═══════════════════════════════════════════════════════════════
         # ФАЗА 5: V8 adaptive с deterministic_dates
@@ -665,6 +690,7 @@ class LimiterV8Orchestrator:
         print("\n📦 Подключение V8 adaptive (deterministic_dates)...")
         
         # V8 MacroProperty (включает current_day_mp, adaptive_result_mp и др.)
+        # Заполнение значений выполняется после populate_agents (move-hf-init-v8).
         rtc_limiter_v8.setup_v8_macroproperties(self.base_model.env, self.deterministic_dates)
         
         # V5 MacroProperty для совместимости (только недостающие)
@@ -699,7 +725,7 @@ class LimiterV8Orchestrator:
             enable_v8_reason=True
         )
         
-        # V8 update_day перенесён ДО квотирования (вариант B)
+        # V8 update_day заменён HF_StepController после limiter min
         
         # ИСПРАВЛЕНО: НЕ вызываем rtc_limiter_v5.register_v5_final_layers!
         # V5 compute_global_min ПЕРЕЗАПИСЫВАЛ результат V8, вызывая баг ops≠target
@@ -708,6 +734,11 @@ class LimiterV8Orchestrator:
         # V8 Exit condition
         self.hf_exit = rtc_limiter_v8.HF_ExitConditionV8(self.end_day)
         self.model.addExitCondition(self.hf_exit)
+        
+        # V8: InitFunction для MacroProperty (выполняется один раз до simulate)
+        self._hf_init_v8 = rtc_limiter_v8.HF_InitV8(self.deterministic_dates, self.end_day)
+        self.model.addInitFunction(self._hf_init_v8)
+        print("  ✅ V8 HF_InitV8 зарегистрирован (init function)")
         
         print("\n✅ Модель LIMITER V8 построена")
         print(f"   deterministic_dates: {len(self.deterministic_dates)} дат")
@@ -731,6 +762,8 @@ class LimiterV8Orchestrator:
         
         # Инициализация агентов
         self._populate_agents()
+        
+        # V8: MacroProperty инициализируются через HF_InitV8 (зарегистрирован в build_model)
         
         # Подготовка MP2
         mp2_rows = []
@@ -947,7 +980,9 @@ class LimiterV8Orchestrator:
         self.simulation.setPopulationData(inactive_pop, "inactive")
         
         # V8: Детерминированный spawn
-        spawn_count = self._populate_spawn_agents()
+        # DISABLED (state5-unused): spawn через reserve больше не используется. Детерминированный spawn реализуется через 0→3.
+        # DISABLED (state5-unused): spawn_count = self._populate_spawn_agents()
+        spawn_count = 0
         
         # V8: Добавляем repair_exits в deterministic_dates
         self._add_repair_exits_to_deterministic()
@@ -963,13 +998,14 @@ class LimiterV8Orchestrator:
         self.simulation.setPopulationData(qm_pop)
         
         # RepairLine агенты (ремонтные линии)
-        if self.repair_quota > 0:
-            rl_pop = fg.AgentVector(self.base_model.repair_line_agent, self.repair_quota)
-            for i in range(self.repair_quota):
-                rl_pop[i].setVariableUInt("line_id", i)
-                rl_pop[i].setVariableUInt("free_days", 1)
-                rl_pop[i].setVariableUInt("aircraft_number", 0)
-            self.simulation.setPopulationData(rl_pop)
+        # if self.repair_quota > 0:
+        #     rl_pop = fg.AgentVector(self.base_model.repair_line_agent, self.repair_quota)
+        #     for i in range(self.repair_quota):
+        #         rl_pop[i].setVariableUInt("line_id", i)
+        #         rl_pop[i].setVariableUInt("free_days", 1)
+        #         rl_pop[i].setVariableUInt("aircraft_number", 0)
+        #     self.simulation.setPopulationData(rl_pop)
+        self._init_repair_lines_at_build()
         
         # V8: RepairAgent ОТКЛЮЧЁН — не инициализируем популяцию
         # count_repair = self._count_agents_in_state("repair")
@@ -989,6 +1025,38 @@ class LimiterV8Orchestrator:
             )
         
         print(f"   ✅ Агенты загружены: Mi-8 ops={mi8_ops}, Mi-17 ops={mi17_ops}, spawn={spawn_count}")
+
+    def _init_repair_lines_at_build(self):
+        """V8: Инициализация RepairLine агентов (day-0 repair -> line)."""
+        if self.repair_quota <= 0:
+            return
+        
+        rl_pop = fg.AgentVector(self.base_model.repair_line_agent, self.repair_quota)
+        for i in range(self.repair_quota):
+            rl_pop[i].setVariableUInt("line_id", i)
+            rl_pop[i].setVariableUInt("free_days", 1)
+            rl_pop[i].setVariableUInt("aircraft_number", 0)
+            rl_pop[i].setVariableUInt("last_acn", 0)
+            rl_pop[i].setVariableUInt("last_day", 0)
+        
+        # Day-0 repair: привязываем к первым линиям
+        repair_pop = fg.AgentVector(self.base_model.agent)
+        self.simulation.getPopulationData(repair_pop, "repair")
+        assign_count = min(repair_pop.size(), self.repair_quota)
+        for i in range(assign_count):
+            agent = repair_pop.at(i)
+            acn = agent.getVariableUInt("aircraft_number")
+            rl_pop[i].setVariableUInt("aircraft_number", acn)
+            rl_pop[i].setVariableUInt("free_days", 0)
+            rl_pop[i].setVariableUInt("last_acn", acn)
+            rl_pop[i].setVariableUInt("last_day", 0)
+        
+        self.simulation.setPopulationData(rl_pop)
+        print(f"   ✅ RepairLine init: quota={self.repair_quota}, day0_assigned={assign_count}")
+
+    # REMOVED: _init_v8_macroproperties_after_population — использовал несуществующий
+    # CUDASimulation.getEnvironmentMacroPropertyUInt(). MacroProperty доступны только
+    # из HostFunction.environment.getMacroPropertyUInt(). Заменён на HF_InitV8 (addInitFunction).
 
     def _debug_day_snapshot(self, day: int):
         """Локальный отладочный срез по Mi-17 на выбранный день."""
@@ -1052,96 +1120,97 @@ class LimiterV8Orchestrator:
         self.deterministic_dates = sorted(set(self.deterministic_dates))
         print(f"   V8 deterministic_dates (с repair): {len(self.deterministic_dates)} дат")
     
-    def _populate_spawn_agents(self) -> int:
-        """V8: Создаём агентов для детерминированного спавна в reserve"""
-        spawn_seed = self.env_data.get('mp4_new_counter_mi17_seed', [])
-        
-        spawn_events = []
-        for day, count in enumerate(spawn_seed):
-            if count > 0:
-                spawn_events.append((day, count))
-        
-        if not spawn_events:
-            return 0
-        
-        mi17_ll = int(self.env_data.get('mi17_ll_const', 270000))
-        mi17_oh = int(self.env_data.get('mi17_oh_const', 270000))
-        mi17_br = int(self.env_data.get('mi17_br_const', 210000))
-        mi17_repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
-        mi17_assembly_time = int(self.env_data.get('mi17_assembly_time_const', 30))
-        mi17_partout_time = int(self.env_data.get('mi17_partout_time_const', 20))
-        
-        first_reserved_idx = int(self.env_data.get('first_reserved_idx', 279))
-        next_idx = first_reserved_idx
-        base_acn = 100000
-        
-        total_spawn = 0
-        spawn_agents = []
-        
-        for spawn_day, count in spawn_events:
-            for i in range(count):
-                agent_data = {
-                    'idx': next_idx,
-                    'aircraft_number': base_acn,
-                    'group_by': 2,  # Mi-17
-                    'sne': 0,
-                    'ppr': 0,
-                    'll': mi17_ll,
-                    'oh': mi17_oh,
-                    'br': mi17_br,
-                    'repair_time': mi17_repair_time,
-                    'assembly_time': mi17_assembly_time,
-                    'partout_time': mi17_partout_time,
-                    'exit_date': spawn_day,
-                    'limiter': 0,
-                }
-                spawn_agents.append(agent_data)
-                next_idx += 1
-                base_acn += 1
-                total_spawn += 1
-        
-        if spawn_agents:
-            pop = fg.AgentVector(self.base_model.agent, len(spawn_agents))
-            
-            for i, data in enumerate(spawn_agents):
-                agent = pop[i]
-                agent.setVariableUInt("idx", data['idx'])
-                agent.setVariableUInt("aircraft_number", data['aircraft_number'])
-                agent.setVariableUInt("group_by", data['group_by'])
-                agent.setVariableUInt("sne", data['sne'])
-                agent.setVariableUInt("ppr", data['ppr'])
-                agent.setVariableUInt("ll", data['ll'])
-                agent.setVariableUInt("oh", data['oh'])
-                agent.setVariableUInt("br", data['br'])
-                agent.setVariableUInt("repair_time", data['repair_time'])
-                agent.setVariableUInt("assembly_time", data['assembly_time'])
-                agent.setVariableUInt("partout_time", data['partout_time'])
-                agent.setVariableUInt("exit_date", data['exit_date'])
-                agent.setVariableUInt16("limiter", 0)
-                agent.setVariableUInt("repair_days", 0)
-                agent.setVariableUInt("daily_today_u32", 0)
-                agent.setVariableUInt("daily_next_u32", 0)
-                agent.setVariableUInt("transition_5_to_2", 0)
-                agent.setVariableUInt("promoted", 0)
-                agent.setVariableUInt("needs_demote", 0)
-                agent.setVariableUInt("status_change_day", 0)
-                agent.setVariableUInt("repair_candidate", 0)
-                agent.setVariableUInt("repair_line_id", 0xFFFFFFFF)
-                agent.setVariableUInt("repair_line_day", 0xFFFFFFFF)
-            
-            self.simulation.setPopulationData(pop, "reserve")
-            
-            spawn_days = sorted(set(d for d, _ in spawn_events))
-            print(f"   📦 Spawn: {total_spawn} агентов в reserve, exit_dates={spawn_days}")
-        
-        return total_spawn
+    # DISABLED (state5-unused): spawn через reserve больше не используется. Детерминированный spawn реализуется через 0→3.
+    # DISABLED (state5-unused): def _populate_spawn_agents(self) -> int:
+    # DISABLED (state5-unused):     """V8: Создаём агентов для детерминированного спавна в reserve"""
+    # DISABLED (state5-unused):     spawn_seed = self.env_data.get('mp4_new_counter_mi17_seed', [])
+    # DISABLED (state5-unused):     
+    # DISABLED (state5-unused):     spawn_events = []
+    # DISABLED (state5-unused):     for day, count in enumerate(spawn_seed):
+    # DISABLED (state5-unused):         if count > 0:
+    # DISABLED (state5-unused):             spawn_events.append((day, count))
+    # DISABLED (state5-unused):     
+    # DISABLED (state5-unused):     if not spawn_events:
+    # DISABLED (state5-unused):         return 0
+    # DISABLED (state5-unused):     
+    # DISABLED (state5-unused):     mi17_ll = int(self.env_data.get('mi17_ll_const', 270000))
+    # DISABLED (state5-unused):     mi17_oh = int(self.env_data.get('mi17_oh_const', 270000))
+    # DISABLED (state5-unused):     mi17_br = int(self.env_data.get('mi17_br_const', 210000))
+    # DISABLED (state5-unused):     mi17_repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
+    # DISABLED (state5-unused):     mi17_assembly_time = int(self.env_data.get('mi17_assembly_time_const', 30))
+    # DISABLED (state5-unused):     mi17_partout_time = int(self.env_data.get('mi17_partout_time_const', 20))
+    # DISABLED (state5-unused):     
+    # DISABLED (state5-unused):     first_reserved_idx = int(self.env_data.get('first_reserved_idx', 279))
+    # DISABLED (state5-unused):     next_idx = first_reserved_idx
+    # DISABLED (state5-unused):     base_acn = 100000
+    # DISABLED (state5-unused):     
+    # DISABLED (state5-unused):     total_spawn = 0
+    # DISABLED (state5-unused):     spawn_agents = []
+    # DISABLED (state5-unused):     
+    # DISABLED (state5-unused):     for spawn_day, count in spawn_events:
+    # DISABLED (state5-unused):         for i in range(count):
+    # DISABLED (state5-unused):             agent_data = {
+    # DISABLED (state5-unused):                 'idx': next_idx,
+    # DISABLED (state5-unused):                 'aircraft_number': base_acn,
+    # DISABLED (state5-unused):                 'group_by': 2,  # Mi-17
+    # DISABLED (state5-unused):                 'sne': 0,
+    # DISABLED (state5-unused):                 'ppr': 0,
+    # DISABLED (state5-unused):                 'll': mi17_ll,
+    # DISABLED (state5-unused):                 'oh': mi17_oh,
+    # DISABLED (state5-unused):                 'br': mi17_br,
+    # DISABLED (state5-unused):                 'repair_time': mi17_repair_time,
+    # DISABLED (state5-unused):                 'assembly_time': mi17_assembly_time,
+    # DISABLED (state5-unused):                 'partout_time': mi17_partout_time,
+    # DISABLED (state5-unused):                 'exit_date': spawn_day,
+    # DISABLED (state5-unused):                 'limiter': 0,
+    # DISABLED (state5-unused):             }
+    # DISABLED (state5-unused):             spawn_agents.append(agent_data)
+    # DISABLED (state5-unused):             next_idx += 1
+    # DISABLED (state5-unused):             base_acn += 1
+    # DISABLED (state5-unused):             total_spawn += 1
+    # DISABLED (state5-unused):     
+    # DISABLED (state5-unused):     if spawn_agents:
+    # DISABLED (state5-unused):         pop = fg.AgentVector(self.base_model.agent, len(spawn_agents))
+    # DISABLED (state5-unused):         
+    # DISABLED (state5-unused):         for i, data in enumerate(spawn_agents):
+    # DISABLED (state5-unused):             agent = pop[i]
+    # DISABLED (state5-unused):             agent.setVariableUInt("idx", data['idx'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("aircraft_number", data['aircraft_number'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("group_by", data['group_by'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("sne", data['sne'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("ppr", data['ppr'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("ll", data['ll'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("oh", data['oh'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("br", data['br'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("repair_time", data['repair_time'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("assembly_time", data['assembly_time'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("partout_time", data['partout_time'])
+    # DISABLED (state5-unused):             agent.setVariableUInt("exit_date", data['exit_date'])
+    # DISABLED (state5-unused):             agent.setVariableUInt16("limiter", 0)
+    # DISABLED (state5-unused):             agent.setVariableUInt("repair_days", 0)
+    # DISABLED (state5-unused):             agent.setVariableUInt("daily_today_u32", 0)
+    # DISABLED (state5-unused):             agent.setVariableUInt("daily_next_u32", 0)
+    # DISABLED (state5-unused):             agent.setVariableUInt("transition_5_to_2", 0)
+    # DISABLED (state5-unused):             agent.setVariableUInt("promoted", 0)
+    # DISABLED (state5-unused):             agent.setVariableUInt("needs_demote", 0)
+    # DISABLED (state5-unused):             agent.setVariableUInt("status_change_day", 0)
+    # DISABLED (state5-unused):             agent.setVariableUInt("repair_candidate", 0)
+    # DISABLED (state5-unused):             agent.setVariableUInt("repair_line_id", 0xFFFFFFFF)
+    # DISABLED (state5-unused):             agent.setVariableUInt("repair_line_day", 0xFFFFFFFF)
+    # DISABLED (state5-unused):         
+    # DISABLED (state5-unused):         self.simulation.setPopulationData(pop, "reserve")
+    # DISABLED (state5-unused):         
+    # DISABLED (state5-unused):         spawn_days = sorted(set(d for d, _ in spawn_events))
+    # DISABLED (state5-unused):         print(f"   📦 Spawn: {total_spawn} агентов в reserve, exit_dates={spawn_days}")
+    # DISABLED (state5-unused):     
+    # DISABLED (state5-unused):     return total_spawn
     
     def _print_final_stats(self):
         """Вывод финальной статистики + ВАЛИДАЦИЯ"""
         print("\n📊 Финальная статистика V8:")
         
         # Подсчёт по состояниям и типам
-        states = ["inactive", "operations", "serviceable", "repair", "reserve", "storage", "unserviceable"]
+        states = ["inactive", "operations", "serviceable", "repair", "storage", "unserviceable"]  # DISABLED (state5-unused): reserve removed
         state_counts = {}
         mi8_by_state = {}
         mi17_by_state = {}
@@ -1202,22 +1271,22 @@ class LimiterV8Orchestrator:
         mi8_repair = mi8_by_state.get("repair", 0)
         mi8_serviceable = mi8_by_state.get("serviceable", 0)
         mi8_inactive = mi8_by_state.get("inactive", 0)
-        mi8_reserve = mi8_by_state.get("reserve", 0)
+        # DISABLED (state5-unused): mi8_reserve = mi8_by_state.get("reserve", 0)
         mi17_unsvc = mi17_by_state.get("unserviceable", 0)
         mi17_repair = mi17_by_state.get("repair", 0)
         mi17_serviceable = mi17_by_state.get("serviceable", 0)
         mi17_inactive = mi17_by_state.get("inactive", 0)
-        mi17_reserve = mi17_by_state.get("reserve", 0)
+        # DISABLED (state5-unused): mi17_reserve = mi17_by_state.get("reserve", 0)
         
         if mi8_delta < 0:
             print(
                 f"   ⚠️ Mi-8 дефицит: unsvc={mi8_unsvc}, repair={mi8_repair}, "
-                f"svc={mi8_serviceable}, inactive={mi8_inactive}, reserve={mi8_reserve}"
+                f"svc={mi8_serviceable}, inactive={mi8_inactive}"
             )
         if mi17_delta < 0:
             print(
                 f"   ⚠️ Mi-17 дефицит: unsvc={mi17_unsvc}, repair={mi17_repair}, "
-                f"svc={mi17_serviceable}, inactive={mi17_inactive}, reserve={mi17_reserve}"
+                f"svc={mi17_serviceable}, inactive={mi17_inactive}"
             )
         
         # Итоговый статус валидации

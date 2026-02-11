@@ -11,7 +11,7 @@
     "description": "Все переходы, не перечисленные в transitions_rules.json → rules, ЗАПРЕЩЕНЫ",
     "rule": "DENY_ALL_EXCEPT_LISTED",
     "max_transitions_per_step": 1,
-    "notes": "Один агент делает максимум один переход за шаг (без каскадов)"
+    "notes": "Один агент делает максимум один переход за шаг (без каскадов). Детерминированный spawn: 0→3 (serviceable). Динамический spawn: 0→2 (ops). State 5 (reserve) не используется в V9."
   },
 
   "global_invariants": [
@@ -101,9 +101,10 @@
       "expr": "forall agent in state 2: if limiter == 0 then agent must exit operations on this step (2->6 or 2->7)",
       "scope": "per_agent",
       "severity": "CRITICAL",
-      "exception": "При инициализации/входе в ops limiter=0 допустим (пересчитывается rtc_compute_limiter_on_entry)",
+      "exception": "При входе в ops limiter=0 допустим — пересчитывается inline в apply_decision / spawn (rtc_compute_limiter_on_entry убран как отдельный слой)",
       "validator": "code/analysis/sim_validation_runner_msg.py (validate_limiter_exit)",
-      "notes": "Если limiter=0 и агент остаётся в ops — EXCEPTION"
+      "notes": "Если limiter=0 и агент остаётся в ops после пересчёта — EXCEPTION. Защита if(limiter==0) limiter=1 маскирует ситуацию — включить в валидацию",
+      "known_artifact": "В БД могут быть записи state=ops, limiter=0 — это артефакт порядка экспорта (snapshot после инкремента, но до переходов ops→unsvc/storage). Агент покидает ops на том же шаге. Валидация SQL должна проверять, что на СЛЕДУЮЩЕМ шаге агент НЕ в ops."
     }
   ],
 
@@ -123,7 +124,8 @@
       "expr": "forall agent in state 7: promote P2 impossible while repair_days > 0",
       "scope": "per_agent",
       "severity": "CRITICAL",
-      "mechanism": "repair_days декрементируется каждый шаг (rtc_unsvc_decrement_v8); P2 pre: repair_days == 0 AND repair_line_id == 0xFFFFFFFF"
+      "mechanism": "repair_days декрементируется каждый шаг (rtc_unsvc_decrement_v8); P2 pre: repair_days == 0 AND repair_line_id == 0xFFFFFFFF",
+      "known_bug": "KNOWN BUG (fix-layer12-limiter): rtc_ops_to_unsvc_v8 (layer 12) НЕ устанавливал repair_days=repair_time → guard не работал. ИСПРАВЛЕНО: добавлен setVariable repair_days=repair_time"
     },
     {
       "id": "TEMP-3",
@@ -158,8 +160,8 @@
       "claim": "mp5_lin read-only после инициализации",
       "scope": "global",
       "severity": "CRITICAL",
-      "init_phase": "HF_InitMP5Cumsum (order 0)",
-      "notes": "MacroProperty mp5_lin записывается один раз в ФАЗА -1, далее только чтение"
+      "init_phase": "Инициализация при сборке модели (заменяет HF_InitMP5Cumsum)",
+      "notes": "MacroProperty mp5_lin записывается один раз при сборке модели (до simulate()), далее только чтение. HF_InitMP5Cumsum — legacy, будет заменён прямой инициализацией"
     },
     {
       "id": "GPU-3",
@@ -182,7 +184,7 @@
       "scope": "per_phase",
       "severity": "CRITICAL",
       "reason": "Без reset остаются stale данные предыдущего шага",
-      "example": "reset_exit_date → MAX перед copy_exit_date (atomicMin); reset_buffers → 0 перед count_agents (atomicAdd)"
+      "example": "В новой архитектуре: один reset mp_min_limiter = 0xFFFFFFFF в HF_StepController. Старые 3 цикла reset+count (12 слоёв) убраны в message-based"
     },
     {
       "id": "GPU-6",

@@ -41,6 +41,7 @@ class V2BaseModelMessaging:
         self.msg_planer_report: Optional[fg.MessageDescription] = None
         self.msg_quota_decision: Optional[fg.MessageDescription] = None
         self.msg_repair_line_status: Optional[fg.MessageDescription] = None
+        self.msg_line_assignment: Optional[fg.MessageDescription] = None
     
     def create_model(self, env_data: Dict[str, object]) -> fg.ModelDescription:
         """Создает модель с messaging архитектурой"""
@@ -82,6 +83,7 @@ class V2BaseModelMessaging:
         
         # ═══════════════════════════════════════════════════════════════
         # Message "PlanerReport": Планер → QuotaManager (POLLING - deprecated)
+        # TODO(message-based-qm): обновить при рефакторинге QM
         # ═══════════════════════════════════════════════════════════════
         self.msg_planer_report = self.model.newMessageBruteForce("PlanerReport")
         self.msg_planer_report.newVariableUInt16("idx")
@@ -110,6 +112,7 @@ class V2BaseModelMessaging:
         
         # ═══════════════════════════════════════════════════════════════
         # Message "QuotaDecision": QuotaManager → Планер
+        # TODO(message-based-qm): обновить при рефакторинге QM
         # ═══════════════════════════════════════════════════════════════
         self.msg_quota_decision = self.model.newMessageBruteForce("QuotaDecision")
         self.msg_quota_decision.newVariableUInt16("idx")         # Кому адресовано
@@ -142,9 +145,13 @@ class V2BaseModelMessaging:
         self.msg_repair_line_status = self.model.newMessageArray("RepairLineStatus")
         self.msg_repair_line_status.setLength(REPAIR_LINES_MAX)
         self.msg_repair_line_status.newVariableUInt("free_days")
-        self.msg_repair_line_status.newVariableUInt("aircraft_number")
+
+        # Message "LineAssignment": QuotaManager → RepairLine (адресное назначение)
+        self.msg_line_assignment = self.model.newMessageArray("LineAssignment")
+        self.msg_line_assignment.setLength(REPAIR_LINES_MAX)
+        self.msg_line_assignment.newVariableUInt("aircraft_number")
         
-        print("  ✅ Messages: PlanerReport, PlanerEvent, QuotaDecision, QuotaBucket, RepairLineStatus")
+        print("  ✅ Messages: PlanerReport, PlanerEvent, QuotaDecision, QuotaBucket, RepairLineStatus, LineAssignment")
     
     def _setup_quota_agent(self) -> fg.AgentDescription:
         """Настройка агента QuotaManager"""
@@ -208,7 +215,7 @@ class V2BaseModelMessaging:
         # ВАЖНО: Используем UInt32 т.к. atomic exchange поддерживает только 32/64-bit типы
         self.env.newMacroPropertyUInt32("qm_ops_idx", max_frames)       # idx агентов в operations
         self.env.newMacroPropertyUInt32("qm_svc_idx", max_frames)       # idx агентов в serviceable
-        self.env.newMacroPropertyUInt32("qm_rsv_idx", max_frames)       # idx агентов в reserve
+        # DISABLED (state5-unused): self.env.newMacroPropertyUInt32("qm_rsv_idx", max_frames)       # idx агентов в reserve
         self.env.newMacroPropertyUInt32("qm_ina_idx", max_frames)       # idx агентов в inactive (готовых)
         
         # Счётчики заполнения буферов (по группам)
@@ -351,8 +358,8 @@ class V2BaseModelMessaging:
         self.env.newMacroPropertyUInt32("mi17_rsv_count", max_frames)
         self.env.newMacroPropertyUInt32("mi8_inactive_count", max_frames)
         self.env.newMacroPropertyUInt32("mi17_inactive_count", max_frames)
-        self.env.newMacroPropertyUInt32("mi8_reserve_count", max_frames)
-        self.env.newMacroPropertyUInt32("mi17_reserve_count", max_frames)
+        # DISABLED (state5-unused): self.env.newMacroPropertyUInt32("mi8_reserve_count", max_frames)
+        # DISABLED (state5-unused): self.env.newMacroPropertyUInt32("mi17_reserve_count", max_frames)
         
         self.env.newMacroPropertyUInt32("mi8_approve", max_frames)
         self.env.newMacroPropertyUInt32("mi17_approve", max_frames)
@@ -387,7 +394,7 @@ class V2BaseModelMessaging:
         
         # Буферы для repair и reserve queue
         self.env.newMacroPropertyUInt32("repair_state_buffer", max_frames)
-        self.env.newMacroPropertyUInt32("reserve_queue_buffer", max_frames)
+        # DISABLED (state5-unused): self.env.newMacroPropertyUInt32("reserve_queue_buffer", max_frames)
         self.env.newMacroPropertyUInt32("ops_repair_buffer", max_frames)
         self.env.newMacroPropertyUInt32("repair_number_by_idx", max_frames)
         
@@ -411,9 +418,9 @@ class V2BaseModelMessaging:
         self.env.newMacroPropertyUInt32("mp2_transition_2_to_6", mp2_size)   # operations → storage
         self.env.newMacroPropertyUInt32("mp2_transition_2_to_3", mp2_size)   # operations → serviceable
         self.env.newMacroPropertyUInt32("mp2_transition_3_to_2", mp2_size)   # serviceable → operations
-        self.env.newMacroPropertyUInt32("mp2_transition_5_to_2", mp2_size)   # reserve → operations
+        # DISABLED (state5-unused): self.env.newMacroPropertyUInt32("mp2_transition_5_to_2", mp2_size)   # reserve → operations
         self.env.newMacroPropertyUInt32("mp2_transition_1_to_2", mp2_size)   # inactive → operations
-        self.env.newMacroPropertyUInt32("mp2_transition_4_to_5", mp2_size)   # repair → reserve
+        # DISABLED (state5-unused): self.env.newMacroPropertyUInt32("mp2_transition_4_to_5", mp2_size)   # repair → reserve
         self.env.newMacroPropertyUInt32("mp2_transition_1_to_4", mp2_size)   # inactive → repair
         self.env.newMacroPropertyUInt32("mp2_transition_4_to_2", mp2_size)   # repair → operations
         
@@ -459,7 +466,7 @@ class V2BaseModelMessaging:
         agent.newState("operations")    # 2 — в эксплуатации
         agent.newState("serviceable")   # 3 — исправные в холдинге
         agent.newState("repair")        # 4 — только день 0, детерминированный выход
-        agent.newState("reserve")       # 5 — только spawn, детерминированный
+        agent.newState("reserve")       # 5 — только spawn, детерминированный  # state 5 — не используется в V9, rудимент V2
         agent.newState("storage")       # 6 — списанные (BR)
         agent.newState("unserviceable") # 7 — НОВЫЙ: после OH, ждёт промоут P2
         
@@ -482,7 +489,8 @@ class V2BaseModelMessaging:
         agent.newVariableUInt("transition_7_to_2", 0)  # промоут P2 (unserviceable)
         agent.newVariableUInt("transition_1_to_2", 0)  # промоут P3
         agent.newVariableUInt("transition_4_to_3", 0)  # repair → serviceable (детерм.)
-        agent.newVariableUInt("transition_5_to_2", 0)  # spawn → operations (детерм.)
+        # DISABLED (state5-unused): agent.newVariableUInt("transition_5_to_2", 0)  # spawn → operations (детерм.)
+        # DISABLED (state5-unused): agent.newVariableUInt("transition_5_to_3", 0)  # spawn → serviceable (детерм.)
         
         # V6: Детерминированная дата выхода (для repair и spawn)
         agent.newVariableUInt("exit_date", 0xFFFFFFFF)  # День перехода (MAX = нет)

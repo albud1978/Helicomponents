@@ -462,7 +462,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_flags_v8, flamegpu::MessageNone, flamegpu::Mes
     FLAMEGPU->setVariable<unsigned int>("transition_7_to_2", 0u);
     FLAMEGPU->setVariable<unsigned int>("transition_1_to_2", 0u);
     FLAMEGPU->setVariable<unsigned int>("transition_4_to_3", 0u);
-    FLAMEGPU->setVariable<unsigned int>("transition_5_to_2", 0u);
+    // DISABLED (state5-unused): FLAMEGPU->setVariable<unsigned int>("transition_5_to_2", 0u);
+    // DISABLED (state5-unused): FLAMEGPU->setVariable<unsigned int>("transition_5_to_3", 0u);
     
     return flamegpu::ALIVE;
 }

@@ -21,7 +21,7 @@ import argparse
 import json
 import os
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from neo4j import GraphDatabase
 from neo4j.exceptions import AuthError, ServiceUnavailable
@@ -63,7 +63,7 @@ def _load_json(path: str) -> Dict[str, Any]:
 def _build_clear_queries() -> List[str]:
     """Удаляет все доменные узлы."""
     return [
-        "MATCH (n) WHERE n:TransitionSpec OR n:State OR n:Rule OR n:QuotaFlow OR n:SelectionRule OR n:RepairLineRule OR n:SpawnRule OR n:MessageBucket DETACH DELETE n",
+        "MATCH (n) WHERE n:TransitionSpec OR n:State OR n:Rule OR n:QuotaFlow OR n:SelectionRule OR n:RepairLineRule OR n:SpawnRule OR n:MessageBucket OR n:RTCLayer DETACH DELETE n",
     ]
 
 
@@ -240,6 +240,70 @@ SET b.keys = $keys,
     return queries
 
 
+def _build_rtc_execution_queries(data: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
+    """Генерирует Cypher для rtc_execution_order."""
+    queries: List[Tuple[str, Dict[str, Any]]] = []
+    rtc_order = data.get("rtc_execution_order", [])
+    prev_order: Optional[int] = None
+
+    for entry in rtc_order:
+        order = int(entry.get("order", 0))
+        queries.append((
+            """
+MERGE (l:RTCLayer {order: $order})
+SET l.phase = $phase,
+    l.layer = $layer,
+    l.function = $function,
+    l.state = $state,
+    l.notes = $notes
+""",
+            {
+                "order": order,
+                "phase": entry.get("phase", ""),
+                "layer": entry.get("layer", ""),
+                "function": entry.get("function", ""),
+                "state": entry.get("state", ""),
+                "notes": entry.get("notes", ""),
+            },
+        ))
+
+        if prev_order is not None:
+            queries.append((
+                """
+MATCH (prev:RTCLayer {order: $prev_order})
+MATCH (curr:RTCLayer {order: $order})
+MERGE (prev)-[:NEXT_LAYER]->(curr)
+""",
+                {"prev_order": prev_order, "order": order},
+            ))
+
+        state_value = entry.get("state", "")
+        if isinstance(state_value, str) and "→" in state_value:
+            from_state, to_state = [part.strip() for part in state_value.split("→", 1)]
+            if from_state.isdigit():
+                queries.append((
+                    """
+MATCH (s:State {id: $state_id})
+MATCH (l:RTCLayer {order: $order})
+MERGE (l)-[:FROM_STATE]->(s)
+""",
+                    {"state_id": int(from_state), "order": order},
+                ))
+            if to_state.isdigit():
+                queries.append((
+                    """
+MATCH (s:State {id: $state_id})
+MATCH (l:RTCLayer {order: $order})
+MERGE (l)-[:TO_STATE]->(s)
+""",
+                    {"state_id": int(to_state), "order": order},
+                ))
+
+        prev_order = order
+
+    return queries
+
+
 # ─── Main ───────────────────────────────────────────────────────────
 
 
@@ -254,6 +318,7 @@ def sync(clear: bool = False, dry_run: bool = False) -> None:
             all_queries.append((q, {}))
 
     all_queries.extend(_build_transitions_queries(transitions))
+    all_queries.extend(_build_rtc_execution_queries(transitions))
     all_queries.extend(_build_quota_queries(quota))
 
     if dry_run:

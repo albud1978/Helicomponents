@@ -48,13 +48,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_increment_v8, flamegpu::MessageNone, flamegpu::M
     
     auto mp5_cumsum = FLAMEGPU->environment.getMacroProperty<unsigned int, {CUMSUM_SIZE}u>("mp5_cumsum");
     
-    // Если агент только что вошёл в operations (deterministic spawn 5→2) — пропускаем инкремент
-    const unsigned int t5 = FLAMEGPU->getVariable<unsigned int>("transition_5_to_2");
-    if (t5 == 1u) {{
-        FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
-        FLAMEGPU->setVariable<unsigned int>("daily_next_u32", 0u);
-        return flamegpu::ALIVE;
-    }}
+    // DISABLED (state5-unused): // Если агент только что вошёл в operations (deterministic spawn 5→2) — пропускаем инкремент
+    // DISABLED (state5-unused): const unsigned int t5 = FLAMEGPU->getVariable<unsigned int>("transition_5_to_2");
+    // DISABLED (state5-unused): if (t5 == 1u) {{
+    // DISABLED (state5-unused):     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+    // DISABLED (state5-unused):     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", 0u);
+    // DISABLED (state5-unused):     return flamegpu::ALIVE;
+    // DISABLED (state5-unused): }}
     
     // dt = cumsum[current_day] - cumsum[prev_day] (налёт за текущий шаг)
     const unsigned int base_curr = current_day * frames + idx;
@@ -136,6 +136,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_decrement_v8, flamegpu::MessageNone, flamegpu:
 # Условие V8: SNE + dt_next >= LL ИЛИ (PPR + dt_next >= OH AND SNE + dt_next >= BR)
 COND_OPS_TO_STORAGE_V8 = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage_v8) {
+    // Early-out: агенты с ненулевым лимитером не выходят из ops
+    const unsigned short lim = FLAMEGPU->getVariable<unsigned short>("limiter");
+    if (lim > 0u) return false;
     // V8: Проверка на СЛЕДУЮЩИЙ день (предотвращение переналёта)
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
@@ -162,6 +165,9 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage_v8) {
 # Условие V8: PPR + dt_next >= OH AND SNE + dt_next < BR (переход в unserviceable)
 COND_OPS_TO_UNSVC_V8 = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
+    // Early-out: агенты с ненулевым лимитером не выходят из ops
+    const unsigned short lim = FLAMEGPU->getVariable<unsigned short>("limiter");
+    if (lim > 0u) return false;
     // V8: Проверка на СЛЕДУЮЩИЙ день (OH и BR)
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
@@ -203,6 +209,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::Me
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
     FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+    FLAMEGPU->setVariable<unsigned int>("repair_days", FLAMEGPU->getVariable<unsigned int>("repair_time"));
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     
     return flamegpu::ALIVE;

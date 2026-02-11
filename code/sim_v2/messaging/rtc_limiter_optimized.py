@@ -336,6 +336,91 @@ class HF_ComputeAdaptiveDays(fg.HostFunction):
         return fg.CONTINUE
 
 
+class HF_StepController(fg.HostFunction):
+    """
+    V8 StepController:
+    adaptive_days = min(mp_min_limiter, days_to_next_deterministic_date)
+    current_day += adaptive_days, reset mp_min_limiter
+    """
+    
+    def run(self, FLAMEGPU):
+        env = FLAMEGPU.environment
+        current_day = int(env.getPropertyUInt("current_day"))
+        end_day = int(env.getPropertyUInt("end_day"))
+        
+        # 1. Читаем min_limiter и сразу сбрасываем MacroProperty
+        mp_min = env.getMacroPropertyUInt("mp_min_limiter")
+        min_limiter = int(mp_min[0])
+        mp_min[0] = 0xFFFFFFFF
+        
+        # 2. Если уже на end_day — фиксируем и выходим
+        if current_day >= end_day:
+            mp_day = env.getMacroPropertyUInt("current_day_mp")
+            mp_day[1] = current_day
+            mp_day[0] = current_day
+            mp_result = env.getMacroPropertyUInt("adaptive_result_mp")
+            mp_result[0] = 0
+            mp_result[1] = 0xFFFFFFFF
+            env.setPropertyUInt("prev_day", current_day)
+            env.setPropertyUInt("current_day", current_day)
+            env.setPropertyUInt("adaptive_days", 0)
+            env.setPropertyUInt("step_days", 0)
+            return fg.CONTINUE
+        
+        # 3. Находим ближайшую детерминированную дату
+        mp_dates = env.getMacroPropertyUInt("deterministic_dates_mp")
+        num_dates = int(env.getPropertyUInt("num_deterministic_dates"))
+        if num_dates > len(mp_dates):
+            num_dates = len(mp_dates)
+        
+        days_to_det = MAX_DAYS
+        for i in range(num_dates):
+            det_day = int(mp_dates[i])
+            if det_day > current_day:
+                delta = det_day - current_day
+                if delta < days_to_det:
+                    days_to_det = delta
+        
+        if days_to_det == MAX_DAYS:
+            days_to_det = end_day - current_day
+        
+        # 4. adaptive_days = min(min_limiter, days_to_det)
+        if min_limiter == 0xFFFFFFFF:
+            adaptive_days = days_to_det
+        else:
+            adaptive_days = min(min_limiter, days_to_det)
+        
+        # Не выходить за end_day
+        if current_day + adaptive_days > end_day:
+            adaptive_days = end_day - current_day
+        
+        if adaptive_days < 1:
+            adaptive_days = 1
+        
+        # 5. Обновляем current_day/prev_day
+        prev_day = current_day
+        new_day = current_day + adaptive_days
+        
+        mp_day = env.getMacroPropertyUInt("current_day_mp")
+        mp_day[1] = prev_day
+        mp_day[0] = new_day
+        
+        mp_result = env.getMacroPropertyUInt("adaptive_result_mp")
+        mp_result[0] = adaptive_days
+        if min_limiter == 0xFFFFFFFF:
+            mp_result[1] = 0xFFFFFFFF
+        else:
+            mp_result[1] = (min_limiter << 1)
+        
+        # 6. Синхронизируем в Environment
+        env.setPropertyUInt("prev_day", prev_day)
+        env.setPropertyUInt("current_day", new_day)
+        env.setPropertyUInt("adaptive_days", adaptive_days)
+        env.setPropertyUInt("step_days", adaptive_days)
+        
+        return fg.CONTINUE
+
+
 def setup_limiter_macroproperties(env, program_changes: list):
     """Настраивает MacroProperty для оптимизированного лимитера"""
     

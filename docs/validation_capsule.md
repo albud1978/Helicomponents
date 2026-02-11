@@ -6,6 +6,7 @@
 - `code/analysis/sim_validation_runner_msg.py` (оркестратор валидации MESSAGING)
 - `code/analysis/sim_validation_quota.py` (INV-2: ops vs target)
 - `code/analysis/sim_validation_increments.py` (INV-6: dt>0 только в ops)
+- `code/analysis/sim_validation_ops_exits.py` (ops exits: limiter==0, ресурс, маскировка)
 - `code/analysis/sim_validation_transitions.py` (матрица переходов)
 - `code/validation/validate_state2ops_increments.py` (INV-5: баланс наработок)
 - `code/validation/validate_state2ops_transitions.py` (переходы state_2_operations)
@@ -34,7 +35,13 @@ SSoT: `config/transitions/invariants.json`
 | INV-6 (dt>0 → ops only) | sim_validation_increments.py | OK |
 | INV-7 (dt = mp5_lin) | validate_limiter_flight_hours.py | OK |
 | INV-8 (storage frozen) | validation_rules.py (InvariantValidator) | OK |
-| INV-9 (limiter=0 → exit) | sim_validation_runner_msg.py | OK |
+| INV-9 (limiter=0 → exit, inline) | sim_validation_runner_msg.py + sim_validation_ops_exits.py | OK |
+
+Примечания по обновлениям (SSoT: `invariants.json`):
+- INV-9: inline limiter вместо отдельного слоя (исключение при входе в ops)
+- TEMP-2: known_bug про repair_days — исправлено
+- GPU-5: один reset mp_min_limiter вместо 3 циклов reset+count
+- GPU-2: инициализация mp5_lin при сборке модели (до simulate())
 
 ## Decisions (≤7)
 
@@ -43,6 +50,7 @@ SSoT: `config/transitions/invariants.json`
 3. **Baseline заморожен** — sim_masterv2 baseline не изменяется; сравнение с ним только по запросу.
 4. **Реальные данные only** — синтетика/заглушки запрещены без явного разрешения.
 5. **JIT warnings = дефект** — каждый NVRTC warning исправляется немедленно (GPU-4).
+6. **Ops-exit проверки вынесены в отдельный скрипт** — `sim_validation_ops_exits.py` (4 проверки).
 
 ## Impact Paths
 - `invariants.json` → определяет ЧТО проверять → все скрипты валидации
@@ -51,7 +59,7 @@ SSoT: `config/transitions/invariants.json`
 - Результат валидации → решение о коммите (оркестратор workflow)
 
 ## Validation Proof
-Рекурсивное: капсула описывает саму систему валидации. Верификация — ручной аудит + SQL-запросы к реальным данным.
+Рекурсивное: капсула описывает саму систему валидации. Верификация — ручной аудит + SQL-запросы к реальным данным + `sim_validation_ops_exits.py` (4 проверки).
 
 ## Risks (≤7) + Mitigations
 - Пробелы покрытия (INV-1, INV-3 без скриптов) → TODO в invariants.json; SQL готов
@@ -69,6 +77,7 @@ SSoT: `config/transitions/invariants.json`
 - `code/analysis/sim_validation_runner.py`
 - `code/analysis/sim_validation_quota.py`
 - `code/analysis/sim_validation_increments.py`
+- `code/analysis/sim_validation_ops_exits.py`
 - `code/analysis/sim_validation_transitions.py`
 - `code/validation/validate_state2ops_increments.py`
 - `code/validation/validate_state2ops_transitions.py`

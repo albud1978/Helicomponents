@@ -1,5 +1,10 @@
 # LIMITER Architecture (V8 — RepairLine)
 
+> **⚠️ ИСТОРИЧЕСКАЯ СПРАВКА.** Этот документ предназначен для ознакомления и НЕ является источником истины.  
+> **Единственный SSoT (Single Source of Truth)** для порядка слоёв и логики переходов:  
+> `config/transitions/transitions_rules.json` (секция `rtc_execution_order` и `rules`).  
+> При расхождениях между этим документом и JSON — **JSON приоритетнее**.
+
 > **Актуальная версия:** V8 (16-01-2026)  
 > **Файл оркестратора:** `code/sim_v2/messaging/orchestrator_limiter_v8.py`
 > **Резервная версия:** V7 (`orchestrator_limiter_v7.py`)
