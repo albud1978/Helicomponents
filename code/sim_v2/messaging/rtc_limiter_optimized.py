@@ -350,7 +350,7 @@ class HF_StepController(fg.HostFunction):
         
         # 1. Читаем min_limiter и сразу сбрасываем MacroProperty
         mp_min = env.getMacroPropertyUInt("mp_min_limiter")
-        min_limiter = int(mp_min[0])
+        min_limiter = int(mp_min[0]) & 0xFFFFFFFF  # Ensure unsigned (pyflamegpu может вернуть signed)
         mp_min[0] = 0xFFFFFFFF
         
         # 2. Если уже на end_day — фиксируем и выходим
