@@ -566,6 +566,19 @@ class LimiterV8Orchestrator:
         hf_init_lines = HF_InitRepairLines(self.repair_quota)
         layer_lines = self.model.newLayer("layer_init_repair_lines")
         layer_lines.addHostFunction(hf_init_lines)
+
+        # V8: HF_InitV8 как layer (addInitFunction не вызывается в step() режиме)
+        self._hf_init_v8 = rtc_limiter_v8.HF_InitV8(self.deterministic_dates, self.end_day)
+        layer_init_v8 = self.model.newLayer("layer_init_v8")
+        layer_init_v8.addHostFunction(self._hf_init_v8)
+        print("  ✅ V8 HF_InitV8 зарегистрирован (layer host function)")
+
+        # V8: StepController как layer ПЕРЕД обработкой (QM видит новый current_day)
+        # Читает mp_min_limiter из ПРЕДЫДУЩЕГО шага, продвигает current_day
+        self.hf_step_controller = rtc_limiter_optimized.HF_StepController()
+        layer_step = self.model.newLayer("layer_step_controller")
+        layer_step.addHostFunction(self.hf_step_controller)
+        print("  ✅ V8 HF_StepController зарегистрирован (layer, перед QM)")
         
         # ═══════════════════════════════════════════════════════════════
         # V8: RepairAgent ОТКЛЮЧЁН — используем V8 квотирование через RepairLine
@@ -679,10 +692,8 @@ class LimiterV8Orchestrator:
         layer_min = self.model.newLayer("L_limiter_min")
         layer_min.addAgentFunction(fn_min)
         
-        # V8 StepController (move-adaptive-to-end): после layer 50 (rtc_compute_min_limiter)
-        self.hf_step_controller = rtc_limiter_optimized.HF_StepController()
-        self.model.addStepFunction(self.hf_step_controller)
-        print("  ✅ V8 HF_StepController зарегистрирован (step function)")
+        # V8 StepController перенесён в layer_step_controller (перед QM)
+        # mp_min_limiter записывается здесь limiter, читается StepController на СЛЕДУЮЩЕМ шаге
         
         # ═══════════════════════════════════════════════════════════════
         # ФАЗА 5: V8 adaptive с deterministic_dates
@@ -725,7 +736,7 @@ class LimiterV8Orchestrator:
             enable_v8_reason=True
         )
         
-        # V8 update_day заменён HF_StepController после limiter min
+        # V8 StepController перенесён в начало (layer_step_controller, перед QM)
         
         # ИСПРАВЛЕНО: НЕ вызываем rtc_limiter_v5.register_v5_final_layers!
         # V5 compute_global_min ПЕРЕЗАПИСЫВАЛ результат V8, вызывая баг ops≠target
@@ -734,11 +745,6 @@ class LimiterV8Orchestrator:
         # V8 Exit condition
         self.hf_exit = rtc_limiter_v8.HF_ExitConditionV8(self.end_day)
         self.model.addExitCondition(self.hf_exit)
-        
-        # V8: InitFunction для MacroProperty (выполняется один раз до simulate)
-        self._hf_init_v8 = rtc_limiter_v8.HF_InitV8(self.deterministic_dates, self.end_day)
-        self.model.addInitFunction(self._hf_init_v8)
-        print("  ✅ V8 HF_InitV8 зарегистрирован (init function)")
         
         print("\n✅ Модель LIMITER V8 построена")
         print(f"   deterministic_dates: {len(self.deterministic_dates)} дат")
@@ -763,7 +769,7 @@ class LimiterV8Orchestrator:
         # Инициализация агентов
         self._populate_agents()
         
-        # V8: MacroProperty инициализируются через HF_InitV8 (зарегистрирован в build_model)
+        # V8: MacroProperty инициализируются через HF_InitV8 (layer host function, NOT addInitFunction)
         
         # Подготовка MP2
         mp2_rows = []
@@ -870,9 +876,57 @@ class LimiterV8Orchestrator:
                 if step_count >= max_steps:
                     break
             
-            # Финальный день фиксируем только если квоты применялись на этот день
-            if self.end_day in recorded_days:
-                pass
+            # Финальный экспорт: последний step() возвращает False,
+            # но данные на GPU уже вычислены. Собираем их.
+            if self.end_day not in recorded_days:
+                # Читаем текущее состояние после последнего шага
+                final_step_log = self.hf_sync_v5.get_step_log()
+                if final_step_log:
+                    final_day = final_step_log[-1]['day']
+                    final_adaptive = final_step_log[-1]['adaptive']
+                else:
+                    final_day = self.end_day
+                    final_adaptive = 0
+                
+                final_prev_day = None
+                if hasattr(self.simulation, "getEnvironmentPropertyUInt"):
+                    final_prev_day = int(self.simulation.getEnvironmentPropertyUInt("prev_day"))
+                elif hasattr(self.simulation, "getEnvironmentProperty"):
+                    final_prev_day = int(self.simulation.getEnvironmentProperty("prev_day"))
+                elif hasattr(self.simulation, "getEnvironmentPropertyInt"):
+                    final_prev_day = int(self.simulation.getEnvironmentPropertyInt("prev_day"))
+                
+                if final_prev_day is None:
+                    final_prev_day = self.end_day
+                
+                day_to_record = min(final_day, self.end_day)
+                
+                if day_to_record not in recorded_days:
+                    step_count += 1
+                    rows = collect_agents_state(
+                        self.simulation, self.base_model.agent,
+                        day_to_record, version_date_int, version_id,
+                        step_id=step_count, prev_day=final_prev_day, adaptive_days=final_adaptive,
+                        spawn_mgr_desc=self.spawn_data.get('mgr_agent') if self.spawn_data else None,
+                        repair_line_desc=self.base_model.repair_line_agent
+                    )
+                    mp2_rows.extend(rows)
+                    rl_rows = collect_repair_lines_state(
+                        self.simulation,
+                        self.base_model.repair_line_agent,
+                        day_to_record, version_date_int, version_id,
+                        step_id=step_count, prev_day=final_prev_day, adaptive_days=final_adaptive
+                    )
+                    repair_line_rows.extend(rl_rows)
+                    qm_rows = collect_quota_manager_state(
+                        self.simulation,
+                        self.base_model.quota_agent,
+                        day_to_record, version_date_int, version_id,
+                        step_id=step_count, prev_day=final_prev_day, adaptive_days=final_adaptive
+                    )
+                    quota_rows.extend(qm_rows)
+                    recorded_days.add(day_to_record)
+                    print(f"  [Final] day={day_to_record} (финальный экспорт после step()=False)")
             
             gpu_time = time.perf_counter() - t_gpu_start
             
