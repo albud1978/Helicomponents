@@ -1,10 +1,62 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-02-07",
+    "updated_at": "2026-02-12T16:21:19Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
-  "workflows": [],
-  "handoffs": [],
-  "contexts": []
+  "workflows": [
+    {
+      "workflow_id": "W_sql_diag_mi17_20250704",
+      "goal": "SQL диагностика дефицита Mi-17 (version_date 2025-07-04)",
+      "phase": "research",
+      "owner": "analyst-sql-graph",
+      "status": "active",
+      "created_at": "2026-02-12T07:56:56Z",
+      "updated_at": "2026-02-12T07:56:56Z"
+    },
+    {
+      "workflow_id": "W_rlm_invariants_20260210",
+      "goal": "Формализация инвариантов (invariants.json) + RLM система контекстных капсул (6 капсул, манифест, профили агентов) + governance enforcement (hooks, audit, policy reinforcement)",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "active",
+      "created_at": "2026-02-12T16:21:03Z",
+      "updated_at": "2026-02-12T16:21:19Z"
+    }
+  ],
+  "handoffs": [
+    {
+      "handoff_id": "handoff_W_rlm_invariants_20260210_orchestrator_cb6b0eae",
+      "workflow_id": "W_rlm_invariants_20260210",
+      "agent": "orchestrator",
+      "goal": "Формализация инвариантов + RLM капсулы + governance enforcement",
+      "changes": "invariants.json, capsules_manifest.json, 5 капсул, 2 scoped rules, 7 профилей агентов, hooks.json fix, audit_code_edit.py, orchestrator_guard.py, CRITICAL запреты",
+      "evidence": "не запускалось",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "нет",
+      "created_at": "2026-02-12T16:21:19Z"
+    }
+  ],
+  "contexts": [
+    {
+      "context_id": "ctx_W_sql_diag_mi17_20250704_research_c0dab4c2",
+      "workflow_id": "W_sql_diag_mi17_20250704",
+      "context_type": "research",
+      "content": "SQL Mi-17 v20250704: day666 non-ops=[22579 status6 donor; 22210/22504/22483/22476 status7 unsvc with repair_days 51/114/126/163]. Day3650 non-ops=24 (status3:25752,22978; status6 donors:27090,22782,25230,22579,25484,25485,25134,22990,22991,22554,27065,27068,27069,27128,22939,22509,22517,25229,22952,22479; status7:22473,25186). Ever_p2/p3=0/0: 22579,25229,25230,25484,27067,27068 (из них не-ops на 3650: 22579,25229,25230,25484,27068). Ops vs target: day666 111 vs 115; day3650 92 vs 127; total Mi-17 постоянно 116 → дефицит частично из-за отсутствия spawn. Блокеры продвижения: donor статус (не в P1/P2/P3), unsvc с repair_days>0, limiter=0 у serviceable/доноров.",
+      "agent": "analyst-sql-graph",
+      "created_at": "2026-02-12T07:56:56Z",
+      "updated_at": "2026-02-12T08:31:26Z"
+    },
+    {
+      "context_id": "ctx_W_rlm_invariants_20260210_decision_8e00a772",
+      "workflow_id": "W_rlm_invariants_20260210",
+      "context_type": "decision",
+      "content": "Создано: config/transitions/invariants.json (SSoT: 9 INV + 4 TEMP + 6 GPU), config/capsules_manifest.json (индекс 6 капсул), 5 новых капсул (transitions, quota, validation, flame_gpu, etl_extract), .cursor/rules/25_invariants_contract.mdc, .cursor/rules/30_capsules_context.mdc. Обновлены все 7 профилей агентов (capsules_manifest как первый шаг). Governance enforcement: починен hooks.json, создан audit_code_edit.py (afterFileEdit лог), orchestrator_guard.py (beforeSubmitPrompt reinforcement), усилены CRITICAL запреты в orchestrator.md и 90_multiagent_workflow.mdc. Иерархия: JSON (SSoT) → Neo4j (визуализация) → Капсулы (контекст для агентов).",
+      "agent": "unknown",
+      "created_at": "2026-02-12T16:21:13Z",
+      "updated_at": "2026-02-12T16:21:13Z"
+    }
+  ]
 }

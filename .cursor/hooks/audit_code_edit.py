@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+"""afterFileEdit hook: логирует правки в code/ и tools/ для audit trail."""
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+LOG_PATH = Path(__file__).resolve().parent / "code_edit_audit.log"
+WATCHED_PREFIXES = ("code/", "tools/")
+MAX_SNIPPET = 120  # максимум символов old/new в логе
+
+
+def main() -> None:
+    raw = sys.stdin.read()
+    try:
+        payload = json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        payload = {}
+
+    file_path = payload.get("file_path", "")
+    if not any(file_path.startswith(p) for p in WATCHED_PREFIXES):
+        sys.stdout.write("{}")
+        return
+
+    edits = payload.get("edits", [])
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    conv_id = payload.get("conversation_id", "?")[:8]
+    gen_id = payload.get("generation_id", "?")[:8]
+
+    lines = [f"[{ts}] conv={conv_id} gen={gen_id} file={file_path}"]
+    for i, edit in enumerate(edits):
+        old = (edit.get("old_string") or "")[:MAX_SNIPPET].replace("\n", "\\n")
+        new = (edit.get("new_string") or "")[:MAX_SNIPPET].replace("\n", "\\n")
+        lines.append(f"  edit[{i}] old='{old}' new='{new}'")
+
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n\n")
+    except OSError:
+        pass  # не блокируем работу агента при ошибке записи
+
+    sys.stdout.write("{}")
+
+
+if __name__ == "__main__":
+    main()

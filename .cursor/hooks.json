@@ -15,22 +15,14 @@
     "beforeSubmitPrompt": [
       {
         "command": "python3 .cursor/hooks/connection_fail_clear.py"
-      }
-    ]
-  }
-}
-{
-  "version": 1,
-  "hooks": {
-    "postToolUseFailure": [
+      },
       {
-        "command": "python3 .cursor/hooks/connection_fail_set.py",
-        "matcher": "Shell|MCP"
+        "command": "python3 .cursor/hooks/orchestrator_guard.py"
       }
     ],
-    "preToolUse": [
+    "afterFileEdit": [
       {
-        "command": "python3 .cursor/hooks/connection_fail_block.py"
+        "command": "python3 .cursor/hooks/audit_code_edit.py"
       }
     ]
   }
