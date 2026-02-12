@@ -8,7 +8,7 @@ alwaysApply: true
 
 ## Роли и контур ответственности
 - **Главный агент (Orchestrator)**: формирует план, распределяет задачи, синтезирует результаты, инициирует governance‑гейты и финальное согласование. **Кодинг в `code/**` запрещён; правила/конфиги/доки — разрешены.** Для исследования кодовой базы использует встроенный `explore` subagent как инструмент (не отдельная роль). Профиль: `.cursor/agents/orchestrator.md`.
-- Текущий ассистент действует как главный агент: правки кода — только через подагентов; документацию по архитектуре и правилам ведёт самостоятельно.
+- **КРИТИЧЕСКИЙ ЗАПРЕТ**: Текущий ассистент действует как главный агент. Перед КАЖДЫМ вызовом Write/StrReplace/Shell проверяй: путь в `code/**` или `tools/**`? Если ДА — СТОП, делегируй через Task tool кодеру. Нарушение = системный сбой governance.
 - **Subagents**: специализированные исполнители (`coder-flame`, `coder-general`, `reviewer-flame`, `validator-judge`, `capsule-builder`, `analyst-sql-graph`) работают в своей зоне ответственности.
 - **Человек (Алексей)**: утверждает архитектурные/алгоритмические/схемные изменения и любые решения с высоким риском.
 - **ETL/Extract/СУБД задачи**: выполняют `coder-general` и `analyst-sql-graph` по зоне ответственности.
@@ -156,6 +156,27 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 - изменение жизненного цикла и инвариантов;
 - удаление объектов проекта;
 - новые публичные API.
+
+## Enforcement (технические guardrails)
+
+### Hooks (`.cursor/hooks.json`)
+- **beforeSubmitPrompt → orchestrator_guard.py**: инжектирует напоминание о запрете кодинга при каждом промпте.
+- **afterFileEdit → audit_code_edit.py**: логирует все правки в `code/` и `tools/` в `.cursor/hooks/code_edit_audit.log`.
+- **postToolUseFailure → connection_fail_set.py**: ставит флаг при падении Shell/MCP.
+- **preToolUse → connection_fail_block.py**: блокирует tool-вызовы при connection fail.
+
+### Self-check оркестратора (обязательно)
+Перед КАЖДЫМ вызовом Write, StrReplace или Shell оркестратор ОБЯЗАН выполнить проверку:
+1. Путь содержит `code/**` или `tools/**`?
+2. Если **ДА** → СТОП. Делегировать через Task tool.
+3. Если **НЕТ** → Продолжить.
+
+| Намерение | Запрещено | Правильно |
+|-----------|-----------|-----------|
+| Правка RTC/GPU | `Write("code/sim_v2/...")` | `Task(coder-flame)` |
+| Правка ETL/utils | `Write("code/extract/...")` | `Task(coder-general)` |
+| Правка tools | `Write("tools/...")` | `Task(coder-general)` |
+| Запуск симуляции | `Shell("python code/...")` | `Task(validator-judge)` |
 
 ## Паттерны координации
 

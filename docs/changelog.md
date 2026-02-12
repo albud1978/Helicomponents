@@ -1,5 +1,22 @@
 # Changelog
 
+## [10-02-2026] - Governance enforcement: hooks, audit, policy reinforcement
+
+### Изменения
+- Починен `.cursor/hooks.json` — удалён дубль (два JSON-объекта подряд → один валидный).
+- Создан `.cursor/hooks/audit_code_edit.py` — afterFileEdit hook, логирует все правки в `code/` и `tools/` в `code_edit_audit.log`.
+- Создан `.cursor/hooks/orchestrator_guard.py` — beforeSubmitPrompt hook, инжектирует governance-напоминание при каждом промпте.
+- Усилены правила в `orchestrator.md` — КРИТИЧЕСКИЙ ЗАПРЕТ с таблицей правильных действий и self-check.
+- Усилены правила в `90_multiagent_workflow.mdc` — секция Enforcement с описанием hooks и self-check.
+- Инициализирован Agent KG: workflow `W_rlm_invariants_20260210` с контекстом и handoff.
+
+### Контекст
+Аудит governance выявил: битый hooks.json (хуки не работали), отсутствие технического enforcement роли оркестратора, пустую шину Agent KG. Реализована трёхслойная защита: prompt reinforcement (beforeSubmitPrompt), policy self-check (CRITICAL маркеры в правилах), post-factum audit (afterFileEdit лог).
+
+### Ревью/Валидация
+- Hooks.json проверен: `json.loads()` → VALID JSON.
+- Ревью кода не требуется (governance-конфиги, не бизнес-код).
+
 ## [10-02-2026] - RLM: создание системы контекстных капсул
 
 ### Изменения
