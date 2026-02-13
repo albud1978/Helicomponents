@@ -19,7 +19,7 @@ RTC модуль: Оптимизированный расчёт LIMITER V3
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from model_build import RTC_MAX_FRAMES, MAX_DAYS
+from model_build import RTC_MAX_FRAMES, MAX_DAYS, MAX_EXPORT_STEPS
 
 try:
     import pyflamegpu as fg
@@ -90,7 +90,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
     // Бинарный поиск: найти день когда накопленный налёт >= remaining_oh
     // Логика: найти минимальный day такой что cumsum[day] - cumsum[current] >= remaining
     // ═══════════════════════════════════════════════════════════════════
-    unsigned int days_to_oh = end_day - current_day;  // Временное значение
+    unsigned int days_to_oh = end_day - current_day;
     bool found_oh = false;
     {{
         unsigned int lo = current_day + 1u;
@@ -98,24 +98,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
         while (lo < hi) {{
             unsigned int mid = (lo + hi) / 2u;
             unsigned int accumulated = cumsum[mid * frames + idx] - base_cumsum;
-            if (accumulated >= remaining_oh) {{
+            if (accumulated > remaining_oh) {{
                 hi = mid;
             }} else {{
                 lo = mid + 1u;
             }}
         }}
         if (lo <= end_day) {{
-            // Проверяем что действительно достигли remaining_oh
             unsigned int final_accumulated = cumsum[lo * frames + idx] - base_cumsum;
-            if (final_accumulated >= remaining_oh) {{
-                days_to_oh = lo - current_day;
+            if (final_accumulated > remaining_oh) {{
+                days_to_oh = (lo - 1u) - current_day;
                 found_oh = true;
             }}
         }}
     }}
     if (!found_oh) {{
-        // Ресурс НЕ исчерпается в горизонте симуляции
-        days_to_oh = (end_day - current_day) + 1u;
+        days_to_oh = end_day - current_day;
     }}
     
     // ═══════════════════════════════════════════════════════════════════
@@ -129,7 +127,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
         while (lo < hi) {{
             unsigned int mid = (lo + hi) / 2u;
             unsigned int accumulated = cumsum[mid * frames + idx] - base_cumsum;
-            if (accumulated >= remaining_ll) {{
+            if (accumulated > remaining_ll) {{
                 hi = mid;
             }} else {{
                 lo = mid + 1u;
@@ -137,15 +135,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
         }}
         if (lo <= end_day) {{
             unsigned int final_accumulated = cumsum[lo * frames + idx] - base_cumsum;
-            if (final_accumulated >= remaining_ll) {{
-                days_to_ll = lo - current_day;
+            if (final_accumulated > remaining_ll) {{
+                days_to_ll = (lo - 1u) - current_day;
                 found_ll = true;
             }}
         }}
     }}
     if (!found_ll) {{
-        // Ресурс НЕ исчерпается в горизонте симуляции
-        days_to_ll = (end_day - current_day) + 1u;
+        days_to_ll = end_day - current_day;
     }}
     
     // ═══════════════════════════════════════════════════════════════════
@@ -155,9 +152,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_limiter_on_entry, flamegpu::MessageNone, fla
     
     // Ограничиваем UInt16 (65535 дней ≈ 179 лет)
     if (limiter > 65535u) limiter = 65535u;
-    
-    // Минимум 1 день (чтобы избежать застревания)
-    if (limiter == 0u) limiter = 1u;
     
     FLAMEGPU->setVariable<unsigned short>("limiter", (unsigned short)limiter);
     
@@ -417,6 +411,17 @@ class HF_StepController(fg.HostFunction):
         env.setPropertyUInt("current_day", new_day)
         env.setPropertyUInt("adaptive_days", adaptive_days)
         env.setPropertyUInt("step_days", adaptive_days)
+        
+        # 7. MP2 Export: записываем маппинг step -> day и счётчик шагов
+        step = FLAMEGPU.getStepCounter()
+        if step < MAX_EXPORT_STEPS:
+            try:
+                mp2_days = env.getMacroPropertyUInt("mp2_day_for_step")
+                mp2_days[step] = new_day
+                mp2_num = env.getMacroPropertyUInt("mp2_num_steps")
+                mp2_num[0] = step + 1
+            except Exception:
+                pass  # MP2 буферы не объявлены (старая конфигурация)
         
         return fg.CONTINUE
 

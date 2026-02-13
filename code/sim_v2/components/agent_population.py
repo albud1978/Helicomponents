@@ -45,7 +45,7 @@ def compute_limiter_for_agent(
     
     # Ресурс исчерпан
     if remaining_ll == 0 or remaining_oh == 0:
-        return 1  # Минимум 1 день для корректной работы
+        return 0
     
     # Day-major индексация: cumsum[day * frames + idx]
     current_day = 0
@@ -61,7 +61,7 @@ def compute_limiter_for_agent(
                 hi = mid
                 continue
             accumulated = int(mp5_cumsum[cumsum_mid_idx]) - int(base_cumsum)
-            if accumulated >= remaining:
+            if accumulated > remaining:
                 hi = mid
             else:
                 lo = mid + 1
@@ -70,8 +70,8 @@ def compute_limiter_for_agent(
             final_idx = lo * frames + idx
             if final_idx < len(mp5_cumsum):
                 final_accumulated = int(mp5_cumsum[final_idx]) - int(base_cumsum)
-                if final_accumulated >= remaining:
-                    return lo
+                if final_accumulated > remaining:
+                    return lo - 1
         return end_day
     
     days_to_oh = binary_search_day(remaining_oh)
@@ -79,8 +79,8 @@ def compute_limiter_for_agent(
     
     limiter = min(days_to_oh, days_to_ll)
     
-    # Ограничиваем UInt16 и минимум 1
-    return max(1, min(65535, limiter))
+    # Ограничиваем UInt16
+    return max(0, min(65535, limiter))
 
 
 class AgentPopulationBuilder:
@@ -230,6 +230,8 @@ class AgentPopulationBuilder:
             
             # Базовые переменные (используем frame_idx из build_frames_index)
             agent.setVariableUInt("idx", frame_idx)
+            agent.setVariableUInt("status_id", status_id)
+            agent.setVariableUInt("pre_status_id", status_id)
             agent.setVariableUInt("aircraft_number", agent_data['aircraft_number'])
             gb = agent_data.get('group_by', 0)
             partseqno = agent_data.get('partseqno_i', 0)

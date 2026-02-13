@@ -89,7 +89,7 @@
       "layer": "ops_increment",
       "function": "rtc_ops_increment_v8",
       "state": "2→2",
-      "notes": "SNE+=dt, PPR+=dt, limiter-=adaptive_days. dt из mp5_cumsum (адаптивный)."
+      "notes": "effective_days=min(adaptive_days,limiter). dt=cumsum[prev_day+effective_days]-cumsum[prev_day]. SNE+=dt, PPR+=dt, limiter-=adaptive_days (clamp 0). Предотвращает overshoot sne>ll."
     },
     {
       "order": 3,
@@ -105,7 +105,7 @@
       "layer": "ops_to_storage",
       "function": "rtc_ops_to_storage_v8",
       "state": "2→6",
-      "notes": "cond: limiter==0 + sne>=LL. Early-out: if limiter>0 return false."
+      "notes": "cond: limiter==0 (sufficient). Routing: sne>=ll→storage; ppr>=oh&&sne>=br→storage; ppr>=oh&&sne<br→unsvc (handled by ops_to_unsvc); edge: rem_ll<=rem_oh→storage. Early-out: if limiter>0 return false."
     },
     {
       "order": 5,
@@ -113,7 +113,7 @@
       "layer": "ops_to_unsvc",
       "function": "rtc_ops_to_unsvc_v8",
       "state": "2→7",
-      "notes": "cond: limiter==0 + ppr>=OH + sne<BR. Устанавливает repair_days=repair_time. Early-out: if limiter>0 return false."
+      "notes": "cond: limiter==0 (sufficient). Routing: sne>=ll→false (storage priority); ppr>=oh&&sne<br→unsvc; edge: rem_oh<rem_ll→unsvc. Устанавливает repair_days=repair_time. Early-out: if limiter>0 return false."
     },
     {
       "order": 6,
@@ -145,7 +145,7 @@
       "layer": "QM_central_decision",
       "function": "rtc_quota_manager_v9",
       "state": "QM",
-      "notes": "QM читает PlanerReport + RepairLineStatus. Каскадный дефицит: demote→P1→P2→P3→spawn_deficit. P2/P3: shared pool, Mi-17 first. Отправляет QuotaDecision + LineAssignment."
+      "notes": "QM читает PlanerReport + RepairLineStatus. Каскадный дефицит: demote→P1→P2→P3→spawn_deficit. P2/P3: shared pool RepairLine slots. Приоритет слотов: P2_mi17→P2_mi8→P3_mi17→P3_mi8. При занятии слота free_days обнуляется. Прямой добор inactive→ops (post-promote) БЕЗ RepairLine ЗАПРЕЩЁН. Отправляет QuotaDecision + LineAssignment."
     },
     {
       "order": 10,
@@ -257,10 +257,10 @@
       "notes": "Детерминированный spawn 0→3 (serviceable). P1 поднимет в ops."
     },
     {
-      "id": "ops_to_storage_ll_v8",
+      "id": "ops_to_storage_v8",
       "from": 2,
       "to": 6,
-      "pre": { "expr": "sne_next >= ll" },
+      "pre": { "expr": "limiter == 0 AND (sne >= ll OR (ppr >= oh AND sne >= br) OR (rem_ll <= rem_oh))" },
       "post": {
         "all": [
           { "expr": "state == 6" },
@@ -269,28 +269,13 @@
         "notes": "Терминальное состояние: sne и ppr frozen"
       },
       "owner_module": "rtc_state_transitions_v8",
-      "notes": "Списание по LL (next-day dt). Приоритет 1."
-    },
-    {
-      "id": "ops_to_storage_br_v8",
-      "from": 2,
-      "to": 6,
-      "pre": { "expr": "ppr_next >= oh AND sne_next >= br" },
-      "post": {
-        "all": [
-          { "expr": "state == 6" },
-          { "expr": "limiter == 0" }
-        ],
-        "notes": "Терминальное состояние: sne и ppr frozen"
-      },
-      "owner_module": "rtc_state_transitions_v8",
-      "notes": "Списание по BR при SNE>=BR. Приоритет 2."
+      "notes": "limiter==0 — безусловный выход из ops. Маршрут в storage: sne>=ll (приоритет 1), ppr>=oh&&sne>=br (приоритет 2), edge case rem_ll<=rem_oh."
     },
     {
       "id": "ops_to_unsvc_v8",
       "from": 2,
       "to": 7,
-      "pre": { "expr": "ppr_next >= oh AND sne_next < br" },
+      "pre": { "expr": "limiter == 0 AND sne < ll AND (ppr >= oh AND sne < br OR rem_oh < rem_ll)" },
       "post": {
         "all": [
           { "expr": "state == 7" },
@@ -299,7 +284,7 @@
         ]
       },
       "owner_module": "rtc_state_transitions_v8",
-      "notes": "Уход в unsvc по OH при SNE<BR. repair_days=repair_time. Приоритет 3."
+      "notes": "limiter==0, sne<ll. Маршрут в unsvc: ppr>=oh&&sne<br (OH, ремонтопригоден), edge case rem_oh<rem_ll."
     },
     {
       "id": "demote_ops_to_svc_v8",

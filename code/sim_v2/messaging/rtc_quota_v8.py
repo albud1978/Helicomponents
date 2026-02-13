@@ -3,7 +3,7 @@
 RTC модуль V8: Квотирование через RepairLine
 
 АРХИТЕКТУРА V8 (отличия от V7):
-1. P2/P3 используют слоты RepairLine (free_days >= repair_time)
+1. P2/P3 используют слоты RepairLine (free_days >= repair_time, при занятии free_days обнуляется)
 2. Условия:
    - current_day >= repair_time (глобальный барьер)
    - есть свободная линия в списке слотов
@@ -47,9 +47,6 @@ from rtc_quota_v8_base import (
     RTC_COUNT_INACTIVE,
     RTC_DEMOTE_OPS,
     RTC_PROMOTE_SVC,
-    RTC_PROMOTE_INACTIVE_POST,
-    RTC_INACTIVE_TO_OPS_POST,
-    COND_INACTIVE_PROMOTED_POST,
 )
 from rtc_publish_report import register_rtc as register_publish_report
 from rtc_apply_decisions import register_rtc as register_apply_decisions
@@ -512,24 +509,29 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     unsigned int p1_17 = (deficit17 < svc17) ? deficit17 : svc17;
     deficit17 -= p1_17;
     
-    // P2/P3 shared pool: Mi-17 first, Mi-8 second
+    // P2 И P3 требуют RepairLine slot (free_days обнуляется при занятии)
+    // Приоритет: P2 (unsvc) первый, P3 (inactive) на остаток
     unsigned int slots_left = available_slots;
     
+    // P2: Mi-17 first — ТРЕБУЕТ RepairLine slot
     unsigned int p2_17 = (deficit17 < unsvc17) ? deficit17 : unsvc17;
     p2_17 = (p2_17 < slots_left) ? p2_17 : slots_left;
     deficit17 -= p2_17;
     slots_left -= p2_17;
     
-    unsigned int p3_17 = (deficit17 < ina_ready17) ? deficit17 : ina_ready17;
-    p3_17 = (p3_17 < slots_left) ? p3_17 : slots_left;
-    deficit17 -= p3_17;
-    slots_left -= p3_17;
-    
+    // P2: Mi-8 — ТРЕБУЕТ RepairLine slot
     unsigned int p2_8 = (deficit8 < unsvc8) ? deficit8 : unsvc8;
     p2_8 = (p2_8 < slots_left) ? p2_8 : slots_left;
     deficit8 -= p2_8;
     slots_left -= p2_8;
     
+    // P3: Mi-17 — на оставшиеся слоты после P2
+    unsigned int p3_17 = (deficit17 < ina_ready17) ? deficit17 : ina_ready17;
+    p3_17 = (p3_17 < slots_left) ? p3_17 : slots_left;
+    deficit17 -= p3_17;
+    slots_left -= p3_17;
+    
+    // P3: Mi-8 — на оставшиеся слоты
     unsigned int p3_8 = (deficit8 < ina_ready8) ? deficit8 : ina_ready8;
     p3_8 = (p3_8 < slots_left) ? p3_8 : slots_left;
     
@@ -878,8 +880,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     const unsigned int candidate = FLAMEGPU->getVariable<unsigned int>("repair_candidate");
     if (candidate == 0u) return flamegpu::ALIVE;
     
+    // P2: unsvc→ops ЧЕРЕЗ RepairLine slot (free_days обнуляется)
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
-    
     auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
     auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
     auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
@@ -900,6 +902,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     bool claimed = false;
     unsigned int chosen_line = 0xFFFFFFFFu;
     
+    // Попытка занять предвыбранную линию
     if (line_id != 0xFFFFFFFFu) {{
         const unsigned int prev_acn = line_acn[line_id].exchange(acn);
         if (prev_acn == 0u) {{
@@ -916,6 +919,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
         }}
     }}
     
+    // Fallback: сканировать все линии
     if (!claimed) {{
         for (unsigned int i = 0u; i < max_lines; ++i) {{
             const unsigned int prev_acn = line_acn[i].exchange(acn);
@@ -1593,22 +1597,6 @@ def register_post_quota_counts_v8(model: fg.ModelDescription, agent: fg.AgentDes
     
     print("  ✅ Подсчёт агентов (post)")
     
-    # Доп. добор до target после пост-квотных переходов
-    layer_promote_post = model.newLayer("v8_promote_inactive_post")
-    fn = agent.newRTCFunction("rtc_promote_inactive_post_v8", RTC_PROMOTE_INACTIVE_POST)
-    fn.setInitialState("inactive")
-    fn.setEndState("inactive")
-    layer_promote_post.addAgentFunction(fn)
-    
-    layer_to_ops_post = model.newLayer("v8_inactive_to_ops_post")
-    fn = agent.newRTCFunction("rtc_inactive_to_ops_post_v8", RTC_INACTIVE_TO_OPS_POST)
-    fn.setRTCFunctionCondition(COND_INACTIVE_PROMOTED_POST)
-    fn.setInitialState("inactive")
-    fn.setEndState("operations")
-    layer_to_ops_post.addAgentFunction(fn)
-    
-    print("  ✅ Доп. добор из inactive (post)")
-
     # Обновляем буферы после post-промоутов, чтобы spawn видел актуальный ops
     layer_reset_spawn = model.newLayer("v8_reset_buffers_spawn")
     for state in ["inactive", "operations", "serviceable", "repair", "reserve", "storage", "unserviceable"]:

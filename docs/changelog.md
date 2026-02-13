@@ -1,5 +1,19 @@
 # Changelog
 
+## [10-02-2026] - Anti-drift: DriftCheck + Facts/Assumptions в Handoff-шаблоне
+
+### Изменения
+- Handoff-шаблон (`90_multiagent_workflow.mdc`): `Goal` → `UserGoal` (verbatim цитата), `Evidence` → `Facts` (с источником) + `Assumptions` (с «Risks if false»), добавлен `DriftCheck` (только оркестратор).
+- Добавлено правило anti-drift: расхождение UserGoal и Changes по scope → СТОП и вопрос человеку.
+- `orchestrator.md`: добавлена секция «Anti-drift self-check» — обязательная процедура перед каждым Handoff.
+- Обновлены ссылки на `Evidence` → `Facts`/`Assumptions` в секциях «Тесты и проверки» и «Аудит действий».
+
+### Контекст
+Аудит показал, что оркестратор склонен «подгонять задачу под ответ» — расширять scope без запроса. Два изменения: (1) DriftCheck заставляет явно сравнивать UserGoal с Changes, (2) Facts/Assumptions разделяют проверенные данные от предположений, блокируя «рассуждения вместо фактов».
+
+### Ревью/Валидация
+- Не требуется (governance-конфиги, не бизнес-код).
+
 ## [10-02-2026] - Governance enforcement: hooks, audit, policy reinforcement
 
 ### Изменения

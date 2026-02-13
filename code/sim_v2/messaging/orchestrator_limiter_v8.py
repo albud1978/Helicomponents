@@ -43,6 +43,12 @@ sys.path.insert(0, os.path.join(code_dir, 'utils'))
 from config_loader import auto_load_env_file
 auto_load_env_file()
 
+# RTC kernel cache — устанавливаем ДО импорта pyflamegpu
+# Без этого ~73 RTC ядра перекомпилируются при каждом запуске (~70с overhead)
+_rtc_cache_dir = os.path.join(project_root, '.rtc_cache')
+os.makedirs(_rtc_cache_dir, exist_ok=True)
+os.environ.setdefault('FLAMEGPU_RTC_EXPORT_CACHE_PATH', _rtc_cache_dir)
+
 import pyflamegpu as fg
 import model_build
 
@@ -372,6 +378,7 @@ import rtc_repair_lines_v8       # V8: RepairLine sync
 import rtc_limiter_optimized
 import rtc_limiter_v5            # Для совместимости
 import rtc_limiter_v8            # V8: deterministic_dates!
+import rtc_mp2_export
 from components.agent_population import AgentPopulationBuilder
 
 # Максимум ремонтных линий (MacroProperty размер)
@@ -467,6 +474,7 @@ class LimiterV8Orchestrator:
         
         # День 0
         dates.add(0)
+        dates.add(1)  # День 1: первый обсчитываемый день (день 0 — инициализация)
         
         # Program changes
         dates.update(self.program_change_days)
@@ -557,6 +565,9 @@ class LimiterV8Orchestrator:
         self.base_model.env.newMacroPropertyUInt32("mp5_cumsum", cumsum_size)
         # mp4_ops_counter_mi8/mi17 уже созданы в base_model как PropertyArray
         
+        # MP2 Export: буферы для per-agent per-step экспорта
+        rtc_mp2_export.setup_mp2_buffers(self.base_model.env)
+        
         # HF для инициализации mp5_cumsum
         hf_init_cumsum = HF_InitMP5Cumsum(self.mp5_cumsum, self.frames, self.days)
         layer_init = self.model.newLayer("layer_init_mp5_cumsum")
@@ -579,6 +590,9 @@ class LimiterV8Orchestrator:
         layer_step = self.model.newLayer("layer_step_controller")
         layer_step.addHostFunction(self.hf_step_controller)
         print("  ✅ V8 HF_StepController зарегистрирован (layer, перед QM)")
+
+        # Pre-status snapshot (перед любыми переходами)
+        rtc_state_transitions_v8.register_save_pre_status(self.model, heli_agent)
         
         # ═══════════════════════════════════════════════════════════════
         # V8: RepairAgent ОТКЛЮЧЁН — используем V8 квотирование через RepairLine
@@ -655,6 +669,8 @@ class LimiterV8Orchestrator:
         dynamic_reserve_mi17 = 50
         remaining_slots = max(0, model_build.RTC_MAX_FRAMES - self.frames - dynamic_reserve_mi17)
         dynamic_reserve_mi8 = 8 if remaining_slots >= 8 else remaining_slots
+        self._dynamic_reserve_mi17 = dynamic_reserve_mi17
+        self._dynamic_reserve_mi8 = dynamic_reserve_mi8
         base_acn_spawn = 100000
         spawn_env_data = {
             'first_dynamic_idx': self.frames,
@@ -668,7 +684,12 @@ class LimiterV8Orchestrator:
         self.spawn_data = rtc_spawn_dynamic_v7.register_spawn_dynamic_v8(
             self.model, heli_agent, spawn_env_data
         )
-        
+
+        # Spawn diagnostic (временно)
+        self._hf_spawn_diag = HF_SpawnDiag()
+        layer_spawn_diag = self.model.newLayer("layer_spawn_diag")
+        layer_spawn_diag.addHostFunction(self._hf_spawn_diag)
+
         # ═══════════════════════════════════════════════════════════════
         # ФАЗА 4: Limiter (бинарный поиск)
         # ═══════════════════════════════════════════════════════════════
@@ -691,6 +712,16 @@ class LimiterV8Orchestrator:
         fn_min.setEndState("operations")
         layer_min = self.model.newLayer("L_limiter_min")
         layer_min.addAgentFunction(fn_min)
+        
+        # ═══════════════════════════════════════════════════════════════
+        # MP2 Export: agent write layer + drain layer + SyncDay layer
+        # ═══════════════════════════════════════════════════════════════
+        rtc_mp2_export.register_mp2_write_layer(self.model, heli_agent)
+        # Включаем spawn слоты в MP2 drain
+        total_agents_with_spawn = self.frames + dynamic_reserve_mi17 + dynamic_reserve_mi8
+        self.hf_mp2_drain = rtc_mp2_export.register_mp2_drain(
+            self.model, self.end_day, total_agents_with_spawn
+        )
         
         # V8 StepController перенесён в layer_step_controller (перед QM)
         # mp_min_limiter записывается здесь limiter, читается StepController на СЛЕДУЮЩЕМ шаге
@@ -733,7 +764,8 @@ class LimiterV8Orchestrator:
             self.program_change_days,
             self.end_day,
             verbose_logging=self.enable_mp2,
-            enable_v8_reason=True
+            enable_v8_reason=True,
+            sync_as_layer=True  # V9/MP2: layer вместо addStepFunction для simulate()
         )
         
         # V8 StepController перенесён в начало (layer_step_controller, перед QM)
@@ -741,6 +773,11 @@ class LimiterV8Orchestrator:
         # ИСПРАВЛЕНО: НЕ вызываем rtc_limiter_v5.register_v5_final_layers!
         # V5 compute_global_min ПЕРЕЗАПИСЫВАЛ результат V8, вызывая баг ops≠target
         # V8 уже имеет свои слои: v8_compute_global_min + v8_update_day
+        
+        # V9/MP2: SyncDay как layer host function (после MP2 drain)
+        layer_sync = self.model.newLayer("layer_sync_day_v5")
+        layer_sync.addHostFunction(self.hf_sync_v5)
+        print("  ✅ HF_SyncDayV5 зарегистрирован как layer host function")
         
         # V8 Exit condition
         self.hf_exit = rtc_limiter_v8.HF_ExitConditionV8(self.end_day)
@@ -753,11 +790,11 @@ class LimiterV8Orchestrator:
         return self.model
     
     def run(self, max_steps: int = 10000):
-        """Запуск симуляции"""
+        """Запуск симуляции (V9: simulate() + MP2 drain)"""
         print("\n" + "=" * 60)
-        print("🚀 LIMITER V8: Запуск симуляции")
+        print("🚀 LIMITER V8/V9: Запуск симуляции (simulate + MP2)")
         print(f"   max_steps: {max_steps}")
-        print(f"   MP2 экспорт: {'✅' if self.enable_mp2 else '❌'}")
+        print(f"   end_day: {self.end_day}")
         print("=" * 60)
         
         t_start = time.perf_counter()
@@ -769,236 +806,110 @@ class LimiterV8Orchestrator:
         # Инициализация агентов
         self._populate_agents()
         
-        # V8: MacroProperty инициализируются через HF_InitV8 (layer host function, NOT addInitFunction)
+        # Запуск simulate() — все шаги выполняются на GPU без возврата в Python
+        print("\n🏃 Запуск simulate()...")
+        t_gpu_start = time.perf_counter()
+        self.simulation.simulate()
+        gpu_time = time.perf_counter() - t_gpu_start
         
-        # Подготовка MP2
-        mp2_rows = []
-        repair_line_rows = []
-        quota_rows = []
+        final_steps = self.simulation.getStepCounter()
+        print(f"   ✅ simulate() завершён: {final_steps} шагов за {gpu_time:.2f}с")
+        
+        # Чтение MP2 данных
         vd = date.fromisoformat(self.version_date)
         version_date_int = vd.year * 10000 + vd.month * 100 + vd.day
-        # Позволяет изолировать прогоны без изменения таблиц (опционально через ENV)
         run_id_env = os.getenv("V8_RUN_ID")
         if run_id_env is not None and run_id_env.isdigit():
             version_id = int(run_id_env)
         else:
             version_id = int(self.env_data.get('version_id_u32', 1))
         
-        # Запуск
-        if self.enable_mp2:
-            print("\n🏃 Запуск step() цикл (для MP2)...")
-            t_gpu_start = time.perf_counter()
-            
-            step_count = 0
-            recorded_days = set()
-            
-            # День 0
-            rows = collect_agents_state(
-                self.simulation, self.base_model.agent,
-                0, version_date_int, version_id,
-                step_id=0, prev_day=0, adaptive_days=0,
-                spawn_mgr_desc=self.spawn_data.get('mgr_agent') if self.spawn_data else None,
-                repair_line_desc=self.base_model.repair_line_agent
+        mp2_data = self.hf_mp2_drain.data
+        if mp2_data is None:
+            print("⚠️ MP2 Drain не прочитал данные (возможно end_day не достигнут)")
+            t_end = time.perf_counter()
+            print(f"\n✅ Симуляция завершена (без экспорта): {t_end - t_start:.2f}с")
+            self._print_final_stats()
+            return self.end_day
+        
+        num_steps = mp2_data['num_steps']
+        days = mp2_data['days']
+        fields = mp2_data['fields']
+        
+        dyn17 = getattr(self, '_dynamic_reserve_mi17', 0)
+        dyn8 = getattr(self, '_dynamic_reserve_mi8', 0)
+        total_export_agents = self.frames + dyn17 + dyn8
+        
+        # Все поля (включая "статические") читаются из MP2 буферов
+        # Fallback не используется
+        
+        print(
+            f"\n📤 MP2 → ClickHouse: {num_steps} шагов × {total_export_agents} агентов "
+            f"(base={self.frames} + spawn={total_export_agents - self.frames})"
+        )
+        
+        # Построение строк для INSERT
+        t_build = time.perf_counter()
+        rows = []
+        for s in range(num_steps):
+            day = days[s]
+            for a in range(total_export_agents):
+                status = int(fields['mp2_status_id'][s, a])
+                if status == 0:
+                    continue  # Пустой spawn slot — пропускаем
+                rows.append([
+                    version_date_int,
+                    version_id,
+                    day,  # day_u16
+                    int(fields['mp2_idx'][s, a]),
+                    int(fields['mp2_aircraft_number'][s, a]),
+                    int(fields['mp2_group_by'][s, a]),
+                    int(fields['mp2_oh'][s, a]),
+                    int(fields['mp2_br'][s, a]),
+                    int(fields['mp2_ll'][s, a]),
+                    status,
+                    int(fields['mp2_pre_status_id'][s, a]),
+                    int(fields['mp2_sne'][s, a]),
+                    int(fields['mp2_ppr'][s, a]),
+                    int(fields['mp2_limiter'][s, a]),
+                    int(fields['mp2_repair_days'][s, a]),
+                    int(fields['mp2_daily_today'][s, a]),
+                    int(fields['mp2_daily_next'][s, a]),
+                    int(fields['mp2_commit_p2'][s, a]),
+                    int(fields['mp2_commit_p3'][s, a]),
+                ])
+        build_time = time.perf_counter() - t_build
+        print(f"   Строк: {len(rows)} ({build_time:.2f}с)")
+        
+        # Batch INSERT
+        if self.clickhouse_client and rows:
+            t_insert = time.perf_counter()
+            columns = [
+                'version_date', 'version_id', 'day_u16',
+                'idx', 'aircraft_number', 'group_by', 'oh', 'br', 'll',
+                'status_id', 'pre_status_id', 'sne', 'ppr', 'limiter', 'repair_days',
+                'daily_today_u32', 'daily_next_u32', 'commit_p2', 'commit_p3'
+            ]
+            col_str = ', '.join(columns)
+            self.clickhouse_client.execute(
+                f"INSERT INTO sim_masterv2_v9 ({col_str}) VALUES",
+                rows
             )
-            mp2_rows.extend(rows)
-            rl_rows = collect_repair_lines_state(
-                self.simulation,
-                self.base_model.repair_line_agent,
-                0, version_date_int, version_id,
-                step_id=0, prev_day=0, adaptive_days=0
-            )
-            repair_line_rows.extend(rl_rows)
-            qm_rows = collect_quota_manager_state(
-                self.simulation,
-                self.base_model.quota_agent,
-                0, version_date_int, version_id,
-                step_id=0, prev_day=0, adaptive_days=0
-            )
-            quota_rows.extend(qm_rows)
-            recorded_days.add(0)
-            print(f"  [Step 0] day=0 (начальное состояние)")
-            
-            while self.simulation.step():
-                step_count += 1
-                
-                step_log = self.hf_sync_v5.get_step_log()
-                if step_log:
-                    current_day = step_log[-1]['day']
-                    adaptive_days = step_log[-1]['adaptive']
-                else:
-                    current_day = 0
-                    adaptive_days = 0
-                
-                # Логируем состояние на текущий день выполнения (current_day)
-                prev_day = None
-                if hasattr(self.simulation, "getEnvironmentPropertyUInt"):
-                    prev_day = int(self.simulation.getEnvironmentPropertyUInt("prev_day"))
-                elif hasattr(self.simulation, "getEnvironmentProperty"):
-                    prev_day = int(self.simulation.getEnvironmentProperty("prev_day"))
-                elif hasattr(self.simulation, "getEnvironmentPropertyInt"):
-                    prev_day = int(self.simulation.getEnvironmentPropertyInt("prev_day"))
-                
-                if prev_day is None:
-                    raise RuntimeError("Не удалось прочитать prev_day из Environment после шага")
-                
-                day_to_record = current_day
-                if day_to_record > self.end_day:
-                    day_to_record = self.end_day
-                
-                if day_to_record not in recorded_days:
-                    rows = collect_agents_state(
-                        self.simulation, self.base_model.agent,
-                        day_to_record, version_date_int, version_id,
-                        step_id=step_count, prev_day=prev_day, adaptive_days=adaptive_days,
-                        spawn_mgr_desc=self.spawn_data.get('mgr_agent') if self.spawn_data else None,
-                        repair_line_desc=self.base_model.repair_line_agent
-                    )
-                    mp2_rows.extend(rows)
-                    rl_rows = collect_repair_lines_state(
-                        self.simulation,
-                        self.base_model.repair_line_agent,
-                        day_to_record, version_date_int, version_id,
-                        step_id=step_count, prev_day=prev_day, adaptive_days=adaptive_days
-                    )
-                    repair_line_rows.extend(rl_rows)
-                    qm_rows = collect_quota_manager_state(
-                        self.simulation,
-                        self.base_model.quota_agent,
-                        day_to_record, version_date_int, version_id,
-                        step_id=step_count, prev_day=prev_day, adaptive_days=adaptive_days
-                    )
-                    quota_rows.extend(qm_rows)
-                    recorded_days.add(day_to_record)
-                
-                if day_to_record in self.debug_days:
-                    self._debug_day_snapshot(day_to_record)
-                
-                if step_count >= max_steps:
-                    break
-            
-            # Финальный экспорт: последний step() возвращает False,
-            # но данные на GPU уже вычислены. Собираем их.
-            if self.end_day not in recorded_days:
-                # Читаем текущее состояние после последнего шага
-                final_step_log = self.hf_sync_v5.get_step_log()
-                if final_step_log:
-                    final_day = final_step_log[-1]['day']
-                    final_adaptive = final_step_log[-1]['adaptive']
-                else:
-                    final_day = self.end_day
-                    final_adaptive = 0
-                
-                final_prev_day = None
-                if hasattr(self.simulation, "getEnvironmentPropertyUInt"):
-                    final_prev_day = int(self.simulation.getEnvironmentPropertyUInt("prev_day"))
-                elif hasattr(self.simulation, "getEnvironmentProperty"):
-                    final_prev_day = int(self.simulation.getEnvironmentProperty("prev_day"))
-                elif hasattr(self.simulation, "getEnvironmentPropertyInt"):
-                    final_prev_day = int(self.simulation.getEnvironmentPropertyInt("prev_day"))
-                
-                if final_prev_day is None:
-                    final_prev_day = self.end_day
-                
-                day_to_record = min(final_day, self.end_day)
-                
-                if day_to_record not in recorded_days:
-                    step_count += 1
-                    rows = collect_agents_state(
-                        self.simulation, self.base_model.agent,
-                        day_to_record, version_date_int, version_id,
-                        step_id=step_count, prev_day=final_prev_day, adaptive_days=final_adaptive,
-                        spawn_mgr_desc=self.spawn_data.get('mgr_agent') if self.spawn_data else None,
-                        repair_line_desc=self.base_model.repair_line_agent
-                    )
-                    mp2_rows.extend(rows)
-                    rl_rows = collect_repair_lines_state(
-                        self.simulation,
-                        self.base_model.repair_line_agent,
-                        day_to_record, version_date_int, version_id,
-                        step_id=step_count, prev_day=final_prev_day, adaptive_days=final_adaptive
-                    )
-                    repair_line_rows.extend(rl_rows)
-                    qm_rows = collect_quota_manager_state(
-                        self.simulation,
-                        self.base_model.quota_agent,
-                        day_to_record, version_date_int, version_id,
-                        step_id=step_count, prev_day=final_prev_day, adaptive_days=final_adaptive
-                    )
-                    quota_rows.extend(qm_rows)
-                    recorded_days.add(day_to_record)
-                    print(f"  [Final] day={day_to_record} (финальный экспорт после step()=False)")
-            
-            gpu_time = time.perf_counter() - t_gpu_start
-            
-            # Лог шагов
-            step_log = self.hf_sync_v5.get_step_log()
+            insert_time = time.perf_counter() - t_insert
+            print(f"   ✅ INSERT: {len(rows)} строк ({insert_time:.2f}с)")
+        
+        # Step log (из SyncDay)
+        step_log = self.hf_sync_v5.get_step_log()
+        if step_log:
             print(f"\n📋 Лог шагов ({len(step_log)} записей):")
-            
             reason_counts = {}
             for entry in step_log:
                 for r in entry['reasons']:
                     key = r.split(':')[0]
                     reason_counts[key] = reason_counts.get(key, 0) + 1
-            
             print(f"   Причины шагов:")
             for reason, count in sorted(reason_counts.items()):
                 print(f"     {reason}: {count}")
-        else:
-            print("\n🏃 Запуск simulate()...")
-            t_gpu_start = time.perf_counter()
-            self.simulation.simulate()
-            gpu_time = time.perf_counter() - t_gpu_start
-        
-        # Результаты
-        final_steps = self.simulation.getStepCounter()
-        
-        # MP2 export
-        drain_time = 0.0
-        
-        if self.enable_mp2 and mp2_rows:
-            unique_days = len(set(r['day_u16'] for r in mp2_rows))
-            print(f"\n📤 Экспорт в СУБД: {len(mp2_rows)} строк, {unique_days} дней...")
-            
-            t_insert = time.perf_counter()
-            columns = list(mp2_rows[0].keys())
-            values = [[row[col] for col in columns] for row in mp2_rows]
-            col_str = ', '.join(columns)
-            self.clickhouse_client.execute(
-                f"INSERT INTO sim_masterv2_v8 ({col_str}) VALUES",
-                values
-            )
-            drain_time = time.perf_counter() - t_insert
-            print(f"   ✅ INSERT: {len(mp2_rows)} строк ({drain_time:.2f}с)")
-        
-        if self.enable_mp2 and repair_line_rows:
-            unique_days_rl = len(set(r['day_u16'] for r in repair_line_rows))
-            print(f"\n📤 Экспорт RepairLine: {len(repair_line_rows)} строк, {unique_days_rl} дней...")
-            t_insert_rl = time.perf_counter()
-            columns = list(repair_line_rows[0].keys())
-            values = [[row[col] for col in columns] for row in repair_line_rows]
-            col_str = ', '.join(columns)
-            self.clickhouse_client.execute(
-                f"INSERT INTO sim_repair_lines_v8 ({col_str}) VALUES",
-                values
-            )
-            drain_time_rl = time.perf_counter() - t_insert_rl
-            print(f"   ✅ INSERT RepairLine: {len(repair_line_rows)} строк ({drain_time_rl:.2f}с)")
-        
-        if self.enable_mp2 and quota_rows:
-            unique_days_qm = len(set(r['day_u16'] for r in quota_rows))
-            print(f"\n📤 Экспорт QuotaManager: {len(quota_rows)} строк, {unique_days_qm} дней...")
-            t_insert_qm = time.perf_counter()
-            columns = list(quota_rows[0].keys())
-            values = [[row[col] for col in columns] for row in quota_rows]
-            col_str = ', '.join(columns)
-            self.clickhouse_client.execute(
-                f"INSERT INTO sim_quota_mgr_v8 ({col_str}) VALUES",
-                values
-            )
-            drain_time_qm = time.perf_counter() - t_insert_qm
-            print(f"   ✅ INSERT QuotaManager: {len(quota_rows)} строк ({drain_time_qm:.2f}с)")
-        
-        # Export RepairSlots отключён: логирование слотов идёт через sim_quota_mgr_v8
         
         t_end = time.perf_counter()
         total_time = t_end - t_start
@@ -1008,8 +919,6 @@ class LimiterV8Orchestrator:
         print(f"   end_day: {self.end_day}")
         print(f"   Время общее: {total_time:.2f}с")
         print(f"   Время GPU: {gpu_time:.2f}с")
-        if self.enable_mp2:
-            print(f"   Время drain: {drain_time:.2f}с")
         if gpu_time > 0:
             print(f"   Скорость: {self.end_day / gpu_time:.0f} дней/сек (GPU)")
         if total_time > 0:
@@ -1378,6 +1287,35 @@ class HF_InitMP5Cumsum(fg.HostFunction):
         print(f"  [HF_InitMP5Cumsum] ✅ Загружено")
 
 
+class HF_SpawnDiag(fg.HostFunction):
+    def __init__(self):
+        super().__init__()
+        self.log_days = {0, 100, 200, 400, 600, 666, 697, 800, 1000, 1500, 2000, 2500, 3000, 3650}
+
+    def run(self, FLAMEGPU):
+        day = FLAMEGPU.environment.getPropertyUInt("current_day")
+        
+        mgr = FLAMEGPU.agent("SpawnDynamicMgr", "default")
+        if mgr.count() == 0:
+            return
+        
+        # HostAgentAPI: для 1 агента sumUInt = значение переменной
+        curr_ops = mgr.sumUInt("debug_curr_ops")
+        target = mgr.sumUInt("debug_target")
+        need = mgr.sumUInt("debug_need")
+        total_spawned = mgr.sumUInt("total_spawned_mi17")
+        curr_ops_8 = mgr.sumUInt("debug_curr_ops_mi8")
+        target_8 = mgr.sumUInt("debug_target_mi8")
+        need_8 = mgr.sumUInt("debug_need_mi8")
+        total_spawned_8 = mgr.sumUInt("total_spawned_mi8")
+        
+        if need > 0 or need_8 > 0 or day in self.log_days:
+            print(
+                f"  SPAWN_DIAG day={day}: Mi17[ops={curr_ops} tgt={target} need={need} spawned={total_spawned}] "
+                f"Mi8[ops={curr_ops_8} tgt={target_8} need={need_8} spawned={total_spawned_8}]"
+            )
+
+
 class HF_InitRepairLines(fg.HostFunction):
     """HostFunction для инициализации RepairLine MacroProperty"""
     
@@ -1418,7 +1356,6 @@ def main():
     parser.add_argument("--version-date", required=True, help="Дата датасета (YYYY-MM-DD)")
     parser.add_argument("--end-day", type=int, default=3650, help="Последний день симуляции")
     parser.add_argument("--max-steps", type=int, default=10000, help="Максимум шагов")
-    parser.add_argument("--enable-mp2", action="store_true", help="Экспорт в СУБД")
     parser.add_argument("--drop-table", action="store_true", help="Пересоздать таблицу")
     
     args = parser.parse_args()
@@ -1427,186 +1364,45 @@ def main():
     print("🚀 LIMITER V8 — Архитектура с RepairLine")
     print("=" * 70)
     
-    # Подключение к ClickHouse если нужен MP2
-    client = None
-    if args.enable_mp2:
-        from sim_env_setup import get_client
-        client = get_client()
-        
-        if args.drop_table:
-            print("🗑️ DROP TABLE sim_masterv2_v8...")
-            client.execute("DROP TABLE IF EXISTS sim_masterv2_v8")
-        
-        # Создание таблицы
-        client.execute("""
-            CREATE TABLE IF NOT EXISTS sim_masterv2_v8 (
-                version_date UInt32,
-                version_id UInt8,
-                day_u16 UInt16,
-                day_date Date MATERIALIZED addDays(toDate('1970-01-01'), toUInt32(version_date) + toUInt32(day_u16)),
-                debug_step UInt32,
-                debug_prev_day UInt32,
-                debug_adaptive_days UInt32,
-                idx UInt16,
-                aircraft_number UInt32,
-                group_by UInt8,
-                state String,
-                sne UInt32,
-                ppr UInt32,
-                ll UInt32,
-                oh UInt32,
-                br UInt32,
-                daily_today_u32 UInt32,
-                daily_next_u32 UInt32,
-                repair_days UInt16,
-                repair_time UInt16,
-                limiter UInt16,
-                status_change_day UInt32,
-                promoted UInt8,
-                needs_demote UInt8,
-                repair_candidate UInt8,
-                repair_line_id UInt32,
-                repair_line_day UInt32,
-                debug_promoted UInt8,
-                debug_needs_demote UInt8,
-                debug_repair_candidate UInt8,
-                debug_repair_line_id UInt32,
-                debug_repair_line_day UInt32,
-                debug_bucket_seen UInt8,
-                commit_p1 UInt32,
-                commit_p2 UInt32,
-                commit_p3 UInt32,
-                decision_p2 UInt32,
-                decision_p3 UInt32,
-                spawn_debug_curr_ops UInt32,
-                spawn_debug_target UInt32,
-                spawn_debug_need UInt32,
-                spawn_debug_curr_ops_mi8 UInt32,
-                spawn_debug_target_mi8 UInt32,
-                spawn_debug_need_mi8 UInt32,
-                debug_current_day UInt32,
-                debug_rl_total UInt32,
-                debug_rl_free UInt32,
-                debug_rl_ready UInt32,
-                debug_rl_min_free UInt32,
-                debug_rl_max_free UInt32,
-                debug_ops_mi17 UInt32,
-                debug_svc_mi17 UInt32,
-                debug_unsvc_ready_mi17 UInt32,
-                debug_inactive_ready_mi17 UInt32
-            ) ENGINE = MergeTree()
-            ORDER BY (version_date, version_id, day_u16, idx)
-        """)
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS daily_today_u32 UInt32")
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS daily_next_u32 UInt32")
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS limiter UInt16")
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS status_change_day UInt32")
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS decision_p2 UInt32")
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS decision_p3 UInt32")
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS debug_bucket_seen UInt32")
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS spawn_debug_curr_ops_mi8 UInt32")
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS spawn_debug_target_mi8 UInt32")
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS spawn_debug_need_mi8 UInt32")
-        client.execute("ALTER TABLE sim_masterv2_v8 ADD COLUMN IF NOT EXISTS day_date Date MATERIALIZED addDays(toDate('1970-01-01'), toUInt32(version_date) + toUInt32(day_u16))")
-        client.execute("""
-            CREATE TABLE IF NOT EXISTS sim_repair_lines_v8 (
-                version_date UInt32,
-                version_id UInt8,
-                day_u16 UInt16,
-                debug_step UInt32,
-                debug_prev_day UInt32,
-                debug_adaptive_days UInt32,
-                debug_current_day UInt32,
-                line_id UInt32,
-                free_days UInt32,
-                aircraft_number UInt32,
-                last_acn UInt32,
-                last_day UInt32,
-                is_free UInt8,
-                ready_mi8 UInt8,
-                ready_mi17 UInt8
-            ) ENGINE = MergeTree()
-            ORDER BY (version_date, version_id, day_u16, line_id)
-        """)
-        client.execute("""
-            CREATE TABLE IF NOT EXISTS sim_quota_mgr_v8 (
-                version_date UInt32,
-                version_id UInt8,
-                day_u16 UInt16,
-                debug_step UInt32,
-                debug_prev_day UInt32,
-                debug_adaptive_days UInt32,
-                debug_current_day UInt32,
-                group_by UInt8,
-                debug_slots_count_mi17 UInt32,
-                debug_slot_mi17_0 UInt32,
-                debug_slot_mi17_1 UInt32,
-                debug_slot_mi17_2 UInt32,
-                debug_slot_mi17_3 UInt32,
-                debug_slot_mi17_4 UInt32,
-                debug_slot_mi17_5 UInt32,
-                debug_p2_ops UInt32,
-                debug_p2_target UInt32,
-                debug_p2_deficit UInt32,
-                debug_p2_needed UInt32,
-                debug_p2_slots UInt32,
-                debug_p2_svc UInt32,
-                debug_p2_unsvc UInt32,
-                debug_qm_ops_mi8 UInt32,
-                debug_qm_ops_mi17 UInt32,
-                debug_qm_target_mi8 UInt32,
-                debug_qm_target_mi17 UInt32,
-                debug_qm_quota_left_mi8 UInt32,
-                debug_qm_quota_left_mi17 UInt32,
-                debug_qm_unsvc_cnt UInt32,
-                debug_qm_inactive_cnt UInt32,
-                debug_qm_p1_mi8 UInt32,
-                debug_qm_p1_mi17 UInt32,
-                debug_qm_p2_total UInt32,
-                debug_qm_p3_total UInt32,
-                debug_qm_balance_mi8 Int32,
-                debug_qm_balance_mi17 Int32,
-                debug_qm_target_day UInt32,
-                debug_qm_ops_cnt_mi8 UInt32,
-                debug_qm_ops_cnt_mi17 UInt32,
-                debug_qm_svc_cnt_mi8 UInt32,
-                debug_qm_svc_cnt_mi17 UInt32,
-                debug_qm_unsvc_ready_mi8 UInt32,
-                debug_qm_unsvc_ready_mi17 UInt32,
-                debug_qm_inactive_mi8 UInt32,
-                debug_qm_inactive_mi17 UInt32
-            ) ENGINE = MergeTree()
-            ORDER BY (version_date, version_id, day_u16, group_by)
-        """)
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_ops_mi8 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_ops_mi17 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_target_mi8 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_target_mi17 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_quota_left_mi8 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_quota_left_mi17 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_unsvc_cnt UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_inactive_cnt UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_p1_mi8 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_p1_mi17 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_p2_total UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_p3_total UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_balance_mi8 Int32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_balance_mi17 Int32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_target_day UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_ops_cnt_mi8 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_ops_cnt_mi17 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_svc_cnt_mi8 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_svc_cnt_mi17 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_unsvc_ready_mi8 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_unsvc_ready_mi17 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_inactive_mi8 UInt32")
-        client.execute("ALTER TABLE sim_quota_mgr_v8 ADD COLUMN IF NOT EXISTS debug_qm_inactive_mi17 UInt32")
-        print("✅ Таблица sim_masterv2_v8 готова")
+    # Подключение к ClickHouse (MP2 всегда включён)
+    from sim_env_setup import get_client
+    client = get_client()
+    
+    if args.drop_table:
+        print("🗑️ DROP TABLE sim_masterv2_v9...")
+        client.execute("DROP TABLE IF EXISTS sim_masterv2_v9")
+    
+    # Создание таблицы (упрощённая схема V9/MP2)
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS sim_masterv2_v9 (
+            version_date UInt32,
+            version_id UInt32,
+            day_u16 UInt16,
+            idx UInt16,
+            aircraft_number UInt32,
+            group_by UInt8,
+            oh UInt32,
+            br UInt32,
+            ll UInt32,
+            status_id UInt8,
+            pre_status_id UInt8,
+            sne UInt32,
+            ppr UInt32,
+            limiter UInt16,
+            repair_days UInt16,
+            daily_today_u32 UInt32,
+            daily_next_u32 UInt32,
+            commit_p2 UInt32,
+            commit_p3 UInt32
+        ) ENGINE = MergeTree()
+        ORDER BY (version_date, version_id, day_u16, idx)
+    """)
+    print("✅ Таблица sim_masterv2_v9 готова")
     
     orchestrator = LimiterV8Orchestrator(
         args.version_date, 
         args.end_day,
-        enable_mp2=args.enable_mp2,
+        enable_mp2=True,
         clickhouse_client=client
     )
     orchestrator.prepare_data()

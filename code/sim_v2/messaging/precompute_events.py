@@ -158,7 +158,7 @@ def compute_limiter_exact(
                 hi = mid
                 continue
             accumulated = mp5_cumsum[cumsum_mid_idx] - base_cumsum
-            if accumulated >= remaining:
+            if accumulated > remaining:
                 hi = mid
             else:
                 lo = mid + 1
@@ -167,8 +167,8 @@ def compute_limiter_exact(
             final_idx = lo * frames + idx
             if final_idx < len(mp5_cumsum):
                 final_accumulated = mp5_cumsum[final_idx] - base_cumsum
-                if final_accumulated >= remaining:
-                    return lo - current_day
+                if final_accumulated > remaining:
+                    return (lo - 1) - current_day
         return end_day - current_day  # До конца симуляции
     
     days_to_oh = binary_search_day(remaining_oh)
@@ -177,8 +177,7 @@ def compute_limiter_exact(
     # Limiter = min из двух
     limiter = min(days_to_oh, days_to_ll)
     
-    # Минимум 1 день
-    return max(1, limiter)
+    return max(0, limiter)
 
 
 class EventPrecomputer:
