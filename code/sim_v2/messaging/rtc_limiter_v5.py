@@ -503,26 +503,37 @@ class HF_SyncDayV5(fg.HostFunction):
 
 def register_v5(model: fg.ModelDescription, heli_agent: fg.AgentDescription, 
                 quota_agent: fg.AgentDescription, program_changes: list, end_day: int,
-                verbose_logging: bool = False, enable_v8_reason: bool = False):
-    """Регистрирует V5 RTC модули"""
+                verbose_logging: bool = False, enable_v8_reason: bool = False,
+                sync_as_layer: bool = False):
+    """Регистрирует V5 RTC модули
+    
+    Args:
+        sync_as_layer: если True, HF_SyncDayV5 НЕ регистрируется как addStepFunction,
+                       а возвращается для регистрации вызывающим кодом как layer host function.
+                       Необходимо для simulate() режима (addStepFunction не вызывается в simulate()).
+    """
     
     # Init HostFunction (один раз при старте)
     hf_init = HF_InitV5(program_changes, end_day)
     model.addInitFunction(hf_init)
     
-    # Step sync — единственный Python callback в step loop
-    # Синхронизирует MacroProperty → Environment + логирование причин шагов
+    # Step sync — синхронизирует MacroProperty → Environment + логирование причин шагов
     hf_sync = HF_SyncDayV5(end_day, program_changes, verbose=verbose_logging,
                            enable_v8_reason=enable_v8_reason)
-    model.addStepFunction(hf_sync)
+    
+    if sync_as_layer:
+        # V9/MP2: регистрируем как layer host function (вызывающий код сам добавит layer)
+        print(f"  ✅ V5 Init зарегистрирован, SyncDayV5 возвращён для регистрации как layer")
+    else:
+        # Legacy: addStepFunction (работает в step() режиме)
+        model.addStepFunction(hf_sync)
+        print(f"  ✅ V5 Init + Sync зарегистрированы (addStepFunction)")
     
     # V5 использует mp_min_limiter от V3 RTC (rtc_compute_min_limiter)
     # Не регистрируем copy/clear — V3 уже делает это
     
     # Только compute global min (после V3 limiter слоёв)
     # Эта функция регистрируется в register_v5_final_layers
-    
-    print(f"  ✅ V5 Init + Sync зарегистрированы")
     
     return hf_init, hf_sync
 

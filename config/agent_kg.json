@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-02-12T16:21:19Z",
+    "updated_at": "2026-02-13T16:00:41Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -22,6 +22,33 @@
       "status": "active",
       "created_at": "2026-02-12T16:21:03Z",
       "updated_at": "2026-02-12T16:21:19Z"
+    },
+    {
+      "workflow_id": "W_pre_status_ch_v6_20260213",
+      "goal": "Валидация pre_status_id в ClickHouse: sim_masterv2_v9, version_id=6, group_by 1/2",
+      "phase": "research",
+      "owner": "analyst-sql-graph",
+      "status": "active",
+      "created_at": "2026-02-13T09:03:46Z",
+      "updated_at": "2026-02-13T09:03:46Z"
+    },
+    {
+      "workflow_id": "W_sql_ops_min_limiter_v11_20260213",
+      "goal": "Минимальный limiter в ops (day=1) + жизненный цикл, version_id=11",
+      "phase": "research",
+      "owner": "analyst-sql-graph",
+      "status": "active",
+      "created_at": "2026-02-13T15:30:13Z",
+      "updated_at": "2026-02-13T15:30:13Z"
+    },
+    {
+      "workflow_id": "W_sql_trace_limiter_acn22418_d271_v11_20260213",
+      "goal": "Трассировка limiter для ACN=22418 на day 271 (P2 unsvc→ops), version_id=11",
+      "phase": "research",
+      "owner": "analyst-sql-graph",
+      "status": "active",
+      "created_at": "2026-02-13T15:45:04Z",
+      "updated_at": "2026-02-13T15:45:04Z"
     }
   ],
   "handoffs": [
@@ -57,6 +84,42 @@
       "agent": "unknown",
       "created_at": "2026-02-12T16:21:13Z",
       "updated_at": "2026-02-12T16:21:13Z"
+    },
+    {
+      "context_id": "ctx_W_pre_status_ch_v6_20260213_research_151a9072",
+      "workflow_id": "W_pre_status_ch_v6_20260213",
+      "context_type": "research",
+      "content": "SQL ClickHouse (sim_masterv2_v9, version_id=6, group_by in 1/2): pre_status_id counts: 0=6, 1=27212, 2=39454, 3=3028, 4=42, 6=2182, 7=6822. Transitions pre!=status counts: 3->2 357; 2->3 354; 2->7 171; 7->2 156; 2->6 30; 1->2 24; 0->7 6; 4->3 5; 4->2 2. dt on transitions: total_dt=0, avg_dt=0, with_dt=0, without_dt=cnt for all pairs. pre_status_id=0 count=6.",
+      "agent": "analyst-sql-graph",
+      "created_at": "2026-02-13T09:03:46Z",
+      "updated_at": "2026-02-13T09:03:46Z"
+    },
+    {
+      "context_id": "ctx_W_sql_ops_min_limiter_v11_20260213_research_3b3b5ecf",
+      "workflow_id": "W_sql_ops_min_limiter_v11_20260213",
+      "context_type": "research",
+      "content": "CH sim_masterv2_v9 v11 day1 ops: min limiter acn=22418 group_by=2 limiter=1 (day1). Top10 limiter day1: 22418(1), 22485(126), 25537(158), 27090(207), 22417(329), 24285(352), 22425(355), 24107(359), 22491(366), 24186(387). ACN 22418 first20: day1 status2 limiter1 -> day2 status7 pre=2 limiter0; затем status7. Exit ops day2 (pre_status_id=2 -> status7) limiter=0; sne<=ll true (remaining_ll 545169), ppr<=oh true (remaining_oh 50). limiter<=0 while in ops not found.",
+      "agent": "analyst-sql-graph",
+      "created_at": "2026-02-13T15:30:13Z",
+      "updated_at": "2026-02-13T15:30:13Z"
+    },
+    {
+      "context_id": "ctx_W_sql_ops_min_limiter_v11_20260213_lifecycle_acn22418_8a7f6d2c",
+      "workflow_id": "W_sql_ops_min_limiter_v11_20260213",
+      "context_type": "research",
+      "content": "SQL lifecycle ACN=22418 v11 (sim_masterv2_v9, group_by 1/2): total_rows=281. Transitions (day pre->status limiter rem_ll rem_oh): 2 2->7 lim0 545169 50; 271 7->2 lim2375 545169 270000; 2646 2->7 lim0 275262 93; 3273 7->2 lim377 275262 270000; 3468 2->3 lim0 251327 246065; 3499 3->2 lim151 251327 246065; 3650 2->7 lim0 234782 229520. Ops return after leaving ops: day271 (lim2375), day3273 (lim377), day3499 (lim151). Final state day3650 status7 pre2 limiter0. Note: column dt absent in sim_masterv2_v9.",
+      "agent": "analyst-sql-graph",
+      "created_at": "2026-02-13T15:35:38Z",
+      "updated_at": "2026-02-13T15:35:38Z"
+    },
+    {
+      "context_id": "ctx_W_sql_trace_limiter_acn22418_d271_v11_20260213_research_df9f0b8d",
+      "workflow_id": "W_sql_trace_limiter_acn22418_d271_v11_20260213",
+      "context_type": "research",
+      "content": "CH v11 sim_masterv2_v9 ACN=22418 group_by=2: day3273 status2 pre7 limiter377 sne804738 ppr0 ll1080000 oh270000 dt0; entry ops days: 271(lim2375), 3273(lim377), 3499(lim151). Exit ops days: 2(status7), 2646(status7), 3468(status3), 3650(status7) limiter0. Ops cycles: 271->2646 pprΔ=269907; 3273->3468 pprΔ=23935; 3499->3650 pprΔ=16545. Limiter decremented within ops between recorded days; transitions pre!=status at days 2, 271, 2646, 3273, 3468, 3499, 3650.",
+      "agent": "unknown",
+      "created_at": "2026-02-13T15:45:11Z",
+      "updated_at": "2026-02-13T16:00:41Z"
     }
   ]
 }

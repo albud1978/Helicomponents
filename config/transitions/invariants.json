@@ -1,7 +1,7 @@
 {
-  "version": 8,
+  "version": 9,
   "meta": {
-    "description": "Глобальные инварианты, temporal-контракты и GPU-ограничения модели V8",
+    "description": "Глобальные инварианты, temporal-контракты и GPU-ограничения модели V9",
     "ssot": true,
     "created": "2026-02-10",
     "related": ["transitions_rules.json", "quota_rules.json"]
@@ -33,7 +33,7 @@
       "severity": "CRITICAL",
       "tolerance": 1,
       "critical_threshold": 3,
-      "exception": "Допустимо отклонение в минус на период <= repair_time от начала симуляции (разогрев)",
+      "exception": "Допустимо отклонение в минус на период [0, repair_time) от начала симуляции (разогрев): P2/P3 требуют RepairLine slot (free_days >= repair_time), до дня repair_time слоты ещё не набрали достаточно free_days",
       "validator": "code/analysis/sim_validation_quota.py",
       "notes": "Проверяется по типам Mi-8 / Mi-17 отдельно"
     },
@@ -133,7 +133,11 @@
       "expr": "ops_count < target допустимо только если sim_day < max(repair_time) (период разогрева)",
       "scope": "per_day",
       "severity": "MEDIUM",
-      "notes": "В начале симуляции агенты могут быть в ремонте/unsvc без свободных RepairLine; недобор сокращается по мере появления слотов"
+      "observed_max_deficit": {
+        "2025-07-04": { "mi8": -1, "mi17": -2, "last_day": 160 },
+        "2025-12-30": { "mi8": 0, "mi17": -6, "last_day": 168 }
+      },
+      "notes": "P2/P3 промоуты требуют RepairLine slot (free_days >= repair_time). До дня repair_time ни одна линия не набирает достаточно free_days → P2/P3 заблокированы. Прямой добор (post-promote) без RepairLine ЗАПРЕЩЁН. Единственный механизм покрытия до repair_time — P1 (serviceable→ops). Дефицит исчезает после repair_time."
     },
     {
       "id": "TEMP-4",

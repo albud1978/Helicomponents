@@ -476,6 +476,7 @@ class V2BaseModelMessaging:
         agent.newVariableUInt("partseqno_i")
         agent.newVariableUInt("group_by")
         agent.newVariableUInt("status_id")
+        agent.newVariableUInt("pre_status_id", 0)
         agent.newVariableUInt("intent_state")
         agent.newVariableUInt("prev_intent", 0)  # Для event-driven: отслеживание изменений
         agent.newVariableUInt("bi_counter", 1)  # Служебное поле для BI (всегда 1)
