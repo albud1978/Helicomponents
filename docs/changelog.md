@@ -19,6 +19,21 @@
 - `python3 -m py_compile code/validation/_trace_repair.py` — OK.
 - `.cursor/hooks.json` — валидный JSON.
 
+## [14-02-2026] - Governance control-plane: выделен отдельный агент
+
+### Изменения
+- Добавлен профиль `.cursor/agents/governance-compliance.md` (policy/risk/compliance, отдельный verdict `approve|reject|escalate`).
+- Обновлён `90_multiagent_workflow.mdc`: роль `governance-compliance` добавлена в реестр ролей и в Sequential Pipeline (после валидации, до capsule/close).
+- Для high-risk задач закреплён обязательный governance verdict перед закрытием.
+- Обновлён `orchestrator.md`: оркестратор обязан запрашивать governance verdict для high-risk workflow.
+- Обновлён `README.md`: актуализирован список субагентов в `.cursor/agents/`.
+
+### Контекст
+Сдвиг к supervisor-first практикам (3–7 специализированных ролей + control-plane) требует явного разделения workers и governance. Выделение `governance-compliance` снижает риск дрейфа scope и улучшает human-on-the-loop контроль.
+
+### Ревью/Валидация
+- Не требуется (правила/профили/документация, бизнес-код не затронут).
+
 ## [10-02-2026] - Anti-drift: DriftCheck + Facts/Assumptions в Handoff-шаблоне
 
 ### Изменения

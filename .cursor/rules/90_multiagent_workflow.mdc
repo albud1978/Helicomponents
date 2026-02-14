@@ -9,7 +9,7 @@ alwaysApply: true
 ## Роли и контур ответственности
 - **Главный агент (Orchestrator)**: формирует план, распределяет задачи, синтезирует результаты, инициирует governance‑гейты и финальное согласование. **Кодинг в `code/**` запрещён; правила/конфиги/доки — разрешены.** Для исследования кодовой базы использует встроенный `explore` subagent как инструмент (не отдельная роль). Профиль: `.cursor/agents/orchestrator.md`.
 - **КРИТИЧЕСКИЙ ЗАПРЕТ**: Текущий ассистент действует как главный агент. Перед КАЖДЫМ вызовом Write/StrReplace/Shell проверяй: путь в `code/**` или `tools/**`? Если ДА — СТОП, делегируй через Task tool кодеру. Нарушение = системный сбой governance.
-- **Subagents**: специализированные исполнители (`coder-flame`, `coder-general`, `reviewer-flame`, `validator-judge`, `capsule-builder`, `analyst-sql-graph`) работают в своей зоне ответственности.
+- **Subagents**: специализированные исполнители (`coder-flame`, `coder-general`, `reviewer-flame`, `validator-judge`, `capsule-builder`, `analyst-sql-graph`, `governance-compliance`) работают в своей зоне ответственности.
 - **Человек (Алексей)**: утверждает архитектурные/алгоритмические/схемные изменения и любые решения с высоким риском.
 - **ETL/Extract/СУБД задачи**: выполняют `coder-general` и `analyst-sql-graph` по зоне ответственности.
 
@@ -20,6 +20,7 @@ alwaysApply: true
 - **reviewer-flame**: ревью RTC/GPU.
 - **validator-judge**: системная валидация инвариантов; запуск готовых скриптов из `code/validation/`; вынесение вердикта pass/fail по каждому инварианту. SQL‑first, по запросу оркестратора.
 - **capsule-builder**: формирование/обновление `docs/*_capsule.md` по шаблону после приёмки оркестратора.
+- **governance-compliance**: контрольная плоскость (policy/risk/compliance). Проверяет traceability, gate-статусы и соответствие scope, выносит вердикт `approve|reject|escalate`.
 
 ## Коммуникация с оркестратором (человек → оркестратор)
 - **Формат запроса**: Goal + ограничения + приоритет (если есть) + запреты на запуск.
@@ -30,6 +31,7 @@ alwaysApply: true
 - Все handoff subagent'ов адресуются **оркестратору**.
 - Оркестратор анализирует handoff'ы, принимает решение о завершении и фиксирует краткие следы работы reviewer/validator в `docs/changelog.md`.
 - В `docs/changelog.md` фиксировать минимум: кто проводил ревью/валидацию и итог (OK/есть замечания).
+- Для high-risk задач перед закрытием обязателен handoff от `governance-compliance` с policy verdict.
 
 ## Решения по коммиту
 - Решение о коммите принимает **оркестратор** по итогам ревью и (если применимо) валидации.
@@ -182,6 +184,11 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 - удаление объектов проекта;
 - новые публичные API.
 
+### Governance control-plane (обязательно для high-risk)
+- `governance-compliance` не пишет код и не меняет доменные данные; его задача — policy check и risk verdict.
+- Минимальный verdict-формат: `policy_status`, `scope_match`, `traceability_status`, `human_gate_status`, `decision`.
+- При `decision=reject|escalate` оркестратор не имеет права закрыть workflow без реакции (исправление или эскалация человеку).
+
 ## Enforcement (технические guardrails)
 
 ### Hooks (`.cursor/hooks.json`)
@@ -231,10 +238,11 @@ Orchestrator явно вызывает агентов, JSON-шина (`config/ag
 
 ### Sequential Pipeline (единственный допустимый паттерн)
 
-- **Порядок:** Анализ (orchestrator + explore) → Research/SQL (analyst-sql-graph) → Реализация (coder-flame / coder-general) → Ревью (reviewer-flame) → Валидация (validator-judge) → Capsule (capsule-builder)
+- **Порядок:** Анализ (orchestrator + explore) → Research/SQL (analyst-sql-graph) → Реализация (coder-flame / coder-general) → Ревью (reviewer-flame) → Валидация (validator-judge) → Governance (governance-compliance) → Capsule (capsule-builder)
 - **Один агент за раз**, строгий порядок. Следующий агент вызывается только после получения Handoff от предыдущего.
 - Orchestrator вызывает каждого агента последовательно.
 - Если на этапе Ревью выявлены замечания — возврат на Реализацию (итерация implement→review).
+- Если на этапе Governance вердикт `reject` — возврат на Реализацию/Ревью; если `escalate` — остановка и вопрос человеку.
 
 > **ЗАПРЕТ:** Parallel Workers и Iterative Loop **запрещены** на текущем этапе развития проекта. Параллельный запуск нескольких агентов‑исполнителей не допускается.
 
@@ -260,4 +268,5 @@ Orchestrator явно вызывает агентов, JSON-шина (`config/ag
 
 - Reviewer/Validator выносят вердикт: «принять», «вернуть на доработку», «эскалировать человеку»
 - При серьёзных расхождениях — эскалация на Governance (человек)
+- `governance-compliance` может блокировать закрытие workflow при policy mismatch, даже если Reviewer/Validator дали OK.
 - Orchestrator фиксирует решение в `config/agent_kg.json` (через `--write-context --context-type decision`)
