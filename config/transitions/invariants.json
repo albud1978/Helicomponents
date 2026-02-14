@@ -1,7 +1,7 @@
 {
-  "version": 9,
+  "version": 10,
   "meta": {
-    "description": "Глобальные инварианты, temporal-контракты и GPU-ограничения модели V9",
+    "description": "Глобальные инварианты, temporal-контракты и GPU-ограничения модели V10. TEMP-2/TEMP-3 удалены (покрыты INV-4/INV-2). Добавлен INV-10 (баланс оборота).",
     "ssot": true,
     "created": "2026-02-10",
     "related": ["transitions_rules.json", "quota_rules.json"]
@@ -27,15 +27,17 @@
     },
     {
       "id": "INV-2",
-      "claim": "Количество в операциях соответствует программе",
-      "expr": "abs(ops_count - target) <= tolerance",
+      "claim": "Количество в операциях соответствует программе (динамический таргет MP4)",
+      "expr": "abs(ops_count - mp4_target[day]) <= tolerance",
       "scope": "per_day_per_type",
       "severity": "CRITICAL",
-      "tolerance": 1,
-      "critical_threshold": 3,
+      "tolerance": 0,
+      "target_source": "flight_program_ac.ops_counter_mi8 / ops_counter_mi17 (per-day, step-function)",
       "exception": "Допустимо отклонение в минус на период [0, repair_time) от начала симуляции (разогрев): P2/P3 требуют RepairLine slot (free_days >= repair_time), до дня repair_time слоты ещё не набрали достаточно free_days",
-      "validator": "code/analysis/sim_validation_quota.py",
-      "notes": "Проверяется по типам Mi-8 / Mi-17 отдельно"
+      "validator": "code/validation/inv2_ops_vs_target.py",
+      "notes": "Таргеты ДИНАМИЧЕСКИЕ из flight_program_ac (MP4), меняются по дням. Mi-8: 42..68, Mi-17: 88..129. Проверяется по типам отдельно. Warmup-отклонения (-1..-6) — ожидаемы и не считаются нарушениями.",
+      "last_validated": "2026-02-07",
+      "last_result": "PASS (0 violations post-warmup, datasets 20250704 + 20251230)"
     },
     {
       "id": "INV-3",
@@ -105,6 +107,17 @@
       "validator": "code/analysis/sim_validation_runner_msg.py (validate_limiter_exit)",
       "notes": "Если limiter=0 и агент остаётся в ops после пересчёта — EXCEPTION. Защита if(limiter==0) limiter=1 маскирует ситуацию — включить в валидацию",
       "known_artifact": "В БД могут быть записи state=ops, limiter=0 — это артефакт порядка экспорта (snapshot после инкремента, но до переходов ops→unsvc/storage). Агент покидает ops на том же шаге. Валидация SQL должна проверять, что на СЛЕДУЮЩЕМ шаге агент НЕ в ops."
+    },
+    {
+      "id": "INV-10",
+      "claim": "Баланс оборота: входы в статус = выходы из статуса (за исключением терминальных и начальных)",
+      "expr": "forall status s in {2,3,4,7}: count(transitions INTO s) == count(transitions OUT OF s) ± tolerance",
+      "scope": "fleet_total_per_status",
+      "severity": "CRITICAL",
+      "tolerance": "<=count(agents_still_in_state_s_at_end)",
+      "postprocessing": "Проверяется ПОСЛЕ GPU-постпроцессинга: прямые 7->2 и 1->2 раскрыты в 7->4+4->2 и 1->4+4->2",
+      "validator": "code/validation/inv10_turnover_balance.py",
+      "notes": "Закон сохранения потоков. Агенты, оставшиеся в статусе на конец симуляции, учитываются как незавершённые выходы. Статус 6 (storage) — терминальный, только входы."
     }
   ],
 
@@ -117,27 +130,6 @@
       "severity": "HIGH",
       "mechanism": "rtc_repair_to_svc_v7 проверяет current_day >= exit_date",
       "tolerance": "+-1 шаг (из-за adaptive_days > 1)"
-    },
-    {
-      "id": "TEMP-2",
-      "claim": "Минимальное время в unserviceable до промоута",
-      "expr": "forall agent in state 7: promote P2 impossible while repair_days > 0",
-      "scope": "per_agent",
-      "severity": "CRITICAL",
-      "mechanism": "repair_days декрементируется каждый шаг (rtc_unsvc_decrement_v8); P2 pre: repair_days == 0 AND repair_line_id == 0xFFFFFFFF",
-      "known_bug": "KNOWN BUG (fix-layer12-limiter): rtc_ops_to_unsvc_v8 (layer 12) НЕ устанавливал repair_days=repair_time → guard не работал. ИСПРАВЛЕНО: добавлен setVariable repair_days=repair_time"
-    },
-    {
-      "id": "TEMP-3",
-      "claim": "Окно допустимого недобора при старте симуляции",
-      "expr": "ops_count < target допустимо только если sim_day < max(repair_time) (период разогрева)",
-      "scope": "per_day",
-      "severity": "MEDIUM",
-      "observed_max_deficit": {
-        "2025-07-04": { "mi8": -1, "mi17": -2, "last_day": 160 },
-        "2025-12-30": { "mi8": 0, "mi17": -6, "last_day": 168 }
-      },
-      "notes": "P2/P3 промоуты требуют RepairLine slot (free_days >= repair_time). До дня repair_time ни одна линия не набирает достаточно free_days → P2/P3 заблокированы. Прямой добор (post-promote) без RepairLine ЗАПРЕЩЁН. Единственный механизм покрытия до repair_time — P1 (serviceable→ops). Дефицит исчезает после repair_time."
     },
     {
       "id": "TEMP-4",

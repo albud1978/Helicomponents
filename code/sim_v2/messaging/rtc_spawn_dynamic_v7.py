@@ -58,7 +58,7 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
         while (lo < hi) {
             unsigned int mid = (lo + hi) / 2u;
             unsigned int accumulated = cumsum[mid * frames + idx] - base_cumsum;
-            if (accumulated > remaining_oh) {
+            if (accumulated >= remaining_oh) {
                 hi = mid;
             } else {
                 lo = mid + 1u;
@@ -66,14 +66,14 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
         }
         if (lo <= end_day) {
             unsigned int final_accumulated = cumsum[lo * frames + idx] - base_cumsum;
-            if (final_accumulated > remaining_oh) {
-                days_to_oh = (lo - 1u) - current_day;
+            if (final_accumulated >= remaining_oh) {
+                days_to_oh = lo - current_day;
                 found_oh = true;
             }
         }
     }
     if (!found_oh) {
-        days_to_oh = end_day - current_day;
+        days_to_oh = (end_day - current_day) + 1u;
     }
     
     unsigned int days_to_ll = end_day - current_day;
@@ -84,7 +84,7 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
         while (lo < hi) {
             unsigned int mid = (lo + hi) / 2u;
             unsigned int accumulated = cumsum[mid * frames + idx] - base_cumsum;
-            if (accumulated > remaining_ll) {
+            if (accumulated >= remaining_ll) {
                 hi = mid;
             } else {
                 lo = mid + 1u;
@@ -92,19 +92,20 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
         }
         if (lo <= end_day) {
             unsigned int final_accumulated = cumsum[lo * frames + idx] - base_cumsum;
-            if (final_accumulated > remaining_ll) {
-                days_to_ll = (lo - 1u) - current_day;
+            if (final_accumulated >= remaining_ll) {
+                days_to_ll = lo - current_day;
                 found_ll = true;
             }
         }
     }
     if (!found_ll) {
-        days_to_ll = end_day - current_day;
+        days_to_ll = (end_day - current_day) + 1u;
     }
     
     unsigned int limiter = (days_to_oh < days_to_ll) ? days_to_oh : days_to_ll;
     
     if (limiter > 65535u) limiter = 65535u;
+    if (limiter == 0u) limiter = 1u;
     
     return (unsigned short)limiter;
 }
@@ -117,7 +118,7 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
     
     return compute_limiter_inline(FLAMEGPU, sne, ppr, ll, oh, idx, current_day);
 }
@@ -237,7 +238,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8, flamegpu::MessageNone, flam
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-    const unsigned int base_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
     const unsigned int ticket = FLAMEGPU->getVariable<unsigned int>("ticket");
     
     // Читаем параметры
@@ -284,11 +285,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8, flamegpu::MessageNone, flam
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_time", repair_time);
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_days", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_change_day", day);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("status_id", 2u);  // operations
+    FLAMEGPU->agent_out.setVariable<unsigned int>("pre_status_id", 0u);
     
     // DISABLED (state5-unused): FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 1u);
     FLAMEGPU->agent_out.setVariable<unsigned short>(
         "limiter",
-        compute_limiter_inline(FLAMEGPU, sne_new, ppr_new, ll, oh, new_idx, base_day)
+        compute_limiter_inline(FLAMEGPU, sne_new, ppr_new, ll, oh, new_idx, prev_day)
     );
     
     return flamegpu::ALIVE;
@@ -396,7 +399,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8_mi8, flamegpu::MessageNone, 
     const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-    const unsigned int base_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
     const unsigned int ticket = FLAMEGPU->getVariable<unsigned int>("ticket");
     
     // Читаем параметры
@@ -438,11 +441,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8_mi8, flamegpu::MessageNone, 
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_time", repair_time);
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_days", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_change_day", day);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("status_id", 2u);  // operations
+    FLAMEGPU->agent_out.setVariable<unsigned int>("pre_status_id", 0u);
     
     // DISABLED (state5-unused): FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 1u);
     FLAMEGPU->agent_out.setVariable<unsigned short>(
         "limiter",
-        compute_limiter_inline(FLAMEGPU, sne, ppr, ll, oh, new_idx, base_day)
+        compute_limiter_inline(FLAMEGPU, sne, ppr, ll, oh, new_idx, prev_day)
     );
     
     return flamegpu::ALIVE;
