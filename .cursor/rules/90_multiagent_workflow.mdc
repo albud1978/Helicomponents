@@ -53,9 +53,12 @@ alwaysApply: true
 
 **Handoff**
 - **UserGoal**: дословная цитата запроса пользователя (verbatim, не пересказ). Если задача от оркестратора — цитата задачи.
+- **TraceID**: уникальный идентификатор трассы запроса/итерации (`wf:<workflow_id>:<UTC>`).
+- **PlanStepID**: идентификатор шага плана (например, `P1`, `R2`, `V1`); если плана нет — `N/A` с причиной.
 - **Changes**: что сделано (файлы/модули/логика).
 - **Facts**: что проверено (с источником: файл/SQL/команда/артефакт). Только подтверждённые данные.
 - **Assumptions**: что НЕ проверено, но предполагается (с пометкой «Risks if false: ...» для каждого).
+- **ApprovalGate**: статус коммуникации с человеком по scope/рискам (`N/A` или `gate_id + status(pending|approved|rejected) + source`).
 - **OpenQuestions**: что осталось неясным.
 - **NextOwner**: кто следующий (роль).
 - **GraphUpdate**: требуется ли запись в граф (да/нет; что именно).
@@ -64,6 +67,7 @@ alwaysApply: true
 - **ProcessInsights** (только оркестратор): сбои, неэффективности, риски процесса, предложения (или `OK, замечаний нет`).
 
 **Правило anti-drift**: если `UserGoal` и `Changes` расходятся по scope — оркестратор ОБЯЗАН остановиться и запросить подтверждение. Молчаливое расширение scope запрещено.
+**Правило трассировки**: Handoff без `TraceID` и `PlanStepID` считается невалидным и должен быть переоформлен.
 
 ## Тесты и проверки
 - **Валидатор** — владелец проверок (SQL‑first) и фиксации результатов.
@@ -111,7 +115,7 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 - **Назначение**: hand-off, контекст между чатами, workflow state
 - **Хранилище**: `config/agent_kg.json` (SSoT)
 - **Типы записей**: WorkflowState, HandoffNode, ContextNode
-- **Инструмент**: `python code/utils/agent_kg.py --init-workflow/--write-handoff/--read-state/--write-context/--read-context`
+- **Инструмент**: `python code/utils/agent_kg.py --init-workflow/--write-handoff/--read-state/--write-context/--read-context/--close-workflow`
 - **Визуализация**: `make agent-kg-viewer` → `tools/agent_kg_viewer/index.html`
 
 ### 2. Domain Graph (облачный Neo4j Aura) — доменная модель
@@ -129,9 +133,15 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 4. Subagents указывают необходимость обновления Domain Graph в поле `GraphUpdate` Handoff-шаблона
 
 ### Когда обновлять Agent KG
-- При каждом hand-off агента (`--write-handoff`)
+- При каждом hand-off агента (`--write-handoff`) и при каждом переходе фазы workflow
 - При передаче контекста между чатами (`--write-context`)
 - При инициализации нового workflow (`--init-workflow`)
+- При закрытии workflow (`--close-workflow`)
+
+### Минимальный payload для `--write-handoff`
+- Обязательные поля: `user_goal`, `trace_id`, `plan_step_id`, `changes`, `facts`, `assumptions`
+- Для оркестратора дополнительно обязательны: `drift_check`, `process_insights`
+- Для задач с human-gate: `approval_gate_id`, `approval_status`, `approval_source`
 
 ### Когда обновлять Domain Graph
 - Изменения правил переходов/квот в JSON
@@ -156,6 +166,11 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 - `docs/changelog.md` — журнал аудита: кто, что, когда, итог ревью/валидации.
 - При подозрении на аномальное поведение агента — эскалация человеку через Governance‑гейт.
 
+### Лог коммуникации с человеком
+- Коммуникация `человек → оркестратор` и решения по scope/gate логируются в `.cursor/hooks/user_comm_audit.log` (только метаданные).
+- В лог пишутся: `timestamp`, `conversation_id`, `generation_id`, `prompt_hash`, `prompt_length`, `approval_hint`.
+- Полные тексты промптов не сохраняются в audit-логе; в Handoff указывается ссылка (`approval_source`) на запись/хеш.
+
 ### Борьба с дрейфом контекста
 - При длительных задачах (>3 последовательных вызовов агентов) Orchestrator выполняет «контрольную точку»: краткая сверка текущего состояния с исходной целью.
 - Если агент «топчется на месте» (повторяет одни и те же действия без прогресса) — Orchestrator обязан остановить цикл и эскалировать человеку.
@@ -170,6 +185,7 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 ## Enforcement (технические guardrails)
 
 ### Hooks (`.cursor/hooks.json`)
+- **beforeSubmitPrompt → user_comm_audit.py**: логирует метаданные пользовательского промпта для трассировки governance-gate.
 - **beforeSubmitPrompt → orchestrator_guard.py**: инжектирует напоминание о запрете кодинга при каждом промпте.
 - **afterFileEdit → audit_code_edit.py**: логирует все правки в `code/` и `tools/` в `.cursor/hooks/code_edit_audit.log`.
 - **postToolUseFailure → connection_fail_set.py**: ставит флаг при падении Shell/MCP.

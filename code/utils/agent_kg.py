@@ -7,10 +7,11 @@ SSoT: config/agent_kg.json
 
 Использование:
     python code/utils/agent_kg.py --init-workflow --workflow-id W1 --goal "цель"
-    python code/utils/agent_kg.py --write-handoff --workflow-id W1 --agent coder-flame --goal "цель" --changes "что сделано"
+    python code/utils/agent_kg.py --write-handoff --workflow-id W1 --agent coder-flame --user-goal "цель" --changes "что сделано" --facts "что проверено" --trace-id "wf:123" --plan-step-id "P1"
     python code/utils/agent_kg.py --read-state --workflow-id W1
     python code/utils/agent_kg.py --write-context --workflow-id W1 --context-type research --content "контент"
     python code/utils/agent_kg.py --read-context --workflow-id W1
+    python code/utils/agent_kg.py --close-workflow --workflow-id W1 --close-reason "задача завершена" --agent orchestrator
 """
 
 import argparse
@@ -116,8 +117,13 @@ def write_handoff(args: argparse.Namespace) -> None:
         raise ValueError("--workflow-id обязателен")
     if not args.agent:
         raise ValueError("--agent обязателен")
-    if not args.goal:
-        raise ValueError("--goal обязателен")
+    user_goal = args.user_goal or args.goal
+    if not user_goal:
+        raise ValueError("--user-goal или --goal обязателен")
+    if args.approval_status:
+        allowed = {"pending", "approved", "rejected"}
+        if args.approval_status not in allowed:
+            raise ValueError("--approval-status должен быть pending|approved|rejected")
 
     path = _resolve_path(args.kg_path)
     data = _load(path)
@@ -128,13 +134,28 @@ def write_handoff(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
     handoff_id = f"handoff_{args.workflow_id}_{args.agent}_{uuid.uuid4().hex[:8]}"
+    evidence_arg = args.evidence
+    evidence = evidence_arg if evidence_arg is not None else "не запускалось"
+    facts = args.facts or ""
+    if not facts and evidence_arg:
+        facts = f"legacy evidence: {evidence_arg}"
     handoff = {
         "handoff_id": handoff_id,
         "workflow_id": args.workflow_id,
         "agent": args.agent,
-        "goal": args.goal,
+        "user_goal": user_goal,
+        "goal": user_goal,
         "changes": args.changes or "",
-        "evidence": args.evidence or "не запускалось",
+        "facts": facts,
+        "assumptions": args.assumptions or "",
+        "evidence": evidence,
+        "drift_check": args.drift_check or "",
+        "process_insights": args.process_insights or "",
+        "trace_id": args.trace_id or "",
+        "plan_step_id": args.plan_step_id or "",
+        "approval_gate_id": args.approval_gate_id or "",
+        "approval_status": args.approval_status or "",
+        "approval_source": args.approval_source or "",
         "risks": args.risks or "нет",
         "next_owner": args.next_owner or "orchestrator",
         "open_questions": args.open_questions or "",
@@ -186,9 +207,30 @@ def read_state(args: argparse.Namespace) -> None:
         for h in recent:
             print(f"\n--- {h['handoff_id']} ---")
             print(f"Agent: {h['agent']}")
-            print(f"Goal: {h['goal']}")
+            print(f"UserGoal: {h.get('user_goal') or h.get('goal', '')}")
+            if h.get("trace_id"):
+                print(f"TraceID: {h.get('trace_id')}")
+            if h.get("plan_step_id"):
+                print(f"PlanStepID: {h.get('plan_step_id')}")
             print(f"Changes: {h['changes']}")
+            if h.get("facts"):
+                print(f"Facts: {h.get('facts')}")
+            if h.get("assumptions"):
+                print(f"Assumptions: {h.get('assumptions')}")
             print(f"Evidence: {h['evidence']}")
+            if h.get("drift_check"):
+                print(f"DriftCheck: {h.get('drift_check')}")
+            if h.get("process_insights"):
+                print(f"ProcessInsights: {h.get('process_insights')}")
+            approval_bits = []
+            if h.get("approval_gate_id"):
+                approval_bits.append(f"id={h.get('approval_gate_id')}")
+            if h.get("approval_status"):
+                approval_bits.append(f"status={h.get('approval_status')}")
+            if h.get("approval_source"):
+                approval_bits.append(f"source={h.get('approval_source')}")
+            if approval_bits:
+                print(f"ApprovalGate: {', '.join(approval_bits)}")
             print(f"Risks: {h['risks']}")
             print(f"Next Owner: {h['next_owner']}")
             print(f"Created: {h.get('created_at', '?')}")
@@ -279,12 +321,53 @@ def read_context(args: argparse.Namespace) -> None:
             print(f"Content:\n{content}")
 
 
+def close_workflow(args: argparse.Namespace) -> None:
+    """Закрывает workflow и опционально записывает причину."""
+    if not args.workflow_id:
+        raise ValueError("--workflow-id обязателен")
+
+    path = _resolve_path(args.kg_path)
+    data = _load(path)
+
+    workflow = _find_workflow(data["workflows"], args.workflow_id)
+    if not workflow:
+        print(f"Workflow не найден: {args.workflow_id}", file=sys.stderr)
+        raise SystemExit(1)
+
+    workflow["status"] = "closed"
+    if args.phase:
+        workflow["phase"] = args.phase
+    if args.owner:
+        workflow["owner"] = args.owner
+    workflow["updated_at"] = _now()
+
+    if args.close_reason:
+        context_id = f"ctx_{args.workflow_id}_closure_{uuid.uuid4().hex[:8]}"
+        data["contexts"].append(
+            {
+                "context_id": context_id,
+                "workflow_id": args.workflow_id,
+                "context_type": "closure",
+                "content": args.close_reason,
+                "agent": args.agent or "orchestrator",
+                "created_at": _now(),
+                "updated_at": _now(),
+            }
+        )
+
+    _save(path, data)
+    print(f"Workflow closed: {args.workflow_id}")
+
+
 # ─── CLI ────────────────────────────────────────────────────────────
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Agent KG — JSON-шина координации мультиагентного workflow"
+        description=(
+            "Agent KG — JSON-шина координации мультиагентного workflow "
+            "(init-workflow, write-handoff, read-state, write-context, read-context, close-workflow)"
+        )
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
@@ -302,21 +385,39 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument(
         "--read-context", action="store_true", help="Прочитать контексты"
     )
+    mode.add_argument(
+        "--close-workflow", action="store_true", help="Закрыть workflow"
+    )
 
     parser.add_argument("--kg-path", type=str, help="Путь к agent_kg.json (по умолчанию config/agent_kg.json)")
     parser.add_argument("--workflow-id", type=str, help="Идентификатор workflow")
     parser.add_argument("--goal", type=str, help="Цель workflow/handoff")
+    parser.add_argument("--user-goal", type=str, help="UserGoal для handoff (новый формат)")
     parser.add_argument("--phase", type=str, help="Фаза (analysis/research/implementation/review/validation)")
     parser.add_argument("--owner", type=str, help="Текущий владелец")
     parser.add_argument("--agent", type=str, help="Агент (для handoff/context)")
     parser.add_argument("--changes", type=str, help="Описание изменений (handoff)")
     parser.add_argument("--evidence", type=str, help="Доказательства (handoff)")
+    parser.add_argument("--facts", type=str, help="Факты/проверки (handoff)")
+    parser.add_argument("--assumptions", type=str, help="Предположения (handoff)")
+    parser.add_argument("--drift-check", type=str, help="Drift check (handoff)")
+    parser.add_argument("--process-insights", type=str, help="Process insights (handoff)")
+    parser.add_argument("--trace-id", type=str, help="Trace ID (handoff)")
+    parser.add_argument("--plan-step-id", type=str, help="Plan step ID (handoff)")
+    parser.add_argument("--approval-gate-id", type=str, help="Approval gate ID (handoff)")
+    parser.add_argument(
+        "--approval-status",
+        type=str,
+        help="Approval status (pending|approved|rejected)",
+    )
+    parser.add_argument("--approval-source", type=str, help="Approval source (handoff)")
     parser.add_argument("--risks", type=str, help="Риски (handoff)")
     parser.add_argument("--next-owner", type=str, help="Следующий владелец (handoff)")
     parser.add_argument("--open-questions", type=str, help="Открытые вопросы (handoff)")
     parser.add_argument("--graph-update", type=str, help="Требуется ли обновление графа (да/нет)")
     parser.add_argument("--context-type", type=str, help="Тип контекста (research/specification/decision)")
     parser.add_argument("--content", type=str, help="Содержимое контекста")
+    parser.add_argument("--close-reason", type=str, help="Причина закрытия workflow")
 
     return parser
 
@@ -335,6 +436,8 @@ def main() -> None:
         write_context(args)
     elif args.read_context:
         read_context(args)
+    elif args.close_workflow:
+        close_workflow(args)
 
 
 if __name__ == "__main__":

@@ -257,10 +257,13 @@ DOMAIN_NEO4J_PASSWORD=your_password
 python3 code/utils/agent_kg.py --init-workflow --workflow-id "task-123" --goal "..."
 
 # Запись hand-off
-python3 code/utils/agent_kg.py --write-handoff --workflow-id "task-123" --agent "coder-flame" --goal "..." --changes "..."
+python3 code/utils/agent_kg.py --write-handoff --workflow-id "task-123" --agent "coder-flame" --user-goal "..." --trace-id "wf:task-123:2026-02-14T10:00:00Z" --plan-step-id "P1" --changes "..." --facts "..." --assumptions "..."
 
 # Чтение состояния
 python3 code/utils/agent_kg.py --read-state --workflow-id "task-123"
+
+# Закрытие workflow
+python3 code/utils/agent_kg.py --close-workflow --workflow-id "task-123" --close-reason "done" --agent "orchestrator"
 
 # Визуализация
 make agent-kg-viewer   # -> tools/agent_kg_viewer/index.html
