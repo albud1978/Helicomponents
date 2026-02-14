@@ -19,11 +19,8 @@ Messaging архитектура для симуляции планеров
 """
 
 from .base_model_messaging import V2BaseModelMessaging
-from .orchestrator_messaging import MessagingOrchestrator
-
 __all__ = [
     'V2BaseModelMessaging',
-    'MessagingOrchestrator',
 ]
 
 

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-02-13T16:00:41Z",
+    "updated_at": "2026-02-13T18:21:04Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -49,6 +49,15 @@
       "status": "active",
       "created_at": "2026-02-13T15:45:04Z",
       "updated_at": "2026-02-13T15:45:04Z"
+    },
+    {
+      "workflow_id": "W_sql_ops_target_v8_v1_20260213",
+      "goal": "Диагностика ops≠target V8 (version_id=1, v2025-07-04)",
+      "phase": "research",
+      "owner": "analyst-sql-graph",
+      "status": "active",
+      "created_at": "2026-02-13T18:01:52Z",
+      "updated_at": "2026-02-13T18:01:52Z"
     }
   ],
   "handoffs": [
@@ -120,6 +129,15 @@
       "agent": "unknown",
       "created_at": "2026-02-13T15:45:11Z",
       "updated_at": "2026-02-13T16:00:41Z"
+    },
+    {
+      "context_id": "ctx_W_sql_ops_target_v8_v1_20260213_research_f3a4b2c1",
+      "workflow_id": "W_sql_ops_target_v8_v1_20260213",
+      "context_type": "research",
+      "content": "SQL v1 sim_masterv2_v9 (group_by 1/2): Mi-17 ops max=113 on days 1032/1033/1047/1058; first drop after last max day 1058 -> day 1062 count 112. group_by=2 total rows per step: days=281, min=116, max=152 (distinct=4), day1=116 day3650=152. Day3650 status7 sample (acn 22171..22245): repair_days=180. Spawned ops (acn>=100000, status2): none. n_repair max=34 on days 3495/3499/3527/3550/3558/3583. repair_number key absent in quota_rules.json. INV-5: base agents diff=660488, spawned diff=0; top diffs acn 25752 (26040), 22978 (20685), 22480 (18194), 22633 (17634), 24645 (17428). Turnover entries/exits: entries status2=569,3=362,4=2492,6=37,7=344; exits pre_status 1=254,2=703,3=362,4=7,7=2442. TEMP-1: repair duration >> rt=180 (e.g., acn25484 duration 3619). Q13 sample acn22419 triggers mostly 0; assembly_trigger=1 at day271, commit_p3=1 at day301.",
+      "agent": "analyst-sql-graph",
+      "created_at": "2026-02-13T18:01:52Z",
+      "updated_at": "2026-02-13T18:21:04Z"
     }
   ]
 }

@@ -8,9 +8,10 @@ Architecture:
 - After simulate(), HF_MP2_Drain reads buffers into numpy arrays
 - Python reconstructs rows only from MP2 buffers (no fallback)
 
-Buffers (15 total):
-  mp2_status_id, mp2_sne, mp2_ppr, mp2_limiter, mp2_repair_days,
+Buffers (20 total):
+  mp2_status_id, mp2_pre_status_id, mp2_sne, mp2_ppr, mp2_limiter, mp2_repair_days,
   mp2_daily_today, mp2_daily_next, mp2_commit_p2, mp2_commit_p3,
+  mp2_repair_time, mp2_assembly_time, mp2_active_trigger, mp2_assembly_trigger,
   mp2_idx, mp2_aircraft_number, mp2_group_by, mp2_ll, mp2_oh, mp2_br
 
 Auxiliary:
@@ -30,7 +31,7 @@ except ImportError as e:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# MP2 field names (9 dynamic + 6 static fields)
+# MP2 field names (14 dynamic + 6 static fields)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 MP2_FIELDS = [
@@ -44,6 +45,10 @@ MP2_FIELDS = [
     "mp2_daily_next",
     "mp2_commit_p2",
     "mp2_commit_p3",
+    "mp2_repair_time",
+    "mp2_assembly_time",
+    "mp2_active_trigger",
+    "mp2_assembly_trigger",
     "mp2_idx",
     "mp2_aircraft_number",
     "mp2_group_by",
@@ -127,6 +132,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_{state}, flamegpu::MessageNone, flamegpu::
     
     auto buf_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_commit_p3");
     buf_p3[offset].exchange(FLAMEGPU->getVariable<unsigned int>("commit_p3"));
+    
+    auto buf_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_repair_time");
+    buf_rt[offset].exchange(FLAMEGPU->getVariable<unsigned int>("repair_time"));
+    
+    auto buf_at = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_assembly_time");
+    buf_at[offset].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_time"));
+    
+    auto buf_act = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_active_trigger");
+    buf_act[offset].exchange(FLAMEGPU->getVariable<unsigned int>("active_trigger"));
+    
+    auto buf_asm = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_assembly_trigger");
+    buf_asm[offset].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_trigger"));
     
     auto buf_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_idx");
     buf_idx[offset].exchange(FLAMEGPU->getVariable<unsigned int>("idx"));

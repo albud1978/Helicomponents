@@ -24,7 +24,7 @@ sys.path.insert(0, _SIM_V2_DIR)
 sys.path.insert(0, _CODE_DIR)
 
 from sim_env_setup import get_client, prepare_env_arrays
-from base_model_messaging import V2BaseModelMessaging
+from .base_model_messaging import V2BaseModelMessaging
 import rtc_publish_report
 import rtc_quota_manager
 import rtc_apply_decisions

@@ -574,9 +574,14 @@ class LimiterV8Orchestrator:
         layer_init.addHostFunction(hf_init_cumsum)
         
         # HF для инициализации repair_line_*_mp
-        hf_init_lines = HF_InitRepairLines(self.repair_quota)
+        # day0_map заполняется позже в _init_repair_lines_at_build
+        mi8_rt = int(self.env_data.get('mi8_repair_time_const', 180))
+        mi17_rt = int(self.env_data.get('mi17_repair_time_const', 180))
+        self._hf_init_lines = HF_InitRepairLines(
+            self.repair_quota, day0_map={}, mi8_rt=mi8_rt, mi17_rt=mi17_rt
+        )
         layer_lines = self.model.newLayer("layer_init_repair_lines")
-        layer_lines.addHostFunction(hf_init_lines)
+        layer_lines.addHostFunction(self._hf_init_lines)
 
         # V8: HF_InitV8 как layer (addInitFunction не вызывается в step() режиме)
         self._hf_init_v8 = rtc_limiter_v8.HF_InitV8(self.deterministic_dates, self.end_day)
@@ -848,6 +853,13 @@ class LimiterV8Orchestrator:
             f"(base={self.frames} + spawn={total_export_agents - self.frames})"
         )
         
+        # Постпроцессинг P2/P3 промоутов
+        t_pp = time.perf_counter()
+        pp_count = self._postprocess_promotions(fields, days, num_steps, total_export_agents)
+        pp_time = time.perf_counter() - t_pp
+        if pp_count > 0:
+            print(f"   📦 Постпроцессинг: {pp_count} записей модифицировано ({pp_time:.2f}с)")
+        
         # Построение строк для INSERT
         t_build = time.perf_counter()
         rows = []
@@ -873,6 +885,10 @@ class LimiterV8Orchestrator:
                     int(fields['mp2_ppr'][s, a]),
                     int(fields['mp2_limiter'][s, a]),
                     int(fields['mp2_repair_days'][s, a]),
+                    int(fields['mp2_repair_time'][s, a]),
+                    int(fields['mp2_assembly_time'][s, a]),
+                    int(fields['mp2_active_trigger'][s, a]),
+                    int(fields['mp2_assembly_trigger'][s, a]),
                     int(fields['mp2_daily_today'][s, a]),
                     int(fields['mp2_daily_next'][s, a]),
                     int(fields['mp2_commit_p2'][s, a]),
@@ -888,12 +904,14 @@ class LimiterV8Orchestrator:
                 'version_date', 'version_id', 'day_u16',
                 'idx', 'aircraft_number', 'group_by', 'oh', 'br', 'll',
                 'status_id', 'pre_status_id', 'sne', 'ppr', 'limiter', 'repair_days',
+                'repair_time', 'assembly_time', 'active_trigger', 'assembly_trigger',
                 'daily_today_u32', 'daily_next_u32', 'commit_p2', 'commit_p3'
             ]
             col_str = ', '.join(columns)
             self.clickhouse_client.execute(
                 f"INSERT INTO sim_masterv2_v9 ({col_str}) VALUES",
-                rows
+                rows,
+                settings={'max_partitions_per_insert_block': 300}
             )
             insert_time = time.perf_counter() - t_insert
             print(f"   ✅ INSERT: {len(rows)} строк ({insert_time:.2f}с)")
@@ -1006,16 +1024,23 @@ class LimiterV8Orchestrator:
         repair_pop = fg.AgentVector(self.base_model.agent)
         self.simulation.getPopulationData(repair_pop, "repair")
         assign_count = min(repair_pop.size(), self.repair_quota)
+        day0_map = {}
         for i in range(assign_count):
             agent = repair_pop.at(i)
             acn = agent.getVariableUInt("aircraft_number")
+            gb = agent.getVariableUInt("group_by")
             rl_pop[i].setVariableUInt("aircraft_number", acn)
             rl_pop[i].setVariableUInt("free_days", 0)
             rl_pop[i].setVariableUInt("last_acn", acn)
             rl_pop[i].setVariableUInt("last_day", 0)
+            day0_map[i] = (acn, int(gb))
+        
+        # Передаём mapping занятых линий в HF_InitRepairLines
+        # чтобы repair_line_rt_mp[i] был корректно инициализирован
+        self._hf_init_lines.day0_map = day0_map
         
         self.simulation.setPopulationData(rl_pop)
-        print(f"   ✅ RepairLine init: quota={self.repair_quota}, day0_assigned={assign_count}")
+        print(f"   ✅ RepairLine init: quota={self.repair_quota}, day0_assigned={assign_count}, day0_map={len(day0_map)}")
 
     # REMOVED: _init_v8_macroproperties_after_population — использовал несуществующий
     # CUDASimulation.getEnvironmentMacroPropertyUInt(). MacroProperty доступны только
@@ -1257,6 +1282,68 @@ class LimiterV8Orchestrator:
             print("\n✅ ВАЛИДАЦИЯ ПРОЙДЕНА: ops = target")
         else:
             print("\n❌ ВАЛИДАЦИЯ ПРОВАЛЕНА: ops ≠ target")
+    
+    def _postprocess_promotions(self, fields, days, num_steps, total_agents):
+        """
+        Постпроцессинг P2/P3 промоутов: восстановление окна ремонта.
+        
+        P2 (commit_p2=1): 7→2 превращается в 7→4→2 (unsvc→repair→ops)
+        P3 (commit_p3=1): 1→2 превращается в 1→4→2 (inactive→repair→ops)
+        
+        Для каждого события промоута:
+        1. Находим step S где commit_p2=1 или commit_p3=1
+        2. Определяем day D = days[S]
+        3. Вычисляем repair_start = D - repair_time (из mp2_repair_time[S, agent])
+        4. Ищем шаги в диапазоне [repair_start, D) и заменяем их status на 4
+        5. Устанавливаем repair_days (накопительный) и assembly_trigger
+        """
+        import numpy as np
+        
+        modified = 0
+        
+        for a in range(total_agents):
+            repair_time_val = 0
+            assembly_time_val = 0
+            
+            for s in range(num_steps):
+                p2 = int(fields['mp2_commit_p2'][s, a])
+                p3 = int(fields['mp2_commit_p3'][s, a])
+                
+                if p2 == 1 or p3 == 1:
+                    d_event = days[s]
+                    repair_time_val = int(fields['mp2_repair_time'][s, a])
+                    assembly_time_val = int(fields['mp2_assembly_time'][s, a])
+                    
+                    if repair_time_val <= 0 or d_event <= 0:
+                        continue
+                    
+                    repair_start = d_event - repair_time_val
+                    
+                    # Устанавливаем active_trigger=1 на шаге промоута
+                    fields['mp2_active_trigger'][s, a] = 1
+                    
+                    # Сканируем предыдущие шаги для заполнения окна ремонта
+                    repair_day_counter = 0
+                    for s_back in range(num_steps):
+                        d_back = days[s_back]
+                        if repair_start <= d_back < d_event:
+                            current_status = int(fields['mp2_status_id'][s_back, a])
+                            # Guard: перезаписываем только unsvc(7) или inactive(1)
+                            if current_status not in (7, 1):
+                                continue
+                            # Этот шаг попадает в окно ремонта
+                            fields['mp2_status_id'][s_back, a] = 4  # repair
+                            repair_day_counter += 1
+                            fields['mp2_repair_days'][s_back, a] = repair_day_counter
+                            
+                            # assembly_trigger=1 если осталось <= assembly_time до конца ремонта
+                            days_to_event = d_event - d_back
+                            if days_to_event <= assembly_time_val:
+                                fields['mp2_assembly_trigger'][s_back, a] = 1
+                            
+                            modified += 1
+        
+        return modified
 
 
 class HF_InitMP5Cumsum(fg.HostFunction):
@@ -1317,11 +1404,20 @@ class HF_SpawnDiag(fg.HostFunction):
 
 
 class HF_InitRepairLines(fg.HostFunction):
-    """HostFunction для инициализации RepairLine MacroProperty"""
+    """HostFunction для инициализации RepairLine MacroProperty.
     
-    def __init__(self, repair_quota: int):
+    day0_map: {line_id: (acn, group_by)} — линии, занятые day-0 repair агентами.
+    Для таких линий устанавливаем mp_rt = repair_time (по group_by),
+    чтобы автоосвобождение (rt > 0 && free_days >= rt) корректно срабатывало.
+    """
+    
+    def __init__(self, repair_quota: int, day0_map: dict = None,
+                 mi8_rt: int = 180, mi17_rt: int = 180):
         super().__init__()
         self.repair_quota = int(repair_quota)
+        self.day0_map = day0_map or {}
+        self.mi8_rt = int(mi8_rt)
+        self.mi17_rt = int(mi17_rt)
         self.initialized = False
     
     def run(self, FLAMEGPU):
@@ -1333,22 +1429,35 @@ class HF_InitRepairLines(fg.HostFunction):
         mp_rt = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_rt_mp")
         mp_last_acn = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_last_acn_mp")
         mp_last_day = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_last_day_mp")
+        
+        occupied_count = 0
         for i in range(len(mp_days)):
-            if i < self.repair_quota:
-                mp_days[i] = 1  # day0: свободно с 1
-                mp_acn[i] = 0   # 0 = свободно
-                mp_rt[i] = 0
-                mp_last_acn[i] = 0
-                mp_last_day[i] = 0
-            else:
+            if i >= self.repair_quota:
                 mp_days[i] = 0xFFFFFFFF  # не используется
                 mp_acn[i] = 0
                 mp_rt[i] = 0
                 mp_last_acn[i] = 0
                 mp_last_day[i] = 0
+            elif i in self.day0_map:
+                # Линия занята day-0 repair агентом
+                acn, gb = self.day0_map[i]
+                rt = self.mi8_rt if gb == 1 else self.mi17_rt
+                mp_days[i] = 0       # repair только начался
+                mp_acn[i] = acn      # линия занята
+                mp_rt[i] = rt        # KEY FIX: позволяет auto-free через rt дней
+                mp_last_acn[i] = acn
+                mp_last_day[i] = 0
+                occupied_count += 1
+            else:
+                mp_days[i] = 1       # свободна с 1
+                mp_acn[i] = 0        # свободна
+                mp_rt[i] = 0
+                mp_last_acn[i] = 0
+                mp_last_day[i] = 0
         
         self.initialized = True
-        print(f"  [HF_InitRepairLines] ✅ Загружено (quota={self.repair_quota})")
+        print(f"  [HF_InitRepairLines] ✅ quota={self.repair_quota}, "
+              f"day0_occupied={occupied_count}, free={self.repair_quota - occupied_count}")
 
 
 def main():
@@ -1378,6 +1487,7 @@ def main():
             version_date UInt32,
             version_id UInt32,
             day_u16 UInt16,
+            day_date Date MATERIALIZED addDays(toDate(toString(version_date)), toUInt16(day_u16)),
             idx UInt16,
             aircraft_number UInt32,
             group_by UInt8,
@@ -1390,11 +1500,16 @@ def main():
             ppr UInt32,
             limiter UInt16,
             repair_days UInt16,
+            repair_time UInt16,
+            assembly_time UInt16,
+            active_trigger UInt8,
+            assembly_trigger UInt8,
             daily_today_u32 UInt32,
             daily_next_u32 UInt32,
             commit_p2 UInt32,
             commit_p3 UInt32
         ) ENGINE = MergeTree()
+        PARTITION BY toYear(day_date)
         ORDER BY (version_date, version_id, day_u16, idx)
     """)
     print("✅ Таблица sim_masterv2_v9 готова")
