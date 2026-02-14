@@ -17,6 +17,9 @@
         "command": "python3 .cursor/hooks/connection_fail_clear.py"
       },
       {
+        "command": "python3 .cursor/hooks/user_comm_audit.py"
+      },
+      {
         "command": "python3 .cursor/hooks/orchestrator_guard.py"
       }
     ],

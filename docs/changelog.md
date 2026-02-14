@@ -1,5 +1,24 @@
 # Changelog
 
+## [14-02-2026] - Governance hardening: traceable handoff + user communication audit
+
+### Изменения
+- `code/utils/agent_kg.py`: расширен формат handoff (`user_goal`, `facts`, `assumptions`, `drift_check`, `process_insights`, `trace_id`, `plan_step_id`, `approval_*`) с обратной совместимостью (`goal`, `evidence`).
+- `code/utils/agent_kg.py`: добавлен режим `--close-workflow` + `--close-reason` (закрытие workflow с записью closure context).
+- `.cursor/rules/90_multiagent_workflow.mdc`: Handoff усилен обязательными `TraceID`, `PlanStepID`, `ApprovalGate`; добавлены правила обязательной записи handoff по фазам и логирования коммуникации с человеком.
+- `.cursor/agents/orchestrator.md`: anti-drift self-check дополнен trace discipline и human gate log; запрещено закрывать этапы без `--write-handoff`/`--close-workflow`.
+- `.cursor/hooks/user_comm_audit.py` + `.cursor/hooks.json`: добавлен аудит метаданных пользовательских промптов (hash/len/ids/approval hint) без хранения полного текста.
+- `README.md`: обновлены примеры `agent_kg.py` под новый формат и закрытие workflow.
+- `code/validation/_trace_repair.py`: проверен и включён как параметризуемый utility-скрипт (CLI-аргументы, безопасный импорт `ch_client`, валидация имени таблицы, сохранение текущей логики трассировки).
+
+### Контекст
+Фактический аудит показал разрыв между новым Handoff-шаблоном и реальной записью в Agent KG, а также отсутствие отдельного лога коммуникации с человеком. Изменения закрывают этот разрыв и делают трассировку решений воспроизводимой.
+
+### Ревью/Валидация
+- `python3 -m py_compile code/utils/agent_kg.py` — OK.
+- `python3 -m py_compile code/validation/_trace_repair.py` — OK.
+- `.cursor/hooks.json` — валидный JSON.
+
 ## [10-02-2026] - Anti-drift: DriftCheck + Facts/Assumptions в Handoff-шаблоне
 
 ### Изменения
