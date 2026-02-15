@@ -16,8 +16,9 @@ def setup_rl_export_buffers(env):
     env.newMacroPropertyUInt("rl_buf_free_days", RL_BUF_SIZE)
     env.newMacroPropertyUInt("rl_buf_acn", RL_BUF_SIZE)
     env.newMacroPropertyUInt("rl_buf_rt", RL_BUF_SIZE)
-    mem_mb = 3 * RL_BUF_SIZE * 4 / (1024 * 1024)
-    print(f"  ✅ RepairLine Export: 3 буфера × {RL_BUF_SIZE} = {mem_mb:.1f} МБ GPU")
+    env.newMacroPropertyUInt("rl_buf_gb", RL_BUF_SIZE)
+    mem_mb = 4 * RL_BUF_SIZE * 4 / (1024 * 1024)
+    print(f"  ✅ RepairLine Export: 4 буфера × {RL_BUF_SIZE} = {mem_mb:.1f} МБ GPU")
 
 # RTC_REPAIR_LINE_SYNC = f"""
 # FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_sync_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -53,6 +54,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_increment_v8, flamegpu::MessageNone, fla
         const unsigned int rt = mp_rt[line_id];
         if (rt > 0u && free_days >= rt) {{
             FLAMEGPU->setVariable<unsigned int>("aircraft_number", 0u);
+            auto mp_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");
+            mp_gb[line_id].exchange(0u);
         }}
     }}
     
@@ -86,6 +89,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_export_v8, flamegpu::MessageNone, flameg
     auto buf_fd = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_free_days");
     auto buf_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_acn");
     auto buf_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_rt");
+    auto buf_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_gb");
     
     // free_days — из MacroProperty (SSoT, обновляется WRITE слоем)
     auto mp_fd = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
@@ -99,6 +103,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_export_v8, flamegpu::MessageNone, flameg
     // repair_time из MacroProperty (per-line)
     auto mp_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
     buf_rt[offset].exchange(mp_rt[line_id]);
+    
+    // group_by из MacroProperty (SSoT, устанавливается в P2/P3 commit)
+    auto mp_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");
+    buf_gb[offset].exchange(mp_gb[line_id]);
     
     return flamegpu::ALIVE;
 }}

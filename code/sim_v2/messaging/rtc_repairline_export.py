@@ -68,14 +68,16 @@ class HF_RepairLineDrain(fg.HostFunction):
         mp_days = env.getMacroPropertyUInt("mp2_day_for_step")
         days = [int(mp_days[s]) for s in range(num_steps)]
 
-        # Чтение 3 буферов
+        # Чтение 4 буферов
         mp_fd = env.getMacroPropertyUInt("rl_buf_free_days")
         mp_acn = env.getMacroPropertyUInt("rl_buf_acn")
         mp_rt = env.getMacroPropertyUInt("rl_buf_rt")
+        mp_gb = env.getMacroPropertyUInt("rl_buf_gb")
 
         free_days = np.zeros((num_steps, self.repair_quota), dtype=np.uint32)
         acn = np.zeros((num_steps, self.repair_quota), dtype=np.uint32)
         rt = np.zeros((num_steps, self.repair_quota), dtype=np.uint32)
+        gb = np.zeros((num_steps, self.repair_quota), dtype=np.uint32)
 
         for s in range(num_steps):
             base = s * REPAIR_LINES_MAX
@@ -83,6 +85,7 @@ class HF_RepairLineDrain(fg.HostFunction):
                 free_days[s, l] = int(mp_fd[base + l])
                 acn[s, l] = int(mp_acn[base + l])
                 rt[s, l] = int(mp_rt[base + l])
+                gb[s, l] = int(mp_gb[base + l])
 
         self.data = {
             'num_steps': num_steps,
@@ -90,9 +93,10 @@ class HF_RepairLineDrain(fg.HostFunction):
             'free_days': free_days,
             'acn': acn,
             'rt': rt,
+            'gb': gb,
         }
 
-        total = num_steps * self.repair_quota * 3
+        total = num_steps * self.repair_quota * 4
         print(f"  [RL Drain] ✅ Прочитано {total:,} значений")
 
 
@@ -119,13 +123,14 @@ def interpolate_repairline_daily(data, repair_quota):
       - acn фиксирован (из шага S)
       - Если acn != 0 и free_days достигает rt — линия освобождается (acn=0)
 
-    Returns: list[tuple] — (day_u16, line_id, free_days, aircraft_number)
+    Returns: list[tuple] — (day_u16, line_id, free_days, aircraft_number, group_by)
     """
     num_steps = data['num_steps']
     days = data['days']
     fd_arr = data['free_days']
     acn_arr = data['acn']
     rt_arr = data['rt']
+    gb_arr = data['gb']
 
     rows = []
 
@@ -137,6 +142,7 @@ def interpolate_repairline_daily(data, repair_quota):
             fd_s = int(fd_arr[s, line_id])
             acn_s = int(acn_arr[s, line_id])
             rt_s = int(rt_arr[s, line_id])
+            gb_s = int(gb_arr[s, line_id])
 
             # Определяем день освобождения линии внутри интервала
             release_day = None
@@ -147,12 +153,16 @@ def interpolate_repairline_daily(data, repair_quota):
             for d in range(d1, d2):
                 daily_fd = fd_s + (d - d1)
                 daily_acn = acn_s
+                daily_gb = gb_s
 
                 # Проверяем освобождение линии
                 if release_day is not None and d >= release_day:
                     daily_acn = 0
+                
+                if daily_acn == 0:
+                    daily_gb = 0
 
-                rows.append((d, line_id, daily_fd, daily_acn))
+                rows.append((d, line_id, daily_fd, daily_acn, daily_gb))
 
     return rows
 
@@ -166,9 +176,11 @@ CREATE TABLE IF NOT EXISTS sim_repairline_v9 (
     version_date UInt32,
     version_id   UInt32,
     day_u16      UInt16,
+    day_date     Date MATERIALIZED addDays(toDate(toString(version_date)), toUInt16(day_u16)),
     line_id      UInt8,
     free_days    UInt32,
-    aircraft_number UInt32
+    aircraft_number UInt32,
+    group_by     UInt8
 ) ENGINE = MergeTree()
 ORDER BY (version_id, version_date, day_u16, line_id)
 SETTINGS index_granularity = 8192
@@ -181,7 +193,7 @@ def export_repairline_to_ch(ch_client, rows, version_date_int, version_id, drop_
 
     Args:
         ch_client: clickhouse_driver.Client
-        rows: list[tuple] — (day_u16, line_id, free_days, aircraft_number)
+        rows: list[tuple] — (day_u16, line_id, free_days, aircraft_number, group_by)
         version_date_int: int — YYYYMMDD
         version_id: int
         drop_table: bool — дропнуть таблицу перед созданием
@@ -191,17 +203,26 @@ def export_repairline_to_ch(ch_client, rows, version_date_int, version_id, drop_
         print("  🗑️ sim_repairline_v9 удалена")
 
     ch_client.execute(DDL_REPAIRLINE)
+    ch_client.execute(
+        "ALTER TABLE sim_repairline_v9 "
+        "ADD COLUMN IF NOT EXISTS day_date Date MATERIALIZED "
+        "addDays(toDate(toString(version_date)), toUInt16(day_u16))"
+    )
+    ch_client.execute(
+        "ALTER TABLE sim_repairline_v9 "
+        "ADD COLUMN IF NOT EXISTS group_by UInt8"
+    )
 
     # Добавляем version_date и version_id к каждой строке
     full_rows = [
-        (version_date_int, version_id, day, lid, fd, acn)
-        for day, lid, fd, acn in rows
+        (version_date_int, version_id, day, lid, fd, acn, gb)
+        for day, lid, fd, acn, gb in rows
     ]
 
     if full_rows:
         ch_client.execute(
             "INSERT INTO sim_repairline_v9 "
-            "(version_date, version_id, day_u16, line_id, free_days, aircraft_number) "
+            "(version_date, version_id, day_u16, line_id, free_days, aircraft_number, group_by) "
             "VALUES",
             full_rows,
             settings={'max_partitions_per_insert_block': 300}

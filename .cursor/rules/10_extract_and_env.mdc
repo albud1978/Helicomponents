@@ -16,7 +16,12 @@ alwaysApply: false
 ## Перед любыми командами
 ```bash
 cd /path/to/Helicomponents
-source .venv/bin/activate
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate cuda13
+if [ "$CONDA_DEFAULT_ENV" != "cuda13" ]; then
+  echo "❌ Требуется conda env cuda13"
+  return 1 2>/dev/null || exit 1
+fi
 source config/load_env.sh
 export CUBE_CONFIG_PATH="$PWD/config"
 ```

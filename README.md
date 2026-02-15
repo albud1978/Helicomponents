@@ -39,12 +39,13 @@
 ## 🚀 Быстрый старт
 
 ```bash
-# 1. Активировать окружение
-# Основной вариант: локальный venv
-source .venv/bin/activate
-# Альтернатива (если .venv отсутствует): conda cuda13
+# 1. Активировать окружение CUDA13 (обязательно)
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate cuda13
+if [ "$CONDA_DEFAULT_ENV" != "cuda13" ]; then
+  echo "❌ Требуется conda env cuda13"
+  return 1 2>/dev/null || exit 1
+fi
 
 # 2. Загрузить переменные окружения
 source config/load_env.sh
@@ -74,6 +75,7 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 |------|----------|
 | **`.cursor/rules/`** | Модульные правила разработки для Cursor AI |
 | **`.cursor/agents/`** | Субагенты проекта (coder-flame, coder-general, reviewer-flame, validator-judge, capsule-builder, analyst-sql-graph, governance-compliance, docs-curator) |
+| `docs/validation.md` | Операционный runbook: порядок прогона V8 + потоковые валидации без автозапуска |
 | `docs/backlog.md` | Короткие идеи на будущее (формат и правила внутри файла) |
 | `docs/migration.md` | Промт для новых разработчиков |
 | `docs/limiter_v8_capsule.md` | Контекстная капсула LIMITER V8 (handoff) |
@@ -210,9 +212,9 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 git clone https://github.com/albud1978/Helicomponents.git
 cd Helicomponents
 
-# 2. Создать виртуальное окружение
-python3 -m venv .venv
-source .venv/bin/activate
+# 2. Активировать conda окружение CUDA13
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate cuda13
 
 # 3. Установить зависимости
 pip install -r requirements.txt -c constraints.txt
