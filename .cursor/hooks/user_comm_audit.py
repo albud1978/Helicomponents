@@ -40,11 +40,24 @@ def _has_approval_hint(text: str) -> bool:
     return any(word in lower for word in APPROVAL_WORDS)
 
 
-def _extract_workflow_id(text: str) -> str:
-    match = re.search(r"\bW_[A-Za-z0-9_]+\b", text)
-    if not match:
-        return "N/A"
-    return match.group(0)
+def _extract_workflow_id(text: str, payload: dict) -> str:
+    payload_wf = payload.get("workflow_id")
+    if isinstance(payload_wf, str) and payload_wf.strip():
+        return payload_wf.strip()
+
+    canonical = re.search(r"\bW_[A-Za-z0-9_]+\b", text)
+    if canonical:
+        return canonical.group(0)
+
+    by_label = re.search(r"\bworkflow_id\s*[:=]\s*([A-Za-z0-9_:-]+)\b", text, flags=re.IGNORECASE)
+    if by_label:
+        return by_label.group(1)
+
+    by_trace = re.search(r"\bwf:([A-Za-z0-9_:-]+)\b", text)
+    if by_trace:
+        return by_trace.group(1)
+
+    return "N/A"
 
 
 def main() -> None:
@@ -58,7 +71,7 @@ def main() -> None:
     norm_prompt = _normalize_text(prompt)
     prompt_hash = hashlib.sha256(norm_prompt.encode("utf-8")).hexdigest()[:16]
     prompt_len = len(prompt)
-    workflow_id = _extract_workflow_id(prompt)
+    workflow_id = _extract_workflow_id(prompt, payload)
     approval_hint = "yes" if _has_approval_hint(prompt) else "no"
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")

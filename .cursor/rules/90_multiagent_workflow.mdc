@@ -9,7 +9,7 @@ alwaysApply: true
 ## Роли и контур ответственности
 - **Главный агент (Orchestrator)**: формирует план, распределяет задачи, синтезирует результаты, инициирует governance‑гейты и финальное согласование. **Кодинг в `code/**` запрещён; правила/конфиги/доки — разрешены.** Для исследования кодовой базы использует встроенный `explore` subagent как инструмент (не отдельная роль). Профиль: `.cursor/agents/orchestrator.md`.
 - **КРИТИЧЕСКИЙ ЗАПРЕТ**: Текущий ассистент действует как главный агент. Перед КАЖДЫМ вызовом Write/StrReplace/Shell проверяй: путь в `code/**` или `tools/**`? Если ДА — СТОП, делегируй через Task tool кодеру. Нарушение = системный сбой governance.
-- **Subagents**: специализированные исполнители (`coder-flame`, `coder-general`, `reviewer-flame`, `validator-judge`, `capsule-builder`, `analyst-sql-graph`, `governance-compliance`) работают в своей зоне ответственности.
+- **Subagents**: специализированные исполнители (`coder-flame`, `coder-general`, `reviewer-flame`, `validator-judge`, `capsule-builder`, `analyst-sql-graph`, `governance-compliance`, `docs-curator`) работают в своей зоне ответственности.
 - **Человек (Алексей)**: утверждает архитектурные/алгоритмические/схемные изменения и любые решения с высоким риском.
 - **ETL/Extract/СУБД задачи**: выполняют `coder-general` и `analyst-sql-graph` по зоне ответственности.
 
@@ -21,6 +21,7 @@ alwaysApply: true
 - **validator-judge**: системная валидация инвариантов; запуск готовых скриптов из `code/validation/`; вынесение вердикта pass/fail по каждому инварианту. SQL‑first, по запросу оркестратора.
 - **capsule-builder**: формирование/обновление `docs/*_capsule.md` по шаблону после приёмки оркестратора.
 - **governance-compliance**: контрольная плоскость (policy/risk/compliance). Проверяет traceability, gate-статусы и соответствие scope, выносит вердикт `approve|reject|escalate`.
+- **docs-curator**: владелец проектной документации (`docs/**`, `README.md`, changelog). Синхронизирует артефакты workflow с документами после governance verdict.
 
 ## Коммуникация с оркестратором (человек → оркестратор)
 - **Формат запроса**: Goal + ограничения + приоритет (если есть) + запреты на запуск.
@@ -32,6 +33,7 @@ alwaysApply: true
 - Оркестратор анализирует handoff'ы, принимает решение о завершении и фиксирует краткие следы работы reviewer/validator в `docs/changelog.md`.
 - В `docs/changelog.md` фиксировать минимум: кто проводил ревью/валидацию и итог (OK/есть замечания).
 - Для high-risk задач перед закрытием обязателен handoff от `governance-compliance` с policy verdict.
+- Перед финальным закрытием high-risk задач обязателен handoff от `docs-curator` (документация синхронизирована с принятыми решениями).
 
 ## Решения по коммиту
 - Решение о коммите принимает **оркестратор** по итогам ревью и (если применимо) валидации.
@@ -47,8 +49,10 @@ alwaysApply: true
 4. **Реализация** — изменения по согласованному плану.
 5. **Ревью** — проверка качества и рисков.
 6. **Валидация** — SQL‑first проверки (если применимо).
-7. **Capsule** — обновление контекстной капсулы (после приёмки оркестратора).
-8. **Handoff/Close** — отчёт и фиксация изменений.
+7. **Governance** — policy/risk/compliance verdict (`governance-compliance`) для high-risk.
+8. **Docs** — синхронизация `docs/**`, `README.md`, changelog (`docs-curator`).
+9. **Capsule** — обновление контекстной капсулы (`capsule-builder`) при необходимости.
+10. **Handoff/Close** — отчёт и фиксация изменений.
 
 ## Handoff‑шаблон (обязателен)
 Используется всеми агентами как формат ответа:
@@ -83,6 +87,7 @@ alwaysApply: true
 - Каждый инвариант из `config/transitions/invariants.json` должен иметь соответствующий скрипт в `code/validation/`.
 - Скрипты принимают параметры (version_id, version_date, table) и возвращают структурированный результат (pass/fail + детали).
 - **SSOT (`config/transitions/invariants.json`) обновляется ТОЛЬКО по явной команде Алексея** после успешного прохождения проверки. Автообновление запрещено.
+- **Результаты валидации хранятся ТОЛЬКО в JSON SSOT** (`invariants.json`: поля `last_validated`, `last_result`). Запись ValidationRun, DecisionNode и прочих workflow-артефактов в Domain Graph (Neo4j Aura) **запрещена**.
 
 ## Контекстные капсулы (RLM)
 
@@ -90,7 +95,8 @@ alwaysApply: true
 
 ### Иерархия источников
 ```
-JSON (SSoT) → Neo4j (визуализация) → Капсулы (контекст для агентов)
+JSON (SSoT) → Domain Graph Neo4j (визуализация архитектуры) → Капсулы (контекст для агентов)
+Валидация: invariants.json (SSoT) → скрипты code/validation/ → результат в invariants.json
 ```
 
 ### Манифест
@@ -124,26 +130,38 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 - **Назначение**: визуализация переходов state→state, квот, симуляции
 - **Подключение**: `DOMAIN_NEO4J_*` в `.env` (MCP: `NEO4J_*`)
 - **SSoT**: `config/transitions/transitions_rules.json`, `config/transitions/quota_rules.json`, `code/sim_v2/**`
-- **Типы узлов в Aura**: TransitionSpec, State, Rule, QuotaFlow, SelectionRule, RepairLineRule, SpawnRule, MessageBucket
+- **Типы узлов в Aura**: TransitionSpec, State, Rule, QuotaFlow, SelectionRule, RepairLineRule, SpawnRule, MessageBucket, RTCLayer
+- **Запрещённые узлы в Aura**: Invariant, ValidationRun, DecisionNode, HandoffNode, ContextNode (это workflow-артефакты, им место в Agent KG / JSON SSOT)
 - **Синхронизация**: `make sync-domain-graph` (JSON SSoT → Aura)
 - **Domain Graph — производная, не SSoT**: изменения делаются в JSON, затем оркестратор синхронизирует в Aura
 
 ### Поток изменений доменного графа
 1. Алексей одобряет изменение (governance-гейт)
 2. Оркестратор правит канонический JSON (`config/transitions/*.json`)
-3. Оркестратор синхронно вызывает `make sync-domain-graph` для записи в Aura
-4. Subagents указывают необходимость обновления Domain Graph в поле `GraphUpdate` Handoff-шаблона
+3. Оркестратор ОБЯЗАН явно запросить подтверждение у человека перед `make sync-domain-graph` (в сообщении указывать `W_<workflow_id>` для трассировки).
+4. Оркестратор синхронно вызывает `make sync-domain-graph` для записи в Aura
+5. `governance-compliance` проверяет наличие `ApprovalGate` (`gate_id/status/source`) и только после этого допускает закрытие workflow.
+6. Subagents указывают необходимость обновления Domain Graph в поле `GraphUpdate` Handoff-шаблона
 
 ### Когда обновлять Agent KG
 - При каждом hand-off агента (`--write-handoff`) и при каждом переходе фазы workflow
 - При передаче контекста между чатами (`--write-context`)
 - При инициализации нового workflow (`--init-workflow`)
 - При закрытии workflow (`--close-workflow`)
+- При входе в фазу обязательно писать context `phase_start` с указанием `agent` (значение `unknown` запрещено)
 
 ### Минимальный payload для `--write-handoff`
 - Обязательные поля: `user_goal`, `trace_id`, `plan_step_id`, `changes`, `facts`, `assumptions`
 - Для оркестратора дополнительно обязательны: `drift_check`, `process_insights`
 - Для задач с human-gate: `approval_gate_id`, `approval_status`, `approval_source`
+
+### Write-through протокол Agent KG (обязательно)
+1. Orchestrator инициализирует workflow (`--init-workflow`) перед первым делегированием.
+2. Перед делегированием пишет context `dispatch` (`--write-context --agent orchestrator`).
+3. Исполнитель в начале фазы пишет context `phase_start` с явным `--agent`.
+4. Исполнитель в конце фазы пишет `--write-handoff` с полным payload по шаблону.
+5. Orchestrator не имеет права запускать следующую фазу без handoff предыдущей фазы.
+6. Закрытие только через `--close-workflow` после governance/docs verdict (если применимо).
 
 ### Когда обновлять Domain Graph
 - Изменения правил переходов/квот в JSON
@@ -170,8 +188,9 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 
 ### Лог коммуникации с человеком
 - Коммуникация `человек → оркестратор` и решения по scope/gate логируются в `.cursor/hooks/user_comm_audit.log` (только метаданные).
-- В лог пишутся: `timestamp`, `conversation_id`, `generation_id`, `prompt_hash`, `prompt_length`, `approval_hint`.
+- В лог пишутся: `timestamp`, `conversation_id`, `generation_id`, `prompt_hash`, `prompt_len`, `workflow_id`, `approval_hint`.
 - Полные тексты промптов не сохраняются в audit-логе; в Handoff указывается ссылка (`approval_source`) на запись/хеш.
+- Для задач с human-gate оркестратор обязан включать `W_<workflow_id>` в запрос к человеку, чтобы `workflow_id` попадал в audit-лог.
 
 ### Борьба с дрейфом контекста
 - При длительных задачах (>3 последовательных вызовов агентов) Orchestrator выполняет «контрольную точку»: краткая сверка текущего состояния с исходной целью.
@@ -188,12 +207,15 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 - `governance-compliance` не пишет код и не меняет доменные данные; его задача — policy check и risk verdict.
 - Минимальный verdict-формат: `policy_status`, `scope_match`, `traceability_status`, `human_gate_status`, `decision`.
 - При `decision=reject|escalate` оркестратор не имеет права закрыть workflow без реакции (исправление или эскалация человеку).
+- Вызов `governance-compliance` обязателен для всех задач с изменениями в `config/transitions/**`, `config/transitions/invariants.json`, `.cursor/rules/**`, `.cursor/agents/**` и перед любым `make sync-domain-graph`.
 
 ## Enforcement (технические guardrails)
 
 ### Hooks (`.cursor/hooks.json`)
 - **beforeSubmitPrompt → user_comm_audit.py**: логирует метаданные пользовательского промпта для трассировки governance-gate.
 - **beforeSubmitPrompt → orchestrator_guard.py**: инжектирует напоминание о запрете кодинга при каждом промпте.
+- **beforeSubmitPrompt → connection_fail_clear.py**: снимает флаг connection fail после явного подтверждения пользователя (`продолжай/готово`).
+- **preToolUse → pre_close_guard.py**: блокирует `--close-workflow`, если в Agent KG нет handoff от `governance-compliance` и `docs-curator`.
 - **afterFileEdit → audit_code_edit.py**: логирует все правки в `code/` и `tools/` в `.cursor/hooks/code_edit_audit.log`.
 - **postToolUseFailure → connection_fail_set.py**: ставит флаг при падении Shell/MCP.
 - **preToolUse → connection_fail_block.py**: блокирует tool-вызовы при connection fail.
@@ -213,17 +235,22 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 
 ## Паттерны координации
 
+### Supervisor-graph логика (best practices)
+- Workflow трактуется как конечный автомат с явными состояниями и разрешёнными переходами.
+- Состояние хранится минимальным и проверяемым: `workflow_id`, `current_phase`, `last_owner`, `trace_id`, `plan_step_id`, `approval_status`.
+- Переходы выполняются только через проверяемые артефакты (`ContextNode/HandoffNode`), а не через неявную память диалога.
+- Циклы ограничены счётчиком шагов и условием прогресса; при отсутствии прогресса — эскалация человеку.
+- В каждый момент времени активен только один исполнитель (single active worker).
+
 ### Механизм переключения агентов (Orchestrator Dispatch + JSON Context)
 
 Orchestrator явно вызывает агентов, JSON-шина (`config/agent_kg.json`) — для персистентности контекста.
 
 **Цикл взаимодействия:**
-1. Orchestrator вызывает агента через Task tool
-2. Агент читает контекст из `config/agent_kg.json` (если нужен)
-3. Агент выполняет задачу
-4. Агент записывает hand-off через `code/utils/agent_kg.py --write-handoff`
-5. Агент возвращает Handoff оркестратору
-6. Orchestrator решает, кого вызвать следующим
+1. Orchestrator пишет `dispatch` в Agent KG и вызывает агента через Task tool
+2. Агент пишет `phase_start` в Agent KG и выполняет задачу
+3. Агент возвращает Handoff и записывает его в Agent KG (`--write-handoff`)
+4. Orchestrator валидирует handoff и решает, кого вызывать следующим
 
 **Почему JSON, а не Neo4j:**
 - Агенты в Cursor — stateless (нет persistent процессов)
@@ -238,11 +265,12 @@ Orchestrator явно вызывает агентов, JSON-шина (`config/ag
 
 ### Sequential Pipeline (единственный допустимый паттерн)
 
-- **Порядок:** Анализ (orchestrator + explore) → Research/SQL (analyst-sql-graph) → Реализация (coder-flame / coder-general) → Ревью (reviewer-flame) → Валидация (validator-judge) → Governance (governance-compliance) → Capsule (capsule-builder)
+- **Порядок:** Анализ (orchestrator + explore) → Research/SQL (analyst-sql-graph) → Реализация (coder-flame / coder-general) → Ревью (reviewer-flame) → Валидация (validator-judge) → Governance (governance-compliance) → Docs (docs-curator) → Capsule (capsule-builder)
 - **Один агент за раз**, строгий порядок. Следующий агент вызывается только после получения Handoff от предыдущего.
 - Orchestrator вызывает каждого агента последовательно.
 - Если на этапе Ревью выявлены замечания — возврат на Реализацию (итерация implement→review).
 - Если на этапе Governance вердикт `reject` — возврат на Реализацию/Ревью; если `escalate` — остановка и вопрос человеку.
+- Если на этапе Docs выявлены несинхронизированные артефакты — возврат к владельцу изменений для документирования.
 
 > **ЗАПРЕТ:** Parallel Workers и Iterative Loop **запрещены** на текущем этапе развития проекта. Параллельный запуск нескольких агентов‑исполнителей не допускается.
 

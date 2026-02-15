@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
 """
-INV-10: баланс оборота по статусам.
+INV-10: Баланс оборота по статусам.
+
+Формула для каждого статуса s in {1,2,3,4,6,7}:
+  initial(s) + entries(s) + spawn_entries(s) = exits(s) + final(s)
+
+Где:
+- initial(s): агенты в статусе s на первом шаге (min day_u16)
+- entries(s): переходы INTO s (pre_status_id != status_id, pre_status_id > 0)
+- spawn_entries(s): spawn (pre_status_id = 0)
+- exits(s): переходы OUT OF s (pre_status_id = s, status_id != s, pre_status_id > 0)
+- final(s): агенты в статусе s на последнем шаге (max day_u16)
+
+Дополнительно выводится таблица фактических переходов с LEGAL/ILLEGAL.
 """
 import argparse
 import re
@@ -24,93 +36,204 @@ def print_result(name: str, passed: bool, details) -> None:
     print("=" * 80)
 
 
-def status_name(status_id: int) -> str:
-    return {
-        1: "inactive",
-        2: "ops",
-        3: "svc",
-        4: "repair",
-        5: "reserve",
-        6: "storage",
-        7: "unsvc",
-    }.get(status_id, f"status_{status_id}")
+def format_table(headers, rows):
+    if not rows:
+        widths = [len(str(h)) for h in headers]
+        header_line = " | ".join(
+            str(h).ljust(widths[idx]) for idx, h in enumerate(headers)
+        )
+        sep_line = "-+-".join("-" * w for w in widths)
+        return [header_line, sep_line, "(empty)"]
+    widths = [len(str(h)) for h in headers]
+    for row in rows:
+        for idx, cell in enumerate(row):
+            widths[idx] = max(widths[idx], len(str(cell)))
+    header_line = " | ".join(
+        str(h).ljust(widths[idx]) for idx, h in enumerate(headers)
+    )
+    sep_line = "-+-".join("-" * w for w in widths)
+    body_lines = [
+        " | ".join(str(cell).ljust(widths[idx]) for idx, cell in enumerate(row))
+        for row in rows
+    ]
+    return [header_line, sep_line] + body_lines
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="INV-10: баланс оборота по статусам")
-    parser.add_argument("--version-id", required=True, type=int, help="version_id")
-    parser.add_argument(
-        "--table",
-        default="sim_masterv2_v9",
-        help="Таблица ClickHouse (по умолчанию: sim_masterv2_v9)",
-    )
-    parser.add_argument(
-        "--tolerance",
-        type=int,
-        default=0,
-        help="Допуск на расхождение (по умолчанию: 0)",
-    )
+    parser = argparse.ArgumentParser(description="INV-10: turnover balance")
+    parser.add_argument("--version-id", required=True, type=int)
+    parser.add_argument("--version-date", type=int, default=None)
+    parser.add_argument("--table", default="sim_masterv2_v9")
     args = parser.parse_args()
     table = validate_table_name(args.table)
     client = get_client()
 
-    query = f"""
-    WITH bounds AS (
-        SELECT min(day_u16) AS min_day, max(day_u16) AS max_day
-        FROM {table}
-        WHERE version_id = %(vid)s AND group_by IN (1, 2)
-    ),
-    lagged AS (
-        SELECT
-            day_u16,
-            status_id,
-            pre_status_id,
-            leadInFrame(status_id, 1, status_id)
-                OVER (PARTITION BY aircraft_number ORDER BY day_u16) AS next_status,
-            bounds.min_day AS min_day,
-            bounds.max_day AS max_day
-        FROM {table}
-        CROSS JOIN bounds
-        WHERE version_id = %(vid)s AND group_by IN (1, 2)
-    )
-    SELECT
-        status_id,
-        countIf(pre_status_id != status_id) AS entries,
-        countIf(next_status != status_id) AS exits,
-        countIf(day_u16 = min_day) AS count_start,
-        countIf(day_u16 = max_day) AS count_end
-    FROM lagged
+    vd_filter = ""
+    params = {"vid": args.version_id}
+    if args.version_date is not None:
+        vd_filter = " AND version_date = %(vdate)s"
+        params["vdate"] = args.version_date
+
+    minmax_query = f"""
+    SELECT min(day_u16) AS min_day, max(day_u16) AS max_day
+    FROM {table}
+    WHERE version_id = %(vid)s{vd_filter}
+      AND group_by IN (1, 2)
+    """
+    minmax_rows = client.execute(minmax_query, params)
+    min_day, max_day = minmax_rows[0] if minmax_rows else (None, None)
+    has_data = min_day is not None and max_day is not None
+
+    # Считаем входы и выходы для каждого статуса
+    # Вход: pre_status_id != status_id (т.е. переход произошёл)
+    entries_query = f"""
+    SELECT status_id AS s, count() AS entries
+    FROM {table}
+    WHERE version_id = %(vid)s{vd_filter}
+      AND group_by IN (1, 2)
+      AND pre_status_id != status_id
+      AND pre_status_id > 0
     GROUP BY status_id
     ORDER BY status_id
     """
-    rows = client.execute(query, {"vid": args.version_id})
+    entries_rows = client.execute(entries_query, params) if has_data else []
+    entries = {int(r[0]): int(r[1]) for r in entries_rows}
 
-    violations = []
-    for status_id, entries, exits, count_start, count_end in rows:
-        balance = int(entries) - int(exits)
-        delta = int(count_end) - int(count_start)
-        diff = balance - delta
-        if abs(diff) > args.tolerance:
-            violations.append(
-                (int(status_id), int(entries), int(exits), int(count_start), int(count_end), diff)
-            )
+    spawn_query = f"""
+    SELECT status_id AS s, count() AS spawn_entries
+    FROM {table}
+    WHERE version_id = %(vid)s{vd_filter}
+      AND group_by IN (1, 2)
+      AND pre_status_id = 0
+    GROUP BY status_id
+    ORDER BY status_id
+    """
+    spawn_rows = client.execute(spawn_query, params) if has_data else []
+    spawn_entries = {int(r[0]): int(r[1]) for r in spawn_rows}
 
-    details = [f"tolerance={args.tolerance}", f"violations={len(violations)}"]
-    if violations:
-        sample = [
-            {
-                "status": status_name(v[0]),
-                "entries": v[1],
-                "exits": v[2],
-                "count_start": v[3],
-                "count_end": v[4],
-                "diff": v[5],
-            }
-            for v in violations[:10]
-        ]
-        details.append("sample_violations=" + str(sample))
+    # Выходы: pre_status_id = s, status_id != s
+    exits_query = f"""
+    SELECT pre_status_id AS s, count() AS exits
+    FROM {table}
+    WHERE version_id = %(vid)s{vd_filter}
+      AND group_by IN (1, 2)
+      AND pre_status_id != status_id
+      AND pre_status_id > 0
+    GROUP BY pre_status_id
+    ORDER BY pre_status_id
+    """
+    exits_rows = client.execute(exits_query, params) if has_data else []
+    exits = {int(r[0]): int(r[1]) for r in exits_rows}
 
-    passed = len(violations) == 0
+    # Начальные и финальные статусы (по первому/последнему дню)
+    initial_counts = {}
+    final_counts = {}
+    if has_data:
+        initial_query = f"""
+        SELECT pre_status_id AS s, count() AS cnt
+        FROM {table}
+        WHERE version_id = %(vid)s{vd_filter}
+          AND group_by IN (1, 2)
+          AND day_u16 = %(min_day)s
+          AND pre_status_id > 0
+        GROUP BY pre_status_id
+        ORDER BY pre_status_id
+        """
+        initial_rows = client.execute(
+            initial_query, {**params, "min_day": int(min_day)}
+        )
+        initial_counts = {int(r[0]): int(r[1]) for r in initial_rows}
+
+        final_query = f"""
+        SELECT status_id AS s, count() AS cnt
+        FROM {table}
+        WHERE version_id = %(vid)s{vd_filter}
+          AND group_by IN (1, 2)
+          AND day_u16 = %(max_day)s
+        GROUP BY status_id
+        ORDER BY status_id
+        """
+        final_rows = client.execute(final_query, {**params, "max_day": int(max_day)})
+        final_counts = {int(r[0]): int(r[1]) for r in final_rows}
+
+    # Баланс для каждого статуса
+    check_states = [1, 2, 3, 4, 6, 7]
+    violations = 0
+    balance_rows = []
+
+    for s in check_states:
+        initial = initial_counts.get(s, 0)
+        ent = entries.get(s, 0)
+        spawn = spawn_entries.get(s, 0)
+        ext = exits.get(s, 0)
+        final = final_counts.get(s, 0)
+        balance = (initial + ent + spawn) - (ext + final)
+        ok = balance == 0
+        balance_rows.append(
+            [s, initial, ent, spawn, ext, final, balance, "OK" if ok else "FAIL"]
+        )
+        if not ok:
+            violations += 1
+
+    # Таблица переходов с LEGAL/ILLEGAL
+    transitions_query = f"""
+    SELECT pre_status_id AS pre, status_id AS st, count() AS cnt
+    FROM {table}
+    WHERE version_id = %(vid)s{vd_filter}
+      AND group_by IN (1, 2)
+      AND pre_status_id != status_id
+    GROUP BY pre_status_id, status_id
+    ORDER BY pre_status_id, status_id
+    """
+    transition_rows = client.execute(transitions_query, params) if has_data else []
+    allowed = {
+        (0, 2),
+        (0, 3),
+        (1, 2),
+        (2, 3),
+        (2, 6),
+        (2, 7),
+        (3, 2),
+        (4, 2),
+        (4, 3),
+        (7, 2),
+    }
+    illegal = 0
+    transitions_rows = []
+    for pre, st, cnt in transition_rows:
+        pre_i = int(pre)
+        st_i = int(st)
+        cnt_i = int(cnt)
+        legal = (pre_i, st_i) in allowed
+        if not legal:
+            illegal += 1
+        transitions_rows.append(
+            [pre_i, st_i, cnt_i, "LEGAL" if legal else "ILLEGAL"]
+        )
+
+    details = []
+    if not has_data:
+        details.append(
+            "no rows for filters: version_id=%s, version_date=%s, group_by IN (1,2)"
+            % (args.version_id, args.version_date if args.version_date else "ANY")
+        )
+    details.append(
+        "day range: min_day=%s, max_day=%s" % (min_day, max_day)
+    )
+    details.append("balance table:")
+    details.extend(
+        format_table(
+            ["status", "initial", "entries", "spawn", "exits", "final", "balance", "ok"],
+            balance_rows,
+        )
+    )
+    details.append("transitions table:")
+    details.extend(
+        format_table(["pre", "status", "count", "legal"], transitions_rows)
+    )
+    details.append(f"illegal_transitions={illegal}")
+
+    passed = violations == 0 and illegal == 0
     print_result("INV-10 turnover balance", passed, details)
     return 0 if passed else 1
 

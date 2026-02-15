@@ -38,13 +38,16 @@ description: FLAME GPU/CUDA разработчик для RTC модулей и 
 4. Соблюдай архитектуру LIMITER V8
 5. Пиши CUDA код в RTC функциях с комментариями
 6. Не нарушай инварианты. Если изменение может нарушить инвариант — эскалация на оркестратора
-7. Тесты запускай только по явному запросу; иначе фиксируй причину в `Evidence`
+7. Тесты запускай только по явному запросу; иначе фиксируй причину в `Facts` или `Assumptions`
+8. В начале фазы записывай context в Agent KG (`--write-context --context-type phase_start --agent coder-flame`)
+9. В конце фазы обязательно записывай handoff в Agent KG (`--write-handoff`) с `TraceID`, `PlanStepID`, `Facts`, `Assumptions`
 
 ## Формат ответа
 
 - **Handoff** по шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
 - В `Changes` — список файлов/функций и ключевые правки
-- В `Evidence` — тесты/проверки или `не запускалось`
+- В `Facts` — что проверено и источники (файлы/команды/логи)
+- В `Assumptions` — непроверенное с пометкой `Risks if false`
 - В `Risks` — 1–3 пункта (или `нет`)
 
 ## Запреты

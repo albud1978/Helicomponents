@@ -118,7 +118,7 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     
     return compute_limiter_inline(FLAMEGPU, sne, ppr, ll, oh, idx, current_day);
 }
@@ -291,7 +291,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8, flamegpu::MessageNone, flam
     // DISABLED (state5-unused): FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 1u);
     FLAMEGPU->agent_out.setVariable<unsigned short>(
         "limiter",
-        compute_limiter_inline(FLAMEGPU, sne_new, ppr_new, ll, oh, new_idx, prev_day)
+        compute_limiter_inline(
+            FLAMEGPU,
+            sne_new,
+            ppr_new,
+            ll,
+            oh,
+            new_idx,
+            FLAMEGPU->environment.getProperty<unsigned int>("current_day")
+        )
     );
     
     return flamegpu::ALIVE;
@@ -447,7 +455,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8_mi8, flamegpu::MessageNone, 
     // DISABLED (state5-unused): FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 1u);
     FLAMEGPU->agent_out.setVariable<unsigned short>(
         "limiter",
-        compute_limiter_inline(FLAMEGPU, sne, ppr, ll, oh, new_idx, prev_day)
+        compute_limiter_inline(
+            FLAMEGPU,
+            sne,
+            ppr,
+            ll,
+            oh,
+            new_idx,
+            FLAMEGPU->environment.getProperty<unsigned int>("current_day")
+        )
     );
     
     return flamegpu::ALIVE;

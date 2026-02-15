@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-INV-8: sne/ppr frozen в storage (status_id=6).
+INV-9: limiter=0 в ops => агент выходит из ops на этом же шаге.
 
-Для агентов, находящихся в storage на двух последовательных шагах,
-sne и ppr не должны меняться.
+Проверяет: если limiter=0 и status_id=2, то на СЛЕДУЮЩЕМ шаге
+агент НЕ должен быть в status_id=2.
 """
 import argparse
 import re
@@ -28,7 +28,7 @@ def print_result(name: str, passed: bool, details) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="INV-8: storage frozen")
+    parser = argparse.ArgumentParser(description="INV-9: limiter=0 => exit ops")
     parser.add_argument("--version-id", required=True, type=int, help="version_id")
     parser.add_argument(
         "--version-date", type=int, default=None,
@@ -52,53 +52,50 @@ def main() -> int:
     SELECT count()
     FROM (
         SELECT
-            aircraft_number, day_u16, status_id, sne, ppr,
-            lagInFrame(sne) OVER w AS prev_sne,
-            lagInFrame(ppr) OVER w AS prev_ppr,
-            lagInFrame(status_id) OVER w AS prev_st,
-            lagInFrame(day_u16, 1, 0) OVER w AS prev_day
+            aircraft_number, day_u16, status_id, limiter, sne, ll, ppr, oh,
+            leadInFrame(status_id) OVER w AS next_st,
+            leadInFrame(day_u16, 1, 0) OVER w AS next_day
         FROM {table}
         WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
         WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
     )
-    WHERE status_id = 6
-      AND prev_st = 6
-      AND prev_day > 0
-      AND (sne != prev_sne OR ppr != prev_ppr)
+    WHERE status_id = 2
+      AND limiter = 0
+      AND next_st = 2
+      AND next_day > 0
     """
     violations = client.execute(count_query, params)[0][0]
     details = [f"violations={violations}"]
 
     if violations:
         sample_query = f"""
-        SELECT aircraft_number, day_u16, sne, prev_sne, ppr, prev_ppr
+        SELECT aircraft_number, day_u16, sne, ll, ppr, oh, next_st
         FROM (
             SELECT
-                aircraft_number, day_u16, status_id, sne, ppr,
-                lagInFrame(sne) OVER w AS prev_sne,
-                lagInFrame(ppr) OVER w AS prev_ppr,
-                lagInFrame(status_id) OVER w AS prev_st,
-                lagInFrame(day_u16, 1, 0) OVER w AS prev_day
+                aircraft_number, day_u16, status_id, limiter, sne, ll, ppr, oh,
+                leadInFrame(status_id) OVER w AS next_st,
+                leadInFrame(day_u16, 1, 0) OVER w AS next_day
             FROM {table}
             WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
             WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
         )
-        WHERE status_id = 6
-          AND prev_st = 6
-          AND prev_day > 0
-          AND (sne != prev_sne OR ppr != prev_ppr)
+        WHERE status_id = 2
+          AND limiter = 0
+          AND next_st = 2
+          AND next_day > 0
         ORDER BY day_u16
         LIMIT 5
         """
         rows = client.execute(sample_query, params)
-        details.append("top5 sample (acn, day, sne/prev_sne, ppr/prev_ppr):")
-        for acn, day, sne, prev_sne, ppr, prev_ppr in rows:
+        details.append("top5 sample (acn, day, sne, ll, ppr, oh, next_status):")
+        for acn, day, sne, ll, ppr, oh, next_st in rows:
             details.append(
-                f"  acn={acn}, day={day}, sne={sne}/{prev_sne}, ppr={ppr}/{prev_ppr}"
+                f"  acn={acn}, day={day}, sne={sne}, ll={ll}, "
+                f"ppr={ppr}, oh={oh}, next_status={next_st}"
             )
 
     passed = violations == 0
-    print_result("INV-8 storage frozen", passed, details)
+    print_result("INV-9 limiter exit ops", passed, details)
     return 0 if passed else 1
 
 

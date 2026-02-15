@@ -127,7 +127,7 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     
     return compute_limiter_inline(FLAMEGPU, sne, ppr, ll, oh, idx, current_day);
 }
@@ -221,7 +221,7 @@ COND_REPAIR_EXIT = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_repair_exit) {
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
-    return (exit_date > 0u && current_day >= exit_date);
+    return (current_day >= exit_date);
 }
 """
 
@@ -528,7 +528,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_to_ops_v7, flamegpu::MessageNone, flamegpu::Me
     FLAMEGPU->setVariable<unsigned int>("status_id", 2u);
     FLAMEGPU->setVariable<unsigned short>(
         "limiter",
-        compute_limiter_inline(FLAMEGPU, sne, ppr_new, ll, oh, idx, prev_day)
+        compute_limiter_inline(
+            FLAMEGPU,
+            sne,
+            ppr_new,
+            ll,
+            oh,
+            idx,
+            FLAMEGPU->environment.getProperty<unsigned int>("current_day")
+        )
     );
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
     if (group_by == 1u) {
@@ -583,7 +591,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_v7, flamegpu::MessageNone, flamegpu:
     FLAMEGPU->setVariable<unsigned int>("status_id", 2u);
     FLAMEGPU->setVariable<unsigned short>(
         "limiter",
-        compute_limiter_inline(FLAMEGPU, sne, ppr_after, ll, oh, idx, prev_day)
+        compute_limiter_inline(
+            FLAMEGPU,
+            sne,
+            ppr_after,
+            ll,
+            oh,
+            idx,
+            FLAMEGPU->environment.getProperty<unsigned int>("current_day")
+        )
     );
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
     if (group_by == 1u) {{

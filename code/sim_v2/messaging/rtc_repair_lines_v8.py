@@ -8,9 +8,16 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import pyflamegpu as fg
+from model_build import MAX_EXPORT_STEPS, RL_BUF_SIZE, REPAIR_LINES_MAX
 
-# Максимум ремонтных линий (MacroProperty размер)
-REPAIR_LINES_MAX = 64
+
+def setup_rl_export_buffers(env):
+    """Объявление буферов экспорта RepairLine."""
+    env.newMacroPropertyUInt("rl_buf_free_days", RL_BUF_SIZE)
+    env.newMacroPropertyUInt("rl_buf_acn", RL_BUF_SIZE)
+    env.newMacroPropertyUInt("rl_buf_rt", RL_BUF_SIZE)
+    mem_mb = 3 * RL_BUF_SIZE * 4 / (1024 * 1024)
+    print(f"  ✅ RepairLine Export: 3 буфера × {RL_BUF_SIZE} = {mem_mb:.1f} МБ GPU")
 
 # RTC_REPAIR_LINE_SYNC = f"""
 # FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_sync_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -62,6 +69,37 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_write_v8, flamegpu::MessageNone, flamegp
     auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
     mp_days[line_id].exchange(free_days);
     mp_acn[line_id].exchange(acn);
+    return flamegpu::ALIVE;
+}}
+"""
+
+RTC_REPAIR_LINE_EXPORT = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_export_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int step = FLAMEGPU->getStepCounter();
+    if (step >= {MAX_EXPORT_STEPS}u) return flamegpu::ALIVE;
+    
+    const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("line_id");
+    if (line_id >= {REPAIR_LINES_MAX}u) return flamegpu::ALIVE;
+    
+    const unsigned int offset = step * {REPAIR_LINES_MAX}u + line_id;
+    
+    auto buf_fd = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_free_days");
+    auto buf_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_acn");
+    auto buf_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_rt");
+    
+    // free_days — из MacroProperty (SSoT, обновляется WRITE слоем)
+    auto mp_fd = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    buf_fd[offset].exchange(mp_fd[line_id]);
+    
+    // aircraft_number — из MacroProperty (SSoT: обновляется P2/P3 commit через CAS)
+    // Agent variable НЕ синхронизирован (LineAssignment message не реализован)
+    auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    buf_acn[offset].exchange(mp_acn[line_id]);
+    
+    // repair_time из MacroProperty (per-line)
+    auto mp_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
+    buf_rt[offset].exchange(mp_rt[line_id]);
+    
     return flamegpu::ALIVE;
 }}
 """
@@ -154,6 +192,16 @@ def register_repair_line_assign_for_repair_exit(model: fg.ModelDescription, heli
     fn.setEndState("repair")
     layer.addAgentFunction(fn)
     print("  ✅ V8: RepairLine assign (repair) слой зарегистрирован")
+
+
+def register_repair_line_export_layer(model: fg.ModelDescription, repair_line_agent: fg.AgentDescription):
+    """Слой экспорта RepairLine в MacroProperty буферы."""
+    layer = model.newLayer("v8_repair_line_export")
+    fn = repair_line_agent.newRTCFunction("rtc_repair_line_export_v8", RTC_REPAIR_LINE_EXPORT)
+    fn.setInitialState("default")
+    fn.setEndState("default")
+    layer.addAgentFunction(fn)
+    print("  ✅ V8: RepairLine export слой зарегистрирован")
 
 def register_repair_line_apply_assignment(model: fg.ModelDescription, repair_line_agent: fg.AgentDescription):
     """Слой применения назначений линий (LineAssignment)"""

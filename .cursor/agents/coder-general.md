@@ -26,13 +26,16 @@ description: Разработчик общего кода (не FLAME GPU). Ис
 1. Прочитай `config/capsules_manifest.json` → выбери релевантные капсулы → прочитай их для фокусного контекста
 2. Соблюдай правила проекта и ограничения
 3. Не трогай RTC/GPU код — это зона `coder-flame`
-4. Тесты запускай только по явному запросу; иначе фиксируй причину в `Evidence`
+4. Тесты запускай только по явному запросу; иначе фиксируй причину в `Facts` или `Assumptions`
+5. В начале фазы записывай context в Agent KG (`--write-context --context-type phase_start --agent coder-general`)
+6. В конце фазы обязательно записывай handoff в Agent KG (`--write-handoff`) с `TraceID`, `PlanStepID`, `Facts`, `Assumptions`
 
 ## Формат ответа
 
 - **Handoff** по шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
 - В `Changes` — список файлов/функций и ключевые правки
-- В `Evidence` — тесты/проверки или `не запускалось`
+- В `Facts` — что проверено и источники (файлы/команды/логи)
+- В `Assumptions` — непроверенное с пометкой `Risks if false`
 - В `Risks` — 1–3 пункта (или `нет`)
 
 ## Запреты
