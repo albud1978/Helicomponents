@@ -220,6 +220,14 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 - **postToolUseFailure → connection_fail_set.py**: ставит флаг при падении Shell/MCP.
 - **preToolUse → connection_fail_block.py**: блокирует tool-вызовы при connection fail.
 
+### Pre-Close Enforcement Checklist (обязательно)
+Перед `--close-workflow` должны выполняться все пункты:
+1. Есть handoff от `governance-compliance` для текущего `workflow_id`.
+2. Есть handoff от `docs-curator` для текущего `workflow_id`.
+3. В этих handoff заполнены `trace_id` и `plan_step_id`.
+4. Для high-risk задач заполнен `ApprovalGate` (`id/status/source`) в handoff оркестратора.
+5. Для high-risk задач в handoff оркестратора заполнен `DriftCheck`.
+
 ### Self-check оркестратора (обязательно)
 Перед КАЖДЫМ вызовом Write, StrReplace или Shell оркестратор ОБЯЗАН выполнить проверку:
 1. Путь содержит `code/**` или `tools/**`?

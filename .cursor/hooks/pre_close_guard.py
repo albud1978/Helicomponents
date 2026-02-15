@@ -12,7 +12,7 @@ import re
 import shlex
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 
 REQUIRED_AGENTS = ("governance-compliance", "docs-curator")
@@ -61,11 +61,14 @@ def _load_agent_kg(repo_root: Path) -> Dict[str, object]:
         return json.load(f)
 
 
-def _missing_required_handoffs(kg_data: Dict[str, object], workflow_id: str) -> List[str]:
-    found = set()
+def _latest_required_handoffs(
+    kg_data: Dict[str, object], workflow_id: str
+) -> Tuple[Dict[str, Dict[str, object]], List[str]]:
+    """Возвращает последние handoff по обязательным агентам и список отсутствующих."""
+    latest: Dict[str, Dict[str, object]] = {}
     handoffs = kg_data.get("handoffs", [])
     if not isinstance(handoffs, list):
-        return list(REQUIRED_AGENTS)
+        return latest, list(REQUIRED_AGENTS)
 
     for item in handoffs:
         if not isinstance(item, dict):
@@ -73,10 +76,31 @@ def _missing_required_handoffs(kg_data: Dict[str, object], workflow_id: str) -> 
         if item.get("workflow_id") != workflow_id:
             continue
         agent = item.get("agent")
-        if agent in REQUIRED_AGENTS:
-            found.add(agent)
+        if agent not in REQUIRED_AGENTS:
+            continue
+        current = latest.get(agent)
+        if current is None:
+            latest[agent] = item
+            continue
+        if (item.get("created_at") or "") > (current.get("created_at") or ""):
+            latest[agent] = item
 
-    return [agent for agent in REQUIRED_AGENTS if agent not in found]
+    missing = [agent for agent in REQUIRED_AGENTS if agent not in latest]
+    return latest, missing
+
+
+def _invalid_trace_fields(handoffs_by_agent: Dict[str, Dict[str, object]]) -> Dict[str, List[str]]:
+    """Проверяет обязательные поля трассировки в handoff."""
+    invalid: Dict[str, List[str]] = {}
+    for agent, handoff in handoffs_by_agent.items():
+        missing_fields: List[str] = []
+        if not str(handoff.get("trace_id") or "").strip():
+            missing_fields.append("trace_id")
+        if not str(handoff.get("plan_step_id") or "").strip():
+            missing_fields.append("plan_step_id")
+        if missing_fields:
+            invalid[agent] = missing_fields
+    return invalid
 
 
 def _deny(reason: str) -> None:
@@ -128,13 +152,25 @@ def main() -> None:
         )
         return
 
-    missing = _missing_required_handoffs(kg_data, workflow_id)
+    handoffs_by_agent, missing = _latest_required_handoffs(kg_data, workflow_id)
     if missing:
         missing_text = ", ".join(missing)
         _deny(
             "Закрытие workflow заблокировано: отсутствуют обязательные handoff "
             f"для {workflow_id}: {missing_text}. "
             "Сначала получите и запишите handoff, затем повторите --close-workflow."
+        )
+        return
+
+    invalid = _invalid_trace_fields(handoffs_by_agent)
+    if invalid:
+        details = "; ".join(
+            f"{agent}: {', '.join(fields)}" for agent, fields in invalid.items()
+        )
+        _deny(
+            "Закрытие workflow заблокировано: в обязательных handoff не заполнены "
+            f"поля трассировки для {workflow_id}: {details}. "
+            "Сначала переоформите handoff с trace_id и plan_step_id."
         )
         return
 

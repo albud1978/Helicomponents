@@ -1,5 +1,27 @@
 # Changelog
 
+## [15-02-2026] - Multiagent settings minimal v1: governance + viewer
+
+### Изменения
+- `.cursor/hooks/pre_close_guard.py`: усилена проверка перед `--close-workflow` — кроме handoff от `governance-compliance` и `docs-curator` обязательны непустые `trace_id` и `plan_step_id` в последних handoff этих агентов.
+- `.cursor/agents/governance-compliance.md`: уточнён high-risk чеклист:
+  - `ApprovalGate` должен быть заполнен полностью (`id/status/source`);
+  - `DriftCheck` в orchestrator handoff обязателен.
+- `.cursor/rules/90_multiagent_workflow.mdc`: добавлен `Pre-Close Enforcement Checklist` (операционный стандарт перед закрытием workflow).
+- `.cursor/agents/orchestrator.md` и `.cursor/hooks/orchestrator_guard.py`: синхронизированы формулировки enforcement по pre-close.
+- `tools/agent_kg_viewer/build_agent_kg_viewer.py`: расширена визуализация:
+  - карточки handoff показывают `trace_id`, `plan_step_id`, `approval_*`, `drift_check`;
+  - добавлены секции `WorkflowTrace`, `GovernanceGates`, `RLMReuse` (по `capsules_manifest.json` + упоминаниям в handoff).
+- Сгенерирован `tools/agent_kg_viewer/index.html` новой версии viewer.
+
+### Контекст
+Выполнен минимальный пакет системных правок поверх существующего каркаса: без изменения схемы `agent_kg.json`, без внешних сервисов и без правок доменной логики симуляции.
+
+### Ревью/Валидация
+- `python3 -m py_compile` для обновлённых hooks/viewer — OK.
+- Генерация `agent_kg_viewer/index.html` — OK.
+- Lint diagnostics для изменённых файлов — без ошибок.
+
 ## [15-02-2026] - TEMP-1/TEMP-4: адаптация валидации ремонта Day0
 
 ### Изменения
