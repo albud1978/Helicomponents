@@ -73,7 +73,7 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 | Файл | Описание |
 |------|----------|
 | **`.cursor/rules/`** | Модульные правила разработки для Cursor AI |
-| **`.cursor/agents/`** | Субагенты проекта (coder-flame, coder-general, reviewer-flame, validator-judge, capsule-builder, analyst-sql-graph, governance-compliance) |
+| **`.cursor/agents/`** | Субагенты проекта (coder-flame, coder-general, reviewer-flame, validator-judge, capsule-builder, analyst-sql-graph, governance-compliance, docs-curator) |
 | `docs/backlog.md` | Короткие идеи на будущее (формат и правила внутри файла) |
 | `docs/migration.md` | Промт для новых разработчиков |
 | `docs/limiter_v8_capsule.md` | Контекстная капсула LIMITER V8 (handoff) |

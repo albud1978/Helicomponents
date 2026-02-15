@@ -61,6 +61,8 @@ description: Ревьюер FLAME GPU/CUDA кода. Вызывай для code 
 
 ### Handoff
 - По шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
+- В начале фазы записывать context в Agent KG (`--write-context --context-type phase_start --agent reviewer-flame`)
+- В конце фазы обязательно писать `--write-handoff` с `TraceID`, `PlanStepID`, `Facts`, `Assumptions`
 
 ## Запреты
 

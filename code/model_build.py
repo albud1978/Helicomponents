@@ -29,6 +29,10 @@ MAX_SIZE = MAX_FRAMES * (MAX_DAYS + 1)  # 400 * 4001 = 1,600,400
 MAX_EXPORT_STEPS = 500   # Максимум шагов симуляции для MP2-буферов (типично 250-300)
 MP2_BUF_SIZE = MAX_FRAMES * MAX_EXPORT_STEPS  # 400 * 500 = 200,000
 
+# RepairLine Export: буферы для записи состояния ремонтных линий на каждом шаге
+REPAIR_LINES_MAX = 64   # Максимум ремонтных линий (согласовано с rtc_repair_lines_v8.py)
+RL_BUF_SIZE = REPAIR_LINES_MAX * MAX_EXPORT_STEPS  # 64 * 500 = 32,000
+
 def set_max_frames_from_data(frames_count: int):
     """
     Логирует реальное количество агентов, но НЕ изменяет MAX_FRAMES.

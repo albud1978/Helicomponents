@@ -9,6 +9,9 @@
     ],
     "preToolUse": [
       {
+        "command": "python3 .cursor/hooks/pre_close_guard.py"
+      },
+      {
         "command": "python3 .cursor/hooks/connection_fail_block.py"
       }
     ],

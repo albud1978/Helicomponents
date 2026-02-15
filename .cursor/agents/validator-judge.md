@@ -44,7 +44,9 @@ description: Валидатор результатов симуляции. SQL-f
 
 ## Минимальные проверки
 - Выполнять проверки из `config/transitions/invariants.json` (INV-*, TEMP-*)
-- Если часть проверок невозможна без полного пайплайна — фиксировать это в `Evidence`
+- Если часть проверок невозможна без полного пайплайна — фиксировать это в `Facts` или `Assumptions`
+- В начале фазы записывать context в Agent KG (`--write-context --context-type phase_start --agent validator-judge`)
+- В конце фазы обязательно записывать handoff в Agent KG (`--write-handoff`) с `TraceID`, `PlanStepID`, `Facts`, `Assumptions`
 
 ## Формат ответа
 
@@ -72,6 +74,8 @@ SELECT ... FROM sim_masterv2_msg WHERE ...
 
 ### Handoff
 - По шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
+- В `Facts` указывать SQL/скрипт/таблицу и фактический результат
+- В `Assumptions` выносить только непроверяемые допущения с `Risks if false`
 
 ## Запреты
 

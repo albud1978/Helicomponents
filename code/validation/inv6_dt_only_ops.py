@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-INV-1: sne <= ll в operations.
+INV-6: dt > 0 только в operations.
 """
 import argparse
 import re
@@ -25,7 +25,7 @@ def print_result(name: str, passed: bool, details) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="INV-1: sne <= ll в operations")
+    parser = argparse.ArgumentParser(description="INV-6: dt > 0 только в ops")
     parser.add_argument("--version-id", required=True, type=int, help="version_id")
     parser.add_argument(
         "--version-date",
@@ -52,8 +52,8 @@ def main() -> int:
     SELECT count()
     FROM {table}
     WHERE version_id = %(vid)s{vd_filter}
-      AND status_id = 2
-      AND sne > ll
+      AND status_id != 2
+      AND daily_today_u32 > 0
       AND group_by IN (1, 2)
     """
     violations = client.execute(count_query, params)[0][0]
@@ -64,30 +64,28 @@ def main() -> int:
         SELECT
             aircraft_number,
             day_u16,
-            sne,
-            ll,
-            (sne - ll) AS exceed,
-            limiter,
+            status_id,
+            pre_status_id,
             daily_today_u32
         FROM {table}
         WHERE version_id = %(vid)s{vd_filter}
-          AND status_id = 2
-          AND sne > ll
+          AND status_id != 2
+          AND daily_today_u32 > 0
           AND group_by IN (1, 2)
-        ORDER BY exceed DESC
+        ORDER BY daily_today_u32 DESC, day_u16
         LIMIT 10
         """
         rows = client.execute(sample_query, params)
-        details.append("top10 sample (acn, day, sne, ll, exceed, limiter, dt):")
+        details.append("top10 sample (acn, day, status, pre_status, dt):")
         for row in rows:
-            acn, day, sne, ll, exceed, limiter, dt = row
+            acn, day, status_id, pre_status_id, dt = row
             details.append(
-                f"  acn={acn}, day={day}, sne={sne}, ll={ll}, "
-                f"exceed={exceed}, limiter={limiter}, dt={dt}"
+                f"  acn={acn}, day={day}, status_id={status_id}, "
+                f"pre_status_id={pre_status_id}, dt={dt}"
             )
 
     passed = violations == 0
-    print_result("INV-1 sne<=ll in ops", passed, details)
+    print_result("INV-6 dt only ops", passed, details)
     return 0 if passed else 1
 
 

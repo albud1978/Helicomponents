@@ -15,7 +15,11 @@ AGENT_MESSAGE = (
     "Оркестратор НЕ пишет код в code/** и tools/**. "
     "Для изменений в code/ и tools/ — используй Task tool "
     "для делегирования coder-flame или coder-general. "
-    "Перед каждым Write/StrReplace/Shell проверяй путь."
+    "Перед каждым Write/StrReplace/Shell проверяй путь. "
+    "Agent KG ведется write-through: dispatch -> phase_start -> --write-handoff -> --close-workflow. "
+    "Перед make sync-domain-graph всегда запроси ApprovalGate у человека (с W_<workflow_id>) "
+    "и получи governance-compliance verdict. "
+    "High-risk закрывается только после governance-compliance и docs-curator."
 )
 
 

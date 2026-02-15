@@ -1,5 +1,191 @@
 # Changelog
 
+## [15-02-2026] - TEMP-1/TEMP-4: адаптация валидации ремонта Day0
+
+### Изменения
+- `code/validation/temp1_repair_duration.py`: адаптирован для Day0 repair agents.
+  - Day0 агенты (pre_status=4, status=4 на min_day): expected = remaining = repair_time - repair_days.
+  - Агенты, вышедшие из ремонта на day 0 (pre_status=4, status≠4), исключены из проверки.
+  - Runtime exits: repair_days при выходе должен быть <= tolerance.
+  - Семантика: repair_days в heli_pandas = elapsed (уже прошедшее время).
+- `config/transitions/invariants.json` v14: TEMP-1 → PASS, TEMP-4 → PASS.
+- Ревью: не требуется (скрипт валидации, без GPU-кода).
+- Валидация: `temp1_repair_duration.py` + `temp4_no_infinite_repair.py` на обоих датасетах.
+
+### Контекст
+TEMP-1 ранее FAIL из-за неверной формулы (сравнивал с repair_days=elapsed вместо remaining=repair_time-repair_days). TEMP-4 ранее FAIL из-за артефактов отключённого постпроцессинга (фантомные status_id=4 на 3000+ дней).
+
+## [15-02-2026] - Governance settings sync (боевой контур)
+
+### Изменения
+- `.cursor/rules/90_multiagent_workflow.mdc` синхронизирован с текущей governance-логикой:
+  - канонический цикл расширен до `... -> Governance -> Docs -> Capsule -> Close`;
+  - уточнены поля лога коммуникации (`prompt_len`, `workflow_id`);
+  - в Hooks секции добавлены явные `connection_fail_clear.py` и `pre_close_guard.py`;
+  - зафиксирован single-active-worker и write-through цикл (`dispatch -> phase_start -> handoff`);
+  - обновлён operational цикл взаимодействия orchestrator/subagents через Agent KG.
+- `.cursor/hooks/pre_close_guard.py` (новый): жёсткий preToolUse guard, блокирует `--close-workflow`, если в `config/agent_kg.json` нет handoff от `governance-compliance` и `docs-curator`.
+- `.cursor/agents/governance-compliance.md`: термин `Evidence quality` заменён на `Facts quality`.
+- `.cursor/hooks/orchestrator_guard.py`: reinforcement усилен требованиями
+  - обязательного write-through (`dispatch -> phase_start -> --write-handoff -> --close-workflow`);
+  - обязательного `ApprovalGate` перед `make sync-domain-graph`;
+  - обязательного governance/docs verdict для high-risk закрытия.
+
+### Контекст
+Пользователь потребовал перенести обновлённую supervisor-first governance-логику не только в шаблон, но и в текущие рабочие настройки проекта.
+
+### Ревью/Валидация
+- Изменения в правилах/хуках/документации; бизнес-код не затронут.
+
+## [15-02-2026] - Governance execution hardening: write-through KG + docs role + supervisor-state
+
+### Изменения
+- `.cursor/rules/90_multiagent_workflow.mdc`:
+  - Добавлена роль `docs-curator` в реестр subagents и Sequential Pipeline (`... -> Governance -> Docs -> Capsule`).
+  - Усилен протокол графов: write-through для Agent KG (`phase_start`, обязательный handoff между фазами, запрет на переход без handoff).
+  - Для Domain Graph закреплён обязательный human-gate перед `make sync-domain-graph` + проверка через `governance-compliance`.
+  - Добавлены правила supervisor-graph (явные состояния, минимальный state, шаговый budget, эскалация при отсутствии прогресса).
+- Добавлен профиль `.cursor/agents/docs-curator.md` как отдельный владелец документации (`docs/**`, `README.md`, `docs/changelog.md`).
+- Обновлён `.cursor/agents/orchestrator.md`: зафиксирован supervisor-first протокол, обязательный docs verdict в high-risk, запрет на sync Domain Graph без ApprovalGate.
+- Обновлён `.cursor/agents/governance-compliance.md`: добавлены проверки `No self-coding by orchestrator`, graph policy и наличие handoff от `docs-curator`.
+- Профили исполнителей синхронизированы на `Facts/Assumptions` и обязательные записи в Agent KG (`--write-context phase_start` + `--write-handoff`):
+  - `.cursor/agents/coder-flame.md`
+  - `.cursor/agents/coder-general.md`
+  - `.cursor/agents/analyst-sql-graph.md`
+  - `.cursor/agents/validator-judge.md`
+  - `.cursor/agents/reviewer-flame.md`
+  - `.cursor/agents/capsule-builder.md`
+- Усилены governance hooks:
+  - `.cursor/hooks/audit_code_edit.py`: нормализация абсолютных/относительных путей для стабильного логирования правок в `code/` и `tools/`.
+  - `.cursor/hooks/user_comm_audit.py`: улучшено извлечение `workflow_id` (payload + шаблоны `W_*`, `workflow_id=`, `wf:*`).
+  - `.cursor/hooks/orchestrator_guard.py`: reinforcement дополнен обязательным write-through и high-risk gate (`governance-compliance` + `docs-curator`).
+
+### Контекст
+Полевой сигнал: агенты оставляют недостаточно следов в графах, governance подключается поздно, а оркестратор иногда выполняет implementer-функции. Изменения переводят workflow на жёсткую supervisor-state модель с проверяемыми переходами и обязательными артефактами на каждом шаге.
+
+### Ревью/Валидация
+- Изменения в правилах/профилях/hooks; бизнес-код не затронут.
+- Валидация ограничена проверкой конфигурации и синтаксиса Python hooks.
+
+## [15-02-2026] - INV-10: баланс оборота — постпроцессинг отключён
+
+### Изменения
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py`: вызов `_postprocess_promotions` закомментирован (Вариант A). Метод оставлен для истории.
+- `code/validation/inv10_turnover_balance.py`: переписан. Формула: `initial(s) + entries(s) + spawn(s) = exits(s) + final(s)` по всем 6 статусам {1,2,3,4,6,7}. Добавлена проверка transition matrix (LEGAL/ILLEGAL). Initial population по `pre_status_id` (состояние ДО обработки Day0).
+- `config/transitions/invariants.json` v13: INV-10 → PASS.
+
+### Контекст
+Постпроцессинг `_postprocess_promotions` перезаписывал `status_id` (7→4, 1→4) на предыдущих шагах, но не обновлял `pre_status_id`. Это создавало ~1967 фантомных «переходов» 7→4 (один на каждый адаптивный шаг в ремонтном окне) и делало данные внутренне противоречивыми. С отдельной таблицей `sim_repairline_v9` (INV-3) постпроцессинг больше не нужен.
+
+### Найденные баги
+- Initial population по `status_id` (после Day0 processing) давала сдвиг: агенты, перешедшие из repair/ops на первом шаге, не учитывались в начальном подсчёте. Исправлено на `pre_status_id`.
+
+### Результаты
+- INV-10 PASS: D1+D2, 0 balance violations, 0 illegal transitions.
+- Все 10/10 глобальных инвариантов: PASS.
+
+---
+
+## [15-02-2026] - INV-3: RepairLine export pipeline + валидация
+
+### Изменения
+- `code/model_build.py`: добавлены `REPAIR_LINES_MAX=64`, `RL_BUF_SIZE=32000` как единый SSoT для всех модулей.
+- `code/sim_v2/messaging/rtc_repair_lines_v8.py`: добавлены `setup_rl_export_buffers()`, `RTC_REPAIR_LINE_EXPORT` (чтение из MacroProperty SSoT: `repair_line_acn_mp`, `repair_line_free_days_mp`, `repair_line_rt_mp`), `register_repair_line_export_layer()`. `REPAIR_LINES_MAX` унифицирован — импортируется из `model_build`.
+- `code/sim_v2/messaging/rtc_repairline_export.py` (новый): `HF_RepairLineDrain` (чтение GPU-буферов), `interpolate_repairline_daily()` (адаптивные шаги → ежедневная матрица 3650×18), `export_repairline_to_ch()` (DDL + INSERT в `sim_repairline_v9`).
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py`: интеграция (буферы, export слой, drain, CH export после MP2 INSERT, `--drop-table` дропает и `sim_repairline_v9`).
+- `code/validation/inv3_repair_capacity.py`: переписан на `sim_repairline_v9` (`countIf(aircraft_number != 0) per day`).
+- `config/transitions/invariants.json` v12: INV-3 → PASS.
+
+### Архитектура pipeline (единый запуск)
+Весь RepairLine export pipeline выполняется в одном запуске `orchestrator_limiter_v8.py`:
+1. GPU `simulate()` → RTC_REPAIR_LINE_EXPORT записывает MacroProperty-снимки в буферы каждый адаптивный шаг
+2. `HF_RepairLineDrain` → numpy arrays на финальном шаге
+3. `interpolate_repairline_daily()` → ежедневная матрица (3650 × repair_quota)
+4. `export_repairline_to_ch()` → INSERT в `sim_repairline_v9`
+
+Постпроцессинг (шаг 3) необходим: GPU работает в адаптивных шагах, валидация требует ежедневных данных.
+
+### Контекст
+INV-3 ранее проверялся по `status_id=4` в `sim_masterv2_v9`, что давало ложные FAIL (до 25 «одновременных ремонтов» при квоте 18). Причина — Python постпроцессинг ретроспективно создавал status=4 для P2/P3 промоутов, и их repair windows перекрывались. Новая методика: GPU экспортирует MacroProperty `repair_line_acn_mp` (SSoT для занятости линий) каждый адаптивный шаг, Python интерполирует до ежедневной матрицы. INV-3 теперь проверяет реальное состояние RepairLine, а не артефакт.
+
+### Найденные баги
+- `aircraft_number` на RepairLine агентах всегда 0: `LineAssignment` message определена, но не реализована (TODO в `rtc_quota_v8.py`). Исправлено чтением из MacroProperty вместо agent variable.
+
+### Ревью/Валидация
+- reviewer-flame: 0 CRITICAL, замечания исправлены (guard `line_id < REPAIR_LINES_MAX`, унификация констант, явное логирование ошибок).
+- INV-3 PASS: D1 (2025-07-04) max=10, D2 (2025-12-30) max=14, quota=18, 0 violations.
+- Ежедневная матрица: 65,700 строк/датасет, 3650 уникальных дней, 0 пропусков.
+
+### Domain Graph
+- Добавлен RTCLayer `v8_repair_line_export` (order=40, phase=ФАЗА 3.5).
+- Deprecated: `v8_repair_line_sync_pre`, `v8_repair_line_sync_post`.
+
+---
+
+## [14-02-2026] - Пакетная валидация INV-4..INV-10, TEMP-1, TEMP-4
+
+### Изменения
+- Создано 8 валидационных скриптов в `code/validation/`:
+  - `inv4_unsvc_repair_time.py` — переписан на `ROW_NUMBER() + INNER JOIN` (обход ограничений ClickHouse на correlated subqueries в CTE).
+  - `inv5_balance_increments.py` — переписан на пошаговую проверку `sne[N+1] - sne[N] == dt[N+1]` с фильтрацией transition-out артефактов.
+  - `inv6_dt_only_ops.py` — `dt > 0` только при `status_id=2`.
+  - `inv7_dt_eq_mp5.py` — SNE consistency: `sne[N+1] == sne[N] + dt` для последовательных шагов в ops.
+  - `inv8_storage_frozen.py` — `lagInFrame()` вместо deprecated `neighbor()`.
+  - `inv9_limiter_exit.py` — `leadInFrame()` вместо deprecated `neighbor()`.
+  - `inv10_turnover_balance.py` — баланс входов/выходов по статусам {2,3,4,7}.
+  - `temp1_repair_duration.py` — переписан на `repair_days`/`repair_time` из `sim_masterv2_v9`.
+  - `temp4_no_infinite_repair.py` — поиск непрерывных repair-спанов через `lagInFrame`.
+- `config/transitions/invariants.json`: обновлены `last_validated`/`last_result` для всех 10 INV + 2 TEMP.
+- Удалены `TEMP-2` и `TEMP-3` (покрыты `INV-4` и `INV-2` соответственно).
+
+### Контекст
+Первый полный прогон всех инвариантов. Обнаружено: deprecated `neighbor()` в ClickHouse (заменён на `lagInFrame`/`leadInFrame`), ограничения correlated subqueries, несоответствие определений (INV-5 требует пошаговую, а не агрегированную проверку).
+
+### Результаты
+- PASS: INV-1, INV-2, INV-3, INV-4, INV-5, INV-6, INV-7, INV-8, INV-9.
+- FAIL: INV-10 (требует GPU-постпроцессинг 7→4+4→2), TEMP-1 (Day0 агенты), TEMP-4 (застрявшие в repair).
+
+---
+
+## [14-02-2026] - INV-2/INV-1 фиксы: compute_limiter_inline, COND_REPAIR_EXIT, repair lockout
+
+### Изменения
+- `code/sim_v2/messaging/rtc_state_transitions_v7.py`:
+  - **COND_REPAIR_EXIT**: убран guard `exit_date > 0u` — агенты с `exit_date=0` (Day0 repairs) теперь корректно выходят из ремонта.
+  - **compute_limiter_inline**: заменён `prev_day` на `current_day` в вызовах и перегрузке — устранён сдвиг на 1 адаптивный шаг при расчёте лимитера.
+- `code/sim_v2/messaging/rtc_spawn_dynamic_v7.py`: аналогичная замена `prev_day` → `current_day` в `compute_limiter_inline` для spawned агентов.
+- Реверт изменений динамического спавна Mi-17 к рабочему состоянию из коммита `4d264559`.
+- Исправлен lockout ремонтных линий: repair line `free_days` теперь корректно инкрементируется, разблокируя P2/P3 промоуты.
+
+### Контекст
+INV-2 показывал дефицит ops у Mi-17 (до -35 на финальный день) и чрезмерный spawn (50+ вместо 31-33). Корневые причины: (1) `compute_limiter_inline` использовал `prev_day` → лимитер завышался на 1 шаг → ложные INV-1 нарушения (`sne > ll`); (2) `COND_REPAIR_EXIT` блокировал Day0 repairs → стартовые агенты застревали в ремонте навечно; (3) lockout ремонтных линий → P2/P3 не могли продвигать агентов → дефицит ops → компенсировался spawn'ом.
+
+### Найденные баги
+- `compute_limiter_inline(prev_day)` → завышенный лимитер → SNE > LL (INV-1 violation).
+- `exit_date > 0u` guard → Day0 repairs никогда не выходили → бесконечный ремонт.
+- Ремонтные линии не освобождались → P2/P3 заблокированы → каскад: дефицит → чрезмерный spawn.
+
+### Результаты
+- INV-1: PASS (0 violations, 2 датасета).
+- INV-2: PASS (0 violations post-warmup, 2 датасета). Warmup: -1..-6 (ожидаемо).
+- Spawn count Mi-17: нормализовался (31-33).
+
+---
+
+## [13-02-2026] - pre_status_id и active/assembly_trigger в sim_masterv2_v9
+
+### Изменения
+- Добавлена agent variable `pre_status_id` (UInt8): статус агента ДО обработки на текущем шаге. Устанавливается в начале каждого шага через `HF_SyncDayV5` / специализированный RTC-слой.
+- Добавлены agent variables `active_trigger` и `assembly_trigger` (UInt8): маркеры для GPU-постпроцессинга реконструкции ремонтного окна (7→2 и 1→2 через 4).
+- MP2 буферы расширены: `mp2_pre_status_id`, `mp2_active_trigger`, `mp2_assembly_trigger`.
+- `sim_masterv2_v9` DDL обновлён: новые колонки `pre_status_id UInt8`, `active_trigger UInt8`, `assembly_trigger UInt8`.
+- Добавлена MATERIALIZED колонка `day_date` и `PARTITION BY` в `sim_masterv2_v9` (аналогично `sim_masterv2`).
+
+### Контекст
+`pre_status_id` необходим для валидации INV-5 (пошаговая проверка `sne_diff == dt` требует знания, в каком статусе агент был ДО перехода). `active/assembly_trigger` — маркеры для постпроцессинга, который раскрывает прямые переходы 7→2 и 1→2 в полную цепочку через ремонт (7→4→3→2), что является приведением к реальности цифрового двойника.
+
+---
+
 ## [14-02-2026] - Governance hardening: traceable handoff + user communication audit
 
 ### Изменения

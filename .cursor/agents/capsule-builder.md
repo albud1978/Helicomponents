@@ -25,12 +25,15 @@ description: Сборщик/редактор Context Capsule (docs/*_capsule.md)
 6. Не пересказывать доменный архитектурный граф и не делать выводы без источников
 7. Не запускать симуляцию или ETL без явного запроса
 8. После создания/изменения капсулы — **обновить `config/capsules_manifest.json`** (добавить/обновить запись)
+9. В начале фазы записывать context в Agent KG (`--write-context --context-type phase_start --agent capsule-builder`)
+10. В конце фазы обязательно записывать handoff в Agent KG (`--write-handoff`) с `TraceID`, `PlanStepID`, `Facts`, `Assumptions`
 
 ## Формат ответа
 
 - **Handoff** по шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
 - В `Changes` — какие капсулы обновлены и что поменялось
-- В `Evidence` — `lint`/проверки или `не запускалось`
+- В `Facts` — подтверждённые проверки и источники
+- В `Assumptions` — непроверенное с пометкой `Risks if false`
 - В `Risks` — 1–3 пункта (или `нет`)
 
 ## Запреты

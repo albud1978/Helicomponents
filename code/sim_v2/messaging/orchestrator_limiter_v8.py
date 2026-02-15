@@ -379,10 +379,9 @@ import rtc_limiter_optimized
 import rtc_limiter_v5            # Для совместимости
 import rtc_limiter_v8            # V8: deterministic_dates!
 import rtc_mp2_export
+import rtc_repairline_export
 from components.agent_population import AgentPopulationBuilder
-
-# Максимум ремонтных линий (MacroProperty размер)
-REPAIR_LINES_MAX = 64
+from model_build import REPAIR_LINES_MAX
 
 
 class LimiterV8Orchestrator:
@@ -568,6 +567,9 @@ class LimiterV8Orchestrator:
         # MP2 Export: буферы для per-agent per-step экспорта
         rtc_mp2_export.setup_mp2_buffers(self.base_model.env)
         
+        # RepairLine Export: буферы для per-line per-step экспорта
+        rtc_repair_lines_v8.setup_rl_export_buffers(self.base_model.env)
+        
         # HF для инициализации mp5_cumsum
         hf_init_cumsum = HF_InitMP5Cumsum(self.mp5_cumsum, self.frames, self.days)
         layer_init = self.model.newLayer("layer_init_mp5_cumsum")
@@ -660,6 +662,11 @@ class LimiterV8Orchestrator:
             self.model, self.base_model.repair_line_agent
         )
         
+        # RepairLine Export: запись состояния в буферы каждый шаг
+        rtc_repair_lines_v8.register_repair_line_export_layer(
+            self.model, self.base_model.repair_line_agent
+        )
+        
         # Синхронизация RepairLine после квотирования (deprecated)
         # rtc_repair_lines_v8.register_repair_line_sync_post_quota(
         #     self.model, self.base_model.repair_line_agent
@@ -726,6 +733,11 @@ class LimiterV8Orchestrator:
         total_agents_with_spawn = self.frames + dynamic_reserve_mi17 + dynamic_reserve_mi8
         self.hf_mp2_drain = rtc_mp2_export.register_mp2_drain(
             self.model, self.end_day, total_agents_with_spawn
+        )
+        
+        # RepairLine Drain: чтение буферов на финальном шаге
+        self.hf_rl_drain = rtc_repairline_export.register_repairline_drain(
+            self.model, self.end_day, self.repair_quota
         )
         
         # V8 StepController перенесён в layer_step_controller (перед QM)
@@ -853,12 +865,16 @@ class LimiterV8Orchestrator:
             f"(base={self.frames} + spawn={total_export_agents - self.frames})"
         )
         
-        # Постпроцессинг P2/P3 промоутов
-        t_pp = time.perf_counter()
-        pp_count = self._postprocess_promotions(fields, days, num_steps, total_export_agents)
-        pp_time = time.perf_counter() - t_pp
-        if pp_count > 0:
-            print(f"   📦 Постпроцессинг: {pp_count} записей модифицировано ({pp_time:.2f}с)")
+        # [2026-02-15] Постпроцессинг P2/P3 отключён (Вариант A).
+        # Ремонты отслеживаются в sim_repairline_v9.
+        # Постпроцессинг ломал INV-10: перезаписывал status_id (7→4, 1→4)
+        # без обновления pre_status_id → внутренне противоречивые данные.
+        # Метод _postprocess_promotions оставлен для истории.
+        # t_pp = time.perf_counter()
+        # pp_count = self._postprocess_promotions(fields, days, num_steps, total_export_agents)
+        # pp_time = time.perf_counter() - t_pp
+        # if pp_count > 0:
+        #     print(f"   📦 Постпроцессинг: {pp_count} записей модифицировано ({pp_time:.2f}с)")
         
         # Построение строк для INSERT
         t_build = time.perf_counter()
@@ -915,6 +931,25 @@ class LimiterV8Orchestrator:
             )
             insert_time = time.perf_counter() - t_insert
             print(f"   ✅ INSERT: {len(rows)} строк ({insert_time:.2f}с)")
+        
+        # ═══════════════════════════════════════════════════════════════
+        # RepairLine Export → ClickHouse
+        # ═══════════════════════════════════════════════════════════════
+        rl_data = self.hf_rl_drain.data
+        if rl_data is not None and self.clickhouse_client:
+            t_rl = time.perf_counter()
+            rl_rows = rtc_repairline_export.interpolate_repairline_daily(
+                rl_data, self.repair_quota
+            )
+            rl_interp_time = time.perf_counter() - t_rl
+            print(f"\n📤 RepairLine → ClickHouse: {len(rl_rows)} строк (интерполяция {rl_interp_time:.2f}с)")
+            
+            rtc_repairline_export.export_repairline_to_ch(
+                self.clickhouse_client, rl_rows,
+                version_date_int, version_id
+            )
+        elif rl_data is None:
+            print("⚠️ RepairLine Drain не прочитал данные")
         
         # Step log (из SyncDay)
         step_log = self.hf_sync_v5.get_step_log()
@@ -1480,6 +1515,8 @@ def main():
     if args.drop_table:
         print("🗑️ DROP TABLE sim_masterv2_v9...")
         client.execute("DROP TABLE IF EXISTS sim_masterv2_v9")
+        print("🗑️ DROP TABLE sim_repairline_v9...")
+        client.execute("DROP TABLE IF EXISTS sim_repairline_v9")
     
     # Создание таблицы (упрощённая схема V9/MP2)
     client.execute("""
@@ -1513,6 +1550,10 @@ def main():
         ORDER BY (version_date, version_id, day_u16, idx)
     """)
     print("✅ Таблица sim_masterv2_v9 готова")
+    
+    # RepairLine таблица
+    client.execute(rtc_repairline_export.DDL_REPAIRLINE)
+    print("✅ Таблица sim_repairline_v9 готова")
     
     orchestrator = LimiterV8Orchestrator(
         args.version_date, 

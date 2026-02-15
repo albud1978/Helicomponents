@@ -33,6 +33,40 @@
 - Временное логирование: `debug_step/debug_prev_day/debug_adaptive_days`, `debug_rl_*` и `debug_*_mi17` для диагностики RepairLine/квотирования; состояние линий пишется в `sim_repair_lines_v8` (включая `last_acn/last_day`), слоты и P2‑метрики — в `sim_quota_mgr_v8` (первые 6 слотов Mi‑17). P2/P3 commit при занятом слоте выбирает следующий доступный в пределах слотов.
 - V8 квоты используют локальные копии (rtc_quota_v8_base) и берут target по `current_day`.
 
+## RepairLine Export Pipeline (V9, 2026-02-15)
+
+Ремонтные линии экспортируются в отдельную таблицу `sim_repairline_v9` для валидации INV-3 (ёмкость) и TEMP-1 (длительность).
+
+**Весь pipeline — в одном запуске** `orchestrator_limiter_v8.py`:
+
+```
+GPU simulate()
+  └─ RTC_REPAIR_LINE_EXPORT (каждый адаптивный шаг)
+       → rl_buf_free_days, rl_buf_acn, rl_buf_rt  [MacroProperty буферы]
+
+После simulate():
+  1. HF_RepairLineDrain         → numpy arrays (адаптивные шаги × repair_quota линий)
+  2. interpolate_repairline_daily() → ежедневная матрица (3650 дней × repair_quota)
+  3. export_repairline_to_ch()  → INSERT sim_repairline_v9
+```
+
+**Зачем постпроцессинг:** GPU работает в адаптивных шагах (не ежедневных). Интерполяция `free_days +1/день` и перенос `aircraft_number` создают физически корректную ежедневную матрицу.
+
+**SSoT для данных ремонта — MacroProperty**, не agent variable:
+- `repair_line_acn_mp` — aircraft_number на линии (обновляется P2/P3 через CAS)
+- `repair_line_free_days_mp` — свободные дни (обновляются в WRITE слое)
+- `repair_line_rt_mp` — repair_time для текущего ремонта
+
+**Постпроцессинг основной таблицы отключён** (Вариант A, 2026-02-15):
+- `_postprocess_promotions` закомментирован в `orchestrator_limiter_v8.py`
+- Ремонтные окна (status_id=4) в `sim_masterv2_v9` отсутствуют (кроме Day0 repair agents)
+- Все проверки ремонтов — через `sim_repairline_v9`
+
+**Файлы:**
+- `code/sim_v2/messaging/rtc_repair_lines_v8.py` — GPU RTC + буферы
+- `code/sim_v2/messaging/rtc_repairline_export.py` — drain + interpolation + CH export
+- `code/model_build.py` — константы `REPAIR_LINES_MAX=64`, `RL_BUF_SIZE=32000`
+
 ## Контекстные капсулы (handoff)
 - После приёмки оркестратора обновляется `docs/limiter_v8_capsule.md`.
 - Формат капсулы фиксирован (8 обязательных секций с лимитами).

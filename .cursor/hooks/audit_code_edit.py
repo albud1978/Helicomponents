@@ -9,6 +9,21 @@ from pathlib import Path
 LOG_PATH = Path(__file__).resolve().parent / "code_edit_audit.log"
 WATCHED_PREFIXES = ("code/", "tools/")
 MAX_SNIPPET = 120  # максимум символов old/new в логе
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _normalize_path(raw_path: str) -> str:
+    if not raw_path:
+        return ""
+
+    path_obj = Path(raw_path)
+    if path_obj.is_absolute():
+        try:
+            return path_obj.resolve().relative_to(REPO_ROOT).as_posix()
+        except ValueError:
+            return path_obj.as_posix()
+
+    return raw_path.replace("\\", "/")
 
 
 def main() -> None:
@@ -18,7 +33,7 @@ def main() -> None:
     except json.JSONDecodeError:
         payload = {}
 
-    file_path = payload.get("file_path", "")
+    file_path = _normalize_path(payload.get("file_path", ""))
     if not any(file_path.startswith(p) for p in WATCHED_PREFIXES):
         sys.stdout.write("{}")
         return
