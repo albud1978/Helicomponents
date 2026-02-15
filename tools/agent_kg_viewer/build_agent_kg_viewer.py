@@ -15,6 +15,7 @@
 import json
 import os
 from datetime import datetime, timezone
+from html import escape
 from typing import Any, Dict
 
 
@@ -39,6 +40,167 @@ def _load_optional_json(path: str, fallback: Dict[str, Any]) -> Dict[str, Any]:
         return fallback
 
 
+def _text(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _short(value: Any, max_len: int = 140) -> str:
+    raw = " ".join(_text(value).split())
+    if not raw:
+        return "N/A"
+    if len(raw) <= max_len:
+        return raw
+    return raw[: max_len - 1] + "…"
+
+
+def _latest_event_for_workflow(
+    workflow_id: str, handoffs: list[Dict[str, Any]], contexts: list[Dict[str, Any]]
+) -> Dict[str, str]:
+    wf_handoffs = sorted(
+        (h for h in handoffs if h.get("workflow_id") == workflow_id),
+        key=lambda x: _text(x.get("created_at")),
+        reverse=True,
+    )
+    wf_contexts = sorted(
+        (c for c in contexts if c.get("workflow_id") == workflow_id),
+        key=lambda x: _text(x.get("updated_at") or x.get("created_at")),
+        reverse=True,
+    )
+
+    last_h = wf_handoffs[0] if wf_handoffs else None
+    last_c = wf_contexts[0] if wf_contexts else None
+    h_ts = _text(last_h.get("created_at")) if last_h else ""
+    c_ts = _text(last_c.get("updated_at") or last_c.get("created_at")) if last_c else ""
+
+    if h_ts and (not c_ts or h_ts >= c_ts):
+        return {
+            "type": "handoff",
+            "at": h_ts,
+            "actor": _text(last_h.get("agent")) or "N/A",
+            "stage": _text(last_h.get("plan_step_id")) or "N/A",
+            "summary": _short(
+                _text(last_h.get("changes"))
+                or _text(last_h.get("facts"))
+                or _text(last_h.get("user_goal"))
+                or _text(last_h.get("goal"))
+            ),
+        }
+    if c_ts:
+        return {
+            "type": "context",
+            "at": c_ts,
+            "actor": _text(last_c.get("agent")) or "N/A",
+            "stage": _text(last_c.get("context_type")) or "N/A",
+            "summary": _short(_text(last_c.get("content")), 100),
+        }
+
+    return {"type": "N/A", "at": "N/A", "actor": "N/A", "stage": "N/A", "summary": "N/A"}
+
+
+def _build_server_snapshot(data: Dict[str, Any]) -> str:
+    workflows = data.get("workflows", [])
+    handoffs = data.get("handoffs", [])
+    contexts = data.get("contexts", [])
+    if not isinstance(workflows, list):
+        workflows = []
+    if not isinstance(handoffs, list):
+        handoffs = []
+    if not isinstance(contexts, list):
+        contexts = []
+
+    active = [w for w in workflows if _text(w.get("status")).lower() == "active"]
+    active.sort(key=lambda w: _text(w.get("updated_at")), reverse=True)
+
+    block: list[str] = []
+    block.append('<div class="section">')
+    block.append("<h2>Текущий статус исполнения (server snapshot)</h2>")
+    block.append(
+        '<div class="section-note">Снимок построен при генерации файла из config/agent_kg.json. '
+        "Если JS не исполняется, этот блок остаётся рабочим.</div>"
+    )
+
+    if not active:
+        block.append('<div class="empty">Активных workflow нет</div>')
+    else:
+        block.append('<div class="table-wrap"><table><thead><tr>')
+        block.append(
+            "<th>Workflow</th><th>Phase</th><th>Owner</th><th>LastEvent</th>"
+            "<th>Actor</th><th>Stage</th><th>Summary</th>"
+        )
+        block.append("</tr></thead><tbody>")
+        for w in active:
+            wf_id = _text(w.get("workflow_id"))
+            ev = _latest_event_for_workflow(wf_id, handoffs, contexts)
+            event_label = f"{ev['type']} @ {ev['at']}"
+            block.append("<tr>")
+            block.append(f"<td>{escape(wf_id)}</td>")
+            block.append(f"<td>{escape(_text(w.get('phase')) or 'N/A')}</td>")
+            block.append(f"<td>{escape(_text(w.get('owner')) or 'N/A')}</td>")
+            block.append(f"<td>{escape(event_label)}</td>")
+            block.append(f"<td>{escape(ev['actor'])}</td>")
+            block.append(f"<td>{escape(ev['stage'])}</td>")
+            block.append(f"<td>{escape(ev['summary'])}</td>")
+            block.append("</tr>")
+        block.append("</tbody></table></div>")
+    block.append("</div>")
+
+    all_events: list[Dict[str, str]] = []
+    for h in handoffs:
+        all_events.append(
+            {
+                "ts": _text(h.get("created_at")),
+                "workflow": _text(h.get("workflow_id")) or "N/A",
+                "type": "handoff",
+                "actor": _text(h.get("agent")) or "N/A",
+                "stage": _text(h.get("plan_step_id")) or "N/A",
+                "summary": _short(
+                    _text(h.get("changes"))
+                    or _text(h.get("facts"))
+                    or _text(h.get("user_goal"))
+                    or _text(h.get("goal"))
+                ),
+            }
+        )
+    for c in contexts:
+        all_events.append(
+            {
+                "ts": _text(c.get("updated_at") or c.get("created_at")),
+                "workflow": _text(c.get("workflow_id")) or "N/A",
+                "type": "context",
+                "actor": _text(c.get("agent")) or "N/A",
+                "stage": _text(c.get("context_type")) or "N/A",
+                "summary": _short(_text(c.get("content")), 120),
+            }
+        )
+    all_events = [e for e in all_events if e["ts"]]
+    all_events.sort(key=lambda e: e["ts"], reverse=True)
+    top_events = all_events[:25]
+
+    block.append('<div class="section">')
+    block.append("<h2>Последние взаимодействия агентов (server snapshot)</h2>")
+    if not top_events:
+        block.append('<div class="empty">События взаимодействия отсутствуют</div>')
+    else:
+        block.append('<div class="table-wrap"><table><thead><tr>')
+        block.append("<th>Time</th><th>Workflow</th><th>Type</th><th>Actor</th><th>Stage</th><th>Summary</th>")
+        block.append("</tr></thead><tbody>")
+        for e in top_events:
+            block.append("<tr>")
+            block.append(f"<td>{escape(e['ts'])}</td>")
+            block.append(f"<td>{escape(e['workflow'])}</td>")
+            block.append(f"<td>{escape(e['type'])}</td>")
+            block.append(f"<td>{escape(e['actor'])}</td>")
+            block.append(f"<td>{escape(e['stage'])}</td>")
+            block.append(f"<td>{escape(e['summary'])}</td>")
+            block.append("</tr>")
+        block.append("</tbody></table></div>")
+    block.append("</div>")
+
+    return "".join(block)
+
+
 def build_html(data: Dict[str, Any], capsules_data: Dict[str, Any]) -> str:
     embedded_kg = json.dumps(data, ensure_ascii=False)
     embedded_caps = json.dumps(capsules_data, ensure_ascii=False)
@@ -60,9 +222,19 @@ def build_html(data: Dict[str, Any], capsules_data: Dict[str, Any]) -> str:
     .meta { color: #666; font-size: 12px; margin-bottom: 10px; }
     .section { margin-bottom: 26px; }
     .empty { color: #888; font-style: italic; }
+    .section-note { font-size: 12px; color: #666; margin: 2px 0 10px; }
 
     .grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
     @media (max-width: 1000px) { .grid-two { grid-template-columns: 1fr; } }
+
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+    .status-card {
+      border: 1px solid #ddd; border-radius: 8px; padding: 10px;
+      background: #f5fbff;
+    }
+    .status-title { font-weight: 700; margin-bottom: 6px; }
+    .status-line { font-size: 12px; margin: 3px 0; }
+    .status-key { font-weight: 600; color: #444; }
 
     .workflow-card {
       border: 2px solid #2a5bd7; border-radius: 8px; padding: 12px;
@@ -128,6 +300,7 @@ def build_html(data: Dict[str, Any], capsules_data: Dict[str, Any]) -> str:
     html.append("  <h1>Agent KG Viewer</h1>")
     html.append(f'  <div class="meta">Generated from config/agent_kg.json at {generated_at}</div>')
     html.append('  <div class="meta">Run: python3 tools/agent_kg_viewer/build_agent_kg_viewer.py</div>')
+    html.append(_build_server_snapshot(data))
     html.append('  <div id="app"></div>')
     html.append("  <script>")
     html.append(f"    const KG_DATA = {embedded_kg};")
@@ -176,6 +349,60 @@ def build_html(data: Dict[str, Any], capsules_data: Dict[str, Any]) -> str:
             <div class="workflow-meta">Created: ${esc(w.created_at || '?')} | Updated: ${esc(w.updated_at || '?')}</div>
           </div>`;
       }).join('');
+    }
+
+    function truncateText(text, maxLen = 140) {
+      const raw = String(text || '').replace(/\\s+/g, ' ').trim();
+      if (!raw) return 'N/A';
+      if (raw.length <= maxLen) return raw;
+      return raw.slice(0, maxLen - 1) + '…';
+    }
+
+    function renderExecutionStatus(workflows, handoffs, contexts) {
+      const active = asArray(workflows).filter(w => (w.status || '').toLowerCase() === 'active');
+      if (!active.length) return '<div class="empty">Активных workflow нет</div>';
+
+      return '<div class="status-grid">' + active.map(w => {
+        const wfHandoffs = sortByDateDesc(asArray(handoffs).filter(h => h.workflow_id === w.workflow_id), 'created_at');
+        const wfContexts = sortByDateDesc(asArray(contexts).filter(c => c.workflow_id === w.workflow_id), 'updated_at');
+        const lastHandoff = wfHandoffs[0];
+        const lastContext = wfContexts[0];
+
+        const handoffTs = (lastHandoff && lastHandoff.created_at) ? lastHandoff.created_at : '';
+        const contextTs = (lastContext && (lastContext.updated_at || lastContext.created_at))
+          ? (lastContext.updated_at || lastContext.created_at)
+          : '';
+
+        let latestType = 'N/A';
+        let latestAt = 'N/A';
+        let latestActor = 'N/A';
+        let latestSummary = 'N/A';
+
+        if (handoffTs && (!contextTs || handoffTs >= contextTs)) {
+          latestType = 'handoff';
+          latestAt = handoffTs;
+          latestActor = lastHandoff.agent || 'N/A';
+          latestSummary = `${lastHandoff.agent || '?'} -> ${lastHandoff.next_owner || '?'} | step=${lastHandoff.plan_step_id || 'N/A'}`;
+        } else if (contextTs) {
+          latestType = 'context';
+          latestAt = contextTs;
+          latestActor = lastContext.agent || 'N/A';
+          latestSummary = `${lastContext.context_type || 'N/A'} | ${truncateText(lastContext.content, 100)}`;
+        }
+
+        return `
+          <div class="status-card">
+            <div class="status-title">${esc(w.workflow_id || '')}</div>
+            <div class="status-line"><span class="status-key">Статус:</span> ${esc(w.status || 'N/A')}</div>
+            <div class="status-line"><span class="status-key">Фаза:</span> ${esc(w.phase || 'N/A')}</div>
+            <div class="status-line"><span class="status-key">Текущий владелец:</span> ${esc(w.owner || 'N/A')}</div>
+            <div class="status-line"><span class="status-key">Последнее событие:</span> ${esc(latestType)} @ ${esc(latestAt)}</div>
+            <div class="status-line"><span class="status-key">Кто:</span> ${esc(latestActor)}</div>
+            <div class="status-line"><span class="status-key">Детали:</span> ${esc(latestSummary)}</div>
+            <div class="status-line"><span class="status-key">Goal:</span> ${esc(truncateText(w.goal, 160))}</div>
+          </div>
+        `;
+      }).join('') + '</div>';
     }
 
     function renderHandoffs(handoffs) {
@@ -285,6 +512,57 @@ def build_html(data: Dict[str, Any], capsules_data: Dict[str, Any]) -> str:
       `;
     }
 
+    function renderLatestInteractions(handoffs, contexts, limit = 25) {
+      const handoffEvents = asArray(handoffs).map(h => ({
+        ts: h.created_at || '',
+        workflow: h.workflow_id || '',
+        type: 'handoff',
+        actor: h.agent || 'N/A',
+        stage: h.plan_step_id || 'N/A',
+        summary: truncateText(h.changes || h.facts || h.user_goal || h.goal, 160),
+      }));
+
+      const contextEvents = asArray(contexts).map(c => ({
+        ts: c.updated_at || c.created_at || '',
+        workflow: c.workflow_id || '',
+        type: 'context',
+        actor: c.agent || 'N/A',
+        stage: c.context_type || 'N/A',
+        summary: truncateText(c.content, 160),
+      }));
+
+      const all = [...handoffEvents, ...contextEvents]
+        .filter(e => e.ts)
+        .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
+        .slice(0, limit);
+
+      if (!all.length) return '<div class="empty">События взаимодействия отсутствуют</div>';
+
+      const body = all.map(e => `
+        <tr>
+          <td>${esc(e.ts)}</td>
+          <td>${esc(e.workflow)}</td>
+          <td>${esc(e.type)}</td>
+          <td>${esc(e.actor)}</td>
+          <td>${esc(e.stage)}</td>
+          <td>${esc(e.summary)}</td>
+        </tr>
+      `).join('');
+
+      return `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th><th>Workflow</th><th>Type</th><th>Actor</th><th>Stage</th><th>Summary</th>
+              </tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
     function renderRlmReuse(handoffs, capsulesData) {
       const capsules = asArray((capsulesData || {}).capsules);
       if (!capsules.length) return '<div class="empty">capsules_manifest.json не найден или пуст</div>';
@@ -356,6 +634,16 @@ def build_html(data: Dict[str, Any], capsules_data: Dict[str, Any]) -> str:
       const handoffs = asArray(data.handoffs);
       const contexts = asArray(data.contexts);
       let html = '';
+
+      html += '<div class="section"><h2>Текущий статус исполнения</h2>';
+      html += '<div class="section-note">Активные workflow: текущая фаза, владелец, последнее взаимодействие (handoff/context) из Agent KG.</div>';
+      html += renderExecutionStatus(workflows, handoffs, contexts);
+      html += '</div>';
+
+      html += '<div class="section"><h2>Последние взаимодействия агентов</h2>';
+      html += '<div class="section-note">Лента последних handoff/context событий, отсортированная по времени.</div>';
+      html += renderLatestInteractions(handoffs, contexts, 25);
+      html += '</div>';
 
       html += '<div class="section"><h2>Workflows</h2>';
       html += renderWorkflows(workflows);
