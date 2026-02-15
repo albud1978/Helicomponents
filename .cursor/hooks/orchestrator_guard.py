@@ -17,6 +17,7 @@ AGENT_MESSAGE = (
     "для делегирования coder-flame или coder-general. "
     "Перед каждым Write/StrReplace/Shell проверяй путь. "
     "Agent KG ведется write-through: dispatch -> phase_start -> --write-handoff -> --close-workflow. "
+    "Перед закрытием workflow проверь, что handoff governance/docs содержат trace_id и plan_step_id. "
     "Перед make sync-domain-graph всегда запроси ApprovalGate у человека (с W_<workflow_id>) "
     "и получи governance-compliance verdict. "
     "High-risk закрывается только после governance-compliance и docs-curator."
