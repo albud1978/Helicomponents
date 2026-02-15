@@ -689,7 +689,6 @@ class MessagingIncrementsValidator:
                     count(DISTINCT idx) as ac_count,
                     sum(dt) / 60.0 as total_hours
                 FROM {self.table_expr}
-                FROM {self.table_expr}
                 GROUP BY group_by
             """
         
