@@ -884,6 +884,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
     auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
     auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    auto line_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");
     auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
     auto line_last_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_acn_mp");
     auto line_last_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_day_mp");
@@ -943,6 +944,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
         line_rt[chosen_line].exchange(repair_time);
         line_last_acn[chosen_line].exchange(acn);
         line_last_day[chosen_line].exchange(current_day);
+        line_gb[chosen_line].exchange(group_by);
         FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
@@ -1126,6 +1128,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
     auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
     auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    auto line_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");
     auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
     auto line_last_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_acn_mp");
     auto line_last_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_day_mp");
@@ -1183,6 +1186,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
         line_rt[chosen_line].exchange(repair_time);
         line_last_acn[chosen_line].exchange(acn);
         line_last_day[chosen_line].exchange(current_day);
+        line_gb[chosen_line].exchange(group_by);
         FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);

@@ -543,6 +543,7 @@ class LimiterV8Orchestrator:
         self.base_model.env.newPropertyUInt("repair_quota", self.repair_quota)
         self.base_model.env.newMacroPropertyUInt("repair_line_free_days_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_acn_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_gb_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_rt_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_last_acn_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_last_day_mp", REPAIR_LINES_MAX)
@@ -1461,6 +1462,7 @@ class HF_InitRepairLines(fg.HostFunction):
         
         mp_days = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_free_days_mp")
         mp_acn = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_acn_mp")
+        mp_gb = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_gb_mp")
         mp_rt = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_rt_mp")
         mp_last_acn = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_last_acn_mp")
         mp_last_day = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_last_day_mp")
@@ -1470,6 +1472,7 @@ class HF_InitRepairLines(fg.HostFunction):
             if i >= self.repair_quota:
                 mp_days[i] = 0xFFFFFFFF  # не используется
                 mp_acn[i] = 0
+                mp_gb[i] = 0
                 mp_rt[i] = 0
                 mp_last_acn[i] = 0
                 mp_last_day[i] = 0
@@ -1479,6 +1482,7 @@ class HF_InitRepairLines(fg.HostFunction):
                 rt = self.mi8_rt if gb == 1 else self.mi17_rt
                 mp_days[i] = 0       # repair только начался
                 mp_acn[i] = acn      # линия занята
+                mp_gb[i] = int(gb)   # тип (group_by)
                 mp_rt[i] = rt        # KEY FIX: позволяет auto-free через rt дней
                 mp_last_acn[i] = acn
                 mp_last_day[i] = 0
@@ -1486,6 +1490,7 @@ class HF_InitRepairLines(fg.HostFunction):
             else:
                 mp_days[i] = 1       # свободна с 1
                 mp_acn[i] = 0        # свободна
+                mp_gb[i] = 0
                 mp_rt[i] = 0
                 mp_last_acn[i] = 0
                 mp_last_day[i] = 0

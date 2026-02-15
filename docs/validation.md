@@ -20,3 +20,58 @@
 
 ## Графы знаний
 См. `README.md` → секция "Графы знаний (Neo4j)".
+
+## Операционный runbook (для новых агентов)
+
+Этот документ не дублирует формулы инвариантов. Формулы, severity и mapping `инвариант -> validator` хранятся только в `config/transitions/invariants.json`.
+
+### 1) Подготовка окружения
+
+```bash
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate cuda13
+source config/load_env.sh
+export CUBE_CONFIG_PATH="$PWD/config"
+```
+
+### 2) Правильная последовательность симуляции для двух датасетов
+
+```bash
+# D1: первый датасет с очисткой таблиц
+python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-04 --drop-table
+
+# D2: второй датасет БЕЗ drop
+python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-12-30
+```
+
+### 3) Потоковый массовый прогон валидаций
+
+Актуальный раннер: `code/validation/run_all_stream.py`.
+
+```bash
+# Показать доступные dataset-ключи (YYYYMMDD:version_id)
+python3 code/validation/run_all_stream.py --list-datasets
+
+# Запуск только выбранных датасетов (рекомендуется)
+python3 code/validation/run_all_stream.py --dataset 20250704:1 --dataset 20251230:1
+
+# Альтернатива: запустить все обнаруженные
+python3 code/validation/run_all_stream.py --all-datasets
+```
+
+### 4) Принцип опционального запуска
+
+- Без `--dataset` и без `--all-datasets` раннер валидации не запускает проверки.
+- В этом режиме он только показывает подсказку и список обнаруженных датасетов.
+- Это защищает от случайного автозапуска на новых данных.
+
+### 5) Что делать при новом датасете
+
+1. Сначала прогнать симуляцию с нужным `--version-date`.
+2. Проверить ключ через `--list-datasets` (формат `YYYYMMDD:ID`).
+3. Явно передать этот ключ в `--dataset`.
+
+### 6) Примечание по legacy-раннеру
+
+- `code/validation/run_all.py` оставлен для совместимости.
+- Для новых прогонов использовать `code/validation/run_all_stream.py`, так как он читает актуальный список валидаторов из SSoT (`invariants.json`) и поддерживает потоковый вывод.

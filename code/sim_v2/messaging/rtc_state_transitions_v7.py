@@ -240,10 +240,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_to_svc_v7, flamegpu::MessageNone, flamegpu::M
         const unsigned int best_days = FLAMEGPU->getVariable<unsigned int>("repair_line_day");
         auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, __REPAIR_LINES_MAX__u>("repair_line_free_days_mp");
         auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, __REPAIR_LINES_MAX__u>("repair_line_acn_mp");
+        auto mp_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, __REPAIR_LINES_MAX__u>("repair_line_gb_mp");
         const unsigned int old_days = mp_days[line_id].exchange(0u);
         if (old_days == best_days) {
             const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
+            const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
             mp_acn[line_id].exchange(acn);
+            mp_gb[line_id].exchange(group_by);
         }
         FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
     }

@@ -1,0 +1,174 @@
+[2026-02-15 05:49:34 UTC] conv=a8abe955 gen=77b6a93f file=code/validation/inv10_turnover_balance.py
+  edit[0] old='INV-10: Баланс оборота — входы в статус = выходы из статуса.' new='INV-10: Баланс оборота по статусам.'
+  edit[1] old='Для каждого статуса s in {2,3,4,7}:\n  count(transitions INTO s) == count(transitions OUT OF s) + count(agents_still_in_s' new='Формула для каждого статуса s in {1,2,3,4,6,7}:\n  initial(s) + entries(s) + spawn_entries(s) = exits(s) + final(s)'
+  edit[2] old='Статус 6 (storage) — терминальный, только входы.\nСтатус 1 (inactive) — только выходы (spawn/P3).' new='Где:\n- initial(s): агенты в статусе s на первом шаге (min day_u16)\n- entries(s): переходы INTO s (pre_status_id != statu'
+  edit[3] old='Используем pre_status_id для определения переходов.' new='Дополнительно выводится таблица фактических переходов с LEGAL/ILLEGAL.'
+  edit[4] old='' new='def format_table(headers, rows):\n    if not rows:\n        widths = [len(str(h)) for h in headers]\n        header_line = '
+  edit[5] old='' new='    minmax_query = f"""\n    SELECT min(day_u16) AS min_day, max(day_u16) AS max_day\n    FROM {table}\n    WHERE version_i'
+  edit[6] old='    entries_rows = client.execute(entries_query, params)' new='    entries_rows = client.execute(entries_query, params) if has_data else []'
+  edit[7] old='' new='    spawn_query = f"""\n    SELECT status_id AS s, count() AS spawn_entries\n    FROM {table}\n    WHERE version_id = %(vid'
+  edit[8] old='    exits_rows = client.execute(exits_query, params)' new='    exits_rows = client.execute(exits_query, params) if has_data else []'
+  edit[9] old='    # Агенты, остающиеся в статусе на конец симуляции\n    end_query = f"""\n    SELECT status_id AS s, count() AS cnt\n   ' new='    # Начальные и финальные статусы (по первому/последнему дню)\n    initial_counts = {}\n    final_counts = {}\n    if has'
+  edit[10] old='        GROUP BY aircraft_number, group_by\n    )\n    GROUP BY status_id\n    ORDER BY status_id\n    """\n    end_rows = cl' new='          AND day_u16 = %(min_day)s\n        GROUP BY status_id\n        ORDER BY status_id\n        """\n        initial_ro'
+  edit[11] old='    # Баланс для каждого статуса (кроме 6-terminal и 1-initial)\n    check_states = [2, 3, 4, 7]' new='        final_query = f"""\n        SELECT status_id AS s, count() AS cnt\n        FROM {table}\n        WHERE version_id ='
+  edit[12] old='    details = []' new='    balance_rows = []'
+  edit[13] old='' new='        initial = initial_counts.get(s, 0)'
+  edit[14] old='' new='        spawn = spawn_entries.get(s, 0)'
+  edit[15] old='        still = end_counts.get(s, 0)\n        # Баланс: entries = exits + still_in_state\n        balance = ent - ext - st' new='        final = final_counts.get(s, 0)\n        balance = (initial + ent + spawn) - (ext + final)'
+  edit[16] old='        details.append(\n            f"  status={s}: entries={ent}, exits={ext}, "\n            f"still_at_end={still}, ba' new='        balance_rows.append(\n            [s, initial, ent, spawn, ext, final, balance, "OK" if ok else "FAIL"]'
+  edit[17] old='    # Дополнительно: storage (6) — только входы\n    s6_ent = entries.get(6, 0)\n    s6_still = end_counts.get(6, 0)\n    d' new='    # Таблица переходов с LEGAL/ILLEGAL\n    transitions_query = f"""\n    SELECT pre_status_id AS pre, status_id AS st, c'
+  edit[18] old='    passed = violations == 0' new='    details = []\n    if not has_data:\n        details.append(\n            "no rows for filters: version_id=%s, version_d'
+
+[2026-02-15 05:53:37 UTC] conv=a8abe955 gen=77b6a93f file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        # Постпроцессинг P2/P3 промоутов\n        t_pp = time.perf_counter()\n        pp_count = self._postprocess_promoti' new='        # [2026-02-15] Постпроцессинг P2/P3 отключён (Вариант A).\n        # Ремонты отслеживаются в sim_repairline_v9.\n '
+
+[2026-02-15 05:59:48 UTC] conv=a8abe955 gen=d63189c6 file=code/validation/inv10_turnover_balance.py
+  edit[0] old='        SELECT status_id AS s, count() AS cnt' new='        SELECT pre_status_id AS s, count() AS cnt'
+  edit[1] old='        GROUP BY status_id\n        ORDER BY status_id' new='          AND pre_status_id > 0\n        GROUP BY pre_status_id\n        ORDER BY pre_status_id'
+
+[2026-02-15 07:18:21 UTC] conv=a8abe955 gen=cb085f3e file=code/validation/temp1_repair_duration.py
+  edit[0] old='Проверяет: для каждого непрерывного интервала в status_id=4 (repair),\nдлительность (max_day - min_day) == repair_time аг' new='Логика:\n- Day0 repair agents (pre_status_id=4 на min_day):\n  фактическая длительность ремонта должна соответствовать ini'
+  edit[1] old='    # Находим выходы из repair (pre_status_id=4, status_id != 4)\n    # На момент выхода repair_days = elapsed repair tim' new='    # 1) min_day\n    min_day_query = f"""\n    SELECT min(day_u16)\n    FROM {table}\n    WHERE version_id = %(vid)s{vd_fil'
+  edit[2] old='    # Вариант: проверяем пары entry->exit в repair через row_number\n    query = f"""\n    WITH repair_exits AS (\n        ' new='    # 2) Day0 repair agents: initial repair_days\n    day0_query = f"""\n    SELECT aircraft_number, group_by, repair_days'
+  edit[3] old='    early_count = client.execute(query, params)[0][0]' new='    day0_rows = client.execute(day0_query, {**params, "min_day": min_day})\n    day0_set = {(int(r[0]), int(r[1])) for r '
+  edit[4] old='    # Застрявшие: на последнем шаге status=4, repair_days > repair_time + tolerance\n    stuck_query = f"""\n    SELECT co' new='    # 3) Все выходы из repair\n    all_exits_query = f"""\n    SELECT aircraft_number, group_by, day_u16, repair_days, rep'
+  edit[5] old='    stuck_count = client.execute(stuck_query, params)[0][0]' new='    all_exits = client.execute(all_exits_query, params)'
+  edit[6] old='    violations = early_count + stuck_count' new='    # 4) Классификация выходов\n    tolerance = int(args.tolerance)\n    day0_agents = len(day0_initial)\n    day0_exits = '
+  edit[7] old='        f"tolerance={args.tolerance} days",\n        f"early_exits={early_count} (repair_days < repair_time - tol)",\n    ' new='        f"tolerance={tolerance} days",\n        f"day0_agents={day0_agents}, day0_violations={day0_violations}",\n        '
+  edit[8] old='    if early_count > 0:\n        sample = client.execute(f"""\n        WITH repair_exits AS (\n            SELECT aircraft_' new='    if day0_violations > 0:\n        details.append("day0 violations samples (acn, gb, exit_day, init_rd, duration, new_s'
+  edit[9] old='    if stuck_count > 0:\n        sample2 = client.execute(f"""\n        SELECT aircraft_number, last_repair_days, last_rep' new='    if runtime_violations > 0:\n        details.append("runtime violations samples (acn, gb, day, repair_days, repair_tim'
+
+[2026-02-15 08:50:13 UTC] conv=a8abe955 gen=589e134c file=code/validation/temp1_repair_duration.py
+  edit[0] old='    # 2) Day0 repair agents: initial repair_days' new='    # 2) Day0 repair agents: repair_days (elapsed) + repair_time → remaining'
+  edit[1] old='    SELECT aircraft_number, group_by, repair_days AS initial_repair_days' new='    SELECT aircraft_number, group_by, repair_days, repair_time'
+  edit[2] old='    day0_initial = {(int(r[0]), int(r[1])): int(r[2]) for r in day0_rows}' new='    # remaining_repair = repair_time - repair_days (оставшийся ремонт)\n    day0_remaining = {\n        (int(r[0]), int(r['
+
+[2026-02-15 08:50:21 UTC] conv=a8abe955 gen=589e134c file=code/validation/temp1_repair_duration.py
+  edit[0] old='    day0_agents = len(day0_initial)' new='    day0_agents = len(day0_remaining)'
+
+[2026-02-15 08:50:29 UTC] conv=a8abe955 gen=589e134c file=code/validation/temp1_repair_duration.py
+  edit[0] old='            init_rd = int(day0_initial[key])' new='            remaining = int(day0_remaining[key])'
+  edit[1] old='            if abs(actual_duration - init_rd) > tolerance:' new='            if abs(actual_duration - remaining) > tolerance:'
+  edit[2] old='                        f"initial_repair_days={init_rd}, actual_duration={actual_duration}, "' new='                        f"remaining_repair={remaining}, actual_duration={actual_duration}, "'
+
+[2026-02-15 08:50:35 UTC] conv=a8abe955 gen=589e134c file=code/validation/temp1_repair_duration.py
+  edit[0] old='        details.append("day0 violations samples (acn, gb, exit_day, init_rd, duration, new_status):")' new='        details.append("day0 violations samples (acn, gb, exit_day, remaining, duration, new_status):")'
+
+[2026-02-15 08:50:43 UTC] conv=a8abe955 gen=589e134c file=code/validation/temp1_repair_duration.py
+  edit[0] old='  фактическая длительность ремонта должна соответствовать initial_repair_days (± tolerance).' new='  фактическая длительность ≈ remaining_repair (repair_time - repair_days) (± tolerance).\n  repair_days в heli_pandas = у'
+
+[2026-02-15 08:51:44 UTC] conv=a8abe955 gen=589e134c file=code/validation/temp1_repair_duration.py
+  edit[0] old='    # 2) Day0 repair agents: repair_days (elapsed) + repair_time → remaining' new='    # 2) Day0 repair agents: ещё в ремонте на min_day (pre_status=4 AND status=4)\n    #    Агенты с pre_status=4, status'
+  edit[1] old='' new='      AND status_id = 4'
+
+[2026-02-15 09:23:48 UTC] conv=e29d83df gen=80f4d4fe file=tools/agent_kg_viewer/build_agent_kg_viewer.py
+  edit[0] old='- Текущими workflow и их состояниями\n- Timeline handoff'ов\n- Контекстами' new='- текущими workflow и их состояниями\n- детализацией handoff (trace/plan/approval/drift)\n- секциями WorkflowTrace, Govern'
+  edit[1] old='' new='from typing import Any, Dict'
+  edit[2] old='' new='CAPSULES_JSON = os.path.join(ROOT_DIR, "config", "capsules_manifest.json")'
+  edit[3] old='def escape_html(text: str) -> str:\n    return (\n        text.replace("&", "&amp;")\n        .replace("<", "&lt;")\n       ' new='def _load_json(path: str) -> Dict[str, Any]:\n    with open(path, "r", encoding="utf-8") as f:\n        return json.load(f'
+  edit[4] old='def build_html(data: dict) -> str:\n    embedded = json.dumps(data, ensure_ascii=False)' new='def _load_optional_json(path: str, fallback: Dict[str, Any]) -> Dict[str, Any]:\n    if not os.path.exists(path):\n       '
+  edit[5] old='    html.append("""' new='    html.append(\n        """'
+  edit[6] old='    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; max-width: 1200px; }' new='    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; max-width: 1300px; }'
+  edit[7] old='    .meta { color: #666; font-size: 12px; margin-bottom: 16px; }\n    .section { margin-bottom: 24px; }' new='    .meta { color: #666; font-size: 12px; margin-bottom: 10px; }\n    .section { margin-bottom: 26px; }'
+  edit[8] old='    /* Workflow cards */' new='    .grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }\n    @media (max-width: 1000px) { .grid-two {'
+  edit[9] old='    .workflow-header { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }' new='    .workflow-header { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }'
+  edit[10] old='' new='    .badge-approval-approved { background: #2a9d2a; }\n    .badge-approval-pending { background: #d7832a; }\n    .badge-ap'
+  edit[11] old='    /* Handoff timeline */' new=''
+  edit[12] old='    .handoff-field { margin: 2px 0; }' new='    .handoff-field { margin: 3px 0; }'
+  edit[13] old='    /* Context cards */' new='    .table-wrap { overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; }\n    table { border-collapse: collapse;'
+  edit[14] old='    """)' new='    """\n    )'
+  edit[15] old='    html.append(f"    const KG_DATA = {embedded};")\n    html.append("""' new='    html.append(f"    const KG_DATA = {embedded_kg};")\n    html.append(f"    const CAPSULES_DATA = {embedded_caps};")\n  '
+  edit[16] old='' new='    function asArray(value) {\n      return Array.isArray(value) ? value : [];\n    }\n\n    function sortByDateDesc(items, '
+  edit[17] old='      if (!workflows || !workflows.length) return '<div class="empty">Нет активных workflow</div>';\n      return workflo' new='      const list = asArray(workflows);\n      if (!list.length) return '<div class="empty">Нет workflow</div>';\n      ret'
+  edit[18] old='    function renderHandoffs(handoffs, workflowId) {\n      const filtered = workflowId\n        ? handoffs.filter(h => h.w' new='    function renderHandoffs(handoffs) {\n      const sorted = sortByDateDesc(asArray(handoffs), 'created_at');'
+  edit[19] old='      return '<div class="timeline">' + sorted.map(h => `' new='      return '<div class="timeline">' + sorted.map(h => {\n        const approvalRaw = [h.approval_gate_id || '', h.appro'
+  edit[20] old='' new='            ${approvalBadge}'
+  edit[21] old='            <div class="handoff-field"><span class="field-label">Goal:</span> <span class="field-value">${esc(h.goal)}</' new='            <div class="handoff-field"><span class="field-label">TraceID:</span> <span class="field-value">${esc(h.trace'
+  edit[22] old='        </div>`).join('') + '</div>';' new='        </div>`;\n      }).join('') + '</div>';'
+  edit[23] old='    function renderContexts(contexts, workflowId) {\n      const filtered = workflowId\n        ? contexts.filter(c => c.w' new='    function renderWorkflowTrace(workflows, handoffs) {\n      const wfList = asArray(workflows);\n      const handoffList'
+  edit[24] old='          <div style="display:flex;gap:8px;align-items:center">' new='          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+  edit[25] old='' new='            <span style="font-size:11px;color:#666">${esc(c.workflow_id || '')}</span>'
+  edit[26] old='    function render(data) {' new='    function render(data, capsulesData) {'
+  edit[27] old='' new='      const workflows = asArray(data.workflows);\n      const handoffs = asArray(data.handoffs);\n      const contexts = a'
+  edit[28] old='      html += renderWorkflows(data.workflows || []);' new='      html += renderWorkflows(workflows);'
+  edit[29] old='' new='      html += '<div class="section grid-two">';\n      html += '<div><h2>WorkflowTrace</h2>' + renderWorkflowTrace(workfl'
+  edit[30] old='      html += renderHandoffs(data.handoffs || []);' new='      html += renderHandoffs(handoffs);'
+  edit[31] old='' new='      html += '<div class="section"><h2>RLMReuse</h2>';\n      html += renderRlmReuse(handoffs, capsulesData);\n      html'
+  edit[32] old='      html += renderContexts(data.contexts || []);' new='      html += renderContexts(contexts);'
+  edit[33] old='    render(KG_DATA);\n    """)' new='    render(KG_DATA, CAPSULES_DATA);\n    """\n    )'
+  edit[34] old='    with open(INPUT_JSON, "r", encoding="utf-8") as f:\n        data = json.load(f)' new='    kg_data = _load_json(INPUT_JSON)\n    capsules_data = _load_optional_json(CAPSULES_JSON, {"capsules": []})'
+  edit[35] old='    result = build_html(data)' new='    result = build_html(kg_data, capsules_data)'
+
+[2026-02-15 11:39:19 UTC] conv=e29d83df gen=b41e2789 file=tools/agent_kg_viewer/build_agent_kg_viewer.py
+  edit[0] old='' new='    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }\n    .status-'
+  edit[1] old='' new='    function truncateText(text, maxLen = 140) {\n      const raw = String(text || '').replace(/\\s+/g, ' ').trim();\n     '
+  edit[2] old='' new='    function renderLatestInteractions(handoffs, contexts, limit = 25) {\n      const handoffEvents = asArray(handoffs).ma'
+  edit[3] old='' new='      html += '<div class="section"><h2>ExecutionStatus</h2>';\n      html += renderExecutionStatus(workflows, handoffs, '
+
+[2026-02-15 11:44:07 UTC] conv=e29d83df gen=444a0311 file=tools/agent_kg_viewer/build_agent_kg_viewer.py
+  edit[0] old='' new='    .section-note { font-size: 12px; color: #666; margin: 2px 0 10px; }'
+  edit[1] old='      html += '<div class="section"><h2>ExecutionStatus</h2>';' new='      html += '<div class="section"><h2>Текущий статус исполнения</h2>';\n      html += '<div class="section-note">Активн'
+  edit[2] old='      html += '<div class="section"><h2>LatestInteractions</h2>';' new='      html += '<div class="section"><h2>Последние взаимодействия агентов</h2>';\n      html += '<div class="section-note"'
+
+[2026-02-15 11:46:01 UTC] conv=e29d83df gen=444a0311 file=tools/agent_kg_viewer/build_agent_kg_viewer.py
+  edit[0] old='' new='from html import escape'
+  edit[1] old='' new='def _text(value: Any) -> str:\n    if value is None:\n        return ""\n    return str(value)\n\n\ndef _short(value: Any, max'
+  edit[2] old='' new='    html.append(_build_server_snapshot(data))'
+
+[2026-02-15 11:46:18 UTC] conv=e29d83df gen=444a0311 file=tools/agent_kg_viewer/build_agent_kg_viewer.py
+  edit[0] old='' new='            event_label = f"{ev['type']} @ {ev['at']}"'
+  edit[1] old='            block.append(f"<td>{escape(f\"{ev['type']} @ {ev['at']}\")}</td>")' new='            block.append(f"<td>{escape(event_label)}</td>")'
+
+[2026-02-15 11:59:08 UTC] conv=a8abe955 gen=219f2abc file=code/analysis/sim_validation_runner_msg.py
+  edit[0] old='                FROM {self.table_expr}' new=''
+
+[2026-02-15 13:53:19 UTC] conv=98636b0f gen=5b966d90 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='' new='    day_date     Date MATERIALIZED addDays(toDate(toString(version_date)), toUInt16(day_u16)),'
+  edit[1] old='' new='    ch_client.execute(\n        "ALTER TABLE sim_repairline_v9 "\n        "ADD COLUMN IF NOT EXISTS day_date Date MATERIAL'
+
+[2026-02-15 14:18:25 UTC] conv=98636b0f gen=ccf280b4 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='        self.base_model.env.newMacroPropertyUInt("repair_line_gb_mp", REPAIR_LINES_MAX)'
+  edit[1] old='' new='        mp_gb = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_gb_mp")'
+  edit[2] old='' new='                mp_gb[i] = 0'
+  edit[3] old='' new='                mp_gb[i] = int(gb)   # тип (group_by)'
+  edit[4] old='' new='                mp_gb[i] = 0'
+
+[2026-02-15 14:18:37 UTC] conv=98636b0f gen=ccf280b4 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto line_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");'
+  edit[1] old='' new='        line_gb[chosen_line].exchange(group_by);'
+  edit[2] old='' new='    auto line_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");'
+  edit[3] old='' new='        line_gb[chosen_line].exchange(group_by);'
+
+[2026-02-15 14:18:50 UTC] conv=98636b0f gen=ccf280b4 file=code/sim_v2/messaging/rtc_repair_lines_v8.py
+  edit[0] old='    mem_mb = 3 * RL_BUF_SIZE * 4 / (1024 * 1024)\n    print(f"  ✅ RepairLine Export: 3 буфера × {RL_BUF_SIZE} = {mem_mb:.' new='    env.newMacroPropertyUInt("rl_buf_gb", RL_BUF_SIZE)\n    mem_mb = 4 * RL_BUF_SIZE * 4 / (1024 * 1024)\n    print(f"  ✅ '
+  edit[1] old='' new='            auto mp_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");'
+  edit[2] old='' new='    auto buf_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_gb");'
+  edit[3] old='' new='    // group_by из MacroProperty (SSoT, устанавливается в P2/P3 commit)\n    auto mp_gb = FLAMEGPU->environment.getMacroP'
+
+[2026-02-15 14:19:18 UTC] conv=98636b0f gen=ccf280b4 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='        # Чтение 3 буферов' new='        # Чтение 4 буферов'
+  edit[1] old='' new='        mp_gb = env.getMacroPropertyUInt("rl_buf_gb")'
+  edit[2] old='' new='        gb = np.zeros((num_steps, self.repair_quota), dtype=np.uint32)'
+  edit[3] old='' new='                gb[s, l] = int(mp_gb[base + l])'
+  edit[4] old='' new='            'gb': gb,'
+  edit[5] old='        total = num_steps * self.repair_quota * 3' new='        total = num_steps * self.repair_quota * 4'
+  edit[6] old='    Returns: list[tuple] — (day_u16, line_id, free_days, aircraft_number)' new='    Returns: list[tuple] — (day_u16, line_id, free_days, aircraft_number, group_by)'
+  edit[7] old='' new='    gb_arr = data['gb']'
+  edit[8] old='' new='            gb_s = int(gb_arr[s, line_id])'
+  edit[9] old='' new='                daily_gb = gb_s'
+  edit[10] old='' new='                \n                if daily_acn == 0:\n                    daily_gb = 0'
+  edit[11] old='                rows.append((d, line_id, daily_fd, daily_acn))' new='                rows.append((d, line_id, daily_fd, daily_acn, daily_gb))'
+  edit[12] old='    aircraft_number UInt32' new='    aircraft_number UInt32,\n    group_by     UInt8'
+  edit[13] old='        rows: list[tuple] — (day_u16, line_id, free_days, aircraft_number)' new='        rows: list[tuple] — (day_u16, line_id, free_days, aircraft_number, group_by)'
+  edit[14] old='' new='    ch_client.execute(\n        "ALTER TABLE sim_repairline_v9 "\n        "ADD COLUMN IF NOT EXISTS group_by UInt8"\n    )'
+  edit[15] old='        (version_date_int, version_id, day, lid, fd, acn)\n        for day, lid, fd, acn in rows' new='        (version_date_int, version_id, day, lid, fd, acn, gb)\n        for day, lid, fd, acn, gb in rows'
+  edit[16] old='            "(version_date, version_id, day_u16, line_id, free_days, aircraft_number) "' new='            "(version_date, version_id, day_u16, line_id, free_days, aircraft_number, group_by) "'
+
+[2026-02-15 14:27:16 UTC] conv=98636b0f gen=ccf280b4 file=code/sim_v2/messaging/rtc_state_transitions_v7.py
+  edit[0] old='' new='        auto mp_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, __REPAIR_LINES_MAX__u>("repair_line_gb_mp");'
+  edit[1] old='' new='            const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");'
+  edit[2] old='' new='            mp_gb[line_id].exchange(group_by);'
+
+[2026-02-15 14:52:32 UTC] conv=98636b0f gen=d8cae525 file=code/validation/run_all_stream.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nПотоковый раннер всех валидаторов из invariants.json.\n"""\nimport argparse\nimport json\nimport '
+

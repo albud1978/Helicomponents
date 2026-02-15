@@ -76,8 +76,12 @@ elif [ -d "$HOME/miniconda3/targets/x86_64-linux/include" ]; then
         conda activate cuda13 2>/dev/null
         echo "🐍 Conda env: cuda13"
     else
-        conda activate base 2>/dev/null
-        echo "🐍 Conda env: base"
+        echo "❌ Требуется conda env cuda13 (окружение не найдено: $HOME/miniconda3/envs/cuda13)"
+        exit 1
+    fi
+    if [ "$CONDA_DEFAULT_ENV" != "cuda13" ]; then
+        echo "❌ Активировано неверное окружение conda: ${CONDA_DEFAULT_ENV:-<none>} (ожидается cuda13)"
+        exit 1
     fi
     export CUDA_PATH="$HOME/miniconda3/targets/x86_64-linux"
     export LD_LIBRARY_PATH="$HOME/miniconda3/lib:$LD_LIBRARY_PATH"
