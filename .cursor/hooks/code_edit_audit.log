@@ -172,3 +172,113 @@
 [2026-02-15 14:52:32 UTC] conv=98636b0f gen=d8cae525 file=code/validation/run_all_stream.py
   edit[0] old='' new='#!/usr/bin/env python3\n"""\nПотоковый раннер всех валидаторов из invariants.json.\n"""\nimport argparse\nimport json\nimport '
 
+[2026-02-16 04:38:56 UTC] conv=98636b0f gen=40472d6f file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='MULTIBOM_JSON = os.path.join(\n    ROOT_DIR, "config", "transitions", "multibom_template.json"\n)'
+  edit[1] old='        "MATCH (n) WHERE n:TransitionSpec OR n:State OR n:Rule OR n:QuotaFlow OR n:SelectionRule OR n:RepairLineRule OR ' new='        (\n            "MATCH (n) WHERE n:TransitionSpec OR n:State OR n:Rule OR n:QuotaFlow "\n            "OR n:Selectio'
+  edit[2] old='' new='def _build_bom_queries(data: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:\n    """Генерирует Cypher для multibom_'
+  edit[3] old='' new='    multibom = _load_json(MULTIBOM_JSON)'
+  edit[4] old='' new='    all_queries.extend(_build_bom_queries(multibom))'
+
+[2026-02-16 04:39:47 UTC] conv=98636b0f gen=40472d6f file=code/utils/sync_domain_graph.py
+  edit[0] old='        order = int(entry.get("order", 0))' new='        raw_order = entry.get("order", 0)\n        order_label = ""\n        if isinstance(raw_order, int):\n            or'
+  edit[1] old='    l.notes = $notes' new='    l.notes = $notes,\n    l.order_label = $order_label'
+  edit[2] old='' new='                "order_label": order_label,'
+
+[2026-02-16 04:45:34 UTC] conv=98636b0f gen=40472d6f file=code/utils/sync_domain_graph.py
+  edit[0] old='            "OR n:BomCompatibilityRule DETACH DELETE n"' new='            "OR n:BomCompatibilityRule OR n:BomVariantAlias DETACH DELETE n"'
+  edit[1] old='' new='    def _dedupe(values: List[int]) -> List[int]:\n        seen = set()\n        out: List[int] = []\n        for value in v'
+  edit[2] old='' new='    for alias in data.get("variant_aliases", []):\n        if not isinstance(alias, dict):\n            continue\n        a'
+  edit[3] old='' new='    variant_group_matrix = data.get("variant_group_matrix", {})\n    if isinstance(variant_group_matrix, dict):\n        v'
+  edit[4] old='' new='        group_scope = _resolve_group_scope(rule.get("group_scope"), l2_matrix)\n        for group_id in group_scope:\n    '
+
+[2026-02-16 04:45:50 UTC] conv=98636b0f gen=40472d6f file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='    l2_matrix_dict = l2_matrix if isinstance(l2_matrix, dict) else {}'
+  edit[1] old='        group_scope = _resolve_group_scope(rule.get("group_scope"), l2_matrix)' new='        group_scope = _resolve_group_scope(rule.get("group_scope"), l2_matrix_dict)'
+
+[2026-02-16 07:29:46 UTC] conv=98636b0f gen=3dc936a7 file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='            "OR n:BomGroupLevel OR n:BomNumberingRule OR n:BomReplaceabilityRule "'
+
+[2026-02-16 07:29:50 UTC] conv=98636b0f gen=3dc936a7 file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='        groups.extend(_expand_group_ranges(spec.get("range")))\n        groups.extend(_expand_group_ranges(spec.get("rang'
+
+[2026-02-16 07:30:03 UTC] conv=98636b0f gen=3dc936a7 file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='    group_hierarchy = data.get("group_hierarchy", {})\n    if isinstance(group_hierarchy, dict):\n        for level_id, sp'
+
+[2026-02-16 07:30:11 UTC] conv=98636b0f gen=3dc936a7 file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='    numbering = data.get("numbering_logic", {})\n    if isinstance(numbering, dict) and numbering:\n        group_number ='
+
+[2026-02-16 07:30:21 UTC] conv=98636b0f gen=3dc936a7 file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='    replaceability_rules = data.get("replaceability_rules", [])\n    if isinstance(replaceability_rules, list):\n        f'
+
+[2026-02-16 08:41:39 UTC] conv=98636b0f gen=1f04d264 file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='    def _normalize_group_catalog(raw_catalog: Any) -> List[Dict[str, Any]]:\n        if not raw_catalog:\n            retu'
+  edit[1] old='' new='    group_catalog = _normalize_group_catalog(data.get("group_catalog"))\n    for entry in group_catalog:\n        queries.'
+  edit[2] old='' new='    l1_l2_rules = data.get("l1_l2_link_rules", {})\n    via, mask_mapping = _normalize_l1_l2_link_rules(l1_l2_rules)\n    '
+
+[2026-02-16 08:48:46 UTC] conv=98636b0f gen=1f04d264 file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='            group_type = entry.get("group_type", "")\n            group_title = entry.get("group_title", "")'
+  edit[1] old='' new='                    "group_type": group_type,\n                    "group_title": group_title,'
+  edit[2] old='SET g.number = $number,\n    g.name = $name,' new='SET g.group_number = $group_number,\n    g.group_name = $group_name,\n    g.group_type = $group_type,\n    g.group_title = '
+  edit[3] old='' new='    g.number = $group_number,\n    g.name = $group_name,'
+  edit[4] old='                "number": entry["number"],\n                "name": entry["name"],' new='                "group_number": entry["number"],\n                "group_name": entry["name"],\n                "group_typ'
+
+[2026-02-16 09:39:14 UTC] conv=98636b0f gen=8640d274 file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='            members = entry.get("partno_members")\n            if members is None or (isinstance(members, list) and not m'
+  edit[1] old='' new='                    "partno_members": list(dict.fromkeys(members)),'
+
+[2026-02-16 09:39:18 UTC] conv=98636b0f gen=8640d274 file=code/utils/sync_domain_graph.py
+  edit[0] old='            "OR n:BomCompatibilityRule OR n:BomVariantAlias DETACH DELETE n"' new='            "OR n:BomCompatibilityRule OR n:BomVariantAlias OR n:BomPartNo DETACH DELETE n"'
+
+[2026-02-16 09:39:20 UTC] conv=98636b0f gen=8640d274 file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='        partno_list = entry.get("partno_members", entry.get("partno_samples", []))\n        partno_count = len(partno_lis'
+  edit[1] old='' new='    g.partno_count = $partno_count,'
+  edit[2] old='' new='                "partno_count": partno_count,'
+  edit[3] old='' new='    for entry in group_catalog:\n        partno_list = entry.get("partno_members", entry.get("partno_samples", []))\n     '
+
+[2026-02-16 16:44:57 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='    """Удаляет все доменные узлы."""' new='    """Удаляет все доменные узлы (включая устаревшие BomVariant/BomVariantAlias)."""'
+
+[2026-02-16 16:45:01 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='    alias_pairs: List[str] = []\n    for alias in data.get("variant_aliases", []):\n        if not isinstance(alias, dict)' new=''
+  edit[1] old='    t.description = $description,\n    t.aliases = $aliases' new='    t.description = $description'
+  edit[2] old='            "aliases": alias_pairs,' new=''
+
+[2026-02-16 16:45:04 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='        partno_samples = entry.get("partno_samples", [])[:5]  # samples for display\n        if not partno_samples and pa'
+  edit[1] old='SET g.group_number = $group_number,\n    g.group_name = $group_name,\n    g.group_type = $group_type,\n    g.group_title = ' new='SET g.group_title = $group_title,'
+  edit[2] old='    g.partno_samples = $partno_samples,\n    g.partno_count = $partno_count,\n    g.number = $group_number,\n    g.name = $' new='    g.partno_members = $partno_members,\n    g.partno_count = $partno_count'
+  edit[3] old='                "group_number": entry["number"],\n                "group_name": entry["name"],\n                "group_typ' new=''
+  edit[4] old='                "level": entry["level"],' new=''
+  edit[5] old='                "partno_samples": entry["partno_samples"],' new='                "partno_members": entry.get("partno_members", entry.get("partno_samples", [])),'
+
+[2026-02-16 16:45:08 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='        partno_samples = entry.get("partno_samples", [])[:5]  # samples for display\n        if not partno_samples and pa' new=''
+  edit[1] old='                "partno_members": entry.get("partno_members", entry.get("partno_samples", [])),' new='                "partno_members": list(partno_list) if isinstance(partno_list, (list, tuple)) else [],'
+
+[2026-02-16 16:45:13 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='SET g.tier = CASE WHEN $tier <> "" THEN $tier ELSE g.tier END' new=''
+  edit[1] old='                        "tier": tier,' new=''
+  edit[2] old='' new='    # L1 -> L2 hierarchy: (L1_PLANERS)-[:HAS_LEVEL]->(L2_COMPONENTS)\n    level_hierarchy = data.get("level_hierarchy", {'
+
+[2026-02-16 16:45:17 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='' new='    parent_id, child_id = "", ""'
+  edit[1] old='        for parent_id, spec in level_hierarchy.items():\n            if not isinstance(spec, dict):\n                conti' new='        for pid, spec in level_hierarchy.items():\n            if isinstance(spec, dict) and spec.get("child_level"):\n   '
+  edit[2] old='                    {"parent_id": str(parent_id), "child_id": str(child_id)},\n                ))\n                break  ' new='            {"parent_id": parent_id, "child_id": child_id},'
+
+[2026-02-16 16:45:20 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='    raw_variants = data.get("variant_roots", [])\n    if isinstance(raw_variants, dict):\n        raw_variants = [\n       ' new=''
+
+[2026-02-16 16:45:24 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='    variant_group_matrix = data.get("variant_group_matrix", {})\n    if isinstance(variant_group_matrix, dict):\n        v' new=''
+
+[2026-02-16 16:45:26 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='        variant_scope = _normalize_variant_scope(rule.get("variant_scope"))\n        for variant_id in variant_scope:\n   ' new=''
+
+[2026-02-16 16:45:30 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='    def _normalize_variant_scope(scope: Any) -> List[str]:\n        if not scope:\n            return []\n        if isinst' new=''
+
+[2026-02-16 16:49:50 UTC] conv=98636b0f gen=5f14554a file=code/utils/sync_domain_graph.py
+  edit[0] old='SET g.category = $category,\n    g.tier = "L2"' new=''
+  edit[1] old='MERGE (t)-[:HAS_GROUP {category: $category}]->(g)' new='MERGE (t)-[:HAS_GROUP]->(g)'
+  edit[2] old='                        "category": str(category),' new=''
+
