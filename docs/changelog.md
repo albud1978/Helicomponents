@@ -1,5 +1,33 @@
 # Changelog
 
+## [16-02-2026] - BomGroup: убраны лишние поля, уточнены L1 titles
+
+### Изменения
+- BomGroup: удалены `category` и `tier` из узлов Neo4j; HAS_GROUP — без свойства `category`. Минимальный набор полей: `group_by`, `group_title`, `ac_type_mask_effective`, `partno_members`, `partno_count`.
+- multibom_template.json: L1 titles: group_by 1 → «G01 Ми-8 Планер», group_by 2 → «G02 Ми-17 Планер».
+
+## [16-02-2026] - MultiBOM рефакторинг: L1 Planers → L2 Components, без variant-слоя
+
+### Изменения
+- Модель упрощена до L1 Planers → L2 Components → groups; удалён слой BomVariant/BomVariantAlias.
+- `config/transitions/multibom_template.json`: L2_AGGREGATES переименован в L2_COMPONENTS; убраны variant_roots, variant_aliases, variant_group_matrix; group_catalog упрощён (group_by, group_title, ac_type_mask_effective, partno_members).
+- `code/utils/sync_domain_graph.py`: удалена генерация BomVariant/BomVariantAlias/HAS_BOM_GROUP/RULE_FOR_VARIANT; добавлена связь (L1)-[:HAS_LEVEL]->(L2); BomGroup — минимальный набор полей; сохранены BomPartNo, HAS_PARTNO, BomReplaceabilityRule, replaceability (full/partial/none).
+- clear-режим удаляет устаревшие BomVariant/BomVariantAlias.
+
+## [16-02-2026] - MultiBOM шаблон и BOM-синхронизация графа
+
+### Изменения
+- `config/transitions/multibom_template.json`: L1 group 2 — `group_name` = «МИ-17», `group_title` = «G02 Планер» без изменений; добавлено `partno_members` в `group_catalog`.
+- `code/utils/sync_domain_graph.py`: визуализация partno — узлы `BomPartNo`, связи `(g:BomGroup)-[:HAS_PARTNO]->(p:BomPartNo)`, `partno_count` в BomGroup; clear-режим удаляет BomPartNo.
+- `config/transitions/multibom_template.json`: зафиксирован L1/L2 multiBOM (варианты, alias, R1-R4).
+- `code/utils/sync_domain_graph.py`: добавлена загрузка multiBOM и генерация Cypher для BOM-сущностей.
+- `config/transitions/multibom_template.json`: добавлены `group_hierarchy` (L1=1/2, L2=3..42), `numbering_logic` и `replaceability_rules` (full/partial/none).
+- `code/utils/sync_domain_graph.py`: добавлены BomGroupLevel/BomNumberingRule/BomReplaceabilityRule и связи к BomTemplate/группам.
+- `config/transitions/multibom_template.json`: введён `group_catalog` (имена по `partno`, `ac_type_mask_effective`), `l1_l2_link_rules` (прямая L1→L2 привязка по mask), уточнена неполная взаимозаменяемость (full/partial/none).
+- `code/utils/sync_domain_graph.py`: загрузка `group_catalog` в BomGroup (number/name/level/mask/samples) и явные связи `HAS_L2_GROUP` по `ac_type_mask`.
+- `config/transitions/multibom_template.json`: добавлены `group_type`/`group_title` (Gxx <тип>), `cross_platform` заменён на `mask_driven`.
+- `code/utils/sync_domain_graph.py`: BomGroup теперь пишет `group_number/group_name/group_type/group_title` для читаемости графа.
+
 ## [15-02-2026] - Документация: runbook потоковой валидации и явный выбор датасета
 
 ### Изменения
