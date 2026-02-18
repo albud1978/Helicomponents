@@ -434,6 +434,10 @@ class LimiterV8Orchestrator:
         
         print(f"\n✅ Данные: frames={self.frames}, days={self.days}")
         
+        # Подсчёт детерминированного spawn для смещения динамического
+        spawn_seed = self.env_data.get('mp4_new_counter_mi17_seed', [])
+        self._deterministic_spawn_count = sum(c for c in spawn_seed if c > 0)
+        
         # MP5 cumsum
         print("\n📊 Вычисление mp5_cumsum...")
         t0 = time.perf_counter()
@@ -492,7 +496,7 @@ class LimiterV8Orchestrator:
         # Repair exits (repair_time - repair_days для агентов в repair)
         # Будет добавлено при populate_agents, пока placeholder
         
-        # Spawn dates
+        # Spawn dates (детерминированный spawn)
         spawn_seed = self.env_data.get('mp4_new_counter_mi17_seed', [])
         for day, count in enumerate(spawn_seed):
             if count > 0 and day <= self.end_day:
@@ -602,6 +606,34 @@ class LimiterV8Orchestrator:
         # Pre-status snapshot (перед любыми переходами)
         rtc_state_transitions_v8.register_save_pre_status(self.model, heli_agent)
         
+        # Детерминированный spawn (HostFunction, mid-simulation)
+        spawn_seed = self.env_data.get('mp4_new_counter_mi17_seed', [])
+        spawn_schedule = [
+            (day_idx, count)
+            for day_idx, count in enumerate(spawn_seed)
+            if count > 0
+        ]
+        if spawn_schedule:
+            det_spawn = getattr(self, '_deterministic_spawn_count', 0)
+            env_consts = {
+                'll': int(self.env_data.get('mi17_ll_const', 270000)),
+                'oh': int(self.env_data.get('mi17_oh_const', 270000)),
+                'br': int(self.env_data.get('mi17_br_const', 210000)),
+                'repair_time': int(self.env_data.get('mi17_repair_time_const', 180)),
+                'assembly_time': int(self.env_data.get('mi17_assembly_time_const', 30)),
+                'partout_time': int(self.env_data.get('mi17_partout_time_const', 20)),
+                'second_ll_sentinel': int(self.env_data.get('second_ll_sentinel', 0xFFFFFFFF)),
+            }
+            base_idx = int(self.env_data.get('first_reserved_idx', self.frames))
+            if base_idx < 0:
+                base_idx = self.frames
+            self._hf_det_spawn = HF_DeterministicSpawn(
+                spawn_schedule, base_idx, 100000, env_consts
+            )
+            layer_det_spawn = self.model.newLayer("layer_det_spawn")
+            layer_det_spawn.addHostFunction(self._hf_det_spawn)
+            print(f"  ✅ Детерм. spawn: {det_spawn} агентов, schedule={spawn_schedule}")
+        
         # ═══════════════════════════════════════════════════════════════
         # V8: RepairAgent ОТКЛЮЧЁН — используем V8 квотирование через RepairLine
         # ═══════════════════════════════════════════════════════════════
@@ -677,18 +709,24 @@ class LimiterV8Orchestrator:
         rtc_quota_v8.register_post_quota_counts_v8(self.model, heli_agent)
         
         # ═══════════════════════════════════════════════════════════════
-        # Динамический спавн Mi-17 (после P3)
+        # Динамический спавн (после P3): anti-starvation reserve для Mi-8
         # ═══════════════════════════════════════════════════════════════
-        dynamic_reserve_mi17 = 50
-        remaining_slots = max(0, model_build.RTC_MAX_FRAMES - self.frames - dynamic_reserve_mi17)
-        dynamic_reserve_mi8 = 8 if remaining_slots >= 8 else remaining_slots
+        det_spawn = getattr(self, '_deterministic_spawn_count', 0)
+        total_dynamic_slots = max(
+            0,
+            model_build.RTC_MAX_FRAMES - self.frames - det_spawn
+        )
+        dynamic_reserve_mi8 = 8 if total_dynamic_slots >= 8 else total_dynamic_slots
+        dynamic_reserve_mi17 = total_dynamic_slots - dynamic_reserve_mi8
+        if dynamic_reserve_mi17 > 50:
+            dynamic_reserve_mi17 = 50
         self._dynamic_reserve_mi17 = dynamic_reserve_mi17
         self._dynamic_reserve_mi8 = dynamic_reserve_mi8
-        base_acn_spawn = 100000
+        base_acn_spawn = 100000 + det_spawn
         spawn_env_data = {
-            'first_dynamic_idx': self.frames,
-            'first_dynamic_idx_mi17': self.frames,
-            'first_dynamic_idx_mi8': self.frames + dynamic_reserve_mi17,
+            'first_dynamic_idx': self.frames + det_spawn,
+            'first_dynamic_idx_mi17': self.frames + det_spawn,
+            'first_dynamic_idx_mi8': self.frames + det_spawn + dynamic_reserve_mi17,
             'dynamic_reserve_mi17': dynamic_reserve_mi17,
             'dynamic_reserve_mi8': dynamic_reserve_mi8,
             'base_acn_spawn_mi17': base_acn_spawn,
@@ -731,7 +769,7 @@ class LimiterV8Orchestrator:
         # ═══════════════════════════════════════════════════════════════
         rtc_mp2_export.register_mp2_write_layer(self.model, heli_agent)
         # Включаем spawn слоты в MP2 drain
-        total_agents_with_spawn = self.frames + dynamic_reserve_mi17 + dynamic_reserve_mi8
+        total_agents_with_spawn = self.frames + det_spawn + dynamic_reserve_mi17 + dynamic_reserve_mi8
         self.hf_mp2_drain = rtc_mp2_export.register_mp2_drain(
             self.model, self.end_day, total_agents_with_spawn
         )
@@ -856,7 +894,8 @@ class LimiterV8Orchestrator:
         
         dyn17 = getattr(self, '_dynamic_reserve_mi17', 0)
         dyn8 = getattr(self, '_dynamic_reserve_mi8', 0)
-        total_export_agents = self.frames + dyn17 + dyn8
+        det_spawn = getattr(self, '_deterministic_spawn_count', 0)
+        total_export_agents = self.frames + det_spawn + dyn17 + dyn8
         
         # Все поля (включая "статические") читаются из MP2 буферов
         # Fallback не используется
@@ -866,16 +905,15 @@ class LimiterV8Orchestrator:
             f"(base={self.frames} + spawn={total_export_agents - self.frames})"
         )
         
-        # [2026-02-15] Постпроцессинг P2/P3 отключён (Вариант A).
-        # Ремонты отслеживаются в sim_repairline_v9.
-        # Постпроцессинг ломал INV-10: перезаписывал status_id (7→4, 1→4)
-        # без обновления pre_status_id → внутренне противоречивые данные.
-        # Метод _postprocess_promotions оставлен для истории.
-        # t_pp = time.perf_counter()
-        # pp_count = self._postprocess_promotions(fields, days, num_steps, total_export_agents)
-        # pp_time = time.perf_counter() - t_pp
-        # if pp_count > 0:
-        #     print(f"   📦 Постпроцессинг: {pp_count} записей модифицировано ({pp_time:.2f}с)")
+        # [2026-02-17] Постпроцессинг P2/P3 включён (Вариант B).
+        # Ремонты также отслеживаются в sim_repairline_v9.
+        # Вариант A ломал INV-10 из-за отсутствия обновления pre_status_id.
+        # Вариант B: корректное обновление pre_status_id + status_id.
+        t_pp = time.perf_counter()
+        pp_count = self._postprocess_promotions(fields, days, num_steps, total_export_agents)
+        pp_time = time.perf_counter() - t_pp
+        if pp_count > 0:
+            print(f"   📦 Постпроцессинг: {pp_count} записей модифицировано ({pp_time:.2f}с)")
         
         # Построение строк для INSERT
         t_build = time.perf_counter()
@@ -996,10 +1034,8 @@ class LimiterV8Orchestrator:
             inactive_pop[i].setVariableUInt("repair_days", 0)
         self.simulation.setPopulationData(inactive_pop, "inactive")
         
-        # V8: Детерминированный spawn
-        # DISABLED (state5-unused): spawn через reserve больше не используется. Детерминированный spawn реализуется через 0→3.
-        # DISABLED (state5-unused): spawn_count = self._populate_spawn_agents()
-        spawn_count = 0
+        # Детерминированный spawn реализован через HF_DeterministicSpawn (mid-simulation)
+        spawn_count = getattr(self, '_deterministic_spawn_count', 0)
         
         # V8: Добавляем repair_exits в deterministic_dates
         self._add_repair_exits_to_deterministic()
@@ -1144,91 +1180,6 @@ class LimiterV8Orchestrator:
         self.deterministic_dates = sorted(set(self.deterministic_dates))
         print(f"   V8 deterministic_dates (с repair): {len(self.deterministic_dates)} дат")
     
-    # DISABLED (state5-unused): spawn через reserve больше не используется. Детерминированный spawn реализуется через 0→3.
-    # DISABLED (state5-unused): def _populate_spawn_agents(self) -> int:
-    # DISABLED (state5-unused):     """V8: Создаём агентов для детерминированного спавна в reserve"""
-    # DISABLED (state5-unused):     spawn_seed = self.env_data.get('mp4_new_counter_mi17_seed', [])
-    # DISABLED (state5-unused):     
-    # DISABLED (state5-unused):     spawn_events = []
-    # DISABLED (state5-unused):     for day, count in enumerate(spawn_seed):
-    # DISABLED (state5-unused):         if count > 0:
-    # DISABLED (state5-unused):             spawn_events.append((day, count))
-    # DISABLED (state5-unused):     
-    # DISABLED (state5-unused):     if not spawn_events:
-    # DISABLED (state5-unused):         return 0
-    # DISABLED (state5-unused):     
-    # DISABLED (state5-unused):     mi17_ll = int(self.env_data.get('mi17_ll_const', 270000))
-    # DISABLED (state5-unused):     mi17_oh = int(self.env_data.get('mi17_oh_const', 270000))
-    # DISABLED (state5-unused):     mi17_br = int(self.env_data.get('mi17_br_const', 210000))
-    # DISABLED (state5-unused):     mi17_repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
-    # DISABLED (state5-unused):     mi17_assembly_time = int(self.env_data.get('mi17_assembly_time_const', 30))
-    # DISABLED (state5-unused):     mi17_partout_time = int(self.env_data.get('mi17_partout_time_const', 20))
-    # DISABLED (state5-unused):     
-    # DISABLED (state5-unused):     first_reserved_idx = int(self.env_data.get('first_reserved_idx', 279))
-    # DISABLED (state5-unused):     next_idx = first_reserved_idx
-    # DISABLED (state5-unused):     base_acn = 100000
-    # DISABLED (state5-unused):     
-    # DISABLED (state5-unused):     total_spawn = 0
-    # DISABLED (state5-unused):     spawn_agents = []
-    # DISABLED (state5-unused):     
-    # DISABLED (state5-unused):     for spawn_day, count in spawn_events:
-    # DISABLED (state5-unused):         for i in range(count):
-    # DISABLED (state5-unused):             agent_data = {
-    # DISABLED (state5-unused):                 'idx': next_idx,
-    # DISABLED (state5-unused):                 'aircraft_number': base_acn,
-    # DISABLED (state5-unused):                 'group_by': 2,  # Mi-17
-    # DISABLED (state5-unused):                 'sne': 0,
-    # DISABLED (state5-unused):                 'ppr': 0,
-    # DISABLED (state5-unused):                 'll': mi17_ll,
-    # DISABLED (state5-unused):                 'oh': mi17_oh,
-    # DISABLED (state5-unused):                 'br': mi17_br,
-    # DISABLED (state5-unused):                 'repair_time': mi17_repair_time,
-    # DISABLED (state5-unused):                 'assembly_time': mi17_assembly_time,
-    # DISABLED (state5-unused):                 'partout_time': mi17_partout_time,
-    # DISABLED (state5-unused):                 'exit_date': spawn_day,
-    # DISABLED (state5-unused):                 'limiter': 0,
-    # DISABLED (state5-unused):             }
-    # DISABLED (state5-unused):             spawn_agents.append(agent_data)
-    # DISABLED (state5-unused):             next_idx += 1
-    # DISABLED (state5-unused):             base_acn += 1
-    # DISABLED (state5-unused):             total_spawn += 1
-    # DISABLED (state5-unused):     
-    # DISABLED (state5-unused):     if spawn_agents:
-    # DISABLED (state5-unused):         pop = fg.AgentVector(self.base_model.agent, len(spawn_agents))
-    # DISABLED (state5-unused):         
-    # DISABLED (state5-unused):         for i, data in enumerate(spawn_agents):
-    # DISABLED (state5-unused):             agent = pop[i]
-    # DISABLED (state5-unused):             agent.setVariableUInt("idx", data['idx'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("aircraft_number", data['aircraft_number'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("group_by", data['group_by'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("sne", data['sne'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("ppr", data['ppr'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("ll", data['ll'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("oh", data['oh'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("br", data['br'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("repair_time", data['repair_time'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("assembly_time", data['assembly_time'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("partout_time", data['partout_time'])
-    # DISABLED (state5-unused):             agent.setVariableUInt("exit_date", data['exit_date'])
-    # DISABLED (state5-unused):             agent.setVariableUInt16("limiter", 0)
-    # DISABLED (state5-unused):             agent.setVariableUInt("repair_days", 0)
-    # DISABLED (state5-unused):             agent.setVariableUInt("daily_today_u32", 0)
-    # DISABLED (state5-unused):             agent.setVariableUInt("daily_next_u32", 0)
-    # DISABLED (state5-unused):             agent.setVariableUInt("transition_5_to_2", 0)
-    # DISABLED (state5-unused):             agent.setVariableUInt("promoted", 0)
-    # DISABLED (state5-unused):             agent.setVariableUInt("needs_demote", 0)
-    # DISABLED (state5-unused):             agent.setVariableUInt("status_change_day", 0)
-    # DISABLED (state5-unused):             agent.setVariableUInt("repair_candidate", 0)
-    # DISABLED (state5-unused):             agent.setVariableUInt("repair_line_id", 0xFFFFFFFF)
-    # DISABLED (state5-unused):             agent.setVariableUInt("repair_line_day", 0xFFFFFFFF)
-    # DISABLED (state5-unused):         
-    # DISABLED (state5-unused):         self.simulation.setPopulationData(pop, "reserve")
-    # DISABLED (state5-unused):         
-    # DISABLED (state5-unused):         spawn_days = sorted(set(d for d, _ in spawn_events))
-    # DISABLED (state5-unused):         print(f"   📦 Spawn: {total_spawn} агентов в reserve, exit_dates={spawn_days}")
-    # DISABLED (state5-unused):     
-    # DISABLED (state5-unused):     return total_spawn
-    
     def _print_final_stats(self):
         """Вывод финальной статистики + ВАЛИДАЦИЯ"""
         print("\n📊 Финальная статистика V8:")
@@ -1321,7 +1272,7 @@ class LimiterV8Orchestrator:
     
     def _postprocess_promotions(self, fields, days, num_steps, total_agents):
         """
-        Постпроцессинг P2/P3 промоутов: восстановление окна ремонта.
+        Постпроцессинг P2/P3 промоутов: восстановление окна ремонта + дневной cap по repair_quota.
         
         P2 (commit_p2=1): 7→2 превращается в 7→4→2 (unsvc→repair→ops)
         P3 (commit_p3=1): 1→2 превращается в 1→4→2 (inactive→repair→ops)
@@ -1336,6 +1287,24 @@ class LimiterV8Orchestrator:
         import numpy as np
         
         modified = 0
+        apply_daily_cap = self.repair_quota > 0
+        
+        # Текущая дневная занятость repair по планерам (group_by 1/2) на основе status_id=4
+        day_to_agents_set = {}
+        for s in range(num_steps):
+            day = int(days[s])
+            day_set = day_to_agents_set.get(day)
+            if day_set is None:
+                day_set = set()
+                day_to_agents_set[day] = day_set
+            for a in range(total_agents):
+                if int(fields['mp2_status_id'][s, a]) != 4:
+                    continue
+                group_by = int(fields['mp2_group_by'][s, a])
+                if group_by not in (1, 2):
+                    continue
+                agent_key = int(fields['mp2_idx'][s, a])
+                day_set.add(agent_key)
         
         for a in range(total_agents):
             repair_time_val = 0
@@ -1346,40 +1315,217 @@ class LimiterV8Orchestrator:
                 p3 = int(fields['mp2_commit_p3'][s, a])
                 
                 if p2 == 1 or p3 == 1:
-                    d_event = days[s]
+                    d_event = int(days[s])
                     repair_time_val = int(fields['mp2_repair_time'][s, a])
                     assembly_time_val = int(fields['mp2_assembly_time'][s, a])
+                    group_by_event = int(fields['mp2_group_by'][s, a])
+                    agent_key = int(fields['mp2_idx'][s, a])
+                    apply_daily_cap_for_agent = apply_daily_cap and group_by_event in (1, 2)
                     
                     if repair_time_val <= 0 or d_event <= 0:
                         continue
                     
                     repair_start = d_event - repair_time_val
                     
-                    # Устанавливаем active_trigger=1 на шаге промоута
-                    fields['mp2_active_trigger'][s, a] = 1
-                    
-                    # Сканируем предыдущие шаги для заполнения окна ремонта
-                    repair_day_counter = 0
+                    # Собираем кандидатов окна ремонта с guard-условиями
+                    candidate_steps = []
                     for s_back in range(num_steps):
-                        d_back = days[s_back]
+                        d_back = int(days[s_back])
                         if repair_start <= d_back < d_event:
                             current_status = int(fields['mp2_status_id'][s_back, a])
                             # Guard: перезаписываем только unsvc(7) или inactive(1)
                             if current_status not in (7, 1):
                                 continue
-                            # Этот шаг попадает в окно ремонта
-                            fields['mp2_status_id'][s_back, a] = 4  # repair
-                            repair_day_counter += 1
-                            fields['mp2_repair_days'][s_back, a] = repair_day_counter
-                            
-                            # assembly_trigger=1 если осталось <= assembly_time до конца ремонта
-                            days_to_event = d_event - d_back
-                            if days_to_event <= assembly_time_val:
-                                fields['mp2_assembly_trigger'][s_back, a] = 1
-                            
-                            modified += 1
+                            # Guard: пропускаем дни перехода (pre_status != status) —
+                            # сохраняем оригинальный GPU-переход (напр. 2→7)
+                            current_pre = int(fields['mp2_pre_status_id'][s_back, a])
+                            if current_pre != current_status:
+                                continue
+                            candidate_steps.append((s_back, d_back))
+                    
+                    if not candidate_steps:
+                        continue
+                    
+                    # Pre-check: дневной cap (если превышен на любой день — отклоняем событие)
+                    if apply_daily_cap_for_agent:
+                        reject_event = False
+                        for s_back, d_back in candidate_steps:
+                            day_set = day_to_agents_set.get(d_back)
+                            if day_set is None:
+                                day_len = 0
+                                has_agent = False
+                            else:
+                                day_len = len(day_set)
+                                has_agent = agent_key in day_set
+                            if not has_agent and day_len >= self.repair_quota:
+                                reject_event = True
+                                break
+                        if reject_event:
+                            continue
+                    
+                    # Устанавливаем active_trigger=1 на шаге промоута
+                    fields['mp2_active_trigger'][s, a] = 1
+                    
+                    # Заполняем окно ремонта без пропусков
+                    repair_day_counter = 0
+                    first_repair_set = False
+                    for s_back, d_back in candidate_steps:
+                        # Этот шаг попадает в окно ремонта
+                        fields['mp2_status_id'][s_back, a] = 4  # repair
+                        if first_repair_set:
+                            fields['mp2_pre_status_id'][s_back, a] = 4
+                        else:
+                            first_repair_set = True
+                        if apply_daily_cap_for_agent:
+                            day_set = day_to_agents_set.get(d_back)
+                            if day_set is None:
+                                day_set = set()
+                                day_to_agents_set[d_back] = day_set
+                            day_set.add(agent_key)
+                        repair_day_counter += 1
+                        fields['mp2_repair_days'][s_back, a] = repair_day_counter
+                        
+                        # assembly_trigger=1 если осталось <= assembly_time до конца ремонта
+                        days_to_event = d_event - d_back
+                        if days_to_event <= assembly_time_val:
+                            fields['mp2_assembly_trigger'][s_back, a] = 1
+                        
+                        modified += 1
+                    
+                    # Шаг промоута: pre_status_id = 4 только если окно было окрашено
+                    if first_repair_set:
+                        fields['mp2_pre_status_id'][s, a] = 4
         
         return modified
+
+
+class HF_DeterministicSpawn(fg.HostFunction):
+    """
+    HostFunction: детерминированный spawn агентов в serviceable.
+    Создаёт агентов mid-simulation когда current_day >= spawn_day.
+    pre_status_id = 0 (маркер spawn) сохраняется корректно.
+    """
+    
+    def __init__(self, spawn_schedule, base_idx, base_acn, env_consts):
+        """
+        Args:
+            spawn_schedule: list of (day, count) — расписание spawn
+            base_idx: стартовый idx для det spawn агентов
+            base_acn: стартовый aircraft_number (100000)
+            env_consts: dict с ll, oh, br, repair_time, assembly_time, partout_time, second_ll_sentinel
+        """
+        super().__init__()
+        self.spawn_schedule = list(spawn_schedule or [])
+        self.base_idx = int(base_idx)
+        self.base_acn = int(base_acn)
+        self.env_consts = env_consts or {}
+        self.spawned_days = set()
+        self.total_spawned = 0
+    
+    def run(self, FLAMEGPU):
+        if not self.spawn_schedule:
+            return
+        
+        env = FLAMEGPU.environment
+        current_day = int(env.getPropertyUInt("current_day"))
+        svc_api = None
+        
+        for spawn_day, count in self.spawn_schedule:
+            spawn_day_i = int(spawn_day)
+            if spawn_day_i in self.spawned_days:
+                continue
+            if current_day < spawn_day_i:
+                continue
+            
+            self.spawned_days.add(spawn_day_i)
+            count_i = int(count)
+            if count_i <= 0:
+                continue
+            
+            if svc_api is None:
+                svc_api = FLAMEGPU.agent("HELI", "serviceable")
+            
+            start_acn = self.base_acn + self.total_spawned
+            for _ in range(count_i):
+                idx = self.base_idx + self.total_spawned
+                acn = self.base_acn + self.total_spawned
+                
+                agent = svc_api.newAgent()
+                agent.setVariableUInt("idx", idx)
+                agent.setVariableUInt("aircraft_number", acn)
+                agent.setVariableUInt("partseqno_i", 0)
+                agent.setVariableUInt("group_by", 2)  # Mi-17
+                agent.setVariableUInt("status_id", 3)
+                agent.setVariableUInt("pre_status_id", 0)  # spawn marker
+                agent.setVariableUInt("intent_state", 3)
+                agent.setVariableUInt("prev_intent", 0)
+                agent.setVariableUInt("bi_counter", 1)
+                
+                agent.setVariableUInt("transition_0_to_2", 0)
+                agent.setVariableUInt("transition_2_to_3", 0)
+                agent.setVariableUInt("transition_2_to_6", 0)
+                agent.setVariableUInt("transition_2_to_7", 0)
+                agent.setVariableUInt("transition_3_to_2", 0)
+                agent.setVariableUInt("transition_7_to_2", 0)
+                agent.setVariableUInt("transition_1_to_2", 0)
+                agent.setVariableUInt("transition_4_to_3", 0)
+                
+                agent.setVariableUInt("exit_date", 0)
+                agent.setVariableUInt("sne", 0)
+                agent.setVariableUInt("ppr", 0)
+                agent.setVariableUInt("cso", 0)
+                agent.setVariableUInt("daily_today_u32", 0)
+                agent.setVariableUInt("daily_next_u32", 0)
+                
+                agent.setVariableUInt("ll", int(self.env_consts.get('ll', 0)))
+                agent.setVariableUInt(
+                    "second_ll", int(self.env_consts.get('second_ll_sentinel', 0xFFFFFFFF))
+                )
+                agent.setVariableUInt("oh", int(self.env_consts.get('oh', 0)))
+                agent.setVariableUInt("br", int(self.env_consts.get('br', 0)))
+                
+                agent.setVariableUInt("repair_time", int(self.env_consts.get('repair_time', 0)))
+                agent.setVariableUInt("assembly_time", int(self.env_consts.get('assembly_time', 0)))
+                agent.setVariableUInt("partout_time", int(self.env_consts.get('partout_time', 0)))
+                agent.setVariableUInt("repair_days", 0)
+                agent.setVariableUInt("assembly_trigger", 0)
+                agent.setVariableUInt("active_trigger", 0)
+                agent.setVariableUInt("partout_trigger", 0)
+                
+                agent.setVariableUInt("mfg_date", current_day)
+                agent.setVariableUInt("s4_days", 0)
+                
+                agent.setVariableUInt("limiter_date", 0xFFFFFFFF)
+                agent.setVariableUInt16("limiter", 0)
+                agent.setVariableUInt("computed_adaptive_days", 1)
+                
+                agent.setVariableUInt("status_change_day", current_day)
+                agent.setVariableUInt("repair_candidate", 0)
+                agent.setVariableUInt("repair_line_id", 0xFFFFFFFF)
+                agent.setVariableUInt("repair_line_day", 0xFFFFFFFF)
+                
+                agent.setVariableUInt("promoted", 0)
+                agent.setVariableUInt("needs_demote", 0)
+                agent.setVariableUInt("commit_p1", 0)
+                agent.setVariableUInt("commit_p2", 0)
+                agent.setVariableUInt("commit_p3", 0)
+                agent.setVariableUInt("decision_p2", 0)
+                agent.setVariableUInt("decision_p3", 0)
+                
+                agent.setVariableUInt("debug_promoted", 0)
+                agent.setVariableUInt("debug_needs_demote", 0)
+                agent.setVariableUInt("debug_repair_candidate", 0)
+                agent.setVariableUInt("debug_repair_line_id", 0xFFFFFFFF)
+                agent.setVariableUInt("debug_repair_line_day", 0xFFFFFFFF)
+                agent.setVariableUInt("debug_bucket_seen", 0)
+                
+                self.total_spawned += 1
+            
+            end_acn = self.base_acn + self.total_spawned - 1
+            print(
+                f"   📦 Det spawn: {count_i} агентов в serviceable "
+                f"(day={current_day}, acn={start_acn}..{end_acn})"
+            )
 
 
 class HF_InitMP5Cumsum(fg.HostFunction):
@@ -1491,7 +1637,10 @@ class HF_InitRepairLines(fg.HostFunction):
                 mp_days[i] = 1       # свободна с 1
                 mp_acn[i] = 0        # свободна
                 mp_gb[i] = 0
-                mp_rt[i] = 0
+                min_rt = min(self.mi8_rt, self.mi17_rt)
+                if min_rt <= 0:
+                    min_rt = max(self.mi8_rt, self.mi17_rt)
+                mp_rt[i] = min_rt if min_rt > 0 else 0  # baseline readiness threshold для свободной линии, иначе QM не увидит слот
                 mp_last_acn[i] = 0
                 mp_last_day[i] = 0
         

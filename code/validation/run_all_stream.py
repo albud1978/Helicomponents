@@ -135,7 +135,6 @@ def run_validator(
     dataset_key = format_dataset(version_date, version_id)
     script_name = os.path.basename(script_path)
     inv_label = "/".join(inv_ids)
-    table = table_repair if script_name == "inv3_repair_capacity.py" else table_main
 
     print("\n" + "=" * 80)
     print(f"DATASET {dataset_key} | {inv_label} -> {script_name}")
@@ -148,9 +147,13 @@ def run_validator(
         str(version_id),
         "--version-date",
         str(version_date),
-        "--table",
-        table,
     ]
+    if script_name == "inv3_repair_capacity.py":
+        cmd.extend(["--table", table_repair])
+    elif script_name == "temp5_repair_hybrid_vector.py":
+        cmd.extend(["--table-main", table_main, "--table-repair", table_repair])
+    else:
+        cmd.extend(["--table", table_main])
     return stream_process(cmd)
 
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## [18-02-2026] - INV-2 root-cause fix + strict TEMP-5 stabilization + graph/history update
+
+### Изменения
+- `code/sim_v2/messaging/rtc_repair_lines_v8.py`: устранён рассинхрон `free_days`/`aircraft_number` между MacroProperty и agent state (source-of-truth в increment).
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py`: исправлена инициализация `repair_line_rt_mp` для свободных линий (слоты видимы для QM), добавлен anti-starvation расчёт dynamic reserve для Mi-8.
+- `code/validation/temp4_no_infinite_repair.py`: исправлено построение repair-span по полной траектории (без ложного склеивания интервалов).
+- `code/validation/temp5_repair_hybrid_vector.py`: strict проверка переведена на future-window `[day, day+repair_window)` с tail-adjustment; исправлена SQL-резолюция alias.
+- `code/validation/run_all.py` и `code/validation/run_all_stream.py`: синхронизирована маршрутизация таблиц для `INV-3`/`TEMP-5`, актуализирован набор валидаторов.
+- `config/transitions/invariants.json`: обновлены формулировки `INV-3` (lookback-only busy metric) и добавлен/уточнён `TEMP-5` (hybrid strict future-window).
+
+### Контекст
+Пост-warmup дефицит `INV-2` (ранее массовый, затем локальный) расследован до причинной цепочки: невидимость части repair slots для квотирования + рассинхрон `free_days` после claim. После исправлений подтверждена работоспособность fallback-механизмов и согласованность строгой hybrid-валидации.
+
+### Результаты
+- `TEMP-5`: PASS на `20250704:1` и `20251230:2`.
+- `INV-3`: PASS на `20250704:1` и `20251230:2`.
+- `INV-10`: PASS на `20250704:1` и `20251230:2`.
+- `INV-2`: PASS на `20250704:1` и `20251230:2`.
+- `run_all_stream`: 13/13 PASS на обоих датасетах (без FAIL-инвариантов).
+
+### История и графы
+- Agent KG обновлён: `W_INV2_ROOTCAUSE_20260218` (workflow + decision context + orchestrator handoff).
+- Доменный граф синхронизирован после фиксов текущей итерации.
+
 ## [16-02-2026] - BomGroup: убраны лишние поля, уточнены L1 titles
 
 ### Изменения

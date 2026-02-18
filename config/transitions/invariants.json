@@ -4,7 +4,7 @@
     "description": "Глобальные инварианты, temporal-контракты и GPU-ограничения модели V11. Все инварианты обеспечены валидационными скриптами в code/validation/.",
     "ssot": true,
     "created": "2026-02-10",
-    "updated": "2026-02-15",
+    "updated": "2026-02-17",
     "related": ["transitions_rules.json", "quota_rules.json"]
   },
 
@@ -43,15 +43,15 @@
     },
     {
       "id": "INV-3",
-      "claim": "Одновременно в ремонте <= repair_quota (по RepairLine матрице)",
-      "expr": "countIf(aircraft_number != 0) per day <= repair_quota",
+      "claim": "Одновременно занятые линии ремонта (busy lines: repair_time > 0 и free_days < repair_time) <= repair_quota",
+      "expr": "countIf(repair_time > 0 AND free_days < repair_time) per day <= repair_quota",
       "scope": "per_day_global",
       "severity": "CRITICAL",
       "data_source": "sim_repairline_v9 (ежедневная интерполяция из GPU RepairLine буферов)",
       "validator": "code/validation/inv3_repair_capacity.py",
       "last_validated": "2026-02-15",
       "last_result": "PASS (D1: max 10, D2: max 14, quota=18, 0 violations, datasets 20250704 + 20251230)",
-      "notes": "Ранее проверялось по status_id=4 в sim_masterv2_v9 (артефакт постпроцессинга, давал ложные FAIL). Теперь — по GPU-экспорту MacroProperty repair_line_acn_mp через sim_repairline_v9 с ежедневной интерполяцией."
+      "notes": "Lookback-only семантика: занятость линии определяется по repair_time > 0 и free_days < repair_time; aircraft_number не используется. Источник — GPU-экспорт MacroProperty repair_line_acn_mp через sim_repairline_v9 с ежедневной интерполяцией."
     },
     {
       "id": "INV-4",
@@ -127,11 +127,11 @@
       "scope": "fleet_total_per_status",
       "severity": "CRITICAL",
       "initial_source": "pre_status_id на первом шаге (состояние ДО обработки Day0)",
-      "transition_matrix": "LEGAL: 0→2, 0→3, 1→2, 2→3, 2→6, 2→7, 3→2, 4→2, 4→3, 7→2. Все прочие — ILLEGAL.",
+      "transition_matrix": "LEGAL: 0→2, 0→3, 1→2, 1→4, 2→3, 2→6, 2→7, 3→2, 4→2, 4→3, 7→2, 7→4. Все прочие — ILLEGAL.",
       "validator": "code/validation/inv10_turnover_balance.py",
       "last_validated": "2026-02-15",
       "last_result": "PASS (0 balance violations, 0 illegal transitions, datasets 20250704 + 20251230)",
-      "notes": "Закон сохранения потоков. Постпроцессинг status_id отключён (Вариант A, 2026-02-15) — ремонты отслеживаются в sim_repairline_v9. Начальная популяция по pre_status_id (не status_id) для учёта Day0 переходов."
+      "notes": "Закон сохранения потоков. Постпроцессинг P2/P3 включён (Вариант B, 2026-02-17) — реконструирует окно ремонта (7→4→2, 1→4→2) с корректным обновлением pre_status_id. Ремонты также отслеживаются в sim_repairline_v9. Начальная популяция по pre_status_id (не status_id) для учёта Day0 переходов."
     }
   ],
 
@@ -160,6 +160,17 @@
       "last_validated": "2026-02-15",
       "last_result": "PASS (0 violations, max repair span ~101 days, datasets 20250704 + 20251230)",
       "notes": "Прежние FAIL (3000+ дней) были артефактом отключённого постпроцессинга: статусы status_id=4 ставились Python post-processing, а не GPU — создавали непрерывные спаны без exit_date."
+    },
+    {
+      "id": "TEMP-5",
+      "claim": "Hybrid precondition: для каждого 4→2 на дне d доступная ремонтная емкость подтверждается по repairline",
+      "expr": "for each (day,group): busy_today >= count_4to2(day,group) AND future_busy_sum[day,day+repair_window) >= count_4to2(day,group) * effective_window, where effective_window = min(repair_window, max_day_group - day + 1), max_day_group = max(day_u16) in repairline for group, and if effective_window <= 0 then required = 0",
+      "scope": "per_day_per_group",
+      "severity": "HIGH",
+      "validator": "code/validation/temp5_repair_hybrid_vector.py",
+      "last_validated": "2026-02-17",
+      "last_result": "PENDING (new validator)",
+      "notes": "Гибридная проверка: master transitions + repairline vectors. Capacity check выполняется по strict future cooldown window [day, day+repair_window) с tail adjustment на конце доступного горизонта repairline."
     }
   ],
 

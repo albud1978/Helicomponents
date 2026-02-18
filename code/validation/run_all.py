@@ -11,15 +11,17 @@ import sys
 SCRIPTS = [
     ("INV-1", "inv1_sne_le_ll.py"),
     ("INV-2", "inv2_ops_vs_target.py"),
-    ("INV-3", "inv3_repair_limit.py"),
-    ("INV-4", "inv4_unsvc_min_repair.py"),
-    ("INV-5", "inv5_sne_balance.py"),
-    ("INV-6", "inv6_dt_outside_ops.py"),
+    ("INV-3", "inv3_repair_capacity.py"),
+    ("INV-4", "inv4_unsvc_repair_time.py"),
+    ("INV-5", "inv5_balance_increments.py"),
+    ("INV-6", "inv6_dt_only_ops.py"),
+    ("INV-7", "inv7_dt_eq_mp5.py"),
     ("INV-8", "inv8_storage_frozen.py"),
-    ("INV-9", "inv9_limiter_zero_exit.py"),
+    ("INV-9", "inv9_limiter_exit.py"),
     ("INV-10", "inv10_turnover_balance.py"),
     ("TEMP-1", "temp1_repair_duration.py"),
-    ("TEMP-4", "temp4_liveness.py"),
+    ("TEMP-4", "temp4_no_infinite_repair.py"),
+    ("TEMP-5", "temp5_repair_hybrid_vector.py"),
 ]
 
 
@@ -27,9 +29,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Запуск всех инвариантов (SQL-first)")
     parser.add_argument("--version-id", required=True, type=int, help="version_id")
     parser.add_argument(
-        "--table",
+        "--version-date",
+        type=int,
+        default=None,
+        help="version_date (YYYYMMDD) для фильтрации",
+    )
+    parser.add_argument(
+        "--table-main",
         default="sim_masterv2_v9",
-        help="Таблица ClickHouse (по умолчанию: sim_masterv2_v9)",
+        help="Основная таблица ClickHouse (по умолчанию: sim_masterv2_v9)",
+    )
+    parser.add_argument(
+        "--table-repair",
+        default="sim_repairline_v9",
+        help="Таблица RepairLine (по умолчанию: sim_repairline_v9)",
     )
     args = parser.parse_args()
 
@@ -44,17 +57,21 @@ def main() -> int:
         print("\n" + "=" * 80)
         print(f"RUN {name} -> {script}")
         print("=" * 80)
-        result = subprocess.run(
-            [
-                sys.executable,
-                script_path,
-                "--version-id",
-                str(args.version_id),
-                "--table",
-                args.table,
-            ],
-            check=False,
-        )
+        cmd = [
+            sys.executable,
+            script_path,
+            "--version-id",
+            str(args.version_id),
+        ]
+        if args.version_date is not None:
+            cmd.extend(["--version-date", str(args.version_date)])
+        if script == "inv3_repair_capacity.py":
+            cmd.extend(["--table", args.table_repair])
+        elif script == "temp5_repair_hybrid_vector.py":
+            cmd.extend(["--table-main", args.table_main, "--table-repair", args.table_repair])
+        else:
+            cmd.extend(["--table", args.table_main])
+        result = subprocess.run(cmd, check=False)
         ok = result.returncode == 0
         results.append((name, ok))
         if not ok:

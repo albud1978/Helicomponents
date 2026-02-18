@@ -9,6 +9,9 @@ GPU записывает состояние (free_days, acn, rt) каждый а
 HF_RepairLineDrain читает буферы на финальном шаге.
 interpolate_repairline_daily() разворачивает адаптивные шаги в ежедневную матрицу.
 export_repairline_to_ch() отправляет результат в ClickHouse (sim_repairline_v9).
+
+Lookback-only: aircraft_number не используется как forward occupancy в экспорте (всегда 0),
+метрики ремонта строятся по free_days и repair_time, но group_by сохраняется из снимка линии.
 """
 
 import sys
@@ -120,15 +123,14 @@ def interpolate_repairline_daily(data, repair_quota):
     Для каждой линии line_id (0..repair_quota-1):
     - Между шагами S (day D1) и S+1 (day D2):
       - free_days растёт на +1/день от значения на шаге S
-      - acn фиксирован (из шага S)
-      - Если acn != 0 и free_days достигает rt — линия освобождается (acn=0)
+    - lookback-only: aircraft_number не используется как forward occupancy (в экспорте = 0)
+    - group_by сохраняется из GPU-снимка линии на шаге S
 
-    Returns: list[tuple] — (day_u16, line_id, free_days, aircraft_number, group_by)
+    Returns: list[tuple] — (day_u16, line_id, free_days, repair_time, aircraft_number, group_by)
     """
     num_steps = data['num_steps']
     days = data['days']
     fd_arr = data['free_days']
-    acn_arr = data['acn']
     rt_arr = data['rt']
     gb_arr = data['gb']
 
@@ -140,29 +142,13 @@ def interpolate_repairline_daily(data, repair_quota):
             d2 = days[s + 1] if s + 1 < num_steps else d1 + 1
 
             fd_s = int(fd_arr[s, line_id])
-            acn_s = int(acn_arr[s, line_id])
             rt_s = int(rt_arr[s, line_id])
-            gb_s = int(gb_arr[s, line_id])
 
-            # Определяем день освобождения линии внутри интервала
-            release_day = None
-            if acn_s != 0 and rt_s > 0 and fd_s < rt_s:
-                # Линия освободится через (rt_s - fd_s) дней от d1
-                release_day = d1 + (rt_s - fd_s)
-
+            daily_gb = int(gb_arr[s, line_id])
             for d in range(d1, d2):
                 daily_fd = fd_s + (d - d1)
-                daily_acn = acn_s
-                daily_gb = gb_s
-
-                # Проверяем освобождение линии
-                if release_day is not None and d >= release_day:
-                    daily_acn = 0
-                
-                if daily_acn == 0:
-                    daily_gb = 0
-
-                rows.append((d, line_id, daily_fd, daily_acn, daily_gb))
+                daily_rt = rt_s
+                rows.append((d, line_id, daily_fd, daily_rt, 0, daily_gb))
 
     return rows
 
@@ -179,6 +165,7 @@ CREATE TABLE IF NOT EXISTS sim_repairline_v9 (
     day_date     Date MATERIALIZED addDays(toDate(toString(version_date)), toUInt16(day_u16)),
     line_id      UInt8,
     free_days    UInt32,
+    repair_time  UInt32,
     aircraft_number UInt32,
     group_by     UInt8
 ) ENGINE = MergeTree()
@@ -193,10 +180,13 @@ def export_repairline_to_ch(ch_client, rows, version_date_int, version_id, drop_
 
     Args:
         ch_client: clickhouse_driver.Client
-        rows: list[tuple] — (day_u16, line_id, free_days, aircraft_number, group_by)
+        rows: list[tuple] — (day_u16, line_id, free_days, repair_time, aircraft_number, group_by)
         version_date_int: int — YYYYMMDD
         version_id: int
         drop_table: bool — дропнуть таблицу перед созданием
+
+    Lookback-only: aircraft_number не используется как forward occupancy (в экспорте = 0),
+    group_by сохраняется из GPU-снимка линии.
     """
     if drop_table:
         ch_client.execute("DROP TABLE IF EXISTS sim_repairline_v9")
@@ -212,17 +202,21 @@ def export_repairline_to_ch(ch_client, rows, version_date_int, version_id, drop_
         "ALTER TABLE sim_repairline_v9 "
         "ADD COLUMN IF NOT EXISTS group_by UInt8"
     )
+    ch_client.execute(
+        "ALTER TABLE sim_repairline_v9 "
+        "ADD COLUMN IF NOT EXISTS repair_time UInt32"
+    )
 
     # Добавляем version_date и version_id к каждой строке
     full_rows = [
-        (version_date_int, version_id, day, lid, fd, acn, gb)
-        for day, lid, fd, acn, gb in rows
+        (version_date_int, version_id, day, lid, fd, rt, acn, gb)
+        for day, lid, fd, rt, acn, gb in rows
     ]
 
     if full_rows:
         ch_client.execute(
             "INSERT INTO sim_repairline_v9 "
-            "(version_date, version_id, day_u16, line_id, free_days, aircraft_number, group_by) "
+            "(version_date, version_id, day_u16, line_id, free_days, repair_time, aircraft_number, group_by) "
             "VALUES",
             full_rows,
             settings={'max_partitions_per_insert_block': 300}

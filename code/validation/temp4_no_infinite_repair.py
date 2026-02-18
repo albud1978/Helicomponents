@@ -44,8 +44,8 @@ def main() -> int:
         vd_filter = " AND version_date = %(vdate)s"
         params["vdate"] = args.version_date
 
-    # Находим непрерывные интервалы в repair для каждого агента
-    # и проверяем что длительность <= max_repair_days
+    # Нельзя фильтровать status_id=4 до lag: так склеиваются разные repair-отрезки через промежуточные статусы.
+    # Находим непрерывные интервалы в repair для каждого агента и проверяем что длительность <= max_repair_days.
     query = f"""
     WITH repair_spans AS (
         SELECT
@@ -55,16 +55,33 @@ def main() -> int:
             max(day_u16) - min(day_u16) AS span,
             groupArray(day_u16) AS days
         FROM (
-            SELECT *,
+            SELECT
+                   aircraft_number,
+                   group_by,
+                   day_u16,
+                   is_repair,
                    sum(new_span) OVER (PARTITION BY aircraft_number, group_by ORDER BY day_u16) AS span_id
             FROM (
                 SELECT
-                    aircraft_number, group_by, day_u16, status_id,
-                    if(lagInFrame(status_id, 1, 0) OVER w != 4 OR lagInFrame(day_u16, 1, 0) OVER w = 0, 1, 0) AS new_span
-                FROM {table}
-                WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2) AND status_id = 4
-                WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
+                    aircraft_number,
+                    group_by,
+                    day_u16,
+                    is_repair,
+                    prev_is_repair,
+                    if(is_repair = 1 AND prev_is_repair = 0, 1, 0) AS new_span
+                FROM (
+                    SELECT
+                        aircraft_number,
+                        group_by,
+                        day_u16,
+                        if(status_id = 4, 1, 0) AS is_repair,
+                        lagInFrame(if(status_id = 4, 1, 0), 1, 0) OVER w AS prev_is_repair
+                    FROM {table}
+                    WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
+                    WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
+                )
             )
+            WHERE is_repair = 1
         )
         GROUP BY aircraft_number, group_by, span_id
     )
@@ -86,16 +103,33 @@ def main() -> int:
                 max(day_u16) AS last_day,
                 max(day_u16) - min(day_u16) AS span
             FROM (
-                SELECT *,
+                SELECT
+                       aircraft_number,
+                       group_by,
+                       day_u16,
+                       is_repair,
                        sum(new_span) OVER (PARTITION BY aircraft_number, group_by ORDER BY day_u16) AS span_id
                 FROM (
                     SELECT
-                        aircraft_number, group_by, day_u16, status_id,
-                        if(lagInFrame(status_id, 1, 0) OVER w != 4 OR lagInFrame(day_u16, 1, 0) OVER w = 0, 1, 0) AS new_span
-                    FROM {table}
-                    WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2) AND status_id = 4
-                    WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
+                        aircraft_number,
+                        group_by,
+                        day_u16,
+                        is_repair,
+                        prev_is_repair,
+                        if(is_repair = 1 AND prev_is_repair = 0, 1, 0) AS new_span
+                    FROM (
+                        SELECT
+                            aircraft_number,
+                            group_by,
+                            day_u16,
+                            if(status_id = 4, 1, 0) AS is_repair,
+                            lagInFrame(if(status_id = 4, 1, 0), 1, 0) OVER w AS prev_is_repair
+                        FROM {table}
+                        WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
+                        WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
+                    )
                 )
+                WHERE is_repair = 1
             )
             GROUP BY aircraft_number, group_by, span_id
         )
