@@ -282,3 +282,222 @@
   edit[1] old='MERGE (t)-[:HAS_GROUP {category: $category}]->(g)' new='MERGE (t)-[:HAS_GROUP]->(g)'
   edit[2] old='                        "category": str(category),' new=''
 
+[2026-02-17 12:23:11 UTC] conv=fad3769c gen=28d88a95 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        # [2026-02-15] Постпроцессинг P2/P3 отключён (Вариант A).\n        # Ремонты отслеживаются в sim_repairline_v9.\n ' new='        # [2026-02-17] Постпроцессинг P2/P3 включён (Вариант B).\n        # Ремонты также отслеживаются в sim_repairline_'
+  edit[1] old='' new='                    first_repair_set = False'
+  edit[2] old='' new='                            if first_repair_set:\n                                fields['mp2_pre_status_id'][s_back, a] '
+  edit[3] old='' new='                    \n                    # Шаг промоута: pre_status_id = 4 (был в repair → теперь в ops)\n               '
+
+[2026-02-17 12:26:24 UTC] conv=fad3769c gen=28d88a95 file=code/validation/inv10_turnover_balance.py
+  edit[0] old='' new='        (1, 4),'
+  edit[1] old='' new='        (7, 4),'
+
+[2026-02-17 12:35:25 UTC] conv=fad3769c gen=28d88a95 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='                            # Guard: пропускаем дни перехода (pre_status != status) —\n                            # сохр'
+
+[2026-02-17 17:19:40 UTC] conv=fad3769c gen=e62e5609 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='        # Подсчёт детерминированного spawn для смещения динамического\n        spawn_seed = self.env_data.get('mp4_new_co'
+
+[2026-02-17 17:19:46 UTC] conv=fad3769c gen=e62e5609 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        # V8: Детерминированный spawn\n        # DISABLED (state5-unused): spawn через reserve больше не используется. Де' new='        # V8: Детерминированный spawn (0→3 через serviceable + exit_date)\n        spawn_count = self._populate_determini'
+
+[2026-02-17 17:19:57 UTC] conv=fad3769c gen=e62e5609 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        base_acn_spawn = 100000' new='        det_spawn = getattr(self, '_deterministic_spawn_count', 0)\n        base_acn_spawn = 100000 + det_spawn'
+  edit[1] old='            'first_dynamic_idx': self.frames,\n            'first_dynamic_idx_mi17': self.frames,\n            'first_dyna' new='            'first_dynamic_idx': self.frames + det_spawn,\n            'first_dynamic_idx_mi17': self.frames + det_spawn,'
+
+[2026-02-17 17:20:08 UTC] conv=fad3769c gen=e62e5609 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        total_agents_with_spawn = self.frames + dynamic_reserve_mi17 + dynamic_reserve_mi8' new='        total_agents_with_spawn = self.frames + det_spawn + dynamic_reserve_mi17 + dynamic_reserve_mi8'
+
+[2026-02-17 17:20:15 UTC] conv=fad3769c gen=e62e5609 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        total_export_agents = self.frames + dyn17 + dyn8' new='        det_spawn = getattr(self, '_deterministic_spawn_count', 0)\n        total_export_agents = self.frames + det_spawn'
+
+[2026-02-17 17:20:53 UTC] conv=fad3769c gen=e62e5609 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='    # DISABLED (state5-unused): spawn через reserve больше не используется. Детерминированный spawn реализуется через 0→' new='    def _populate_deterministic_spawn(self) -> int:\n        """\n        Детерминированный spawn: создаём агентов в servi'
+
+[2026-02-17 17:21:00 UTC] conv=fad3769c gen=e62e5609 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        # Spawn dates' new='        # Spawn dates (детерминированный spawn)'
+
+[2026-02-17 17:21:08 UTC] conv=fad3769c gen=e62e5609 file=code/sim_v2/messaging/rtc_state_transitions_v7.py
+  edit[0] old='' new='    // Guard: spawn агенты с exit_date > 0 заморожены до exit_date\n    const unsigned int exit_date = FLAMEGPU->getVaria'
+
+[2026-02-17 17:35:59 UTC] conv=fad3769c gen=e62e5609 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        remaining_slots = max(0, model_build.RTC_MAX_FRAMES - self.frames - dynamic_reserve_mi17)' new='        det_spawn = getattr(self, '_deterministic_spawn_count', 0)\n        remaining_slots = max(\n            0,\n       '
+  edit[1] old='        det_spawn = getattr(self, '_deterministic_spawn_count', 0)' new=''
+  edit[2] old='' new='        second_ll_sentinel = int(self.env_data.get('second_ll_sentinel', 0xFFFFFFFF))'
+  edit[3] old='' new='        # Детерминированный spawn начинается после реальных агентов (reserved slots)\n        start_idx = int(self.env_da'
+  edit[4] old='        next_idx = self.frames' new='        next_idx = start_idx'
+  edit[5] old='' new='        remaining = available_spawn'
+  edit[6] old='            for _ in range(count):' new='            if remaining <= 0:\n                break\n            to_create = min(count, remaining)\n            for _ in '
+  edit[7] old='' new='                remaining -= 1'
+  edit[8] old='' new='            missing_vars = set()\n            \n            def _is_missing_var_error(exc: Exception) -> bool:\n           '
+  edit[9] old='                agent.setVariableUInt("idx", data['idx'])\n                agent.setVariableUInt("aircraft_number", data[' new='                # Базовые переменные (как в AgentPopulationBuilder.populate_agents)\n                safe_set_uint(agent,'
+  edit[10] old='                agent.setVariableUInt("transition_0_to_2", 0)\n                agent.setVariableUInt("transition_2_to_3",' new='                safe_set_uint(agent, "sne", data['sne'])\n                safe_set_uint(agent, "ppr", data['ppr'])'
+  edit[11] old='                agent.setVariableUInt("exit_date", data['exit_date'])' new='                safe_set_uint(agent, "ll", data['ll'])\n                safe_set_uint(agent, "second_ll", second_ll_senti'
+  edit[12] old='                agent.setVariableUInt("sne", data['sne'])\n                agent.setVariableUInt("ppr", data['ppr'])\n    ' new='                safe_set_uint(agent, "mfg_date", data['exit_date'])\n                safe_set_uint(agent, "repair_time", '
+  edit[13] old='                agent.setVariableUInt("ll", data['ll'])\n                agent.setVariableUInt("second_ll", 0)\n          ' new='                # Детерминированный выход из spawn\n                safe_set_uint(agent, "exit_date", data['exit_date'])\n'
+
+[2026-02-17 18:00:16 UTC] conv=fad3769c gen=3e99b51a file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='        # Детерминированный spawn (HostFunction, mid-simulation)\n        spawn_seed = self.env_data.get('mp4_new_counter'
+
+[2026-02-17 18:00:21 UTC] conv=fad3769c gen=3e99b51a file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        # V8: Детерминированный spawn (0→3 через serviceable + exit_date)\n        spawn_count = self._populate_determini' new='        # Детерминированный spawn реализован через HF_DeterministicSpawn (mid-simulation)\n        spawn_count = getattr('
+
+[2026-02-17 18:00:47 UTC] conv=fad3769c gen=3e99b51a file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='    def _populate_deterministic_spawn(self) -> int:\n        """\n        Детерминированный spawn: создаём агентов в servi' new=''
+
+[2026-02-17 18:01:21 UTC] conv=fad3769c gen=3e99b51a file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='class HF_DeterministicSpawn(fg.HostFunction):\n    """\n    HostFunction: детерминированный spawn агентов в serviceable.\n '
+
+[2026-02-17 18:01:26 UTC] conv=fad3769c gen=3e99b51a file=code/sim_v2/messaging/rtc_state_transitions_v7.py
+  edit[0] old='    // Guard: spawn агенты с exit_date > 0 заморожены до exit_date\n    const unsigned int exit_date = FLAMEGPU->getVaria' new=''
+
+[2026-02-17 19:55:51 UTC] conv=fad3769c gen=735aaddb file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    auto line_acn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");' new=''
+  edit[1] old='        if (line_acn_mp[i] == 0u && line_days_mp[i] >= min_rt) {{' new='        if (line_days_mp[i] >= min_rt) {{'
+
+[2026-02-17 19:56:15 UTC] conv=fad3769c gen=735aaddb file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='' new='\nLookback-only: aircraft_number не используется как forward occupancy в экспорте,\nметрики ремонта строятся по free_days '
+  edit[1] old='      - acn фиксирован (из шага S)\n      - Если acn != 0 и free_days достигает rt — линия освобождается (acn=0)' new='      - lookback-only: aircraft_number не используется как forward occupancy'
+  edit[2] old='    Returns: list[tuple] — (day_u16, line_id, free_days, aircraft_number, group_by)' new='    Returns: list[tuple] — (day_u16, line_id, free_days, repair_time, aircraft_number, group_by)'
+  edit[3] old='    acn_arr = data['acn']' new=''
+  edit[4] old='    gb_arr = data['gb']' new=''
+  edit[5] old='            acn_s = int(acn_arr[s, line_id])' new=''
+  edit[6] old='            gb_s = int(gb_arr[s, line_id])' new=''
+  edit[7] old='            # Определяем день освобождения линии внутри интервала\n            release_day = None\n            if acn_s !=' new=''
+  edit[8] old='                daily_acn = acn_s\n                daily_gb = gb_s' new='                daily_rt = rt_s\n                rows.append((d, line_id, daily_fd, daily_rt, 0, 0))'
+  edit[9] old='                # Проверяем освобождение линии\n                if release_day is not None and d >= release_day:\n        ' new=''
+  edit[10] old='' new='    repair_time  UInt32,'
+  edit[11] old='        rows: list[tuple] — (day_u16, line_id, free_days, aircraft_number, group_by)' new='        rows: list[tuple] — (day_u16, line_id, free_days, repair_time, aircraft_number, group_by)'
+  edit[12] old='' new='\n    Lookback-only: aircraft_number не используется как forward occupancy, в экспорте = 0.'
+  edit[13] old='' new='    ch_client.execute(\n        "ALTER TABLE sim_repairline_v9 "\n        "ADD COLUMN IF NOT EXISTS repair_time UInt32"\n  '
+  edit[14] old='        (version_date_int, version_id, day, lid, fd, acn, gb)\n        for day, lid, fd, acn, gb in rows' new='        (version_date_int, version_id, day, lid, fd, rt, acn, gb)\n        for day, lid, fd, rt, acn, gb in rows'
+  edit[15] old='            "(version_date, version_id, day_u16, line_id, free_days, aircraft_number, group_by) "' new='            "(version_date, version_id, day_u16, line_id, free_days, repair_time, aircraft_number, group_by) "'
+
+[2026-02-17 20:00:50 UTC] conv=fad3769c gen=735aaddb file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        Постпроцессинг P2/P3 промоутов: восстановление окна ремонта.' new='        Постпроцессинг P2/P3 промоутов: восстановление окна ремонта + дневной cap по repair_quota.'
+  edit[1] old='' new='        apply_daily_cap = self.repair_quota > 0'
+  edit[2] old='' new='        # Текущая дневная занятость repair по планерам (group_by 1/2) на основе status_id=4\n        day_to_agents_set = '
+  edit[3] old='' new='                    agent_key = int(fields['mp2_idx'][s, a])'
+  edit[4] old='' new='                            if apply_daily_cap:\n                                day_set = day_to_agents_set.get(d_back)\n'
+  edit[5] old='' new='                            if apply_daily_cap:\n                                day_set.add(agent_key)'
+
+[2026-02-17 20:01:06 UTC] conv=fad3769c gen=735aaddb file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='                    group_by_event = int(fields['mp2_group_by'][s, a])'
+  edit[1] old='' new='                    apply_daily_cap_for_agent = apply_daily_cap and group_by_event in (1, 2)'
+  edit[2] old='                            if apply_daily_cap:' new='                            if apply_daily_cap_for_agent:'
+  edit[3] old='                            if apply_daily_cap:' new='                            if apply_daily_cap_for_agent:'
+
+[2026-02-17 20:04:39 UTC] conv=fad3769c gen=735aaddb file=code/validation/inv3_repair_capacity.py
+  edit[0] old='' new='    # aircraft_number в lookback-only экспорте не является признаком занятости линии\n    busy_expr = "repair_time > 0 AN'
+  edit[1] old='        SELECT day_u16, countIf(aircraft_number != 0) AS n' new='        SELECT day_u16, countIf({busy_expr}) AS n'
+  edit[2] old='        SELECT day_u16, countIf(aircraft_number != 0) AS n' new='        SELECT day_u16, countIf({busy_expr}) AS n'
+  edit[3] old='            SELECT day_u16, countIf(aircraft_number != 0) AS n' new='            SELECT day_u16, countIf({busy_expr}) AS n'
+
+[2026-02-17 20:18:14 UTC] conv=fad3769c gen=735aaddb file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto line_rt_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");'
+  edit[1] old='    \n    // min repair_time для порога доступности\n    const unsigned int min_rt = (mi8_rt < mi17_rt) ? mi8_rt : mi17_rt' new=''
+  edit[2] old='        if (line_days_mp[i] >= min_rt) {{' new='        const unsigned int line_rt = line_rt_mp[i];\n        if (line_rt > 0u && line_days_mp[i] >= line_rt) {{'
+
+[2026-02-17 20:18:43 UTC] conv=fad3769c gen=735aaddb file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='                    d_event = days[s]' new='                    d_event = int(days[s])'
+  edit[1] old='                    # Устанавливаем active_trigger=1 на шаге промоута\n                    fields['mp2_active_trigger'][s' new='                    # Собираем кандидатов окна ремонта с guard-условиями\n                    candidate_steps = []'
+  edit[2] old='                        d_back = days[s_back]' new='                        d_back = int(days[s_back])'
+  edit[3] old='                            if apply_daily_cap_for_agent:\n                                day_set = day_to_agents_set.ge' new='                            candidate_steps.append((s_back, d_back))\n                    \n                    if not can'
+  edit[4] old='                                first_repair_set = True\n                            if apply_daily_cap_for_agent:\n      ' new='                                day_len = len(day_set)\n                                has_agent = agent_key in day_set\n'
+  edit[5] old='                    # Шаг промоута: pre_status_id = 4 (был в repair → теперь в ops)' new='                    # Устанавливаем active_trigger=1 на шаге промоута\n                    fields['mp2_active_trigger'][s'
+
+[2026-02-17 20:29:48 UTC] conv=fad3769c gen=735aaddb file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='Lookback-only: aircraft_number не используется как forward occupancy в экспорте,\nметрики ремонта строятся по free_days и' new='Lookback-only: aircraft_number не используется как forward occupancy в экспорте (всегда 0),\nметрики ремонта строятся по '
+  edit[1] old='      - lookback-only: aircraft_number не используется как forward occupancy' new='    - lookback-only: aircraft_number не используется как forward occupancy (в экспорте = 0)\n    - group_by сохраняется и'
+  edit[2] old='' new='    gb_arr = data['gb']'
+  edit[3] old='' new='            daily_gb = int(gb_arr[s, line_id])'
+  edit[4] old='                rows.append((d, line_id, daily_fd, daily_rt, 0, 0))' new='                rows.append((d, line_id, daily_fd, daily_rt, 0, daily_gb))'
+
+[2026-02-17 20:29:56 UTC] conv=fad3769c gen=735aaddb file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='    Lookback-only: aircraft_number не используется как forward occupancy, в экспорте = 0.' new='    Lookback-only: aircraft_number не используется как forward occupancy (в экспорте = 0),\n    group_by сохраняется из G'
+
+[2026-02-18 04:32:39 UTC] conv=fad3769c gen=6351ac90 file=code/validation/run_all_stream.py
+  edit[0] old='    table = table_repair if script_name == "inv3_repair_capacity.py" else table_main' new=''
+  edit[1] old='        "--table",\n        table,' new=''
+  edit[2] old='' new='    if script_name == "inv3_repair_capacity.py":\n        cmd.extend(["--table", table_repair])\n    elif script_name == "'
+
+[2026-02-18 04:32:52 UTC] conv=fad3769c gen=6351ac90 file=code/validation/run_all.py
+  edit[0] old='    ("INV-3", "inv3_repair_limit.py"),\n    ("INV-4", "inv4_unsvc_min_repair.py"),\n    ("INV-5", "inv5_sne_balance.py"),\n' new='    ("INV-3", "inv3_repair_capacity.py"),\n    ("INV-4", "inv4_unsvc_repair_time.py"),\n    ("INV-5", "inv5_balance_increm'
+  edit[1] old='    ("INV-9", "inv9_limiter_zero_exit.py"),' new='    ("INV-9", "inv9_limiter_exit.py"),'
+  edit[2] old='    ("TEMP-4", "temp4_liveness.py"),' new='    ("TEMP-4", "temp4_no_infinite_repair.py"),\n    ("TEMP-5", "temp5_repair_hybrid_vector.py"),'
+  edit[3] old='        "--table",' new='        "--version-date",\n        type=int,\n        default=None,\n        help="version_date (YYYYMMDD) для фильтрации",'
+  edit[4] old='        help="Таблица ClickHouse (по умолчанию: sim_masterv2_v9)",' new='        help="Основная таблица ClickHouse (по умолчанию: sim_masterv2_v9)",'
+  edit[5] old='' new='    parser.add_argument(\n        "--table-repair",\n        default="sim_repairline_v9",\n        help="Таблица RepairLine'
+  edit[6] old='        result = subprocess.run(\n            [\n                sys.executable,\n                script_path,\n            ' new='        cmd = [\n            sys.executable,\n            script_path,\n            "--version-id",\n            str(args.ve'
+
+[2026-02-18 04:33:22 UTC] conv=fad3769c gen=6351ac90 file=code/validation/temp5_repair_hybrid_vector.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nTEMP-5: Hybrid precondition (master transitions + repairline vectors).\n\nПроверяет:\n1) busy_to'
+
+[2026-02-18 04:34:40 UTC] conv=fad3769c gen=6351ac90 file=code/validation/temp5_repair_hybrid_vector.py
+  edit[0] old='    busy_by_day AS (' new='    busy_by_day_raw AS ('
+  edit[1] old='' new='    ),\n    all_days AS (\n        SELECT group_by, day_u16 FROM event_days\n        UNION DISTINCT\n        SELECT group_by'
+  edit[2] old='    WHERE ifNull(b.busy_day_count, 0) < e.cnt_4to2_day' new='    WHERE b.busy_day_count < e.cnt_4to2_day'
+  edit[3] old='            sum(ifNull(b.busy_day_count, 0)) AS window_busy_sum' new='            ifNull(w.window_busy_sum, 0) AS window_busy_sum'
+  edit[4] old='        LEFT JOIN busy_by_day AS b\n            ON b.group_by = e.group_by\n           AND b.day_u16 >= e.day_u16 - %(wind' new='        LEFT JOIN busy_with_window AS w\n            ON w.group_by = e.group_by AND w.day_u16 = e.day_u16\n        WHERE i'
+  edit[5] old='            ifNull(b.busy_day_count, 0) AS busy_today' new='            b.busy_day_count AS busy_today'
+  edit[6] old='        WHERE ifNull(b.busy_day_count, 0) < e.cnt_4to2_day\n        ORDER BY (e.cnt_4to2_day - ifNull(b.busy_day_count, 0' new='        WHERE b.busy_day_count < e.cnt_4to2_day\n        ORDER BY (e.cnt_4to2_day - b.busy_day_count) DESC, e.day_u16'
+  edit[7] old='            sum(ifNull(b.busy_day_count, 0)) AS window_busy_sum,' new='            ifNull(w.window_busy_sum, 0) AS window_busy_sum,'
+  edit[8] old='            (%(window)s * e.cnt_4to2_day - sum(ifNull(b.busy_day_count, 0))) AS deficit' new='            (%(window)s * e.cnt_4to2_day - ifNull(w.window_busy_sum, 0)) AS deficit'
+  edit[9] old='        LEFT JOIN busy_by_day AS b\n            ON b.group_by = e.group_by\n           AND b.day_u16 >= e.day_u16 - %(wind' new='        LEFT JOIN busy_with_window AS w\n            ON w.group_by = e.group_by AND w.day_u16 = e.day_u16\n        WHERE i'
+
+[2026-02-18 04:43:39 UTC] conv=fad3769c gen=6351ac90 file=code/validation/temp4_no_infinite_repair.py
+  edit[0] old='    # Находим непрерывные интервалы в repair для каждого агента\n    # и проверяем что длительность <= max_repair_days' new='    # Нельзя фильтровать status_id=4 до lag: так склеиваются разные repair-отрезки через промежуточные статусы.\n    # На'
+  edit[1] old='            SELECT *,' new='            SELECT\n                   aircraft_number,\n                   group_by,\n                   day_u16,\n        '
+  edit[2] old='                    aircraft_number, group_by, day_u16, status_id,\n                    if(lagInFrame(status_id, 1, 0) OV' new='                    aircraft_number,\n                    group_by,\n                    day_u16,\n                    is_r'
+  edit[3] old='' new='            WHERE is_repair = 1'
+  edit[4] old='                SELECT *,' new='                SELECT\n                       aircraft_number,\n                       group_by,\n                       d'
+  edit[5] old='                        aircraft_number, group_by, day_u16, status_id,\n                        if(lagInFrame(status_id, ' new='                        aircraft_number,\n                        group_by,\n                        day_u16,\n            '
+  edit[6] old='' new='                WHERE is_repair = 1'
+
+[2026-02-18 05:51:24 UTC] conv=fad3769c gen=ae39e863 file=code/sim_v2/messaging/rtc_repair_lines_v8.py
+  edit[0] old='    unsigned int free_days = FLAMEGPU->getVariable<unsigned int>("free_days");' new='    auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp")'
+  edit[1] old='' new='    const unsigned int acn = mp_acn[line_id];\n    FLAMEGPU->setVariable<unsigned int>("aircraft_number", acn);\n    '
+  edit[2] old='    const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");' new=''
+
+[2026-02-18 06:25:23 UTC] conv=fad3769c gen=ae39e863 file=code/validation/temp5_repair_hybrid_vector.py
+  edit[0] old='2) sum(busy_day_count) на окне [day-window, day) >= window * count_4to2_day.' new='2) strict future-window [day, day+window) с tail adjustment:\n   future_busy_sum >= count_4to2_day * effective_window.'
+  edit[1] old='        description="TEMP-5: repair hybrid vector (master + repairline)"' new='        description=(\n            "TEMP-5: repair hybrid vector "\n            "(master + repairline, strict future-windo'
+  edit[2] old='    params = {"vid": args.version_id, "window": repair_window}' new='    params = {\n        "vid": args.version_id,\n        "window": repair_window,\n        "window_follow": repair_window -'
+  edit[3] old='' new='    max_day_by_group AS (\n        SELECT\n            group_by,\n            max(day_u16) AS max_day_group\n        FROM {t'
+  edit[4] old='                RANGE BETWEEN %(window)s PRECEDING AND 1 PRECEDING\n            ) AS window_busy_sum' new='                RANGE BETWEEN CURRENT ROW AND %(window_follow)s FOLLOWING\n            ) AS future_busy_sum'
+  edit[5] old='            ifNull(w.window_busy_sum, 0) AS window_busy_sum' new='            ifNull(w.future_busy_sum, 0) AS future_busy_sum,\n            ifNull(\n                least(\n                '
+  edit[6] old='        WHERE ifNull(w.window_busy_sum, 0) < %(window)s * e.cnt_4to2_day' new='        LEFT JOIN max_day_by_group AS m\n            ON m.group_by = e.group_by\n        WHERE future_busy_sum < (e.cnt_4t'
+  edit[7] old='' new='        "tail_adjusted=true (strict future window [day, day+repair_window))",'
+  edit[8] old='            ifNull(w.window_busy_sum, 0) AS window_busy_sum,\n            (%(window)s * e.cnt_4to2_day) AS required,\n    ' new='            ifNull(w.future_busy_sum, 0) AS future_busy_sum,\n            ifNull(\n                least(\n                '
+  edit[9] old='        WHERE ifNull(w.window_busy_sum, 0) < %(window)s * e.cnt_4to2_day' new='        LEFT JOIN max_day_by_group AS m\n            ON m.group_by = e.group_by\n        WHERE future_busy_sum < required'
+  edit[10] old='            "top5 window_capacity (gb, day, cnt, window_busy_sum, required, deficit):"' new='            "top5 window_capacity (gb, day, cnt, future_busy_sum, required, deficit):"'
+  edit[11] old='        for gb, day, cnt, window_sum, required, deficit in rows:' new='        for gb, day, cnt, future_sum, required, deficit in rows:'
+  edit[12] old='                "  gb={gb}, day={day}, cnt={cnt}, window_busy_sum={ws}, "' new='                "  gb={gb}, day={day}, cnt={cnt}, future_busy_sum={fbs}, "'
+  edit[13] old='                    ws=window_sum,' new='                    fbs=future_sum,'
+
+[2026-02-18 06:25:50 UTC] conv=fad3769c gen=ae39e863 file=code/validation/temp5_repair_hybrid_vector.py
+  edit[0] old='            e.group_by,\n            e.day_u16,\n            e.cnt_4to2_day,\n            ifNull(w.future_busy_sum, 0) AS f' new='            src.group_by,\n            src.day_u16,\n            src.cnt_4to2_day,\n            src.future_busy_sum,\n      '
+  edit[1] old='            e.group_by,\n            e.day_u16,\n            e.cnt_4to2_day,\n            ifNull(w.future_busy_sum, 0) AS f' new='            src.group_by,\n            src.day_u16,\n            src.cnt_4to2_day,\n            src.future_busy_sum,\n      '
+  edit[2] old='                (e.cnt_4to2_day * if(effective_window <= 0, 0, effective_window))\n                - ifNull(w.future_busy' new='                (src.cnt_4to2_day * if(src.effective_window <= 0, 0, src.effective_window))\n                - src.future'
+  edit[3] old='        FROM event_days AS e\n        LEFT JOIN busy_with_window AS w\n            ON w.group_by = e.group_by AND w.day_u1' new='        FROM (\n            SELECT\n                e.group_by,\n                e.day_u16,\n                e.cnt_4to2_day,'
+
+[2026-02-18 06:25:55 UTC] conv=fad3769c gen=ae39e863 file=code/validation/temp5_repair_hybrid_vector.py
+  edit[0] old='        ORDER BY deficit DESC, e.day_u16' new='        ORDER BY deficit DESC, src.day_u16'
+
+[2026-02-18 07:39:21 UTC] conv=fad3769c gen=3647953c file=code/validation/temp5_repair_hybrid_vector.py
+  edit[0] old='' new='    ),\n    event_with_window AS (\n        SELECT\n            e.group_by AS group_by,\n            e.day_u16 AS day_u16,\n '
+  edit[1] old='    FROM (\n        SELECT\n            src.group_by,\n            src.day_u16,\n            src.cnt_4to2_day,\n            s' new='    FROM event_with_window\n    WHERE future_busy_sum < (\n        cnt_4to2_day * if(effective_window <= 0, 0, effective_w'
+  edit[2] old='            src.group_by,\n            src.day_u16,\n            src.cnt_4to2_day,\n            src.future_busy_sum,\n      ' new='            group_by,\n            day_u16,\n            cnt_4to2_day,\n            future_busy_sum,\n            effective_'
+  edit[3] old='                (src.cnt_4to2_day * if(src.effective_window <= 0, 0, src.effective_window))\n                - src.future' new='                (cnt_4to2_day * if(effective_window <= 0, 0, effective_window))\n                - future_busy_sum'
+  edit[4] old='        FROM (\n            SELECT\n                e.group_by,\n                e.day_u16,\n                e.cnt_4to2_day,' new='        FROM event_with_window\n        WHERE future_busy_sum < (\n            cnt_4to2_day * if(effective_window <= 0, 0,'
+
+[2026-02-18 07:58:30 UTC] conv=fad3769c gen=7bfa8dbc file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='                mp_rt[i] = 0' new='                min_rt = min(self.mi8_rt, self.mi17_rt)\n                if min_rt <= 0:\n                    min_rt = max'
+
+[2026-02-18 10:22:07 UTC] conv=fad3769c gen=3cb6c811 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        # Динамический спавн Mi-17 (после P3)' new='        # Динамический спавн (после P3): anti-starvation reserve для Mi-8'
+  edit[1] old='        dynamic_reserve_mi17 = 50' new=''
+  edit[2] old='        remaining_slots = max(' new='        total_dynamic_slots = max('
+  edit[3] old='            model_build.RTC_MAX_FRAMES - self.frames - det_spawn - dynamic_reserve_mi17' new='            model_build.RTC_MAX_FRAMES - self.frames - det_spawn'
+  edit[4] old='        dynamic_reserve_mi8 = 8 if remaining_slots >= 8 else remaining_slots' new='        dynamic_reserve_mi8 = 8 if total_dynamic_slots >= 8 else total_dynamic_slots\n        dynamic_reserve_mi17 = tota'
+

@@ -484,16 +484,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     
     // Подсчет доступных слотов ремонта (shared pool)
     auto line_days_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
-    auto line_acn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    auto line_rt_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
     const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
     const unsigned int max_lines = (repair_quota < {REPAIR_LINES_MAX}u) ? repair_quota : {REPAIR_LINES_MAX}u;
-    
-    // min repair_time для порога доступности
-    const unsigned int min_rt = (mi8_rt < mi17_rt) ? mi8_rt : mi17_rt;
-    
+
     unsigned int available_slots = 0u;
     for (unsigned int i = 0u; i < max_lines; ++i) {{
-        if (line_acn_mp[i] == 0u && line_days_mp[i] >= min_rt) {{
+        const unsigned int line_rt = line_rt_mp[i];
+        if (line_rt > 0u && line_days_mp[i] >= line_rt) {{
             available_slots++;
         }}
     }}
@@ -920,23 +918,48 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
         }}
     }}
     
-    // Fallback: сканировать все линии
+    // Fallback: выбирать линию с минимальным old_days (при равенстве — меньший line_id)
     if (!claimed) {{
+        bool tried[{REPAIR_LINES_MAX}u];
         for (unsigned int i = 0u; i < max_lines; ++i) {{
-            const unsigned int prev_acn = line_acn[i].exchange(acn);
+            tried[i] = false;
+        }}
+        
+        for (unsigned int attempt = 0u; attempt < max_lines && !claimed; ++attempt) {{
+            unsigned int best_line = 0xFFFFFFFFu;
+            unsigned int best_days = 0xFFFFFFFFu;
+            
+            for (unsigned int i = 0u; i < max_lines; ++i) {{
+                if (tried[i]) continue;
+                if (line_acn[i] != 0u) continue;
+                const unsigned int old_days = line_mp[i];
+                if (old_days < repair_time) continue;
+                if (best_line == 0xFFFFFFFFu || old_days < best_days || (old_days == best_days && i < best_line)) {{
+                    best_line = i;
+                    best_days = old_days;
+                }}
+            }}
+            
+            if (best_line == 0xFFFFFFFFu) {{
+                break;
+            }}
+            tried[best_line] = true;
+            
+            const unsigned int prev_acn = line_acn[best_line].exchange(acn);
             if (prev_acn != 0u) {{
-                line_acn[i].exchange(prev_acn);
+                line_acn[best_line].exchange(prev_acn);
                 continue;
             }}
-            const unsigned int old_days = line_mp[i].exchange(0u);
+            
+            const unsigned int old_days = line_mp[best_line].exchange(0u);
             if (old_days < repair_time) {{
-                line_mp[i].exchange(old_days);
-                line_acn[i].exchange(0u);
+                line_mp[best_line].exchange(old_days);
+                line_acn[best_line].exchange(0u);
                 continue;
             }}
-            chosen_line = i;
+            
+            chosen_line = best_line;
             claimed = true;
-            break;
         }}
     }}
     
@@ -1164,21 +1187,46 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     }}
     
     if (!claimed) {{
+        bool tried[{REPAIR_LINES_MAX}u];
         for (unsigned int i = 0u; i < max_lines; ++i) {{
-            const unsigned int prev_acn = line_acn[i].exchange(acn);
+            tried[i] = false;
+        }}
+        
+        for (unsigned int attempt = 0u; attempt < max_lines && !claimed; ++attempt) {{
+            unsigned int best_line = 0xFFFFFFFFu;
+            unsigned int best_days = 0xFFFFFFFFu;
+            
+            for (unsigned int i = 0u; i < max_lines; ++i) {{
+                if (tried[i]) continue;
+                if (line_acn[i] != 0u) continue;
+                const unsigned int old_days = line_mp[i];
+                if (old_days < repair_time) continue;
+                if (best_line == 0xFFFFFFFFu || old_days < best_days || (old_days == best_days && i < best_line)) {{
+                    best_line = i;
+                    best_days = old_days;
+                }}
+            }}
+            
+            if (best_line == 0xFFFFFFFFu) {{
+                break;
+            }}
+            tried[best_line] = true;
+            
+            const unsigned int prev_acn = line_acn[best_line].exchange(acn);
             if (prev_acn != 0u) {{
-                line_acn[i].exchange(prev_acn);
+                line_acn[best_line].exchange(prev_acn);
                 continue;
             }}
-            const unsigned int old_days = line_mp[i].exchange(0u);
+            
+            const unsigned int old_days = line_mp[best_line].exchange(0u);
             if (old_days < repair_time) {{
-                line_mp[i].exchange(old_days);
-                line_acn[i].exchange(0u);
+                line_mp[best_line].exchange(old_days);
+                line_acn[best_line].exchange(0u);
                 continue;
             }}
-            chosen_line = i;
+            
+            chosen_line = best_line;
             claimed = true;
-            break;
         }}
     }}
     

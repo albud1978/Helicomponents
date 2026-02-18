@@ -56,10 +56,13 @@ def main() -> int:
         vd_filter = " AND version_date = %(vdate)s"
         params["vdate"] = args.version_date
 
+    # aircraft_number в lookback-only экспорте не является признаком занятости линии
+    busy_expr = "repair_time > 0 AND free_days < repair_time"
+
     max_query = f"""
     SELECT max(n)
     FROM (
-        SELECT day_u16, countIf(aircraft_number != 0) AS n
+        SELECT day_u16, countIf({busy_expr}) AS n
         FROM {table}
         WHERE version_id = %(vid)s{vd_filter}
         GROUP BY day_u16
@@ -72,7 +75,7 @@ def main() -> int:
     violations_query = f"""
     SELECT count()
     FROM (
-        SELECT day_u16, countIf(aircraft_number != 0) AS n
+        SELECT day_u16, countIf({busy_expr}) AS n
         FROM {table}
         WHERE version_id = %(vid)s{vd_filter}
         GROUP BY day_u16
@@ -90,7 +93,7 @@ def main() -> int:
         sample_query = f"""
         SELECT day_u16, n
         FROM (
-            SELECT day_u16, countIf(aircraft_number != 0) AS n
+            SELECT day_u16, countIf({busy_expr}) AS n
             FROM {table}
             WHERE version_id = %(vid)s{vd_filter}
             GROUP BY day_u16
