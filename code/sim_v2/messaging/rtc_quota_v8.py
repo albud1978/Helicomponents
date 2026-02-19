@@ -28,6 +28,8 @@ from model_build import RTC_MAX_FRAMES, MAX_DAYS
 
 # Максимум ремонтных линий (MacroProperty размер)
 REPAIR_LINES_MAX = 64
+# Максимум bank-окон на линию
+REPAIR_BANK_MAX = 64
 
 import pyflamegpu as fg
 
@@ -485,13 +487,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     // Подсчет доступных слотов ремонта (shared pool)
     auto line_days_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
     auto line_rt_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
+    auto bank_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_mp");
     const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
     const unsigned int max_lines = (repair_quota < {REPAIR_LINES_MAX}u) ? repair_quota : {REPAIR_LINES_MAX}u;
 
     unsigned int available_slots = 0u;
     for (unsigned int i = 0u; i < max_lines; ++i) {{
         const unsigned int line_rt = line_rt_mp[i];
-        if (line_rt > 0u && line_days_mp[i] >= line_rt) {{
+        const bool today_ready = (line_rt > 0u && line_days_mp[i] >= line_rt);
+        const bool bank_ready = (bank_count_mp[i] > 0u);
+        if (today_ready || bank_ready) {{
             available_slots++;
         }}
     }}
@@ -568,6 +573,48 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     FLAMEGPU->setVariable<unsigned int>("debug_qm_unsvc_ready_mi17", unsvc17);
     FLAMEGPU->setVariable<unsigned int>("debug_qm_inactive_mi8", ina_ready8);
     FLAMEGPU->setVariable<unsigned int>("debug_qm_inactive_mi17", ina_ready17);
+    
+    return flamegpu::ALIVE;
+}}
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V8: Snapshot RepairLine MacroProperty (RO)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RTC_REPAIR_LINE_SNAPSHOT_V8 = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_snapshot_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned char group_by = FLAMEGPU->getVariable<unsigned char>("group_by");
+    if (group_by != 1u) return flamegpu::ALIVE;  // один QM делает snapshot
+    
+    auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    auto bank_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_mp");
+    auto bank_end_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX * REPAIR_BANK_MAX}u>("repair_line_bank_end_mp");
+    
+    auto line_mp_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_ro_mp");
+    auto line_acn_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_ro_mp");
+    auto bank_count_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_ro_mp");
+    auto bank_head_end_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_head_end_ro_mp");
+    
+    for (unsigned int i = 0u; i < {REPAIR_LINES_MAX}u; ++i) {{
+        unsigned int fd = line_mp[i].exchange(0u);
+        line_mp[i].exchange(fd);
+        line_mp_ro[i].exchange(fd);
+        
+        unsigned int acn = line_acn[i].exchange(0u);
+        line_acn[i].exchange(acn);
+        line_acn_ro[i].exchange(acn);
+        
+        unsigned int bc = bank_count_mp[i].exchange(0u);
+        bank_count_mp[i].exchange(bc);
+        bank_count_ro[i].exchange(bc);
+        
+        const unsigned int base = i * {REPAIR_BANK_MAX}u;
+        unsigned int head_end = bank_end_mp[base].exchange(0u);
+        bank_end_mp[base].exchange(head_end);
+        bank_head_end_ro[i].exchange(head_end);
+    }}
     
     return flamegpu::ALIVE;
 }}
@@ -771,8 +818,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
     const unsigned int slots_count = slots_count_mp[0];
     auto slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_all");
     auto slots_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_days");
+
+    const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
+    const unsigned int max_lines = (repair_quota < {REPAIR_LINES_MAX}u) ? repair_quota : {REPAIR_LINES_MAX}u;
+    auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto line_acn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    auto bank_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_mp");
     
-    unsigned int available_lines = slots_count;
+    unsigned int bank_available = 0u;
+    for (unsigned int i = 0u; i < max_lines; ++i) {{
+        if (line_acn_mp[i] != 0u) continue;
+        if (bank_count_mp[i] == 0u) continue;
+        if (line_mp[i] >= repair_time) continue;  // уже учитывается в today slots
+        ++bank_available;
+    }}
+    
+    unsigned int available_lines = slots_count + bank_available;
     if (available_lines == 0u) {{
         return flamegpu::ALIVE;
     }}
@@ -858,13 +919,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_v8, flamegpu::MessageNone, flamegpu::M
             }}
             ++valid_rank;
         }}
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
+        FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
+        FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", chosen_line);
         if (chosen_line != 0xFFFFFFFFu) {{
-            FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
-            FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
             FLAMEGPU->setVariable<unsigned int>("repair_line_day", chosen_days);
-            FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
-            FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", chosen_line);
             FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", chosen_days);
+        }} else {{
+            FLAMEGPU->setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);
+            FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", 0xFFFFFFFFu);
         }}
     }}
     
@@ -886,6 +950,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
     auto line_last_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_acn_mp");
     auto line_last_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_day_mp");
+    auto bank_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_mp");
+    auto bank_lock_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_lock_mp");
+    auto bank_start_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX * REPAIR_BANK_MAX}u>("repair_line_bank_start_mp");
+    auto bank_end_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX * REPAIR_BANK_MAX}u>("repair_line_bank_end_mp");
+    
+    auto line_mp_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_ro_mp");
+    auto line_acn_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_ro_mp");
+    auto bank_count_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_ro_mp");
+    auto bank_head_end_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_head_end_ro_mp");
     
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -900,6 +973,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     
     bool claimed = false;
     unsigned int chosen_line = 0xFFFFFFFFu;
+    unsigned int claim_start = 0xFFFFFFFFu;
+    unsigned int claim_end = 0xFFFFFFFFu;
+    unsigned int claim_source = 0u;
+    unsigned int carry_days = 0u;
     
     // Попытка занять предвыбранную линию
     if (line_id != 0xFFFFFFFFu) {{
@@ -909,6 +986,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
             if (old_days >= repair_time) {{
                 chosen_line = line_id;
                 claimed = true;
+                claim_start = current_day - repair_time;
+                claim_end = current_day;
+                claim_source = 1u;
+                carry_days = old_days;
             }} else {{
                 line_mp[line_id].exchange(old_days);
                 line_acn[line_id].exchange(0u);
@@ -931,8 +1012,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
             
             for (unsigned int i = 0u; i < max_lines; ++i) {{
                 if (tried[i]) continue;
-                if (line_acn[i] != 0u) continue;
-                const unsigned int old_days = line_mp[i];
+                if (line_acn_ro[i] != 0u) continue;
+                const unsigned int old_days = line_mp_ro[i];
                 if (old_days < repair_time) continue;
                 if (best_line == 0xFFFFFFFFu || old_days < best_days || (old_days == best_days && i < best_line)) {{
                     best_line = i;
@@ -960,6 +1041,118 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
             
             chosen_line = best_line;
             claimed = true;
+            claim_start = current_day - repair_time;
+            claim_end = current_day;
+            claim_source = 1u;
+            carry_days = old_days;
+        }}
+    }}
+    
+    // Fallback: bank окна (newest-first)
+    if (!claimed) {{
+        bool tried[{REPAIR_LINES_MAX}u];
+        for (unsigned int i = 0u; i < max_lines; ++i) {{
+            tried[i] = false;
+        }}
+        
+        for (unsigned int attempt = 0u; attempt < max_lines && !claimed; ++attempt) {{
+            unsigned int best_line = 0xFFFFFFFFu;
+            unsigned int best_end = 0u;
+            
+            for (unsigned int i = 0u; i < max_lines; ++i) {{
+                if (tried[i]) continue;
+                if (bank_count_ro[i] == 0u) continue;
+                const unsigned int head_end = bank_head_end_ro[i];
+                if (head_end == 0xFFFFFFFFu) continue;
+                if (best_line == 0xFFFFFFFFu || head_end > best_end || (head_end == best_end && i < best_line)) {{
+                    best_line = i;
+                    best_end = head_end;
+                }}
+            }}
+            
+            if (best_line == 0xFFFFFFFFu) {{
+                break;
+            }}
+            tried[best_line] = true;
+            
+            const unsigned int prev_lock = bank_lock_mp[best_line].exchange(acn);
+            if (prev_lock != 0u) {{
+                bank_lock_mp[best_line].exchange(prev_lock);
+                continue;
+            }}
+            
+            unsigned int bank_count = bank_count_ro[best_line];
+            if (bank_count == 0u) {{
+                bank_lock_mp[best_line].exchange(0u);
+                continue;
+            }}
+            
+            const unsigned int base = best_line * {REPAIR_BANK_MAX}u;
+            unsigned int window_start = bank_start_mp[base].exchange(0u);
+            unsigned int window_end = bank_end_mp[base].exchange(0u);
+            if (window_start == 0xFFFFFFFFu || window_end == 0xFFFFFFFFu || window_end <= window_start) {{
+                bank_start_mp[base].exchange(window_start);
+                bank_end_mp[base].exchange(window_end);
+                bank_lock_mp[best_line].exchange(0u);
+                continue;
+            }}
+            
+            for (unsigned int i = 1u; i < bank_count; ++i) {{
+                const unsigned int from = base + i;
+                const unsigned int to = base + (i - 1u);
+                const unsigned int prev_start = bank_start_mp[from].exchange(0u);
+                const unsigned int prev_end = bank_end_mp[from].exchange(0u);
+                bank_start_mp[to].exchange(prev_start);
+                bank_end_mp[to].exchange(prev_end);
+            }}
+            const unsigned int tail = base + (bank_count - 1u);
+            bank_start_mp[tail].exchange(0xFFFFFFFFu);
+            bank_end_mp[tail].exchange(0xFFFFFFFFu);
+            bank_count -= 1u;
+            bank_count_mp[best_line].exchange(bank_count);
+            bank_lock_mp[best_line].exchange(0u);
+            
+            chosen_line = best_line;
+            claimed = true;
+            claim_start = window_start;
+            claim_end = window_end;
+            claim_source = 2u;
+        }}
+    }}
+    
+    // Резервирование прошлых окон (newest-first)
+    if (claimed && claim_source == 1u && carry_days >= repair_time) {{
+        unsigned int windows_total = carry_days / repair_time;
+        if (windows_total > 1u) {{
+            unsigned int carry = windows_total - 1u;
+            if (carry > {REPAIR_BANK_MAX}u) {{
+                carry = {REPAIR_BANK_MAX}u;
+            }}
+            unsigned int bank_count = bank_count_ro[chosen_line];
+            for (unsigned int n = carry; n > 0u; --n) {{
+                const unsigned int win_idx = n - 1u;
+                const unsigned int end_day = current_day - repair_time * (win_idx + 1u);
+                const unsigned int start_day = end_day - repair_time;
+                
+                unsigned int shift_limit = (bank_count < {REPAIR_BANK_MAX}u)
+                    ? bank_count
+                    : ({REPAIR_BANK_MAX}u - 1u);
+                for (int j = (int)shift_limit; j > 0; --j) {{
+                    const unsigned int from = chosen_line * {REPAIR_BANK_MAX}u + (unsigned int)(j - 1);
+                    const unsigned int to = chosen_line * {REPAIR_BANK_MAX}u + (unsigned int)j;
+                    const unsigned int prev_start = bank_start_mp[from].exchange(0u);
+                    const unsigned int prev_end = bank_end_mp[from].exchange(0u);
+                    bank_start_mp[to].exchange(prev_start);
+                    bank_end_mp[to].exchange(prev_end);
+                }}
+                const unsigned int head = chosen_line * {REPAIR_BANK_MAX}u;
+                bank_start_mp[head].exchange(start_day);
+                bank_end_mp[head].exchange(end_day);
+                if (bank_count < {REPAIR_BANK_MAX}u) {{
+                    bank_count += 1u;
+                }}
+            }}
+            bank_count_mp[chosen_line].exchange(bank_count);
         }}
     }}
     
@@ -971,6 +1164,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
         FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
+        FLAMEGPU->setVariable<unsigned int>("repair_claim_start_day", claim_start);
+        FLAMEGPU->setVariable<unsigned int>("repair_claim_end_day", claim_end);
+        FLAMEGPU->setVariable<unsigned int>("repair_claim_source", claim_source);
         
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
         if (group_by == 1u) {{
@@ -1031,7 +1227,22 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     auto slots = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_all");
     auto slots_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_slots_days");
     
-    if (slots_count == 0u) {{
+    const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
+    const unsigned int max_lines = (repair_quota < {REPAIR_LINES_MAX}u) ? repair_quota : {REPAIR_LINES_MAX}u;
+    auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto line_acn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
+    auto bank_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_mp");
+    
+    unsigned int bank_available = 0u;
+    for (unsigned int i = 0u; i < max_lines; ++i) {{
+        if (line_acn_mp[i] != 0u) continue;
+        if (bank_count_mp[i] == 0u) continue;
+        if (line_mp[i] >= repair_time) continue;  // already in today slots
+        ++bank_available;
+    }}
+    
+    unsigned int available_lines = slots_count + bank_available;
+    if (available_lines == 0u) {{
         return flamegpu::ALIVE;
     }}
     
@@ -1079,8 +1290,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     
     unsigned int deficit_p2 = (target > curr_after_p1) ? (target - curr_after_p1) : 0u;
     unsigned int p2_will_promote = (deficit_p2 < unsvc_available) ? deficit_p2 : unsvc_available;
-    if (p2_will_promote > slots_count) {{
-        p2_will_promote = slots_count;
+    if (p2_will_promote > available_lines) {{
+        p2_will_promote = available_lines;
     }}
     unsigned int curr_after_p2 = curr_after_p1 + p2_will_promote;
     
@@ -1091,10 +1302,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     unsigned int deficit = target - curr_after_p2;
     
     // Ограничиваем количеством доступных линий (остаток после P2)
-    unsigned int available_lines = (slots_count > p2_will_promote) ? (slots_count - p2_will_promote) : 0u;
+    unsigned int available_left = (available_lines > p2_will_promote) ? (available_lines - p2_will_promote) : 0u;
     unsigned int needed = (deficit < inactive_available) ? deficit : inactive_available;
-    if (available_lines < needed) {{
-        needed = available_lines;
+    if (available_left < needed) {{
+        needed = available_left;
     }}
     
     if (needed == 0u) {{
@@ -1112,7 +1323,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
     }}
     
     if (rank < needed) {{
-        const unsigned int target_rank = p2_will_promote + rank;
+        const unsigned int p2_slots_used = (p2_will_promote < slots_count) ? p2_will_promote : slots_count;
+        const unsigned int target_rank = p2_slots_used + rank;
         unsigned int chosen_line = 0xFFFFFFFFu;
         unsigned int chosen_days = 0u;
         unsigned int valid_rank = 0u;
@@ -1128,13 +1340,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_v8, flamegpu::MessageNone, flamegpu
             }}
             ++valid_rank;
         }}
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
+        FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
+        FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", chosen_line);
         if (chosen_line != 0xFFFFFFFFu) {{
-            FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
-            FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
             FLAMEGPU->setVariable<unsigned int>("repair_line_day", chosen_days);
-            FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
-            FLAMEGPU->setVariable<unsigned int>("debug_repair_line_id", chosen_line);
             FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", chosen_days);
+        }} else {{
+            FLAMEGPU->setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);
+            FLAMEGPU->setVariable<unsigned int>("debug_repair_line_day", 0xFFFFFFFFu);
         }}
     }}
     
@@ -1155,6 +1370,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
     auto line_last_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_acn_mp");
     auto line_last_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_last_day_mp");
+    auto bank_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_mp");
+    auto bank_lock_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_lock_mp");
+    auto bank_start_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX * REPAIR_BANK_MAX}u>("repair_line_bank_start_mp");
+    auto bank_end_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX * REPAIR_BANK_MAX}u>("repair_line_bank_end_mp");
+    
+    auto line_mp_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_ro_mp");
+    auto line_acn_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_ro_mp");
+    auto bank_count_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_ro_mp");
+    auto bank_head_end_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_head_end_ro_mp");
     
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
@@ -1169,6 +1393,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     
     bool claimed = false;
     unsigned int chosen_line = 0xFFFFFFFFu;
+    unsigned int claim_start = 0xFFFFFFFFu;
+    unsigned int claim_end = 0xFFFFFFFFu;
+    unsigned int claim_source = 0u;
+    unsigned int carry_days = 0u;
     
     if (line_id != 0xFFFFFFFFu) {{
         const unsigned int prev_acn = line_acn[line_id].exchange(acn);
@@ -1177,6 +1405,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
             if (old_days >= repair_time) {{
                 chosen_line = line_id;
                 claimed = true;
+                claim_start = current_day - repair_time;
+                claim_end = current_day;
+                claim_source = 1u;
+                carry_days = old_days;
             }} else {{
                 line_mp[line_id].exchange(old_days);
                 line_acn[line_id].exchange(0u);
@@ -1198,8 +1430,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
             
             for (unsigned int i = 0u; i < max_lines; ++i) {{
                 if (tried[i]) continue;
-                if (line_acn[i] != 0u) continue;
-                const unsigned int old_days = line_mp[i];
+                if (line_acn_ro[i] != 0u) continue;
+                const unsigned int old_days = line_mp_ro[i];
                 if (old_days < repair_time) continue;
                 if (best_line == 0xFFFFFFFFu || old_days < best_days || (old_days == best_days && i < best_line)) {{
                     best_line = i;
@@ -1227,6 +1459,118 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
             
             chosen_line = best_line;
             claimed = true;
+            claim_start = current_day - repair_time;
+            claim_end = current_day;
+            claim_source = 1u;
+            carry_days = old_days;
+        }}
+    }}
+    
+    // Fallback: bank окна (newest-first)
+    if (!claimed) {{
+        bool tried[{REPAIR_LINES_MAX}u];
+        for (unsigned int i = 0u; i < max_lines; ++i) {{
+            tried[i] = false;
+        }}
+        
+        for (unsigned int attempt = 0u; attempt < max_lines && !claimed; ++attempt) {{
+            unsigned int best_line = 0xFFFFFFFFu;
+            unsigned int best_end = 0u;
+            
+            for (unsigned int i = 0u; i < max_lines; ++i) {{
+                if (tried[i]) continue;
+                if (bank_count_ro[i] == 0u) continue;
+                const unsigned int head_end = bank_head_end_ro[i];
+                if (head_end == 0xFFFFFFFFu) continue;
+                if (best_line == 0xFFFFFFFFu || head_end > best_end || (head_end == best_end && i < best_line)) {{
+                    best_line = i;
+                    best_end = head_end;
+                }}
+            }}
+            
+            if (best_line == 0xFFFFFFFFu) {{
+                break;
+            }}
+            tried[best_line] = true;
+            
+            const unsigned int prev_lock = bank_lock_mp[best_line].exchange(acn);
+            if (prev_lock != 0u) {{
+                bank_lock_mp[best_line].exchange(prev_lock);
+                continue;
+            }}
+            
+            unsigned int bank_count = bank_count_ro[best_line];
+            if (bank_count == 0u) {{
+                bank_lock_mp[best_line].exchange(0u);
+                continue;
+            }}
+            
+            const unsigned int base = best_line * {REPAIR_BANK_MAX}u;
+            unsigned int window_start = bank_start_mp[base].exchange(0u);
+            unsigned int window_end = bank_end_mp[base].exchange(0u);
+            if (window_start == 0xFFFFFFFFu || window_end == 0xFFFFFFFFu || window_end <= window_start) {{
+                bank_start_mp[base].exchange(window_start);
+                bank_end_mp[base].exchange(window_end);
+                bank_lock_mp[best_line].exchange(0u);
+                continue;
+            }}
+            
+            for (unsigned int i = 1u; i < bank_count; ++i) {{
+                const unsigned int from = base + i;
+                const unsigned int to = base + (i - 1u);
+                const unsigned int prev_start = bank_start_mp[from].exchange(0u);
+                const unsigned int prev_end = bank_end_mp[from].exchange(0u);
+                bank_start_mp[to].exchange(prev_start);
+                bank_end_mp[to].exchange(prev_end);
+            }}
+            const unsigned int tail = base + (bank_count - 1u);
+            bank_start_mp[tail].exchange(0xFFFFFFFFu);
+            bank_end_mp[tail].exchange(0xFFFFFFFFu);
+            bank_count -= 1u;
+            bank_count_mp[best_line].exchange(bank_count);
+            bank_lock_mp[best_line].exchange(0u);
+            
+            chosen_line = best_line;
+            claimed = true;
+            claim_start = window_start;
+            claim_end = window_end;
+            claim_source = 2u;
+        }}
+    }}
+    
+    // Резервирование прошлых окон (newest-first)
+    if (claimed && claim_source == 1u && carry_days >= repair_time) {{
+        unsigned int windows_total = carry_days / repair_time;
+        if (windows_total > 1u) {{
+            unsigned int carry = windows_total - 1u;
+            if (carry > {REPAIR_BANK_MAX}u) {{
+                carry = {REPAIR_BANK_MAX}u;
+            }}
+            unsigned int bank_count = bank_count_ro[chosen_line];
+            for (unsigned int n = carry; n > 0u; --n) {{
+                const unsigned int win_idx = n - 1u;
+                const unsigned int end_day = current_day - repair_time * (win_idx + 1u);
+                const unsigned int start_day = end_day - repair_time;
+                
+                unsigned int shift_limit = (bank_count < {REPAIR_BANK_MAX}u)
+                    ? bank_count
+                    : ({REPAIR_BANK_MAX}u - 1u);
+                for (int j = (int)shift_limit; j > 0; --j) {{
+                    const unsigned int from = chosen_line * {REPAIR_BANK_MAX}u + (unsigned int)(j - 1);
+                    const unsigned int to = chosen_line * {REPAIR_BANK_MAX}u + (unsigned int)j;
+                    const unsigned int prev_start = bank_start_mp[from].exchange(0u);
+                    const unsigned int prev_end = bank_end_mp[from].exchange(0u);
+                    bank_start_mp[to].exchange(prev_start);
+                    bank_end_mp[to].exchange(prev_end);
+                }}
+                const unsigned int head = chosen_line * {REPAIR_BANK_MAX}u;
+                bank_start_mp[head].exchange(start_day);
+                bank_end_mp[head].exchange(end_day);
+                if (bank_count < {REPAIR_BANK_MAX}u) {{
+                    bank_count += 1u;
+                }}
+            }}
+            bank_count_mp[chosen_line].exchange(bank_count);
         }}
     }}
     
@@ -1238,6 +1582,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
         FLAMEGPU->setVariable<unsigned int>("repair_line_id", chosen_line);
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
         FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
+        FLAMEGPU->setVariable<unsigned int>("repair_claim_start_day", claim_start);
+        FLAMEGPU->setVariable<unsigned int>("repair_claim_end_day", claim_end);
+        FLAMEGPU->setVariable<unsigned int>("repair_claim_source", claim_source);
         
         const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
         if (group_by == 1u) {{
@@ -1471,6 +1818,13 @@ def register_quota_v8_messages(model, agent, quota_agent):
     fn.setEndState("inactive")
     fn.setMessageInput("QuotaBucket")
     layer_p3.addAgentFunction(fn)
+    
+    # Snapshot RepairLine MacroProperty (RO) перед commit P2/P3
+    layer_snapshot = model.newLayer("v8_repair_line_snapshot")
+    fn = quota_agent.newRTCFunction("rtc_repair_line_snapshot_v8", RTC_REPAIR_LINE_SNAPSHOT_V8)
+    fn.setInitialState("default")
+    fn.setEndState("default")
+    layer_snapshot.addAgentFunction(fn)
     
     # Commit P2/P3
     layer_p2_commit = model.newLayer("v8_promote_unsvc_commit")

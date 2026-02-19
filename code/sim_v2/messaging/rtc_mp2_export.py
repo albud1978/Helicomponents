@@ -8,10 +8,12 @@ Architecture:
 - After simulate(), HF_MP2_Drain reads buffers into numpy arrays
 - Python reconstructs rows only from MP2 buffers (no fallback)
 
-Buffers (20 total):
+Buffers (24 total):
   mp2_status_id, mp2_pre_status_id, mp2_sne, mp2_ppr, mp2_limiter, mp2_repair_days,
   mp2_daily_today, mp2_daily_next, mp2_commit_p2, mp2_commit_p3,
   mp2_repair_time, mp2_assembly_time, mp2_active_trigger, mp2_assembly_trigger,
+  mp2_repair_claim_start_day, mp2_repair_claim_end_day, mp2_repair_claim_source,
+  mp2_repair_claim_line_id,
   mp2_idx, mp2_aircraft_number, mp2_group_by, mp2_ll, mp2_oh, mp2_br
 
 Auxiliary:
@@ -31,7 +33,7 @@ except ImportError as e:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# MP2 field names (14 dynamic + 6 static fields)
+# MP2 field names (17 dynamic + 6 static fields)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 MP2_FIELDS = [
@@ -49,6 +51,10 @@ MP2_FIELDS = [
     "mp2_assembly_time",
     "mp2_active_trigger",
     "mp2_assembly_trigger",
+    "mp2_repair_claim_start_day",
+    "mp2_repair_claim_end_day",
+    "mp2_repair_claim_source",
+    "mp2_repair_claim_line_id",
     "mp2_idx",
     "mp2_aircraft_number",
     "mp2_group_by",
@@ -144,6 +150,18 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_{state}, flamegpu::MessageNone, flamegpu::
     
     auto buf_asm = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_assembly_trigger");
     buf_asm[offset].exchange(FLAMEGPU->getVariable<unsigned int>("assembly_trigger"));
+    
+    auto buf_claim_start = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_repair_claim_start_day");
+    buf_claim_start[offset].exchange(FLAMEGPU->getVariable<unsigned int>("repair_claim_start_day"));
+    
+    auto buf_claim_end = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_repair_claim_end_day");
+    buf_claim_end[offset].exchange(FLAMEGPU->getVariable<unsigned int>("repair_claim_end_day"));
+    
+    auto buf_claim_source = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_repair_claim_source");
+    buf_claim_source[offset].exchange(FLAMEGPU->getVariable<unsigned int>("repair_claim_source"));
+
+    auto buf_claim_line_id = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_repair_claim_line_id");
+    buf_claim_line_id[offset].exchange(FLAMEGPU->getVariable<unsigned int>("repair_line_id"));
     
     auto buf_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_idx");
     buf_idx[offset].exchange(FLAMEGPU->getVariable<unsigned int>("idx"));
@@ -250,7 +268,8 @@ class HF_MP2_Drain(fg.HostFunction):
             for s in range(num_steps):
                 base = s * MAX_FRAMES
                 for a in range(self.num_agents):
-                    arr[s, a] = int(mp[base + a])
+                    val = int(mp[base + a]) & 0xFFFFFFFF
+                    arr[s, a] = val
             result[field_name] = arr
         
         self.data = {

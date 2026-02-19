@@ -1,5 +1,36 @@
 # Changelog
 
+## [19-02-2026] - Bank-окна в активном bucket-контуре + claim-SSOT + устранение Mi-8 dynamic spawn
+
+### Изменения
+- `code/sim_v2/messaging/rtc_quota_v8.py`:
+  - bucket-QuotaManager теперь учитывает слоты как `today_ready OR bank_count>0`;
+  - в commit P2/P3 включён корректный bank fallback (`repair_claim_source=2`) с `newest-first`;
+  - добавлен lock `repair_line_bank_lock_mp` для безопасного pop bank-окон.
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py`:
+  - добавлены bank MacroProperty и инициализация lock;
+  - постпроцессинг `_postprocess_promotions` переведён на claim metadata (`start/end/source/line_id`) как SSOT;
+  - схема `sim_masterv2_v9` расширена claim-полями (`repair_claim_start_day/end_day/source/line_id`) + `ALTER ... IF NOT EXISTS`.
+- `code/sim_v2/messaging/base_model_messaging.py`, `rtc_mp2_export.py`, `rtc_quota_v8_base.py`:
+  - добавлены/сброшены claim-поля агента и экспорт в MP2.
+- `code/validation/temp5_repair_hybrid_vector.py`:
+  - TEMP-5 переведён на claim-based проверки (`invalid_claim_rows`, `transition_claim_mismatch`, `overlap_violations`, `bank_underflow_suspicions`) без experimental join.
+- Техническая стабилизация uint-пайплайна:
+  - `code/sim_v2/messaging/rtc_mp2_export.py`, `rtc_repairline_export.py` — безопасная нормализация UInt (`& 0xFFFFFFFF`) при drain/readback.
+
+### Контекст
+До фикса bank-окна почти не участвовали в реальном квотировании active-path (`MessageBucket`), из-за чего в дни без текущих ready-окон срабатывал динамический spawn. После включения bank в расчёт слотов и корректного fallback в commit, ремонт по окнам прошлого начал отрабатывать последовательно до spawn.
+
+### Результаты
+- `run_all_stream`:
+  - `20250704:1` → `TOTAL=13 PASSED=13 FAILED=0`
+  - `20251230:2` → `TOTAL=13 PASSED=13 FAILED=0`
+- `INV-2` и `TEMP-5`: PASS на обоих датасетах.
+- По рождениям (`sim_masterv2_v9`):
+  - Mi-8 (`group_by=1`): `0` рождений на обоих датасетах;
+  - Mi-17 (`group_by=2`): `35` (D1) и `31` (D2).
+- Для Mi-8 зафиксировано использование bank: `repair_claim_source=2` присутствует в P2 commit.
+
 ## [18-02-2026] - INV-2 root-cause fix + strict TEMP-5 stabilization + graph/history update
 
 ### Изменения

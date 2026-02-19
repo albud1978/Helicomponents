@@ -383,6 +383,9 @@ import rtc_repairline_export
 from components.agent_population import AgentPopulationBuilder
 from model_build import REPAIR_LINES_MAX
 
+# Максимум bank-окон на линию (должно совпадать с rtc_quota_v8.py)
+REPAIR_BANK_MAX = 64
+
 
 class LimiterV8Orchestrator:
     """
@@ -551,6 +554,14 @@ class LimiterV8Orchestrator:
         self.base_model.env.newMacroPropertyUInt("repair_line_rt_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_last_acn_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_last_day_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_bank_count_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_bank_lock_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_bank_start_mp", REPAIR_LINES_MAX * REPAIR_BANK_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_bank_end_mp", REPAIR_LINES_MAX * REPAIR_BANK_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_free_days_ro_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_acn_ro_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_bank_count_ro_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_bank_head_end_ro_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_slots_all", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_slots_days", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_slots_count_mp", 1)
@@ -918,6 +929,10 @@ class LimiterV8Orchestrator:
         # Построение строк для INSERT
         t_build = time.perf_counter()
         rows = []
+        def _u16(val) -> int:
+            return int(val) & 0xFFFF
+        def _u8(val) -> int:
+            return int(val) & 0xFF
         for s in range(num_steps):
             day = days[s]
             for a in range(total_export_agents):
@@ -927,23 +942,27 @@ class LimiterV8Orchestrator:
                 rows.append([
                     version_date_int,
                     version_id,
-                    day,  # day_u16
-                    int(fields['mp2_idx'][s, a]),
+                    _u16(day),  # day_u16
+                    _u16(fields['mp2_idx'][s, a]),
                     int(fields['mp2_aircraft_number'][s, a]),
-                    int(fields['mp2_group_by'][s, a]),
+                    _u8(fields['mp2_group_by'][s, a]),
                     int(fields['mp2_oh'][s, a]),
                     int(fields['mp2_br'][s, a]),
                     int(fields['mp2_ll'][s, a]),
-                    status,
-                    int(fields['mp2_pre_status_id'][s, a]),
+                    _u8(status),
+                    _u8(fields['mp2_pre_status_id'][s, a]),
                     int(fields['mp2_sne'][s, a]),
                     int(fields['mp2_ppr'][s, a]),
-                    int(fields['mp2_limiter'][s, a]),
-                    int(fields['mp2_repair_days'][s, a]),
-                    int(fields['mp2_repair_time'][s, a]),
-                    int(fields['mp2_assembly_time'][s, a]),
-                    int(fields['mp2_active_trigger'][s, a]),
-                    int(fields['mp2_assembly_trigger'][s, a]),
+                    _u16(fields['mp2_limiter'][s, a]),
+                    _u16(fields['mp2_repair_days'][s, a]),
+                    _u16(fields['mp2_repair_claim_start_day'][s, a]),
+                    _u16(fields['mp2_repair_claim_end_day'][s, a]),
+                    _u8(fields['mp2_repair_claim_source'][s, a]),
+                    _u16(fields['mp2_repair_claim_line_id'][s, a]),
+                    _u16(fields['mp2_repair_time'][s, a]),
+                    _u16(fields['mp2_assembly_time'][s, a]),
+                    _u8(fields['mp2_active_trigger'][s, a]),
+                    _u8(fields['mp2_assembly_trigger'][s, a]),
                     int(fields['mp2_daily_today'][s, a]),
                     int(fields['mp2_daily_next'][s, a]),
                     int(fields['mp2_commit_p2'][s, a]),
@@ -959,6 +978,8 @@ class LimiterV8Orchestrator:
                 'version_date', 'version_id', 'day_u16',
                 'idx', 'aircraft_number', 'group_by', 'oh', 'br', 'll',
                 'status_id', 'pre_status_id', 'sne', 'ppr', 'limiter', 'repair_days',
+                'repair_claim_start_day', 'repair_claim_end_day', 'repair_claim_source',
+                'repair_claim_line_id',
                 'repair_time', 'assembly_time', 'active_trigger', 'assembly_trigger',
                 'daily_today_u32', 'daily_next_u32', 'commit_p2', 'commit_p3'
             ]
@@ -1272,17 +1293,16 @@ class LimiterV8Orchestrator:
     
     def _postprocess_promotions(self, fields, days, num_steps, total_agents):
         """
-        Постпроцессинг P2/P3 промоутов: восстановление окна ремонта + дневной cap по repair_quota.
+        Постпроцессинг P2/P3 промоутов: окно ремонта по runtime claim metadata + дневной cap.
         
         P2 (commit_p2=1): 7→2 превращается в 7→4→2 (unsvc→repair→ops)
         P3 (commit_p3=1): 1→2 превращается в 1→4→2 (inactive→repair→ops)
         
         Для каждого события промоута:
         1. Находим step S где commit_p2=1 или commit_p3=1
-        2. Определяем day D = days[S]
-        3. Вычисляем repair_start = D - repair_time (из mp2_repair_time[S, agent])
-        4. Ищем шаги в диапазоне [repair_start, D) и заменяем их status на 4
-        5. Устанавливаем repair_days (накопительный) и assembly_trigger
+        2. Берём claim metadata (start/end/source) из MP2
+        3. Ищем шаги в диапазоне [claim_start, claim_end) и заменяем их status на 4
+        4. Устанавливаем repair_days (накопительный) и assembly_trigger
         """
         import numpy as np
         
@@ -1307,7 +1327,6 @@ class LimiterV8Orchestrator:
                 day_set.add(agent_key)
         
         for a in range(total_agents):
-            repair_time_val = 0
             assembly_time_val = 0
             
             for s in range(num_steps):
@@ -1315,23 +1334,23 @@ class LimiterV8Orchestrator:
                 p3 = int(fields['mp2_commit_p3'][s, a])
                 
                 if p2 == 1 or p3 == 1:
-                    d_event = int(days[s])
-                    repair_time_val = int(fields['mp2_repair_time'][s, a])
+                    claim_source = int(fields['mp2_repair_claim_source'][s, a])
+                    if claim_source not in (1, 2):
+                        continue
+                    claim_start = int(fields['mp2_repair_claim_start_day'][s, a])
+                    claim_end = int(fields['mp2_repair_claim_end_day'][s, a])
+                    if claim_start == 0xFFFFFFFF or claim_end == 0xFFFFFFFF or claim_end <= claim_start:
+                        continue
                     assembly_time_val = int(fields['mp2_assembly_time'][s, a])
                     group_by_event = int(fields['mp2_group_by'][s, a])
                     agent_key = int(fields['mp2_idx'][s, a])
                     apply_daily_cap_for_agent = apply_daily_cap and group_by_event in (1, 2)
                     
-                    if repair_time_val <= 0 or d_event <= 0:
-                        continue
-                    
-                    repair_start = d_event - repair_time_val
-                    
                     # Собираем кандидатов окна ремонта с guard-условиями
                     candidate_steps = []
                     for s_back in range(num_steps):
                         d_back = int(days[s_back])
-                        if repair_start <= d_back < d_event:
+                        if claim_start <= d_back < claim_end:
                             current_status = int(fields['mp2_status_id'][s_back, a])
                             # Guard: перезаписываем только unsvc(7) или inactive(1)
                             if current_status not in (7, 1):
@@ -1386,8 +1405,8 @@ class LimiterV8Orchestrator:
                         fields['mp2_repair_days'][s_back, a] = repair_day_counter
                         
                         # assembly_trigger=1 если осталось <= assembly_time до конца ремонта
-                        days_to_event = d_event - d_back
-                        if days_to_event <= assembly_time_val:
+                        days_to_end = claim_end - d_back
+                        if days_to_end <= assembly_time_val:
                             fields['mp2_assembly_trigger'][s_back, a] = 1
                         
                         modified += 1
@@ -1612,9 +1631,19 @@ class HF_InitRepairLines(fg.HostFunction):
         mp_rt = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_rt_mp")
         mp_last_acn = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_last_acn_mp")
         mp_last_day = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_last_day_mp")
+        mp_bank_count = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_bank_count_mp")
+        mp_bank_lock = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_bank_lock_mp")
+        mp_bank_start = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_bank_start_mp")
+        mp_bank_end = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_bank_end_mp")
         
         occupied_count = 0
         for i in range(len(mp_days)):
+            mp_bank_count[i] = 0
+            mp_bank_lock[i] = 0
+            base = i * REPAIR_BANK_MAX
+            for j in range(REPAIR_BANK_MAX):
+                mp_bank_start[base + j] = 0xFFFFFFFF
+                mp_bank_end[base + j] = 0xFFFFFFFF
             if i >= self.repair_quota:
                 mp_days[i] = 0xFFFFFFFF  # не используется
                 mp_acn[i] = 0
@@ -1691,6 +1720,10 @@ def main():
             ppr UInt32,
             limiter UInt16,
             repair_days UInt16,
+            repair_claim_start_day UInt16,
+            repair_claim_end_day UInt16,
+            repair_claim_source UInt8,
+            repair_claim_line_id UInt16,
             repair_time UInt16,
             assembly_time UInt16,
             active_trigger UInt8,
@@ -1703,6 +1736,10 @@ def main():
         PARTITION BY toYear(day_date)
         ORDER BY (version_date, version_id, day_u16, idx)
     """)
+    client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS repair_claim_start_day UInt16")
+    client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS repair_claim_end_day UInt16")
+    client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS repair_claim_source UInt8")
+    client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS repair_claim_line_id UInt16")
     print("✅ Таблица sim_masterv2_v9 готова")
     
     # RepairLine таблица

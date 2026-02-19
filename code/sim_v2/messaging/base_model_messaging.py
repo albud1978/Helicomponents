@@ -544,6 +544,9 @@ class V2BaseModelMessaging:
         agent.newVariableUInt("repair_candidate", 0)
         agent.newVariableUInt("repair_line_id", 0xFFFFFFFF)
         agent.newVariableUInt("repair_line_day", 0xFFFFFFFF)
+        agent.newVariableUInt("repair_claim_start_day", 0xFFFFFFFF)
+        agent.newVariableUInt("repair_claim_end_day", 0xFFFFFFFF)
+        agent.newVariableUInt("repair_claim_source", 0)
         
         # V7: Флаги для однофазной архитектуры (без intent)
         agent.newVariableUInt("promoted", 0)     # 1 = получил промоут в этом шаге

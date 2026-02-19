@@ -85,10 +85,10 @@ class HF_RepairLineDrain(fg.HostFunction):
         for s in range(num_steps):
             base = s * REPAIR_LINES_MAX
             for l in range(self.repair_quota):
-                free_days[s, l] = int(mp_fd[base + l])
-                acn[s, l] = int(mp_acn[base + l])
-                rt[s, l] = int(mp_rt[base + l])
-                gb[s, l] = int(mp_gb[base + l])
+                free_days[s, l] = int(mp_fd[base + l]) & 0xFFFFFFFF
+                acn[s, l] = int(mp_acn[base + l]) & 0xFFFFFFFF
+                rt[s, l] = int(mp_rt[base + l]) & 0xFFFFFFFF
+                gb[s, l] = int(mp_gb[base + l]) & 0xFFFFFFFF
 
         self.data = {
             'num_steps': num_steps,
