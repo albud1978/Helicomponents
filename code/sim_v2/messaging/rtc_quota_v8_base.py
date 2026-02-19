@@ -447,6 +447,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_flags_v8, flamegpu::MessageNone, flamegpu::Mes
     FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
     FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     FLAMEGPU->setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);
+    FLAMEGPU->setVariable<unsigned int>("repair_claim_start_day", 0xFFFFFFFFu);
+    FLAMEGPU->setVariable<unsigned int>("repair_claim_end_day", 0xFFFFFFFFu);
+    FLAMEGPU->setVariable<unsigned int>("repair_claim_source", 0u);
     FLAMEGPU->setVariable<unsigned int>("debug_needs_demote", 0u);
     FLAMEGPU->setVariable<unsigned int>("debug_promoted", 0u);
     FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 0u);
