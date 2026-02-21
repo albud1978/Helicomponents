@@ -951,6 +951,7 @@ class LimiterV8Orchestrator:
                     int(fields['mp2_ll'][s, a]),
                     _u8(status),
                     _u8(fields['mp2_pre_status_id'][s, a]),
+                    _u16(fields['mp2_status_change_day'][s, a]),
                     int(fields['mp2_sne'][s, a]),
                     int(fields['mp2_ppr'][s, a]),
                     _u16(fields['mp2_limiter'][s, a]),
@@ -977,7 +978,7 @@ class LimiterV8Orchestrator:
             columns = [
                 'version_date', 'version_id', 'day_u16',
                 'idx', 'aircraft_number', 'group_by', 'oh', 'br', 'll',
-                'status_id', 'pre_status_id', 'sne', 'ppr', 'limiter', 'repair_days',
+                'status_id', 'pre_status_id', 'status_change_day', 'sne', 'ppr', 'limiter', 'repair_days',
                 'repair_claim_start_day', 'repair_claim_end_day', 'repair_claim_source',
                 'repair_claim_line_id',
                 'repair_time', 'assembly_time', 'active_trigger', 'assembly_trigger',
@@ -1716,6 +1717,7 @@ def main():
             ll UInt32,
             status_id UInt8,
             pre_status_id UInt8,
+            status_change_day UInt16,
             sne UInt32,
             ppr UInt32,
             limiter UInt16,
@@ -1736,6 +1738,7 @@ def main():
         PARTITION BY toYear(day_date)
         ORDER BY (version_date, version_id, day_u16, idx)
     """)
+    client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS status_change_day UInt16")
     client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS repair_claim_start_day UInt16")
     client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS repair_claim_end_day UInt16")
     client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS repair_claim_source UInt8")

@@ -7,6 +7,11 @@
   - GPU-1..GPU-6: ограничения платформы FLAME GPU (read/write, mp5_lin read-only, Float64 запрет и др.)
 - Правило Cursor: `.cursor/rules/25_invariants_contract.mdc` — автоматически подтягивается при работе с `code/sim_v2/**`, `code/validation/**`, `code/analysis/**`, `config/transitions/**`.
 
+## Версия ClickHouse (актуальный runtime)
+- Проверено на сервере: **`24.10.1.2812`** (проверка `SELECT version();`, дата фиксации: 20-02-2026).
+- SQL-проверки и runbook в этом документе считаются валидированными для этой версии.
+- При смене версии ClickHouse перед прогонами валидации сначала перепроверять совместимость SQL (особенно window-функции и deprecated-конструкции).
+
 ## Методология
 - `docs/architecture/validation_rules.md` — методология SQL‑first валидации, heli_pandas проверки, NVRTC правила.
 
@@ -53,7 +58,7 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-12-
 python3 code/validation/run_all_stream.py --list-datasets
 
 # Запуск только выбранных датасетов (рекомендуется)
-python3 code/validation/run_all_stream.py --dataset 20250704:1 --dataset 20251230:1
+python3 code/validation/run_all_stream.py --dataset 20250704:1 --dataset 20251230:2
 
 # Альтернатива: запустить все обнаруженные
 python3 code/validation/run_all_stream.py --all-datasets

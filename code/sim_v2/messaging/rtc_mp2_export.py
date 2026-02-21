@@ -8,8 +8,8 @@ Architecture:
 - After simulate(), HF_MP2_Drain reads buffers into numpy arrays
 - Python reconstructs rows only from MP2 buffers (no fallback)
 
-Buffers (24 total):
-  mp2_status_id, mp2_pre_status_id, mp2_sne, mp2_ppr, mp2_limiter, mp2_repair_days,
+Buffers (25 total):
+  mp2_status_id, mp2_pre_status_id, mp2_status_change_day, mp2_sne, mp2_ppr, mp2_limiter, mp2_repair_days,
   mp2_daily_today, mp2_daily_next, mp2_commit_p2, mp2_commit_p3,
   mp2_repair_time, mp2_assembly_time, mp2_active_trigger, mp2_assembly_trigger,
   mp2_repair_claim_start_day, mp2_repair_claim_end_day, mp2_repair_claim_source,
@@ -33,12 +33,13 @@ except ImportError as e:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# MP2 field names (17 dynamic + 6 static fields)
+# MP2 field names (19 dynamic + 6 static fields)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 MP2_FIELDS = [
     "mp2_status_id",
     "mp2_pre_status_id",
+    "mp2_status_change_day",
     "mp2_sne",
     "mp2_ppr",
     "mp2_limiter",
@@ -114,6 +115,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_{state}, flamegpu::MessageNone, flamegpu::
     
     auto buf_pre_status = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_pre_status_id");
     buf_pre_status[offset].exchange(FLAMEGPU->getVariable<unsigned int>("pre_status_id"));
+
+    auto buf_status_change_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_status_change_day");
+    buf_status_change_day[offset].exchange(FLAMEGPU->getVariable<unsigned int>("status_change_day"));
     
     auto buf_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_sne");
     buf_sne[offset].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));

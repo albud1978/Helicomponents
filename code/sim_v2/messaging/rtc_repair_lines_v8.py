@@ -10,6 +10,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import pyflamegpu as fg
 from model_build import MAX_EXPORT_STEPS, RL_BUF_SIZE, REPAIR_LINES_MAX
 
+REPAIR_BANK_MAX = 64
+REPAIR_BANK_SIZE = REPAIR_LINES_MAX * REPAIR_BANK_MAX
+
 
 def setup_rl_export_buffers(env):
     """Объявление буферов экспорта RepairLine."""
@@ -17,8 +20,11 @@ def setup_rl_export_buffers(env):
     env.newMacroPropertyUInt("rl_buf_acn", RL_BUF_SIZE)
     env.newMacroPropertyUInt("rl_buf_rt", RL_BUF_SIZE)
     env.newMacroPropertyUInt("rl_buf_gb", RL_BUF_SIZE)
-    mem_mb = 4 * RL_BUF_SIZE * 4 / (1024 * 1024)
-    print(f"  ✅ RepairLine Export: 4 буфера × {RL_BUF_SIZE} = {mem_mb:.1f} МБ GPU")
+    env.newMacroPropertyUInt("rl_buf_bank_count", RL_BUF_SIZE)
+    env.newMacroPropertyUInt("rl_buf_bank_head_start", RL_BUF_SIZE)
+    env.newMacroPropertyUInt("rl_buf_bank_head_end", RL_BUF_SIZE)
+    mem_mb = 4 * RL_BUF_SIZE * 7 / (1024 * 1024)
+    print(f"  ✅ RepairLine Export: 7 буферов × {RL_BUF_SIZE} = {mem_mb:.1f} МБ GPU")
 
 # RTC_REPAIR_LINE_SYNC = f"""
 # FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_sync_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
@@ -94,6 +100,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_export_v8, flamegpu::MessageNone, flameg
     auto buf_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_acn");
     auto buf_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_rt");
     auto buf_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_gb");
+    auto buf_bank_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_bank_count");
+    auto buf_bank_head_start = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_bank_head_start");
+    auto buf_bank_head_end = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_bank_head_end");
     
     // free_days — из MacroProperty (SSoT, обновляется WRITE слоем)
     auto mp_fd = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
@@ -111,6 +120,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_export_v8, flamegpu::MessageNone, flameg
     // group_by из MacroProperty (SSoT, устанавливается в P2/P3 commit)
     auto mp_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");
     buf_gb[offset].exchange(mp_gb[line_id]);
+
+    // bank telemetry: count + head_start/head_end (без нормализации)
+    auto mp_bank_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_mp");
+    const unsigned int bank_base = line_id * {REPAIR_BANK_MAX}u;
+    auto mp_bank_start = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_BANK_SIZE}u>("repair_line_bank_start_mp");
+    auto mp_bank_end = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_BANK_SIZE}u>("repair_line_bank_end_mp");
+    buf_bank_count[offset].exchange(mp_bank_count[line_id]);
+    buf_bank_head_start[offset].exchange(mp_bank_start[bank_base]);
+    buf_bank_head_end[offset].exchange(mp_bank_end[bank_base]);
     
     return flamegpu::ALIVE;
 }}
