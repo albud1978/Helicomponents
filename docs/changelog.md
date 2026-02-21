@@ -1,5 +1,39 @@
 # Changelog
 
+## [20-02-2026] - V8: telemetry-export fix + bank lock race fix + zero Mi-8 births
+
+### Изменения
+- `code/sim_v2/messaging/rtc_repairline_export.py`, `rtc_repair_lines_v8.py`:
+  - в `sim_repairline_v9` восстановлен runtime `aircraft_number` (без принудительного обнуления);
+  - добавлена bank-телеметрия: `bank_count`, `bank_head_start`, `bank_head_end`.
+- `code/sim_v2/messaging/rtc_mp2_export.py`, `orchestrator_limiter_v8.py`:
+  - добавлен экспорт `status_change_day` в `sim_masterv2_v9` для forensic-проверок guard без proxy.
+- `code/sim_v2/messaging/rtc_quota_v8.py`, `base_model_messaging.py`:
+  - добавлен `today_committable_slots` в `QuotaBucket`;
+  - для bank-only дней включено bank-friendly ранжирование кандидатов в bucket;
+  - устранена race-проблема bank lock (бинарный lock `0/1`, без restore чужого lock).
+
+### Контекст
+При разборе остаточных рождений выявлен паттерн: `today_ready=0`, `bank` не пуст, но `source2` commit не происходил. После доработки сигналов bucket и фикса lock-гонки bank-окна начали стабильно выдаваться в проблемные дни.
+
+### Результаты
+- Симуляции: `20250704:1` и `20251230:2` завершены успешно (`ops=target`).
+- `run_all_stream`:
+  - `20250704:1` → `TOTAL=13 PASSED=13 FAILED=0`
+  - `20251230:2` → `TOTAL=13 PASSED=13 FAILED=0`
+- По рождениям (`sim_masterv2_v9`, latest version_date):
+  - Mi-8 (`group_by=1`): `0->2 = 0`, `0->3 = 0` на обоих датасетах;
+  - Mi-17 (`group_by=2`): `0->2 = 33` (D1), `0->2 = 32` (D2), `0->3 = 6` (D1), `0->3 = 0` (D2).
+
+## [20-02-2026] - Фиксация актуальной версии ClickHouse в docs/skills
+
+### Изменения
+- `docs/validation.md`: добавлена секция с зафиксированной runtime-версией ClickHouse (`24.10.1.2812`) и правилом перепроверки SQL-совместимости при смене версии.
+- `.cursor/skills/clickhouse-v9-guard/SKILL.md`: добавлен блок `Версия сервера и совместимость` с командой `SELECT version();` и требованием отмечать риск несовместимости при отличающейся версии.
+
+### Контекст
+После проверки текущего сервера ClickHouse потребовалось закрепить в документации и агентском skill единый ориентир по версии СУБД, чтобы SQL-диагностика и валидации опирались на подтверждённый runtime.
+
 ## [19-02-2026] - Bank-окна в активном bucket-контуре + claim-SSOT + устранение Mi-8 dynamic spawn
 
 ### Изменения

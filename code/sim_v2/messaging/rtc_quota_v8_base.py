@@ -34,6 +34,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8, flamegpu::MessageNone, flamegpu::Mes
     auto mi17_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
     auto mi8_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
     auto mi17_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
+    auto mi8_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_status_day");
+    auto mi17_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_status_day");
+    auto mi8_inactive_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_status_day");
+    auto mi17_inactive_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_status_day");
     auto mi8_commit_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p1");
     auto mi17_commit_p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p1");
     auto mi8_commit_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p2");
@@ -52,6 +56,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8, flamegpu::MessageNone, flamegpu::Mes
         mi17_unsvc_ready[i].exchange(0u);
         mi8_inactive[i].exchange(0u);
         mi17_inactive[i].exchange(0u);
+        mi8_unsvc_status_day[i].exchange(0u);
+        mi17_unsvc_status_day[i].exchange(0u);
+        mi8_inactive_status_day[i].exchange(0u);
+        mi17_inactive_status_day[i].exchange(0u);
         mi8_commit_p1[i].exchange(0u);
         mi17_commit_p1[i].exchange(0u);
         mi8_commit_p2[i].exchange(0u);
@@ -84,6 +92,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8_spawn, flamegpu::MessageNone, flamegp
     auto mi17_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
     auto mi8_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
     auto mi17_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
+    auto mi8_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_status_day");
+    auto mi17_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_status_day");
+    auto mi8_inactive_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_status_day");
+    auto mi17_inactive_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_status_day");
     
     for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
         mi8_ops[i].exchange(0u);
@@ -96,6 +108,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8_spawn, flamegpu::MessageNone, flamegp
         mi17_unsvc_ready[i].exchange(0u);
         mi8_inactive[i].exchange(0u);
         mi17_inactive[i].exchange(0u);
+        mi8_unsvc_status_day[i].exchange(0u);
+        mi17_unsvc_status_day[i].exchange(0u);
+        mi8_inactive_status_day[i].exchange(0u);
+        mi17_inactive_status_day[i].exchange(0u);
     }}
     
     return flamegpu::ALIVE;
@@ -141,12 +157,17 @@ RTC_COUNT_INACTIVE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_count_inactive_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");
     if (group_by == 1u) {{
         auto count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
+        auto status_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_status_day");
         count[idx].exchange(1u);
+        status_days[idx].exchange(status_change_day);
     }} else if (group_by == 2u) {{
         auto count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
+        auto status_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_status_day");
         count[idx].exchange(1u);
+        status_days[idx].exchange(status_change_day);
     }}
     return flamegpu::ALIVE;
 }}

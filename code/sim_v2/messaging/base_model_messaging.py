@@ -138,6 +138,9 @@ class V2BaseModelMessaging:
         self.msg_quota_bucket.newVariableUInt("promote_p3_mi17")
         self.msg_quota_bucket.newVariableUInt("deficit_mi8")
         self.msg_quota_bucket.newVariableUInt("deficit_mi17")
+        self.msg_quota_bucket.newVariableUInt("today_ready_slots")
+        self.msg_quota_bucket.newVariableUInt("bank_ready_slots")
+        self.msg_quota_bucket.newVariableUInt("today_committable_slots")
 
         # ═══════════════════════════════════════════════════════════════
         # Message "RepairLineStatus": RepairLine → QuotaManager (addressed)
@@ -385,6 +388,11 @@ class V2BaseModelMessaging:
         # UNSVC, готовые к промоуту (exit_date <= current_day)
         self.env.newMacroPropertyUInt32("mi8_unsvc_ready_count", max_frames)
         self.env.newMacroPropertyUInt32("mi17_unsvc_ready_count", max_frames)
+        # Ranking proxy (status_change_day) for P2/P3 bucket selection
+        self.env.newMacroPropertyUInt32("mi8_unsvc_status_day", max_frames)
+        self.env.newMacroPropertyUInt32("mi17_unsvc_status_day", max_frames)
+        self.env.newMacroPropertyUInt32("mi8_inactive_status_day", max_frames)
+        self.env.newMacroPropertyUInt32("mi17_inactive_status_day", max_frames)
         self.env.newMacroPropertyUInt32("mi8_approve_s7", max_frames)
         self.env.newMacroPropertyUInt32("mi17_approve_s7", max_frames)
         
