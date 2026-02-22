@@ -1,5 +1,22 @@
 # Changelog
 
+## [21-02-2026] - ClickHouse: нормальное партицирование v9 runtime-таблиц + BI runbook
+
+### Изменения
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py`:
+  - для `sim_masterv2_v9` обновлён partition key на `PARTITION BY (version_date, toYYYYMM(day_date))`.
+- `code/sim_v2/messaging/rtc_repairline_export.py`:
+  - для `sim_repairline_v9` добавлен `PARTITION BY (version_date, toYYYYMM(day_date))`.
+- `docs/validation.md`:
+  - добавлена секция по runtime-партицированию v9 таблиц;
+  - добавлен BI runbook для Superset (фильтры `version_date/version_id`, timegrain, рекомендации по предагрегациям).
+
+### Контекст
+Ранее `sim_masterv2_v9` и `sim_repairline_v9` были асимметричны по DDL (master с партицированием, repairline без). Это создавало лишний скан данных и нестабильную производительность BI/SQL при агрегациях по дням/месяцам/годам.
+
+### Примечание по применению
+- Для уже существующих таблиц смена partition key требует полного цикла `DROP + CREATE + reload` (через обычный `ALTER` ключ партиции не меняется).
+
 ## [20-02-2026] - V8: telemetry-export fix + bank lock race fix + zero Mi-8 births
 
 ### Изменения
@@ -5197,3 +5214,15 @@ SELECT dictGet('aircraft_number_dict_flat', 'registration_code', aircraft_number
 ---
 
 ## [23-10-2025] - ✅ РЕШЕНИЕ: Transition detection через Python post-processing
+
+## [17-02-2026] - Domain Graph governance и выравнивание JSON-SSoT под V8
+
+### Изменено
+- `config/transitions/quota_rules.json`: приведён к текущему V8 runtime — добавлены `today_ready_slots`, `bank_ready_slots`, `today_committable_slots`, зафиксированы source1/source2 правила, bank-only ранжирование и бинарный bank-lock.
+- `config/transitions/transitions_rules.json`: обновлён до `version: 10`, синхронизирован фактический RTC execution order (host/init, quota, commit, post-quota recount, spawn, export/drain), зафиксирован type-first приоритет `Mi-17(P2->P3) -> Mi-8(P2->P3)` и guard-условия source1/source2.
+- `.cursor/rules/90_multiagent_workflow.mdc`: добавлен обязательный шаг `GraphImpactProposal` для оркестратора при изменениях в `code/sim_v2/**` и/или `config/transitions/**`, включая требование явно предлагать пользователю апдейт Domain Graph даже при `GraphUpdate: нет` у subagent.
+
+### Governance
+- Зафиксирован policy-контур: закрытие high-risk workflow без `GraphImpactProposal` считается violation.
+- Sync Domain Graph должен выполняться только после явного human-gate (`ApprovalGate`) и фиксироваться в handoff оркестратора.
+- Выполнен `make sync-domain-graph` после явного approval в текущем чате; результат: `Synced 438 queries to neo4j+s://894fb8f5.databases.neo4j.io` (exit code 0).

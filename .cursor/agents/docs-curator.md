@@ -20,6 +20,7 @@ description: Документационный агент. Поддерживае
 2. Обновить `docs/changelog.md` с кратким следом: что изменено, кто проверял, итог.
 3. Проверить, что README и профильные документы не противоречат SSoT (`config/transitions/*.json`, `config/transitions/invariants.json`).
 4. Зафиксировать handoff в Agent KG с полями `TraceID`, `PlanStepID`, `Facts`, `Assumptions`.
+5. В начале фазы обязательно записать context в Agent KG (`--write-context --context-type phase_start --agent docs-curator`).
 
 ## Чеклист качества
 
@@ -34,6 +35,8 @@ description: Документационный агент. Поддерживае
 - В `Changes` — какие документы синхронизированы
 - В `Facts` — источники (пути, логи, handoff)
 - В `Assumptions` — только непроверяемые допущения с `Risks if false`
+- `GraphUpdate` в handoff трактовать только как обновление Domain Graph (Neo4j Aura)
+- Факт записей в Agent KG (`--write-context`, `--write-handoff`) явно отражать в `Changes` и/или `Facts`
 
 ## Запреты
 

@@ -501,3 +501,526 @@
   edit[3] old='            model_build.RTC_MAX_FRAMES - self.frames - det_spawn - dynamic_reserve_mi17' new='            model_build.RTC_MAX_FRAMES - self.frames - det_spawn'
   edit[4] old='        dynamic_reserve_mi8 = 8 if remaining_slots >= 8 else remaining_slots' new='        dynamic_reserve_mi8 = 8 if total_dynamic_slots >= 8 else total_dynamic_slots\n        dynamic_reserve_mi17 = tota'
 
+[2026-02-18 18:32:28 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/base_model_messaging.py
+  edit[0] old='' new='        agent.newVariableUInt("repair_claim_start_day", 0xFFFFFFFF)\n        agent.newVariableUInt("repair_claim_end_day"'
+
+[2026-02-18 18:32:33 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8_base.py
+  edit[0] old='' new='    FLAMEGPU->setVariable<unsigned int>("repair_claim_start_day", 0xFFFFFFFFu);\n    FLAMEGPU->setVariable<unsigned int>('
+
+[2026-02-18 18:32:40 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_mp2_export.py
+  edit[0] old='Buffers (20 total):' new='Buffers (23 total):'
+  edit[1] old='' new='  mp2_repair_claim_start_day, mp2_repair_claim_end_day, mp2_repair_claim_source,'
+  edit[2] old='# MP2 field names (14 dynamic + 6 static fields)' new='# MP2 field names (17 dynamic + 6 static fields)'
+  edit[3] old='' new='    "mp2_repair_claim_start_day",\n    "mp2_repair_claim_end_day",\n    "mp2_repair_claim_source",'
+
+[2026-02-18 18:32:46 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_mp2_export.py
+  edit[0] old='' new='    auto buf_claim_start = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_repair_claim_start_day'
+
+[2026-02-18 18:32:54 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='# Максимум bank-окон на линию\nREPAIR_BANK_MAX = 64'
+
+[2026-02-18 18:33:19 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='\n    const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");\n    const unsign'
+  edit[1] old='    unsigned int available_lines = slots_count;' new='    unsigned int bank_available = 0u;\n    for (unsigned int i = 0u; i < max_lines; ++i) {{\n        if (line_acn_mp[i] !='
+  edit[2] old='' new='        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);\n        FLAMEGPU->setVariable<unsigned int>("debug_'
+  edit[3] old='            FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);\n            FLAMEGPU->setVariable<unsigned int>' new=''
+  edit[4] old='            FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);\n            FLAMEGPU->setVariable<unsigne' new=''
+  edit[5] old='' new='        }} else {{\n            FLAMEGPU->setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);\n            FLAMEGPU'
+
+[2026-02-18 18:33:39 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    if (slots_count == 0u) {{' new='    const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");\n    const unsigne'
+  edit[1] old='    if (p2_will_promote > slots_count) {{\n        p2_will_promote = slots_count;' new='    if (p2_will_promote > available_lines) {{\n        p2_will_promote = available_lines;'
+  edit[2] old='    unsigned int available_lines = (slots_count > p2_will_promote) ? (slots_count - p2_will_promote) : 0u;' new='    unsigned int available_left = (available_lines > p2_will_promote) ? (available_lines - p2_will_promote) : 0u;'
+  edit[3] old='    if (available_lines < needed) {{\n        needed = available_lines;' new='    if (available_left < needed) {{\n        needed = available_left;'
+  edit[4] old='        const unsigned int target_rank = p2_will_promote + rank;' new='        const unsigned int p2_slots_used = (p2_will_promote < slots_count) ? p2_will_promote : slots_count;\n        cons'
+  edit[5] old='' new='        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);\n        FLAMEGPU->setVariable<unsigned int>("debug_'
+  edit[6] old='            FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);\n            FLAMEGPU->setVariable<unsigned int>' new=''
+  edit[7] old='            FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);\n            FLAMEGPU->setVariable<unsigne' new=''
+  edit[8] old='' new='        }} else {{\n            FLAMEGPU->setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);\n            FLAMEGPU'
+
+[2026-02-18 18:35:17 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto bank_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_cou'
+  edit[1] old='' new='    unsigned int claim_start = 0xFFFFFFFFu;\n    unsigned int claim_end = 0xFFFFFFFFu;\n    unsigned int claim_source = 0u'
+  edit[2] old='' new='                claim_start = current_day - repair_time;\n                claim_end = current_day;\n                claim_'
+  edit[3] old='' new='            claim_start = current_day - repair_time;\n            claim_end = current_day;\n            claim_source = 1u;'
+  edit[4] old='' new='    // Fallback: bank окна (newest-first)\n    if (!claimed) {{\n        bool tried[{REPAIR_LINES_MAX}u];\n        for (uns'
+  edit[5] old='' new='        FLAMEGPU->setVariable<unsigned int>("repair_claim_start_day", claim_start);\n        FLAMEGPU->setVariable<unsign'
+
+[2026-02-18 18:35:53 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto bank_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_cou'
+  edit[1] old='' new='    unsigned int claim_start = 0xFFFFFFFFu;\n    unsigned int claim_end = 0xFFFFFFFFu;\n    unsigned int claim_source = 0u'
+  edit[2] old='' new='                claim_start = current_day - repair_time;\n                claim_end = current_day;\n                claim_'
+  edit[3] old='' new='            claim_start = current_day - repair_time;\n            claim_end = current_day;\n            claim_source = 1u;'
+  edit[4] old='' new='    // Fallback: bank окна (newest-first)\n    if (!claimed) {{\n        bool tried[{REPAIR_LINES_MAX}u];\n        for (uns'
+  edit[5] old='' new='        FLAMEGPU->setVariable<unsigned int>("repair_claim_start_day", claim_start);\n        FLAMEGPU->setVariable<unsign'
+
+[2026-02-18 18:35:59 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='# Максимум bank-окон на линию (должно совпадать с rtc_quota_v8.py)\nREPAIR_BANK_MAX = 64'
+  edit[1] old='' new=''
+
+[2026-02-18 18:36:07 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='        self.base_model.env.newMacroPropertyUInt("repair_line_bank_count_mp", REPAIR_LINES_MAX)\n        self.base_model.'
+
+[2026-02-18 18:36:19 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='        mp_bank_count = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_bank_count_mp")\n        mp_bank_start = F'
+  edit[1] old='' new='            mp_bank_count[i] = 0\n            base = i * REPAIR_BANK_MAX\n            for j in range(REPAIR_BANK_MAX):\n   '
+
+[2026-02-18 18:36:33 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='            repair_claim_start_day UInt16,\n            repair_claim_end_day UInt16,\n            repair_claim_source UInt'
+  edit[1] old='' new='    client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS repair_claim_start_day UInt16")\n    client.exec'
+
+[2026-02-18 18:36:42 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='                    int(fields['mp2_repair_claim_start_day'][s, a]),\n                    int(fields['mp2_repair_claim_en'
+  edit[1] old='' new='                'repair_claim_start_day', 'repair_claim_end_day', 'repair_claim_source','
+
+[2026-02-18 18:37:12 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        Постпроцессинг P2/P3 промоутов: восстановление окна ремонта + дневной cap по repair_quota.' new='        Постпроцессинг P2/P3 промоутов: окно ремонта по runtime claim metadata + дневной cap.'
+  edit[1] old='        2. Определяем day D = days[S]\n        3. Вычисляем repair_start = D - repair_time (из mp2_repair_time[S, agent])' new='        2. Берём claim metadata (start/end/source) из MP2\n        3. Ищем шаги в диапазоне [claim_start, claim_end) и за'
+  edit[2] old='            repair_time_val = 0' new=''
+  edit[3] old='                    d_event = int(days[s])\n                    repair_time_val = int(fields['mp2_repair_time'][s, a])' new='                    claim_source = int(fields['mp2_repair_claim_source'][s, a])\n                    if claim_source not '
+  edit[4] old='                    if repair_time_val <= 0 or d_event <= 0:\n                        continue\n                    \n     ' new=''
+  edit[5] old='                        if repair_start <= d_back < d_event:' new='                        if claim_start <= d_back < claim_end:'
+  edit[6] old='                        days_to_event = d_event - d_back\n                        if days_to_event <= assembly_time_val:' new='                        days_to_end = claim_end - d_back\n                        if days_to_end <= assembly_time_val:'
+
+[2026-02-18 18:41:33 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_mp2_export.py
+  edit[0] old='Buffers (23 total):' new='Buffers (24 total):'
+  edit[1] old='' new='  mp2_repair_claim_line_id,'
+  edit[2] old='' new='    "mp2_repair_claim_line_id",'
+  edit[3] old='' new='\n    auto buf_claim_line_id = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_repair_claim_line_i'
+
+[2026-02-18 18:41:45 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='                    int(fields['mp2_repair_claim_line_id'][s, a]),'
+  edit[1] old='' new='                'repair_claim_line_id','
+  edit[2] old='' new='            repair_claim_line_id UInt16,'
+  edit[3] old='' new='    client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS repair_claim_line_id UInt16")'
+
+[2026-02-18 18:47:26 UTC] conv=fad3769c gen=05072d22 file=code/validation/temp5_repair_hybrid_vector.py
+  edit[0] old='TEMP-5: Hybrid precondition (master transitions + repairline vectors).' new='TEMP-5: Claim metadata consistency (bank+claim semantics, sim_masterv2_v9).'
+  edit[1] old='1) busy_today >= count_4to2_day для каждого дня с 4->2 переходами.\n2) strict future-window [day, day+window) с tail adju' new='1) invalid_claim_rows: claim-события (commit_p2/commit_p3) имеют валидные поля claim.\n2) transition_claim_mismatch: пере'
+  edit[2] old='' new='    _ = table_repair\n    _ = repair_window'
+  edit[3] old='        "window": repair_window,\n        "window_follow": repair_window - 1,' new=''
+  edit[4] old='' new='    valid_claim_expr = (\n        "repair_claim_source IN (1, 2)"\n        " AND repair_claim_line_id != 65535"\n        " '
+  edit[5] old='    WITH event_days AS (' new='    WITH base AS ('
+  edit[6] old='' new='            aircraft_number,'
+  edit[7] old='            countIf(pre_status_id = 4 AND status_id = 2) AS cnt_4to2_day' new='            pre_status_id,\n            status_id,\n            commit_p2,\n            commit_p3,\n            repair_time,'
+  edit[8] old='        GROUP BY group_by, day_u16\n        HAVING cnt_4to2_day > 0' new=''
+  edit[9] old='    busy_by_day_raw AS (' new='    claim_rows AS ('
+  edit[10] old='            group_by,\n            day_u16,\n            countIf(repair_time > 0 AND free_days < repair_time) AS busy_day_' new='            *,\n            ({valid_claim_expr}) AS is_valid_claim\n        FROM base\n        WHERE commit_p2 = 1 OR commi'
+  edit[11] old='    max_day_by_group AS (' new='    transition_rows AS ('
+  edit[12] old='            group_by,\n            max(day_u16) AS max_day_group\n        FROM {table_repair}\n        WHERE version_id = %' new='            *,\n            ({valid_claim_expr}) AS is_valid_claim\n        FROM base\n        WHERE pre_status_id = 4 AND '
+  edit[13] old='    all_days AS (\n        SELECT group_by, day_u16 FROM event_days\n        UNION DISTINCT\n        SELECT group_by, day_u' new='    valid_claims AS ('
+  edit[14] old='            d.group_by,\n            d.day_u16,\n            ifNull(b.busy_day_count, 0) AS busy_day_count\n        FROM al' new='            aircraft_number,'
+  edit[15] old='            day_u16,\n            busy_day_count,\n            sum(busy_day_count) OVER (\n                PARTITION BY gro' new='            repair_claim_line_id,\n            repair_claim_start_day,\n            repair_claim_end_day,\n            row_'
+  edit[16] old='    total_query = base_cte + """\n    SELECT count()\n    FROM event_days' new='    counts_query = base_cte + f"""\n    SELECT\n        (SELECT count() FROM claim_rows) AS total_claim_events,\n        (S'
+  edit[17] old='    total_event_days = client.execute(total_query, params)[0][0] or 0' new=''
+  edit[18] old='    day_sanity_query = base_cte + """\n    SELECT count()\n    FROM event_days AS e\n    LEFT JOIN busy_by_day AS b\n       ' new='    (\n        total_claim_events,\n        total_valid_claim_events,\n        invalid_claim_rows,\n        total_transition'
+  edit[19] old='    window_query = base_cte + """\n    SELECT count()\n    FROM event_with_window\n    WHERE future_busy_sum < (\n        cn' new=''
+  edit[20] old='        f"repair_window={repair_window}",\n        "tail_adjusted=true (strict future window [day, day+repair_window))",\n' new='        f"table_main={table_main}",\n        f"total_claim_events={total_claim_events}",\n        f"total_valid_claim_even'
+  edit[21] old='    if day_sanity_violations:' new='    if invalid_claim_rows:'
+  edit[22] old='            e.group_by,\n            e.day_u16,\n            e.cnt_4to2_day,\n            b.busy_day_count AS busy_today\n  ' new='            group_by,\n            day_u16,\n            aircraft_number,\n            commit_p2,\n            commit_p3,\n  '
+  edit[23] old='        details.append("top5 day_sanity (gb, day, cnt, busy_today):")\n        for gb, day, cnt, busy_today in rows:' new='        details.append(\n            "top5 invalid_claim_rows (gb, day, acn, c2, c3, src, line, start, end, rt, len):"\n  '
+  edit[24] old='                f"  gb={gb}, day={day}, cnt={cnt}, busy_today={busy_today}"' new='                "  gb={gb}, day={day}, acn={acn}, c2={c2}, c3={c3}, "\n                "src={src}, line={line}, start={st'
+  edit[25] old='    if window_capacity_violations:\n        window_sample_query = base_cte + """' new='    if transition_claim_mismatch:\n        transition_sample_query = base_cte + """'
+  edit[26] old='            cnt_4to2_day,\n            future_busy_sum,\n            effective_window,\n            (cnt_4to2_day * if(effe' new='            aircraft_number,\n            pre_status_id,\n            status_id,\n            commit_p2,\n            commit'
+  edit[27] old='                (cnt_4to2_day * if(effective_window <= 0, 0, effective_window))\n                - future_busy_sum\n      ' new='                gb,\n                day,\n                acn,\n                pre_status,\n                status,\n      '
+  edit[28] old='        ORDER BY deficit DESC, day_u16' new='        for row in rows:\n            (\n                gb,\n                line_id,\n                acn_a,\n             '
+  edit[29] old='        rows = client.execute(window_sample_query, params)' new='        rows = client.execute(bank_sample_query, params)'
+  edit[30] old='            "top5 window_capacity (gb, day, cnt, future_busy_sum, required, deficit):"' new='            "top5 bank_underflow (gb, day, acn, start, end, rt, len):"'
+  edit[31] old='        for gb, day, cnt, future_sum, required, deficit in rows:' new='        for row in rows:\n            gb, day, acn, start_day, end_day, repair_time, length_calc = row'
+  edit[32] old='                "  gb={gb}, day={day}, cnt={cnt}, future_busy_sum={fbs}, "\n                "required={req}, deficit={def' new='                "  gb={gb}, day={day}, acn={acn}, start={start}, end={end}, "\n                "rt={rt}, len={ln}".format'
+  edit[33] old='                    cnt=cnt,\n                    fbs=future_sum,\n                    req=required,\n                    d' new='                    acn=acn,\n                    start=start_day,\n                    end=end_day,\n                    r'
+  edit[34] old='    passed = day_sanity_violations == 0 and window_capacity_violations == 0\n    print_result("TEMP-5 repair hybrid vecto' new='    passed = (\n        invalid_claim_rows == 0\n        and transition_claim_mismatch == 0\n        and overlap_violations'
+
+[2026-02-18 18:47:41 UTC] conv=fad3769c gen=05072d22 file=code/validation/temp5_repair_hybrid_vector.py
+  edit[0] old='            "TEMP-5: repair hybrid vector "\n            "(master + repairline, strict future-window + tail adjustment)"' new='            "TEMP-5: claim metadata consistency "\n            "(bank+claim semantics, sim_masterv2_v9)"'
+
+[2026-02-18 19:03:30 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='#define MP_READ_RESTORE(mp, idx, sentinel, out) \\\n    do {{ out = mp[idx].exchange(sentinel); mp[idx].exchange(out); }}'
+  edit[1] old='                if (line_acn[i] != 0u) continue;\n                const unsigned int old_days = line_mp[i];' new='                unsigned int acn_seen = 0u;\n                MP_READ_RESTORE(line_acn, i, 0xFFFFFFFFu, acn_seen);\n       '
+  edit[2] old='                if (line_acn[i] != 0u) continue;\n                if (bank_count_mp[i] == 0u) continue;' new='                unsigned int acn_seen = 0u;\n                MP_READ_RESTORE(line_acn, i, 0xFFFFFFFFu, acn_seen);\n       '
+  edit[3] old='                const unsigned int head_end = bank_end_mp[base];' new='                unsigned int head_end = 0u;\n                MP_READ_RESTORE(bank_end_mp, base, 0u, head_end);'
+  edit[4] old='            unsigned int bank_count = bank_count_mp[best_line];' new='            unsigned int bank_count = 0u;\n            MP_READ_RESTORE(bank_count_mp, best_line, 0u, bank_count);'
+  edit[5] old='            const unsigned int window_start = bank_start_mp[base];\n            const unsigned int window_end = bank_end_' new='            unsigned int window_start = 0u;\n            unsigned int window_end = 0u;\n            MP_READ_RESTORE(bank_s'
+  edit[6] old='                const unsigned int prev_start = bank_start_mp[from];\n                const unsigned int prev_end = bank_' new='                const unsigned int prev_start = bank_start_mp[from].exchange(0u);\n                const unsigned int pre'
+  edit[7] old='            unsigned int bank_count = bank_count_mp[chosen_line];' new='            unsigned int bank_count = 0u;\n            MP_READ_RESTORE(bank_count_mp, chosen_line, 0u, bank_count);'
+  edit[8] old='                    const unsigned int prev_start = bank_start_mp[from];\n                    const unsigned int prev_end' new='                    const unsigned int prev_start = bank_start_mp[from].exchange(0u);\n                    const unsigned'
+  edit[9] old='' new='#undef MP_READ_RESTORE'
+
+[2026-02-18 19:03:46 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='#define MP_READ_RESTORE(mp, idx, sentinel, out) \\\n    do {{ out = mp[idx].exchange(sentinel); mp[idx].exchange(out); }}'
+  edit[1] old='                if (line_acn[i] != 0u) continue;\n                const unsigned int old_days = line_mp[i];' new='                unsigned int acn_seen = 0u;\n                MP_READ_RESTORE(line_acn, i, 0xFFFFFFFFu, acn_seen);\n       '
+  edit[2] old='                if (line_acn[i] != 0u) continue;\n                if (bank_count_mp[i] == 0u) continue;' new='                unsigned int acn_seen = 0u;\n                MP_READ_RESTORE(line_acn, i, 0xFFFFFFFFu, acn_seen);\n       '
+  edit[3] old='                const unsigned int head_end = bank_end_mp[base];' new='                unsigned int head_end = 0u;\n                MP_READ_RESTORE(bank_end_mp, base, 0u, head_end);'
+  edit[4] old='            unsigned int bank_count = bank_count_mp[best_line];' new='            unsigned int bank_count = 0u;\n            MP_READ_RESTORE(bank_count_mp, best_line, 0u, bank_count);'
+  edit[5] old='            const unsigned int window_start = bank_start_mp[base];\n            const unsigned int window_end = bank_end_' new='            unsigned int window_start = 0u;\n            unsigned int window_end = 0u;\n            MP_READ_RESTORE(bank_s'
+  edit[6] old='                const unsigned int prev_start = bank_start_mp[from];\n                const unsigned int prev_end = bank_' new='                const unsigned int prev_start = bank_start_mp[from].exchange(0u);\n                const unsigned int pre'
+  edit[7] old='            unsigned int bank_count = bank_count_mp[chosen_line];' new='            unsigned int bank_count = 0u;\n            MP_READ_RESTORE(bank_count_mp, chosen_line, 0u, bank_count);'
+  edit[8] old='                    const unsigned int prev_start = bank_start_mp[from];\n                    const unsigned int prev_end' new='                    const unsigned int prev_start = bank_start_mp[from].exchange(0u);\n                    const unsigned'
+  edit[9] old='' new='#undef MP_READ_RESTORE'
+
+[2026-02-18 19:08:38 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_mp2_export.py
+  edit[0] old='                    arr[s, a] = int(mp[base + a])' new='                    val = int(mp[base + a]) & 0xFFFFFFFF\n                    arr[s, a] = val'
+
+[2026-02-18 19:11:15 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='                free_days[s, l] = int(mp_fd[base + l])\n                acn[s, l] = int(mp_acn[base + l])\n               ' new='                free_days[s, l] = int(mp_fd[base + l]) & 0xFFFFFFFF\n                acn[s, l] = int(mp_acn[base + l]) & '
+
+[2026-02-18 19:13:04 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='        def _u16(val) -> int:\n            return int(val) & 0xFFFF\n        def _u8(val) -> int:\n            return int(v'
+  edit[1] old='                    day,  # day_u16\n                    int(fields['mp2_idx'][s, a]),' new='                    _u16(day),  # day_u16\n                    _u16(fields['mp2_idx'][s, a]),'
+  edit[2] old='                    int(fields['mp2_group_by'][s, a]),' new='                    _u8(fields['mp2_group_by'][s, a]),'
+  edit[3] old='                    status,\n                    int(fields['mp2_pre_status_id'][s, a]),' new='                    _u8(status),\n                    _u8(fields['mp2_pre_status_id'][s, a]),'
+  edit[4] old='                    int(fields['mp2_limiter'][s, a]),\n                    int(fields['mp2_repair_days'][s, a]),\n        ' new='                    _u16(fields['mp2_limiter'][s, a]),\n                    _u16(fields['mp2_repair_days'][s, a]),\n      '
+
+[2026-02-18 19:21:55 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='# V8: Snapshot RepairLine MacroProperty (RO)\n# ═════════════════════════════════════════════════════════════════════════'
+  edit[1] old='#define MP_READ_RESTORE(mp, idx, sentinel, out) \\\n    do {{ out = mp[idx].exchange(sentinel); mp[idx].exchange(out); }}' new=''
+  edit[2] old='' new='    auto line_mp_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_r'
+  edit[3] old='                unsigned int acn_seen = 0u;\n                MP_READ_RESTORE(line_acn, i, 0xFFFFFFFFu, acn_seen);\n       ' new='                if (line_acn_ro[i] != 0u) continue;\n                const unsigned int old_days = line_mp_ro[i];'
+  edit[4] old='                unsigned int acn_seen = 0u;\n                MP_READ_RESTORE(line_acn, i, 0xFFFFFFFFu, acn_seen);\n       ' new='                if (line_acn_ro[i] != 0u) continue;\n                if (bank_count_ro[i] == 0u) continue;\n              '
+  edit[5] old='            unsigned int bank_count = 0u;\n            MP_READ_RESTORE(bank_count_mp, best_line, 0u, bank_count);' new='            unsigned int bank_count = bank_count_mp[best_line].exchange(0u);\n            bank_count_mp[best_line].exchan'
+  edit[6] old='            unsigned int window_start = 0u;\n            unsigned int window_end = 0u;\n            MP_READ_RESTORE(bank_s' new='            unsigned int window_start = bank_start_mp[base].exchange(0u);\n            unsigned int window_end = bank_end'
+  edit[7] old='            unsigned int bank_count = 0u;\n            MP_READ_RESTORE(bank_count_mp, chosen_line, 0u, bank_count);' new='            unsigned int bank_count = bank_count_mp[chosen_line].exchange(0u);\n            bank_count_mp[chosen_line].ex'
+  edit[8] old='#undef MP_READ_RESTORE' new=''
+  edit[9] old='#define MP_READ_RESTORE(mp, idx, sentinel, out) \\\n    do {{ out = mp[idx].exchange(sentinel); mp[idx].exchange(out); }}' new=''
+  edit[10] old='' new='    auto line_mp_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_r'
+  edit[11] old='                unsigned int acn_seen = 0u;\n                MP_READ_RESTORE(line_acn, i, 0xFFFFFFFFu, acn_seen);\n       ' new='                if (line_acn_ro[i] != 0u) continue;\n                const unsigned int old_days = line_mp_ro[i];'
+  edit[12] old='                unsigned int acn_seen = 0u;\n                MP_READ_RESTORE(line_acn, i, 0xFFFFFFFFu, acn_seen);\n       ' new='                if (line_acn_ro[i] != 0u) continue;\n                if (bank_count_ro[i] == 0u) continue;\n              '
+  edit[13] old='            unsigned int bank_count = 0u;\n            MP_READ_RESTORE(bank_count_mp, best_line, 0u, bank_count);' new='            unsigned int bank_count = bank_count_mp[best_line].exchange(0u);\n            bank_count_mp[best_line].exchan'
+  edit[14] old='            unsigned int window_start = 0u;\n            unsigned int window_end = 0u;\n            MP_READ_RESTORE(bank_s' new='            unsigned int window_start = bank_start_mp[base].exchange(0u);\n            unsigned int window_end = bank_end'
+  edit[15] old='            unsigned int bank_count = 0u;\n            MP_READ_RESTORE(bank_count_mp, chosen_line, 0u, bank_count);' new='            unsigned int bank_count = bank_count_mp[chosen_line].exchange(0u);\n            bank_count_mp[chosen_line].ex'
+  edit[16] old='#undef MP_READ_RESTORE' new=''
+
+[2026-02-18 19:22:01 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    # Snapshot RepairLine MacroProperty (RO) перед commit P2/P3\n    layer_snapshot = model.newLayer("v8_repair_line_snap'
+
+[2026-02-18 19:22:14 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='        self.base_model.env.newMacroPropertyUInt("repair_line_free_days_ro_mp", REPAIR_LINES_MAX)\n        self.base_mode'
+
+[2026-02-18 19:23:24 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='            unsigned int bank_count = bank_count_mp[best_line].exchange(0u);\n            bank_count_mp[best_line].exchan' new='            unsigned int bank_count = bank_count_ro[best_line];'
+  edit[1] old='            unsigned int bank_count = bank_count_mp[chosen_line].exchange(0u);\n            bank_count_mp[chosen_line].ex' new='            unsigned int bank_count = bank_count_ro[chosen_line];'
+
+[2026-02-18 19:23:29 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='            unsigned int bank_count = bank_count_mp[best_line].exchange(0u);\n            bank_count_mp[best_line].exchan' new='            unsigned int bank_count = bank_count_ro[best_line];'
+  edit[1] old='            unsigned int bank_count = bank_count_mp[chosen_line].exchange(0u);\n            bank_count_mp[chosen_line].ex' new='            unsigned int bank_count = bank_count_ro[chosen_line];'
+
+[2026-02-18 19:23:53 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='                bank_start_mp[base].exchange(window_start);\n                bank_end_mp[base].exchange(window_end);'
+
+[2026-02-18 19:23:57 UTC] conv=fad3769c gen=05072d22 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='                bank_start_mp[base].exchange(window_start);\n                bank_end_mp[base].exchange(window_end);'
+
+[2026-02-18 19:29:55 UTC] conv=fad3769c gen=05072d22 file=code/validation/temp5_repair_hybrid_vector.py
+  edit[0] old='' new='            day_u16,'
+  edit[1] old='' new='    ),\n    valid_claims_with_prev AS (\n        SELECT\n            aircraft_number,\n            group_by,\n            day'
+  edit[2] old='            FROM valid_claims AS a\n            INNER JOIN valid_claims AS b\n                ON a.group_by = b.group_by\n ' new='            FROM valid_claims_with_prev\n            WHERE prev_max_end > repair_claim_start_day'
+  edit[3] old='            a.group_by,\n            a.repair_claim_line_id,\n            a.aircraft_number,\n            a.repair_claim_st' new='            group_by,\n            repair_claim_line_id,\n            aircraft_number,\n            day_u16,\n            re'
+  edit[4] old='            "top5 overlap_pairs (gb, line, acn_a, start_a, end_a, acn_b, start_b, end_b):"' new='            "top5 overlap_rows (gb, line, acn, day, start, end, prev_max_end):"'
+  edit[5] old='                acn_a,\n                start_a,\n                end_a,\n                acn_b,\n                start_b,\n ' new='                acn,\n                day,\n                start_day,\n                end_day,\n                prev_max_e'
+  edit[6] old='                "  gb={gb}, line={line}, acn_a={acna}, "\n                "start_a={sa}, end_a={ea}, acn_b={acnb}, "\n    ' new='                "  gb={gb}, line={line}, acn={acn}, day={day}, "\n                "start={start}, end={end}, prev_max_end'
+  edit[7] old='                    acna=acn_a,\n                    sa=start_a,\n                    ea=end_a,\n                    acnb=a' new='                    acn=acn,\n                    day=day,\n                    start=start_day,\n                    end=e'
+
+[2026-02-18 19:32:56 UTC] conv=fad3769c gen=05072d22 file=code/validation/temp5_repair_hybrid_vector.py
+  edit[0] old='' new='          AND day_u16 >= repair_time'
+
+[2026-02-19 02:08:23 UTC] conv=fad3769c gen=249c4c90 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='        self.base_model.env.newMacroPropertyUInt("repair_line_bank_lock_mp", REPAIR_LINES_MAX)'
+  edit[1] old='' new='        mp_bank_lock = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_bank_lock_mp")'
+  edit[2] old='' new='            mp_bank_lock[i] = 0'
+
+[2026-02-19 02:08:32 UTC] conv=fad3769c gen=249c4c90 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto bank_count_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_cou'
+  edit[1] old='        if (line_rt > 0u && line_days_mp[i] >= line_rt) {{' new='        const bool today_ready = (line_rt > 0u && line_days_mp[i] >= line_rt);\n        const bool bank_ready = (bank_cou'
+
+[2026-02-19 02:08:50 UTC] conv=fad3769c gen=249c4c90 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto bank_lock_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_lock'
+  edit[1] old='                if (line_acn_ro[i] != 0u) continue;' new=''
+  edit[2] old='' new='                if (head_end == 0xFFFFFFFFu) continue;'
+  edit[3] old='            const unsigned int prev_acn = line_acn[best_line].exchange(acn);\n            if (prev_acn != 0u) {{\n        ' new='            const unsigned int prev_lock = bank_lock_mp[best_line].exchange(acn);\n            if (prev_lock != 0u) {{\n  '
+  edit[4] old='                line_acn[best_line].exchange(0u);' new='                bank_lock_mp[best_line].exchange(0u);'
+  edit[5] old='                line_acn[best_line].exchange(0u);' new='                bank_lock_mp[best_line].exchange(0u);'
+  edit[6] old='' new='            bank_lock_mp[best_line].exchange(0u);'
+
+[2026-02-19 02:09:06 UTC] conv=fad3769c gen=249c4c90 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto bank_lock_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_lock'
+  edit[1] old='                if (line_acn_ro[i] != 0u) continue;' new=''
+  edit[2] old='' new='                if (head_end == 0xFFFFFFFFu) continue;'
+  edit[3] old='            const unsigned int prev_acn = line_acn[best_line].exchange(acn);\n            if (prev_acn != 0u) {{\n        ' new='            const unsigned int prev_lock = bank_lock_mp[best_line].exchange(acn);\n            if (prev_lock != 0u) {{\n  '
+  edit[4] old='                line_acn[best_line].exchange(0u);' new='                bank_lock_mp[best_line].exchange(0u);'
+  edit[5] old='                line_acn[best_line].exchange(0u);' new='                bank_lock_mp[best_line].exchange(0u);'
+  edit[6] old='' new='            bank_lock_mp[best_line].exchange(0u);'
+
+[2026-02-19 02:12:00 UTC] conv=fad3769c gen=249c4c90 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto bank_lock_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_lock'
+
+[2026-02-19 02:12:07 UTC] conv=fad3769c gen=249c4c90 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto bank_lock_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_lock'
+
+[2026-02-19 02:12:45 UTC] conv=fad3769c gen=249c4c90 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    auto bank_lock_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_lock' new=''
+
+[2026-02-19 02:12:50 UTC] conv=fad3769c gen=249c4c90 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto bank_lock_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_lock'
+
+[2026-02-19 02:12:55 UTC] conv=fad3769c gen=249c4c90 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto bank_lock_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_lock'
+
+[2026-02-19 10:36:16 UTC] conv=fad3769c gen=d3e099ef file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");'
+  edit[1] old='                chosen_line = line_id;\n                claimed = true;\n                claim_start = current_day - repai' new='                const unsigned int claim_start_day = current_day - repair_time;\n                if (claim_start_day >= s'
+  edit[2] old='' new='            const unsigned int claim_start_day = current_day - repair_time;\n            if (claim_start_day < status_cha'
+  edit[3] old='            claim_start = current_day - repair_time;' new='            claim_start = claim_start_day;'
+  edit[4] old='' new='            if (window_start < status_change_day) {{\n                bank_start_mp[base].exchange(window_start);\n       '
+  edit[5] old='' new='    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");'
+  edit[6] old='                chosen_line = line_id;\n                claimed = true;\n                claim_start = current_day - repai' new='                const unsigned int claim_start_day = current_day - repair_time;\n                if (claim_start_day >= s'
+  edit[7] old='' new='            const unsigned int claim_start_day = current_day - repair_time;\n            if (claim_start_day < status_cha'
+  edit[8] old='            claim_start = current_day - repair_time;' new='            claim_start = claim_start_day;'
+  edit[9] old='' new='            if (window_start < status_change_day) {{\n                bank_start_mp[base].exchange(window_start);\n       '
+
+[2026-02-19 12:10:09 UTC] conv=fad3769c gen=3570a45b file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");\n    ' new=''
+  edit[1] old='                if (claim_start_day >= status_change_day) {{\n                    chosen_line = line_id;\n                ' new='                chosen_line = line_id;\n                claimed = true;\n                claim_start = claim_start_day;\n  '
+  edit[2] old='            if (claim_start_day < status_change_day) {{\n                line_mp[best_line].exchange(old_days);\n         ' new=''
+  edit[3] old='            if (window_start < status_change_day) {{\n                bank_start_mp[base].exchange(window_start);\n       ' new=''
+  edit[4] old='    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");\n    ' new=''
+  edit[5] old='                if (claim_start_day >= status_change_day) {{\n                    chosen_line = line_id;\n                ' new='                chosen_line = line_id;\n                claimed = true;\n                claim_start = claim_start_day;\n  '
+  edit[6] old='            if (claim_start_day < status_change_day) {{\n                line_mp[best_line].exchange(old_days);\n         ' new=''
+  edit[7] old='            if (window_start < status_change_day) {{\n                bank_start_mp[base].exchange(window_start);\n       ' new=''
+
+[2026-02-19 12:37:28 UTC] conv=fad3769c gen=99f35777 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");\n    unsigned int ag'
+  edit[1] old='            if (old_days >= repair_time) {{' new='            if (old_days >= repair_time && old_days <= agent_nonops_days) {{'
+  edit[2] old='            unsigned int best_days = 0xFFFFFFFFu;' new='            unsigned int best_days = 0u;'
+  edit[3] old='                if (old_days < repair_time) continue;\n                if (best_line == 0xFFFFFFFFu || old_days < best_da' new='                if (old_days < repair_time || old_days > agent_nonops_days) continue;\n                if (best_line == 0'
+  edit[4] old='            if (old_days < repair_time) {{' new='            if (old_days < repair_time || old_days > agent_nonops_days) {{'
+  edit[5] old='' new='            if (status_change_day > window_start) {{\n                bank_start_mp[base].exchange(window_start);\n       '
+
+[2026-02-19 12:37:55 UTC] conv=fad3769c gen=99f35777 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");\n    unsigned int ag'
+  edit[1] old='            if (old_days >= repair_time) {{' new='            if (old_days >= repair_time && old_days <= agent_nonops_days) {{'
+  edit[2] old='            unsigned int best_days = 0xFFFFFFFFu;' new='            unsigned int best_days = 0u;'
+  edit[3] old='                if (old_days < repair_time) continue;\n                if (best_line == 0xFFFFFFFFu || old_days < best_da' new='                if (old_days < repair_time || old_days > agent_nonops_days) continue;\n                if (best_line == 0'
+  edit[4] old='            if (old_days < repair_time) {{' new='            if (old_days < repair_time || old_days > agent_nonops_days) {{'
+  edit[5] old='' new='            if (status_change_day > window_start) {{\n                bank_start_mp[base].exchange(window_start);\n       '
+
+[2026-02-19 12:38:01 UTC] conv=fad3769c gen=99f35777 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    // Fallback: выбирать линию с минимальным old_days (при равенстве — меньший line_id)' new='    // Fallback: выбирать линию с максимальным old_days (<= agent_nonops_days), tie-break: меньший line_id'
+
+[2026-02-19 13:17:34 UTC] conv=fad3769c gen=4bf65bf2 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    unsigned int agent_nonops_days = 0u;\n    if (current_day >= status_change_day) {{\n        agent_nonops_days = curren' new=''
+  edit[1] old='' new='    const unsigned int claim_start_day = current_day - repair_time;'
+  edit[2] old='            if (old_days >= repair_time && old_days <= agent_nonops_days) {{\n                const unsigned int claim_st' new='            if (old_days >= repair_time && status_change_day <= claim_start_day) {{'
+  edit[3] old='    // Fallback: выбирать линию с максимальным old_days (<= agent_nonops_days), tie-break: меньший line_id' new='    // Fallback: line-first/best-fit — минимальный old_days >= repair_time, tie-break: меньший line_id'
+  edit[4] old='                if (old_days < repair_time || old_days > agent_nonops_days) continue;\n                if (best_line == 0' new='                if (old_days < repair_time) continue;\n                if (best_line == 0xFFFFFFFFu || old_days < best_da'
+  edit[5] old='            if (old_days < repair_time || old_days > agent_nonops_days) {{' new='            if (old_days < repair_time || status_change_day > claim_start_day) {{'
+  edit[6] old='            const unsigned int claim_start_day = current_day - repair_time;' new=''
+
+[2026-02-19 13:17:45 UTC] conv=fad3769c gen=4bf65bf2 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    unsigned int agent_nonops_days = 0u;\n    if (current_day >= status_change_day) {{\n        agent_nonops_days = curren' new=''
+  edit[1] old='' new='    const unsigned int claim_start_day = current_day - repair_time;'
+  edit[2] old='            if (old_days >= repair_time && old_days <= agent_nonops_days) {{\n                const unsigned int claim_st' new='            if (old_days >= repair_time && status_change_day <= claim_start_day) {{'
+  edit[3] old='                if (old_days < repair_time || old_days > agent_nonops_days) continue;\n                if (best_line == 0' new='                if (old_days < repair_time) continue;\n                if (best_line == 0xFFFFFFFFu || old_days < best_da'
+  edit[4] old='            if (old_days < repair_time || old_days > agent_nonops_days) {{' new='            if (old_days < repair_time || status_change_day > claim_start_day) {{'
+  edit[5] old='            const unsigned int claim_start_day = current_day - repair_time;' new=''
+
+[2026-02-20 04:17:46 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/base_model_messaging.py
+  edit[0] old='' new='        # Ranking proxy (status_change_day) for P2/P3 bucket selection\n        self.env.newMacroPropertyUInt32("mi8_unsv'
+
+[2026-02-20 04:18:26 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/rtc_quota_v8_base.py
+  edit[0] old='' new='    auto mi8_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_statu'
+  edit[1] old='' new='        mi8_unsvc_status_day[i].exchange(0u);\n        mi17_unsvc_status_day[i].exchange(0u);\n        mi8_inactive_status'
+
+[2026-02-20 04:18:53 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/rtc_quota_v8_base.py
+  edit[0] old='' new='    auto mi8_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_statu'
+
+[2026-02-20 04:19:00 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/rtc_quota_v8_base.py
+  edit[0] old='' new='        mi8_unsvc_status_day[i].exchange(0u);\n        mi17_unsvc_status_day[i].exchange(0u);\n        mi8_inactive_status'
+
+[2026-02-20 04:19:24 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/rtc_quota_v8_base.py
+  edit[0] old='' new='    auto mi8_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_statu'
+
+[2026-02-20 04:19:34 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/rtc_quota_v8_base.py
+  edit[0] old='' new='    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");'
+  edit[1] old='' new='        auto status_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_status_'
+  edit[2] old='' new='        status_days[idx].exchange(status_change_day);'
+  edit[3] old='' new='        auto status_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_status'
+  edit[4] old='' new='        status_days[idx].exchange(status_change_day);'
+
+[2026-02-20 04:19:44 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");'
+  edit[1] old='' new='        auto status_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_status_day'
+  edit[2] old='        if (ready) ready_count[idx].exchange(1u);' new='        if (ready) {{\n            ready_count[idx].exchange(1u);\n            status_days[idx].exchange(status_change_day'
+  edit[3] old='' new='        auto status_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_status_da'
+  edit[4] old='        if (ready) ready_count[idx].exchange(1u);' new='        if (ready) {{\n            ready_count[idx].exchange(1u);\n            status_days[idx].exchange(status_change_day'
+
+[2026-02-20 04:19:56 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");'
+  edit[1] old='' new='    auto unsvc8_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_status_day");\n '
+  edit[2] old='    for (unsigned int i = 0u; i < frames; ++i) {{\n        if (i <= idx) continue;\n        rank += (group_by == 1u) ? uns' new='    if (group_by == 1u) {{\n        for (unsigned int i = 0u; i < frames; ++i) {{\n            if (unsvc8[i] == 0u) contin'
+
+[2026-02-20 04:20:06 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");'
+  edit[1] old='' new='    auto ina8_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_status_day");\n'
+  edit[2] old='    for (unsigned int i = 0u; i < frames; ++i) {{\n        if (i <= idx) continue;\n        rank += (group_by == 1u) ? ina' new='    if (group_by == 1u) {{\n        for (unsigned int i = 0u; i < frames; ++i) {{\n            if (ina8[i] == 0u) continue'
+
+[2026-02-20 04:20:22 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/rtc_quota_v8_base.py
+  edit[0] old='' new='    auto mi8_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_statu'
+
+[2026-02-20 04:20:46 UTC] conv=fad3769c gen=27a82383 file=code/sim_v2/messaging/rtc_quota_v8_base.py
+  edit[0] old='    auto mi8_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_statu' new=''
+
+[2026-02-20 05:41:06 UTC] conv=fad3769c gen=77fbaece file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    // Приоритет: P2 (unsvc) первый, P3 (inactive) на остаток' new='    // Приоритет: по типу (Mi-17 → Mi-8), внутри типа P2 (unsvc) → P3 (inactive)'
+  edit[1] old='    // P2: Mi-8 — ТРЕБУЕТ RepairLine slot\n    unsigned int p2_8 = (deficit8 < unsvc8) ? deficit8 : unsvc8;\n    p2_8 = (p' new='    // P3: Mi-17 — на оставшиеся слоты после P2 (того же типа)'
+  edit[2] old='' new='    // P2: Mi-8 — ТРЕБУЕТ RepairLine slot (после Mi-17 P2/P3)\n    unsigned int p2_8 = (deficit8 < unsvc8) ? deficit8 : u'
+  edit[3] old='' new='    deficit8 -= p3_8;\n    slots_left -= p3_8;'
+
+[2026-02-20 05:41:22 UTC] conv=fad3769c gen=77fbaece file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    deficit8 -= p3_8;\n    slots_left -= p3_8;' new=''
+
+[2026-02-20 08:37:44 UTC] conv=fad3769c gen=9b1918dd file=code/sim_v2/messaging/rtc_repair_lines_v8.py
+  edit[0] old='' new='REPAIR_BANK_MAX = 64'
+  edit[1] old='' new=''
+  edit[2] old='    mem_mb = 4 * RL_BUF_SIZE * 4 / (1024 * 1024)\n    print(f"  ✅ RepairLine Export: 4 буфера × {RL_BUF_SIZE} = {mem_mb:.' new='    env.newMacroPropertyUInt("rl_buf_bank_count", RL_BUF_SIZE)\n    env.newMacroPropertyUInt("rl_buf_bank_head_start", RL'
+  edit[3] old='' new='    auto buf_bank_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RL_BUF_SIZE}u>("rl_buf_bank_count");\n   '
+  edit[4] old='' new='\n    // bank telemetry: count + head_start/head_end (без нормализации)\n    auto mp_bank_count = FLAMEGPU->environment.ge'
+
+[2026-02-20 08:37:57 UTC] conv=fad3769c gen=9b1918dd file=code/sim_v2/messaging/rtc_repair_lines_v8.py
+  edit[0] old='' new='REPAIR_BANK_SIZE = REPAIR_LINES_MAX * REPAIR_BANK_MAX'
+  edit[1] old='    auto mp_bank_start = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u * {REPAIR_BANK_MAX}u>(' new='    auto mp_bank_start = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_BANK_SIZE}u>("repair_line_bank_sta'
+
+[2026-02-20 08:38:37 UTC] conv=fad3769c gen=9b1918dd file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='GPU записывает состояние (free_days, acn, rt) каждый адаптивный шаг' new='GPU записывает состояние (free_days, acn, rt, bank telemetry) каждый адаптивный шаг'
+  edit[1] old='Lookback-only: aircraft_number не используется как forward occupancy в экспорте (всегда 0),\nметрики ремонта строятся по ' new='Lookback-only: aircraft_number — runtime telemetry, не используется как forward occupancy.\nМетрики ремонта строятся по f'
+
+[2026-02-20 08:38:46 UTC] conv=fad3769c gen=9b1918dd file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='        # Чтение 4 буферов' new='        # Чтение 7 буферов'
+  edit[1] old='' new='        mp_bank_count = env.getMacroPropertyUInt("rl_buf_bank_count")\n        mp_bank_head_start = env.getMacroPropertyU'
+  edit[2] old='' new='        bank_count = np.zeros((num_steps, self.repair_quota), dtype=np.uint32)\n        bank_head_start = np.zeros((num_s'
+  edit[3] old='' new='                bank_count[s, l] = int(mp_bank_count[base + l]) & 0xFFFFFFFF\n                bank_head_start[s, l] = int'
+  edit[4] old='' new='            'bank_count': bank_count,\n            'bank_head_start': bank_head_start,\n            'bank_head_end': bank_'
+  edit[5] old='        total = num_steps * self.repair_quota * 4' new='        total = num_steps * self.repair_quota * 7'
+
+[2026-02-20 08:38:54 UTC] conv=fad3769c gen=9b1918dd file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='    - lookback-only: aircraft_number не используется как forward occupancy (в экспорте = 0)\n    - group_by сохраняется и' new='    - lookback-only: aircraft_number — runtime telemetry (не используется как forward occupancy)\n    - group_by и bank t'
+  edit[1] old='    Returns: list[tuple] — (day_u16, line_id, free_days, repair_time, aircraft_number, group_by)' new='    Returns: list[tuple] — (day_u16, line_id, free_days, repair_time, aircraft_number, group_by,\n                       '
+  edit[2] old='' new='    acn_arr = data['acn']\n    bank_count_arr = data['bank_count']\n    bank_head_start_arr = data['bank_head_start']\n    '
+  edit[3] old='' new='            acn_s = int(acn_arr[s, line_id])'
+  edit[4] old='' new='            daily_bank_count = int(bank_count_arr[s, line_id])\n            daily_bank_head_start = int(bank_head_start_a'
+  edit[5] old='                rows.append((d, line_id, daily_fd, daily_rt, 0, daily_gb))' new='                rows.append(\n                    (\n                        d,\n                        line_id,\n         '
+
+[2026-02-20 08:38:58 UTC] conv=fad3769c gen=9b1918dd file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='    group_by     UInt8' new='    group_by     UInt8,\n    bank_count   UInt32,\n    bank_head_start UInt32,\n    bank_head_end UInt32'
+
+[2026-02-20 08:39:06 UTC] conv=fad3769c gen=9b1918dd file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='        rows: list[tuple] — (day_u16, line_id, free_days, repair_time, aircraft_number, group_by)' new='        rows: list[tuple] — (day_u16, line_id, free_days, repair_time, aircraft_number, group_by,\n                      '
+  edit[1] old='    Lookback-only: aircraft_number не используется как forward occupancy (в экспорте = 0),\n    group_by сохраняется из G' new='    Lookback-only: aircraft_number — runtime telemetry (не используется как forward occupancy),\n    group_by и bank tele'
+  edit[2] old='' new='    ch_client.execute(\n        "ALTER TABLE sim_repairline_v9 "\n        "ADD COLUMN IF NOT EXISTS bank_count UInt32"\n   '
+  edit[3] old='        (version_date_int, version_id, day, lid, fd, rt, acn, gb)\n        for day, lid, fd, rt, acn, gb in rows' new='        (version_date_int, version_id, day, lid, fd, rt, acn, gb, bank_count, bank_head_start, bank_head_end)\n        fo'
+  edit[4] old='            "(version_date, version_id, day_u16, line_id, free_days, repair_time, aircraft_number, group_by) "' new='            "(version_date, version_id, day_u16, line_id, free_days, repair_time, aircraft_number, group_by, "\n         '
+
+[2026-02-20 12:01:56 UTC] conv=fad3769c gen=79f545c6 file=code/sim_v2/messaging/rtc_mp2_export.py
+  edit[0] old='Buffers (24 total):\n  mp2_status_id, mp2_pre_status_id, mp2_sne, mp2_ppr, mp2_limiter, mp2_repair_days,' new='Buffers (25 total):\n  mp2_status_id, mp2_pre_status_id, mp2_status_change_day, mp2_sne, mp2_ppr, mp2_limiter, mp2_repair'
+  edit[1] old='# MP2 field names (17 dynamic + 6 static fields)' new='# MP2 field names (19 dynamic + 6 static fields)'
+  edit[2] old='' new='    "mp2_status_change_day",'
+  edit[3] old='' new='\n    auto buf_status_change_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_status_change_d'
+
+[2026-02-20 12:02:07 UTC] conv=fad3769c gen=79f545c6 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='                    _u16(fields['mp2_status_change_day'][s, a]),'
+  edit[1] old='                'status_id', 'pre_status_id', 'sne', 'ppr', 'limiter', 'repair_days',' new='                'status_id', 'pre_status_id', 'status_change_day', 'sne', 'ppr', 'limiter', 'repair_days','
+  edit[2] old='' new='            status_change_day UInt16,'
+  edit[3] old='' new='    client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS status_change_day UInt16")'
+
+[2026-02-20 12:22:24 UTC] conv=fad3769c gen=6dc65266 file=code/sim_v2/messaging/base_model_messaging.py
+  edit[0] old='' new='        self.msg_quota_bucket.newVariableUInt("today_ready_slots")\n        self.msg_quota_bucket.newVariableUInt("bank_r'
+
+[2026-02-20 12:22:51 UTC] conv=fad3769c gen=6dc65266 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    unsigned int available_slots = 0u;' new='    unsigned int today_ready_slots = 0u;\n    unsigned int bank_ready_slots = 0u;'
+  edit[1] old='        if (today_ready || bank_ready) {{\n            available_slots++;' new='        if (today_ready) {{\n            today_ready_slots++;\n        }} else if (bank_ready) {{\n            bank_ready_s'
+  edit[2] old='' new='    unsigned int available_slots = today_ready_slots + bank_ready_slots;'
+  edit[3] old='' new='    FLAMEGPU->message_out.setVariable<unsigned int>("today_ready_slots", today_ready_slots);\n    FLAMEGPU->message_out.s'
+  edit[4] old='' new='    unsigned int today_ready_slots = 0u;\n    unsigned int bank_ready_slots = 0u;'
+  edit[5] old='' new='        today_ready_slots = msg.getVariable<unsigned int>("today_ready_slots");\n        bank_ready_slots = msg.getVariab'
+  edit[6] old='' new='    const bool bank_only_day = (today_ready_slots == 0u && bank_ready_slots > 0u);\n    '
+  edit[7] old='            if (other_day > status_change_day || (other_day == status_change_day && i > idx)) {{\n                rank +=' new='            if (!bank_only_day) {{\n                if (other_day > status_change_day || (other_day == status_change_day '
+  edit[8] old='            if (other_day > status_change_day || (other_day == status_change_day && i > idx)) {{\n                rank +=' new='            if (!bank_only_day) {{\n                if (other_day > status_change_day || (other_day == status_change_day '
+  edit[9] old='' new='    unsigned int today_ready_slots = 0u;\n    unsigned int bank_ready_slots = 0u;'
+  edit[10] old='' new='        today_ready_slots = msg.getVariable<unsigned int>("today_ready_slots");\n        bank_ready_slots = msg.getVariab'
+  edit[11] old='' new='    const bool bank_only_day = (today_ready_slots == 0u && bank_ready_slots > 0u);\n    '
+  edit[12] old='            if (other_day > status_change_day || (other_day == status_change_day && i > idx)) {{\n                rank +=' new='            if (!bank_only_day) {{\n                if (other_day > status_change_day || (other_day == status_change_day '
+  edit[13] old='            if (other_day > status_change_day || (other_day == status_change_day && i > idx)) {{\n                rank +=' new='            if (!bank_only_day) {{\n                if (other_day > status_change_day || (other_day == status_change_day '
+
+[2026-02-20 12:31:57 UTC] conv=fad3769c gen=6dc65266 file=code/sim_v2/messaging/base_model_messaging.py
+  edit[0] old='' new='        self.msg_quota_bucket.newVariableUInt("today_committable_slots")'
+
+[2026-02-20 12:32:16 UTC] conv=fad3769c gen=6dc65266 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='' new='    auto line_acn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");'
+  edit[1] old='' new='    unsigned int today_committable_slots = 0u;'
+  edit[2] old='' new='        const unsigned int line_acn = line_acn_mp[i];'
+  edit[3] old='' new='        const bool today_committable = (line_acn == 0u && line_rt > 0u && line_days_mp[i] >= line_rt);'
+  edit[4] old='' new='        if (today_committable) {{\n            today_committable_slots++;\n        }}'
+  edit[5] old='' new='    FLAMEGPU->message_out.setVariable<unsigned int>("today_committable_slots", today_committable_slots);'
+
+[2026-02-20 12:32:26 UTC] conv=fad3769c gen=6dc65266 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='    unsigned int today_ready_slots = 0u;' new='    unsigned int today_committable_slots = 0u;'
+  edit[1] old='        today_ready_slots = msg.getVariable<unsigned int>("today_ready_slots");' new='        today_committable_slots = msg.getVariable<unsigned int>("today_committable_slots");'
+  edit[2] old='    const bool bank_only_day = (today_ready_slots == 0u && bank_ready_slots > 0u);' new='    const bool bank_only_day = (today_committable_slots == 0u && bank_ready_slots > 0u);'
+  edit[3] old='    unsigned int today_ready_slots = 0u;' new='    unsigned int today_committable_slots = 0u;'
+  edit[4] old='        today_ready_slots = msg.getVariable<unsigned int>("today_ready_slots");' new='        today_committable_slots = msg.getVariable<unsigned int>("today_committable_slots");'
+  edit[5] old='    const bool bank_only_day = (today_ready_slots == 0u && bank_ready_slots > 0u);' new='    const bool bank_only_day = (today_committable_slots == 0u && bank_ready_slots > 0u);'
+
+[2026-02-20 15:55:04 UTC] conv=fad3769c gen=c363f4b5 file=code/sim_v2/messaging/rtc_quota_v8.py
+  edit[0] old='            const unsigned int prev_lock = bank_lock_mp[best_line].exchange(acn);' new='            const unsigned int prev_lock = bank_lock_mp[best_line].exchange(1u);'
+  edit[1] old='                bank_lock_mp[best_line].exchange(prev_lock);' new=''
+  edit[2] old='            const unsigned int prev_lock = bank_lock_mp[best_line].exchange(acn);' new='            const unsigned int prev_lock = bank_lock_mp[best_line].exchange(1u);'
+  edit[3] old='                bank_lock_mp[best_line].exchange(prev_lock);' new=''
+
+[2026-02-21 04:42:34 UTC] conv=fad3769c gen=bceda2a2 file=tools/agents_viewer/build_agents_viewer.py
+  edit[0] old='    with open(GRAPH_JSON, "r", encoding="utf-8") as f:\n        graph_data = json.load(f)' new='    if os.path.exists(GRAPH_JSON):\n        with open(GRAPH_JSON, "r", encoding="utf-8") as f:\n            graph_data = j'
+
+[2026-02-21 04:58:53 UTC] conv=fad3769c gen=7ff53112 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        PARTITION BY toYear(day_date)' new='        PARTITION BY (version_date, toYYYYMM(day_date))'
+
+[2026-02-21 04:59:04 UTC] conv=fad3769c gen=7ff53112 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='' new='PARTITION BY (version_date, toYYYYMM(day_date))'
+
+[2026-02-21 05:16:10 UTC] conv=4fb143f8 gen=a776da81 file=tools/echarts_gantt_mvp/fetch_data.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nГенерация данных интервалов занятости линий для ECharts Gantt (вариант A).\n\nЗапуск из корня р'
+
+[2026-02-21 05:16:29 UTC] conv=4fb143f8 gen=a776da81 file=tools/echarts_gantt_mvp/index.html
+  edit[0] old='' new='<!doctype html>\n<html lang="ru">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, in'
+
+[2026-02-21 05:19:03 UTC] conv=4fb143f8 gen=a776da81 file=tools/echarts_gantt_mvp/data.json
+  edit[0] old='' new='{\n  "generated_at_utc": "2026-02-21T05:12:02.360089+00:00",\n  "source_table": "sim_repairline_v9",\n  "filters": {\n    "v'
+
+[2026-02-21 05:26:19 UTC] conv=4fb143f8 gen=f8927aed file=tools/echarts_gantt_mvp/index.html
+  edit[0] old='' new='      <label for="localFile">Локально:</label>\n      <input id="localFile" type="file" accept="application/json">\n      '
+  edit[1] old='' new='    const localFileInput = document.getElementById('localFile');\n    const loadLocalBtn = document.getElementById('loadL'
+  edit[2] old='' new='    function renderPayload(payload) {\n      const rows = payload.rows || [];\n      chart.setOption(buildOption(rows), tr'
+  edit[3] old='      const rows = payload.rows || [];\n      chart.setOption(buildOption(rows), true);\n\n      const f = payload.filters ' new='      renderPayload(payload);'
+  edit[4] old='      loadAndRender(pathInput.value.trim()).catch(err => {\n        metaEl.textContent = `Ошибка: ${err.message}`;\n      ' new='      loadAndRender(pathInput.value.trim()).catch(setFetchError);'
+  edit[5] old='    window.addEventListener('resize', () => chart.resize());\n    loadAndRender(pathInput.value).catch(err => {\n      met' new='    loadLocalBtn.addEventListener('click', () => {\n      const file = localFileInput.files && localFileInput.files[0];\n '
+  edit[6] old='' new='\n    window.addEventListener('resize', () => chart.resize());\n    loadAndRender(pathInput.value).catch(setFetchError);'
+
+[2026-02-21 05:32:04 UTC] conv=4fb143f8 gen=30a927a7 file=tools/echarts_gantt_mvp/index.html
+  edit[0] old='    function renderPayload(payload) {' new='    function renderPayload(payload, options = {}) {'
+  edit[1] old='' new='      const sourceNote = options.fallback ? ' | источник: data.js (fallback)' : '';'
+  edit[2] old='        `Rows: ${rows.length} | table: ${payload.source_table || '-'} | version_date: ${f.version_date ?? '-'} | version' new='        `Rows: ${rows.length} | table: ${payload.source_table || '-'} | version_date: ${f.version_date ?? '-'} | version'
+  edit[3] old='' new='    function loadScript(src) {\n      return new Promise((resolve, reject) => {\n        const script = document.createEle'
+  edit[4] old='      loadAndRender(pathInput.value.trim()).catch(setFetchError);' new='      loadAndRenderWithFallback(pathInput.value.trim()).catch(setFetchError);'
+  edit[5] old='    loadAndRender(pathInput.value).catch(setFetchError);' new='    loadAndRenderWithFallback(pathInput.value).catch(setFetchError);'
+
+[2026-02-21 05:32:09 UTC] conv=4fb143f8 gen=30a927a7 file=tools/echarts_gantt_mvp/fetch_data.py
+  edit[0] old='    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")\n    print(f"OK: {len(payloa' new='    payload_json = json.dumps(payload, ensure_ascii=False, indent=2)\n    out_path.write_text(payload_json, encoding="utf'
+  edit[1] old='' new='    js_path = out_path.with_suffix(".js")\n    js_payload = f"window.__GANTT_PAYLOAD__ = {payload_json};\n"\n    js_path.w'
+  edit[2] old='' new='    intervals_count = len(payload["rows"])\n    print(f"OK: {intervals_count} intervals")\n    print(f"JSON: {out_path}")\n'
+
+[2026-02-21 08:11:12 UTC] conv=98636b0f gen=06557cac file=code/utils/agent_kg.py
+  edit[0] old='    python code/utils/agent_kg.py --write-handoff --workflow-id W1 --agent coder-flame --user-goal "цель" --changes "что' new='    python code/utils/agent_kg.py --write-handoff --workflow-id W1 --agent coder-flame --user-goal "цель" --changes "что'
+  edit[1] old='' new='def _short(text: Optional[str], limit: int = 120) -> str:\n    if text is None:\n        return ""\n    text = str(text)\n  '
+  edit[2] old='' new='    risk_tier_arg = args.risk_tier.strip() if args.risk_tier else ""\n    risk_tier_provided = bool(risk_tier_arg)\n    if'
+  edit[3] old='' new='        "risk_tier": risk_tier,\n        "risk_reasons": risk_reasons,\n        "risk_owner": risk_owner,\n        "risk_va'
+  edit[4] old='' new='            if h.get("risk_tier"):\n                print(f"RiskTier: {h.get('risk_tier')}")\n            if h.get("risk_r'
+  edit[5] old='' new='            if h.get("plan_card"):\n                print(f"PlanCard: {_short(h.get('plan_card'))}")\n            if h.get'
+  edit[6] old='' new='    parser.add_argument("--risk-tier", type=str, help="Risk tier (low|medium|high)")\n    parser.add_argument("--risk-rea'
+

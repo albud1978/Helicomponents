@@ -205,6 +205,7 @@ CREATE TABLE IF NOT EXISTS sim_repairline_v9 (
     bank_head_start UInt32,
     bank_head_end UInt32
 ) ENGINE = MergeTree()
+PARTITION BY (version_date, toYYYYMM(day_date))
 ORDER BY (version_id, version_date, day_u16, line_id)
 SETTINGS index_granularity = 8192
 """

@@ -7,7 +7,7 @@ SSoT: config/agent_kg.json
 
 Использование:
     python code/utils/agent_kg.py --init-workflow --workflow-id W1 --goal "цель"
-    python code/utils/agent_kg.py --write-handoff --workflow-id W1 --agent coder-flame --user-goal "цель" --changes "что сделано" --facts "что проверено" --trace-id "wf:123" --plan-step-id "P1"
+    python code/utils/agent_kg.py --write-handoff --workflow-id W1 --agent coder-flame --user-goal "цель" --changes "что сделано" --facts "что проверено" --trace-id "wf:123" --plan-step-id "P1" --risk-tier low --risk-reasons "..." --plan-card "N/A (low-risk)" --evidence-pack "N/A (low-risk)" --compliance-checklist "N/A (low-risk)"
     python code/utils/agent_kg.py --read-state --workflow-id W1
     python code/utils/agent_kg.py --write-context --workflow-id W1 --context-type research --content "контент"
     python code/utils/agent_kg.py --read-context --workflow-id W1
@@ -62,6 +62,15 @@ def _save(path: str, data: Dict[str, Any]) -> None:
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _short(text: Optional[str], limit: int = 120) -> str:
+    if text is None:
+        return ""
+    text = str(text)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "..."
 
 
 def _find_workflow(
@@ -139,6 +148,57 @@ def write_handoff(args: argparse.Namespace) -> None:
     facts = args.facts or ""
     if not facts and evidence_arg:
         facts = f"legacy evidence: {evidence_arg}"
+    risk_tier_arg = args.risk_tier.strip() if args.risk_tier else ""
+    risk_tier_provided = bool(risk_tier_arg)
+    if risk_tier_provided:
+        risk_tier = risk_tier_arg.lower()
+        allowed_risk_tiers = {"low", "medium", "high"}
+        if risk_tier not in allowed_risk_tiers:
+            raise ValueError("--risk-tier должен быть low|medium|high")
+    else:
+        risk_tier = "low"
+    risk_reasons = (args.risk_reasons or "").strip()
+    if not risk_tier_provided:
+        if not risk_reasons:
+            risk_reasons = "legacy default (risk tier not provided)"
+    else:
+        if not risk_reasons:
+            raise ValueError("--risk-reasons обязателен при переданном --risk-tier")
+    risk_owner = (args.risk_owner or "").strip() or "orchestrator"
+    risk_validated_by = (args.risk_validated_by or "").strip()
+    if not risk_validated_by:
+        risk_validated_by = "N/A" if risk_tier == "low" else "pending"
+    human_gate_required = (args.human_gate_required or "").strip()
+    if not human_gate_required:
+        if risk_tier == "low":
+            human_gate_required = "no"
+        elif risk_tier == "high":
+            human_gate_required = "yes"
+        else:
+            human_gate_required = "conditional"
+    plan_card = (args.plan_card or "").strip()
+    evidence_pack = (args.evidence_pack or "").strip()
+    compliance_checklist = (args.compliance_checklist or "").strip()
+    if risk_tier in {"medium", "high"}:
+        missing = []
+        if not plan_card:
+            missing.append("--plan-card")
+        if not evidence_pack:
+            missing.append("--evidence-pack")
+        if not compliance_checklist:
+            missing.append("--compliance-checklist")
+        if missing:
+            missing_str = ", ".join(missing)
+            raise ValueError(
+                f"Для risk-tier {risk_tier} обязательны: {missing_str}"
+            )
+    else:
+        if not plan_card:
+            plan_card = "N/A (low-risk)"
+        if not evidence_pack:
+            evidence_pack = "N/A (low-risk)"
+        if not compliance_checklist:
+            compliance_checklist = "N/A (low-risk)"
     handoff = {
         "handoff_id": handoff_id,
         "workflow_id": args.workflow_id,
@@ -156,6 +216,14 @@ def write_handoff(args: argparse.Namespace) -> None:
         "approval_gate_id": args.approval_gate_id or "",
         "approval_status": args.approval_status or "",
         "approval_source": args.approval_source or "",
+        "risk_tier": risk_tier,
+        "risk_reasons": risk_reasons,
+        "risk_owner": risk_owner,
+        "risk_validated_by": risk_validated_by,
+        "human_gate_required": human_gate_required,
+        "plan_card": plan_card,
+        "evidence_pack": evidence_pack,
+        "compliance_checklist": compliance_checklist,
         "risks": args.risks or "нет",
         "next_owner": args.next_owner or "orchestrator",
         "open_questions": args.open_questions or "",
@@ -212,12 +280,28 @@ def read_state(args: argparse.Namespace) -> None:
                 print(f"TraceID: {h.get('trace_id')}")
             if h.get("plan_step_id"):
                 print(f"PlanStepID: {h.get('plan_step_id')}")
+            if h.get("risk_tier"):
+                print(f"RiskTier: {h.get('risk_tier')}")
+            if h.get("risk_reasons"):
+                print(f"RiskReasons: {_short(h.get('risk_reasons'))}")
+            if h.get("risk_owner"):
+                print(f"RiskOwner: {h.get('risk_owner')}")
+            if h.get("risk_validated_by"):
+                print(f"RiskValidatedBy: {h.get('risk_validated_by')}")
+            if h.get("human_gate_required"):
+                print(f"HumanGateRequired: {h.get('human_gate_required')}")
             print(f"Changes: {h['changes']}")
             if h.get("facts"):
                 print(f"Facts: {h.get('facts')}")
             if h.get("assumptions"):
                 print(f"Assumptions: {h.get('assumptions')}")
             print(f"Evidence: {h['evidence']}")
+            if h.get("plan_card"):
+                print(f"PlanCard: {_short(h.get('plan_card'))}")
+            if h.get("evidence_pack"):
+                print(f"EvidencePack: {_short(h.get('evidence_pack'))}")
+            if h.get("compliance_checklist"):
+                print(f"ComplianceChecklist: {_short(h.get('compliance_checklist'))}")
             if h.get("drift_check"):
                 print(f"DriftCheck: {h.get('drift_check')}")
             if h.get("process_insights"):
@@ -411,6 +495,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Approval status (pending|approved|rejected)",
     )
     parser.add_argument("--approval-source", type=str, help="Approval source (handoff)")
+    parser.add_argument("--risk-tier", type=str, help="Risk tier (low|medium|high)")
+    parser.add_argument("--risk-reasons", type=str, help="Причины риска (handoff)")
+    parser.add_argument("--risk-owner", type=str, help="Владелец риска (handoff)")
+    parser.add_argument(
+        "--risk-validated-by", type=str, help="Кем валидирован риск (handoff)"
+    )
+    parser.add_argument(
+        "--human-gate-required", type=str, help="Human gate required (handoff)"
+    )
+    parser.add_argument("--plan-card", type=str, help="Plan card (handoff)")
+    parser.add_argument("--evidence-pack", type=str, help="Evidence pack (handoff)")
+    parser.add_argument(
+        "--compliance-checklist", type=str, help="Compliance checklist (handoff)"
+    )
     parser.add_argument("--risks", type=str, help="Риски (handoff)")
     parser.add_argument("--next-owner", type=str, help="Следующий владелец (handoff)")
     parser.add_argument("--open-questions", type=str, help="Открытые вопросы (handoff)")
