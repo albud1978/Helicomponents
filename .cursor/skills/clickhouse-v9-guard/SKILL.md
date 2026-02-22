@@ -1,17 +1,16 @@
 ---
-name: clickhouse-v9-guard
-description: Executes read-only ClickHouse analysis for V8/V9 simulation tables with strict dataset scoping. Use when tasks mention ClickHouse, SQL, sim_masterv2_v9, sim_repairline_v9, version_id, version_date, group_by, validations, or transition counts.
+name: clickhouse-sim-guard
+description: Executes read-only ClickHouse analysis for simulation tables (v9/v10+) with strict scoping and schema-first checks. Use for ClickHouse/SQL, Superset BI diagnostics, version_id/version_date/group_by, validations, transitions, and repairline metrics.
 ---
 
-# ClickHouse V9 Guard
+# ClickHouse SIM Guard (v9/v10+)
 
 ## Когда применять
 
-Применяй этот skill для задач с ClickHouse/SQL, особенно если упоминаются:
-- `sim_masterv2_v9`, `sim_repairline_v9`
-- `version_id`, `version_date`, `day_u16`, `day_date`
-- `group_by` (Mi-8=1, Mi-17=2)
-- проверки инвариантов, массовая/потоковая валидация, подсчёт переходов `pre_status_id -> status_id`.
+Применяй skill для задач с ClickHouse/SQL и BI, особенно если упоминаются:
+- симуляционные таблицы вида `sim_masterv2_v*`, `sim_repairline_v*`;
+- `version_id`, `version_date`, `day_u16`, `day_date`, `group_by`;
+- проверки инвариантов, переходов `pre_status_id -> status_id`, анализ дашбордов Superset.
 
 ## Обязательный старт
 
@@ -36,70 +35,97 @@ export CUBE_CONFIG_PATH="$PWD/config"
    - минимум: `version_date` и `version_id`;
    - для планеров/типов: обязательно `group_by`.
 3. Не смешивай `group_by` без явной причины (критичное измерение проекта).
-4. Не предполагай схему таблиц — сначала проверяй `DESCRIBE TABLE`.
-5. Если пользователь пишет "последний прогон", явно проговаривай критерий:
+4. Не предполагай схему таблиц — сначала `DESCRIBE TABLE`.
+5. Если пользователь говорит "последний прогон", явно фиксируй критерий:
    - по умолчанию: `max(version_date)` для каждого `version_id`;
-   - если нужен другой критерий (`run_id`, timestamp, commit) — спроси.
+   - если нужен иной критерий (`run_id`, timestamp, commit) — уточнить.
 
 ## Версия сервера и совместимость
 
-- Базовая целевая версия ClickHouse в проекте: **`24.10.1.2812`** (зафиксировано 20-02-2026).
-- Перед сложными SQL (window/CTE/функции) сверяйся с реальной версией:
+- Базовая целевая версия в проекте: `24.10.1.2812` (может измениться).
+- Перед сложными SQL/оконными функциями:
 
 ```sql
 SELECT version();
 ```
 
-- Если версия отличается, в отчёте явно помечай риск несовместимости и проверяй SQL на этой версии до финальных выводов.
+- Если версия отличается, явно помечай риск совместимости в выводе.
 
-## Актуальная V9 схема (проверять через DESCRIBE перед отчётом)
+## Универсальный выбор таблиц (без жёсткой привязки к v9)
 
-### `sim_masterv2_v9`
-Ключевые поля для SQL-аналитики:
-- `version_date`, `version_id`, `day_u16`, `day_date`
-- `aircraft_number`, `group_by`
-- `status_id`, `pre_status_id`
-- `repair_claim_start_day`, `repair_claim_end_day`, `repair_claim_source`, `repair_claim_line_id`
-
-Переходы считать по правилу:
-- `pre_status_id = X AND status_id = Y`.
-
-### `sim_repairline_v9`
-Ключевые поля:
-- `version_date`, `version_id`, `day_u16`, `day_date`
-- `line_id`, `free_days`, `repair_time`
-- `aircraft_number` (lookback telemetry), `group_by`
-- `bank_count`, `bank_head_start`, `bank_head_end`
-
-Важно:
-- `day_date` materialized присутствует;
-- `group_by` присутствует и должен использоваться в фильтрах/агрегациях по типу борта.
-
-## Шаблоны запросов
-
-### 1) Проверка схемы перед анализом
+### 1) Найти кандидатов
 
 ```sql
-DESCRIBE TABLE sim_masterv2_v9;
-DESCRIBE TABLE sim_repairline_v9;
+SHOW TABLES FROM default LIKE 'sim_masterv2_v%';
+SHOW TABLES FROM default LIKE 'sim_repairline_v%';
 ```
 
-### 2) Доступные датасеты
+### 2) Выбрать рабочие таблицы
+
+- Предпочитать таблицы с максимальным суффиксом (`v10` > `v9`) **только после проверки схемы**.
+- Использовать переменные в запросах/отчёте:
+  - `{master_table}`
+  - `{repair_table}`
+
+### 3) Проверить схему перед каждым анализом
+
+```sql
+DESCRIBE TABLE {master_table};
+DESCRIBE TABLE {repair_table};
+```
+
+## Feature-gates по колонкам (обязательно)
+
+Перед SQL-логикой проверяй наличие нужных полей:
+- Базовые: `version_date`, `version_id`, `day_date`, `group_by`.
+- Переходы: `pre_status_id`, `status_id`.
+- Repairline telemetry: `line_id`, `free_days`, `repair_time`, `aircraft_number`.
+- Опциональные bank-поля: `bank_count`, `bank_head_start`, `bank_head_end` (могут отсутствовать в некоторых версиях).
+
+Если колонки нет — не падать в догадки, а переключать запрос на совместимую ветку и явно писать это в `Facts/Assumptions`.
+
+## BI/Superset guardrails (накопленный опыт)
+
+1. **Row-limit в Pivot**  
+   Для матрицы `line_id × day_date` часто нужно >10k строк.  
+   Проверка:
+   - ожидаемая кардинальность по SQL;
+   - `row_limit` в чарте должен покрывать ожидаемое число строк.
+
+2. **Разрывы на оси времени**  
+   В адаптивных данных возможны месяцы без snapshot-дней.  
+   Это не всегда баг. Для “безразрывной” оси:
+   - использовать календарную ось (virtual dataset);
+   - fill-стратегию согласовывать явно: `zero` или `carry-forward`.
+
+3. **Cross-filter vs native filter конфликт**  
+   Проверять `chartsInScope` и `scope.excluded`.  
+   Дубли фильтров по `version_date`/`time_grain_sqla` могут дать пустые результаты.
+
+4. **Сортировка по времени**  
+   Для агрегатов по времени в CH использовать валидную сортировку, совместимую с `GROUP BY` (например, через агрегат по дате в `orderby`), а не сырой `day_date`.
+
+5. **Sentinel-значения**  
+   Для BI выводов явно нормализовать sentinel (`4294967295`) в `NULL` там, где это согласовано бизнес-логикой.
+
+## Универсальные шаблоны запросов
+
+### 1) Доступные датасеты (version scope)
 
 ```sql
 SELECT version_date, version_id
-FROM sim_masterv2_v9
+FROM {master_table}
 WHERE group_by IN (1, 2)
 GROUP BY version_date, version_id
 ORDER BY version_date, version_id;
 ```
 
-### 3) Рождения Mi-8 по переходам 0->2 и 0->3 (последний прогон на version_id)
+### 2) Рождения Mi-8 по переходам (последний прогон)
 
 ```sql
 WITH latest AS (
   SELECT version_id, max(version_date) AS version_date
-  FROM sim_masterv2_v9
+  FROM {master_table}
   WHERE version_id IN (1, 2)
   GROUP BY version_id
 )
@@ -108,7 +134,7 @@ SELECT
   m.version_date,
   countIf(m.pre_status_id = 0 AND m.status_id = 2) AS count_0_2,
   countIf(m.pre_status_id = 0 AND m.status_id = 3) AS count_0_3
-FROM sim_masterv2_v9 AS m
+FROM {master_table} AS m
 INNER JOIN latest AS l
   ON m.version_id = l.version_id
  AND m.version_date = l.version_date
@@ -117,7 +143,7 @@ GROUP BY m.version_id, m.version_date
 ORDER BY m.version_id;
 ```
 
-### 4) Дневной контроль repairline по Mi-8/Mi-17
+### 3) Repairline дневной контроль
 
 ```sql
 SELECT
@@ -126,7 +152,7 @@ SELECT
   day_u16,
   group_by,
   countIf(aircraft_number != 0) AS busy_lines
-FROM sim_repairline_v9
+FROM {repair_table}
 WHERE version_date = 20250704
   AND version_id = 1
   AND group_by IN (1, 2)
@@ -137,8 +163,8 @@ ORDER BY day_u16, group_by;
 ## Стандарт отчёта
 
 В ответе обязательно фиксируй:
-1. Какие таблицы/поля проверены (`DESCRIBE`/SQL).
-2. Какой критерий "последнего прогона" использован.
+1. Какие таблицы и их версии выбраны (`{master_table}`, `{repair_table}`) и почему.
+2. Какие поля проверены (`DESCRIBE`) и какие feature-gates сработали.
 3. Полные фильтры (`version_date`, `version_id`, `group_by`).
 4. Табличный результат.
 5. Допущения в явном виде (`Risks if false: ...`).

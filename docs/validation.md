@@ -12,6 +12,25 @@
 - SQL-проверки и runbook в этом документе считаются валидированными для этой версии.
 - При смене версии ClickHouse перед прогонами валидации сначала перепроверять совместимость SQL (особенно window-функции и deprecated-конструкции).
 
+## Партицирование runtime-таблиц (v9)
+- `sim_masterv2_v9`: `PARTITION BY (version_date, toYYYYMM(day_date))`
+- `sim_repairline_v9`: `PARTITION BY (version_date, toYYYYMM(day_date))`
+- Текущие `ORDER BY` сохранены для совместимости с существующими SQL и валидаторами.
+
+### Важно по применению DDL
+- Изменение partition key в ClickHouse не применяется через `ALTER`.
+- Для действующих таблиц обязателен цикл: `DROP TABLE` -> `CREATE TABLE` -> повторная загрузка данных.
+- Рекомендуемая последовательность после смены DDL:
+  1) прогон D1 с `--drop-table`;
+  2) прогон D2 без `--drop-table`;
+  3) проверка `run_all_stream` по обоим dataset-ключам.
+
+### Мини-runbook для Superset
+- Всегда фильтровать `version_date` и `version_id` в датасете/чарте.
+- Временная колонка: `day_date`; grain: `day/month/year`.
+- Не строить графики по всем версиям сразу (это размывает метрики и увеличивает скан партиций).
+- Для тяжёлых чартов использовать предагрегации по дням (status/repairline daily counts) и затем строить month/year поверх них.
+
 ## Методология
 - `docs/architecture/validation_rules.md` — методология SQL‑first валидации, heli_pandas проверки, NVRTC правила.
 

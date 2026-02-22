@@ -17,6 +17,7 @@ from typing import Dict, List, Tuple
 
 REQUIRED_AGENTS = ("governance-compliance", "docs-curator")
 KG_RELATIVE_PATH = Path("config/agent_kg.json")
+RISK_TIERS_WITH_REQUIRED_ARTIFACTS = {"medium", "high"}
 
 
 def _extract_shell_command(payload: Dict[str, object]) -> str:
@@ -103,6 +104,71 @@ def _invalid_trace_fields(handoffs_by_agent: Dict[str, Dict[str, object]]) -> Di
     return invalid
 
 
+def _normalize_text(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _is_true_like(value: object) -> bool:
+    normalized = _normalize_text(value).lower()
+    return normalized in {"yes", "true", "1", "да"}
+
+
+def _is_na_like(value: object) -> bool:
+    normalized = _normalize_text(value).lower()
+    return normalized in {"n/a", "n/a (low-risk)", "na"}
+
+
+def _policy_violations(kg_data: Dict[str, object], workflow_id: str) -> List[str]:
+    """Проверяет policy-поля risk/artifacts/approval для handoff workflow."""
+    violations: List[str] = []
+    handoffs = kg_data.get("handoffs", [])
+    if not isinstance(handoffs, list):
+        return violations
+
+    for item in handoffs:
+        if not isinstance(item, dict):
+            continue
+        if item.get("workflow_id") != workflow_id:
+            continue
+
+        handoff_id = _normalize_text(item.get("handoff_id")) or "<unknown_handoff>"
+        risk_tier = _normalize_text(item.get("risk_tier")).lower()
+        if risk_tier in RISK_TIERS_WITH_REQUIRED_ARTIFACTS:
+            required = {
+                "plan_card": item.get("plan_card"),
+                "evidence_pack": item.get("evidence_pack"),
+                "compliance_checklist": item.get("compliance_checklist"),
+            }
+            missing = [
+                key
+                for key, value in required.items()
+                if not _normalize_text(value) or _is_na_like(value)
+            ]
+            if missing:
+                violations.append(
+                    f"{handoff_id}: risk_tier={risk_tier}, отсутствуют обязательные артефакты: "
+                    + ", ".join(missing)
+                )
+
+        graph_update = _normalize_text(item.get("graph_update"))
+        if _is_true_like(graph_update):
+            approval_fields = {
+                "approval_gate_id": item.get("approval_gate_id"),
+                "approval_status": item.get("approval_status"),
+                "approval_source": item.get("approval_source"),
+            }
+            missing_approval = [
+                key for key, value in approval_fields.items() if not _normalize_text(value)
+            ]
+            if missing_approval:
+                violations.append(
+                    f"{handoff_id}: graph_update={graph_update}, не заполнены approval-поля: "
+                    + ", ".join(missing_approval)
+                )
+
+    return violations
+
+
 def _deny(reason: str) -> None:
     sys.stdout.write(json.dumps({"decision": "deny", "reason": reason}))
 
@@ -171,6 +237,18 @@ def main() -> None:
             "Закрытие workflow заблокировано: в обязательных handoff не заполнены "
             f"поля трассировки для {workflow_id}: {details}. "
             "Сначала переоформите handoff с trace_id и plan_step_id."
+        )
+        return
+
+    policy_issues = _policy_violations(kg_data, workflow_id)
+    if policy_issues:
+        details = "; ".join(policy_issues[:3])
+        if len(policy_issues) > 3:
+            details = f"{details}; ... +{len(policy_issues) - 3} ещё"
+        _deny(
+            "Закрытие workflow заблокировано: обнаружены policy-нарушения в handoff "
+            f"для {workflow_id}: {details}. "
+            "Исправьте handoff (risk/artifacts/approval) и повторите --close-workflow."
         )
         return
 

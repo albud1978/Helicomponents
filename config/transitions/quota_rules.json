@@ -1,6 +1,6 @@
 {
   "version": 8,
-  "architecture": "LIMITER V8 quota (MessageBucket + RepairLine)",
+  "architecture": "LIMITER V8 quota (MessageBucket + RepairLine + bank windows)",
   "quota_flow": [
     {
       "id": "reset_flags",
@@ -21,10 +21,10 @@
       "notes": "Подсчёт по состояниям и готовность unsvc/inactive."
     },
     {
-      "id": "repair_line_slots",
-      "owner_module": "rtc_repair_line_slots_v8",
-      "expr": "slots = lines where aircraft_number==0 && free_days>=repair_time; sort by free_days; slots_count=...",
-      "notes": "Сбор доступных RepairLine слотов (используется в full‑варианте квот; в message‑only не вызывается)."
+      "id": "repair_line_snapshot",
+      "owner_module": "rtc_repair_line_snapshot_v8",
+      "expr": "snapshot mutable MP -> *_ro_mp (free_days, acn, bank_count, bank_head_end)",
+      "notes": "Снимок RepairLine перед commit-фазами P2/P3. В message-only нужен для консистентного read в условиях конкуренции."
     },
     {
       "id": "demote_ops",
@@ -41,19 +41,19 @@
     {
       "id": "promote_p2_unsvc",
       "owner_module": "rtc_promote_unsvc_v8",
-      "expr": "repair_candidate=1 if rank < promote_p2_*; choose line by min free_days>=repair_time",
-      "notes": "P2: unserviceable → operations (общий RepairLine пул). Выбор линии: минимальный free_days при free_days >= repair_time; квотирование только message-only, agent-based не применять."
+      "expr": "repair_candidate=1 if rank < promote_p2_*; line-first: source1(min free_days>=repair_time) else source2(bank head)",
+      "notes": "P2: unserviceable → operations. В bank-only дни ранжирование кандидатов переключается на bank-friendly (older status_change_day first)."
     },
     {
       "id": "promote_p3_inactive",
       "owner_module": "rtc_promote_inactive_v8",
-      "expr": "repair_candidate=1 if rank < promote_p3_*; choose line by min free_days>=repair_time",
-      "notes": "P3: inactive → operations (после P2). Выбор линии: минимальный free_days при free_days >= repair_time; квотирование только message-only, agent-based не применять."
+      "expr": "repair_candidate=1 if rank < promote_p3_*; line-first: source1(min free_days>=repair_time) else source2(bank head)",
+      "notes": "P3: inactive → operations (после P2 в рамках типа). В bank-only дни ранжирование кандидатов bank-friendly."
     },
     {
       "id": "spawn_p4_dynamic",
       "owner_module": "rtc_spawn_dynamic_mgr_v8",
-      "expr": "deficit = target - curr_ops - used(P1,P2,P3); write spawn_dynamic_*[day]",
+      "expr": "deficit = target - curr_ops - used(P1,P2,P3 commits); write spawn_dynamic_*[day]",
       "notes": "P4: динамический spawn при оставшемся дефиците."
     }
   ],
@@ -74,7 +74,7 @@
       "notes": "P2: unsvc готов при repair_days==0 и нет назначенной линии."
     },
     {
-      "id": "p3_threshold_s5",
+      "id": "p3_threshold_s1",
       "expr": "idx >= threshold_s5",
       "notes": "P3: inactive → operations (после P2)."
     }
@@ -93,12 +93,27 @@
     {
       "id": "line_selection_min_free_days",
       "expr": "choose min free_days where free_days >= repair_time (P2/P3)",
-      "notes": "Анти-фрагментация: выбирать линию с минимальным free_days при free_days >= repair_time; квотирование только message-only, agent-based не применять."
+      "notes": "Анти-фрагментация source1: выбирать линию с минимальным free_days при free_days >= repair_time."
     },
     {
       "id": "assign_on_promote",
       "expr": "on promote: free_days = 0; aircraft_number = acn; repair_line_id = line_id",
       "notes": "Назначение RepairLine при P2/P3."
+    },
+    {
+      "id": "source1_guard",
+      "expr": "status_change_day <= (current_day - repair_time)",
+      "notes": "Source1 claim допустим, только если агент покрывает персональное окно ремонта."
+    },
+    {
+      "id": "source2_guard",
+      "expr": "status_change_day <= window_start",
+      "notes": "Source2 claim из bank допустим, только если агент покрывает начало bank-окна."
+    },
+    {
+      "id": "source2_bank_lock_binary",
+      "expr": "bank_lock: exchange(1u) on acquire; release exchange(0u); no restore of foreign lock",
+      "notes": "Бинарный lock исключает race/залипание и позволяет стабильный source2 commit в bank-only днях."
     }
   ],
   "spawn_rules": [
@@ -124,9 +139,12 @@
         "promote_p3_mi8",
         "promote_p3_mi17",
         "deficit_mi8",
-        "deficit_mi17"
+        "deficit_mi17",
+        "today_ready_slots",
+        "bank_ready_slots",
+        "today_committable_slots"
       ],
-      "notes": "QM пишет один broadcast (key=0) с квотами для Mi-8/Mi-17; агент выбирает поле по group_by."
+      "notes": "QM пишет один broadcast (key=0): квоты + сигналы слотов. Приоритет распределения слотов: P2_17 -> P3_17 -> P2_8 -> P3_8."
     }
   }
 }

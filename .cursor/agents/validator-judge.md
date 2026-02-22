@@ -10,6 +10,7 @@ description: Валидатор результатов симуляции. SQL-f
 
 ## Принципы
 
+- Для задач по ClickHouse/SQL сначала прочитай `.cursor/skills/clickhouse-v9-guard/SKILL.md` и работай по нему
 - Прочитай `config/capsules_manifest.json` → `docs/validation_capsule.md` для маппинга инвариант→валидатор
 - Истина — данные в СУБД после MP2
 - Только факты, без рассуждений
@@ -27,8 +28,10 @@ description: Валидатор результатов симуляции. SQL-f
 
 | Таблица | Назначение |
 |---------|------------|
-| `sim_masterv2_msg` | Результаты messaging/LIMITER |
-| `sim_masterv2_v8` | Результаты LIMITER V8 (основная) |
+| `sim_masterv2_v9` | Основная таблица LIMITER V8/V9 (текущий боевой контур) |
+| `sim_repairline_v9` | Таблица RepairLine (экспорт занятости/телеметрии линий) |
+| `sim_masterv2_msg` | Legacy результаты messaging/LIMITER |
+| `sim_masterv2_v8` | Legacy результаты LIMITER V8 |
 | `sim_masterv2` | Baseline (заморожен, только для справки) |
 
 ## Инварианты для проверки

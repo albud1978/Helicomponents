@@ -441,8 +441,25 @@ def build_html(agents: list, graph_data: dict, workflow: dict,
 
 def main():
     # Load graph
-    with open(GRAPH_JSON, "r", encoding="utf-8") as f:
-        graph_data = json.load(f)
+    if os.path.exists(GRAPH_JSON):
+        with open(GRAPH_JSON, "r", encoding="utf-8") as f:
+            graph_data = json.load(f)
+    else:
+        graph_data = {
+            "nodes": [],
+            "edges": [],
+            "metadata": {
+                "fallback": True,
+                "reason": f"missing {os.path.relpath(GRAPH_JSON, ROOT_DIR)}",
+                "generated_at": datetime.now(timezone.utc).strftime(
+                    "%Y-%m-%d %H:%M:%S UTC"
+                ),
+            },
+        }
+        print(
+            f"WARNING: {os.path.relpath(GRAPH_JSON, ROOT_DIR)} not found; "
+            "using fallback empty graph."
+        )
 
     # Load agent profiles
     agents = []

@@ -1,0 +1,1859 @@
+{
+  "generated_at_utc": "2026-02-21T05:34:48.426684+00:00",
+  "source_table": "sim_repairline_v9",
+  "filters": {
+    "version_date": 20250704,
+    "version_ids": [
+      1,
+      2
+    ],
+    "group_by": [
+      1,
+      2
+    ],
+    "date_from": null,
+    "date_to": null
+  },
+  "rows": [
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 0,
+      "aircraft_number": 22556,
+      "start_date": "2025-07-05",
+      "end_date_exclusive": "2025-12-31",
+      "duration_days": 179
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 0,
+      "aircraft_number": 25551,
+      "start_date": "2025-12-31",
+      "end_date_exclusive": "2026-06-29",
+      "duration_days": 180
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 0,
+      "aircraft_number": 25413,
+      "start_date": "2026-07-06",
+      "end_date_exclusive": "2027-02-01",
+      "duration_days": 210
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 0,
+      "aircraft_number": 22491,
+      "start_date": "2027-02-01",
+      "end_date_exclusive": "2027-08-06",
+      "duration_days": 186
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 0,
+      "aircraft_number": 22504,
+      "start_date": "2027-09-21",
+      "end_date_exclusive": "2028-04-01",
+      "duration_days": 193
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 0,
+      "aircraft_number": 22435,
+      "start_date": "2028-05-01",
+      "end_date_exclusive": "2028-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 0,
+      "aircraft_number": 27131,
+      "start_date": "2029-05-01",
+      "end_date_exclusive": "2029-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 0,
+      "aircraft_number": 22806,
+      "start_date": "2029-10-29",
+      "end_date_exclusive": "2030-05-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 0,
+      "aircraft_number": 25751,
+      "start_date": "2030-05-01",
+      "end_date_exclusive": "2030-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 0,
+      "aircraft_number": 22221,
+      "start_date": "2031-05-24",
+      "end_date_exclusive": "2031-12-01",
+      "duration_days": 191
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 0,
+      "aircraft_number": 22597,
+      "start_date": "2032-06-01",
+      "end_date_exclusive": "2032-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 0,
+      "aircraft_number": 24177,
+      "start_date": "2033-06-01",
+      "end_date_exclusive": "2033-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 0,
+      "aircraft_number": 25551,
+      "start_date": "2034-11-12",
+      "end_date_exclusive": "2035-05-24",
+      "duration_days": 193
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 0,
+      "aircraft_number": 22476,
+      "start_date": "2035-05-24",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 40
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 1,
+      "aircraft_number": 25484,
+      "start_date": "2025-07-05",
+      "end_date_exclusive": "2025-12-31",
+      "duration_days": 179
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 1,
+      "aircraft_number": 22497,
+      "start_date": "2026-05-01",
+      "end_date_exclusive": "2026-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 1,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 1,
+      "aircraft_number": 22210,
+      "start_date": "2027-10-29",
+      "end_date_exclusive": "2028-05-01",
+      "duration_days": 185
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 1,
+      "aircraft_number": 22435,
+      "start_date": "2028-05-01",
+      "end_date_exclusive": "2028-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 1,
+      "aircraft_number": 27131,
+      "start_date": "2029-05-01",
+      "end_date_exclusive": "2029-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 1,
+      "aircraft_number": 24585,
+      "start_date": "2029-11-07",
+      "end_date_exclusive": "2030-05-21",
+      "duration_days": 195
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 1,
+      "aircraft_number": 24539,
+      "start_date": "2030-06-01",
+      "end_date_exclusive": "2030-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 1,
+      "aircraft_number": 22251,
+      "start_date": "2031-05-01",
+      "end_date_exclusive": "2031-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 1,
+      "aircraft_number": 24577,
+      "start_date": "2032-06-16",
+      "end_date_exclusive": "2033-01-01",
+      "duration_days": 199
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 1,
+      "aircraft_number": 22804,
+      "start_date": "2033-05-15",
+      "end_date_exclusive": "2033-11-23",
+      "duration_days": 192
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 1,
+      "aircraft_number": 24505,
+      "start_date": "2033-11-23",
+      "end_date_exclusive": "2034-05-30",
+      "duration_days": 188
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 1,
+      "aircraft_number": 22492,
+      "start_date": "2034-05-30",
+      "end_date_exclusive": "2034-11-30",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 1,
+      "aircraft_number": 22504,
+      "start_date": "2035-05-26",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 38
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 22431,
+      "start_date": "2025-07-05",
+      "end_date_exclusive": "2025-12-31",
+      "duration_days": 179
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 22497,
+      "start_date": "2026-05-01",
+      "end_date_exclusive": "2026-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 22435,
+      "start_date": "2028-05-01",
+      "end_date_exclusive": "2028-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 27131,
+      "start_date": "2029-05-01",
+      "end_date_exclusive": "2029-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 22865,
+      "start_date": "2030-08-27",
+      "end_date_exclusive": "2031-02-28",
+      "duration_days": 185
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 25752,
+      "start_date": "2031-05-01",
+      "end_date_exclusive": "2031-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 25489,
+      "start_date": "2032-06-27",
+      "end_date_exclusive": "2033-01-01",
+      "duration_days": 188
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 25421,
+      "start_date": "2033-05-01",
+      "end_date_exclusive": "2033-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 27071,
+      "start_date": "2033-10-31",
+      "end_date_exclusive": "2034-05-01",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 22417,
+      "start_date": "2034-06-01",
+      "end_date_exclusive": "2034-11-30",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 2,
+      "aircraft_number": 22487,
+      "start_date": "2035-05-01",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 63
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 3,
+      "aircraft_number": 22486,
+      "start_date": "2025-07-05",
+      "end_date_exclusive": "2025-12-31",
+      "duration_days": 179
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 3,
+      "aircraft_number": 22497,
+      "start_date": "2026-05-01",
+      "end_date_exclusive": "2026-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 3,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 3,
+      "aircraft_number": 22435,
+      "start_date": "2028-05-01",
+      "end_date_exclusive": "2028-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 3,
+      "aircraft_number": 27065,
+      "start_date": "2029-05-01",
+      "end_date_exclusive": "2029-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 3,
+      "aircraft_number": 24144,
+      "start_date": "2030-09-12",
+      "end_date_exclusive": "2031-03-17",
+      "duration_days": 186
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 3,
+      "aircraft_number": 25752,
+      "start_date": "2031-05-01",
+      "end_date_exclusive": "2031-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 3,
+      "aircraft_number": 24125,
+      "start_date": "2032-06-28",
+      "end_date_exclusive": "2033-01-01",
+      "duration_days": 187
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 3,
+      "aircraft_number": 22215,
+      "start_date": "2033-05-01",
+      "end_date_exclusive": "2033-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 3,
+      "aircraft_number": 25413,
+      "start_date": "2033-10-31",
+      "end_date_exclusive": "2034-05-01",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 3,
+      "aircraft_number": 100002,
+      "start_date": "2034-06-05",
+      "end_date_exclusive": "2034-12-05",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 3,
+      "aircraft_number": 22487,
+      "start_date": "2035-05-01",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 63
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 4,
+      "aircraft_number": 22489,
+      "start_date": "2025-07-05",
+      "end_date_exclusive": "2025-12-31",
+      "duration_days": 179
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 4,
+      "aircraft_number": 22497,
+      "start_date": "2026-05-01",
+      "end_date_exclusive": "2026-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 4,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 4,
+      "aircraft_number": 22435,
+      "start_date": "2028-05-01",
+      "end_date_exclusive": "2028-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 4,
+      "aircraft_number": 24147,
+      "start_date": "2029-05-26",
+      "end_date_exclusive": "2029-11-23",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 4,
+      "aircraft_number": 22922,
+      "start_date": "2029-11-23",
+      "end_date_exclusive": "2030-06-01",
+      "duration_days": 190
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 4,
+      "aircraft_number": 24539,
+      "start_date": "2030-06-01",
+      "end_date_exclusive": "2030-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 4,
+      "aircraft_number": 22250,
+      "start_date": "2031-05-16",
+      "end_date_exclusive": "2031-12-01",
+      "duration_days": 199
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 4,
+      "aircraft_number": 22591,
+      "start_date": "2032-06-01",
+      "end_date_exclusive": "2032-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 4,
+      "aircraft_number": 25355,
+      "start_date": "2033-06-02",
+      "end_date_exclusive": "2033-12-01",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 4,
+      "aircraft_number": 22426,
+      "start_date": "2034-08-19",
+      "end_date_exclusive": "2035-03-01",
+      "duration_days": 194
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 4,
+      "aircraft_number": 22487,
+      "start_date": "2035-05-01",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 63
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 5,
+      "aircraft_number": 22215,
+      "start_date": "2025-07-05",
+      "end_date_exclusive": "2025-12-31",
+      "duration_days": 179
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 5,
+      "aircraft_number": 22216,
+      "start_date": "2026-05-01",
+      "end_date_exclusive": "2026-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 5,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 5,
+      "aircraft_number": 25496,
+      "start_date": "2028-05-01",
+      "end_date_exclusive": "2028-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 5,
+      "aircraft_number": 22915,
+      "start_date": "2029-05-31",
+      "end_date_exclusive": "2029-12-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 5,
+      "aircraft_number": 22252,
+      "start_date": "2030-08-13",
+      "end_date_exclusive": "2031-02-28",
+      "duration_days": 199
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 5,
+      "aircraft_number": 25752,
+      "start_date": "2031-05-01",
+      "end_date_exclusive": "2031-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 5,
+      "aircraft_number": 22431,
+      "start_date": "2032-10-02",
+      "end_date_exclusive": "2033-04-01",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 5,
+      "aircraft_number": 22215,
+      "start_date": "2033-05-01",
+      "end_date_exclusive": "2033-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 5,
+      "aircraft_number": 24238,
+      "start_date": "2033-11-09",
+      "end_date_exclusive": "2034-05-30",
+      "duration_days": 202
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 5,
+      "aircraft_number": 100000,
+      "start_date": "2034-06-01",
+      "end_date_exclusive": "2034-11-30",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 5,
+      "aircraft_number": 22435,
+      "start_date": "2035-05-01",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 63
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 6,
+      "aircraft_number": 22802,
+      "start_date": "2025-07-05",
+      "end_date_exclusive": "2025-12-31",
+      "duration_days": 179
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 6,
+      "aircraft_number": 22485,
+      "start_date": "2026-05-30",
+      "end_date_exclusive": "2026-12-22",
+      "duration_days": 206
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 6,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 6,
+      "aircraft_number": 22479,
+      "start_date": "2028-09-15",
+      "end_date_exclusive": "2029-04-01",
+      "duration_days": 198
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 6,
+      "aircraft_number": 27131,
+      "start_date": "2029-05-01",
+      "end_date_exclusive": "2029-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 6,
+      "aircraft_number": 24500,
+      "start_date": "2031-06-01",
+      "end_date_exclusive": "2031-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 6,
+      "aircraft_number": 24287,
+      "start_date": "2031-12-08",
+      "end_date_exclusive": "2032-06-15",
+      "duration_days": 190
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 6,
+      "aircraft_number": 22614,
+      "start_date": "2032-06-15",
+      "end_date_exclusive": "2033-01-01",
+      "duration_days": 200
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 6,
+      "aircraft_number": 25828,
+      "start_date": "2033-06-01",
+      "end_date_exclusive": "2033-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 6,
+      "aircraft_number": 22483,
+      "start_date": "2035-06-01",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 32
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 7,
+      "aircraft_number": 22478,
+      "start_date": "2026-06-01",
+      "end_date_exclusive": "2026-12-22",
+      "duration_days": 204
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 7,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 7,
+      "aircraft_number": 22473,
+      "start_date": "2028-09-16",
+      "end_date_exclusive": "2029-04-01",
+      "duration_days": 197
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 7,
+      "aircraft_number": 27131,
+      "start_date": "2029-05-01",
+      "end_date_exclusive": "2029-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 7,
+      "aircraft_number": 25390,
+      "start_date": "2031-06-30",
+      "end_date_exclusive": "2031-08-08",
+      "duration_days": 39
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 7,
+      "aircraft_number": 25390,
+      "start_date": "2031-08-08",
+      "end_date_exclusive": "2032-01-01",
+      "duration_days": 146
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 7,
+      "aircraft_number": 22981,
+      "start_date": "2032-05-01",
+      "end_date_exclusive": "2032-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 7,
+      "aircraft_number": 22581,
+      "start_date": "2032-10-31",
+      "end_date_exclusive": "2033-05-01",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 7,
+      "aircraft_number": 22493,
+      "start_date": "2033-05-01",
+      "end_date_exclusive": "2033-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 7,
+      "aircraft_number": 22861,
+      "start_date": "2035-06-01",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 32
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 8,
+      "aircraft_number": 22478,
+      "start_date": "2026-06-01",
+      "end_date_exclusive": "2026-12-22",
+      "duration_days": 204
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 8,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 8,
+      "aircraft_number": 24120,
+      "start_date": "2029-09-02",
+      "end_date_exclusive": "2030-03-01",
+      "duration_days": 180
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 8,
+      "aircraft_number": 25751,
+      "start_date": "2030-05-01",
+      "end_date_exclusive": "2030-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 8,
+      "aircraft_number": 22171,
+      "start_date": "2031-05-28",
+      "end_date_exclusive": "2031-12-01",
+      "duration_days": 187
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 8,
+      "aircraft_number": 22481,
+      "start_date": "2032-05-01",
+      "end_date_exclusive": "2032-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 8,
+      "aircraft_number": 22581,
+      "start_date": "2032-10-31",
+      "end_date_exclusive": "2033-05-01",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 8,
+      "aircraft_number": 22215,
+      "start_date": "2033-05-01",
+      "end_date_exclusive": "2033-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 8,
+      "aircraft_number": 100004,
+      "start_date": "2035-06-02",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 31
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 9,
+      "aircraft_number": 22484,
+      "start_date": "2026-06-01",
+      "end_date_exclusive": "2026-12-22",
+      "duration_days": 204
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 9,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 9,
+      "aircraft_number": 25159,
+      "start_date": "2029-09-09",
+      "end_date_exclusive": "2030-04-01",
+      "duration_days": 204
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 9,
+      "aircraft_number": 25751,
+      "start_date": "2030-05-01",
+      "end_date_exclusive": "2030-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 9,
+      "aircraft_number": 22268,
+      "start_date": "2031-05-28",
+      "end_date_exclusive": "2031-12-01",
+      "duration_days": 187
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 9,
+      "aircraft_number": 22620,
+      "start_date": "2032-05-19",
+      "end_date_exclusive": "2032-11-27",
+      "duration_days": 192
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 9,
+      "aircraft_number": 24135,
+      "start_date": "2033-08-08",
+      "end_date_exclusive": "2033-09-27",
+      "duration_days": 50
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 9,
+      "aircraft_number": 24135,
+      "start_date": "2033-09-27",
+      "end_date_exclusive": "2034-03-01",
+      "duration_days": 155
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 9,
+      "aircraft_number": 100003,
+      "start_date": "2034-06-22",
+      "end_date_exclusive": "2035-01-01",
+      "duration_days": 193
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 9,
+      "aircraft_number": 22487,
+      "start_date": "2035-05-01",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 63
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 10,
+      "aircraft_number": 22977,
+      "start_date": "2026-06-25",
+      "end_date_exclusive": "2026-12-22",
+      "duration_days": 180
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 10,
+      "aircraft_number": 22426,
+      "start_date": "2027-02-01",
+      "end_date_exclusive": "2027-08-06",
+      "duration_days": 186
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 10,
+      "aircraft_number": 22579,
+      "start_date": "2027-10-06",
+      "end_date_exclusive": "2028-04-21",
+      "duration_days": 198
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 10,
+      "aircraft_number": 22435,
+      "start_date": "2028-05-01",
+      "end_date_exclusive": "2028-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 10,
+      "aircraft_number": 27057,
+      "start_date": "2029-06-01",
+      "end_date_exclusive": "2029-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 10,
+      "aircraft_number": 22437,
+      "start_date": "2030-06-01",
+      "end_date_exclusive": "2030-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 10,
+      "aircraft_number": 22655,
+      "start_date": "2031-05-19",
+      "end_date_exclusive": "2031-12-01",
+      "duration_days": 196
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 10,
+      "aircraft_number": 22597,
+      "start_date": "2032-06-01",
+      "end_date_exclusive": "2032-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 10,
+      "aircraft_number": 22977,
+      "start_date": "2033-07-30",
+      "end_date_exclusive": "2034-02-01",
+      "duration_days": 186
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 10,
+      "aircraft_number": 22491,
+      "start_date": "2034-08-01",
+      "end_date_exclusive": "2035-01-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 10,
+      "aircraft_number": 22487,
+      "start_date": "2035-05-01",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 63
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 11,
+      "aircraft_number": 27090,
+      "start_date": "2026-07-28",
+      "end_date_exclusive": "2027-02-01",
+      "duration_days": 188
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 11,
+      "aircraft_number": 22491,
+      "start_date": "2027-02-01",
+      "end_date_exclusive": "2027-08-06",
+      "duration_days": 186
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 11,
+      "aircraft_number": 22476,
+      "start_date": "2027-10-11",
+      "end_date_exclusive": "2028-04-21",
+      "duration_days": 193
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 11,
+      "aircraft_number": 22435,
+      "start_date": "2028-05-01",
+      "end_date_exclusive": "2028-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 11,
+      "aircraft_number": 27057,
+      "start_date": "2029-06-01",
+      "end_date_exclusive": "2029-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 11,
+      "aircraft_number": 22801,
+      "start_date": "2030-06-09",
+      "end_date_exclusive": "2030-12-08",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 11,
+      "aircraft_number": 24105,
+      "start_date": "2030-12-08",
+      "end_date_exclusive": "2031-06-26",
+      "duration_days": 200
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 11,
+      "aircraft_number": 25154,
+      "start_date": "2031-06-26",
+      "end_date_exclusive": "2032-01-01",
+      "duration_days": 189
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 11,
+      "aircraft_number": 22981,
+      "start_date": "2032-05-01",
+      "end_date_exclusive": "2032-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 11,
+      "aircraft_number": 22581,
+      "start_date": "2032-10-31",
+      "end_date_exclusive": "2033-05-01",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 11,
+      "aircraft_number": 22215,
+      "start_date": "2033-05-01",
+      "end_date_exclusive": "2033-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 11,
+      "aircraft_number": 100005,
+      "start_date": "2035-06-03",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 30
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 12,
+      "aircraft_number": 22517,
+      "start_date": "2026-08-18",
+      "end_date_exclusive": "2027-02-23",
+      "duration_days": 189
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 12,
+      "aircraft_number": 22554,
+      "start_date": "2027-02-23",
+      "end_date_exclusive": "2027-09-19",
+      "duration_days": 208
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 12,
+      "aircraft_number": 22483,
+      "start_date": "2027-09-19",
+      "end_date_exclusive": "2028-03-17",
+      "duration_days": 180
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 12,
+      "aircraft_number": 22435,
+      "start_date": "2028-05-01",
+      "end_date_exclusive": "2028-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 12,
+      "aircraft_number": 25434,
+      "start_date": "2029-06-01",
+      "end_date_exclusive": "2029-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 12,
+      "aircraft_number": 24492,
+      "start_date": "2030-07-21",
+      "end_date_exclusive": "2031-02-01",
+      "duration_days": 195
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 12,
+      "aircraft_number": 25752,
+      "start_date": "2031-05-01",
+      "end_date_exclusive": "2031-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 12,
+      "aircraft_number": 24441,
+      "start_date": "2032-10-05",
+      "end_date_exclusive": "2032-10-14",
+      "duration_days": 9
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 12,
+      "aircraft_number": 24441,
+      "start_date": "2032-10-14",
+      "end_date_exclusive": "2033-04-18",
+      "duration_days": 186
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 12,
+      "aircraft_number": 22497,
+      "start_date": "2033-05-01",
+      "end_date_exclusive": "2033-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 13,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 13,
+      "aircraft_number": 22429,
+      "start_date": "2029-09-11",
+      "end_date_exclusive": "2030-04-01",
+      "duration_days": 202
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 13,
+      "aircraft_number": 25751,
+      "start_date": "2030-05-01",
+      "end_date_exclusive": "2030-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 13,
+      "aircraft_number": 22991,
+      "start_date": "2031-05-31",
+      "end_date_exclusive": "2031-12-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 13,
+      "aircraft_number": 22981,
+      "start_date": "2032-05-01",
+      "end_date_exclusive": "2032-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 13,
+      "aircraft_number": 22581,
+      "start_date": "2032-10-31",
+      "end_date_exclusive": "2033-05-01",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 13,
+      "aircraft_number": 22497,
+      "start_date": "2033-05-01",
+      "end_date_exclusive": "2033-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 14,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 14,
+      "aircraft_number": 24579,
+      "start_date": "2029-10-09",
+      "end_date_exclusive": "2030-05-01",
+      "duration_days": 204
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 14,
+      "aircraft_number": 25751,
+      "start_date": "2030-05-01",
+      "end_date_exclusive": "2030-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 14,
+      "aircraft_number": 22658,
+      "start_date": "2031-06-01",
+      "end_date_exclusive": "2031-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 14,
+      "aircraft_number": 24227,
+      "start_date": "2031-12-08",
+      "end_date_exclusive": "2032-06-15",
+      "duration_days": 190
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 14,
+      "aircraft_number": 25164,
+      "start_date": "2032-06-15",
+      "end_date_exclusive": "2033-01-01",
+      "duration_days": 200
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 14,
+      "aircraft_number": 25828,
+      "start_date": "2033-06-01",
+      "end_date_exclusive": "2033-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 14,
+      "aircraft_number": 22483,
+      "start_date": "2035-06-01",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 32
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 15,
+      "aircraft_number": 27130,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 15,
+      "aircraft_number": 24157,
+      "start_date": "2031-07-18",
+      "end_date_exclusive": "2031-08-05",
+      "duration_days": 18
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 15,
+      "aircraft_number": 24157,
+      "start_date": "2031-08-05",
+      "end_date_exclusive": "2032-02-01",
+      "duration_days": 180
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 15,
+      "aircraft_number": 24121,
+      "start_date": "2032-05-01",
+      "end_date_exclusive": "2032-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 15,
+      "aircraft_number": 22427,
+      "start_date": "2032-10-31",
+      "end_date_exclusive": "2033-05-01",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 15,
+      "aircraft_number": 22497,
+      "start_date": "2033-05-01",
+      "end_date_exclusive": "2033-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 16,
+      "aircraft_number": 22509,
+      "start_date": "2027-05-01",
+      "end_date_exclusive": "2027-10-29",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 16,
+      "aircraft_number": 24222,
+      "start_date": "2031-07-31",
+      "end_date_exclusive": "2031-08-04",
+      "duration_days": 4
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 16,
+      "aircraft_number": 24222,
+      "start_date": "2031-08-04",
+      "end_date_exclusive": "2032-02-01",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 16,
+      "aircraft_number": 24593,
+      "start_date": "2032-04-01",
+      "end_date_exclusive": "2032-10-02",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 16,
+      "aircraft_number": 22494,
+      "start_date": "2032-10-02",
+      "end_date_exclusive": "2033-04-01",
+      "duration_days": 181
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 16,
+      "aircraft_number": 22215,
+      "start_date": "2033-05-01",
+      "end_date_exclusive": "2033-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 17,
+      "aircraft_number": 22981,
+      "start_date": "2027-06-01",
+      "end_date_exclusive": "2027-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 17,
+      "aircraft_number": 22435,
+      "start_date": "2028-05-01",
+      "end_date_exclusive": "2028-11-01",
+      "duration_days": 184
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 17,
+      "aircraft_number": 27104,
+      "start_date": "2029-08-05",
+      "end_date_exclusive": "2030-02-01",
+      "duration_days": 180
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 17,
+      "aircraft_number": 22420,
+      "start_date": "2030-05-01",
+      "end_date_exclusive": "2030-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 17,
+      "aircraft_number": 22658,
+      "start_date": "2031-06-01",
+      "end_date_exclusive": "2031-12-01",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 1,
+      "line_id": 17,
+      "aircraft_number": 22981,
+      "start_date": "2032-05-01",
+      "end_date_exclusive": "2032-10-31",
+      "duration_days": 183
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 17,
+      "aircraft_number": 27071,
+      "start_date": "2033-08-27",
+      "end_date_exclusive": "2034-03-01",
+      "duration_days": 186
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 17,
+      "aircraft_number": 100001,
+      "start_date": "2034-06-06",
+      "end_date_exclusive": "2034-12-05",
+      "duration_days": 182
+    },
+    {
+      "version_date": 20250704,
+      "version_id": 1,
+      "group_by": 2,
+      "line_id": 17,
+      "aircraft_number": 22487,
+      "start_date": "2035-05-01",
+      "end_date_exclusive": "2035-07-03",
+      "duration_days": 63
+    }
+  ]
+}
