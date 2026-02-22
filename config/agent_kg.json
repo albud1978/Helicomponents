@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-02-21T12:32:14Z",
+    "updated_at": "2026-02-22T03:39:33Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -1048,6 +1048,24 @@
       "status": "active",
       "created_at": "2026-02-21T05:31:04Z",
       "updated_at": "2026-02-21T05:35:16Z"
+    },
+    {
+      "workflow_id": "W_superset_27_20260222",
+      "goal": "Применить фикс в Superset dashboard 27 для chart 242/243: row_limit 70000, сортировка по day_date ASC, вернуть status 4 на Day, сохранить default Year",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "active",
+      "created_at": "2026-02-22T03:27:24Z",
+      "updated_at": "2026-02-22T03:36:29Z"
+    },
+    {
+      "workflow_id": "W_superset_242_243_P1Y_20260222T033838Z",
+      "goal": "Update Superset charts 242/243 time_grain_sqla to P1Y via API",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "active",
+      "created_at": "2026-02-22T03:38:48Z",
+      "updated_at": "2026-02-22T03:39:33Z"
     }
   ],
   "handoffs": [
@@ -1062,7 +1080,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-12T16:21:19Z"
+      "created_at": "2026-02-12T16:21:19Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv3_repairline_export_20260215_orchestrator_3faa29c1",
@@ -1085,7 +1111,15 @@
       "next_owner": "orchestrator",
       "open_questions": "LineAssignment message не реализован (TODO в rtc_quota_v8.py) — agent variable aircraft_number на RepairLine не синхронизирован",
       "graph_update": "да: добавить RTCLayer v8_repair_line_export в Domain Graph",
-      "created_at": "2026-02-15T05:10:22Z"
+      "created_at": "2026-02-15T05:10:22Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv2_inv1_fixes_20260214_orchestrator_0ae35187",
@@ -1108,7 +1142,15 @@
       "next_owner": "orchestrator",
       "open_questions": "INV-10 FAIL: требует GPU-постпроцессинг. TEMP-1/TEMP-4 FAIL: Day0 repairs и застрявшие агенты.",
       "graph_update": "да: обновить notes RTCLayer для compute_limiter и COND_REPAIR_EXIT",
-      "created_at": "2026-02-15T05:18:00Z"
+      "created_at": "2026-02-15T05:18:00Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_batch_validation_20260214_orchestrator_2f88c326",
@@ -1131,7 +1173,15 @@
       "next_owner": "orchestrator",
       "open_questions": "INV-10: GPU-постпроцессинг 7→4+4→2. TEMP-1: начальные агенты Day0. TEMP-4: бесконечные repair spans.",
       "graph_update": "нет",
-      "created_at": "2026-02-15T05:18:11Z"
+      "created_at": "2026-02-15T05:18:11Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_pre_status_triggers_20260213_orchestrator_38d0addf",
@@ -1154,7 +1204,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Постпроцессинг GPU ещё не реализован (markers записываются, но не используются).",
       "graph_update": "нет",
-      "created_at": "2026-02-15T05:18:21Z"
+      "created_at": "2026-02-15T05:18:21Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv10_balance_v18_20260215_analyst-sql-graph_a8d0c4b5",
@@ -1177,7 +1235,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-15T05:38:05Z"
+      "created_at": "2026-02-15T05:38:05Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv10_balance_v18_20260215_coder-general_ea82856b",
@@ -1200,7 +1266,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли делегировать coder-flame отключение _postprocess_promotions в ?",
       "graph_update": "нет",
-      "created_at": "2026-02-15T05:50:36Z"
+      "created_at": "2026-02-15T05:50:36Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv10_balance_v18_20260215_coder-general_969cf91f",
@@ -1223,7 +1297,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли делегировать coder-flame отключение _postprocess_promotions в orchestrator_limiter_v8.py?",
       "graph_update": "нет",
-      "created_at": "2026-02-15T05:51:14Z"
+      "created_at": "2026-02-15T05:51:14Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv10_balance_v18_20260215_coder-general_9d681e5e",
@@ -1246,7 +1328,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-15T05:53:59Z"
+      "created_at": "2026-02-15T05:53:59Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv10_balance_v18_20260215_coder-general_2b973396",
@@ -1269,7 +1359,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-15T06:00:06Z"
+      "created_at": "2026-02-15T06:00:06Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv10_balance_20260215_orchestrator_84646731",
@@ -1292,7 +1390,15 @@
       "next_owner": "orchestrator",
       "open_questions": "active_trigger/assembly_trigger — убрать из экспорта или оставить для аналитики?",
       "graph_update": "нет",
-      "created_at": "2026-02-15T06:02:07Z"
+      "created_at": "2026-02-15T06:02:07Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_temp1_temp4_day0_20260215_analyst-sql-graph_6f20be8f",
@@ -1315,7 +1421,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-15T06:06:59Z"
+      "created_at": "2026-02-15T06:06:59Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_temp1_temp4_day0_20260215_coder-general_9af07c90",
@@ -1338,7 +1452,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-15T07:19:16Z"
+      "created_at": "2026-02-15T07:19:16Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_gpu_review_20260215_reviewer-flame_feeba66a",
@@ -1361,7 +1483,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-15T09:02:12Z"
+      "created_at": "2026-02-15T09:02:12Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_repairline_day_date_20260215_coder-flame_9d01b09e",
@@ -1384,7 +1514,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-15T13:53:49Z"
+      "created_at": "2026-02-15T13:53:49Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_orch_v8_run_d2_20260215_coder-flame_988c8b2a",
@@ -1407,7 +1545,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-15T14:10:14Z"
+      "created_at": "2026-02-15T14:10:14Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_repairline_group_by_20260215_coder-flame_edf0f28a",
@@ -1430,7 +1576,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-15T14:23:49Z"
+      "created_at": "2026-02-15T14:23:49Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_repairline_group_by_20260215_coder-flame_cc811bc5",
@@ -1453,7 +1607,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужен ли контроль уникальности/очистка sim_repairline_v9 между прогонами для корректной проверки?",
       "graph_update": "нет",
-      "created_at": "2026-02-15T14:29:37Z"
+      "created_at": "2026-02-15T14:29:37Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_20260215_143218_coder-flame_f7958d91",
@@ -1476,7 +1638,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-15T14:34:17Z"
+      "created_at": "2026-02-15T14:34:17Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_full_20260215_validator-judge_483d9dab",
@@ -1499,7 +1669,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-15T14:44:35Z"
+      "created_at": "2026-02-15T14:44:35Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_stream_runner_20260215_coder-general_0833c18c",
@@ -1522,7 +1700,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-15T14:53:16Z"
+      "created_at": "2026-02-15T14:53:16Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_stream_runner_20260215_validator-judge_630ae648",
@@ -1545,7 +1731,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-15T14:57:19Z"
+      "created_at": "2026-02-15T14:57:19Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_multibom_template_20260216_coder-general_00f66d43",
@@ -1568,7 +1762,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-16T04:40:47Z"
+      "created_at": "2026-02-16T04:40:47Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_multibom_template_20260216_coder-general_ac1a28c6",
@@ -1591,7 +1793,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "да: требуется запуск sync_domain_graph без --dry-run",
-      "created_at": "2026-02-16T04:46:49Z"
+      "created_at": "2026-02-16T04:46:49Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_multibom_template_20260216_coder-general_a6a7ae78",
@@ -1614,7 +1824,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужен запуск make sync-domain-graph оркестратором с approval W_multibom_template_20260216?",
       "graph_update": "да: требуется запуск sync-domain-graph",
-      "created_at": "2026-02-16T05:36:39Z"
+      "created_at": "2026-02-16T05:36:39Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_multibom_template_20260216_coder-general_0f109f23",
@@ -1637,7 +1855,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "да: sync-domain-graph выполнен",
-      "created_at": "2026-02-16T06:51:55Z"
+      "created_at": "2026-02-16T06:51:55Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_multibom_template_20260216_coder-general_bfd4f6fd",
@@ -1660,7 +1886,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "да: требуется sync-domain-graph",
-      "created_at": "2026-02-16T07:31:55Z"
+      "created_at": "2026-02-16T07:31:55Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_multibom_template_20260216_coder-general_6d4caa46",
@@ -1683,7 +1917,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "да: sync-domain-graph выполнен",
-      "created_at": "2026-02-16T07:39:38Z"
+      "created_at": "2026-02-16T07:39:38Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_multibom_template_20260216_coder-general_7b8b62c8",
@@ -1706,7 +1948,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Требуется ли принудительно заполнять partno_samples до 2-5, если в md_components только 1 значение?",
       "graph_update": "да: обновить Domain Graph через sync_domain_graph (после approval)",
-      "created_at": "2026-02-16T08:43:20Z"
+      "created_at": "2026-02-16T08:43:20Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_multibom_template_20260216_coder-general_d3e89aa7",
@@ -1729,7 +1979,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Требуется ли принудительно заполнять partno_samples до 2-5, если в md_components только 1 значение?",
       "graph_update": "да: обновить Domain Graph через sync_domain_graph (после approval)",
-      "created_at": "2026-02-16T08:43:42Z"
+      "created_at": "2026-02-16T08:43:42Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_multibom_group_titles_20260216_coder-general_93adfcd7",
@@ -1752,7 +2010,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "да: требуется sync-domain-graph после принятия",
-      "created_at": "2026-02-16T08:50:13Z"
+      "created_at": "2026-02-16T08:50:13Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_multibom_group_titles_20260216_coder-general_7bb5bb80",
@@ -1775,7 +2041,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-16T08:59:07Z"
+      "created_at": "2026-02-16T08:59:07Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_P2P3_PP_20260217_coder-flame_b698efd1",
@@ -1798,7 +2072,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T12:24:13Z"
+      "created_at": "2026-02-17T12:24:13Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_P2P3_PP_20260217_coder-general_4ac7bae1",
@@ -1821,7 +2103,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T12:26:40Z"
+      "created_at": "2026-02-17T12:26:40Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_v8_postproc_runs_20260217_coder-flame_6b89614e",
@@ -1844,7 +2134,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T12:30:52Z"
+      "created_at": "2026-02-17T12:30:52Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_P2P3_PP_20260217_coder-flame_6a54250f",
@@ -1867,7 +2165,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T12:35:57Z"
+      "created_at": "2026-02-17T12:35:57Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_INV10_RERUN_20260217_coder-flame_91b470c6",
@@ -1890,7 +2196,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T12:41:32Z"
+      "created_at": "2026-02-17T12:41:32Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_INV10_RERUN_20260217_coder-flame_24383bcb",
@@ -1913,7 +2227,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T16:13:08Z"
+      "created_at": "2026-02-17T16:13:08Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_det_spawn_restore_20260217_coder-flame_2e84de9c",
@@ -1936,7 +2258,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T17:21:51Z"
+      "created_at": "2026-02-17T17:21:51Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_det_spawn_run_20260217_coder-flame_879fbb48",
@@ -1959,7 +2289,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T17:26:41Z"
+      "created_at": "2026-02-17T17:26:41Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_fix_det_spawn_oob_20260217_coder-flame_ab9058b5",
@@ -1982,7 +2320,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T17:37:31Z"
+      "created_at": "2026-02-17T17:37:31Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_fix_det_spawn_oob_20260217_coder-flame_2003f317",
@@ -2005,7 +2351,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T17:37:44Z"
+      "created_at": "2026-02-17T17:37:44Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_20260215_143218_coder-flame_7338cc03",
@@ -2028,7 +2382,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T17:41:43Z"
+      "created_at": "2026-02-17T17:41:43Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_det_spawn_hostfunc_20260217_coder-flame_fb48954e",
@@ -2051,7 +2413,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T18:02:32Z"
+      "created_at": "2026-02-17T18:02:32Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_20260215_143218_coder-flame_66d7bad2",
@@ -2074,7 +2444,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T18:06:57Z"
+      "created_at": "2026-02-17T18:06:57Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_rca_status4_repair_quota_20260217_analyst-sql-graph_1b5e809e",
@@ -2097,7 +2475,15 @@
       "next_owner": "orchestrator",
       "open_questions": "- Использует ли BI фильтр group_by (1/2) или агрегирует все группы?\n- Какой источник repair_quota (env/config) в BI для v1?",
       "graph_update": "нет",
-      "created_at": "2026-02-17T18:27:40Z"
+      "created_at": "2026-02-17T18:27:40Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_SQL_FAULT_20260218_analyst-sql-graph_427c28c0",
@@ -2120,7 +2506,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Почему в sim_repairline_v9 на day=2097 присутствует только group_by=0 при occupied_lines=0?",
       "graph_update": "нет",
-      "created_at": "2026-02-17T19:34:50Z"
+      "created_at": "2026-02-17T19:34:50Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_acn_dupes_20260218_analyst-sql-graph_2c10bb0d",
@@ -2143,7 +2537,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T19:52:13Z"
+      "created_at": "2026-02-17T19:52:13Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_lookback_only_20260218_coder-flame_293fd943",
@@ -2166,7 +2568,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T19:56:44Z"
+      "created_at": "2026-02-17T19:56:44Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_f3_postprocess_cap_20260218_coder-flame_2fb9290e",
@@ -2189,7 +2599,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:01:31Z"
+      "created_at": "2026-02-17T20:01:31Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv3_lookback_only_20260218_coder-general_f8229173",
@@ -2212,7 +2630,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:05:35Z"
+      "created_at": "2026-02-17T20:05:35Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_P2P3_PP_20260217_reviewer-flame_95d4982a",
@@ -2235,7 +2661,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Are mi8_rt and mi17_rt always equal in prod datasets? Should daily cap drop entire repair window when quota full?",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:14:38Z"
+      "created_at": "2026-02-17T20:14:38Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_P2P3_PP_20260217_coder-flame_63fbfca2",
@@ -2258,7 +2692,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:19:18Z"
+      "created_at": "2026-02-17T20:19:18Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_f4_20260218_coder-flame_10ce0965",
@@ -2281,7 +2723,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:23:10Z"
+      "created_at": "2026-02-17T20:23:10Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_f4_20260218_validator-judge_ae659602",
@@ -2304,7 +2754,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:27:49Z"
+      "created_at": "2026-02-17T20:27:49Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_lookback_only_20260218_coder-flame_7d6f9e8d",
@@ -2327,7 +2785,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:30:28Z"
+      "created_at": "2026-02-17T20:30:28Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_20260215_143218_coder-flame_15a4c759",
@@ -2350,7 +2816,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:33:06Z"
+      "created_at": "2026-02-17T20:33:06Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_f4_20260218_validator-judge_c2223227",
@@ -2373,7 +2847,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:37:18Z"
+      "created_at": "2026-02-17T20:37:18Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_followup_v2_20260218_validator-judge_4e3b1a7c",
@@ -2396,7 +2878,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:42:05Z"
+      "created_at": "2026-02-17T20:42:05Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_f5_report_20260218_analyst-sql-graph_af9978e8",
@@ -2419,7 +2909,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужна ли альтернативная трактовка status4/day (не countIf) и следует ли заполнять отсутствующие дни нулём в окне 180?",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:48:06Z"
+      "created_at": "2026-02-17T20:48:06Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_causality_20260218_analyst-sql-graph_8ac56433",
@@ -2442,7 +2940,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-17T20:53:11Z"
+      "created_at": "2026-02-17T20:53:11Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_status4_180d_20260218_analyst-sql-graph_5b5b47af",
@@ -2465,7 +2971,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T04:06:43Z"
+      "created_at": "2026-02-18T04:06:43Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_hybrid_4to2_vector_20260218_analyst-sql-graph_0340613e",
@@ -2488,7 +3002,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T04:14:48Z"
+      "created_at": "2026-02-18T04:14:48Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_temp5_validator_20260218_coder-general_f4f4e780",
@@ -2511,7 +3033,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T04:36:12Z"
+      "created_at": "2026-02-18T04:36:12Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_updated_20260218_validator-judge_d5a7c29a",
@@ -2534,7 +3064,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T04:40:01Z"
+      "created_at": "2026-02-18T04:40:01Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_temp4_rerun_20260218_validator-judge_60cce4bf",
@@ -2557,7 +3095,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T04:47:17Z"
+      "created_at": "2026-02-18T04:47:17Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_temp5_window_compare_20260218_analyst-sql-graph_4efdad23",
@@ -2580,7 +3126,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T05:09:51Z"
+      "created_at": "2026-02-18T05:09:51Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_temp5_forensic_20260218_analyst-sql-graph_409ac786",
@@ -2603,7 +3157,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T05:32:04Z"
+      "created_at": "2026-02-18T05:32:04Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_repair_time_units_20260218_analyst-sql-graph_cc757f76",
@@ -2626,7 +3188,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T05:36:12Z"
+      "created_at": "2026-02-18T05:36:12Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_free_days_sync_20260218_analyst-sql-graph_9e22f7b8",
@@ -2649,7 +3219,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T05:40:52Z"
+      "created_at": "2026-02-18T05:40:52Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_repairline_dupes_20260218_analyst-sql-graph_fe6f379b",
@@ -2672,7 +3250,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T05:44:32Z"
+      "created_at": "2026-02-18T05:44:32Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_fix_free_days_sync_20260218_coder-flame_316795e6",
@@ -2695,7 +3281,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T05:52:00Z"
+      "created_at": "2026-02-18T05:52:00Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_rerun_v8_sim_20260218_coder-flame_8b8babf7",
@@ -2718,7 +3312,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T05:56:06Z"
+      "created_at": "2026-02-18T05:56:06Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_free_days_anomaly_20260218_analyst-sql-graph_26c6a81a",
@@ -2741,7 +3343,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-18T05:59:47Z"
+      "created_at": "2026-02-18T05:59:47Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_updated_20260218_validator-judge_ce4f8258",
@@ -2764,7 +3374,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T06:02:22Z"
+      "created_at": "2026-02-18T06:02:22Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_postfix_forensic_20260218_analyst-sql-graph_4cecacd7",
@@ -2787,7 +3405,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T06:07:26Z"
+      "created_at": "2026-02-18T06:07:26Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_temp5_window_fail_classify_20260218_analyst-sql-graph_2d2271f2",
@@ -2810,7 +3436,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T06:13:47Z"
+      "created_at": "2026-02-18T06:13:47Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_temp5_window_compare_20260218_analyst-sql-graph_b184eb2c",
@@ -2833,7 +3467,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T06:17:58Z"
+      "created_at": "2026-02-18T06:17:58Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_tail_adjusted_future_window_20260218_analyst-sql-graph_77c16c95",
@@ -2856,7 +3498,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T06:23:16Z"
+      "created_at": "2026-02-18T06:23:16Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_temp5_rerun_20260218_validator-judge_b8ba53a0",
@@ -2879,7 +3529,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T06:29:46Z"
+      "created_at": "2026-02-18T06:29:46Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_temp5_rerun_20260218_validator-judge_ab8977bf",
@@ -2902,7 +3560,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T07:37:58Z"
+      "created_at": "2026-02-18T07:37:58Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_temp5_rerun_20260218_validator-judge_6439b3dd",
@@ -2925,7 +3591,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T07:41:26Z"
+      "created_at": "2026-02-18T07:41:26Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv2_fail_details_20260218_validator-judge_478c0189",
@@ -2948,7 +3622,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T07:45:21Z"
+      "created_at": "2026-02-18T07:45:21Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv2_rootcause_v1_20260218_analyst-sql-graph_ffb738e5",
@@ -2971,7 +3653,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Что означает status_id=6 для Mi-8 и ожидается ли возврат в ops между step днями?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T08:24:02Z"
+      "created_at": "2026-02-18T08:24:02Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_ops_target_v8_v1_20260213_analyst-sql-graph_a01a131b",
@@ -2994,7 +3684,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T08:28:59Z"
+      "created_at": "2026-02-18T08:28:59Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_ops_target_v8_v1_20260213_analyst-sql-graph_9944a7ba",
@@ -3017,7 +3715,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T08:31:18Z"
+      "created_at": "2026-02-18T08:31:18Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv2_guard_inactive_20260218_analyst-sql-graph_8123221d",
@@ -3040,7 +3746,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T09:58:13Z"
+      "created_at": "2026-02-18T09:58:13Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_repairline_v9_20250704_analyst-sql-graph_d281a3bf",
@@ -3063,7 +3777,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:03:22Z"
+      "created_at": "2026-02-18T10:03:22Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_ops_target_v8_v1_20260213_analyst-sql-graph_aa03b773",
@@ -3086,7 +3808,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужен ли точный день дефицита (SQL) для подтверждения момента?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:06:55Z"
+      "created_at": "2026-02-18T10:06:55Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_mi8_reserve_check_20260218_analyst-sql-graph_3fff1b46",
@@ -3109,7 +3839,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли считать frames суммарно по group_by 1+2 или использовать только gb=1 для формулы?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:10:52Z"
+      "created_at": "2026-02-18T10:10:52Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_dyn_reserve_v1_20260218_analyst-sql-graph_e1ea5f93",
@@ -3132,7 +3870,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужна ли доп. разбивка по group_by=1/2 для frames_est/det_spawn_est?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:14:57Z"
+      "created_at": "2026-02-18T10:14:57Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_diag_mi17_20250704_analyst-sql-graph_5c2b1e7d",
@@ -3155,7 +3901,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли считать cumulative spawn на конкретные дни дефицита для gb2?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:19:31Z"
+      "created_at": "2026-02-18T10:19:31Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_inv2_v9_20260218_validator-judge_6b7d39e9",
@@ -3178,7 +3932,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:26:20Z"
+      "created_at": "2026-02-18T10:26:20Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_det_spawn_check_20260218_analyst-sql-graph_b0c8f7f3",
@@ -3201,7 +3963,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:29:52Z"
+      "created_at": "2026-02-18T10:29:52Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_spawn_split_20260218_analyst-sql-graph_b94d6970",
@@ -3224,7 +3994,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:33:05Z"
+      "created_at": "2026-02-18T10:33:05Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_inv2_ops_target_v1_rerun_20260218_validator-judge_984e7cf1",
@@ -3247,7 +4025,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:36:42Z"
+      "created_at": "2026-02-18T10:36:42Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_inv2_v9_20260218_validator-judge_5216c082",
@@ -3270,7 +4056,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:40:49Z"
+      "created_at": "2026-02-18T10:40:49Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sim_masterv2_v9_counts_20260218_analyst-sql-graph_85a96e35",
@@ -3293,7 +4087,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:44:11Z"
+      "created_at": "2026-02-18T10:44:11Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_sim_masterv2_v9_20260218_analyst-sql-graph_2afd599b",
@@ -3316,7 +4118,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:46:49Z"
+      "created_at": "2026-02-18T10:46:49Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_inv2_v9_20260218_validator-judge_676821b3",
@@ -3339,7 +4149,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T10:50:36Z"
+      "created_at": "2026-02-18T10:50:36Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_INV2_ROOTCAUSE_20260218_orchestrator_17d89dd5",
@@ -3359,13 +4177,13 @@
       "approval_status": "approved",
       "approval_source": "chat: user requested update of domain graphs",
       "risk_tier": "high",
-      "risk_reasons": "Domain Graph update requested by user; requires strict traceability and human approval",
+      "risk_reasons": "Backfill2 standard: high-risk because Domain Graph update or equivalent high-impact action is flagged.",
       "risk_owner": "orchestrator",
       "risk_validated_by": "pending",
       "human_gate_required": "yes",
-      "plan_card": "Сохранить историю изменений и обновить Domain Graph по подтвержденному scope без расширения задач",
-      "evidence_pack": "TEMP-5/INV-3/INV-10/INV-2 PASS; run_all_stream completed without critical regressions",
-      "compliance_checklist": "human_gate=pass; scope_match=pass; traceability=pass; graph_update=approved",
+      "plan_card": "Backfill2 standard: high-risk action constrained by workflow scope and approval gate.",
+      "evidence_pack": "Backfill2 standard: evidence source=Facts/Changes; execution details retained in legacy fields.",
+      "compliance_checklist": "Backfill2 standard: policy_check=required; human_gate=yes; approval_gate must be populated.",
       "risks": "низкие; контрольный прогон выполнен",
       "next_owner": "user",
       "open_questions": "",
@@ -3390,13 +4208,13 @@
       "approval_status": "approved",
       "approval_source": "chat: user requested update of domain graphs",
       "risk_tier": "high",
-      "risk_reasons": "Execution of Domain Graph sync requires explicit approved gate and audit trail",
+      "risk_reasons": "Backfill2 standard: high-risk because Domain Graph update or equivalent high-impact action is flagged.",
       "risk_owner": "orchestrator",
       "risk_validated_by": "pending",
       "human_gate_required": "yes",
-      "plan_card": "Выполнить make sync-domain-graph после согласования и зафиксировать артефакты в changelog и Agent KG",
-      "evidence_pack": "make sync-domain-graph exit 0; Synced 405 queries",
-      "compliance_checklist": "human_gate=pass; sync_result=pass; traceability=pass; docs_logging=pass",
+      "plan_card": "Backfill2 standard: high-risk action constrained by workflow scope and approval gate.",
+      "evidence_pack": "Backfill2 standard: evidence source=Facts/Changes; execution details retained in legacy fields.",
+      "compliance_checklist": "Backfill2 standard: policy_check=required; human_gate=yes; approval_gate must be populated.",
       "risks": "низкие",
       "next_owner": "user",
       "open_questions": "",
@@ -3424,7 +4242,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T13:04:48Z"
+      "created_at": "2026-02-18T13:04:48Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_births_v1_v2_20260218_analyst-sql-graph_3cdf735a",
@@ -3447,7 +4273,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T13:24:14Z"
+      "created_at": "2026-02-18T13:24:14Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_spawn_ready_lines_20260218_analyst-sql-graph_6c00e3eb",
@@ -3470,7 +4304,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T13:31:53Z"
+      "created_at": "2026-02-18T13:31:53Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_free_days_sync_20260218_analyst-sql-graph_5110fc04",
@@ -3493,7 +4335,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T16:51:50Z"
+      "created_at": "2026-02-18T16:51:50Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_births_v1_v2_20260218_analyst-sql-graph_61c51f8e",
@@ -3516,7 +4366,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T17:14:05Z"
+      "created_at": "2026-02-18T17:14:05Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_repairline_fragmentation_20260218_analyst-sql-graph_ac163e44",
@@ -3539,7 +4397,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нет.",
       "graph_update": "нет",
-      "created_at": "2026-02-18T17:38:08Z"
+      "created_at": "2026-02-18T17:38:08Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_dynamic_births_windows_20260218_analyst-sql-graph_02f55ac1",
@@ -3562,7 +4428,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нет.",
       "graph_update": "нет",
-      "created_at": "2026-02-18T17:51:38Z"
+      "created_at": "2026-02-18T17:51:38Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_lookback_only_20260218_coder-flame_4ec3ec08",
@@ -3585,7 +4459,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T18:38:56Z"
+      "created_at": "2026-02-18T18:38:56Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_claim_line_id_20260218_coder-flame_ff2de867",
@@ -3608,7 +4490,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T18:42:24Z"
+      "created_at": "2026-02-18T18:42:24Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_temp5_validator_20260218_coder-general_4a13b1b5",
@@ -3631,7 +4521,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли ограничить bank_underflow_suspicions только commit_p2/commit_p3?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T18:48:45Z"
+      "created_at": "2026-02-18T18:48:45Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_SIMRUN_20260218_01_coder-flame_bbe3815c",
@@ -3654,7 +4552,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужен явный dispatch оркестратора",
       "graph_update": "нет",
-      "created_at": "2026-02-18T18:51:46Z"
+      "created_at": "2026-02-18T18:51:46Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_LOOKBACK_BANK_IMPL_20260218_coder-flame_7eb3fb44",
@@ -3677,7 +4583,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Требуется исправить слой rtc_promote_inactive_commit_v8 (read+atomic write) и перезапустить?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T18:58:16Z"
+      "created_at": "2026-02-18T18:58:16Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_LOOKBACK_BANK_IMPL_20260218_coder-flame_ecc21167",
@@ -3700,7 +4614,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли исправлять OverflowError в rtc_mp2_export.py и повторять прогоны?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T19:07:39Z"
+      "created_at": "2026-02-18T19:07:39Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_LOOKBACK_BANK_IMPL_20260218_coder-flame_f8f65c61",
@@ -3723,7 +4645,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли разбирать WARN: ops != target, но exit code=0?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T19:14:29Z"
+      "created_at": "2026-02-18T19:14:29Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_all_stream_20260219_coder-general_68881365",
@@ -3746,7 +4676,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-18T19:16:35Z"
+      "created_at": "2026-02-18T19:16:35Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_LOOKBACK_BANK_IMPL_20260218_coder-flame_1373cda5",
@@ -3769,7 +4707,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Разрешать allow_experimental_join_condition для TEMP-5 или переписать запрос?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T19:29:21Z"
+      "created_at": "2026-02-18T19:29:21Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_temp5_rerun_20260218_coder-general_ef3a7974",
@@ -3792,7 +4738,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужен ли разбор transition_claim_mismatch=2 (gb=2, day=11/23) в sim_masterv2_v9 vs sim_repairline_v9?",
       "graph_update": "нет",
-      "created_at": "2026-02-18T19:32:04Z"
+      "created_at": "2026-02-18T19:32:04Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_validation_stream_runner_20260215_coder-general_31045309",
@@ -3815,7 +4769,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-18T19:34:51Z"
+      "created_at": "2026-02-18T19:34:51Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_births_20260219_analyst-sql-graph_2dbf2de6",
@@ -3838,7 +4800,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T01:41:30Z"
+      "created_at": "2026-02-19T01:41:30Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_births_20260219_analyst-sql-graph_1ee0ba43",
@@ -3861,7 +4831,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T01:41:50Z"
+      "created_at": "2026-02-19T01:41:50Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_mi8_spawn_forensic_20260219_analyst-sql-graph_1e986d6c",
@@ -3884,7 +4862,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T01:57:21Z"
+      "created_at": "2026-02-19T01:57:21Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_mi8_births_20260219_analyst-sql-graph_17483fdb",
@@ -3907,7 +4893,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли показать все дни (включая births=0) или достаточно дней с births>0?",
       "graph_update": "нет",
-      "created_at": "2026-02-19T02:00:49Z"
+      "created_at": "2026-02-19T02:00:49Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_LOOKBACK_BANK_IMPL_20260218_coder-flame_be139e59",
@@ -3930,7 +4924,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T02:15:51Z"
+      "created_at": "2026-02-19T02:15:51Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_birth_counts_20260219_analyst-sql-graph_b60374bf",
@@ -3953,7 +4955,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-19T02:32:48Z"
+      "created_at": "2026-02-19T02:32:48Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_birth_counts_20260219_analyst-sql-graph_ae5d5508",
@@ -3976,7 +4986,15 @@
       "next_owner": "orchestrator",
       "open_questions": "нет",
       "graph_update": "нет",
-      "created_at": "2026-02-19T02:33:05Z"
+      "created_at": "2026-02-19T02:33:05Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_before_after_20260219_analyst-sql-graph_dc792d24",
@@ -3999,7 +5017,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T03:48:03Z"
+      "created_at": "2026-02-19T03:48:03Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_early_repair_20260219_analyst-sql-graph_66f44c8b",
@@ -4022,7 +5048,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T03:54:27Z"
+      "created_at": "2026-02-19T03:54:27Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_early_repair_split_20260219_analyst-sql-graph_eaab23c5",
@@ -4045,7 +5079,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T04:02:22Z"
+      "created_at": "2026-02-19T04:02:22Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_lead500_d1_20260219_analyst-sql-graph_2e4c2d6a",
@@ -4068,7 +5110,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T04:18:05Z"
+      "created_at": "2026-02-19T04:18:05Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_forensic_d1_line3_5_20260219_analyst-sql-graph_333d214d",
@@ -4091,7 +5141,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T04:21:51Z"
+      "created_at": "2026-02-19T04:21:51Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_forensic_d1_line3_5_20260219_analyst-sql-graph_892c4cc3",
@@ -4114,7 +5172,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T04:25:47Z"
+      "created_at": "2026-02-19T04:25:47Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_commit_events_lines35_20260219_analyst-sql-graph_2a07b45b",
@@ -4137,7 +5203,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T04:38:14Z"
+      "created_at": "2026-02-19T04:38:14Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_sim_masterv2_v9_source2_20260219_analyst-sql-graph_276032a5",
@@ -4160,7 +5234,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T04:49:00Z"
+      "created_at": "2026-02-19T04:49:00Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_guard_non_ops_window_20260219_coder-flame_f98995c3",
@@ -4183,7 +5265,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Когда и кем обновляется status_change_day для переходов в 7/1?",
       "graph_update": "нет",
-      "created_at": "2026-02-19T10:37:02Z"
+      "created_at": "2026-02-19T10:37:02Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_GUARD_NON_OPS_20260219_coder-flame_b110cfa6",
@@ -4206,7 +5296,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T10:41:38Z"
+      "created_at": "2026-02-19T10:41:38Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_forensic_mi8_births_20260219_analyst-sql-graph_fdec5203",
@@ -4229,7 +5327,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Почему spawn произошел при ops_d=target (для D1): нужен разбор RTC-шага/deficit до применения P4. Есть ли общий пул линий ремонта между group_by?",
       "graph_update": "нет",
-      "created_at": "2026-02-19T10:58:24Z"
+      "created_at": "2026-02-19T10:58:24Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_csv_mi8_births_20260219_analyst-sql-graph_fef06b58",
@@ -4252,7 +5358,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T11:00:47Z"
+      "created_at": "2026-02-19T11:00:47Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_mi8_births_20260219_analyst-sql-graph_5ae92ab0",
@@ -4275,7 +5389,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T11:30:20Z"
+      "created_at": "2026-02-19T11:30:20Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_remove_status_guard_20260219_coder-flame_babf2ad8",
@@ -4298,7 +5420,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T12:15:07Z"
+      "created_at": "2026-02-19T12:15:07Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_rtc_quota_window_20260219_coder-flame_1d6d95f1",
@@ -4321,7 +5451,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли оркестратору подтвердить запуск симуляций и SQL-проверок для датасетов 2025-07-04/2025-12-30?",
       "graph_update": "нет",
-      "created_at": "2026-02-19T12:39:16Z"
+      "created_at": "2026-02-19T12:39:16Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_rtc_quota_window_20260219_coder-flame_cb74738e",
@@ -4344,7 +5482,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Уточнить формулу lead для source=2 (start_day vs end_day) и требуется ли доп. диагностика дефицита ops.",
       "graph_update": "нет",
-      "created_at": "2026-02-19T12:45:47Z"
+      "created_at": "2026-02-19T12:45:47Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_rtc_quota_linefirst_20260219_coder-flame_2d827718",
@@ -4367,7 +5513,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-19T13:20:27Z"
+      "created_at": "2026-02-19T13:20:27Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_20260215_143218_coder-flame_db7bceb4",
@@ -4390,7 +5544,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужен ли повторный запуск прямо сейчас?",
       "graph_update": "нет",
-      "created_at": "2026-02-19T16:23:24Z"
+      "created_at": "2026-02-19T16:23:24Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_quota_rank_20260220_coder-flame_c0163748",
@@ -4413,7 +5575,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Требуются прогоны/валидации/SQL по запросу пользователя; нужна передача оркестратору.",
       "graph_update": "нет",
-      "created_at": "2026-02-20T04:21:38Z"
+      "created_at": "2026-02-20T04:21:38Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_quota_rank_20260220_coder-flame_6491ec06",
@@ -4436,7 +5606,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Требуются прогоны/валидации/SQL по запросу пользователя; нужна передача оркестратору.",
       "graph_update": "нет",
-      "created_at": "2026-02-20T04:21:51Z"
+      "created_at": "2026-02-20T04:21:51Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_quota_rank_20260220_coder-flame_2eb0673e",
@@ -4459,7 +5637,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T04:28:28Z"
+      "created_at": "2026-02-20T04:28:28Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_all_stream_20260219_validator-judge_81d609d0",
@@ -4482,7 +5668,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T04:30:42Z"
+      "created_at": "2026-02-20T04:30:42Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_metrics_sim_masterv2_v9_20260220_analyst-sql-graph_9c51003b",
@@ -4505,7 +5699,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T04:33:17Z"
+      "created_at": "2026-02-20T04:33:17Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_quota_rank_20260220_coder-flame_4c59917c",
@@ -4528,7 +5730,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T05:42:44Z"
+      "created_at": "2026-02-20T05:42:44Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_quota_rank_20260220_coder-flame_10362bde",
@@ -4551,7 +5761,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T05:42:55Z"
+      "created_at": "2026-02-20T05:42:55Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_births_mi8_20260220_analyst-sql-graph_cf8d3069",
@@ -4574,7 +5792,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T05:44:51Z"
+      "created_at": "2026-02-20T05:44:51Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_quota_rank_20260220_validator-judge_81d10fff",
@@ -4597,7 +5823,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T05:45:53Z"
+      "created_at": "2026-02-20T05:45:53Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_birth_window_20260220_analyst-sql-graph_80cb6ace",
@@ -4620,7 +5854,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T06:12:58Z"
+      "created_at": "2026-02-20T06:12:58Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_birth_window_20260220_analyst-sql-graph_53dd59c3",
@@ -4643,7 +5885,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Какой источник/таблица содержит status_change_day для расчёта guard_eligible?",
       "graph_update": "нет",
-      "created_at": "2026-02-20T06:19:36Z"
+      "created_at": "2026-02-20T06:19:36Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_fix_repairline_v9_20260220_coder-flame_72f7f5b6",
@@ -4666,7 +5916,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли править model_build.py для объявления bank MacroProperty, если они отсутствуют?",
       "graph_update": "нет",
-      "created_at": "2026-02-20T08:39:52Z"
+      "created_at": "2026-02-20T08:39:52Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_fix_repairline_v9_20260220_coder-flame_8da57051",
@@ -4689,7 +5947,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли повторить прогоны после восстановления ClickHouse?",
       "graph_update": "нет",
-      "created_at": "2026-02-20T08:42:06Z"
+      "created_at": "2026-02-20T08:42:06Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_fix_repairline_v9_20260220_coder-flame_4bcddea0",
@@ -4712,7 +5978,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нет.",
       "graph_update": "нет",
-      "created_at": "2026-02-20T11:14:53Z"
+      "created_at": "2026-02-20T11:14:53Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_run_20260215_143218_analyst-sql-graph_1574b923",
@@ -4735,7 +6009,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли включать/исключать group_by=0 в итоговых метриках?",
       "graph_update": "нет",
-      "created_at": "2026-02-20T11:19:10Z"
+      "created_at": "2026-02-20T11:19:10Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_birth_window_20260220_analyst-sql-graph_4b1ce04f",
@@ -4758,7 +6040,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Где в экспорте есть status_change_day (или эквивалент) для точной проверки guard по source1/source2?",
       "graph_update": "нет",
-      "created_at": "2026-02-20T11:35:33Z"
+      "created_at": "2026-02-20T11:35:33Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_birth_window_20260220_analyst-sql-graph_f9ef07e9",
@@ -4781,7 +6071,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Где в экспорте есть status_change_day (или эквивалент) для точной проверки guard по source1/source2?",
       "graph_update": "нет",
-      "created_at": "2026-02-20T11:35:57Z"
+      "created_at": "2026-02-20T11:35:57Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_repairline_breaks_20260220_analyst-sql-graph_005b940c",
@@ -4804,7 +6102,15 @@
       "next_owner": "orchestrator",
       "open_questions": "1) Какая таблица/вьюха используется в BI для «линий ремонта»?\n2) Есть ли промежуточный экспорт/интерполяция между CH и BI?\n3) Нужно ли отдельно проверять разрывы по line_id (а не по aircraft_number)?",
       "graph_update": "нет",
-      "created_at": "2026-02-20T11:57:51Z"
+      "created_at": "2026-02-20T11:57:51Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_birth_window_20260220_coder-flame_bafd1c9c",
@@ -4827,7 +6133,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T12:07:23Z"
+      "created_at": "2026-02-20T12:07:23Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_birthdays_status_change_20260220_analyst-sql-graph_a3472e7f",
@@ -4850,7 +6164,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли сводить repairline по всем group_by (общий пул) вместо раздельных значений?",
       "graph_update": "нет",
-      "created_at": "2026-02-20T12:13:14Z"
+      "created_at": "2026-02-20T12:13:14Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_fix_bank_only_rank_20260220_coder-flame_04310144",
@@ -4873,7 +6195,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Почему births v1 остались? Нужна доп. проверка ранжирования/guard на bank-only дни.",
       "graph_update": "нет",
-      "created_at": "2026-02-20T12:27:04Z"
+      "created_at": "2026-02-20T12:27:04Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_fix_bucket_committable_20260220_coder-flame_20be5217",
@@ -4896,7 +6226,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Need validator-judge run_all_stream + analyst-sql-graph SQL per request.",
       "graph_update": "нет",
-      "created_at": "2026-02-20T12:34:39Z"
+      "created_at": "2026-02-20T12:34:39Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_fix_bucket_committable_20260220_validator-judge_1457d98a",
@@ -4919,7 +6257,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T12:36:58Z"
+      "created_at": "2026-02-20T12:36:58Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_birthdays_status_change_20260220_analyst-sql-graph_8a349788",
@@ -4942,7 +6288,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T12:38:00Z"
+      "created_at": "2026-02-20T12:38:00Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_rtc_quota_banklock_20260220_coder-flame_e989d0ce",
@@ -4965,7 +6319,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T15:58:33Z"
+      "created_at": "2026-02-20T15:58:33Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_births_v9_v1v2_20260220_analyst-sql-graph_5b849963",
@@ -4988,7 +6350,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужно ли подтверждение по run_id/commit вместо version_date?",
       "graph_update": "нет",
-      "created_at": "2026-02-20T16:04:12Z"
+      "created_at": "2026-02-20T16:04:12Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_births_latest_v9_20260220_analyst-sql-graph_eaf9443e",
@@ -5011,7 +6381,15 @@
       "next_owner": "orchestrator",
       "open_questions": "N/A",
       "graph_update": "нет",
-      "created_at": "2026-02-20T16:11:54Z"
+      "created_at": "2026-02-20T16:11:54Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_births_latest_v9_20260220_analyst-sql-graph_dd7b6b6d",
@@ -5034,7 +6412,15 @@
       "next_owner": "orchestrator",
       "open_questions": "N/A",
       "graph_update": "нет",
-      "created_at": "2026-02-20T16:12:16Z"
+      "created_at": "2026-02-20T16:12:16Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_births_latest_v9_20260220_analyst-sql-graph_dafd6ef0",
@@ -5057,7 +6443,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T16:28:43Z"
+      "created_at": "2026-02-20T16:28:43Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_births_latest_v9_20260220_analyst-sql-graph_8de0539a",
@@ -5080,7 +6474,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T16:29:00Z"
+      "created_at": "2026-02-20T16:29:00Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_repairline_window_20260220_analyst-sql-graph_b2a9fb8d",
@@ -5103,7 +6505,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T16:34:34Z"
+      "created_at": "2026-02-20T16:34:34Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_repairline_window_20260220_analyst-sql-graph_54286bb0",
@@ -5126,7 +6536,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T16:34:59Z"
+      "created_at": "2026-02-20T16:34:59Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_repairline_window_20260220_analyst-sql-graph_a0552364",
@@ -5149,7 +6567,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T16:36:00Z"
+      "created_at": "2026-02-20T16:36:00Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_ready_check_20260220_analyst-sql-graph_715c9a25",
@@ -5172,7 +6598,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Подтвердить семантику 'валидного head' и трактовку min/max при count=0.",
       "graph_update": "нет",
-      "created_at": "2026-02-20T16:40:27Z"
+      "created_at": "2026-02-20T16:40:27Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_sql_ready_check_20260220_analyst-sql-graph_f123f0c7",
@@ -5195,7 +6629,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-20T17:40:03Z"
+      "created_at": "2026-02-20T17:40:03Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_ch_audit_superset_20260221T024949Z_analyst-sql-graph_bd850176",
@@ -5218,7 +6660,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нужны ли оценки по всем version_date (без фильтра) и по group_by вне (1,2)?",
       "graph_update": "нет",
-      "created_at": "2026-02-21T02:51:24Z"
+      "created_at": "2026-02-21T02:51:24Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_tools_views_20260221_coder-general_bd4addf2",
@@ -5241,7 +6691,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Где должен находиться config/agent_system/graph.json для сборки agents_viewer?",
       "graph_update": "нет",
-      "created_at": "2026-02-21T04:41:06Z"
+      "created_at": "2026-02-21T04:41:06Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_tools_views_20260221_coder-general_1780e20e",
@@ -5264,7 +6722,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-21T04:42:59Z"
+      "created_at": "2026-02-21T04:42:59Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_partition_v9_20260221_coder-general_2d24ffa3",
@@ -5287,7 +6753,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-21T04:59:26Z"
+      "created_at": "2026-02-21T04:59:26Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_tools_echarts_move_20260221_coder-general_ab53fcf3",
@@ -5310,7 +6784,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-21T05:20:21Z"
+      "created_at": "2026-02-21T05:20:21Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_tools_echarts_move_20260221_coder-general_ac063f72",
@@ -5333,7 +6815,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-21T05:26:51Z"
+      "created_at": "2026-02-21T05:26:51Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_partition_v9_20260221_coder-flame_74906d9f",
@@ -5356,7 +6846,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-21T05:28:28Z"
+      "created_at": "2026-02-21T05:28:28Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_partition_v9_20260221_coder-flame_3f805b79",
@@ -5379,7 +6877,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-21T05:28:47Z"
+      "created_at": "2026-02-21T05:28:47Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_gantt_mvp_20260221_coder-general_09afc9c9",
@@ -5402,7 +6908,15 @@
       "next_owner": "orchestrator",
       "open_questions": "Нет",
       "graph_update": "нет",
-      "created_at": "2026-02-21T05:32:59Z"
+      "created_at": "2026-02-21T05:32:59Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_W_gantt_mvp_20260221_coder-general_a5f686c0",
@@ -5425,7 +6939,15 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-21T05:35:16Z"
+      "created_at": "2026-02-21T05:35:16Z",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass."
     },
     {
       "handoff_id": "handoff_ch_audit_superset_20260221T024949Z_coder-general_48c3af29",
@@ -5444,8 +6966,70 @@
       "approval_gate_id": "",
       "approval_status": "",
       "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Backfill2.1 standard: medium-risk legacy handoff; requires compliance review for human-gate decision.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Backfill2.1 standard: medium-risk plan inferred from Changes; refine manually if reused.",
+      "evidence_pack": "Backfill2.1 standard: evidence source=Facts/Changes in legacy record.",
+      "compliance_checklist": "Backfill2.1 standard: policy_check=pending; human_gate=conditional; traceability=pass.",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "нет",
+      "created_at": "2026-02-21T12:32:14Z"
+    },
+    {
+      "handoff_id": "handoff_W_superset_27_20260222_coder-general_1eed28c5",
+      "workflow_id": "W_superset_27_20260222",
+      "agent": "coder-general",
+      "user_goal": "Нужно применить согласованный фикс в Superset dashboard 27 для чартов 242 и 243.",
+      "goal": "Нужно применить согласованный фикс в Superset dashboard 27 для чартов 242 и 243.",
+      "changes": "Superset chart 242/243: params row_limit=70000, order_desc=false, x_axis_sort_asc=true; query_context queries[0].orderby -> ASC по времени (toStartOfDay(toDateTime(day_date))).",
+      "facts": "GET /api/v1/chart/242,243: row_limit=70000; orderby=toStartOfDay(toDateTime(day_date)) ASC. POST /api/v1/chart/data (chart 242, P1D, 2026-01-01:2026-12-31, row_limit 70000): rows=364, статус '4' присутствует и ненулевой. GET /api/v1/dashboard/27: native_filter time_grain defaults для 'Гранулярность 1/2' = P1D (Day).",
+      "assumptions": "sort_by_metric отсутствует в params (не менялся); дефолт P1Y на дашборде не подтверждён — нужна отдельная правка, если требуется P1Y.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_superset_27_20260222:2026-02-22T03:32:01Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
       "risk_tier": "low",
-      "risk_reasons": "Точечные изменения параметров Superset без смены метрик/фильтров/данных.",
+      "risk_reasons": "локальные изменения настроек чарта, обратимы, без правок кода/SSoT",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "Дефолт timegrain в дашборде сейчас P1D; если нужен P1Y, потребуется отдельное изменение.",
+      "next_owner": "orchestrator",
+      "open_questions": "Нужно ли править native_filter time_grain на дашборде 27 на P1Y?",
+      "graph_update": "нет",
+      "created_at": "2026-02-22T03:32:01Z"
+    },
+    {
+      "handoff_id": "handoff_W_superset_27_20260222_coder-general_a8f4ba59",
+      "workflow_id": "W_superset_27_20260222",
+      "agent": "coder-general",
+      "user_goal": "Нужно только одно точечное изменение в Superset dashboard 27: вернуть дефолт timegrain на Year.\n\nСделай через API:\n- dashboard id 27, json_metadata.native_filter_configuration\n- для фильтров с именами \"Гранулярность 1\" и \"Гранулярность 2\":\n  - defaultDataMask.extraFormData.time_grain_sqla = \"P1Y\"\n  - defaultDataMask.filterState.label = \"Year\"\n  - defaultDataMask.filterState.value = [\"P1Y\"]\n\nНичего другого не менять.\n\nПроверка:\n- Прочитать dashboard 27 после PUT и показать оба значения (должны быть P1Y/Year).\n\nВерни короткий handoff с результатом.",
+      "goal": "Нужно только одно точечное изменение в Superset dashboard 27: вернуть дефолт timegrain на Year.\n\nСделай через API:\n- dashboard id 27, json_metadata.native_filter_configuration\n- для фильтров с именами \"Гранулярность 1\" и \"Гранулярность 2\":\n  - defaultDataMask.extraFormData.time_grain_sqla = \"P1Y\"\n  - defaultDataMask.filterState.label = \"Year\"\n  - defaultDataMask.filterState.value = [\"P1Y\"]\n\nНичего другого не менять.\n\nПроверка:\n- Прочитать dashboard 27 после PUT и показать оба значения (должны быть P1Y/Year).\n\nВерни короткий handoff с результатом.",
+      "changes": "Dashboard 27 json_metadata.native_filter_configuration: для фильтров 'Гранулярность 1/2' defaultDataMask.extraFormData.time_grain_sqla=P1Y; defaultDataMask.filterState.label=Year; defaultDataMask.filterState.value=[P1Y].",
+      "facts": "GET /api/v1/dashboard/27 после PUT: фильтр 'Гранулярность 1' time_grain_sqla=P1Y, label=Year, value=[P1Y]; фильтр 'Гранулярность 2' time_grain_sqla=P1Y, label=Year, value=[P1Y].",
+      "assumptions": "Superset UI читает обновлённый json_metadata без доп. кеширования. Risks if false: потребуется сброс кэша/переподключение сессии.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:superset_27_timegrain_year:2026-02-22T03:36:29Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "Локальная правка метаданных дашборда, обратима, без затрагивания кода/SSoT.",
       "risk_owner": "orchestrator",
       "risk_validated_by": "N/A",
       "human_gate_required": "no",
@@ -5456,7 +7040,38 @@
       "next_owner": "orchestrator",
       "open_questions": "",
       "graph_update": "нет",
-      "created_at": "2026-02-21T12:32:14Z"
+      "created_at": "2026-02-22T03:36:29Z"
+    },
+    {
+      "handoff_id": "handoff_W_superset_242_243_P1Y_20260222T033838Z_coder-general_8039074f",
+      "workflow_id": "W_superset_242_243_P1Y_20260222T033838Z",
+      "agent": "coder-general",
+      "user_goal": "Нужно довести конфиг chart 242 и 243 в Superset:\n\nТекущее состояние:\n- row_limit/order fix уже применён (нужно сохранить).\n- в params.time_grain_sqla у обоих сейчас P1D (это нужно поменять).\n\nСделай через API:\n1) Для chart 242 и 243:\n   - params.time_grain_sqla = \"P1Y\"\n   - query_context.form_data.time_grain_sqla = \"P1Y\"\n   - query_context.queries[0].extras.time_grain_sqla = \"P1Y\"\n   - query_context.queries[0].columns[0].timeGrain = \"P1Y\" (для time колонки)\n2) Сохранить без изменений:\n   - params.row_limit=70000\n   - x_axis_sort_asc=true\n   - orderby по времени ASC в query_context\n3) Проверка:\n   - GET chart 242/243 и подтвердить time_grain_sqla=P1Y + row_limit=70000.",
+      "goal": "Нужно довести конфиг chart 242 и 243 в Superset:\n\nТекущее состояние:\n- row_limit/order fix уже применён (нужно сохранить).\n- в params.time_grain_sqla у обоих сейчас P1D (это нужно поменять).\n\nСделай через API:\n1) Для chart 242 и 243:\n   - params.time_grain_sqla = \"P1Y\"\n   - query_context.form_data.time_grain_sqla = \"P1Y\"\n   - query_context.queries[0].extras.time_grain_sqla = \"P1Y\"\n   - query_context.queries[0].columns[0].timeGrain = \"P1Y\" (для time колонки)\n2) Сохранить без изменений:\n   - params.row_limit=70000\n   - x_axis_sort_asc=true\n   - orderby по времени ASC в query_context\n3) Проверка:\n   - GET chart 242/243 и подтвердить time_grain_sqla=P1Y + row_limit=70000.",
+      "changes": "Superset chart 242/243: params.time_grain_sqla=P1Y; query_context.form_data.time_grain_sqla=P1Y; queries[0].extras.time_grain_sqla=P1Y; queries[0].columns[0].timeGrain=P1Y.",
+      "facts": "GET /api/v1/chart/242,243 после PUT: params.time_grain_sqla=P1Y; row_limit=70000; x_axis_sort_asc=true; query_context form_data/extras time_grain_sqla=P1Y; columns[0].timeGrain=P1Y; orderby ASC по time.",
+      "assumptions": "Superset UI применяет обновлённые params/query_context без доп. кеширования. Risks if false: может потребоваться сброс кеша/перелогин.",
+      "evidence": "Superset API GET /api/v1/chart/242,243",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_superset_242_243_P1Y_20260222T033838Z:2026-02-22T03:38:38Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "Локальная правка настроек чарта через API, обратима",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "нет",
+      "created_at": "2026-02-22T03:39:33Z"
     }
   ],
   "contexts": [
@@ -6602,6 +8217,24 @@
       "agent": "coder-general",
       "created_at": "2026-02-21T05:31:07Z",
       "updated_at": "2026-02-21T05:34:42Z"
+    },
+    {
+      "context_id": "ctx_W_superset_27_20260222_phase_start_0583001c",
+      "workflow_id": "W_superset_27_20260222",
+      "context_type": "phase_start",
+      "content": "phase_start: dashboard 27 native timegrain defaults -> Year (P1Y); trace_id=wf:superset_27_timegrain_year:2026-02-22T03:35:39Z; plan_step_id=P1",
+      "agent": "coder-general",
+      "created_at": "2026-02-22T03:27:24Z",
+      "updated_at": "2026-02-22T03:35:39Z"
+    },
+    {
+      "context_id": "ctx_W_superset_242_243_P1Y_20260222T033838Z_phase_start_acd468e0",
+      "workflow_id": "W_superset_242_243_P1Y_20260222T033838Z",
+      "context_type": "phase_start",
+      "content": "phase_start: update Superset charts 242/243 time_grain_sqla->P1Y; trace_id=wf:W_superset_242_243_P1Y_20260222T033838Z:2026-02-22T03:38:38Z; plan_step_id=P1",
+      "agent": "coder-general",
+      "created_at": "2026-02-22T03:38:51Z",
+      "updated_at": "2026-02-22T03:38:51Z"
     }
   ]
 }
