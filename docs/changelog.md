@@ -1,5 +1,24 @@
 # Changelog
 
+## [23-02-2026] - RepairLine occupancy унифицирован с master-SSoT + подготовка графа к новой семантике
+
+### Изменения
+- `code/sim_v2/messaging/rtc_repairline_export.py`:
+  - occupancy (`aircraft_number`, `group_by`) в `sim_repairline_v9` переведён на единую семантику из `sim_masterv2_v9` (claim-based + claimless repair episodes);
+  - runtime `acn/group_by` линии исключён из роли доменного источника occupancy;
+  - для конфликтов/неоднозначностей добавлены строгие ошибки данных (без fallback).
+- `config/transitions/quota_rules.json`:
+  - добавлен шаг `repairline_occupancy_overlay_export` в `quota_flow`;
+  - добавлено правило `repairline_occupancy_ssot_master` в `repair_line_rules`.
+- `config/transitions/transitions_rules.json`:
+  - обновлены архитектурные notes в `RTCLayer`/`Rule` о том, что claim metadata является SSOT для восстановления repairline occupancy на этапе экспорта.
+- `docs/validation.md`:
+  - добавлена секция о единой семантике occupancy в `sim_repairline_v9`.
+
+### Контекст
+- Исправлен архитектурный разрыв, когда `sim_masterv2_v9` и `sim_repairline_v9` описывали ремонт разными моделями времени (lookback vs runtime telemetry).
+- Цель: единая интерпретация ремонтов для BI и валидаций без двойной трактовки.
+
 ## [21-02-2026] - ClickHouse: нормальное партицирование v9 runtime-таблиц + BI runbook
 
 ### Изменения

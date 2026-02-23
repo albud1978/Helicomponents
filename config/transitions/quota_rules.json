@@ -1,6 +1,6 @@
 {
   "version": 8,
-  "architecture": "LIMITER V8 quota (MessageBucket + RepairLine + bank windows)",
+  "architecture": "LIMITER V8 quota (MessageBucket + RepairLine + bank windows + master-SSoT occupancy export)",
   "quota_flow": [
     {
       "id": "reset_flags",
@@ -55,6 +55,12 @@
       "owner_module": "rtc_spawn_dynamic_mgr_v8",
       "expr": "deficit = target - curr_ops - used(P1,P2,P3 commits); write spawn_dynamic_*[day]",
       "notes": "P4: динамический spawn при оставшемся дефиците."
+    },
+    {
+      "id": "repairline_occupancy_overlay_export",
+      "owner_module": "rtc_repairline_export",
+      "expr": "occupancy(day,line) := claim-based segments U claimless master episodes; runtime line telemetry kept as-is",
+      "notes": "Единая семантика BI/валидации: aircraft occupancy в sim_repairline_v9 строится из sim_masterv2_v9 (claim SSOT), runtime acn/gb не источник occupancy."
     }
   ],
   "selection_rules": [
@@ -114,6 +120,11 @@
       "id": "source2_bank_lock_binary",
       "expr": "bank_lock: exchange(1u) on acquire; release exchange(0u); no restore of foreign lock",
       "notes": "Бинарный lock исключает race/залипание и позволяет стабильный source2 commit в bank-only днях."
+    },
+    {
+      "id": "repairline_occupancy_ssot_master",
+      "expr": "for aircraft_number!=0: group_by/occupancy are reconstructed from sim_master claims and repair episodes, not runtime line acn",
+      "notes": "Запрещена двойная трактовка: runtime acn/gb — телеметрия линии; доменная occupancy для repairline — только master-SSoT."
     }
   ],
   "spawn_rules": [

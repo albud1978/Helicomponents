@@ -163,3 +163,11 @@ activate.sh
 # Keep generated Python cache ignored inside .cursor
 .cursor/**/__pycache__/
 .cursor/**/*.py[cod]
+
+# ============================================================
+# Local Superset sandbox (do not commit)
+# ============================================================
+.superset-build/
+deploy/superset-local/
+superset-frontend/plugins/plugin-chart-echarts6-gantt/
+.cursor/hooks/connection_fail.flag

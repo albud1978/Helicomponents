@@ -1123,11 +1123,13 @@ class LimiterV8Orchestrator:
             agent = repair_pop.at(i)
             acn = agent.getVariableUInt("aircraft_number")
             gb = agent.getVariableUInt("group_by")
+            repair_time = agent.getVariableUInt("repair_time")
+            exit_date = agent.getVariableUInt("exit_date")
             rl_pop[i].setVariableUInt("aircraft_number", acn)
             rl_pop[i].setVariableUInt("free_days", 0)
             rl_pop[i].setVariableUInt("last_acn", acn)
             rl_pop[i].setVariableUInt("last_day", 0)
-            day0_map[i] = (acn, int(gb))
+            day0_map[i] = (acn, int(gb), int(repair_time), int(exit_date))
         
         # Передаём mapping занятых линий в HF_InitRepairLines
         # чтобы repair_line_rt_mp[i] был корректно инициализирован
@@ -1608,9 +1610,9 @@ class HF_SpawnDiag(fg.HostFunction):
 class HF_InitRepairLines(fg.HostFunction):
     """HostFunction для инициализации RepairLine MacroProperty.
     
-    day0_map: {line_id: (acn, group_by)} — линии, занятые day-0 repair агентами.
-    Для таких линий устанавливаем mp_rt = repair_time (по group_by),
-    чтобы автоосвобождение (rt > 0 && free_days >= rt) корректно срабатывало.
+    day0_map: {line_id: (acn, group_by, repair_time, exit_date)} — линии, занятые day-0 repair агентами.
+    Для таких линий вычисляем стартовые free_days и mp_rt так, чтобы автоосвобождение
+    (rt > 0 && free_days >= rt) совпадало с индивидуальным exit_date.
     """
     
     def __init__(self, repair_quota: int, day0_map: dict = None,
@@ -1654,12 +1656,24 @@ class HF_InitRepairLines(fg.HostFunction):
                 mp_last_day[i] = 0
             elif i in self.day0_map:
                 # Линия занята day-0 repair агентом
-                acn, gb = self.day0_map[i]
-                rt = self.mi8_rt if gb == 1 else self.mi17_rt
-                mp_days[i] = 0       # repair только начался
-                mp_acn[i] = acn      # линия занята
-                mp_gb[i] = int(gb)   # тип (group_by)
-                mp_rt[i] = rt        # KEY FIX: позволяет auto-free через rt дней
+                entry = self.day0_map[i]
+                if len(entry) >= 4:
+                    acn, gb, rt_agent, exit_date = entry
+                else:
+                    acn, gb = entry
+                    rt_agent = 0
+                    exit_date = 0
+                gb = int(gb)
+                rt = int(rt_agent) if int(rt_agent) > 0 else (self.mi8_rt if gb == 1 else self.mi17_rt)
+                remaining_days = int(exit_date) if int(exit_date) > 0 else 0
+                rt_eff = remaining_days if remaining_days > rt else rt
+                initial_free_days = rt_eff - remaining_days
+                # При таком старте free_days + remaining_days == rt_eff, значит release (free_days>=rt_eff)
+                # срабатывает именно в exit_date для каждого борта.
+                mp_days[i] = int(initial_free_days)
+                mp_acn[i] = acn
+                mp_gb[i] = gb
+                mp_rt[i] = int(rt_eff)
                 mp_last_acn[i] = acn
                 mp_last_day[i] = 0
                 occupied_count += 1

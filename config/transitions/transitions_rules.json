@@ -1,6 +1,6 @@
 {
   "version": 10,
-  "architecture": "LIMITER V8 (message-only quota + RepairLine bank + MP2 export)",
+  "architecture": "LIMITER V8 (message-only quota + RepairLine bank + MP2 export + master-SSoT repairline occupancy overlay)",
   "matrix": {
     "from": "state",
     "to": "state"
@@ -105,7 +105,7 @@
     { "order": 31, "phase": "Phase 3 apply", "layer": "v7_unsvc_to_ops", "function": "rtc_unsvc_to_ops_v7", "state": "7->2", "notes": "Применение P2 commit." },
     { "order": 32, "phase": "Phase 3 apply", "layer": "v7_inactive_to_ops", "function": "rtc_inactive_to_ops_v7", "state": "1->2", "notes": "Применение P3 commit." },
     { "order": 33, "phase": "Phase 3 apply", "layer": "v8_repair_line_apply_assignment", "function": "rtc_repair_line_apply_assignment_v8", "state": "RepairLine", "notes": "Финализация line assignment для telemetry." },
-    { "order": 34, "phase": "Telemetry", "layer": "v8_repair_line_export", "function": "rtc_repair_line_export_v8", "state": "RepairLine", "notes": "Экспорт free_days/repair_time/acn/bank telemetry в RL buffers." },
+    { "order": 34, "phase": "Telemetry", "layer": "v8_repair_line_export", "function": "rtc_repair_line_export_v8", "state": "RepairLine", "notes": "Экспорт runtime telemetry линии (free_days/repair_time/acn/bank) в RL buffers; occupancy-семантика формируется на этапе CH export из master claim SSOT." },
     { "order": 35, "phase": "Post quota recount", "layer": "v8_reset_buffers_post_quota", "function": "rtc_reset_quota_v8_post_*", "state": "all", "notes": "Сброс post-quota count буферов." },
     { "order": 36, "phase": "Post quota recount", "layer": "v8_count_agents_post_quota", "function": "rtc_count_*_v8_post", "state": "ops/svc/unsvc/inactive", "notes": "Пересчет для корректного spawn." },
     { "order": 37, "phase": "Spawn recount", "layer": "v8_reset_buffers_spawn", "function": "rtc_reset_quota_v8_spawn_*", "state": "all", "notes": "Сброс spawn count буферов." },
@@ -117,7 +117,7 @@
     { "order": 43, "phase": "Limiter", "layer": "L_limiter_min", "function": "rtc_compute_min_limiter", "state": "2->2", "notes": "Подготовка mp_min_limiter для следующего day advance." },
     { "order": 44, "phase": "MP2 export", "layer": "layer_mp2_write", "function": "rtc_mp2_write_*", "state": "all active", "notes": "Запись агентных полей в MP2 буферы." },
     { "order": 45, "phase": "MP2 export", "layer": "layer_mp2_drain", "function": "HF_MP2_Drain", "state": "host", "notes": "Drain MP2 буферов в host dataframes." },
-    { "order": 46, "phase": "RL export", "layer": "layer_repairline_drain", "function": "HF_RepairLineDrain", "state": "host", "notes": "Drain RL буферов (включая bank telemetry)." },
+    { "order": 46, "phase": "RL export", "layer": "layer_repairline_drain", "function": "HF_RepairLineDrain", "state": "host", "notes": "Drain RL буферов (включая bank telemetry); при записи в sim_repairline_v9 occupancy накладывается из sim_masterv2_v9 (claim/claimless episodes)." },
     { "order": 47, "phase": "Sync day", "layer": "layer_sync_day_v5", "function": "HF_SyncDayV5", "state": "host", "notes": "Совместимость и финальный sync дня для simulate()." }
   ],
   "rules": [
@@ -199,7 +199,7 @@
         "notes": "Source1 guard: status_change_day <= current_day - repair_time; source2 guard: status_change_day <= window_start."
       },
       "owner_module": "rtc_quota_v8",
-      "notes": "Commit-порядок: source1(today best-fit) -> source2(bank newest-first, binary lock)."
+      "notes": "Commit-порядок: source1(today best-fit) -> source2(bank newest-first, binary lock). Claim metadata является SSOT для восстановления repairline occupancy в export."
     },
     {
       "id": "p3_inactive_to_ops_v8",
@@ -215,7 +215,7 @@
         "notes": "Source1/source2 guards и line-first commit аналогичны P2."
       },
       "owner_module": "rtc_quota_v8",
-      "notes": "Приоритет внутри QM type-first: Mi-17(P2->P3) затем Mi-8(P2->P3)."
+      "notes": "Приоритет внутри QM type-first: Mi-17(P2->P3) затем Mi-8(P2->P3). Claim metadata является SSOT для восстановления repairline occupancy в export."
     },
     {
       "id": "repair_to_svc_v8",
