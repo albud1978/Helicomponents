@@ -17,6 +17,14 @@
 - `sim_repairline_v9`: `PARTITION BY (version_date, toYYYYMM(day_date))`
 - Текущие `ORDER BY` сохранены для совместимости с существующими SQL и валидаторами.
 
+## Семантика occupancy в `sim_repairline_v9`
+- Единый источник правды по занятости ремонта (`aircraft_number`, `group_by`) — `sim_masterv2_v9`.
+- В `sim_repairline_v9` occupancy формируется как overlay:
+  - claim-based сегменты (`repair_claim_start_day/end_day/line_id/source`);
+  - claimless repair-эпизоды из траектории `status/pre_status` в master.
+- Runtime `acn/group_by` линии больше не трактуется как доменная occupancy (это только телеметрия слоя RepairLine).
+- Для строк с `aircraft_number != 0` допускается только детерминированное сопоставление с master; конфликт/неоднозначность трактуется как ошибка данных.
+
 ### Важно по применению DDL
 - Изменение partition key в ClickHouse не применяется через `ALTER`.
 - Для действующих таблиц обязателен цикл: `DROP TABLE` -> `CREATE TABLE` -> повторная загрузка данных.

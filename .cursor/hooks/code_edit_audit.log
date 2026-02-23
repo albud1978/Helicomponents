@@ -1024,3 +1024,66 @@
   edit[5] old='' new='            if h.get("plan_card"):\n                print(f"PlanCard: {_short(h.get('plan_card'))}")\n            if h.get'
   edit[6] old='' new='    parser.add_argument("--risk-tier", type=str, help="Risk tier (low|medium|high)")\n    parser.add_argument("--risk-rea'
 
+[2026-02-22 20:02:06 UTC] conv=fad3769c gen=cb3fc599 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='' new='    master_rows = ch_client.execute(\n        "SELECT day_u16, aircraft_number, group_by "\n        "FROM sim_masterv2_v9 '
+  edit[1] old='    full_rows = [\n        (version_date_int, version_id, day, lid, fd, rt, acn, gb, bank_count, bank_head_start, bank_he' new='    full_rows = []\n    for day, lid, fd, rt, acn, gb, bank_count, bank_head_start, bank_head_end in rows:\n        use_gb'
+  edit[2] old='' new='    print(\n        f"  [RL Export] reconcile: mapped={mapped}, "\n        f"fallback={fallback}, conflicts={conflict_rows'
+
+[2026-02-22 20:04:35 UTC] conv=fad3769c gen=775072f0 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='    conflict_keys = set()' new=''
+  edit[1] old='        if key in conflict_keys:\n            continue\n        if key in master_map:\n            if master_map[key] != gb' new='        if key in master_map and master_map[key] != gb_val:\n            raise RuntimeError(\n                "sim_masterv'
+  edit[2] old='    mapped = 0\n    fallback = 0\n    conflict_rows = 0' new='    rows_with_acn = 0\n    rows_mapped = 0'
+  edit[3] old='            key = (day, acn)\n            if key in master_map:\n                use_gb = master_map[key]\n                ' new='            rows_with_acn += 1\n            key = (int(day), int(acn))\n            if key not in master_map:\n            '
+  edit[4] old='        f"  [RL Export] reconcile: mapped={mapped}, "\n        f"fallback={fallback}, conflicts={conflict_rows}"' new='        f"  [RL Export] reconcile: rows_with_acn={rows_with_acn}, "\n        f"rows_mapped={rows_mapped}"'
+
+[2026-02-22 20:16:28 UTC] conv=fad3769c gen=775072f0 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='        "SELECT day_u16, aircraft_number, group_by "' new='        "SELECT aircraft_number, group_by "'
+  edit[1] old='    master_map = {}\n    for day_u16, acn, gb in master_rows:\n        key = (int(day_u16), int(acn))' new='    acn_map = {}\n    for acn, gb in master_rows:\n        acn_val = int(acn)'
+  edit[2] old='        if key in master_map and master_map[key] != gb_val:' new='        if acn_val in acn_map and acn_map[acn_val] != gb_val:'
+  edit[3] old='                "sim_masterv2_v9 group_by conflict for key="\n                f"{key}: {master_map[key]} vs {gb_val}"' new='                "sim_masterv2_v9 group_by conflict for aircraft_number="\n                f"{acn_val}: {acn_map[acn_val]}'
+  edit[4] old='        master_map[key] = gb_val' new='        acn_map[acn_val] = gb_val'
+  edit[5] old='' new='    unique_acn_mapped = set()'
+  edit[6] old='            key = (int(day), int(acn))\n            if key not in master_map:' new='            acn_val = int(acn)\n            if acn_val not in acn_map:'
+  edit[7] old='                    "sim_masterv2_v9 missing group_by for key="\n                    f"{key} (version_date={version_date_' new='                    "sim_masterv2_v9 missing group_by for aircraft_number="\n                    f"{acn_val} (version_dat'
+  edit[8] old='            use_gb = master_map[key]' new='            use_gb = acn_map[acn_val]'
+  edit[9] old='' new='            unique_acn_mapped.add(acn_val)'
+  edit[10] old='        f"rows_mapped={rows_mapped}"' new='        f"rows_mapped={rows_mapped}, unique_acn_mapped={len(unique_acn_mapped)}"'
+
+[2026-02-23 17:45:06 UTC] conv=fad3769c gen=244fdd55 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='            repair_time = agent.getVariableUInt("repair_time")\n            exit_date = agent.getVariableUInt("exit_date"'
+  edit[1] old='            day0_map[i] = (acn, int(gb))' new='            day0_map[i] = (acn, int(gb), int(repair_time), int(exit_date))'
+  edit[2] old='    day0_map: {line_id: (acn, group_by)} — линии, занятые day-0 repair агентами.\n    Для таких линий устанавливаем mp_rt' new='    day0_map: {line_id: (acn, group_by, repair_time, exit_date)} — линии, занятые day-0 repair агентами.\n    Для таких л'
+  edit[3] old='                acn, gb = self.day0_map[i]\n                rt = self.mi8_rt if gb == 1 else self.mi17_rt\n               ' new='                entry = self.day0_map[i]\n                if len(entry) >= 4:\n                    acn, gb, rt_agent, exit'
+
+[2026-02-23 18:32:37 UTC] conv=fad3769c gen=a857daa4 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='Lookback-only: aircraft_number — runtime telemetry, не используется как forward occupancy.\nМетрики ремонта строятся по f' new='Lookback-only: occupancy (aircraft_number/group_by) берётся из sim_masterv2_v9.\nRuntime telemetry (acn/gb) не использует'
+  edit[1] old='' new='from collections import defaultdict'
+
+[2026-02-23 18:32:42 UTC] conv=fad3769c gen=a857daa4 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='' new='def _build_repair_episodes(days_sorted):\n    """\n    days_sorted: sorted list of day_u16 with status_id=4 for one aircra'
+
+[2026-02-23 18:33:11 UTC] conv=fad3769c gen=a857daa4 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='    Lookback-only: aircraft_number — runtime telemetry (не используется как forward occupancy),\n    group_by и bank tele' new='    Lookback-only: occupancy (aircraft_number/group_by) детерминированно строится из sim_masterv2_v9.\n    Runtime teleme'
+  edit[1] old='        "SELECT aircraft_number, group_by "' new='        "SELECT aircraft_number, group_by, day_u16, status_id, pre_status_id, "\n        "commit_p2, commit_p3, repair_cl'
+  edit[2] old='' new=''
+  edit[3] old='    for acn, gb in master_rows:' new='    repair_days_by_acn = defaultdict(list)\n    claim_events = []\n    for (\n        acn, gb, day, status_id, _pre_status_'
+  edit[4] old='    rows_with_acn = 0\n    rows_mapped = 0\n    unique_acn_mapped = set()' new='        day_val = int(day)\n        if int(status_id) == 4:\n            repair_days_by_acn[acn_val].append(day_val)'
+  edit[5] old='    # Добавляем version_date и version_id к каждой строке\n    full_rows = []\n    for day, lid, fd, rt, acn, gb, bank_cou' new='        if int(commit_p2) == 1 or int(commit_p3) == 1:\n            claim_source_val = int(claim_source)\n            line'
+  edit[6] old='                    "sim_masterv2_v9 missing group_by for aircraft_number="\n                    f"{acn_val} (version_dat' new='                    "sim_repairline_v9 occupancy conflict: "\n                    f"day={day_val}, line_id={line_val}, "\n'
+  edit[7] old='            use_gb = acn_map[acn_val]\n            rows_mapped += 1\n            unique_acn_mapped.add(acn_val)' new='            return False\n        occupancy_map[key] = (acn_val, gb_val)\n        return True\n\n    # Claim-based occupancy'
+  edit[8] old='            (version_date_int, version_id, day, lid, fd, rt, acn, use_gb, bank_count, bank_head_start, bank_head_end)' new='            (\n                version_date_int,\n                version_id,\n                day,\n                lid,\n  '
+  edit[9] old='        f"  [RL Export] reconcile: rows_with_acn={rows_with_acn}, "\n        f"rows_mapped={rows_mapped}, unique_acn_mapp' new='        f"  [RL Export] reconcile: total_rows={total_rows}, painted_rows={painted_rows}, "\n        f"claim_rows_painted='
+
+[2026-02-23 18:42:48 UTC] conv=fad3769c gen=a857daa4 file=code/sim_v2/messaging/rtc_repairline_export.py
+  edit[0] old='def _build_repair_episodes(days_sorted):' new='def _build_repair_episodes(master_trace):'
+  edit[1] old='    days_sorted: sorted list of day_u16 with status_id=4 for one aircraft.' new='    master_trace: list of (day_u16, status_id, pre_status_id) sorted by day_u16.'
+  edit[2] old='    if not days_sorted:' new='    if not master_trace:'
+  edit[3] old='' new=''
+  edit[4] old='    start = days_sorted[0]\n    prev = days_sorted[0]\n    for day in days_sorted[1:]:\n        if day == prev + 1:\n       ' new='    in_episode = False\n    start_day = None\n    last_day = None\n\n    for day_val, status_id, pre_status_id in master_tra'
+  edit[5] old='        episodes.append((start, prev + 1))\n        start = day\n        prev = day\n    episodes.append((start, prev + 1))' new='\n        if in_episode and pre_val == 4 and status_val in (2, 3):\n            episodes.append((start_day, day_val))\n    '
+  edit[6] old='    repair_days_by_acn = defaultdict(list)' new='    master_trace_by_acn = defaultdict(list)'
+  edit[7] old='        acn, gb, day, status_id, _pre_status_id, commit_p2, commit_p3,' new='        acn, gb, day, status_id, pre_status_id, commit_p2, commit_p3,'
+  edit[8] old='        if int(status_id) == 4:\n            repair_days_by_acn[acn_val].append(day_val)' new='        status_val = int(status_id)\n        pre_val = int(pre_status_id)\n        master_trace_by_acn[acn_val].append((da'
+  edit[9] old='    for acn_val, days in repair_days_by_acn.items():\n        if not days:' new='    for acn_val, trace in master_trace_by_acn.items():\n        if not trace:'
+  edit[10] old='        days_sorted = sorted(set(days))\n        for ep_start, ep_end in _build_repair_episodes(days_sorted):' new='        trace_sorted = sorted(trace, key=lambda item: item[0])\n        for ep_start, ep_end in _build_repair_episodes(tr'
+

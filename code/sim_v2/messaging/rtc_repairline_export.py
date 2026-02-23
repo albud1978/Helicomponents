@@ -10,12 +10,14 @@ HF_RepairLineDrain читает буферы на финальном шаге.
 interpolate_repairline_daily() разворачивает адаптивные шаги в ежедневную матрицу.
 export_repairline_to_ch() отправляет результат в ClickHouse (sim_repairline_v9).
 
-Lookback-only: aircraft_number — runtime telemetry, не используется как forward occupancy.
-Метрики ремонта строятся по free_days и repair_time, group_by и bank telemetry сохраняются из снимка линии.
+Lookback-only: occupancy (aircraft_number/group_by) берётся из sim_masterv2_v9.
+Runtime telemetry (acn/gb) не используется как источник occupancy, только для определения line_id
+в claimless эпизодах. Метрики ремонта строятся по free_days и repair_time, bank telemetry сохраняются.
 """
 
 import sys
 import os
+from collections import defaultdict
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from model_build import MAX_EXPORT_STEPS, REPAIR_LINES_MAX, RL_BUF_SIZE
 
@@ -186,6 +188,41 @@ def interpolate_repairline_daily(data, repair_quota):
     return rows
 
 
+def _build_repair_episodes(master_trace):
+    """
+    master_trace: list of (day_u16, status_id, pre_status_id) sorted by day_u16.
+    Returns list of (start_day, end_day) with end exclusive.
+    """
+    if not master_trace:
+        return []
+
+    episodes = []
+    in_episode = False
+    start_day = None
+    last_day = None
+
+    for day_val, status_id, pre_status_id in master_trace:
+        day_val = int(day_val)
+        status_val = int(status_id)
+        pre_val = int(pre_status_id)
+        last_day = day_val
+
+        if not in_episode and status_val == 4:
+            in_episode = True
+            start_day = day_val
+            continue
+
+        if in_episode and pre_val == 4 and status_val in (2, 3):
+            episodes.append((start_day, day_val))
+            in_episode = False
+            start_day = None
+
+    if in_episode and start_day is not None:
+        episodes.append((start_day, last_day + 1))
+
+    return episodes
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Экспорт в ClickHouse
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -223,8 +260,9 @@ def export_repairline_to_ch(ch_client, rows, version_date_int, version_id, drop_
         version_id: int
         drop_table: bool — дропнуть таблицу перед созданием
 
-    Lookback-only: aircraft_number — runtime telemetry (не используется как forward occupancy),
-    group_by и bank telemetry сохраняются из GPU-снимка линии.
+    Lookback-only: occupancy (aircraft_number/group_by) детерминированно строится из sim_masterv2_v9.
+    Runtime telemetry (acn/gb) не используется как источник occupancy, только для выбора line_id
+    для claimless эпизодов. bank telemetry сохраняется из GPU-снимка линии.
     """
     if drop_table:
         ch_client.execute("DROP TABLE IF EXISTS sim_repairline_v9")
@@ -257,11 +295,152 @@ def export_repairline_to_ch(ch_client, rows, version_date_int, version_id, drop_
         "ADD COLUMN IF NOT EXISTS bank_head_end UInt32"
     )
 
+    master_rows = ch_client.execute(
+        "SELECT aircraft_number, group_by, day_u16, status_id, pre_status_id, "
+        "commit_p2, commit_p3, repair_claim_line_id, repair_claim_start_day, "
+        "repair_claim_end_day, repair_claim_source "
+        "FROM sim_masterv2_v9 "
+        "WHERE version_date=%(vd)s AND version_id=%(vid)s",
+        {'vd': version_date_int, 'vid': version_id},
+    )
+
+    acn_map = {}
+    master_trace_by_acn = defaultdict(list)
+    claim_events = []
+    for (
+        acn, gb, day, status_id, pre_status_id, commit_p2, commit_p3,
+        claim_line_id, claim_start_day, claim_end_day, claim_source
+    ) in master_rows:
+        acn_val = int(acn)
+        gb_val = int(gb)
+        if acn_val in acn_map and acn_map[acn_val] != gb_val:
+            raise RuntimeError(
+                "sim_masterv2_v9 group_by conflict for aircraft_number="
+                f"{acn_val}: {acn_map[acn_val]} vs {gb_val} "
+                f"(version_date={version_date_int}, version_id={version_id})"
+            )
+        acn_map[acn_val] = gb_val
+
+        day_val = int(day)
+        status_val = int(status_id)
+        pre_val = int(pre_status_id)
+        master_trace_by_acn[acn_val].append((day_val, status_val, pre_val))
+
+        if int(commit_p2) == 1 or int(commit_p3) == 1:
+            claim_source_val = int(claim_source)
+            line_val = int(claim_line_id)
+            start_val = int(claim_start_day)
+            end_val = int(claim_end_day)
+            if (
+                claim_source_val in (1, 2)
+                and line_val != 65535
+                and start_val != 65535
+                and end_val != 65535
+                and end_val > start_val
+            ):
+                claim_events.append((acn_val, gb_val, line_val, start_val, end_val))
+
+    runtime_lines_by_acn = defaultdict(lambda: defaultdict(set))
+    for day, lid, _fd, _rt, runtime_acn, _gb, _bank_count, _bank_head_start, _bank_head_end in rows:
+        acn_val = int(runtime_acn)
+        if acn_val != 0:
+            runtime_lines_by_acn[acn_val][int(day)].add(int(lid))
+
+    occupancy_map = {}
+    claim_rows_painted = 0
+    claimless_rows_painted = 0
+    claim_days_by_acn = defaultdict(set)
+
+    def _paint(day_val, line_val, acn_val, gb_val):
+        key = (day_val, line_val)
+        if key in occupancy_map:
+            if occupancy_map[key][0] != acn_val:
+                raise RuntimeError(
+                    "sim_repairline_v9 occupancy conflict: "
+                    f"day={day_val}, line_id={line_val}, "
+                    f"acn={occupancy_map[key][0]} vs {acn_val} "
+                    f"(version_date={version_date_int}, version_id={version_id})"
+                )
+            return False
+        occupancy_map[key] = (acn_val, gb_val)
+        return True
+
+    # Claim-based occupancy
+    for acn_val, gb_val, line_val, start_val, end_val in claim_events:
+        for day_val in range(start_val, end_val):
+            if _paint(day_val, line_val, acn_val, gb_val):
+                claim_rows_painted += 1
+            claim_days_by_acn[acn_val].add(day_val)
+
+    # Claimless episodes (repair status=4 not covered by claim-based)
+    for acn_val, trace in master_trace_by_acn.items():
+        if not trace:
+            continue
+        trace_sorted = sorted(trace, key=lambda item: item[0])
+        for ep_start, ep_end in _build_repair_episodes(trace_sorted):
+            covered = False
+            for day_val in range(ep_start, ep_end):
+                if day_val in claim_days_by_acn.get(acn_val, set()):
+                    covered = True
+                    break
+            if covered:
+                continue
+
+            line_ids = set()
+            runtime_days = runtime_lines_by_acn.get(acn_val, {})
+            for day_val in range(ep_start, ep_end):
+                line_ids.update(runtime_days.get(day_val, set()))
+
+            if not line_ids:
+                raise RuntimeError(
+                    "sim_repairline_v9 missing runtime line_id for claimless episode: "
+                    f"acn={acn_val}, episode=[{ep_start},{ep_end}) "
+                    f"(version_date={version_date_int}, version_id={version_id})"
+                )
+            if len(line_ids) > 1:
+                raise RuntimeError(
+                    "sim_repairline_v9 ambiguous runtime line_id for claimless episode: "
+                    f"acn={acn_val}, episode=[{ep_start},{ep_end}), line_ids={sorted(line_ids)} "
+                    f"(version_date={version_date_int}, version_id={version_id})"
+                )
+
+            line_val = next(iter(line_ids))
+            gb_val = acn_map[acn_val]
+            for day_val in range(ep_start, ep_end):
+                if _paint(day_val, line_val, acn_val, gb_val):
+                    claimless_rows_painted += 1
+
+    total_rows = len(rows)
+    painted_rows = len(occupancy_map)
+
     # Добавляем version_date и version_id к каждой строке
-    full_rows = [
-        (version_date_int, version_id, day, lid, fd, rt, acn, gb, bank_count, bank_head_start, bank_head_end)
-        for day, lid, fd, rt, acn, gb, bank_count, bank_head_start, bank_head_end in rows
-    ]
+    full_rows = []
+    for day, lid, fd, rt, _acn, _gb, bank_count, bank_head_start, bank_head_end in rows:
+        key = (int(day), int(lid))
+        if key in occupancy_map:
+            acn_val, gb_val = occupancy_map[key]
+        else:
+            acn_val, gb_val = 0, 0
+        full_rows.append(
+            (
+                version_date_int,
+                version_id,
+                day,
+                lid,
+                fd,
+                rt,
+                acn_val,
+                gb_val,
+                bank_count,
+                bank_head_start,
+                bank_head_end,
+            )
+        )
+
+    print(
+        f"  [RL Export] reconcile: total_rows={total_rows}, painted_rows={painted_rows}, "
+        f"claim_rows_painted={claim_rows_painted}, claimless_rows_painted={claimless_rows_painted}"
+    )
 
     if full_rows:
         ch_client.execute(
