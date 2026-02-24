@@ -1,0 +1,17 @@
+kind: dashboard
+logical_id: dashboard_planers_10y_v9
+dashboard:
+  title: "Планеры 10Y Гистограмма v9"
+  slug: "planery-10y-v9"
+  charts:
+    - hist_status_v9_main
+    - gantt_repairline_custom_v20250704
+  native_filters:
+    - logical_id: gantt_version_filter
+      name: "Версия Gantt"
+      scope: [gantt_repairline_custom_v20250704]
+      constraints:
+        single_select: true
+        allow_empty: false
+  notes:
+    - "Cross-filter scope must exclude gantt unless explicitly enabled."

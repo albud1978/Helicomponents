@@ -1,0 +1,15 @@
+domain_id: "REPLACE_ME"
+name: "REPLACE_ME"
+owner_role: "analyst-sql-graph"
+
+kpis:
+  - id: "kpi_example"
+    name: "KPI Example"
+    datasource_logical_id: "sim_masterv2_v9_daily"
+    sql_expression: "COUNT(*)"
+    grain: "day"
+
+dashboards:
+  - logical_id: "dashboard_planers_10y_v9"
+    level: "ops"
+    audience: ["engineering", "operations"]

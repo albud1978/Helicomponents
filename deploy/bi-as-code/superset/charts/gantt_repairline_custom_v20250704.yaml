@@ -1,0 +1,13 @@
+kind: chart
+logical_id: gantt_repairline_custom_v20250704
+chart:
+  viz_type: echarts6_gantt
+  datasource_logical_id: sim_repairline_v9_daily
+  slice_name: "ECharts6 Gantt (custom-flight style) v20250704"
+  params:
+    requires_single_version_filter: true
+    version_filter_name: "Версия Gantt"
+    date_format_tooltip: "%d-%m-%Y"
+    display_rules:
+      line_id_display_shift: "+1 (0..17 -> 1..18)"
+      aircraft_type_label: "Тип ВС"

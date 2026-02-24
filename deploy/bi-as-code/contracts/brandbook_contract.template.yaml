@@ -1,0 +1,63 @@
+contract_version: 1
+status: template
+note: "Заполнить после передачи корпоративного брендбука и списка инстансов."
+
+sources:
+  brandbook_document_ref: "TBD"
+  corporate_instances_ref: "TBD"
+
+rules:
+  must:
+    - id: must-color-palette
+      description: "Основная палитра согласована и используется во всех дашбордах."
+      superset_mapping:
+        chart_params: [color_scheme]
+        dashboard_json_metadata: [color_scheme]
+    - id: must-typography
+      description: "Шрифты и размеры заголовков/подписей соответствуют брендбуку."
+      superset_mapping:
+        dashboard_css: [font_family, font_size]
+    - id: must-naming
+      description: "Нейминг дашбордов/чартов и легенд соответствует корпоративной терминологии."
+      superset_mapping:
+        entities: [dashboard_title, slice_name, legend_labels]
+    - id: must-date-format
+      description: "Формат дат согласован с брендбуком для осей и tooltip."
+      superset_mapping:
+        chart_params: [date_format, tooltipTimeFormat, x_axis_time_format]
+
+  should:
+    - id: should-layout-grid
+      description: "Сетка и отступы соответствуют рекомендованным паттернам."
+      superset_mapping:
+        dashboard_layout: [position_json]
+    - id: should-legend-placement
+      description: "Легенды расположены единообразно для сопоставимых панелей."
+      superset_mapping:
+        chart_params: [show_legend, legendOrientation, legendType]
+
+  must_not:
+    - id: must-not-unapproved-colors
+      description: "Не использовать цвета вне согласованной палитры."
+    - id: must-not-runtime-only-fixes
+      description: "Не оставлять критичные визуальные правки только в runtime-ассетах без фиксации в source artifacts."
+
+acceptance:
+  checklists:
+    preview_gate:
+      - palette_conformance
+      - typography_conformance
+      - naming_conformance
+      - date_format_conformance
+    production_handoff_gate:
+      - preview_checklist_passed
+      - exceptions_approved
+      - evidence_attached
+
+exceptions:
+  policy: "Любое отклонение от MUST правил требует явного согласования и отдельной записи в handoff."
+  fields:
+    - rule_id
+    - justification
+    - approver
+    - expiration_date

@@ -1,0 +1,29 @@
+environment_profile: "corp-preview-or-prod"
+superset:
+  base_url: "https://superset.example.corp"
+  api_version: "v1"
+  auth:
+    type: "bearer_token"
+    token_env_var: "SUPERSET_API_TOKEN"
+
+database_bindings:
+  clickhouse_database_name: "clickhouse_default"
+  expected_datasets:
+    - "sim_masterv2_v9"
+    - "sim_repairline_v9"
+
+security:
+  workspace_roles:
+    viewer_role: "bi_viewer"
+    editor_role: "bi_editor"
+  enforce_least_privilege: true
+
+release_policy:
+  allow_apply: false
+  allow_rollback: true
+  require_preview_signoff: true
+  require_governance_verdict: true
+
+notes:
+  - "Do not store secrets in this file."
+  - "Admins must inject credentials via secured environment."
