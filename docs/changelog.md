@@ -5245,3 +5245,18 @@ SELECT dictGet('aircraft_number_dict_flat', 'registration_code', aircraft_number
 - Зафиксирован policy-контур: закрытие high-risk workflow без `GraphImpactProposal` считается violation.
 - Sync Domain Graph должен выполняться только после явного human-gate (`ApprovalGate`) и фиксироваться в handoff оркестратора.
 - Выполнен `make sync-domain-graph` после явного approval в текущем чате; результат: `Synced 438 queries to neo4j+s://894fb8f5.databases.neo4j.io` (exit code 0).
+
+## [24-02-2026] - BI sandbox: брендбук-оформление 3 чартов и доработка Gantt UX
+
+### Изменено
+- Для dashboard `1` и chart `1/2/5` выровнены брендовые параметры отображения (палитра, типографика, читаемость UI).
+- Для `График Ремонта` (chart `5`) обновлён визуальный стиль в духе ECharts custom-gantt: более чистый фон, аккуратные оси и dataZoom, улучшенная легенда.
+- Добавлена легенда-селектор в Gantt: `Ми-8`, `Ми-17`, `Слоты`.
+- Для `Слоты` внедрён контурный режим (пустой прямоугольник с рамкой, без цветной заливки).
+
+### Технические детали
+- Изменения применены runtime-патчем ассетов в контейнере `superset-local` с cache-bust циклом (обновление chunk+SPA entry+manifest и restart контейнера).
+- Обновлены операционные инструкции в `README.md` (раздел BI/Superset) с фиксированным набором URL/ID и правилами recovery.
+
+### Governance / Agent KG
+- Контекст BI-итерации зафиксирован в Agent KG: workflow `W_bi_gantt_brandbook_20260224` (`dispatch`, `phase_start`, `handoff`).
