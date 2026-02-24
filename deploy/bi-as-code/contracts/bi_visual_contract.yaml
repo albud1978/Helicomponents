@@ -1,0 +1,50 @@
+contract:
+  id: bi_visual_contract
+  version: "1.0.0"
+  status: active
+  owner_role: coder-general
+
+scope:
+  dashboards:
+    - "main_bi_dashboard"
+  chart_families:
+    - histogram
+    - pivot
+    - gantt_custom_echarts
+
+layout_rules:
+  - "Keep visuals minimal and readable; avoid decorative overload."
+  - "Reserve enough negative space for labels and tooltips."
+  - "Do not use visual effects that reduce readability."
+
+gantt_rules:
+  color_policy: "brandbook_core_palette_first"
+  color_mapping:
+    group_1_mi8: token:gantt_mi8_group_1
+    group_2_mi17: token:gantt_mi17_group_2
+  line_display_transform:
+    source_range: "0..17"
+    display_range: "1..18"
+    persistence_change: false
+  free_window_highlight:
+    enabled: true
+    min_days: 180
+    style: "transparent_fill_with_border"
+    label: "slots_180_floor"
+  label_policy:
+    occupied_bar_label: "aircraft_number"
+    show_if_bar_width_px_gte: 26
+
+histogram_rules:
+  legend_status_labels:
+    "1": "Списание"
+    "2": "Операции"
+    "3": "Исправные"
+    "4": "Ремонт"
+    "6": "Хранение"
+    "7": "Неисправные"
+  x_axis_label_format: "YYYY"
+
+filter_scoping_rules:
+  - "Gantt filter scope is isolated from other chart families."
+  - "Cross-filter propagation to gantt is disabled unless explicitly requested."

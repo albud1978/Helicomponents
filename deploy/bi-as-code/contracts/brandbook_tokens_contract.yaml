@@ -1,0 +1,48 @@
+contract:
+  id: brandbook_tokens_contract
+  version: "1.0.0"
+  status: active
+  owner_role: docs-curator
+
+tokens:
+  colors:
+    utair_blue: "#003594"
+    utair_black: "#111820"
+    utair_white: "#FFFFFF"
+    utair_grey: "#737576"
+    utair_light_blue: "#7CA3DC"
+    utair_light_blue_2: "#B4C8E7"
+    utair_light_grey: "#D0D3D4"
+    utair_red: "#DC2328"
+    utair_yellow: "#FFC332"
+    utair_green: "#008C5F"
+    utair_orange: "#FF6E0A"
+
+  semantic:
+    dashboard_background: "#FFFFFF"
+    chart_axis_text: "#111820"
+    chart_grid: "#D0D3D4"
+    primary_series: "#003594"
+    highlight_series: "#7CA3DC"
+    gantt_mi8_group_1: "#003594"
+    gantt_mi17_group_2: "#7CA3DC"
+    free_window_fill: "rgba(148,163,184,0.08)"
+    free_window_border: "#737576"
+
+  typography:
+    family_primary: "Suisse Int'l Regular"
+    family_fallback_windows: "Arial"
+    family_fallback_macos: "Helvetica Neue"
+    use_bold: false
+    use_italic: false
+
+accessibility:
+  min_text_contrast_ratio: 4.5
+  min_key_ui_contrast_ratio: 3.0
+
+rules:
+  - "Blue is the dominant brand color for primary UI accents."
+  - "For two aircraft types, use core blue palette first (Utair Blue + Utair Light Blue)."
+  - "Additional colors are used only for semantic encoding."
+  - "Use red/yellow/green/orange only when blue palette is insufficient."
+  - "Avoid over-saturated multi-color palettes in one visual."
