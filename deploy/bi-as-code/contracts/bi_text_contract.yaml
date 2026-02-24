@@ -1,0 +1,51 @@
+contract:
+  id: bi_text_contract
+  version: "1.0.0"
+  status: active
+  owner_role: docs-curator
+
+tone_of_voice:
+  traits:
+    - friendly
+    - optimistic
+    - clear
+  must:
+    - "Write concise and direct UI copy."
+    - "Prefer plain language over office jargon."
+    - "Use neutral, respectful wording."
+  must_not:
+    - "No bureaucratic wording."
+    - "No manipulative hype language."
+    - "No sarcasm in user-facing messages."
+
+terminology:
+  brand_name:
+    display: "Utair"
+    inflect: false
+  gantt_group_label:
+    display_key: "Тип ВС"
+    values:
+      "1": "Ми-8"
+      "2": "Ми-17"
+  status_dictionary:
+    "1": "Списание"
+    "2": "Операции"
+    "3": "Исправные"
+    "4": "Ремонт"
+    "6": "Хранение"
+    "7": "Неисправные"
+
+tooltip_policy:
+  must_include:
+    - aircraft_number
+    - line_display_id
+    - start_date
+    - end_date
+  must_exclude:
+    - "MAX(aircraft_number)"
+
+naming_policy:
+  chart_titles:
+    dataset_1: "Датасет 1"
+    dataset_2: "Датасет 2"
+    repair_gantt: "График Ремонта"

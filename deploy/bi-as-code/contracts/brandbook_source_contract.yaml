@@ -1,0 +1,49 @@
+contract:
+  id: brandbook_source_contract
+  version: "1.0.0"
+  status: active
+  owner_role: docs-curator
+  scope:
+    environments:
+      - personal_sandbox
+      - corporate_sandbox_preview
+    production_in_scope: false
+
+sources:
+  - id: basic_constants
+    path: data_input/brandbook/1 utair_brandbook_Basic constants.pdf
+    purpose: "Visual constants: colors, logo, typography, composition"
+    priority: 1
+  - id: voice_tone
+    path: data_input/brandbook/Friends Utair Voice_Tone Guidelines.pdf
+    purpose: "Text style, grammar, date and number writing rules"
+    priority: 2
+  - id: brand_platform
+    path: data_input/brandbook/Utair Brand Platform.pdf
+    purpose: "Brand values and communication intent"
+    priority: 3
+  - id: slogan_guide
+    path: data_input/brandbook/Friends Руководство по использованию бренд-слогана.pdf
+    purpose: "Descriptor and slogan usage"
+    priority: 4
+  - id: photo_illustration
+    path: data_input/brandbook/Utair Photo&Illustration Guidelines.pdf
+    purpose: "Imagery and visual do/don't rules"
+    priority: 5
+
+precedence_rules:
+  - "If a visual rule conflicts, follow basic_constants first."
+  - "If a text rule conflicts, follow voice_tone first."
+  - "BI-specific approved exceptions override generic language examples."
+
+approved_bi_exceptions:
+  - id: bi_date_display
+    rule: "Dashboard UI dates use DD-MM-YYYY."
+    rationale: "User-approved Superset filter and tooltip readability."
+    approved_by: "Alexey (chat approval)"
+
+validation_policy:
+  refresh_on:
+    - "Brandbook source update"
+    - "New dashboard family introduction"
+  review_frequency: "per release"

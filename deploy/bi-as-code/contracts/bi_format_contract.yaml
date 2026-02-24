@@ -1,0 +1,41 @@
+contract:
+  id: bi_format_contract
+  version: "1.0.0"
+  status: active
+  owner_role: coder-general
+
+date_time:
+  storage_format:
+    version_date: "YYYYMMDD"
+    day_date: "YYYY-MM-DD"
+  ui_display:
+    filters_default: "DD-MM-YYYY"
+    gantt_tooltip: "DD-MM-YYYY"
+    gantt_axis: "YYYY"
+    histogram_axis: "YYYY"
+  timezone:
+    default: "Europe/Moscow"
+    enforce_consistency: true
+
+numeric:
+  thousand_separator:
+    enabled: false
+  decimal_separator: "."
+  integer_display:
+    prefer_plain_digits: true
+
+line_id_display:
+  source_field: "line_id"
+  transform:
+    operation: "display_plus_one"
+    persistent_writeback: false
+
+null_and_empty:
+  policy:
+    - "Do not silently replace missing values with zero unless metric contract says so."
+    - "For long free windows use explicit visual marker instead of fake occupancy."
+
+filter_defaults:
+  gantt_version_date:
+    strategy: "latest_available"
+    selection_mode: "single"

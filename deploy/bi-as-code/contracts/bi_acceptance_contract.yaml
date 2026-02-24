@@ -1,0 +1,49 @@
+contract:
+  id: bi_acceptance_contract
+  version: "1.0.0"
+  status: active
+  owner_role: governance-compliance
+
+release_scope:
+  environments:
+    - personal_sandbox
+    - corporate_sandbox_preview
+  production_deploy_allowed: false
+  corporate_preview_deploy_mode: "manual_on_user_command"
+
+gates:
+  - id: G1_brand_tokens
+    severity: blocker
+    check: "All dashboard colors map to approved brandbook tokens."
+  - id: G2_typography
+    severity: blocker
+    check: "Primary/fallback fonts follow token contract."
+  - id: G3_date_formats
+    severity: blocker
+    check: "UI dates, tooltip dates and axis formats follow bi_format_contract."
+  - id: G4_status_labels
+    severity: blocker
+    check: "Status legend uses semantic names, not numeric-only labels."
+  - id: G5_gantt_scope
+    severity: blocker
+    check: "Gantt native filter is isolated from unrelated chart scopes."
+  - id: G6_tooltip_clean
+    severity: major
+    check: "Tooltip does not show technical aggregates like MAX(...)."
+  - id: G7_line_display
+    severity: major
+    check: "Repair line display numbering is 1..18 without data mutation."
+  - id: G8_free_window
+    severity: major
+    check: "Free windows >180 days are rendered with transparent framed bars and slots180."
+
+evidence_requirements:
+  - "API payload snapshot for changed chart(s)"
+  - "Browser render proof in dashboard context"
+  - "Changed contract versions and checksum references"
+
+verdict:
+  allowed_values:
+    - pass
+    - fail
+    - escalate
