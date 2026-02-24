@@ -14,6 +14,7 @@ description: Разработчик общего кода (не FLAME GPU). Ис
 - `config/**`
 - `docs/**`
 - `tools/**`
+- `deploy/bi-as-code/**` (BI артефакты, release-шаблоны, dry-run/apply/rollback скрипты)
 
 ## Компетенции
 
@@ -30,6 +31,8 @@ description: Разработчик общего кода (не FLAME GPU). Ис
 5. Тесты запускай только по явному запросу; иначе фиксируй причину в `Facts` или `Assumptions`
 6. В начале фазы записывай context в Agent KG (`--write-context --context-type phase_start --agent coder-general`)
 7. В конце фазы обязательно записывай handoff в Agent KG (`--write-handoff`) с `TraceID`, `PlanStepID`, `Facts`, `Assumptions`
+8. Для BI-задач в corporate sandbox: `apply/clone` выполнять только при явной команде человека, по умолчанию использовать `dry-run`
+9. Для production BI: не выполнять deploy/apply, только готовить handoff-пакет для админов
 
 ## Формат ответа
 
@@ -43,3 +46,4 @@ description: Разработчик общего кода (не FLAME GPU). Ис
 
 - Симуляцию запускать только по задаче оркестратора
 - НЕ использовать Float64 без согласования
+- НЕ выполнять production deploy BI-артефактов

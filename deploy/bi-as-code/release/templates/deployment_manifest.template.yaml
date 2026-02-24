@@ -1,0 +1,55 @@
+manifest_version: 1
+release_id: "bi-release-YYYYMMDD-HHMM"
+target_environment: "corp-sandbox"
+source_commit: "REPLACE_WITH_GIT_SHA"
+generated_at_utc: "YYYY-MM-DDTHH:MM:SSZ"
+author_role: "orchestrator"
+
+prechecks:
+  - semantic_contract_loaded
+  - brandbook_contract_loaded_or_approved_exception
+  - governance_verdict_present
+  - docs_synced
+
+steps:
+  - step: 10
+    kind: dataset
+    logical_id: "sim_masterv2_v9_daily"
+    action: upsert
+    source: "deploy/bi-as-code/superset/datasets/sim_masterv2_v9_daily.yaml"
+    notes: "refresh metadata + columns"
+  - step: 20
+    kind: dataset
+    logical_id: "sim_repairline_v9_daily"
+    action: upsert
+    source: "deploy/bi-as-code/superset/datasets/sim_repairline_v9_daily.yaml"
+    notes: "refresh metadata + columns"
+  - step: 30
+    kind: chart
+    logical_id: "hist_status_v9_main"
+    action: upsert
+    source: "deploy/bi-as-code/superset/charts/hist_status_v9_main.yaml"
+    notes: "status labels and date formats are governed by semantic_contract"
+  - step: 40
+    kind: chart
+    logical_id: "gantt_repairline_custom_v20250704"
+    action: upsert
+    source: "deploy/bi-as-code/superset/charts/gantt_repairline_custom_v20250704.yaml"
+    notes: "single-version filter dependency"
+  - step: 50
+    kind: dashboard
+    logical_id: "dashboard_planers_10y_v9"
+    action: upsert
+    source: "deploy/bi-as-code/superset/dashboards/dashboard_planers_10y_v9.yaml"
+    notes: "includes native filter scopes"
+
+postchecks:
+  - charts_data_endpoint_smoke
+  - browser_render_smoke
+  - acceptance_report_updated
+  - brandbook_conformance_report_updated
+
+rollback:
+  strategy: "reverse_steps"
+  requires_last_apply_state: true
+  state_file: "deploy/bi-as-code/release/.last_apply_state.json"

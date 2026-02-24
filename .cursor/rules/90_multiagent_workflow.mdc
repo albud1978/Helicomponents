@@ -12,16 +12,27 @@ alwaysApply: true
 - **Subagents**: специализированные исполнители (`coder-flame`, `coder-general`, `reviewer-flame`, `validator-judge`, `capsule-builder`, `analyst-sql-graph`, `governance-compliance`, `docs-curator`) работают в своей зоне ответственности.
 - **Человек (Алексей)**: утверждает архитектурные/алгоритмические/схемные изменения и любые решения с высоким риском.
 - **ETL/Extract/СУБД задачи**: выполняют `coder-general` и `analyst-sql-graph` по зоне ответственности.
+- **BI-контур (упрощённый, текущий этап)**: работаем в `personal supersetbi sandbox` (действующий инстанс с существующими дашбордами); deploy/clone в `corporate sandbox` — только по явной команде человека; production не трогаем (только handoff-пакет для админов).
 
 ## Назначение зон (по умолчанию)
 - **coder-flame**: FLAME GPU/RTC, симуляция и запуск GPU-прогонов (`code/sim_v2/messaging/**`, RTC модули). Единственный агент, имеющий право запускать симуляции (`python -m sim_v2.messaging.orchestrator_limiter_v8`).
-- **coder-general**: общий код вне GPU (ETL/Extract/analysis/utils/config/docs/tools), включая скрипты валидации (`code/validation/**`).
-- **analyst-sql-graph**: SQL‑запросы (SELECT), граф знаний/изменений (JSON/Cypher), Neo4j‑экспорт. Также выполняет Researcher‑функцию в SQL/граф‑домене.
+- **coder-general**: общий код вне GPU (ETL/Extract/analysis/utils/config/docs/tools) + BI-as-code артефакты в `deploy/bi-as-code/**`, включая скрипты валидации (`code/validation/**`).
+- **analyst-sql-graph**: SQL‑запросы (SELECT), граф знаний/изменений (JSON/Cypher), Neo4j‑экспорт + BI semantic checks (метрики/агрегации/фильтры/граничные случаи). Также выполняет Researcher‑функцию в SQL/граф‑домене.
 - **reviewer-flame**: ревью RTC/GPU.
 - **validator-judge**: системная валидация инвариантов; запуск готовых скриптов из `code/validation/`; вынесение вердикта pass/fail по каждому инварианту. SQL‑first, по запросу оркестратора.
 - **capsule-builder**: формирование/обновление `docs/*_capsule.md` по шаблону после приёмки оркестратора.
 - **governance-compliance**: контрольная плоскость (policy/risk/compliance). Проверяет traceability, gate-статусы и соответствие scope, выносит вердикт `approve|reject|escalate`.
 - **docs-curator**: владелец проектной документации (`docs/**`, `README.md`, changelog). Синхронизирует артефакты workflow с документами после governance verdict.
+- **docs-curator**: владелец проектной документации (`docs/**`, `README.md`, changelog) и BI handoff-доков (`deploy/bi-as-code/release/**`).
+
+## BI-контур исполнения (обязательный режим)
+
+- **SSOT BI-артефактов в репозитории**: `deploy/bi-as-code/**`.
+- **Personal sandbox**: текущий рабочий `supersetbi` с существующими дашбордами — основной контур разработки/валидации.
+- **Corporate sandbox**: deploy/clone только по явной команде Алексея в текущем чате.
+- **Production**: любые apply/deploy действия запрещены на текущем этапе; допускается только подготовка handoff-пакета для админов.
+- **Перед corporate review**: обязателен handoff-пакет (`deployment_manifest`, `env_overrides_template`, `runbook`, `acceptance_report`, `brandbook_conformance_report`).
+- **Brandbook** и список corporate инстансов предоставляет человек отдельно; до получения — только шаблонные контракты/заготовки.
 
 ## Коммуникация с оркестратором (человек → оркестратор)
 - **Формат запроса**: Goal + ограничения + приоритет (если есть) + запреты на запуск.
@@ -232,6 +243,8 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 - изменение жизненного цикла и инвариантов;
 - удаление объектов проекта;
 - новые публичные API.
+- deploy/clone BI-артефактов в corporate sandbox.
+- любые действия, затрагивающие production BI-контур.
 
 ### Governance control-plane (обязательно для high-risk)
 - `governance-compliance` не пишет код и не меняет доменные данные; его задача — policy check и risk verdict.

@@ -1,0 +1,16 @@
+kind: dataset
+logical_id: sim_masterv2_v9_daily
+datasource:
+  database_name: clickhouse_default
+  schema: default
+  table_name: sim_masterv2_v9
+metadata:
+  owner_role: coder-general
+  description: "Master daily simulation output for BI."
+  columns_required:
+    - day_date
+    - version_date
+    - version_id
+    - group_by
+    - status_id
+    - status_count_ffill

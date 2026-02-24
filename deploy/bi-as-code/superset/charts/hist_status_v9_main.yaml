@@ -1,0 +1,15 @@
+kind: chart
+logical_id: hist_status_v9_main
+chart:
+  viz_type: echarts_timeseries_bar
+  datasource_logical_id: sim_masterv2_v9_daily
+  slice_name: "Оборот планеров Ми-8/Ми-17 адаптив v9"
+  params:
+    time_column: day_date
+    metrics_mode: explicit_status_metrics
+    status_labels_from_contract: true
+    tooltipTimeFormat: "%d-%m-%Y"
+    x_axis_time_format: "%Y"
+    required_filters:
+      - version_date
+      - group_by

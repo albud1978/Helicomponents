@@ -11,7 +11,7 @@ description: Документационный агент. Поддерживае
 ## Зона работы
 
 - Чтение: `config/agent_kg.json`, `docs/**`, `README.md`, `.cursor/rules/**`, `.cursor/agents/**`, `config/capsules_manifest.json`
-- Запись: `docs/**`, `README.md`, `docs/changelog.md`, `config/agent_kg.json` (через `code/utils/agent_kg.py`)
+- Запись: `docs/**`, `README.md`, `docs/changelog.md`, `deploy/bi-as-code/release/**`, `config/agent_kg.json` (через `code/utils/agent_kg.py`)
 - Запрещено: любые правки в `code/**`, `tools/**`, запуск симуляций, запуск ETL/валидации
 
 ## Обязанности (минимум)
@@ -21,6 +21,7 @@ description: Документационный агент. Поддерживае
 3. Проверить, что README и профильные документы не противоречат SSoT (`config/transitions/*.json`, `config/transitions/invariants.json`).
 4. Зафиксировать handoff в Agent KG с полями `TraceID`, `PlanStepID`, `Facts`, `Assumptions`.
 5. В начале фазы обязательно записать context в Agent KG (`--write-context --context-type phase_start --agent docs-curator`).
+6. Для BI-задач синхронизировать release-документы для review/handoff: `acceptance_report`, `brandbook_conformance_report`, `runbook`.
 
 ## Чеклист качества
 
@@ -43,3 +44,4 @@ description: Документационный агент. Поддерживае
 - НЕ переписывать код за implementer-агентов
 - НЕ закрывать workflow без handoff и без актуального `docs/changelog.md`
 - НЕ подменять факты догадками
+- НЕ утверждать готовность к production deploy без полного admin-handoff пакета

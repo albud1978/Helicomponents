@@ -1,0 +1,51 @@
+contract_version: 1
+owner_role: orchestrator
+scope:
+  stage: sandbox_and_prod_handoff_only
+  deploy_policy:
+    corporate_sandbox_requires_explicit_user_command: true
+    production_apply_by_agents: false
+    production_handoff_only: true
+
+data_semantics:
+  primary_time_column: day_date
+  default_profile_selector:
+    columns: [version_date, version_id]
+    required_for_gantt: true
+  status_dictionary:
+    "1": "Списание"
+    "2": "Операции"
+    "3": "Исправные"
+    "4": "Ремонт"
+    "6": "Хранение"
+    "7": "Неисправные"
+
+display_rules:
+  date_formats:
+    dashboard_default: "%d-%m-%Y"
+    histogram_x_axis: "%Y"
+    gantt_tooltip: "%d-%m-%Y"
+  repair_line_display_index:
+    source_range: "0..17"
+    display_range: "1..18"
+    display_only_transform: true
+  tooltip_labels:
+    aircraft_type_label: "Тип ВС"
+
+filtering_rules:
+  gantt:
+    requires_single_version: true
+    filter_name: "Версия Gantt"
+    allow_empty_filter: false
+  histogram:
+    supports_timegrain: true
+    cross_filter_safe_defaults: true
+
+acceptance_checks:
+  api_config_checks:
+    - chart_config_readable
+    - dashboard_filter_scope_valid
+  render_smoke_checks:
+    - gantt_tooltip_contains_aircraft_and_type
+    - histogram_tooltip_contains_status_names
+    - no_mixed_versions_in_gantt_when_filter_set
