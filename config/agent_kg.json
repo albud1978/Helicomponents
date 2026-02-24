@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-02-23T18:52:18Z",
+    "updated_at": "2026-02-24T18:37:47Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -1138,6 +1138,15 @@
       "status": "active",
       "created_at": "2026-02-23T18:51:32Z",
       "updated_at": "2026-02-23T18:52:18Z"
+    },
+    {
+      "workflow_id": "W_bi_gantt_brandbook_20260224",
+      "goal": "BI gantt brandbook context logging",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "active",
+      "created_at": "2026-02-24T18:37:25Z",
+      "updated_at": "2026-02-24T18:37:47Z"
     }
   ],
   "handoffs": [
@@ -7671,6 +7680,68 @@
       "open_questions": "",
       "graph_update": "нет",
       "created_at": "2026-02-23T18:52:18Z"
+    },
+    {
+      "handoff_id": "handoff_W_bi_gantt_brandbook_20260224_orchestrator_54b851d6",
+      "workflow_id": "W_bi_gantt_brandbook_20260224",
+      "agent": "orchestrator",
+      "user_goal": "Нужно записать текущий BI-контекст в Agent KG через утилиту code/utils/agent_kg.py.",
+      "goal": "Нужно записать текущий BI-контекст в Agent KG через утилиту code/utils/agent_kg.py.",
+      "changes": "config/agent_kg.json updated: init workflow; dispatch context; orchestrator handoff",
+      "facts": "agent_kg.py commands executed successfully",
+      "assumptions": "No additional validations required",
+      "evidence": "не запускалось",
+      "drift_check": "No drift: only Agent KG entries per request",
+      "process_insights": "OK",
+      "trace_id": "wf:W_bi_gantt_brandbook_20260224:2026-02-24T00:00:00Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "metadata-only KG update; no code/data changes",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "none",
+      "next_owner": "orchestrator",
+      "open_questions": "none",
+      "graph_update": "no",
+      "created_at": "2026-02-24T18:37:41Z"
+    },
+    {
+      "handoff_id": "handoff_W_bi_gantt_brandbook_20260224_coder-general_3f46582d",
+      "workflow_id": "W_bi_gantt_brandbook_20260224",
+      "agent": "coder-general",
+      "user_goal": "Нужно записать текущий BI-контекст в Agent KG через утилиту code/utils/agent_kg.py.",
+      "goal": "Нужно записать текущий BI-контекст в Agent KG через утилиту code/utils/agent_kg.py.",
+      "changes": "config/agent_kg.json updated via agent_kg.py (workflow init, contexts, orchestrator handoff)",
+      "facts": "agent_kg.py commands executed successfully",
+      "assumptions": "No additional validations required",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_bi_gantt_brandbook_20260224:2026-02-24T00:00:00Z",
+      "plan_step_id": "CG1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "metadata-only KG update; no code/data changes",
+      "risk_owner": "coder-general",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "none",
+      "next_owner": "orchestrator",
+      "open_questions": "none",
+      "graph_update": "no",
+      "created_at": "2026-02-24T18:37:47Z"
     }
   ],
   "contexts": [
@@ -8924,6 +8995,24 @@
       "agent": "orchestrator",
       "created_at": "2026-02-23T18:51:42Z",
       "updated_at": "2026-02-23T18:51:42Z"
+    },
+    {
+      "context_id": "ctx_W_bi_gantt_brandbook_20260224_phase_start_b2e4a0df",
+      "workflow_id": "W_bi_gantt_brandbook_20260224",
+      "context_type": "phase_start",
+      "content": "phase_start: coder-general; task=agent_kg BI context logging",
+      "agent": "coder-general",
+      "created_at": "2026-02-24T18:37:27Z",
+      "updated_at": "2026-02-24T18:37:27Z"
+    },
+    {
+      "context_id": "ctx_W_bi_gantt_brandbook_20260224_dispatch_676db9b3",
+      "workflow_id": "W_bi_gantt_brandbook_20260224",
+      "context_type": "dispatch",
+      "content": "dispatch: legend Mi-8/Mi-17/Slots + brandbook style",
+      "agent": "orchestrator",
+      "created_at": "2026-02-24T18:37:31Z",
+      "updated_at": "2026-02-24T18:37:31Z"
     }
   ]
 }
