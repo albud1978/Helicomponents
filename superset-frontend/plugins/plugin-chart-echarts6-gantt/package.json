@@ -1,0 +1,23 @@
+{
+  "name": "@local/plugin-chart-echarts6-gantt",
+  "version": "0.1.0",
+  "description": "Custom ECharts 6 Gantt chart plugin scaffold for Apache Superset",
+  "private": true,
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@superset-ui/chart-controls": "*",
+    "@superset-ui/core": "*",
+    "react": "*"
+  },
+  "dependencies": {
+    "echarts": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}

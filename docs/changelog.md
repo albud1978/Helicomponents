@@ -1,5 +1,29 @@
 # Changelog
 
+## [25-02-2026] - BI repo-only: восстановление исходников Gantt plugin + onboarding нового агента
+
+### Изменения
+- Восстановлены исходники кастомного плагина в Git:
+  - `superset-frontend/plugins/plugin-chart-echarts6-gantt/package.json`
+  - `superset-frontend/plugins/plugin-chart-echarts6-gantt/tsconfig.json`
+  - `superset-frontend/plugins/plugin-chart-echarts6-gantt/src/**`
+- `deploy/superset-local/scripts/build_superset_with_plugin.sh`:
+  - добавлен `OUTPUT_IMAGE` (по умолчанию из `SUPERSET_PLUGIN_IMAGE`);
+  - добавлена явная проверка наличия исходников плагина;
+  - сборка image переведена на единый тег из окружения.
+- Добавлен helper-скрипт `deploy/superset-local/start_local_plugin.sh`:
+  - проверяет наличие plugin image;
+  - при отсутствии автоматически запускает локальную сборку;
+  - поднимает stack c `docker-compose.plugin.yml`.
+- `.gitignore` обновлён для versioning исходников плагина (игнорируются только `node_modules/lib/dist/package-lock`).
+- `deploy/bi-as-code/README.md` и `README.md` расширены:
+  - добавлен `repo-only` сценарий (без cloud registry);
+  - добавлен обязательный post-pull чеклист донастройки нового агента;
+  - уточнено, что запуск для Gantt выполняется через `start_local_plugin.sh`.
+
+### Контекст
+Ошибка `Item with key "echarts6_gantt" is not registered` возникала на новых машинах из-за отсутствия plugin source/image при переносе только bundle-метаданных. Текущий контур теперь воспроизводим через Git + локальную сборку на WSL/Docker Desktop.
+
 ## [23-02-2026] - RepairLine occupancy унифицирован с master-SSoT + подготовка графа к новой семантике
 
 ### Изменения

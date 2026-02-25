@@ -167,7 +167,7 @@ activate.sh
 .cursor/**/*.py[cod]
 
 # ============================================================
-# Local Superset sandbox (do not commit)
+# Local Superset sandbox
 # ============================================================
 .superset-build/
 !deploy/superset-local/
@@ -177,5 +177,8 @@ deploy/superset-local/.env.*
 !deploy/superset-local/.env.example
 deploy/superset-local/__pycache__/
 deploy/superset-local/**/*.py[cod]
-superset-frontend/plugins/plugin-chart-echarts6-gantt/
+superset-frontend/plugins/plugin-chart-echarts6-gantt/node_modules/
+superset-frontend/plugins/plugin-chart-echarts6-gantt/lib/
+superset-frontend/plugins/plugin-chart-echarts6-gantt/dist/
+superset-frontend/plugins/plugin-chart-echarts6-gantt/package-lock.json
 .cursor/hooks/connection_fail.flag
