@@ -168,6 +168,12 @@ activate.sh
 # Local Superset sandbox (do not commit)
 # ============================================================
 .superset-build/
-deploy/superset-local/
+!deploy/superset-local/
+!deploy/superset-local/**
+deploy/superset-local/.env
+deploy/superset-local/.env.*
+!deploy/superset-local/.env.example
+deploy/superset-local/__pycache__/
+deploy/superset-local/**/*.py[cod]
 superset-frontend/plugins/plugin-chart-echarts6-gantt/
 .cursor/hooks/connection_fail.flag

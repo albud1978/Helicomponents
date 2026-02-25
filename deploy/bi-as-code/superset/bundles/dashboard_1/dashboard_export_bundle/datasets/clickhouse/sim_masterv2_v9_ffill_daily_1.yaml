@@ -1,0 +1,131 @@
+table_name: sim_masterv2_v9_ffill_daily
+main_dttm_col: day_date
+description: null
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: default
+sql: "WITH raw AS (\n    SELECT\n        version_date AS version_date,\n        version_id\
+  \ AS version_id,\n        group_by AS group_by,\n        status_id AS status_id,\n\
+  \        day_date AS day_date,\n        count() AS status_count\n    FROM default.sim_masterv2_v9\n\
+  \    WHERE version_id IN (1, 2)\n      AND group_by IN (1, 2)\n    GROUP BY version_date,\
+  \ version_id, group_by, status_id, day_date\n),\nsnap_days AS (\n    SELECT DISTINCT\n\
+  \        version_date AS version_date,\n        version_id AS version_id,\n    \
+  \    day_date AS snap_day\n    FROM raw\n),\nstatus_dim AS (\n    SELECT DISTINCT\n\
+  \        version_date AS version_date,\n        version_id AS version_id,\n    \
+  \    group_by AS group_by,\n        status_id AS status_id\n    FROM raw\n),\nsnapshot_matrix\
+  \ AS (\n    SELECT\n        d.version_date AS version_date,\n        d.version_id\
+  \ AS version_id,\n        d.snap_day AS snap_day,\n        s.group_by AS group_by,\n\
+  \        s.status_id AS status_id,\n        ifNull(r.status_count, 0) AS snap_count\n\
+  \    FROM snap_days d\n    INNER JOIN status_dim s\n      ON s.version_date = d.version_date\n\
+  \     AND s.version_id = d.version_id\n    LEFT JOIN raw r\n      ON r.version_date\
+  \ = d.version_date\n     AND r.version_id = d.version_id\n     AND r.day_date =\
+  \ d.snap_day\n     AND r.group_by = s.group_by\n     AND r.status_id = s.status_id\n\
+  ),\npacked AS (\n    SELECT\n        version_date AS version_date,\n        version_id\
+  \ AS version_id,\n        group_by AS group_by,\n        status_id AS status_id,\n\
+  \        arraySort(x -> x.1, groupArray((snap_day, snap_count))) AS pairs,\n   \
+  \     min(snap_day) AS min_day,\n        max(snap_day) AS max_day\n    FROM snapshot_matrix\n\
+  \    GROUP BY version_date, version_id, group_by, status_id\n),\nexpanded AS (\n\
+  \    SELECT\n        version_date AS version_date,\n        version_id AS version_id,\n\
+  \        group_by AS group_by,\n        status_id AS status_id,\n        addDays(min_day,\
+  \ n) AS day_date,\n        arrayMap(x -> x.1, pairs) AS snap_days_arr,\n       \
+  \ arrayMap(x -> x.2, pairs) AS snap_counts_arr\n    FROM packed\n    ARRAY JOIN\
+  \ range(dateDiff('day', min_day, max_day) + 1) AS n\n)\nSELECT\n    version_date,\n\
+  \    version_id,\n    group_by,\n    status_id,\n    day_date,\n    if(\n      \
+  \  arrayLastIndex(x -> x <= day_date, snap_days_arr) = 0,\n        0,\n        snap_counts_arr[arrayLastIndex(x\
+  \ -> x <= day_date, snap_days_arr)]\n    ) AS status_count_ffill\nFROM expanded"
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+folders: null
+uuid: 500f4b0d-760d-40fc-9570-3533d904dce1
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description: null
+  d3format: null
+  currency: null
+  extra: null
+  warning_text: null
+columns:
+- column_name: version_date
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: UInt32
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: version_id
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: UInt32
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: status_count_ffill
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: UInt64
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: status_id
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: UInt8
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: group_by
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: UInt8
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: day_date
+  verbose_name: null
+  is_dttm: true
+  is_active: true
+  type: Date
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+version: 1.0.0
+database_uuid: bd3097bd-d46e-46db-b5ee-31b3f6d8c67b

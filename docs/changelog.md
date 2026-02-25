@@ -5246,6 +5246,29 @@ SELECT dictGet('aircraft_number_dict_flat', 'registration_code', aircraft_number
 - Sync Domain Graph должен выполняться только после явного human-gate (`ApprovalGate`) и фиксироваться в handoff оркестратора.
 - Выполнен `make sync-domain-graph` после явного approval в текущем чате; результат: `Synced 438 queries to neo4j+s://894fb8f5.databases.neo4j.io` (exit code 0).
 
+## [25-02-2026] - BI Git migration mode: подготовка для регулярного A <-> B переноса
+
+### Добавлено
+- `deploy/bi-as-code/scripts/superset_git_sync.py`: API-контроллер экспорта/импорта dashboard bundle (`export` / `import --overwrite`) для Git-цикла между машинами.
+- `deploy/bi-as-code/superset/bundles/.gitkeep`: каталог-носитель экспортируемых Superset bundle в Git.
+- `deploy/superset-local/.env.example`: шаблон локального окружения Superset без секретов.
+- `deploy/bi-as-code/superset/bundles/dashboard_1/**`: актуальный экспорт dashboard `1` с зависимостями (charts/datasets/database metadata).
+
+### Изменено
+- `.gitignore`: снят полный ignore с `deploy/superset-local/**`; оставлены исключения для секретов (`.env`, `.env.*`) и python-кэша.
+- `deploy/bi-as-code/README.md`: добавлен подробный runbook `Git migration mode` (bootstrap, export on A, import on B, регулярный цикл A <-> Git <-> B).
+- `README.md`: добавлена ссылка на полный runbook миграции через Git.
+
+### Результат
+- Репозиторий подготовлен к регулярному переносу BI-контура между машинами через `git pull` + docker + import bundle.
+- Секреты остаются вне Git и передаются локально через `deploy/superset-local/.env`.
+
+### Дополнение (onboarding + WSL + audit)
+- В `deploy/bi-as-code/README.md` добавлен обязательный порядок чтения для нового агента:
+  - `README.md` -> `deploy/bi-as-code/README.md` -> ключевые `.cursor/rules/*.mdc` -> audit-логи -> BI bundle.
+- Зафиксировано, что `.cursor/hooks/user_comm_audit.log` и `.cursor/hooks/code_edit_audit.log` входят в traceability контур и могут включаться в регулярную синхронизацию.
+- Добавлены WSL2-заметки для поднятия BI-контура на машине Windows + WSL без изменения процедуры миграции.
+
 ## [24-02-2026] - BI sandbox: брендбук-оформление 3 чартов и доработка Gantt UX
 
 ### Изменено
