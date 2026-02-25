@@ -27,11 +27,25 @@ import sys
 import logging
 import pandas as pd
 import numpy as np
+import math
 from pathlib import Path
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Tuple, Any, Optional
 import openpyxl
 import calendar
+
+
+def round_half_up_nonneg(value: Any) -> int:
+    """Half-up округление для неотрицательных значений, иначе 0."""
+    if value is None:
+        return 0
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0
+    if not np.isfinite(numeric) or numeric < 0:
+        return 0
+    return int(math.floor(numeric + 0.5))
 
 # Добавляем пути к utils и общему коду
 code_root = Path(__file__).resolve().parents[1]
@@ -504,7 +518,7 @@ class ProgramACDirectLoader:
                 # ops_counter_mi8 (приводим к UInt16)
                 if 'ops_counter_mi8' in ops_data_by_field:
                     record = ops_data_by_field['ops_counter_mi8']
-                    ops_mi8 = int(tensor_engine.distribute_column_value(
+                    ops_mi8 = round_half_up_nonneg(tensor_engine.distribute_column_value(
                         flight_date, month_number, year_number, record['column_data'],
                         record['distribution_type'], year_mapping
                     ))
@@ -512,7 +526,7 @@ class ProgramACDirectLoader:
                 # ops_counter_mi17 (приводим к UInt16)
                 if 'ops_counter_mi17' in ops_data_by_field:
                     record = ops_data_by_field['ops_counter_mi17']
-                    ops_mi17 = int(tensor_engine.distribute_column_value(
+                    ops_mi17 = round_half_up_nonneg(tensor_engine.distribute_column_value(
                         flight_date, month_number, year_number, record['column_data'],
                         record['distribution_type'], year_mapping
                     ))
@@ -520,7 +534,7 @@ class ProgramACDirectLoader:
                 # new_counter_mi17 (приводим к UInt8)
                 if 'new_counter_mi17' in new_data_by_field:
                     record = new_data_by_field['new_counter_mi17']
-                    new_mi17 = int(tensor_engine.distribute_column_value(
+                    new_mi17 = round_half_up_nonneg(tensor_engine.distribute_column_value(
                         flight_date, month_number, year_number, record['column_data'],
                         record['distribution_type'], year_mapping
                     ))
