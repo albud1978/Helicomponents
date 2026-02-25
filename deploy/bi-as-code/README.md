@@ -72,6 +72,7 @@ SUPERSET_PORT=8089 docker compose -p superset2 \
 - `deploy/bi-as-code/contracts/` (semantic + brandbook contracts).
 - `deploy/bi-as-code/superset/` (BI manifests and exported bundle directory).
 - `deploy/bi-as-code/scripts/superset_git_sync.py` (export/import controller via Superset API).
+- `superset-frontend/plugins/plugin-chart-echarts6-gantt/` (custom chart source for local plugin image build).
 - `.cursor/hooks/code_edit_audit.log` is versioned for project traceability.
 - `.cursor/hooks/user_comm_audit.log` is local-only and not synchronized via Git.
 
@@ -111,6 +112,34 @@ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:8088/health"
 - `127.0.0.1:8088` is valid from WSL and Windows browser in standard Docker Desktop setup.
 - If corporate policies remap networking, keep `SUPERSET_PORT` configurable in `deploy/superset-local/.env`.
 
+### Repo-only mode (no cloud registry, local build on each machine)
+Use this mode when both machines have Docker Desktop/WSL and you want full reproducibility only via Git.
+
+1) Build custom Superset image with `echarts6_gantt` plugin from repository source:
+```bash
+bash "deploy/superset-local/scripts/build_superset_with_plugin.sh"
+```
+
+2) Start stack with plugin override:
+```bash
+bash "deploy/superset-local/start_local_plugin.sh"
+```
+
+3) Verify chart type is registered:
+```bash
+python - <<'PY'
+import requests
+base="http://127.0.0.1:8088"
+s=requests.Session()
+t=s.post(base+"/api/v1/security/login",json={"username":"admin","password":"admin","provider":"db","refresh":True},timeout=30).json()["access_token"]
+h={"Authorization":f"Bearer {t}"}
+r=s.get(base+"/api/v1/chart/",headers=h,params={"q":"(page:0,page_size:1)"},timeout=30)
+print("api_ok", r.status_code)
+PY
+```
+If dashboard still says `Item with key "echarts6_gantt" is not registered`, run hard refresh (`Ctrl+Shift+R`) and ensure startup used `docker-compose.plugin.yml`.
+This guarantees plugin registration and chart rendering. Visual fine-tuning from one-off runtime asset patches must be reapplied only if explicitly required.
+
 ### Export current BI state to Git (machine A)
 ```bash
 python "deploy/bi-as-code/scripts/superset_git_sync.py" \
@@ -132,6 +161,7 @@ git push
 ### Import BI state from Git (machine B)
 ```bash
 git pull
+bash "deploy/superset-local/start_local_plugin.sh"
 python "deploy/bi-as-code/scripts/superset_git_sync.py" \
   --base-url "http://127.0.0.1:8088" \
   --username "admin" \
@@ -146,6 +176,17 @@ python "deploy/bi-as-code/scripts/superset_git_sync.py" \
 - B pulls -> import --overwrite.
 - B changed BI in UI -> export -> commit/push.
 - A pulls -> import --overwrite.
+
+### New agent post-pull tuning checklist (mandatory)
+1) Read this file and confirm scope: local sandbox only.
+2) Verify plugin source exists:
+   - `superset-frontend/plugins/plugin-chart-echarts6-gantt/package.json`
+   - `superset-frontend/plugins/plugin-chart-echarts6-gantt/src/plugin/Echarts6Gantt.tsx`
+3) Ensure `.env` is created from `.env.example` and ClickHouse port is `8123` for `clickhousedb://`.
+4) Run `bash deploy/superset-local/start_local_plugin.sh` (not base `start_local.sh`).
+5) Import bundle and check dashboard `1` + chart `5`.
+6) If import requires DB password map, use key `databases/clickhouse.yaml`.
+7) If UI baseline differs from expected sandbox styling, record delta and apply approved visual patch task separately.
 
 ### Critical notes
 - `.env` is local-only and ignored; never commit secrets.

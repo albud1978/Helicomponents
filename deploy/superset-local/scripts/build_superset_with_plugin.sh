@@ -8,6 +8,7 @@ SUPERSET_SRC_DIR="${SUPERSET_SRC_DIR:-}"
 PLUGIN_SRC_DIR="${PLUGIN_SRC_DIR:-$ROOT_DIR/superset-frontend/plugins/plugin-chart-echarts6-gantt}"
 SUPERSET_GIT_REF="${SUPERSET_GIT_REF:-}"
 SKIP_DOCKER_BUILD="${SKIP_DOCKER_BUILD:-0}"
+OUTPUT_IMAGE="${OUTPUT_IMAGE:-${SUPERSET_PLUGIN_IMAGE:-local/superset-echarts6:latest}}"
 
 detect_latest_stable_tag() {
   git ls-remote --tags --refs https://github.com/apache/superset.git \
@@ -47,6 +48,13 @@ fi
 echo "[build] Superset git ref: ${SUPERSET_GIT_REF}"
 echo "[build] Build dir: ${BUILD_DIR}"
 echo "[build] Superset src dir: ${SUPERSET_SRC_DIR}"
+echo "[build] Output image: ${OUTPUT_IMAGE}"
+
+if [[ ! -f "${PLUGIN_SRC_DIR}/package.json" || ! -d "${PLUGIN_SRC_DIR}/src" ]]; then
+  echo "[build] ERROR: plugin source is missing at ${PLUGIN_SRC_DIR}" >&2
+  echo "[build] Expected files: package.json and src/**" >&2
+  exit 1
+fi
 
 mkdir -p "${BUILD_DIR}"
 if [[ -n "${USER_SUPERSET_SRC_DIR}" && -d "${SUPERSET_SRC_DIR}" ]]; then
@@ -85,10 +93,10 @@ if [[ "${SKIP_DOCKER_BUILD}" != "1" ]]; then
   echo "[build] Building docker image..."
   (
     cd "${SUPERSET_SRC_DIR}"
-    docker build -t "local/superset-echarts6:${SUPERSET_GIT_REF}" .
+    docker build -t "${OUTPUT_IMAGE}" .
   )
 else
   echo "[build] SKIP_DOCKER_BUILD=1, skipping docker image build"
 fi
 
-echo "[build] Done. Image: local/superset-echarts6:${SUPERSET_GIT_REF}"
+echo "[build] Done. Image: ${OUTPUT_IMAGE}"
