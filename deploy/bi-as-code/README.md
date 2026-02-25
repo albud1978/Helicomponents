@@ -35,6 +35,36 @@
 - All artifacts are idempotent and reviewable in Git before apply.
 - Runtime emergency patches must be backported into source artifacts.
 
+## Instance isolation model
+
+Each machine runs a **fully isolated** Superset instance:
+- Separate Docker containers and named volumes (no shared state between machines).
+- Superset metadata DB (PostgreSQL) is local to each machine.
+- **Git bundle is the only state transfer mechanism** between instances.
+- Starting Superset on machine B from the same `docker-compose.yml` does NOT affect machine A in any way.
+
+### What "same content" means
+After bootstrap, a fresh instance has **no dashboards**. To replicate content from another machine:
+1. Pull the latest Git state (`git pull`).
+2. Run `import --overwrite` (see section below).
+
+Content is in sync only after explicit import. Without import, instances diverge independently.
+
+### Running two instances on the same machine
+Possible, but requires three isolation parameters:
+
+| Parameter | Default | Override |
+|---|---|---|
+| Container names | `superset-local`, `superset-db-local`, `superset-redis-local` | Remove `container_name` from compose or rename |
+| Port | `8088` | Set `SUPERSET_PORT=8089` in `.env` |
+| Compose project | directory name | `docker compose -p superset2 -f ...` |
+
+Example (second instance on port 8089):
+```bash
+SUPERSET_PORT=8089 docker compose -p superset2 \
+  -f "deploy/superset-local/docker-compose.yml" up -d --build
+```
+
 ## Git migration mode (regular A <-> B sync)
 
 ### What is now stored in Git for migration
