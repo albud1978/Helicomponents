@@ -160,6 +160,8 @@ activate.sh
 !.cursor/**
 # Explicitly unignore hook logs (overrides global *.log ignore)
 !.cursor/hooks/*.log
+# Keep user communication audit local-only
+.cursor/hooks/user_comm_audit.log
 # Keep generated Python cache ignored inside .cursor
 .cursor/**/__pycache__/
 .cursor/**/*.py[cod]

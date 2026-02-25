@@ -153,7 +153,7 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 - Для нового агента обязателен onboarding перед действиями:
   - прочитать `deploy/bi-as-code/README.md`;
   - прочитать `.cursor/rules/00_global_always.mdc` и `.cursor/rules/90_multiagent_workflow.mdc`;
-  - проверить `.cursor/hooks/user_comm_audit.log` и `.cursor/hooks/code_edit_audit.log`.
+  - проверить `.cursor/hooks/code_edit_audit.log` (в Git) и локальный `.cursor/hooks/user_comm_audit.log` (на текущей машине).
 - Для WSL2 поддержан тот же контур (см. WSL notes в `deploy/bi-as-code/README.md`).
 
 ## 📚 Документация
