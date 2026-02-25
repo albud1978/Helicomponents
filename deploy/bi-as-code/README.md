@@ -42,15 +42,16 @@
 - `deploy/bi-as-code/contracts/` (semantic + brandbook contracts).
 - `deploy/bi-as-code/superset/` (BI manifests and exported bundle directory).
 - `deploy/bi-as-code/scripts/superset_git_sync.py` (export/import controller via Superset API).
-- `.cursor/hooks/user_comm_audit.log` and `.cursor/hooks/code_edit_audit.log` (project audit trail for handoff context).
+- `.cursor/hooks/code_edit_audit.log` is versioned for project traceability.
+- `.cursor/hooks/user_comm_audit.log` is local-only and not synchronized via Git.
 
 ### Mandatory onboarding for a new agent (read order)
 1) `README.md` (section `BI (Superset)` and migration pointers).
 2) `deploy/bi-as-code/README.md` (this file, full runbook).
 3) `.cursor/rules/00_global_always.mdc` and `.cursor/rules/90_multiagent_workflow.mdc` (governance and workflow).
 4) Latest audit entries:
-   - `.cursor/hooks/user_comm_audit.log`
-   - `.cursor/hooks/code_edit_audit.log`
+   - `.cursor/hooks/code_edit_audit.log` (in Git)
+   - `.cursor/hooks/user_comm_audit.log` (local machine only)
 5) Current BI artifact state in Git:
    - `deploy/bi-as-code/superset/bundles/dashboard_1/`
 
@@ -118,9 +119,9 @@ python "deploy/bi-as-code/scripts/superset_git_sync.py" \
 
 ### Critical notes
 - `.env` is local-only and ignored; never commit secrets.
-- Audit logs are versioned by design for traceability; include them in regular sync if they changed:
+- `code_edit_audit.log` is versioned by design for traceability:
 ```bash
-git add ".cursor/hooks/user_comm_audit.log" ".cursor/hooks/code_edit_audit.log"
+git add ".cursor/hooks/code_edit_audit.log"
 ```
 - If dashboard bundle contains database YAML requiring passwords, pass JSON maps to import:
   - `--passwords-file`
