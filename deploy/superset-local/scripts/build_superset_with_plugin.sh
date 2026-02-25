@@ -69,20 +69,21 @@ mkdir -p "${SUPERSET_SRC_DIR}/superset-frontend/plugins/plugin-chart-echarts6-ga
 cp -R "${PLUGIN_SRC_DIR}/." "${SUPERSET_SRC_DIR}/superset-frontend/plugins/plugin-chart-echarts6-gantt/"
 
 echo "[build] Registering plugin..."
-python "${ROOT_DIR}/deploy/superset-local/scripts/register_plugin_in_superset.py" --superset-src "${SUPERSET_SRC_DIR}"
-python "${ROOT_DIR}/deploy/superset-local/scripts/patch_webpack_proxy_zstd.py" --superset-src "${SUPERSET_SRC_DIR}"
+python3 "${ROOT_DIR}/deploy/superset-local/scripts/register_plugin_in_superset.py" --superset-src "${SUPERSET_SRC_DIR}"
+python3 "${ROOT_DIR}/deploy/superset-local/scripts/patch_webpack_proxy_zstd.py" --superset-src "${SUPERSET_SRC_DIR}"
 
 echo "[build] Installing frontend deps and building assets..."
-if command -v npm >/dev/null 2>&1; then
+_NPM_PATH="$(command -v npm 2>/dev/null || true)"
+if [[ -n "${_NPM_PATH}" && "${_NPM_PATH}" != /mnt/* ]]; then
+  echo "[build] Using host npm: ${_NPM_PATH}"
   (
     cd "${SUPERSET_SRC_DIR}/superset-frontend"
     npm install
     npm run build
   )
 else
-  echo "[build] npm not found on host, using node:20-bullseye container..."
+  echo "[build] npm not found or is Windows npm (${_NPM_PATH}), using node:20-bullseye container..."
   docker run --rm \
-    -u "$(id -u):$(id -g)" \
     -v "${SUPERSET_SRC_DIR}:/src" \
     -w /src/superset-frontend \
     node:20-bullseye \

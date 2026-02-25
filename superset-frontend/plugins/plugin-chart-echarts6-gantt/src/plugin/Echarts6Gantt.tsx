@@ -42,8 +42,8 @@ function formatType(group: number): string {
 function buildLongFreeWindowPoints(
   aircraftPoints: AircraftSeriesPoint[],
   categories: string[],
-  xMin?: number,
-  xMax?: number
+  xMin: number,
+  xMax: number
 ): SlotSeriesPoint[] {
   if (!aircraftPoints.length || !Number.isFinite(xMin) || !Number.isFinite(xMax)) {
     return [];
@@ -82,7 +82,7 @@ function buildLongFreeWindowPoints(
         const slots = Math.floor(days / LONG_FREE_WINDOW_DAYS);
         if (days > LONG_FREE_WINDOW_DAYS && slots > 0) {
           slotPoints.push({
-            value: [idx, cursor, range.start, slots, categories[idx]]
+            value: [idx, cursor, range.start, slots, categories[idx]!]
           });
         }
       }
@@ -94,7 +94,7 @@ function buildLongFreeWindowPoints(
       const slots = Math.floor(days / LONG_FREE_WINDOW_DAYS);
       if (days > LONG_FREE_WINDOW_DAYS && slots > 0) {
         slotPoints.push({
-          value: [idx, cursor, xMax, slots, categories[idx]]
+          value: [idx, cursor, xMax, slots, categories[idx]!]
         });
       }
     }
@@ -315,8 +315,8 @@ export default function Echarts6Gantt(props: Echarts6GanttTransformedProps): JSX
       buildLongFreeWindowPoints(
         aircraftSeriesData,
         categories,
-        xExtent.min,
-        xExtent.max
+        xExtent.min ?? 0,
+        xExtent.max ?? 0
       ),
     [aircraftSeriesData, categories, xExtent.max, xExtent.min]
   );
@@ -444,7 +444,7 @@ export default function Echarts6Gantt(props: Echarts6GanttTransformedProps): JSX
           brushSelect: false
         }
       ],
-      series: [
+      series: (([
         {
           type: "custom",
           name: "Ми-8",
@@ -475,10 +475,10 @@ export default function Echarts6Gantt(props: Echarts6GanttTransformedProps): JSX
           encode: { x: [1, 2], y: 0, tooltip: [4, 3, 1, 2] },
           data: freeWindowSeriesData
         }
-      ]
+      ]) as any[]),
     };
 
-    chartRef.current.setOption(option, true);
+    chartRef.current.setOption(option as any, true);
     chartRef.current.resize({ width, height });
 
     return () => {
