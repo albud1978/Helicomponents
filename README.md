@@ -153,6 +153,9 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 - Для `repo-only` (без registry) использовать запуск с плагином:
   - `bash deploy/superset-local/start_local_plugin.sh`
   - этот скрипт при необходимости соберёт локальный image из `superset-frontend/plugins/plugin-chart-echarts6-gantt/`.
+- Для точной 1:1 копии инстанса использовать exact clone scripts:
+  - `bash deploy/superset-local/scripts/export_exact_superset_clone.sh`
+  - `bash deploy/superset-local/scripts/import_exact_superset_clone.sh <artifact_dir>`
 - Для нового агента обязателен onboarding перед действиями:
   - прочитать `deploy/bi-as-code/README.md`;
   - прочитать `.cursor/rules/00_global_always.mdc` и `.cursor/rules/90_multiagent_workflow.mdc`;
