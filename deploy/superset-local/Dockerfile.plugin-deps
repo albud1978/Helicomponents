@@ -1,0 +1,8 @@
+ARG SUPERSET_PLUGIN_IMAGE=local/superset-echarts6:latest
+FROM ${SUPERSET_PLUGIN_IMAGE}
+
+USER root
+RUN /app/.venv/bin/python -m ensurepip --upgrade 2>/dev/null || true && \
+    /app/.venv/bin/python -m pip install --no-cache-dir clickhouse-connect psycopg2-binary || \
+    pip3 install --no-cache-dir clickhouse-connect psycopg2-binary
+USER superset

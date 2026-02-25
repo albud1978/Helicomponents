@@ -1,12 +1,24 @@
 services:
   superset:
-    image: ${SUPERSET_PLUGIN_IMAGE:-local/superset-echarts6:latest}
-    build: null
+    image: local/superset-echarts6-deps:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.plugin-deps
+      args:
+        SUPERSET_PLUGIN_IMAGE: ${SUPERSET_PLUGIN_IMAGE:-local/superset-echarts6:latest}
 
   superset-worker:
-    image: ${SUPERSET_PLUGIN_IMAGE:-local/superset-echarts6:latest}
-    build: null
+    image: local/superset-echarts6-deps:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.plugin-deps
+      args:
+        SUPERSET_PLUGIN_IMAGE: ${SUPERSET_PLUGIN_IMAGE:-local/superset-echarts6:latest}
 
   superset-beat:
-    image: ${SUPERSET_PLUGIN_IMAGE:-local/superset-echarts6:latest}
-    build: null
+    image: local/superset-echarts6-deps:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.plugin-deps
+      args:
+        SUPERSET_PLUGIN_IMAGE: ${SUPERSET_PLUGIN_IMAGE:-local/superset-echarts6:latest}
