@@ -335,6 +335,7 @@ export default function Echarts6Gantt(props: Echarts6GanttTransformedProps): JSX
     const option: echarts.EChartsOption = {
       animation: true,
       backgroundColor: "#ffffff",
+      color: [COLOR_MI8, COLOR_MI17, "rgba(0,0,0,0)"],
       grid: { top: 52, right: 28, bottom: 84, left: 96 },
       tooltip: {
         trigger: "item",
@@ -449,6 +450,7 @@ export default function Echarts6Gantt(props: Echarts6GanttTransformedProps): JSX
           type: "custom",
           name: "Ми-8",
           progressive: 0,
+          itemStyle: { color: COLOR_MI8 },
           renderItem: renderAircraftBar,
           encode: { x: [1, 2], y: 0, tooltip: [4, 3, 5, 1, 2] },
           data: aircraftSeriesData.filter(item => Number(item.value[5]) === 1)
@@ -457,6 +459,7 @@ export default function Echarts6Gantt(props: Echarts6GanttTransformedProps): JSX
           type: "custom",
           name: "Ми-17",
           progressive: 0,
+          itemStyle: { color: COLOR_MI17 },
           renderItem: renderAircraftBar,
           encode: { x: [1, 2], y: 0, tooltip: [4, 3, 5, 1, 2] },
           markLine: {
@@ -471,6 +474,11 @@ export default function Echarts6Gantt(props: Echarts6GanttTransformedProps): JSX
           type: "custom",
           name: "Слоты",
           progressive: 0,
+          itemStyle: {
+            color: "rgba(0,0,0,0)",
+            borderColor: COLOR_SLOT_BORDER,
+            borderWidth: 2
+          },
           renderItem: renderSlotBar,
           encode: { x: [1, 2], y: 0, tooltip: [4, 3, 1, 2] },
           data: freeWindowSeriesData
