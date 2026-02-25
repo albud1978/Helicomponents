@@ -2,6 +2,8 @@
 
 ## Scope Freeze (current stage)
 - Active scope: `personal sandbox -> corporate sandbox`.
+- **Single transfer mode: Mode B (repo-only) only.**
+- Exact clone mode is out of active process and is not used by default.
 - Production deploy is **not** executed by project agents at this stage.
 - Production is treated as a handoff target for corporate admins.
 - Any clone/deploy action to corporate sandbox is executed **only** by explicit user command.
@@ -179,7 +181,6 @@ What import does:
 #### Notes and limits (archived)
 - Scripts are kept for reference; not used in standard workflow.
 - Keep `.env` local and never commit secrets.
-
 ### Export current BI state to Git (machine A)
 ```bash
 python "deploy/bi-as-code/scripts/superset_git_sync.py" \
@@ -222,15 +223,16 @@ python "deploy/bi-as-code/scripts/superset_git_sync.py" \
 2) Verify plugin source exists:
    - `superset-frontend/plugins/plugin-chart-echarts6-gantt/package.json`
    - `superset-frontend/plugins/plugin-chart-echarts6-gantt/src/plugin/Echarts6Gantt.tsx`
-3) Create `.env` from `.env.example`. Set `CLICKHOUSE_PORT=8123` (HTTP, for `clickhouse+connect://` dialect).
-4) Run `bash deploy/superset-local/start_local_plugin.sh` — builds plugin image if absent, starts compose with plugin override.
-5) Health check: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8088/health` → `200`.
-6) Import bundle: `superset_git_sync.py import --overwrite`. If DB password required, use key `databases/clickhouse.yaml`.
-7) Open `http://127.0.0.1:8088/superset/dashboard/1/` and verify chart `5` (`График Ремонта`) renders correctly.
-8) If `echarts6_gantt is not registered` — step 4 was run with wrong compose file (missing plugin override). Repeat step 4.
+3) Create `.env` from `.env.example`. Set `CLICKHOUSE_PORT=8123` (HTTP, for `clickhousedb://`).
+4) Run `bash deploy/superset-local/start_local_plugin.sh` (not base `start_local.sh`).
+5) Health check: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8088/health` -> `200`.
+6) Import bundle and check dashboard `1` + chart `5`.
+7) If import requires DB password map, use key `databases/clickhouse.yaml`.
+8) If `echarts6_gantt is not registered` then startup used wrong compose path; repeat step 4.
 
 ### Critical notes
 - `.env` is local-only and ignored; never commit secrets.
+- `deploy/superset-local/scripts/export_exact_superset_clone.sh` and `import_exact_superset_clone.sh` are kept in repository, but not part of active Mode B workflow.
 - `code_edit_audit.log` is versioned by design for traceability:
 ```bash
 git add ".cursor/hooks/code_edit_audit.log"
