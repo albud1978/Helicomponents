@@ -1,0 +1,152 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: superset-db-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-superset}
+      POSTGRES_USER: ${POSTGRES_USER:-superset}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-superset}
+    volumes:
+      - superset_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-superset} -d ${POSTGRES_DB:-superset}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: superset-redis-local
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  superset:
+    build:
+      context: ../..
+      dockerfile: deploy/superset-local/Dockerfile
+      args:
+        SUPERSET_IMAGE_TAG: ${SUPERSET_IMAGE_TAG:-latest}
+    container_name: superset-local
+    restart: unless-stopped
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-change_this_secret_key_for_local}
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_LOAD_EXAMPLES: "no"
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: ${POSTGRES_USER:-superset}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-superset}
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_DB: ${POSTGRES_DB:-superset}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      BOOTSTRAP_DATASOURCE: ${BOOTSTRAP_DATASOURCE:-1}
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
+      SUPERSET_ADMIN_FIRSTNAME: ${SUPERSET_ADMIN_FIRSTNAME:-Local}
+      SUPERSET_ADMIN_LASTNAME: ${SUPERSET_ADMIN_LASTNAME:-Admin}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL:-admin@example.com}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
+      SUPERSET_CH_DATABASE_NAME: ${SUPERSET_CH_DATABASE_NAME:-clickhouse_default}
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-10.95.19.132}
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-9000}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-default}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change_me}
+      CLICKHOUSE_SECURE: ${CLICKHOUSE_SECURE:-0}
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./init-superset.sh:/app/deploy/superset-local/init-superset.sh:ro
+      - ./scripts:/app/deploy/superset-local/scripts:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${SUPERSET_PORT:-8088}:8088"
+    command:
+      - /bin/bash
+      - -c
+      - /app/deploy/superset-local/init-superset.sh && /usr/bin/run-server.sh
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8088/health || exit 1"]
+      interval: 20s
+      timeout: 8s
+      retries: 15
+
+  superset-worker:
+    build:
+      context: ../..
+      dockerfile: deploy/superset-local/Dockerfile
+      args:
+        SUPERSET_IMAGE_TAG: ${SUPERSET_IMAGE_TAG:-latest}
+    container_name: superset-worker-local
+    restart: unless-stopped
+    profiles: ["async"]
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-change_this_secret_key_for_local}
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: ${POSTGRES_USER:-superset}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-superset}
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_DB: ${POSTGRES_DB:-superset}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset_config.py:/app/pythonpath/superset_config.py:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      - /bin/bash
+      - -c
+      - celery --app=superset.tasks.celery_app:app worker -l INFO -O fair
+
+  superset-beat:
+    build:
+      context: ../..
+      dockerfile: deploy/superset-local/Dockerfile
+      args:
+        SUPERSET_IMAGE_TAG: ${SUPERSET_IMAGE_TAG:-latest}
+    container_name: superset-beat-local
+    restart: unless-stopped
+    profiles: ["async"]
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-change_this_secret_key_for_local}
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: ${POSTGRES_USER:-superset}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-superset}
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_DB: ${POSTGRES_DB:-superset}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset_config.py:/app/pythonpath/superset_config.py:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      - /bin/bash
+      - -c
+      - celery --app=superset.tasks.celery_app:app beat -l INFO
+
+volumes:
+  superset_db_data:
+  superset_home:

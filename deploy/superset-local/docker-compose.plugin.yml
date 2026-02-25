@@ -1,0 +1,12 @@
+services:
+  superset:
+    image: ${SUPERSET_PLUGIN_IMAGE:-local/superset-echarts6:latest}
+    build: null
+
+  superset-worker:
+    image: ${SUPERSET_PLUGIN_IMAGE:-local/superset-echarts6:latest}
+    build: null
+
+  superset-beat:
+    image: ${SUPERSET_PLUGIN_IMAGE:-local/superset-echarts6:latest}
+    build: null

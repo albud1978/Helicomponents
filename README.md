@@ -144,6 +144,18 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 - Если есть кэш-конфликт ассетов после runtime-патча:
   - перезапустить `superset-local`, затем повторить `Ctrl+Shift+R`.
 
+### Полная миграция через Git (регулярно между машинами)
+
+- Подробный runbook: `deploy/bi-as-code/README.md` (раздел `Git migration mode`).
+- Ключевой инструмент синхронизации dashboard bundle:
+  - `python deploy/bi-as-code/scripts/superset_git_sync.py export ...`
+  - `python deploy/bi-as-code/scripts/superset_git_sync.py import --overwrite ...`
+- Для нового агента обязателен onboarding перед действиями:
+  - прочитать `deploy/bi-as-code/README.md`;
+  - прочитать `.cursor/rules/00_global_always.mdc` и `.cursor/rules/90_multiagent_workflow.mdc`;
+  - проверить `.cursor/hooks/user_comm_audit.log` и `.cursor/hooks/code_edit_audit.log`.
+- Для WSL2 поддержан тот же контур (см. WSL notes в `deploy/bi-as-code/README.md`).
+
 ## 📚 Документация
 
 ### Правила и методология
