@@ -65,6 +65,12 @@ SUPERSET_PORT=8089 docker compose -p superset2 \
   -f "deploy/superset-local/docker-compose.yml" up -d --build
 ```
 
+## Scope Freeze: ONLY Mode B (repo-only)
+
+> **The only supported migration mode is Mode B (repo-only via Git bundle + plugin image build from source).**
+> Exact-clone mode (container snapshot) is archived and not used in regular workflow.
+> New agents must NOT use exact-clone scripts unless explicitly instructed by the user.
+
 ## Git migration mode (regular A <-> B sync)
 
 ### What is now stored in Git for migration
@@ -140,8 +146,9 @@ PY
 If dashboard still says `Item with key "echarts6_gantt" is not registered`, run hard refresh (`Ctrl+Shift+R`) and ensure startup used `docker-compose.plugin.yml`.
 This guarantees plugin registration and chart rendering. Visual fine-tuning from one-off runtime asset patches must be reapplied only if explicitly required.
 
-### Exact 1:1 clone mode (container snapshot + metadata DB + superset_home)
-Use this mode when you need a near-identical copy of the source Superset instance, including runtime frontend state.
+### ~~Exact 1:1 clone mode~~ (ARCHIVED — do not use)
+> **ARCHIVED. Not part of regular workflow. Scripts kept for reference only.**
+> Use Mode B (repo-only) instead. See `Scope Freeze` section above.
 
 #### Source machine (export exact clone)
 ```bash
@@ -169,11 +176,9 @@ What import does:
 4) Restores `superset_home` archive (if present).
 5) Waits for health check.
 
-#### Notes and limits
-- This mode is intended for sandbox-to-sandbox cloning only.
+#### Notes and limits (archived)
+- Scripts are kept for reference; not used in standard workflow.
 - Keep `.env` local and never commit secrets.
-- If source instance contains one-off runtime asset patches, exact mode preserves them by snapshot image.
-- If you skip exact mode and use only bundle import, frontend customizations may differ.
 
 ### Export current BI state to Git (machine A)
 ```bash
@@ -212,23 +217,17 @@ python "deploy/bi-as-code/scripts/superset_git_sync.py" \
 - B changed BI in UI -> export -> commit/push.
 - A pulls -> import --overwrite.
 
-### New agent post-pull tuning checklist (mandatory)
-1) Read this file and confirm scope: local sandbox only.
+### New agent post-pull checklist (mandatory, Mode B only)
+1) Read this file fully. Confirm scope: local sandbox only, Mode B.
 2) Verify plugin source exists:
    - `superset-frontend/plugins/plugin-chart-echarts6-gantt/package.json`
    - `superset-frontend/plugins/plugin-chart-echarts6-gantt/src/plugin/Echarts6Gantt.tsx`
-3) Ensure `.env` is created from `.env.example` and ClickHouse port is `8123` for `clickhousedb://`.
-4) Run `bash deploy/superset-local/start_local_plugin.sh` (not base `start_local.sh`).
-5) Import bundle and check dashboard `1` + chart `5`.
-6) If import requires DB password map, use key `databases/clickhouse.yaml`.
-7) If UI baseline differs from expected sandbox styling, record delta and apply approved visual patch task separately.
-
-### New agent post-pull checklist for exact mode
-1) Confirm source machine already exported exact artifacts.
-2) Confirm target has Docker Desktop/WSL integration and running daemon.
-3) Ensure local `.env` exists and contains correct ClickHouse connectivity.
-4) Run `import_exact_superset_clone.sh` with artifact directory.
-5) Open dashboard `1` and verify chart `5` renders without `echarts6_gantt` registration errors.
+3) Create `.env` from `.env.example`. Set `CLICKHOUSE_PORT=8123` (HTTP, for `clickhouse+connect://` dialect).
+4) Run `bash deploy/superset-local/start_local_plugin.sh` — builds plugin image if absent, starts compose with plugin override.
+5) Health check: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8088/health` → `200`.
+6) Import bundle: `superset_git_sync.py import --overwrite`. If DB password required, use key `databases/clickhouse.yaml`.
+7) Open `http://127.0.0.1:8088/superset/dashboard/1/` and verify chart `5` (`График Ремонта`) renders correctly.
+8) If `echarts6_gantt is not registered` — step 4 was run with wrong compose file (missing plugin override). Repeat step 4.
 
 ### Critical notes
 - `.env` is local-only and ignored; never commit secrets.
