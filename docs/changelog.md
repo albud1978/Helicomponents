@@ -1,5 +1,19 @@
 # Changelog
 
+## [25-02-2026] - BI exact clone scripts (1:1 перенос инстанса между машинами)
+
+### Изменения
+- Добавлены скрипты точного переноса Superset sandbox:
+  - `deploy/superset-local/scripts/export_exact_superset_clone.sh`
+  - `deploy/superset-local/scripts/import_exact_superset_clone.sh`
+- В `deploy/bi-as-code/README.md` добавлен runbook `Exact 1:1 clone mode`:
+  - экспорт snapshot image + metadata dump + `superset_home`;
+  - импорт на целевой машине с восстановлением БД и запуском stack.
+- `README.md` дополнен ссылками на exact clone scripts для быстрого старта нового агента.
+
+### Контекст
+Для сценария «перенести максимально идентичный Superset, включая runtime-оформление и кастомный Gantt» bundle-import недостаточен. Exact clone mode фиксирует состояние контейнера и метаданных, снижая дрейф между sandbox-машинами.
+
 ## [25-02-2026] - BI repo-only: восстановление исходников Gantt plugin + onboarding нового агента
 
 ### Изменения

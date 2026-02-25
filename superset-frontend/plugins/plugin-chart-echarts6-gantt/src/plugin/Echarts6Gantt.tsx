@@ -2,10 +2,236 @@ import { useEffect, useMemo, useRef } from "react";
 import * as echarts from "echarts";
 import { Echarts6GanttTransformedProps } from "./types";
 
-export default function Echarts6Gantt(
-  props: Echarts6GanttTransformedProps
-): JSX.Element {
-  const { width, height, data, metricLabel } = props;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const LONG_FREE_WINDOW_DAYS = 180;
+const COLOR_MI8 = "#003594";
+const COLOR_MI17 = "#7CA3DC";
+const COLOR_SLOT_BORDER = "#64748b";
+const COLOR_AXIS_TEXT = "#111820";
+
+type AircraftSeriesPoint = {
+  value: [number, number, number, string, string, number];
+  itemStyle: { color: string };
+};
+
+type SlotSeriesPoint = {
+  value: [number, number, number, number, string];
+};
+
+function formatDateDDMMYYYY(value: unknown): string {
+  const ts = Number(value);
+  const d = new Date(ts);
+  if (!Number.isFinite(d.getTime())) {
+    return "-";
+  }
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+function formatDateYYYY(value: number): string {
+  const d = new Date(value);
+  return Number.isFinite(d.getTime()) ? String(d.getFullYear()) : "";
+}
+
+function formatType(group: number): string {
+  return group === 2 ? "Ми-17" : "Ми-8";
+}
+
+function buildLongFreeWindowPoints(
+  aircraftPoints: AircraftSeriesPoint[],
+  categories: string[],
+  xMin?: number,
+  xMax?: number
+): SlotSeriesPoint[] {
+  if (!aircraftPoints.length || !Number.isFinite(xMin) || !Number.isFinite(xMax)) {
+    return [];
+  }
+
+  const occupiedByCategory = new Map<number, Array<{ start: number; end: number }>>();
+  for (const item of aircraftPoints) {
+    const [categoryIndex, start, end] = item.value;
+    if (!occupiedByCategory.has(categoryIndex)) {
+      occupiedByCategory.set(categoryIndex, []);
+    }
+    occupiedByCategory.get(categoryIndex)!.push({ start, end });
+  }
+
+  const slotPoints: SlotSeriesPoint[] = [];
+
+  for (let idx = 0; idx < categories.length; idx += 1) {
+    const ranges = (occupiedByCategory.get(idx) || [])
+      .slice()
+      .sort((a, b) => a.start - b.start);
+
+    const merged: Array<{ start: number; end: number }> = [];
+    for (const range of ranges) {
+      const last = merged[merged.length - 1];
+      if (!last || range.start > last.end) {
+        merged.push({ ...range });
+      } else {
+        last.end = Math.max(last.end, range.end);
+      }
+    }
+
+    let cursor = xMin;
+    for (const range of merged) {
+      if (range.start > cursor) {
+        const days = Math.floor((range.start - cursor) / DAY_MS);
+        const slots = Math.floor(days / LONG_FREE_WINDOW_DAYS);
+        if (days > LONG_FREE_WINDOW_DAYS && slots > 0) {
+          slotPoints.push({
+            value: [idx, cursor, range.start, slots, categories[idx]]
+          });
+        }
+      }
+      cursor = Math.max(cursor, range.end);
+    }
+
+    if (cursor < xMax) {
+      const days = Math.floor((xMax - cursor) / DAY_MS);
+      const slots = Math.floor(days / LONG_FREE_WINDOW_DAYS);
+      if (days > LONG_FREE_WINDOW_DAYS && slots > 0) {
+        slotPoints.push({
+          value: [idx, cursor, xMax, slots, categories[idx]]
+        });
+      }
+    }
+  }
+
+  return slotPoints;
+}
+
+function renderAircraftBar(params: any, api: any) {
+  const categoryIndex = Number(api.value(0));
+  const start = api.coord([api.value(1), categoryIndex]);
+  const end = api.coord([api.value(2), categoryIndex]);
+  const size = api.size([0, 1]);
+  const h = (Array.isArray(size) ? size[1] : Number(size || 0)) * 0.64;
+  const coord = params.coordSys || {};
+  const baseStyle = api.style();
+
+  const rect = echarts.graphic.clipRectByRect(
+    {
+      x: start[0],
+      y: start[1] - h / 2,
+      width: Math.max(1, end[0] - start[0]),
+      height: h
+    },
+    {
+      x: Number(coord.x || 0),
+      y: Number(coord.y || 0),
+      width: Number(coord.width || 0),
+      height: Number(coord.height || 0)
+    }
+  );
+
+  if (!rect) {
+    return null;
+  }
+
+  const barText = String(api.value(3) ?? "");
+  const showText = rect.width >= 26;
+  return {
+    type: "group",
+    children: [
+      {
+        type: "rect",
+        shape: rect,
+        style: {
+          ...baseStyle,
+          stroke: "#1f2937",
+          lineWidth: 0.6,
+          opacity: 0.92
+        },
+        emphasis: {
+          style: {
+            opacity: 1,
+            lineWidth: 1
+          }
+        }
+      },
+      {
+        type: "text",
+        style: {
+          x: rect.x + 4,
+          y: rect.y + rect.height / 2,
+          text: showText ? barText : "",
+          verticalAlign: "middle",
+          textAlign: "left",
+          fill: "#ffffff",
+          fontWeight: 700,
+          fontSize: Math.max(10, Math.min(12, rect.height - 1)),
+          width: Math.max(rect.width - 8, 0),
+          overflow: "truncate"
+        },
+        silent: true
+      }
+    ]
+  };
+}
+
+function renderSlotBar(params: any, api: any) {
+  const categoryIndex = Number(api.value(0));
+  const start = api.coord([api.value(1), categoryIndex]);
+  const end = api.coord([api.value(2), categoryIndex]);
+  const size = api.size([0, 1]);
+  const h = (Array.isArray(size) ? size[1] : Number(size || 0)) * 0.52;
+  const coord = params.coordSys || {};
+
+  const rect = echarts.graphic.clipRectByRect(
+    {
+      x: start[0],
+      y: start[1] - h / 2,
+      width: Math.max(1, end[0] - start[0]),
+      height: h
+    },
+    {
+      x: Number(coord.x || 0),
+      y: Number(coord.y || 0),
+      width: Number(coord.width || 0),
+      height: Number(coord.height || 0)
+    }
+  );
+
+  if (!rect) {
+    return null;
+  }
+
+  const slots = Number(api.value(3) ?? 0);
+  return {
+    type: "group",
+    children: [
+      {
+        type: "rect",
+        shape: rect,
+        style: {
+          fill: "rgba(0,0,0,0)",
+          stroke: COLOR_SLOT_BORDER,
+          lineWidth: 2
+        }
+      },
+      {
+        type: "text",
+        style: {
+          x: rect.x + rect.width / 2,
+          y: rect.y + rect.height / 2,
+          text: slots > 0 ? String(slots) : "",
+          verticalAlign: "middle",
+          textAlign: "center",
+          fill: COLOR_SLOT_BORDER,
+          fontWeight: 700,
+          fontSize: 11
+        },
+        silent: true
+      }
+    ]
+  };
+}
+
+export default function Echarts6Gantt(props: Echarts6GanttTransformedProps): JSX.Element {
+  const { width, height, data } = props;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
 
@@ -17,9 +243,14 @@ export default function Echarts6Gantt(
     [data]
   );
 
+  const categoryIndexMap = useMemo(
+    () => new Map(categories.map((category, idx) => [category, idx])),
+    [categories]
+  );
+
   const xExtent = useMemo(() => {
     if (!data.length) {
-      return { min: undefined, max: undefined };
+      return { min: undefined as number | undefined, max: undefined as number | undefined };
     }
     const day0Starts = data
       .filter(point => point.dayIndexStart === 0)
@@ -52,8 +283,48 @@ export default function Echarts6Gantt(
     return result;
   }, [data]);
 
+  const aircraftSeriesData = useMemo<AircraftSeriesPoint[]>(
+    () =>
+      data
+        .map(point => {
+          const categoryIndex = categoryIndexMap.get(point.category);
+          if (categoryIndex === undefined) {
+            return null;
+          }
+          const stableGroup = dominantGroupByLabel.get(point.label) ?? point.groupBy ?? 1;
+          return {
+            value: [
+              categoryIndex,
+              point.startTs,
+              point.endTs,
+              point.label,
+              point.category,
+              stableGroup
+            ],
+            itemStyle: {
+              color: stableGroup === 2 ? COLOR_MI17 : COLOR_MI8
+            }
+          };
+        })
+        .filter((item): item is AircraftSeriesPoint => item !== null),
+    [categoryIndexMap, data, dominantGroupByLabel]
+  );
+
+  const freeWindowSeriesData = useMemo(
+    () =>
+      buildLongFreeWindowPoints(
+        aircraftSeriesData,
+        categories,
+        xExtent.min,
+        xExtent.max
+      ),
+    [aircraftSeriesData, categories, xExtent.max, xExtent.min]
+  );
+
   useEffect(() => {
-    if (!rootRef.current) return undefined;
+    if (!rootRef.current) {
+      return undefined;
+    }
 
     if (!chartRef.current) {
       chartRef.current = echarts.init(rootRef.current, undefined, {
@@ -61,47 +332,58 @@ export default function Echarts6Gantt(
       });
     }
 
-    const seriesData = data.map(point => {
-      const categoryIndex = categories.indexOf(point.category);
-      const stableGroup = dominantGroupByLabel.get(point.label) ?? point.groupBy ?? 1;
-      const color = stableGroup === 2 ? "#22c55e" : "#facc15";
-      return {
-        value: [
-          categoryIndex,
-          point.startTs,
-          point.endTs,
-          point.value,
-          point.label,
-          point.category,
-          stableGroup
-        ],
-        itemStyle: {
-          color
-        }
-      };
-    });
-
     const option: echarts.EChartsOption = {
       animation: true,
-      grid: { top: 24, right: 28, bottom: 84, left: 96 },
+      backgroundColor: "#ffffff",
+      grid: { top: 52, right: 28, bottom: 84, left: 96 },
       tooltip: {
         trigger: "item",
         axisPointer: { type: "cross" },
         formatter: (params: any) => {
           const payload = Array.isArray(params) ? params[0] : params;
           const value = Array.isArray(payload?.value) ? payload.value : [];
-          const fmt = (x: unknown) => {
-            const d = new Date(Number(x));
-            return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : "-";
-          };
+          const seriesName = String(payload?.seriesName || "");
+          if (seriesName === "Слоты") {
+            return [
+              `Линия: ${value[4] ?? "-"}`,
+              `Свободные слоты (180д): ${value[3] ?? "-"}`,
+              `${formatDateDDMMYYYY(value[1])} -> ${formatDateDDMMYYYY(value[2])}`
+            ].join("<br/>");
+          }
+          const group = Number(value[5] ?? 1);
           return [
-            `Линия: ${value[5] ?? "-"}`,
-            `Борт: ${value[4] ?? "-"}`,
-            `Группа: ${value[6] ?? "-"}`,
-            `${metricLabel}: ${value[3] ?? "-"}`,
-            `${fmt(value[1])} -> ${fmt(value[2])}`
+            `Линия: ${value[4] ?? "-"}`,
+            `Борт: ${value[3] ?? "-"}`,
+            `Тип ВС: ${formatType(group)}`,
+            `${formatDateDDMMYYYY(value[1])} -> ${formatDateDDMMYYYY(value[2])}`
           ].join("<br/>");
         }
+      },
+      legend: {
+        top: 8,
+        left: "center",
+        selectedMode: true,
+        textStyle: { color: COLOR_AXIS_TEXT, fontWeight: 600 },
+        backgroundColor: "rgba(255,255,255,0.86)",
+        borderColor: "#cbd5e1",
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: [6, 10, 6, 10],
+        itemWidth: 20,
+        itemHeight: 10,
+        data: [
+          { name: "Ми-8", icon: "roundRect" },
+          { name: "Ми-17", icon: "roundRect" },
+          {
+            name: "Слоты",
+            icon: "roundRect",
+            itemStyle: {
+              color: "rgba(0,0,0,0)",
+              borderColor: COLOR_SLOT_BORDER,
+              borderWidth: 2
+            }
+          }
+        ]
       },
       xAxis: {
         type: "time",
@@ -109,16 +391,21 @@ export default function Echarts6Gantt(
         max: xExtent.max,
         splitLine: { show: true, lineStyle: { color: "#e2e8f0" } },
         axisLabel: {
-          formatter: (value: number) => {
-            const d = new Date(value);
-            return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : "";
-          }
+          color: COLOR_AXIS_TEXT,
+          formatter: formatDateYYYY
         }
       },
       yAxis: {
         type: "category",
         data: categories,
-        axisLabel: { interval: 0 },
+        axisLabel: {
+          interval: 0,
+          color: COLOR_AXIS_TEXT,
+          formatter: (value: string) => {
+            const n = Number(value);
+            return Number.isFinite(n) ? String(n + 1) : value;
+          }
+        },
         splitLine: { show: true, lineStyle: { color: "#f1f5f9" } }
       },
       dataZoom: [
@@ -160,84 +447,33 @@ export default function Echarts6Gantt(
       series: [
         {
           type: "custom",
-          name: "Gantt",
+          name: "Ми-8",
           progressive: 0,
-          renderItem: (params: any, api: any) => {
-            const categoryIndex = Number(api.value(0));
-            const start = api.coord([api.value(1), categoryIndex]);
-            const end = api.coord([api.value(2), categoryIndex]);
-            const size = api.size([0, 1]);
-            const h = (Array.isArray(size) ? size[1] : Number(size || 0)) * 0.64;
-            const coord = params.coordSys || {};
-            const baseStyle = api.style();
-
-            const rect = echarts.graphic.clipRectByRect(
-              {
-                x: start[0],
-                y: start[1] - h / 2,
-                width: Math.max(1, end[0] - start[0]),
-                height: h
-              },
-              {
-                x: Number(coord.x || 0),
-                y: Number(coord.y || 0),
-                width: Number(coord.width || 0),
-                height: Number(coord.height || 0)
-              }
-            );
-
-            if (!rect) {
-              return null;
-            }
-
-            const barText = String(api.value(4) ?? "");
-            const showText = rect.width >= 26;
-            return {
-              type: "group",
-              children: [
-                {
-                  type: "rect",
-                  shape: rect,
-                  style: {
-                    ...baseStyle,
-                    stroke: "#1f2937",
-                    lineWidth: 0.6,
-                    opacity: 0.92
-                  },
-                  emphasis: {
-                    style: {
-                      opacity: 1,
-                      lineWidth: 1
-                    }
-                  }
-                },
-                {
-                  type: "text",
-                  style: {
-                    x: rect.x + 4,
-                    y: rect.y + rect.height / 2,
-                    text: showText ? barText : "",
-                    verticalAlign: "middle",
-                    textAlign: "left",
-                    fill: "#ffffff",
-                    fontWeight: 700,
-                    fontSize: Math.max(10, Math.min(12, rect.height - 1)),
-                    width: Math.max(rect.width - 8, 0),
-                    overflow: "truncate"
-                  },
-                  silent: true
-                }
-              ]
-            };
-          },
-          encode: { x: [1, 2], y: 0, tooltip: [5, 4, 6, 3, 1, 2] },
+          renderItem: renderAircraftBar,
+          encode: { x: [1, 2], y: 0, tooltip: [4, 3, 5, 1, 2] },
+          data: aircraftSeriesData.filter(item => Number(item.value[5]) === 1)
+        },
+        {
+          type: "custom",
+          name: "Ми-17",
+          progressive: 0,
+          renderItem: renderAircraftBar,
+          encode: { x: [1, 2], y: 0, tooltip: [4, 3, 5, 1, 2] },
           markLine: {
             symbol: "none",
             label: { formatter: "Сегодня", position: "insideEndTop" },
             lineStyle: { type: "dashed", color: "#475569", width: 1 },
             data: [{ xAxis: Date.now() }]
           },
-          data: seriesData
+          data: aircraftSeriesData.filter(item => Number(item.value[5]) === 2)
+        },
+        {
+          type: "custom",
+          name: "Слоты",
+          progressive: 0,
+          renderItem: renderSlotBar,
+          encode: { x: [1, 2], y: 0, tooltip: [4, 3, 1, 2] },
+          data: freeWindowSeriesData
         }
       ]
     };
@@ -251,7 +487,7 @@ export default function Echarts6Gantt(
         chartRef.current = null;
       }
     };
-  }, [categories, data, dominantGroupByLabel, height, metricLabel, width]);
+  }, [aircraftSeriesData, categories, data, freeWindowSeriesData, height, width, xExtent.max, xExtent.min]);
 
   return <div ref={rootRef} style={{ width, height }} />;
 }

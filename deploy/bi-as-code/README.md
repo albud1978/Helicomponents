@@ -140,6 +140,41 @@ PY
 If dashboard still says `Item with key "echarts6_gantt" is not registered`, run hard refresh (`Ctrl+Shift+R`) and ensure startup used `docker-compose.plugin.yml`.
 This guarantees plugin registration and chart rendering. Visual fine-tuning from one-off runtime asset patches must be reapplied only if explicitly required.
 
+### Exact 1:1 clone mode (container snapshot + metadata DB + superset_home)
+Use this mode when you need a near-identical copy of the source Superset instance, including runtime frontend state.
+
+#### Source machine (export exact clone)
+```bash
+bash "deploy/superset-local/scripts/export_exact_superset_clone.sh"
+```
+
+Default output:
+- `output/superset_exact_clone_<UTC>/superset-image.tar`
+- `output/superset_exact_clone_<UTC>/superset_meta.dump`
+- `output/superset_exact_clone_<UTC>/superset_home.tar.gz`
+- `output/superset_exact_clone_<UTC>/image_ref.txt`
+
+Transfer that output directory to the target machine by any secure channel.
+
+#### Target machine (import exact clone)
+```bash
+bash "deploy/superset-local/scripts/import_exact_superset_clone.sh" \
+  "output/superset_exact_clone_<UTC>"
+```
+
+What import does:
+1) `docker load` image tar.
+2) Recreates Superset metadata DB from dump.
+3) Starts compose with plugin override using imported image.
+4) Restores `superset_home` archive (if present).
+5) Waits for health check.
+
+#### Notes and limits
+- This mode is intended for sandbox-to-sandbox cloning only.
+- Keep `.env` local and never commit secrets.
+- If source instance contains one-off runtime asset patches, exact mode preserves them by snapshot image.
+- If you skip exact mode and use only bundle import, frontend customizations may differ.
+
 ### Export current BI state to Git (machine A)
 ```bash
 python "deploy/bi-as-code/scripts/superset_git_sync.py" \
@@ -187,6 +222,13 @@ python "deploy/bi-as-code/scripts/superset_git_sync.py" \
 5) Import bundle and check dashboard `1` + chart `5`.
 6) If import requires DB password map, use key `databases/clickhouse.yaml`.
 7) If UI baseline differs from expected sandbox styling, record delta and apply approved visual patch task separately.
+
+### New agent post-pull checklist for exact mode
+1) Confirm source machine already exported exact artifacts.
+2) Confirm target has Docker Desktop/WSL integration and running daemon.
+3) Ensure local `.env` exists and contains correct ClickHouse connectivity.
+4) Run `import_exact_superset_clone.sh` with artifact directory.
+5) Open dashboard `1` and verify chart `5` renders without `echarts6_gantt` registration errors.
 
 ### Critical notes
 - `.env` is local-only and ignored; never commit secrets.
