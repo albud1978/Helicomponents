@@ -127,6 +127,23 @@ git add ".cursor/hooks/user_comm_audit.log" ".cursor/hooks/code_edit_audit.log"
   - `--ssh-tunnel-passwords-file`
   - `--ssh-tunnel-private-key-passwords-file`
   - `--ssh-tunnel-private-keys-file`
+- Important for `--passwords-file`: key must be the path inside bundle ZIP, not database display name.
+  - For current bundle, use key: `"databases/clickhouse.yaml"`.
+  - Example:
+```bash
+cat > /tmp/superset_passwords.json <<'EOF'
+{"databases/clickhouse.yaml":"REPLACE_WITH_REAL_PASSWORD"}
+EOF
+
+python "deploy/bi-as-code/scripts/superset_git_sync.py" \
+  --base-url "http://127.0.0.1:8088" \
+  --username "admin" \
+  --password "admin" \
+  import \
+  --bundle-dir "deploy/bi-as-code/superset/bundles/dashboard_1" \
+  --overwrite \
+  --passwords-file "/tmp/superset_passwords.json"
+```
 - If UI still shows old assets, restart container and hard refresh:
 ```bash
 docker restart superset-local
