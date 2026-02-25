@@ -31,10 +31,24 @@ import sys
 import logging
 import pandas as pd
 import numpy as np
+import math
 from pathlib import Path
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Tuple, Any, Optional
 import openpyxl
+
+
+def round_half_up_nonneg(value: Any) -> int:
+    """Half-up округление для неотрицательных значений, иначе 0."""
+    if value is None:
+        return 0
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0
+    if not np.isfinite(numeric) or numeric < 0:
+        return 0
+    return int(math.floor(numeric + 0.5))
 
 # Добавляем пути к utils и общему коду
 code_root = Path(__file__).resolve().parents[1]
@@ -379,7 +393,7 @@ class FlightProgramDirectLoader:
                     insert_data.append([
                         int(aircraft_number),
                         flight_date,  # dates (переименовано из flight_date)
-                        int(daily_hours),  # Конвертируем в UInt32
+                        round_half_up_nonneg(daily_hours),  # Конвертируем в UInt32
                         ac_type_mask,
                         base_date,
                         version_id

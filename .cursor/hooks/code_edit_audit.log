@@ -1087,3 +1087,15 @@
   edit[9] old='    for acn_val, days in repair_days_by_acn.items():\n        if not days:' new='    for acn_val, trace in master_trace_by_acn.items():\n        if not trace:'
   edit[10] old='        days_sorted = sorted(set(days))\n        for ep_start, ep_end in _build_repair_episodes(days_sorted):' new='        trace_sorted = sorted(trace, key=lambda item: item[0])\n        for ep_start, ep_end in _build_repair_episodes(tr'
 
+[2026-02-25 16:24:25 UTC] conv=8328ba3a gen=f1222179 file=code/extract/program_ac_direct_loader.py
+  edit[0] old='' new='import math'
+  edit[1] old='' new='\ndef round_half_up_nonneg(value: Any) -> int:\n    """Half-up округление для неотрицательных значений, иначе 0."""\n    if'
+  edit[2] old='                    ops_mi8 = int(tensor_engine.distribute_column_value(' new='                    ops_mi8 = round_half_up_nonneg(tensor_engine.distribute_column_value('
+  edit[3] old='                    ops_mi17 = int(tensor_engine.distribute_column_value(' new='                    ops_mi17 = round_half_up_nonneg(tensor_engine.distribute_column_value('
+  edit[4] old='                    new_mi17 = int(tensor_engine.distribute_column_value(' new='                    new_mi17 = round_half_up_nonneg(tensor_engine.distribute_column_value('
+
+[2026-02-25 16:24:32 UTC] conv=8328ba3a gen=f1222179 file=code/extract/program_fl_direct_loader.py
+  edit[0] old='' new='import math'
+  edit[1] old='' new='\ndef round_half_up_nonneg(value: Any) -> int:\n    """Half-up округление для неотрицательных значений, иначе 0."""\n    if'
+  edit[2] old='                        int(daily_hours),  # Конвертируем в UInt32' new='                        round_half_up_nonneg(daily_hours),  # Конвертируем в UInt32'
+
