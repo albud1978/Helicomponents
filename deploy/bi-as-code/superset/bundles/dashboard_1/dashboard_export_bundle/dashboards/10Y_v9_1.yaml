@@ -267,7 +267,7 @@ metadata:
     filterType: filter_select
     targets:
     - column:
-        name: group_by
+        name: ac_type
       datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
     defaultDataMask:
       extraFormData: {}
@@ -365,7 +365,7 @@ metadata:
     filterType: filter_select
     targets:
     - column:
-        name: group_by
+        name: ac_type
       datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
     defaultDataMask:
       extraFormData: {}
