@@ -939,6 +939,20 @@ class LimiterV8Orchestrator:
                 status = int(fields['mp2_status_id'][s, a])
                 if status == 0:
                     continue  # Пустой spawn slot — пропускаем
+                pre_status = int(fields['mp2_pre_status_id'][s, a])
+                commit_p2 = int(fields['mp2_commit_p2'][s, a])
+                commit_p3 = int(fields['mp2_commit_p3'][s, a])
+                claim_start = int(fields['mp2_repair_claim_start_day'][s, a])
+                claim_end = int(fields['mp2_repair_claim_end_day'][s, a])
+                claim_source = int(fields['mp2_repair_claim_source'][s, a])
+                claim_line_id = int(fields['mp2_repair_claim_line_id'][s, a])
+                if pre_status == 0 and status in (2, 3):
+                    commit_p2 = 0
+                    commit_p3 = 0
+                    claim_source = 0
+                    claim_start = 0xFFFF
+                    claim_end = 0xFFFF
+                    claim_line_id = 0xFFFF
                 rows.append([
                     version_date_int,
                     version_id,
@@ -950,24 +964,24 @@ class LimiterV8Orchestrator:
                     int(fields['mp2_br'][s, a]),
                     int(fields['mp2_ll'][s, a]),
                     _u8(status),
-                    _u8(fields['mp2_pre_status_id'][s, a]),
+                    _u8(pre_status),
                     _u16(fields['mp2_status_change_day'][s, a]),
                     int(fields['mp2_sne'][s, a]),
                     int(fields['mp2_ppr'][s, a]),
                     _u16(fields['mp2_limiter'][s, a]),
                     _u16(fields['mp2_repair_days'][s, a]),
-                    _u16(fields['mp2_repair_claim_start_day'][s, a]),
-                    _u16(fields['mp2_repair_claim_end_day'][s, a]),
-                    _u8(fields['mp2_repair_claim_source'][s, a]),
-                    _u16(fields['mp2_repair_claim_line_id'][s, a]),
+                    _u16(claim_start),
+                    _u16(claim_end),
+                    _u8(claim_source),
+                    _u16(claim_line_id),
                     _u16(fields['mp2_repair_time'][s, a]),
                     _u16(fields['mp2_assembly_time'][s, a]),
                     _u8(fields['mp2_active_trigger'][s, a]),
                     _u8(fields['mp2_assembly_trigger'][s, a]),
                     int(fields['mp2_daily_today'][s, a]),
                     int(fields['mp2_daily_next'][s, a]),
-                    int(fields['mp2_commit_p2'][s, a]),
-                    int(fields['mp2_commit_p3'][s, a]),
+                    commit_p2,
+                    commit_p3,
                 ])
         build_time = time.perf_counter() - t_build
         print(f"   Строк: {len(rows)} ({build_time:.2f}с)")
@@ -1417,6 +1431,24 @@ class LimiterV8Orchestrator:
                     # Шаг промоута: pre_status_id = 4 только если окно было окрашено
                     if first_repair_set:
                         fields['mp2_pre_status_id'][s, a] = 4
+        
+        # Нормализация assembly_trigger по фактическому хвосту ремонта
+        for s in range(num_steps):
+            for a in range(total_agents):
+                status = int(fields['mp2_status_id'][s, a])
+                if status != 4:
+                    fields['mp2_assembly_trigger'][s, a] = 0
+                    continue
+                assembly_time = int(fields['mp2_assembly_time'][s, a])
+                if assembly_time <= 0:
+                    fields['mp2_assembly_trigger'][s, a] = 0
+                    continue
+                repair_time = int(fields['mp2_repair_time'][s, a])
+                repair_days = int(fields['mp2_repair_days'][s, a])
+                remaining_repair = repair_time - repair_days
+                if remaining_repair < 0:
+                    remaining_repair = 0
+                fields['mp2_assembly_trigger'][s, a] = 1 if remaining_repair < assembly_time else 0
         
         return modified
 

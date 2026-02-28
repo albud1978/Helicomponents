@@ -32,9 +32,11 @@ sql: "WITH raw AS (\n    SELECT\n        version_date AS version_date,\n        
   \ n) AS day_date,\n        arrayMap(x -> x.1, pairs) AS snap_days_arr,\n       \
   \ arrayMap(x -> x.2, pairs) AS snap_counts_arr\n    FROM packed\n    ARRAY JOIN\
   \ range(dateDiff('day', min_day, max_day) + 1) AS n\n)\nSELECT\n    version_date,\n\
-  \    version_id,\n    formatDateTime(parseDateTimeBestEffort(toString(version_date)), '%d-%m-%Y') AS version_date_ddmmyyyy,\n    group_by,\n    status_id,\n    day_date,\n    if(\n      \
-  \  arrayLastIndex(x -> x <= day_date, snap_days_arr) = 0,\n        0,\n        snap_counts_arr[arrayLastIndex(x\
-  \ -> x <= day_date, snap_days_arr)]\n    ) AS status_count_ffill\nFROM expanded"
+  \    version_id,\n    formatDateTime(parseDateTimeBestEffort(toString(version_date)),\
+  \ '%d-%m-%Y') AS version_date_ddmmyyyy,\n    group_by,\n    status_id,\n    day_date,\n\
+  \    if(\n        arrayLastIndex(x -> x <= day_date, snap_days_arr) = 0,\n     \
+  \   0,\n        snap_counts_arr[arrayLastIndex(x -> x <= day_date, snap_days_arr)]\n\
+  \    ) AS status_count_ffill\nFROM expanded"
 params: null
 template_params: null
 filter_select_enabled: true
@@ -55,18 +57,6 @@ metrics:
   extra: null
   warning_text: null
 columns:
-- column_name: version_date_ddmmyyyy
-  verbose_name: "\u0412\u0435\u0440\u0441\u0438\u044F \u0434\u0430\u0442\u0430\u0441\u0435\u0442\u0430 (DD-MM-YYYY)"
-  is_dttm: false
-  is_active: true
-  type: String
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: Display-only formatted version date
-  python_date_format: null
-  extra: {}
 - column_name: version_date
   verbose_name: null
   is_dttm: false
@@ -136,6 +126,18 @@ columns:
   groupby: true
   filterable: true
   expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: version_date_ddmmyyyy
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: String
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
   description: null
   python_date_format: null
   extra: null

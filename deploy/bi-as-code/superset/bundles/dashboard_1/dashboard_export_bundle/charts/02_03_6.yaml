@@ -1,0 +1,86 @@
+slice_name: "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430 (0\u21922, 0\u21923)"
+description: ''
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  adhoc_filters:
+  - clause: WHERE
+    comparator: No filter
+    expressionType: SIMPLE
+    operator: TEMPORAL_RANGE
+    subject: day_date
+  annotation_layers: []
+  color_scheme: supersetColors
+  comparison_type: values
+  dashboards:
+  - 27
+  datasource: 3__table
+  extra_form_data: {}
+  groupby: []
+  legendOrientation: top
+  legendType: scroll
+  metrics:
+  - expressionType: SQL
+    sqlExpression: COUNTIf(pre_status_id = 0 AND status_id IN (2, 3))
+    column: null
+    aggregate: null
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430"
+  order_desc: false
+  orientation: vertical
+  rich_tooltip: true
+  row_limit: 70000
+  show_empty_columns: false
+  show_legend: true
+  show_value: true
+  slice_id: 6
+  sort_series_type: sum
+  time_grain_sqla: P1M
+  tooltipTimeFormat: '%d-%m-%Y'
+  truncateXAxis: true
+  truncate_metric: true
+  viz_type: echarts_timeseries_bar
+  x_axis: day_date
+  x_axis_sort_asc: true
+  x_axis_sort_series: name
+  x_axis_sort_series_ascending: true
+  y_axis_format: SMART_NUMBER
+  y_axis_title_margin: 15
+  y_axis_title_position: Left
+  x_axis_time_format: '%Y-%m'
+  label_colors:
+    "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430": '#A868B7'
+query_context: '{"datasource": {"id": 3, "type": "table"}, "force": false, "form_data":
+  {"adhoc_filters": [{"clause": "WHERE", "comparator": "No filter", "expressionType":
+  "SIMPLE", "operator": "TEMPORAL_RANGE", "subject": "day_date"}], "annotation_layers":
+  [], "color_scheme": "supersetColors", "comparison_type": "values", "dashboards":
+  [27], "datasource": "3__table", "extra_form_data": {}, "groupby": [], "legendOrientation":
+  "top", "legendType": "scroll", "metrics": [{"expressionType": "SQL", "sqlExpression":
+  "COUNTIf(pre_status_id = 0 AND status_id IN (2, 3))", "column": null, "aggregate":
+  null, "datasourceWarning": false, "hasCustomLabel": true, "label": "\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430"}],
+  "order_desc": false, "orientation": "vertical", "rich_tooltip": true, "row_limit":
+  70000, "show_empty_columns": false, "show_legend": true, "show_value": true, "slice_id":
+  6, "sort_series_type": "sum", "time_grain_sqla": "P1M", "tooltipTimeFormat": "%d-%m-%Y",
+  "truncateXAxis": true, "truncate_metric": true, "viz_type": "echarts_timeseries_bar",
+  "x_axis": "day_date", "x_axis_sort_asc": true, "x_axis_sort_series": "name", "x_axis_sort_series_ascending":
+  true, "y_axis_format": "SMART_NUMBER", "y_axis_title_margin": 15, "y_axis_title_position":
+  "Left", "x_axis_time_format": "%Y-%m", "label_colors": {"\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430":
+  "#A868B7"}, "force": false, "result_format": "json", "result_type": "full"}, "queries":
+  [{"annotation_layers": [], "applied_time_extras": {}, "columns": [{"columnType":
+  "BASE_AXIS", "expressionType": "SQL", "label": "day_date", "sqlExpression": "day_date",
+  "timeGrain": "P1M"}], "custom_form_data": {}, "custom_params": {}, "extras": {"having":
+  "", "time_grain_sqla": "P1M", "where": ""}, "filters": [{"col": "day_date", "op":
+  "TEMPORAL_RANGE", "val": "No filter"}], "metrics": [{"expressionType": "SQL", "sqlExpression":
+  "COUNTIf(pre_status_id = 0 AND status_id IN (2, 3))", "column": null, "aggregate":
+  null, "datasourceWarning": false, "hasCustomLabel": true, "label": "\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430"}],
+  "order_desc": true, "orderby": [[{"columnType": "BASE_AXIS", "expressionType": "SQL",
+  "label": "day_date", "sqlExpression": "toStartOfMonth(toDateTime(day_date))"}, true]],
+  "post_processing": [], "row_limit": 10000, "series_columns": [], "series_limit":
+  0, "time_offsets": [], "url_params": {}}], "result_format": "json", "result_type":
+  "full"}'
+cache_timeout: null
+uuid: c2ed6e5e-5905-47d2-91ad-d525d1373633
+version: 1.0.0
+dataset_uuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f

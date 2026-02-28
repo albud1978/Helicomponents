@@ -13,6 +13,27 @@
 - Этот документ — дизайн-проект RTC для агрегатов. Реализация ещё не завершена; текст ниже фиксирует договорённости по переменным, источникам данных и плану spawn/статусов.
 - Важно: для части агрегатов есть **продление ресурса**, это **не ремонт**. При ремонте мы сбрасываем `ppr`, при продлении — **нет**. Сейчас эта разница не моделируется, из‑за чего агрегаты с продлением могут попадать в неверную ветку (сброс `ppr`). Требуется отдельный признак/поле в `md_components` и явная обработка в алгоритме агрегатов (без изменения текущих агрегатных скриптов).
 
+### 0.1. MVP L2 engines 3/4 (Phase 0 контракт)
+
+- Контракт Phase 0 для L2 engines (group_by=3/4) зафиксирован в:
+  - `config/transitions/transitions_rules_l2_engines.json`
+  - `config/transitions/quota_rules_l2_engines.json`
+- L2 messaging контур (MVP) для engines 3/4:
+  - `code/sim_v2/messaging/orchestrator_units_v1.py`
+  - `code/sim_v2/messaging/base_model_units_v1.py`
+  - `code/sim_v2/messaging/agent_population_units_v1.py`
+  - `code/sim_v2/messaging/planer_l2_loader.py`
+  - `code/sim_v2/messaging/rtc_units_planner_sync_v1.py`
+  - `code/sim_v2/messaging/rtc_units_transition_ops_v1.py`
+  - `code/sim_v2/messaging/rtc_units_transition_serviceable_v1.py`
+  - `code/sim_v2/messaging/l2_fullkit_postprocess.py`
+- L2 валидация (engines 3/4):
+  - `code/validation/l2_inv0a_engine_ops_requires_planner_ops.py`
+  - `code/validation/l2_inv0b_planner_ops_full_engine_set.py`
+  - `code/validation/l2_inv_scope_engines_3_4_only.py`
+  - `code/validation/run_l2_engines_stream.py`
+- `l2_fullkit_postprocess.py` — MVP-стабилизация для покрытия дефицита комплектов до EP-cascade runtime версии.
+
 ---
 
 ## 1. ПЕРЕМЕННЫЕ АГЕНТОВ

@@ -1,5 +1,46 @@
 # Changelog
 
+## [27-02-2026] - MVP L2 engines 3/4: Phase 0 контракт, messaging контур, D3 run
+
+### Изменения
+- Добавлен Phase 0 контракт L2 engines:
+  - `config/transitions/transitions_rules_l2_engines.json`
+  - `config/transitions/quota_rules_l2_engines.json`
+- Добавлен L2 messaging контур (engines 3/4, MVP):
+  - `code/sim_v2/messaging/orchestrator_units_v1.py`
+  - `code/sim_v2/messaging/base_model_units_v1.py`
+  - `code/sim_v2/messaging/agent_population_units_v1.py`
+  - `code/sim_v2/messaging/planer_l2_loader.py`
+  - `code/sim_v2/messaging/rtc_units_planner_sync_v1.py`
+  - `code/sim_v2/messaging/rtc_units_transition_ops_v1.py`
+  - `code/sim_v2/messaging/rtc_units_transition_serviceable_v1.py`
+  - `code/sim_v2/messaging/l2_fullkit_postprocess.py`
+- Добавлены L2 валидаторы и потоковый раннер:
+  - `code/validation/l2_inv0a_engine_ops_requires_planner_ops.py`
+  - `code/validation/l2_inv0b_planner_ops_full_engine_set.py`
+  - `code/validation/l2_inv_scope_engines_3_4_only.py`
+  - `code/validation/run_l2_engines_stream.py`
+
+### Контекст
+- `l2_fullkit_postprocess.py` — MVP-стабилизация для покрытия дефицита комплектов до EP-cascade runtime версии.
+
+### Результаты
+- `orchestrator_units_v1` D3 (2026-02-21, `version_id=1`, `group_scope=3,4`) завершён успешно.
+- `sim_units_v2`: 3,032,978 base + 29,621 synthetic fullkit rows.
+- L2 validation runner: PASS all, `exit_code=0`.
+
+## [26-02-2026] - V8: `active_trigger` помечен как артефактный маркер (без удаления)
+
+### Изменения
+- `docs/validation.md`:
+  - зафиксирован статус `active_trigger` как артефактного marker-поля для совместимости/аналитики;
+  - явно зафиксировано, что восстановление repair-окон в V8 выполняется по `repair_claim_*`, а не по `active_trigger`;
+  - зафиксирована текущая роль `assembly_trigger` (day0 init + хвост claim-окна в postprocess).
+
+### Контекст
+- Повторная сверка кода `orchestrator_limiter_v8.py` и `rtc_repairline_export.py` подтвердила, что `active_trigger` не является SSOT для обратной закраски ремонта.
+- Поле оставлено в контракте таблиц до следующего уровня сборки, чтобы избежать обратной несовместимости.
+
 ## [25-02-2026] - BI transfer scope freeze: only Mode B (repo-only)
 
 ### Изменения

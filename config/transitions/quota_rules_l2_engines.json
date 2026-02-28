@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "metadata": {
+    "description": "Phase 0 quota contract for L2 engines (group_by=3/4).",
+    "scope": "EP1/EP2/EP4 only; no EP3",
+    "created": "2026-02-26"
+  },
+  "architecture": "L2 engines quota (assembly demand + repair-line EP2 + spawn EP4)",
+  "quota_flow": [
+    {
+      "id": "ep1_collect_demand",
+      "phase": "EP1",
+      "expr": "engine_quota_demand = max(0, 2 - installed_engine_count) when assembly_trigger > 0",
+      "notes": "Demand for full engine kit."
+    },
+    {
+      "id": "ep2_repair_line_select",
+      "phase": "EP2",
+      "expr": "select line with min free_days where free_days >= repair_time",
+      "notes": "EP2: repair line selection for promote from repair."
+    },
+    {
+      "id": "ep4_spawn_engines",
+      "phase": "EP4",
+      "expr": "deficit = target_ops - curr_ops; spawn allowed any day",
+      "notes": "EP4: engine spawn to cover deficit."
+    }
+  ],
+  "selection_rules": [
+    {
+      "id": "youngest_to_ops",
+      "expr": "rank_youngest < promote_limit",
+      "notes": "young -> ops"
+    },
+    {
+      "id": "oldest_to_out",
+      "expr": "rank_oldest < demote_limit",
+      "notes": "old -> out"
+    }
+  ],
+  "repair_line_rules": [
+    {
+      "id": "line_available",
+      "expr": "aircraft_number == 0 AND free_days >= repair_time",
+      "notes": "Line available for EP2."
+    },
+    {
+      "id": "line_select_min_free_days",
+      "expr": "choose min free_days where free_days >= repair_time",
+      "notes": "Anti-fragmentation: min free_days."
+    },
+    {
+      "id": "assign_on_promote",
+      "expr": "free_days = 0; aircraft_number = acn; repair_line_id = line_id",
+      "notes": "Assign line on EP2."
+    }
+  ],
+  "spawn_rules": [
+    {
+      "id": "spawn_any_day",
+      "expr": "spawn allowed any day for group_by in {3,4}",
+      "notes": "Allowed any day."
+    },
+    {
+      "id": "cover_deficit",
+      "expr": "spawn_count = max(0, deficit)",
+      "notes": "Cover deficit."
+    }
+  ]
+}
