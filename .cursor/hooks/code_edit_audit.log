@@ -1099,3 +1099,288 @@
   edit[1] old='' new='\ndef round_half_up_nonneg(value: Any) -> int:\n    """Half-up округление для неотрицательных значений, иначе 0."""\n    if'
   edit[2] old='                        int(daily_hours),  # Конвертируем в UInt32' new='                        round_half_up_nonneg(daily_hours),  # Конвертируем в UInt32'
 
+[2026-02-25 18:18:43 UTC] conv=ae703fe4 gen=08f7173f file=code/sim_v2/messaging/rtc_spawn_dynamic_v7.py
+  edit[0] old='' new='    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p1", 0u);\n    FLAMEGPU->agent_out.setVariable<unsigned int>("c'
+  edit[1] old='' new='    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p1", 0u);\n    FLAMEGPU->agent_out.setVariable<unsigned int>("c'
+  edit[2] old='' new='    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p1", 0u);\n    FLAMEGPU->agent_out.setVariable<unsigned int>("c'
+
+[2026-02-25 18:44:55 UTC] conv=610e066c gen=3c21fb5c file=code/sim_v2/messaging/rtc_spawn_dynamic_v7.py
+  edit[0] old='' new='    FLAMEGPU->agent_out.setVariable<unsigned int>("promoted", 0u);\n    FLAMEGPU->agent_out.setVariable<unsigned int>("ne'
+  edit[1] old='' new='    FLAMEGPU->agent_out.setVariable<unsigned int>("promoted", 0u);\n    FLAMEGPU->agent_out.setVariable<unsigned int>("ne'
+
+[2026-02-25 18:45:13 UTC] conv=610e066c gen=3c21fb5c file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='                pre_status = int(fields['mp2_pre_status_id'][s, a])\n                commit_p2 = int(fields['mp2_commit_p'
+  edit[1] old='                    _u8(fields['mp2_pre_status_id'][s, a]),' new='                    _u8(pre_status),'
+  edit[2] old='                    _u16(fields['mp2_repair_claim_start_day'][s, a]),\n                    _u16(fields['mp2_repair_claim_' new='                    _u16(claim_start),\n                    _u16(claim_end),\n                    _u8(claim_source),\n     '
+  edit[3] old='                    int(fields['mp2_commit_p2'][s, a]),\n                    int(fields['mp2_commit_p3'][s, a]),' new='                    commit_p2,\n                    commit_p3,'
+
+[2026-02-26 11:07:32 UTC] conv=78f27f00 gen=7aea05a1 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='' new='        # Нормализация assembly_trigger по фактическому хвосту ремонта\n        for s in range(num_steps):\n            fo'
+
+[2026-02-26 18:43:18 UTC] conv=8073ab8d gen=073c7459 file=code/sim_v2/messaging/agent_population_units_v1.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nAgentPopulationUnitsBuilderV1 - инициализация агрегатов (L2 engines) с фильтром group_by\n\nОтв'
+
+[2026-02-26 18:43:47 UTC] conv=8073ab8d gen=073c7459 file=code/sim_v2/messaging/base_model_units_v1.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nV1 Base Model для агрегатов (L2 engines): базовая модель и окружение для RTC симуляции\n\nОтлич'
+
+[2026-02-26 18:44:12 UTC] conv=8073ab8d gen=073c7459 file=code/sim_v2/messaging/planer_l2_loader.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nLoader планерных сигналов для L2 engines (group_by=3/4).\n\nЗагружает из sim_masterv2_v9:\n- day'
+
+[2026-02-26 18:46:22 UTC] conv=8073ab8d gen=073c7459 file=code/sim_v2/messaging/rtc_units_planner_sync_v1.py
+  edit[0] old='' new='"""\nRTC модуль синхронизации агрегатов с планером (L2 engines).\n\nЛогика:\n1) Operations guard: если planner_status != 2 →'
+
+[2026-02-26 18:46:43 UTC] conv=8073ab8d gen=073c7459 file=code/sim_v2/messaging/rtc_units_transition_ops_v1.py
+  edit[0] old='' new='"""\nRTC модуль переходов из operations (L2 engines)\n\nПереходы:\n- 2→2 (operations → operations) при intent=2\n- 2→3 (opera'
+
+[2026-02-26 18:47:01 UTC] conv=8073ab8d gen=073c7459 file=code/sim_v2/messaging/rtc_units_transition_serviceable_v1.py
+  edit[0] old='' new='"""\nRTC модуль переходов из serviceable (L2 engines)\n\nПереходы:\n- 3→3 (serviceable → serviceable) при intent=3\n- 3→2 (se'
+
+[2026-02-26 18:48:11 UTC] conv=8073ab8d gen=073c7459 file=code/sim_v2/messaging/orchestrator_units_v1.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nОркестратор L2 engines (group_by=3/4) в messaging-контуре.\n\nЗапуск:\n    python orchestrator_u'
+
+[2026-02-26 18:53:09 UTC] conv=7cb811d5 gen=8b6b8ee4 file=code/sim_v2/messaging/rtc_units_transition_ops_v1.py
+  edit[0] old='def get_rtc_code() -> str:\n    return """\n// Условия по intent/flags' new='# Условия по intent/flags (RTC condition blocks)\nCOND_UNITS_OPS_STAY = """'
+  edit[1] old='' new='"""'
+  edit[2] old='' new='COND_UNITS_OPS_TO_SERVICEABLE = """'
+  edit[3] old='' new='"""'
+  edit[4] old='' new='COND_UNITS_OPS_TO_REPAIR = """'
+  edit[5] old='' new='"""'
+  edit[6] old='' new='COND_UNITS_OPS_TO_STORAGE = """'
+  edit[7] old='' new='"""'
+  edit[8] old='' new='\ndef get_rtc_code() -> str:\n    return """'
+  edit[9] old='    fn_2_to_2.setRTCFunctionCondition("cond_units_ops_stay")' new='    fn_2_to_2.setRTCFunctionCondition(COND_UNITS_OPS_STAY)'
+  edit[10] old='    fn_2_to_3.setRTCFunctionCondition("cond_units_ops_to_serviceable")' new='    fn_2_to_3.setRTCFunctionCondition(COND_UNITS_OPS_TO_SERVICEABLE)'
+  edit[11] old='    fn_2_to_4.setRTCFunctionCondition("cond_units_ops_to_repair")' new='    fn_2_to_4.setRTCFunctionCondition(COND_UNITS_OPS_TO_REPAIR)'
+  edit[12] old='    fn_2_to_6.setRTCFunctionCondition("cond_units_ops_to_storage")' new='    fn_2_to_6.setRTCFunctionCondition(COND_UNITS_OPS_TO_STORAGE)'
+
+[2026-02-26 18:53:33 UTC] conv=7cb811d5 gen=8b6b8ee4 file=code/sim_v2/messaging/rtc_units_planner_sync_v1.py
+  edit[0] old='\nFLAMEGPU_AGENT_FUNCTION_CONDITION(cond_units_planner_detach) {{\n    const unsigned int aircraft_number = FLAMEGPU->getV' new=''
+
+[2026-02-26 18:53:47 UTC] conv=7cb811d5 gen=8b6b8ee4 file=code/sim_v2/messaging/rtc_units_planner_sync_v1.py
+  edit[0] old='' new='def get_detach_condition_code(max_days: int) -> str:\n    planer_size = MAX_PLANERS * (max_days + 1)\n    return f"""\nFLAM'
+  edit[1] old='' new='    detach_cond = get_detach_condition_code(max_days)'
+  edit[2] old='    fn_det_ops.setRTCFunctionCondition("cond_units_planner_detach")' new='    fn_det_ops.setRTCFunctionCondition(detach_cond)'
+  edit[3] old='    fn_det_svc.setRTCFunctionCondition("cond_units_planner_detach")' new='    fn_det_svc.setRTCFunctionCondition(detach_cond)'
+  edit[4] old='    fn_det_rsv.setRTCFunctionCondition("cond_units_planner_detach")' new='    fn_det_rsv.setRTCFunctionCondition(detach_cond)'
+
+[2026-02-26 19:04:14 UTC] conv=d8394ab6 gen=ade97200 file=code/validation/l2_inv0a_engine_ops_requires_planner_ops.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 INV-0a: engines in ops require planner in ops on same day/acn.\n"""\nimport argparse\nimport '
+
+[2026-02-26 19:04:33 UTC] conv=d8394ab6 gen=ade97200 file=code/validation/l2_inv0b_planner_ops_full_engine_set.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 INV-0b: planner ops require full engine set (>=2 in ops).\n"""\nimport argparse\nimport re\nim'
+
+[2026-02-26 19:04:48 UTC] conv=d8394ab6 gen=ade97200 file=code/validation/l2_inv_scope_engines_3_4_only.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 scope: units dataset should contain only engines group_by 3/4 and valid states.\n"""\nimport'
+
+[2026-02-26 19:04:59 UTC] conv=d8394ab6 gen=ade97200 file=code/validation/run_l2_engines_stream.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nStream runner for L2 engines validations (group_by 3/4).\n"""\nimport argparse\nimport os\nimport'
+
+[2026-02-26 19:05:33 UTC] conv=d8394ab6 gen=ade97200 file=code/validation/l2_inv0b_planner_ops_full_engine_set.py
+  edit[0] old='            group_by,\n            count() AS engine_ops_cnt' new='            sumIf(1, group_by = 3) AS engines_g3,\n            sumIf(1, group_by = 4) AS engines_g4'
+  edit[1] old='        GROUP BY day_u16, aircraft_number, group_by' new='        GROUP BY day_u16, aircraft_number'
+  edit[2] old='     AND (\n        (p.group_by = 1 AND e.group_by = 3)\n        OR (p.group_by = 2 AND e.group_by = 4)\n     )\n    WHERE (' new='    WHERE (p.group_by = 1 AND (e.engines_g3 < 2 OR e.engines_g3 IS NULL))\n       OR (p.group_by = 2 AND (e.engines_g4 < '
+  edit[3] old='                group_by,\n                count() AS engine_ops_cnt' new='                sumIf(1, group_by = 3) AS engines_g3,\n                sumIf(1, group_by = 4) AS engines_g4'
+  edit[4] old='            GROUP BY day_u16, aircraft_number, group_by' new='            GROUP BY day_u16, aircraft_number'
+  edit[5] old='            ifNull(e.engine_ops_cnt, 0) AS engine_ops_cnt' new='            ifNull(e.engines_g3, 0) AS engines_g3,\n            ifNull(e.engines_g4, 0) AS engines_g4'
+  edit[6] old='         AND (\n            (p.group_by = 1 AND e.group_by = 3)\n            OR (p.group_by = 2 AND e.group_by = 4)\n      ' new='        WHERE (p.group_by = 1 AND (e.engines_g3 < 2 OR e.engines_g3 IS NULL))\n           OR (p.group_by = 2 AND (e.engin'
+  edit[7] old='            "sample_planner_missing_engines (day_u16, acn, planner_group_by, engine_ops_cnt):"' new='            "sample_planner_missing_engines (day_u16, acn, planner_group_by, g3, g4):"'
+  edit[8] old='            day_u16, acn, planner_group_by, engine_ops_cnt = row' new='            day_u16, acn, planner_group_by, engines_g3, engines_g4 = row'
+  edit[9] old='                "  day={0}, acn={1}, planner_group_by={2}, engine_ops_cnt={3}".format(\n                    day_u16, acn,' new='                "  day={0}, acn={1}, planner_group_by={2}, g3={3}, g4={4}".format(\n                    day_u16, acn, pla'
+
+[2026-02-26 19:19:00 UTC] conv=6aa19b2b gen=cf105560 file=code/sim_v2/messaging/l2_fullkit_postprocess.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 fullkit postprocess:\nFill missing engine ops (>=2) for planner ops rows by inserting synth'
+
+[2026-02-26 19:19:14 UTC] conv=6aa19b2b gen=cf105560 file=code/sim_v2/messaging/orchestrator_units_v1.py
+  edit[0] old='' new='from l2_fullkit_postprocess import apply_l2_fullkit_postprocess'
+  edit[1] old='' new='\n            print("\n" + "=" * 60)\n            print("🧩 L2 FULLKIT POSTPROCESS (planner ops -> engines)")\n            p'
+
+[2026-02-26 19:19:22 UTC] conv=6aa19b2b gen=cf105560 file=code/sim_v2/messaging/l2_fullkit_postprocess.py
+  edit[0] old='        print("   ✅ L2 fullkit postprocess: no missing engines found")' new='        print("   OK L2 fullkit postprocess: no missing engines found")'
+  edit[1] old='    print(f"   ✅ L2 fullkit postprocess: inserted {inserted:,} synthetic rows")' new='    print(f"   OK L2 fullkit postprocess: inserted {inserted:,} synthetic rows")'
+
+[2026-02-26 19:34:18 UTC] conv=d835f38c gen=ff652a3d file=code/sim_v2/messaging/planer_l2_loader.py
+  edit[0] old='def _version_date_to_int(version_date: str) -> int:' new='def _version_date_to_yyyymmdd(version_date: str) -> int:'
+  edit[1] old='' new='        if version_date.isdigit():\n            return int(version_date)'
+  edit[2] old='        return (vd - date(1970, 1, 1)).days' new='        return int(vd.strftime("%Y%m%d"))'
+  edit[3] old='    version_date_int = _version_date_to_int(version_date)' new='    version_date_ymd = _version_date_to_yyyymmdd(version_date)'
+  edit[4] old='    ac_to_idx = _load_planers_from_sim(client, version_date_int, version_id)' new='    ac_to_idx = _load_planers_from_sim(client, version_date_ymd, version_id)'
+  edit[5] old='        'version_date': version_date_int,' new='        'version_date': version_date_ymd,'
+
+[2026-02-26 19:34:24 UTC] conv=d835f38c gen=ff652a3d file=code/sim_v2/messaging/rtc_units_transition_serviceable_v1.py
+  edit[0] old='    return FLAMEGPU->getVariable<unsigned int>("intent_state") == 2u;' new='    const unsigned int aircraft_number = FLAMEGPU->getVariable<unsigned int>("aircraft_number");\n    return aircraft_num'
+
+[2026-02-26 19:34:27 UTC] conv=d835f38c gen=ff652a3d file=code/sim_v2/messaging/rtc_units_planner_sync_v1.py
+  edit[0] old='    const bool needs_storage = (ll > 0u && sne >= ll) || (br > 0u && sne >= br);' new='    const bool needs_storage = (ll > 0u && sne >= ll) || (br > 0u && ppr >= br);'
+
+[2026-02-26 19:34:32 UTC] conv=d835f38c gen=ff652a3d file=code/sim_v2/messaging/l2_fullkit_postprocess.py
+  edit[0] old='import time' new=''
+  edit[1] old='' new='    SETTINGS mutations_sync = 1'
+  edit[2] old='    # Let mutation settle before inserts to avoid double counting on re-runs.\n    time.sleep(2)' new=''
+
+[2026-02-27 02:14:37 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_inv_scope_engines_3_4_only.py
+  edit[0] old='' new='L2 INV scope: только engines group_by 3/4 и допустимые состояния.\n"""\nimport argparse\nimport re\nimport sys\n\nfrom ch_clie'
+
+[2026-02-27 02:14:50 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_inv0a_engine_ops_requires_planner_ops.py
+  edit[0] old='' new='L2 INV-0a: engine ops требуют planner ops (status_id=2).\n"""\nimport argparse\nimport re\nimport sys\n\nfrom ch_client import'
+
+[2026-02-27 02:15:08 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_inv0b_planner_ops_full_engine_set.py
+  edit[0] old='' new='L2 INV-0b: planner ops требуют полный комплект engines (>=2).\n"""\nimport argparse\nimport re\nimport sys\n\nfrom ch_client i'
+
+[2026-02-27 02:15:21 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_inv1_sne_le_ll.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 INV-1: sne <= ll_expected для engines в operations.\n"""\nimport argparse\nimport re\nimport s'
+
+[2026-02-27 02:15:45 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_inv7_sne_dt_consistency.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 INV-7: консистентность dt — delta_sne/delta_ppr == planner_dt для ops.\n"""\nimport argparse'
+
+[2026-02-27 02:16:01 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_inv8_storage_frozen.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 INV-8: sne/ppr frozen в storage (state=6).\n"""\nimport argparse\nimport re\nimport sys\n\nfrom '
+
+[2026-02-27 02:16:20 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_temp1_repair_duration.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 TEMP-1: длительность ремонта не меньше repair_time_expected.\n"""\nimport argparse\nimport re'
+
+[2026-02-27 02:16:40 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_temp4_no_infinite_repair.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 TEMP-4: нет бесконечного ремонта (span <= max_repair_days).\n"""\nimport argparse\nimport re\n'
+
+[2026-02-27 02:16:55 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_inv17_allowed_transitions.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 INV-17: допустимые переходы состояния для engines.\n"""\nimport argparse\nimport re\nimport sy'
+
+[2026-02-27 02:17:14 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_inv10_turnover_balance.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nL2 INV-10: turnover balance по состояниям S={2,3,4,5,6}.\n"""\nimport argparse\nimport re\nimport'
+
+[2026-02-27 02:17:35 UTC] conv=8f38c27b gen=338fb41d file=code/validation/run_l2_engines_stream.py
+  edit[0] old='' new='Потоковый раннер L2-валидаций engines (group_by 3/4).\n"""\nimport argparse\nimport os\nimport re\nimport subprocess\nimport s'
+
+[2026-02-27 02:18:18 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_inv0b_planner_ops_full_engine_set.py
+  edit[0] old='        SELECT day_u16, aircraft_number, group_by' new='        SELECT\n            day_u16,\n            aircraft_number,\n            group_by,\n            if(group_by = 1, 3, 4'
+  edit[1] old='       AND ((p.group_by = 1 AND e.group_by = 3) OR (p.group_by = 2 AND e.group_by = 4))' new='       AND e.group_by = p.engine_group_by'
+  edit[2] old='            SELECT day_u16, aircraft_number, group_by' new='            SELECT\n                day_u16,\n                aircraft_number,\n                group_by,\n                i'
+  edit[3] old='           AND ((p.group_by = 1 AND e.group_by = 3) OR (p.group_by = 2 AND e.group_by = 4))' new='           AND e.group_by = p.engine_group_by'
+
+[2026-02-27 02:18:45 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_temp1_repair_duration.py
+  edit[0] old='    WITH base AS (' new='    WITH base1 AS ('
+  edit[1] old='            leadInFrame(day_u16, 1, 0) OVER w AS next_day,\n            sum(\n                if(state = 4 AND lagInFrame(' new='            leadInFrame(day_u16, 1, 0) OVER w AS next_day'
+  edit[2] old='' new='    base2 AS (\n        SELECT\n            psn,\n            group_by,\n            day_u16,\n            state,\n           '
+  edit[3] old='        FROM base' new='        FROM base2'
+  edit[4] old='        WITH base AS (' new='        WITH base1 AS ('
+  edit[5] old='                leadInFrame(day_u16, 1, 0) OVER w AS next_day,\n                sum(\n                    if(state = 4 AND' new='                leadInFrame(day_u16, 1, 0) OVER w AS next_day'
+  edit[6] old='' new='        base2 AS (\n            SELECT\n                psn,\n                group_by,\n                day_u16,\n          '
+  edit[7] old='            FROM base' new='            FROM base2'
+
+[2026-02-27 02:18:59 UTC] conv=8f38c27b gen=338fb41d file=code/validation/l2_temp4_no_infinite_repair.py
+  edit[0] old='    WITH base AS (' new='    WITH base1 AS ('
+  edit[1] old='            lagInFrame(state, 1, 0) OVER w AS prev_state,\n            sum(\n                if(state = 4 AND lagInFrame(s' new='            lagInFrame(state, 1, 0) OVER w AS prev_state'
+  edit[2] old='' new='    base2 AS (\n        SELECT\n            psn,\n            group_by,\n            day_u16,\n            state,\n           '
+  edit[3] old='        FROM base' new='        FROM base2'
+  edit[4] old='        WITH base AS (' new='        WITH base1 AS ('
+  edit[5] old='                lagInFrame(state, 1, 0) OVER w AS prev_state,\n                sum(\n                    if(state = 4 AND ' new='                lagInFrame(state, 1, 0) OVER w AS prev_state'
+  edit[6] old='' new='        base2 AS (\n            SELECT\n                psn,\n                group_by,\n                day_u16,\n          '
+  edit[7] old='            FROM base' new='            FROM base2'
+
+[2026-02-27 02:22:45 UTC] conv=2e2b5319 gen=b2db4f60 file=code/validation/run_l2_engines_stream.py
+  edit[0] old='#!/usr/bin/env python3\n"""\nStream runner for L2 engines validations (group_by 3/4).\n"""\nimport argparse\nimport os\nimport' new=''
+
+[2026-02-27 18:40:14 UTC] conv=86dbe53c gen=db9fc326 file=code/sim_v2/messaging/base_model_units_v1.py
+  edit[0] old='' new='        self.env.newMacroPropertyUInt("mp2_units_pre_state", mp2_buffer_size)'
+  edit[1] old='' new='        agent.newVariableUInt("pre_state_id", 0)'
+
+[2026-02-27 18:40:20 UTC] conv=86dbe53c gen=db9fc326 file=code/sim_v2/messaging/agent_population_units_v1.py
+  edit[0] old='' new='                agent.setVariableUInt("pre_state_id", status_id)'
+  edit[1] old='' new='                    spawn_agent.setVariableUInt("pre_state_id", 5)'
+
+[2026-02-27 18:40:29 UTC] conv=86dbe53c gen=db9fc326 file=code/sim_v2/messaging/rtc_units_save_pre_state_v1.py
+  edit[0] old='' new='"""\nRTC слой сохранения pre_state_id (L2 engines).\n\nСтавит pre_state_id в текущий state до любых переходов.\nСостояние аг'
+
+[2026-02-27 18:40:45 UTC] conv=86dbe53c gen=db9fc326 file=code/sim_v2/messaging/rtc_units_mp2_writer_v1.py
+  edit[0] old='' new='"""\nRTC модуль записи данных агрегатов в MP2 (messaging v1).\n\nОсобенности:\n- state пишется как фактическое состояние фун'
+
+[2026-02-27 18:41:14 UTC] conv=86dbe53c gen=db9fc326 file=code/sim_v2/messaging/mp2_drain_units_v1.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nHost функция для дренажа MP2 агрегатов в ClickHouse (messaging v1).\n\nАдаптация mp2_drain_unit'
+
+[2026-02-27 18:41:28 UTC] conv=86dbe53c gen=db9fc326 file=code/sim_v2/messaging/orchestrator_units_v1.py
+  edit[0] old='from sim_v2.units import rtc_units_mp2_writer\nfrom sim_v2.units.mp2_drain_units import MP2DrainUnitsHostFunction' new=''
+  edit[1] old='' new='from mp2_drain_units_v1 import MP2DrainUnitsHostFunction\n\nimport rtc_units_save_pre_state_v1'
+  edit[2] old='' new='import rtc_units_mp2_writer_v1'
+  edit[3] old='        # 1. planner sync' new='        # 1. pre_state snapshot (до любых переходов)'
+  edit[4] old='' new='            rtc_units_save_pre_state_v1.register_rtc(model, agent)\n            modules_ok += 1\n        except Exception '
+  edit[5] old='        # 2. increment + check_limits' new='        # 3. increment + check_limits'
+  edit[6] old='        # 3. fifo_priority (EP1/EP2/EP4 + spawn)' new='        # 4. fifo_priority (EP1/EP2/EP4 + spawn)'
+  edit[7] old='        # 4. transition ops' new='        # 5. transition ops'
+  edit[8] old='        # 5. transition serviceable' new='        # 6. transition serviceable'
+  edit[9] old='        # 6. transition reserve (stable)' new='        # 7. transition reserve (stable)'
+  edit[10] old='        # 7. state_repair' new='        # 8. state_repair'
+  edit[11] old='        # 8. mp2 writer' new='        # 9. mp2 writer'
+  edit[12] old='            rtc_units_mp2_writer.register_rtc(model, agent, max_frames, max_days, drain_interval)' new='            rtc_units_mp2_writer_v1.register_rtc(model, agent, max_frames, max_days, drain_interval)'
+  edit[13] old='        # 9. mp2 drain' new='        # 10. mp2 drain'
+
+[2026-02-27 18:53:05 UTC] conv=0230f024 gen=d843790f file=code/validation/l2_inv0a_engine_ops_requires_planner_ops.py
+  edit[0] old='' new='          AND day_u16 > 0'
+  edit[1] old='' new='              AND day_u16 > 0'
+  edit[2] old='#!/usr/bin/env python3\n"""\nL2 INV-0a: engines in ops require planner in ops on same day/acn.\n"""\nimport argparse\nimport ' new=''
+
+[2026-02-27 18:53:16 UTC] conv=0230f024 gen=d843790f file=code/validation/l2_inv_scope_engines_3_4_only.py
+  edit[0] old='#!/usr/bin/env python3\n"""\nL2 scope: units dataset should contain only engines group_by 3/4 and valid states.\n"""\nimport' new=''
+
+[2026-02-27 18:53:33 UTC] conv=0230f024 gen=d843790f file=code/validation/l2_inv0b_planner_ops_full_engine_set.py
+  edit[0] old='#!/usr/bin/env python3\n"""\nL2 INV-0b: planner ops require full engine set (>=2 in ops).\n"""\nimport argparse\nimport re\nim' new=''
+
+[2026-02-27 18:53:51 UTC] conv=0230f024 gen=d843790f file=code/validation/l2_inv7_sne_dt_consistency.py
+  edit[0] old='' new='            "pre_state_id",'
+  edit[1] old='' new='            pre_state_id,'
+  edit[2] old='            lagInFrame(state, 1, 0) OVER w AS prev_state,\n            lagInFrame(aircraft_number, 1, 0) OVER w AS prev_a' new=''
+  edit[3] old='            prev_state,\n            prev_acn,' new=''
+  edit[4] old='            toInt64(sne) - toInt64(prev_sne) AS delta_sne,\n            toInt64(ppr) - toInt64(prev_ppr) AS delta_ppr' new='            toInt64(sne) - toInt64(prev_sne) AS sne_delta,\n            toInt64(ppr) - toInt64(prev_ppr) AS ppr_delta,\n  '
+  edit[5] old='          AND prev_state = 2\n          AND prev_day > 0' new='          AND pre_state_id = 2'
+  edit[6] old='          AND prev_acn = aircraft_number' new=''
+  edit[7] old='        countIf(isNull(p.daily_today_u32)) AS skipped_no_planner_dt,' new='        countIf(NOT is_consecutive) AS skipped_non_consecutive,\n        countIf(is_consecutive AND isNull(p.daily_today_'
+  edit[8] old='            NOT isNull(p.daily_today_u32)\n            AND (delta_sne != p.daily_today_u32 OR delta_ppr != p.daily_today_' new='            is_consecutive\n            AND NOT isNull(p.daily_today_u32)\n            AND (sne_delta != p.daily_today_u32'
+  edit[9] old='    checked_rows, skipped_no_planner_dt, violations = client.execute(query, params)[0]' new='    (\n        checked_rows,\n        skipped_non_consecutive,\n        skipped_no_planner_dt,\n        violations,\n    ) = '
+  edit[10] old='' new='        f"skipped_non_consecutive={skipped_non_consecutive}",'
+  edit[11] old='' new='                pre_state_id,'
+  edit[12] old='                lagInFrame(state, 1, 0) OVER w AS prev_state,\n                lagInFrame(aircraft_number, 1, 0) OVER w A' new=''
+  edit[13] old='                prev_state,\n                prev_acn,' new=''
+  edit[14] old='                toInt64(sne) - toInt64(prev_sne) AS delta_sne,\n                toInt64(ppr) - toInt64(prev_ppr) AS delta' new='                toInt64(sne) - toInt64(prev_sne) AS sne_delta,\n                toInt64(ppr) - toInt64(prev_ppr) AS ppr_d'
+  edit[15] old='              AND prev_state = 2\n              AND prev_day > 0' new='              AND pre_state_id = 2'
+  edit[16] old='              AND prev_acn = aircraft_number' new=''
+  edit[17] old='            delta_sne,\n            delta_ppr,' new='            sne_delta,\n            ppr_delta,'
+  edit[18] old='            delta_sne - toInt64(p.daily_today_u32) AS diff_sne,\n            delta_ppr - toInt64(p.daily_today_u32) AS di' new='            sne_delta - toInt64(p.daily_today_u32) AS diff_sne,\n            ppr_delta - toInt64(p.daily_today_u32) AS di'
+  edit[19] old='        WHERE NOT isNull(p.daily_today_u32)\n          AND (delta_sne != p.daily_today_u32 OR delta_ppr != p.daily_today_' new='        WHERE is_consecutive\n          AND NOT isNull(p.daily_today_u32)\n          AND (sne_delta != p.daily_today_u32 O'
+
+[2026-02-27 18:54:10 UTC] conv=0230f024 gen=d843790f file=code/validation/l2_inv10_turnover_balance.py
+  edit[0] old='        ["version_date", "version_id", "day_u16", "psn", "group_by", "state"],' new='        [\n            "version_date",\n            "version_id",\n            "day_u16",\n            "psn",\n            "g'
+  edit[1] old='            psn,\n            group_by,' new=''
+  edit[2] old='            lagInFrame(state, 1, 0) OVER w AS prev_state,\n            lagInFrame(day_u16, 1, 0) OVER w AS prev_day' new='            pre_state_id'
+  edit[3] old='        WINDOW w AS (PARTITION BY psn ORDER BY day_u16)' new=''
+  edit[4] old='    first_last AS (\n        SELECT\n            psn,\n            argMin(state, day_u16) AS first_state,\n            min(d' new=''
+  edit[5] old='        SELECT state, count() AS initial_count' new='        SELECT pre_state_id AS state, count() AS initial_count'
+  edit[6] old='        GROUP BY state' new='          AND pre_state_id IN (2, 3, 4, 5, 6)\n        GROUP BY pre_state_id'
+  edit[7] old='' new='          AND state IN (2, 3, 4, 5, 6)'
+  edit[8] old='        WHERE prev_day > 0 AND prev_state != state' new='        WHERE state IN (2, 3, 4, 5, 6)\n          AND pre_state_id > 0\n          AND pre_state_id != state'
+  edit[9] old='    exits AS (\n        SELECT prev_state AS state, count() AS exits' new='    spawn_entries AS (\n        SELECT state, count() AS spawn'
+  edit[10] old='        WHERE prev_day > 0 AND prev_state != state\n        GROUP BY prev_state' new='        WHERE state IN (2, 3, 4, 5, 6)\n          AND pre_state_id = 0\n        GROUP BY state'
+  edit[11] old='    spawn AS (\n        SELECT first_state AS state, count() AS spawn\n        FROM first_last\n        WHERE first_day > %' new='    exits AS (\n        SELECT pre_state_id AS state, count() AS exits\n        FROM base\n        WHERE pre_state_id IN (2'
+  edit[12] old='    LEFT JOIN spawn sp USING state' new='    LEFT JOIN spawn_entries sp USING state'
+
+[2026-02-27 18:54:25 UTC] conv=0230f024 gen=d843790f file=code/validation/l2_inv17_allowed_transitions.py
+  edit[0] old='        ["version_date", "version_id", "day_u16", "psn", "group_by", "state"],' new='        [\n            "version_date",\n            "version_id",\n            "day_u16",\n            "psn",\n            "g'
+  edit[1] old='    SELECT count()\n    FROM (' new='    WITH base AS ('
+  edit[2] old='            group_by,' new=''
+  edit[3] old='            state AS cur_state,\n            lagInFrame(state, 1, 0) OVER w AS prev_state,\n            lagInFrame(day_u16' new='            pre_state_id AS prev_state,\n            state AS cur_state'
+  edit[4] old='        WINDOW w AS (PARTITION BY psn ORDER BY day_u16)' new='          AND pre_state_id > 0'
+  edit[5] old='    WHERE prev_day > 0\n      AND (prev_state, cur_state) NOT IN (' new='    SELECT count()\n    FROM base\n    WHERE (prev_state, cur_state) NOT IN ('
+  edit[6] old='        SELECT psn, day_u16, prev_state, cur_state\n        FROM (' new='        WITH base AS ('
+  edit[7] old='                group_by,' new=''
+  edit[8] old='                state AS cur_state,\n                lagInFrame(state, 1, 0) OVER w AS prev_state,\n                lagInF' new='                pre_state_id AS prev_state,\n                state AS cur_state'
+  edit[9] old='            WINDOW w AS (PARTITION BY psn ORDER BY day_u16)' new='              AND pre_state_id > 0'
+  edit[10] old='        WHERE prev_day > 0\n          AND (prev_state, cur_state) NOT IN (' new='        SELECT psn, day_u16, prev_state, cur_state\n        FROM base\n        WHERE (prev_state, cur_state) NOT IN ('
+  edit[11] old='' new='        breakdown_query = f"""\n        WITH base AS (\n            SELECT\n                pre_state_id AS prev_state,\n   '
+
+[2026-02-27 19:10:46 UTC] conv=905da4b2 gen=35a4d44e file=code/sim_v2/messaging/rtc_units_mp2_writer_v1.py
+  edit[0] old='' new='    unsigned int state_out = state;\n    unsigned int pre_state_out = pre_state_id;\n    if (active == 1u) {{\n        if ('
+  edit[1] old='    mp2_state[pos].exchange(state);\n    mp2_pre_state[pos].exchange(pre_state_id);' new='    mp2_state[pos].exchange(state_out);\n    mp2_pre_state[pos].exchange(pre_state_out);'
+
+[2026-02-27 19:10:57 UTC] conv=905da4b2 gen=35a4d44e file=code/sim_v2/messaging/agent_population_units_v1.py
+  edit[0] old='' new='                if status_id == 5:\n                    status_id = 3\n'
+
+[2026-02-28 07:13:51 UTC] conv=7aa5e3ef gen=d66f722c file=tools/transitions_viewer/build_l2_engines_transitions_viewer.py
+  edit[0] old='' new='#!/usr/bin/env python3\nimport json\nimport os\nfrom datetime import datetime, timezone\n\n\nROOT_DIR = os.path.abspath(os.pat'
+

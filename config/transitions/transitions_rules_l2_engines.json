@@ -1,0 +1,179 @@
+{
+  "version": 2,
+  "metadata": {
+    "description": "L2 engines SSOT built from planner runtime pattern + location/planner-status contract.",
+    "scope": "L2 engines only (group_by=3/4), planner-driven, no L2->L1 feedback",
+    "created": "2026-02-26",
+    "updated": "2026-02-28",
+    "source": "planner transitions parity + approved MultiBOM location rules"
+  },
+  "architecture": "L2 engines (planner parity + strict location/planner status gates, no inactive, no reserve)",
+  "matrix": {
+    "from": "state",
+    "to": "state"
+  },
+  "states": {
+    "0": "spawn (boundary)",
+    "2": "operations",
+    "3": "serviceable",
+    "4": "repair",
+    "7": "unserviceable",
+    "6": "storage (terminal)"
+  },
+  "variables": [
+    "state",
+    "pre_state_id",
+    "group_by",
+    "aircraft_number",
+    "intent_state",
+    "planner_status",
+    "planner_active_trigger",
+    "planner_assembly_trigger",
+    "installed_engine_count",
+    "engine_quota_demand",
+    "sne",
+    "ppr",
+    "ll",
+    "oh",
+    "br",
+    "repair_days",
+    "repair_time"
+  ],
+  "invariant_principles": [
+    {
+      "id": "L2_INV_1",
+      "claim": "No L2->L1 feedback: engine contour never modifies planner state/triggers."
+    },
+    {
+      "id": "L2_INV_2",
+      "claim": "No inactive for engines: state=1 is forbidden."
+    },
+    {
+      "id": "L2_INV_3",
+      "claim": "No reserve for engines in L2 matrix: state=5 is forbidden."
+    },
+    {
+      "id": "L2_INV_4",
+      "claim": "6->3 is forbidden: storage is terminal."
+    },
+    {
+      "id": "L2_INV_5",
+      "claim": "Location cannot change while planner is in ops or in final repair stage (ActiveTrigger=1), except forced terminal detach."
+    }
+  ],
+  "location_contract": [
+    {
+      "id": "LOC_1_lock_ops_and_final_repair",
+      "rule": "If planner_status==2 OR (planner_status==4 AND planner_active_trigger==1), location changes are forbidden.",
+      "exception": "Forced detach is allowed only when (ll > 0 AND sne >= ll) OR (br > 0 AND ppr >= br)."
+    },
+    {
+      "id": "LOC_2_detach_on_planner_repair_enter",
+      "rule": "On planner enter to repair, all engines on this planner must set aircraft_number=0."
+    },
+    {
+      "id": "LOC_3_forced_fullkit_on_ops_or_active_trigger",
+      "rule": "When planner enters ops or ActiveTrigger=1, enforce full kit through quota demand and assignment."
+    },
+    {
+      "id": "LOC_4_sync_status_on_planner_ops_edges",
+      "rule": "Planner enter ops => installed engines move to state=2; planner exit ops => installed engines move from state=2 to state=3."
+    },
+    {
+      "id": "LOC_5_unsvc_on_wing",
+      "rule": "State=7 is allowed on-wing (aircraft_number != 0) as non-removable holding while location is locked."
+    }
+  ],
+  "rtc_execution_order": [
+    { "order": 0, "phase": "A", "layer": "l2_sync_planner_signals", "function": "rtc_l2_sync_planner_signals", "state": "all", "notes": "Read planner_status/active_trigger/assembly_trigger for current day." },
+    { "order": 1, "phase": "B", "layer": "l2_apply_location_locks", "function": "rtc_l2_apply_location_locks", "state": "all", "notes": "Apply location guards based on planner status." },
+    { "order": 2, "phase": "C", "layer": "l2_ops_and_serviceable_edges", "function": "rtc_l2_ops_serviceable_edges", "state": "2/3", "notes": "Planner-driven 2<->3 transitions with location contract." },
+    { "order": 3, "phase": "D", "layer": "l2_ops_resource_edges", "function": "rtc_l2_ops_resource_edges", "state": "2", "notes": "2->4 (detached repair), 2->7 (on-wing unsvc), 2->6 (storage)." },
+    { "order": 4, "phase": "E", "layer": "l2_unsvc_edges", "function": "rtc_l2_unsvc_edges", "state": "7", "notes": "7->2 return when planner/status gates allow." },
+    { "order": 5, "phase": "F", "layer": "l2_repair_exit", "function": "rtc_l2_repair_exit", "state": "4", "notes": "4->3 only for day0 cohort; runtime repair exit to 2." },
+    { "order": 6, "phase": "G", "layer": "l2_quota_demand", "function": "rtc_l2_quota_demand", "state": "3", "notes": "Assembly-trigger and full-kit demand routing." }
+  ],
+  "rules": [
+    {
+      "id": "spawn_to_ops_dynamic",
+      "from": 0,
+      "to": 2,
+      "pre": { "expr": "group_by in {3,4} AND engine_quota_demand > 0" },
+      "post": { "all": [{ "expr": "state == 2" }, { "expr": "repair_days == 0" }] },
+      "effects": [{ "expr": "state = 2" }],
+      "notes": "Dynamic spawn is allowed any day to close deficit."
+    },
+    {
+      "id": "ops_to_svc_on_planner_exit",
+      "from": 2,
+      "to": 3,
+      "pre": { "expr": "group_by in {3,4} AND aircraft_number != 0 AND planner_status != 2" },
+      "post": { "all": [{ "expr": "state == 3" }] },
+      "effects": [{ "expr": "state = 3" }],
+      "notes": "Planner exits ops -> installed engines move to serviceable."
+    },
+    {
+      "id": "ops_to_repair_by_limit",
+      "from": 2,
+      "to": 4,
+      "pre": { "expr": "group_by in {3,4} AND (oh > 0 AND ppr >= oh) AND NOT ((ll > 0 AND sne >= ll) OR (br > 0 AND ppr >= br)) AND NOT (planner_status == 2 OR (planner_status == 4 AND planner_active_trigger == 1))" },
+      "post": { "all": [{ "expr": "state == 4" }, { "expr": "aircraft_number == 0" }] },
+      "effects": [{ "expr": "state = 4" }, { "expr": "aircraft_number = 0" }],
+      "notes": "Resource-driven detach to repair."
+    },
+    {
+      "id": "ops_to_unsvc_onwing_by_limit",
+      "from": 2,
+      "to": 7,
+      "pre": { "expr": "group_by in {3,4} AND (oh > 0 AND ppr >= oh) AND NOT ((ll > 0 AND sne >= ll) OR (br > 0 AND ppr >= br)) AND (planner_status == 2 OR (planner_status == 4 AND planner_active_trigger == 1))" },
+      "post": { "all": [{ "expr": "state == 7" }, { "expr": "aircraft_number != 0" }] },
+      "effects": [{ "expr": "state = 7" }],
+      "notes": "When location is locked, engine cannot be detached to repair and moves to on-wing unserviceable."
+    },
+    {
+      "id": "ops_to_storage_terminal",
+      "from": 2,
+      "to": 6,
+      "pre": { "expr": "group_by in {3,4} AND ((ll > 0 AND sne >= ll) OR (br > 0 AND ppr >= br))" },
+      "post": { "all": [{ "expr": "state == 6" }, { "expr": "aircraft_number == 0" }] },
+      "effects": [{ "expr": "state = 6" }, { "expr": "aircraft_number = 0" }],
+      "notes": "Terminal detach to storage."
+    },
+    {
+      "id": "svc_to_ops_on_planner_ops",
+      "from": 3,
+      "to": 2,
+      "pre": { "expr": "group_by in {3,4} AND aircraft_number != 0 AND planner_status == 2" },
+      "post": { "all": [{ "expr": "state == 2" }] },
+      "effects": [{ "expr": "state = 2" }],
+      "notes": "Installed serviceable engine joins ops only when planner is in ops."
+    },
+    {
+      "id": "unsvc_to_ops",
+      "from": 7,
+      "to": 2,
+      "pre": { "expr": "group_by in {3,4} AND planner_status == 2 AND aircraft_number != 0 AND intent_state == 2" },
+      "post": { "all": [{ "expr": "state == 2" }] },
+      "effects": [{ "expr": "state = 2" }],
+      "notes": "Return from on-wing unserviceable to operations under planner and intent gates."
+    },
+    {
+      "id": "repair_to_svc_day0_only",
+      "from": 4,
+      "to": 3,
+      "pre": { "expr": "group_by in {3,4} AND day0_state(psn) == 4 AND repair_days >= repair_time" },
+      "post": { "all": [{ "expr": "state == 3" }, { "expr": "aircraft_number == 0" }] },
+      "effects": [{ "expr": "state = 3" }, { "expr": "aircraft_number = 0" }],
+      "notes": "4->3 is allowed only for day0 repair cohort."
+    },
+    {
+      "id": "repair_to_ops_runtime",
+      "from": 4,
+      "to": 2,
+      "pre": { "expr": "group_by in {3,4} AND day0_state(psn) != 4 AND repair_days >= repair_time AND planner_status == 2" },
+      "post": { "all": [{ "expr": "state == 2" }, { "expr": "aircraft_number != 0" }] },
+      "effects": [{ "expr": "state = 2" }],
+      "notes": "Runtime repair exit must go to operations path."
+    }
+  ]
+}

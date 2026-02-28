@@ -1,4 +1,4 @@
-slice_name: Датасет 1
+slice_name: "\u0414\u0430\u0442\u0430\u0441\u0435\u0442 1"
 description: ''
 certified_by: null
 certification_details: null
@@ -36,21 +36,21 @@ params:
     aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
-    label: Операции
+    label: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0438"
   - expressionType: SQL
     sqlExpression: ROUND(AVGIf(status_count_ffill, status_id = 3))
     column: null
     aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
-    label: Исправные
+    label: "\u0418\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435"
   - expressionType: SQL
     sqlExpression: ROUND(AVGIf(status_count_ffill, status_id = 4))
     column: null
     aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
-    label: Ремонт
+    label: "\u0420\u0435\u043C\u043E\u043D\u0442"
   - expressionType: SQL
     sqlExpression: ROUND(AVGIf(status_count_ffill, status_id = 6))
     column: null
@@ -64,7 +64,7 @@ params:
     aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
-    label: Неисправные
+    label: "\u041D\u0435\u0438\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435"
   order_desc: false
   orientation: vertical
   rich_tooltip: true
@@ -88,11 +88,11 @@ params:
   y_axis_title_position: Left
   x_axis_time_format: '%Y'
   label_colors:
-    "\u0421\u043F\u0438\u0441\u0430\u043D\u0438\u0435": '#737576'
+    "\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435": '#003594'
     "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0438": '#7CA3DC'
     "\u0418\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435": '#008C5F'
     "\u0420\u0435\u043C\u043E\u043D\u0442": '#FFC332'
-    "\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435": '#003594'
+    "\u0421\u043F\u0438\u0441\u0430\u043D\u0438\u0435": '#737576'
     "\u041D\u0435\u0438\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435": '#DC2328'
     "\u041C\u0438-8": '#003594'
     "\u041C\u0438-17": '#7CA3DC'
@@ -100,49 +100,62 @@ params:
     "\u0422\u0438\u043F \u0412\u0421: \u041C\u0438-17": '#7CA3DC'
     '1': '#003594'
     '2': '#7CA3DC'
-query_context: '{"datasource": {"id": 1, "type": "table"}, "force": false, "form_data":
-  {"adhoc_filters": [{"clause": "WHERE", "comparator": "No filter", "expressionType":
-  "SIMPLE", "operator": "TEMPORAL_RANGE", "subject": "day_date"}], "annotation_layers":
-  [], "color_scheme": "supersetColors", "comparison_type": "values", "dashboards":
-  [27], "datasource": "1__table", "extra_form_data": {}, "force": false, "forecastInterval":
-  0.8, "forecastPeriods": 10, "groupby": ["status_id"], "legendOrientation": "top",
-  "legendType": "scroll", "metrics": [{"aggregate": null, "column": null, "datasourceWarning":
-  false, "expressionType": "SQL", "hasCustomLabel": true, "label": "Борты", "optionName":
-  "metric_ffill_borts", "sqlExpression": "ROUND(SUM(status_count_ffill) / countDistinct(day_date))"}],
-  "order_desc": true, "orientation": "vertical", "result_format": "json", "result_type":
-  "full", "rich_tooltip": true, "row_limit": 10000, "show_empty_columns": false, "show_legend":
-  true, "show_value": true, "slice_id": 243, "sort_series_type": "sum", "time_grain_sqla":
-  "P1Y", "tooltipTimeFormat": "smart_date", "truncateXAxis": true, "truncate_metric":
-  true, "viz_type": "echarts_timeseries_bar", "x_axis": "day_date", "x_axis_sort_asc":
-  true, "x_axis_sort_series": "name", "x_axis_sort_series_ascending": true, "y_axis_format":
-  "SMART_NUMBER", "y_axis_title_margin": 15, "y_axis_title_position": "Left", "label_colors":
-  {"Списание": "#737576", "Операции": "#7CA3DC", "Исправные": "#008C5F", "Ремонт":
-  "#FFC332", "Хранение": "#003594", "Неисправные": "#DC2328", "Ми-8": "#003594", "Ми-17":
-  "#7CA3DC", "Тип ВС: Ми-8": "#003594", "Тип ВС: Ми-17": "#7CA3DC", "1": "#003594",
-  "2": "#7CA3DC"}}, "queries": [{"annotation_layers": [], "applied_time_extras": {},
-  "columns": [{"columnType": "BASE_AXIS", "expressionType": "SQL", "label": "day_date",
-  "sqlExpression": "day_date", "timeGrain": "P1Y"}], "custom_form_data": {}, "custom_params":
-  {}, "extras": {"having": "", "time_grain_sqla": "P1Y", "where": "version_date IN
-  (20250704,20251230)"}, "filters": [{"col": "day_date", "op": "TEMPORAL_RANGE", "val":
-  "No filter"}], "metrics": [{"expressionType": "SQL", "sqlExpression": "ROUND(AVGIf(status_count_ffill,
-  status_id = 1))", "column": null, "aggregate": null, "datasourceWarning": false,
-  "hasCustomLabel": true, "label": "Хранение"}, {"expressionType": "SQL", "sqlExpression":
-  "ROUND(AVGIf(status_count_ffill, status_id = 2))", "column": null, "aggregate":
-  null, "datasourceWarning": false, "hasCustomLabel": true, "label": "Операции"},
-  {"expressionType": "SQL", "sqlExpression": "ROUND(AVGIf(status_count_ffill, status_id
-  = 3))", "column": null, "aggregate": null, "datasourceWarning": false, "hasCustomLabel":
-  true, "label": "Исправные"}, {"expressionType": "SQL", "sqlExpression": "ROUND(AVGIf(status_count_ffill,
-  status_id = 4))", "column": null, "aggregate": null, "datasourceWarning": false,
-  "hasCustomLabel": true, "label": "Ремонт"}, {"expressionType": "SQL", "sqlExpression":
-  "ROUND(AVGIf(status_count_ffill, status_id = 6))", "column": null, "aggregate":
-  null, "datasourceWarning": false, "hasCustomLabel": true, "label": "Списание"},
-  {"expressionType": "SQL", "sqlExpression": "ROUND(AVGIf(status_count_ffill, status_id
-  = 7))", "column": null, "aggregate": null, "datasourceWarning": false, "hasCustomLabel":
-  true, "label": "Неисправные"}], "order_desc": true, "orderby": [[{"columnType":
-  "BASE_AXIS", "expressionType": "SQL", "label": "day_date", "sqlExpression": "toStartOfDay(toDateTime(day_date))"},
-  true]], "post_processing": [], "row_limit": 10000, "series_columns": [], "series_limit":
-  0, "time_offsets": [], "url_params": {}}], "result_format": "json", "result_type":
-  "full"}'
+query_context: "{\"datasource\": {\"id\": 1, \"type\": \"table\"}, \"force\": false,\
+  \ \"form_data\": {\"adhoc_filters\": [{\"clause\": \"WHERE\", \"comparator\": \"\
+  No filter\", \"expressionType\": \"SIMPLE\", \"operator\": \"TEMPORAL_RANGE\", \"\
+  subject\": \"day_date\"}], \"annotation_layers\": [], \"color_scheme\": \"supersetColors\"\
+  , \"comparison_type\": \"values\", \"dashboards\": [27], \"datasource\": \"1__table\"\
+  , \"extra_form_data\": {}, \"force\": false, \"forecastInterval\": 0.8, \"forecastPeriods\"\
+  : 10, \"groupby\": [\"status_id\"], \"legendOrientation\": \"top\", \"legendType\"\
+  : \"scroll\", \"metrics\": [{\"aggregate\": null, \"column\": null, \"datasourceWarning\"\
+  : false, \"expressionType\": \"SQL\", \"hasCustomLabel\": true, \"label\": \"\u0411\
+  \u043E\u0440\u0442\u044B\", \"optionName\": \"metric_ffill_borts\", \"sqlExpression\"\
+  : \"ROUND(SUM(status_count_ffill) / countDistinct(day_date))\"}], \"order_desc\"\
+  : true, \"orientation\": \"vertical\", \"result_format\": \"json\", \"result_type\"\
+  : \"full\", \"rich_tooltip\": true, \"row_limit\": 10000, \"show_empty_columns\"\
+  : false, \"show_legend\": true, \"show_value\": true, \"slice_id\": 243, \"sort_series_type\"\
+  : \"sum\", \"time_grain_sqla\": \"P1Y\", \"tooltipTimeFormat\": \"smart_date\",\
+  \ \"truncateXAxis\": true, \"truncate_metric\": true, \"viz_type\": \"echarts_timeseries_bar\"\
+  , \"x_axis\": \"day_date\", \"x_axis_sort_asc\": true, \"x_axis_sort_series\": \"\
+  name\", \"x_axis_sort_series_ascending\": true, \"y_axis_format\": \"SMART_NUMBER\"\
+  , \"y_axis_title_margin\": 15, \"y_axis_title_position\": \"Left\", \"label_colors\"\
+  : {\"\u0421\u043F\u0438\u0441\u0430\u043D\u0438\u0435\": \"#737576\", \"\u041E\u043F\
+  \u0435\u0440\u0430\u0446\u0438\u0438\": \"#7CA3DC\", \"\u0418\u0441\u043F\u0440\u0430\
+  \u0432\u043D\u044B\u0435\": \"#008C5F\", \"\u0420\u0435\u043C\u043E\u043D\u0442\"\
+  : \"#FFC332\", \"\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435\": \"#003594\"\
+  , \"\u041D\u0435\u0438\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435\": \"#DC2328\"\
+  , \"\u041C\u0438-8\": \"#003594\", \"\u041C\u0438-17\": \"#7CA3DC\", \"\u0422\u0438\
+  \u043F \u0412\u0421: \u041C\u0438-8\": \"#003594\", \"\u0422\u0438\u043F \u0412\u0421\
+  : \u041C\u0438-17\": \"#7CA3DC\", \"1\": \"#003594\", \"2\": \"#7CA3DC\"}}, \"queries\"\
+  : [{\"annotation_layers\": [], \"applied_time_extras\": {}, \"columns\": [{\"columnType\"\
+  : \"BASE_AXIS\", \"expressionType\": \"SQL\", \"label\": \"day_date\", \"sqlExpression\"\
+  : \"day_date\", \"timeGrain\": \"P1Y\"}], \"custom_form_data\": {}, \"custom_params\"\
+  : {}, \"extras\": {\"having\": \"\", \"time_grain_sqla\": \"P1Y\", \"where\": \"\
+  version_date IN (20250704,20251230)\"}, \"filters\": [{\"col\": \"day_date\", \"\
+  op\": \"TEMPORAL_RANGE\", \"val\": \"No filter\"}], \"metrics\": [{\"expressionType\"\
+  : \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill, status_id = 1))\"\
+  , \"column\": null, \"aggregate\": null, \"datasourceWarning\": false, \"hasCustomLabel\"\
+  : true, \"label\": \"\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435\"}, {\"expressionType\"\
+  : \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill, status_id = 2))\"\
+  , \"column\": null, \"aggregate\": null, \"datasourceWarning\": false, \"hasCustomLabel\"\
+  : true, \"label\": \"\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0438\"}, {\"expressionType\"\
+  : \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill, status_id = 3))\"\
+  , \"column\": null, \"aggregate\": null, \"datasourceWarning\": false, \"hasCustomLabel\"\
+  : true, \"label\": \"\u0418\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435\"},\
+  \ {\"expressionType\": \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill,\
+  \ status_id = 4))\", \"column\": null, \"aggregate\": null, \"datasourceWarning\"\
+  : false, \"hasCustomLabel\": true, \"label\": \"\u0420\u0435\u043C\u043E\u043D\u0442\
+  \"}, {\"expressionType\": \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill,\
+  \ status_id = 6))\", \"column\": null, \"aggregate\": null, \"datasourceWarning\"\
+  : false, \"hasCustomLabel\": true, \"label\": \"\u0421\u043F\u0438\u0441\u0430\u043D\
+  \u0438\u0435\"}, {\"expressionType\": \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill,\
+  \ status_id = 7))\", \"column\": null, \"aggregate\": null, \"datasourceWarning\"\
+  : false, \"hasCustomLabel\": true, \"label\": \"\u041D\u0435\u0438\u0441\u043F\u0440\
+  \u0430\u0432\u043D\u044B\u0435\"}], \"order_desc\": true, \"orderby\": [[{\"columnType\"\
+  : \"BASE_AXIS\", \"expressionType\": \"SQL\", \"label\": \"day_date\", \"sqlExpression\"\
+  : \"toStartOfDay(toDateTime(day_date))\"}, true]], \"post_processing\": [], \"row_limit\"\
+  : 10000, \"series_columns\": [], \"series_limit\": 0, \"time_offsets\": [], \"url_params\"\
+  : {}}], \"result_format\": \"json\", \"result_type\": \"full\"}"
 cache_timeout: null
 uuid: 63424c89-e6e1-4a92-814f-cf4c7f37d15c
 version: 1.0.0
