@@ -10,6 +10,8 @@ alwaysApply: true
 - **Главный агент (Orchestrator)**: формирует план, распределяет задачи, синтезирует результаты, инициирует governance‑гейты и финальное согласование. **Кодинг в `code/**` запрещён; правила/конфиги/доки — разрешены.** Для исследования кодовой базы использует встроенный `explore` subagent как инструмент (не отдельная роль). Профиль: `.cursor/agents/orchestrator.md`.
 - **КРИТИЧЕСКИЙ ЗАПРЕТ**: Текущий ассистент действует как главный агент. Перед КАЖДЫМ вызовом Write/StrReplace/Shell проверяй: путь в `code/**` или `tools/**`? Если ДА — СТОП, делегируй через Task tool кодеру. Нарушение = системный сбой governance.
 - **Subagents**: специализированные исполнители (`coder-flame`, `coder-general`, `reviewer-flame`, `validator-judge`, `capsule-builder`, `analyst-sql-graph`, `governance-compliance`, `docs-curator`) работают в своей зоне ответственности.
+- **Глубина делегирования (обязательно)**: разрешён только один уровень делегирования (orchestrator → subagent). Subagent'ам запрещено порождать новых subagent'ов (запрет 3-го уровня и любой вложенности) без явного разрешения Алексея в текущем чате.
+- **Enforcement по вложенности**: при попытке nested delegation — немедленная остановка фазы, фиксация policy violation в handoff и эскалация человеку.
 - **Человек (Алексей)**: утверждает архитектурные/алгоритмические/схемные изменения и любые решения с высоким риском.
 - **ETL/Extract/СУБД задачи**: выполняют `coder-general` и `analyst-sql-graph` по зоне ответственности.
 - **BI-контур (упрощённый, текущий этап)**: работаем в `personal supersetbi sandbox` (действующий инстанс с существующими дашбордами); deploy/clone в `corporate sandbox` — только по явной команде человека; production не трогаем (только handoff-пакет для админов).
@@ -249,6 +251,7 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 ### Governance control-plane (обязательно для high-risk)
 - `governance-compliance` не пишет код и не меняет доменные данные; его задача — policy check и risk verdict.
 - Минимальный verdict-формат: `policy_status`, `scope_match`, `traceability_status`, `human_gate_status`, `decision`.
+- В каждый verdict добавить проверку делегирования: `delegation_depth_status=pass|fail` и `nested_subagent_detected=yes|no`.
 - При `decision=reject|escalate` оркестратор не имеет права закрыть workflow без реакции (исправление или эскалация человеку).
 - Вызов `governance-compliance` обязателен для всех задач с изменениями в `config/transitions/**`, `config/transitions/invariants.json`, `.cursor/rules/**`, `.cursor/agents/**` и перед любым `make sync-domain-graph`.
 

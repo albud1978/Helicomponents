@@ -845,6 +845,19 @@ def main(version_date=None, version_id=None):
                 pandas_df = process_program_ac_precheck_d1(pandas_df, client)
             except Exception as e:
                 print(f"⚠️ Ошибка precheck D1: {e}")
+
+            # ЭТАП 2c: D1 precheck для status_id=0 → terminal(6)
+            print(f"🔧 Этап 2c: D1 precheck для status_id=0 → terminal(6)...")
+            try:
+                from extract.program_ac_precheck_status0_terminal import (
+                    process_program_ac_precheck_status0_terminal_d1,
+                )
+                pandas_df = process_program_ac_precheck_status0_terminal_d1(
+                    pandas_df,
+                    client,
+                )
+            except Exception as e:
+                print(f"⚠️ Ошибка precheck D1 status_id=0: {e}")
             
             # ЭТАП 3: Обработка статусов неактивности планеров (МИ-8Т, МИ-8П и т.д.)
             print(f"🔧 Этап 3: Статусы неактивности планеров...")

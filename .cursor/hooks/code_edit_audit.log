@@ -1384,3 +1384,114 @@
 [2026-02-28 07:13:51 UTC] conv=7aa5e3ef gen=d66f722c file=tools/transitions_viewer/build_l2_engines_transitions_viewer.py
   edit[0] old='' new='#!/usr/bin/env python3\nimport json\nimport os\nfrom datetime import datetime, timezone\n\n\nROOT_DIR = os.path.abspath(os.pat'
 
+[2026-02-28 16:50:32 UTC] conv=1d3f7cac gen=e56f60b8 file=code/extract/program_ac_precheck_next_day.py
+  edit[0] old='Precheck D1 для записей с status_id=2 на этапе обогащения heli_pandas' new='Precheck D1 для записей с status_id ∈ {0,2} на этапе обогащения heli_pandas'
+  edit[1] old='- Для group_by ∈ {1,2} и status_id == 2 берём dt = daily_hours(D1)' new='- Для group_by ∈ {1,2} и status_id ∈ {0,2} берём dt = daily_hours(D1)'
+  edit[2] old='' new='- Для status_id == 0 и dt > 0:\n    * если не сработали ветки перевода в 6/4, присваиваем status_id = 2'
+  edit[3] old='    Меняет только строки с status_id == 2 и group_by ∈ {1,2}.' new='    Меняет только строки с status_id ∈ {0,2} и group_by ∈ {1,2}.'
+  edit[4] old='    # Фильтр кандидатов' new='    # Фильтр кандидатов (status_id 0 или 2)'
+  edit[5] old='        (pandas_df['status_id'] == 2)' new='        (pandas_df['status_id'].isin([0, 2]))'
+  edit[6] old='' new='        status_id = int(row.get('status_id') or 0)'
+  edit[7] old='' new='            continue'
+  edit[8] old='' new='        if status_id == 0:\n            pandas_df.at[idx, 'status_id'] = 2\n'
+
+[2026-02-28 17:17:50 UTC] conv=4d945118 gen=eee65f77 file=code/extract/program_ac_precheck_next_day.py
+  edit[0] old='Precheck D1 для записей с status_id=2 на этапе обогащения heli_pandas' new='Precheck D1 для записей с status_id == 2 на этапе обогащения heli_pandas'
+  edit[1] old='    * иначе → status_id = 4 (ремонт)' new='    * иначе → status_id = 7 (ремонтопригодный)'
+  edit[2] old='    # Фильтр кандидатов' new='    # Фильтр кандидатов (status_id == 2)'
+  edit[3] old='                pandas_df.at[idx, 'status_id'] = 4' new='                pandas_df.at[idx, 'status_id'] = 7\n            continue'
+
+[2026-02-28 17:18:08 UTC] conv=4d945118 gen=eee65f77 file=code/extract/program_ac_precheck_status0_terminal.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nD1 precheck для status_id=0: переводит только в terminal (6) по ресурсной логике.\n"""\n\nfrom _'
+
+[2026-02-28 17:18:13 UTC] conv=4d945118 gen=eee65f77 file=code/extract/dual_loader.py
+  edit[0] old='' new='\n            # ЭТАП 2c: D1 precheck для status_id=0 → terminal(6)\n            print(f"🔧 Этап 2c: D1 precheck для status_'
+
+[2026-02-28 18:04:18 UTC] conv=6350888b gen=96840692 file=code/extract/heli_pandas_repair_status.py
+  edit[0] old='' new='   Приоритет: condition='ИСПРАВНЫЙ' — агрегаты не переводим в status_id=4 в этом модуле.'
+  edit[1] old='' new='      AND (\n          toUInt32(ifNull(group_by, 0)) <= 2\n          OR ifNull(condition, '') != 'ИСПРАВНЫЙ'\n      )'
+  edit[2] old='' new='def count_condition_ok_aggregates(client, version_date: date, version_id: int) -> int:\n    """Подсчёт агрегатов с condit'
+  edit[3] old='' new='      AND (\n          toUInt32(ifNull(group_by, 0)) <= 2\n          OR ifNull(condition, '') != 'ИСПРАВНЫЙ'\n      )'
+  edit[4] old='' new='      AND (\n          toUInt32(ifNull(hp.group_by, 0)) <= 2\n          OR ifNull(hp.condition, '') != 'ИСПРАВНЫЙ'\n      )'
+  edit[5] old='    ' new='    condition_ok_count = count_condition_ok_aggregates(client, version_date, version_id)\n'
+  edit[6] old='' new='    print(\n        "⚠️ Найдено агрегатов с condition='ИСПРАВНЫЙ' и валидным target_date: "\n        f"{condition_ok_count'
+
+[2026-02-28 18:10:30 UTC] conv=afc138a5 gen=bcffb2df file=code/extract/heli_pandas_storage_status.py
+  edit[0] old='4. Оставшиеся НЕИСПРАВНЫЕ: → status_id=1 (Inactive), repair_days=0' new='4. Оставшиеся НЕИСПРАВНЫЕ: → status_id=7 (unserviceable/ремонтопригодный), repair_days=0'
+  edit[1] old='- Неисправные агрегаты без target_date → inactive (нет реального плана ремонта)' new='- Неисправные агрегаты без target_date → unserviceable (status_id=7, нет реального плана ремонта)'
+  edit[2] old='    # --- Блок 4: Оставшиеся НЕИСПРАВНЫЕ → Inactive (status_id=1, repair_days=0) ---\n    # FIX: без target_date нет реал' new='    # --- Блок 4: Оставшиеся НЕИСПРАВНЫЕ → unserviceable (status_id=7, repair_days=0) ---\n    # FIX: без target_date нет'
+  edit[3] old='            # FIX: без target_date нет реального ремонта → inactive (1), не repair (4)\n            # Устанавливаем statu' new='            # FIX: без target_date нет реального ремонта → unserviceable (7), не repair (4)\n            # Устанавливаем '
+  edit[4] old='            UPDATE status_id = 1, repair_days = 0' new='            UPDATE status_id = 7, repair_days = 0'
+  edit[5] old='            print(f"✅ Обновлено: {remaining_count} НЕИСПРАВНЫЙ → status_id=1 (Inactive), repair_days=0")' new='            print(\n                f"✅ Обновлено: {remaining_count} НЕИСПРАВНЫЙ → "\n                f"status_id=7 (unser'
+
+[2026-02-28 18:43:25 UTC] conv=eb8f5946 gen=dd24f7d8 file=code/sim_v2/messaging/base_model_units_v1.py
+  edit[0] old='' new='        agent.newState("unserviceable")'
+
+[2026-02-28 18:43:35 UTC] conv=eb8f5946 gen=dd24f7d8 file=code/sim_v2/messaging/agent_population_units_v1.py
+  edit[0] old='            'storage': fg.AgentVector(agent_def)' new='            'storage': fg.AgentVector(agent_def),\n            'unserviceable': fg.AgentVector(agent_def),'
+  edit[1] old='            6: 'storage'' new='            6: 'storage',\n            7: 'unserviceable','
+  edit[2] old='                    status_id = 4' new='                    raise ValueError(\n                        f"Неизвестный status_id={status_id} "\n                    '
+  edit[3] old='                if status_id == 5:\n                    status_id = 3\n' new=''
+  edit[4] old='' new='                elif status_id == 7:\n                    agent.setVariableUInt("intent_state", 7)'
+  edit[5] old='        all_states = ['operations', 'serviceable', 'repair', 'reserve', 'storage']' new='        all_states = [\n            'operations',\n            'serviceable',\n            'repair',\n            'reserve','
+
+[2026-02-28 18:43:40 UTC] conv=eb8f5946 gen=dd24f7d8 file=code/sim_v2/messaging/rtc_units_save_pre_state_v1.py
+  edit[0] old='' new='        "unserviceable": 7,'
+
+[2026-02-28 18:43:46 UTC] conv=eb8f5946 gen=dd24f7d8 file=code/sim_v2/messaging/rtc_units_mp2_writer_v1.py
+  edit[0] old='    unsigned int state_out = state;\n    unsigned int pre_state_out = pre_state_id;\n    if (active == 1u) {{\n        if (' new='    const unsigned int state_out = state;\n    const unsigned int pre_state_out = pre_state_id;'
+  edit[1] old='' new='        "unserviceable": 7,'
+
+[2026-02-28 18:47:45 UTC] conv=6ce7cda5 gen=a152a4a6 file=code/sim_v2/messaging/agent_population_units_v1.py
+  edit[0] old='' new='                # Day0 статус загружается 1:1 без remap.'
+  edit[1] old='                if status_id == 2 and unit['aircraft_number'] == 0:\n                    status_id = 3\n' new=''
+
+[2026-02-28 18:50:54 UTC] conv=3cf1e78b gen=8b84218f file=code/extract/extract_master.py
+  edit[0] old='' new='\n    def validate_zero_statuses(self) -> bool:\n        """Проверка нулевых статусов в heli_pandas для текущей версии."""'
+  edit[1] old='        self.final_validation()' new='        final_ok = self.final_validation()'
+  edit[2] old='        return success_count == total_steps' new='        return success_count == total_steps and final_ok'
+  edit[3] old='' new='\n        # Проверка нулевых статусов в heli_pandas (текущая версия)\n        if not self.validate_zero_statuses():\n      '
+  edit[4] old='' new='        return all_ready'
+
+[2026-03-01 02:25:21 UTC] conv=a2a98f60 gen=eb82c6ae file=code/sim_v2/messaging/agent_population_units_v1.py
+  edit[0] old='' new='        if self.units_data:\n            max_group_by = max(unit['group_by'] for unit in self.units_data)\n        else:\n '
+  edit[1] old='' new='            'max_group_by': max_group_by,\n            'max_groups': max_groups,'
+
+[2026-03-01 02:25:28 UTC] conv=a2a98f60 gen=eb82c6ae file=code/sim_v2/messaging/base_model_units_v1.py
+  edit[0] old='' new='        max_groups = int(env_data.get('max_groups', MAX_GROUPS))\n        if max_groups <= 0:\n            max_groups = MA'
+  edit[1] old='        self.env.newMacroPropertyUInt32("mp_svc_head", MAX_GROUPS)\n        self.env.newMacroPropertyUInt32("mp_svc_tail"' new='        self.env.newMacroPropertyUInt32("mp_svc_head", max_groups)\n        self.env.newMacroPropertyUInt32("mp_svc_tail"'
+  edit[2] old='        self.env.newMacroPropertyUInt32("mp_queue_head", MAX_GROUPS)\n        self.env.newMacroPropertyUInt32("mp_queue_t' new='        self.env.newMacroPropertyUInt32("mp_queue_head", max_groups)\n        self.env.newMacroPropertyUInt32("mp_queue_t'
+  edit[3] old='        self.env.newMacroPropertyUInt32("units_pool_count", MAX_GROUPS)\n        self.env.newMacroPropertyUInt32("units_o' new='        self.env.newMacroPropertyUInt32("units_pool_count", max_groups)\n        self.env.newMacroPropertyUInt32("units_o'
+
+[2026-03-01 02:25:42 UTC] conv=a2a98f60 gen=eb82c6ae file=code/sim_v2/units/rtc_units_fifo_priority.py
+  edit[0] old='MAX_GROUPS = 50' new=''
+  edit[1] old='\ndef get_rtc_code_assign_serviceable(max_frames: int) -> str:' new='def get_rtc_code_assign_serviceable(max_frames: int, max_groups: int) -> str:'
+  edit[2] old='    if (group_by >= {MAX_GROUPS}u) {{' new='    if (group_by >= {max_groups}u) {{'
+  edit[3] old='    auto request_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_request_count");' new='    auto request_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_groups}u>("mp_request_count");'
+  edit[4] old='    auto svc_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_svc_head");\n    auto svc_tai' new='    auto svc_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_groups}u>("mp_svc_head");\n    auto svc_tai'
+  edit[5] old='def get_rtc_code_assign_reserve(max_frames: int) -> str:' new='def get_rtc_code_assign_reserve(max_frames: int, max_groups: int) -> str:'
+  edit[6] old='    if (group_by >= {MAX_GROUPS}u) {{' new='    if (group_by >= {max_groups}u) {{'
+  edit[7] old='    auto request_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_request_count");' new='    auto request_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_groups}u>("mp_request_count");'
+  edit[8] old='    auto svc_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_svc_head");\n    auto svc_tai' new='    auto svc_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_groups}u>("mp_svc_head");\n    auto svc_tai'
+  edit[9] old='    auto rsv_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_head");\n    auto rsv_tai' new='    auto rsv_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_groups}u>("mp_rsv_head");\n    auto rsv_tai'
+  edit[10] old='def get_rtc_code_spawn(max_frames: int) -> str:' new='def get_rtc_code_spawn(max_frames: int, max_groups: int) -> str:'
+  edit[11] old='    if (group_by >= {MAX_GROUPS}u) {{' new='    if (group_by >= {max_groups}u) {{'
+  edit[12] old='    auto request_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_request_count");' new='    auto request_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_groups}u>("mp_request_count");'
+  edit[13] old='    auto svc_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_svc_head");\n    auto svc_tai' new='    auto svc_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_groups}u>("mp_svc_head");\n    auto svc_tai'
+  edit[14] old='    auto rsv_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_head");\n    auto rsv_tai' new='    auto rsv_head = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_groups}u>("mp_rsv_head");\n    auto rsv_tai'
+  edit[15] old='def get_rtc_code_return_to_rsv_pool_write() -> str:' new='def get_rtc_code_return_to_rsv_pool_write(max_groups: int) -> str:'
+  edit[16] old='    if (group_by >= {MAX_GROUPS}u) {{' new='    if (group_by >= {max_groups}u) {{'
+  edit[17] old='    auto rsv_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_GROUPS}u>("mp_rsv_tail");' new='    auto rsv_tail = FLAMEGPU->environment.getMacroProperty<unsigned int, {max_groups}u>("mp_rsv_tail");'
+  edit[18] old='def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription, \n                 max_frames: int, max_days: in' new='def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription,\n                 max_frames: int, max_days: int'
+  edit[19] old='    rtc_svc = get_rtc_code_assign_serviceable(max_frames)' new='    rtc_svc = get_rtc_code_assign_serviceable(max_frames, max_groups)'
+  edit[20] old='    rtc_rsv = get_rtc_code_assign_reserve(max_frames)' new='    rtc_rsv = get_rtc_code_assign_reserve(max_frames, max_groups)'
+  edit[21] old='    rtc_spawn = get_rtc_code_spawn(max_frames)' new='    rtc_spawn = get_rtc_code_spawn(max_frames, max_groups)'
+  edit[22] old='    rtc_return = get_rtc_code_return_to_rsv_pool_write()' new='    rtc_return = get_rtc_code_return_to_rsv_pool_write(max_groups)'
+
+[2026-03-01 02:25:49 UTC] conv=a2a98f60 gen=eb82c6ae file=code/sim_v2/messaging/orchestrator_units_v1.py
+  edit[0] old='' new='        max_groups = int(self.env_data.get('max_groups', 50))\n        self._max_groups = max_groups'
+  edit[1] old='            rtc_units_fifo_priority.register_rtc(model, agent, max_frames, max_days)' new='            rtc_units_fifo_priority.register_rtc(\n                model, agent, max_frames, max_days, max_groups=max_gro'
+  edit[2] old='' new='            max_groups = getattr(self, "_max_groups", 50)'
+  edit[3] old='                if gb < 50 and tail > 0:' new='                if gb < max_groups and tail > 0:'
+  edit[4] old='                if gb < 50 and tail > 0:' new='                if gb < max_groups and tail > 0:'
+

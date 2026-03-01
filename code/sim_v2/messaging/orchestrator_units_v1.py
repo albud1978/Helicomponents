@@ -217,6 +217,8 @@ class UnitsOrchestratorV1:
 
         max_frames = int(self.env_data.get('units_frames_total', 12000))
         max_days = int(self.env_data.get('days_total_u16', 3650))
+        max_groups = int(self.env_data.get('max_groups', 50))
+        self._max_groups = max_groups
 
         modules_ok = 0
         modules_failed = 0
@@ -260,7 +262,9 @@ class UnitsOrchestratorV1:
 
         # 4. fifo_priority (EP1/EP2/EP4 + spawn)
         try:
-            rtc_units_fifo_priority.register_rtc(model, agent, max_frames, max_days)
+            rtc_units_fifo_priority.register_rtc(
+                model, agent, max_frames, max_days, max_groups=max_groups
+            )
             modules_ok += 1
         except Exception as e:
             print(f"  ❌ units_fifo_priority: {e}")
@@ -361,12 +365,13 @@ class UnitsOrchestratorV1:
 
     def _init_fifo_on_first_step(self):
         try:
+            max_groups = getattr(self, "_max_groups", 50)
             for gb, tail in self._svc_tails.items():
-                if gb < 50 and tail > 0:
+                if gb < max_groups and tail > 0:
                     self.simulation.environment.setMacroPropertyUInt32("mp_svc_tail", gb, tail)
 
             for gb, tail in self._rsv_tails.items():
-                if gb < 50 and tail > 0:
+                if gb < max_groups and tail > 0:
                     self.simulation.environment.setMacroPropertyUInt32("mp_rsv_tail", gb, tail)
 
             total_svc = sum(self._svc_tails.values())

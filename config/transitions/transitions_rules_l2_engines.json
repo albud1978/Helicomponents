@@ -50,7 +50,7 @@
     },
     {
       "id": "L2_INV_3",
-      "claim": "No reserve for engines in L2 matrix: state=5 is forbidden."
+      "claim": "No reserve for engines in L2 contract matrix."
     },
     {
       "id": "L2_INV_4",

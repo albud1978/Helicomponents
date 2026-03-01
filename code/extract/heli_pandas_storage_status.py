@@ -6,10 +6,10 @@
 1. Beyond Repair: sne >= br → status_id=6 (Хранение)
 2. ДОНОР: condition='ДОНОР' → status_id=6 (Хранение)
 3. ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР: condition='ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР' → status_id=6 (Хранение)
-4. Оставшиеся НЕИСПРАВНЫЕ: → status_id=1 (Inactive), repair_days=0
+4. Оставшиеся НЕИСПРАВНЫЕ: → status_id=7 (unserviceable/ремонтопригодный), repair_days=0
 
 Логика блока 4:
-- Неисправные агрегаты без target_date → inactive (нет реального плана ремонта)
+- Неисправные агрегаты без target_date → unserviceable (status_id=7, нет реального плана ремонта)
 - repair_days=0 (нет обратного отсчёта — нет ремонта)
 - P2/P3 квотирование решит дальнейшую судьбу агента
 
@@ -317,8 +317,8 @@ def main() -> int:
     else:
         print("ℹ️ Нет ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР агрегатов со status_id=0")
     
-    # --- Блок 4: Оставшиеся НЕИСПРАВНЫЕ → Inactive (status_id=1, repair_days=0) ---
-    # FIX: без target_date нет реального ремонта → inactive, не repair
+    # --- Блок 4: Оставшиеся НЕИСПРАВНЫЕ → unserviceable (status_id=7, repair_days=0) ---
+    # FIX: без target_date нет реального ремонта → unserviceable, не repair
     # P2/P3 квотирование решит дальнейшую судьбу агента
     remaining_count_sql = """
     SELECT count(*) 
@@ -335,11 +335,11 @@ def main() -> int:
         print(f"📊 Оставшихся НЕИСПРАВНЫХ агрегатов со status_id=0: {remaining_count}")
         
         if not args.dry_run:
-            # FIX: без target_date нет реального ремонта → inactive (1), не repair (4)
-            # Устанавливаем status_id=1 (Inactive) и repair_days=0 (нет обратного отсчёта)
+            # FIX: без target_date нет реального ремонта → unserviceable (7), не repair (4)
+            # Устанавливаем status_id=7 (unserviceable/ремонтопригодный) и repair_days=0 (нет обратного отсчёта)
             remaining_update_sql = """
             ALTER TABLE heli_pandas
-            UPDATE status_id = 1, repair_days = 0
+            UPDATE status_id = 7, repair_days = 0
             WHERE group_by > 2 
               AND status_id = 0 
               AND upperUTF8(replaceRegexpAll(ifNull(condition, ''), '^\\s+|\\s+$', '')) = 'НЕИСПРАВНЫЙ'
@@ -347,7 +347,10 @@ def main() -> int:
               AND version_id = %(version_id)s
             """
             client.execute(remaining_update_sql, params)
-            print(f"✅ Обновлено: {remaining_count} НЕИСПРАВНЫЙ → status_id=1 (Inactive), repair_days=0")
+            print(
+                f"✅ Обновлено: {remaining_count} НЕИСПРАВНЫЙ → "
+                f"status_id=7 (unserviceable/ремонтопригодный), repair_days=0"
+            )
     else:
         print("ℹ️ Нет оставшихся НЕИСПРАВНЫХ агрегатов со status_id=0")
     
