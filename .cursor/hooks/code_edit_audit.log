@@ -1495,3 +1495,15 @@
   edit[3] old='                if gb < 50 and tail > 0:' new='                if gb < max_groups and tail > 0:'
   edit[4] old='                if gb < 50 and tail > 0:' new='                if gb < max_groups and tail > 0:'
 
+[2026-03-01 05:05:44 UTC] conv=03dcb6e4 gen=3f63b2b7 file=tools/transitions_viewer/build_l2_engines_transitions_viewer.py
+  edit[0] old='' new='def render_contract_statuses(statuses: list) -> str:\n    if not statuses:\n        return ""\n    html = [\n        '<div c'
+  edit[1] old='' new='def render_runtime_compatibility(items: list) -> str:\n    if not items:\n        return ""\n    html = ['<div class="secti'
+  edit[2] old='' new='    html.append(\n        "    .status-badge { background: #2a5bd7; color: white; padding: 3px 8px; border-radius: 10px; '
+  edit[3] old='' new='    html.append(\n        render_contract_statuses(transitions_data.get("contract_statuses") or [])\n    )\n    html.append'
+
+[2026-03-01 16:58:22 UTC] conv=3c2da98b gen=ee4be786 file=tools/transitions_viewer/build_l2_engines_transitions_viewer.py
+  edit[0] old='' new='def render_driver_tags(tags: list) -> str:\n    if not tags:\n        return ""\n    html = ['<span class="driver-tags">']\n'
+  edit[1] old='' new='    driver_tags = render_driver_tags(rule.get("driver_tags") or [])'
+  edit[2] old='        f'<summary><span class="badge">rule</span><span class="rule-id">{rule_id}</span></summary>'' new='        f'<summary><span class="badge">rule</span><span class="rule-id">{rule_id}</span>{driver_tags}</summary>''
+  edit[3] old='' new='    html.append("    .driver-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; }")\n    htm'
+

@@ -37,16 +37,33 @@ def format_condition(cond: dict) -> str:
     return ""
 
 
+def render_driver_tags(tags: list) -> str:
+    if not tags:
+        return ""
+    html = ['<span class="driver-tags">']
+    for tag in tags:
+        tag_text = escape_html(str(tag))
+        tag_class = "driver-tag"
+        if tag == "planner-status-driven":
+            tag_class += " driver-planner"
+        elif tag == "engine-runtime-driven":
+            tag_class += " driver-engine"
+        html.append(f'<span class="{tag_class}">{tag_text}</span>')
+    html.append("</span>")
+    return "".join(html)
+
+
 def render_rule_card(rule: dict) -> str:
     rule_id = escape_html(str(rule.get("id", "")))
     notes = escape_html(str(rule.get("notes", ""))) if rule.get("notes") else ""
     pre_text = format_condition(rule.get("pre"))
     post_text = format_condition(rule.get("post"))
+    driver_tags = render_driver_tags(rule.get("driver_tags") or [])
 
     html = []
     html.append('<details class="rule-card">')
     html.append(
-        f'<summary><span class="badge">rule</span><span class="rule-id">{rule_id}</span></summary>'
+        f'<summary><span class="badge">rule</span><span class="rule-id">{rule_id}</span>{driver_tags}</summary>'
     )
     html.append('<div class="rule-body">')
     if pre_text:
@@ -95,6 +112,18 @@ def render_states(states: dict) -> str:
     return "\n".join(html)
 
 
+def render_contract_statuses(statuses: list) -> str:
+    if not statuses:
+        return ""
+    html = [
+        '<div class="section" id="contract_statuses"><h2>Contract Statuses</h2><div class="states">'
+    ]
+    for status in statuses:
+        html.append(f'<div class="status-badge">{escape_html(str(status))}</div>')
+    html.append("</div></div>")
+    return "\n".join(html)
+
+
 def render_variables(variables: list) -> str:
     if not variables:
         return ""
@@ -102,6 +131,22 @@ def render_variables(variables: list) -> str:
     for name in variables:
         html.append(f'<div class="var-badge">{escape_html(str(name))}</div>')
     html.append("</div></div>")
+    return "\n".join(html)
+
+
+def render_runtime_compatibility(items: list) -> str:
+    if not items:
+        return ""
+    html = ['<div class="section"><h2>Runtime Compatibility</h2>']
+    for item in items:
+        item_id = escape_html(str(item.get("id", "")))
+        note = escape_html(str(item.get("note", "")))
+        html.append('<div class="list-item">')
+        html.append(f'<div class="list-id">{item_id}</div>')
+        if note:
+            html.append(f'<div class="list-text">{note}</div>')
+        html.append("</div>")
+    html.append("</div>")
     return "\n".join(html)
 
 
@@ -227,6 +272,9 @@ def build_html(transitions_data: dict) -> str:
     html.append(
         "    .var-badge { background: #2a5bd7; color: white; padding: 3px 8px; border-radius: 10px; font-size: 12px; }"
     )
+    html.append(
+        "    .status-badge { background: #2a5bd7; color: white; padding: 3px 8px; border-radius: 10px; font-size: 12px; }"
+    )
     html.append("    table.matrix { width: 100%; border-collapse: collapse; table-layout: fixed; }")
     html.append("    table.matrix th, table.matrix td { border: 1px solid #ccc; padding: 6px; vertical-align: top; }")
     html.append("    table.matrix th { background: #f3f3f3; }")
@@ -237,6 +285,10 @@ def build_html(transitions_data: dict) -> str:
     html.append("    summary::-webkit-details-marker { display: none; }")
     html.append("    .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; background: #2a5bd7; color: white; font-size: 11px; margin-right: 6px; }")
     html.append("    .rule-id { font-weight: 600; margin-right: 8px; }")
+    html.append("    .driver-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; }")
+    html.append("    .driver-tag { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #e0e0e0; border: 1px solid #c8c8c8; color: #222; }")
+    html.append("    .driver-tag.driver-planner { background: #f3c18b; border-color: #e2a55f; color: #4a2d00; }")
+    html.append("    .driver-tag.driver-engine { background: #b7d7f1; border-color: #8fbde8; color: #0b2b4a; }")
     html.append("    .rule-body { margin-top: 8px; }")
     html.append("    .rule-section { margin-bottom: 6px; }")
     html.append("    .label { font-size: 11px; color: #444; text-transform: uppercase; }")
@@ -266,6 +318,14 @@ def build_html(transitions_data: dict) -> str:
     )
     html.append(render_metadata(transitions_data.get("metadata") or {}))
     html.append(render_states(transitions_data.get("states") or {}))
+    html.append(
+        render_contract_statuses(transitions_data.get("contract_statuses") or [])
+    )
+    html.append(
+        render_runtime_compatibility(
+            transitions_data.get("runtime_compatibility") or []
+        )
+    )
     html.append(render_variables(transitions_data.get("variables") or []))
     html.append(render_invariant_principles(transitions_data.get("invariant_principles") or []))
     html.append(render_location_contract(transitions_data.get("location_contract") or []))

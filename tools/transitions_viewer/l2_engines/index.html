@@ -13,6 +13,7 @@
     .states { display: flex; flex-wrap: wrap; gap: 8px; }
     .state-badge { background: #2a5bd7; color: white; padding: 3px 8px; border-radius: 10px; font-size: 12px; }
     .var-badge { background: #2a5bd7; color: white; padding: 3px 8px; border-radius: 10px; font-size: 12px; }
+    .status-badge { background: #2a5bd7; color: white; padding: 3px 8px; border-radius: 10px; font-size: 12px; }
     table.matrix { width: 100%; border-collapse: collapse; table-layout: fixed; }
     table.matrix th, table.matrix td { border: 1px solid #ccc; padding: 6px; vertical-align: top; }
     table.matrix th { background: #f3f3f3; }
@@ -23,6 +24,10 @@
     summary::-webkit-details-marker { display: none; }
     .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; background: #2a5bd7; color: white; font-size: 11px; margin-right: 6px; }
     .rule-id { font-weight: 600; margin-right: 8px; }
+    .driver-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; }
+    .driver-tag { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #e0e0e0; border: 1px solid #c8c8c8; color: #222; }
+    .driver-tag.driver-planner { background: #f3c18b; border-color: #e2a55f; color: #4a2d00; }
+    .driver-tag.driver-engine { background: #b7d7f1; border-color: #8fbde8; color: #0b2b4a; }
     .rule-body { margin-top: 8px; }
     .rule-section { margin-bottom: 6px; }
     .label { font-size: 11px; color: #444; text-transform: uppercase; }
@@ -42,7 +47,7 @@
 </head>
 <body>
   <h1>L2 Engines Transitions Viewer</h1>
-  <div class="meta">Generated from config/transitions/transitions_rules_l2_engines.json at 2026-02-28 18:54:50 UTC</div>
+  <div class="meta">Generated from config/transitions/transitions_rules_l2_engines.json at 2026-03-01 16:58:26 UTC</div>
   <div class="meta">Run: python3 tools/transitions_viewer/build_l2_engines_transitions_viewer.py</div>
 <div class="section"><h2>Metadata</h2>
 <table class="meta-table">
@@ -50,7 +55,7 @@
 <tr><td>description</td><td>L2 engines SSOT built from planner runtime pattern + location/planner-status contract.</td></tr>
 <tr><td>scope</td><td>L2 engines only (group_by=3/4), planner-driven, no L2-&gt;L1 feedback</td></tr>
 <tr><td>created</td><td>2026-02-26</td></tr>
-<tr><td>updated</td><td>2026-02-28</td></tr>
+<tr><td>updated</td><td>2026-03-01</td></tr>
 <tr><td>source</td><td>planner transitions parity + approved MultiBOM location rules</td></tr>
 </tbody></table></div>
 <div class="section"><h2>States</h2><div class="states">
@@ -61,6 +66,19 @@
 <div class="state-badge">6: storage (terminal)</div>
 <div class="state-badge">7: unserviceable</div>
 </div></div>
+<div class="section" id="contract_statuses"><h2>Contract Statuses</h2><div class="states">
+<div class="status-badge">2</div>
+<div class="status-badge">3</div>
+<div class="status-badge">4</div>
+<div class="status-badge">6</div>
+<div class="status-badge">7</div>
+</div></div>
+<div class="section"><h2>Runtime Compatibility</h2>
+<div class="list-item">
+<div class="list-id">RUNTIME_COMPAT_1</div>
+<div class="list-text">Runtime model may keep internal state=5 for technical queue/compatibility, but state=5 is excluded from contract matrix and allowed transition rules.</div>
+</div>
+</div>
 <div class="section"><h2>Variables</h2><div class="states">
 <div class="var-badge">state</div>
 <div class="var-badge">pre_state_id</div>
@@ -73,12 +91,15 @@
 <div class="var-badge">installed_engine_count</div>
 <div class="var-badge">engine_quota_demand</div>
 <div class="var-badge">sne</div>
+<div class="var-badge">sne_next</div>
 <div class="var-badge">ppr</div>
+<div class="var-badge">ppr_next</div>
 <div class="var-badge">ll</div>
 <div class="var-badge">oh</div>
 <div class="var-badge">br</div>
 <div class="var-badge">repair_days</div>
 <div class="var-badge">repair_time</div>
+<div class="var-badge">planned_birth_signal</div>
 </div></div>
 <div class="section"><h2>Invariant Principles</h2>
 <div class="list-item">
@@ -101,12 +122,16 @@
 <div class="list-id">L2_INV_5</div>
 <div class="list-text">Location cannot change while planner is in ops or in final repair stage (ActiveTrigger=1), except forced terminal detach.</div>
 </div>
+<div class="list-item">
+<div class="list-id">L2_INV_6</div>
+<div class="list-text">Day0 load contract: heli_pandas.status_id is loaded 1:1 into model pre_state_id for group_by in {3,4}; transition logic applies only after day0 snapshot.</div>
+</div>
 </div>
 <div class="section"><h2>Location Contract</h2>
 <div class="list-item">
 <div class="list-id">LOC_1_lock_ops_and_final_repair</div>
 <div class="list-text"><strong>Rule:</strong> If planner_status==2 OR (planner_status==4 AND planner_active_trigger==1), location changes are forbidden.</div>
-<div class="list-text"><strong>Exception:</strong> Forced detach is allowed only when (ll &gt; 0 AND sne &gt;= ll) OR (br &gt; 0 AND ppr &gt;= br).</div>
+<div class="list-text"><strong>Exception:</strong> Forced detach is allowed only when (ll &gt; 0 AND sne_next &gt;= ll) OR (br &gt; 0 AND ppr_next &gt;= br).</div>
 </div>
 <div class="list-item">
 <div class="list-id">LOC_2_detach_on_planner_repair_enter</div>
@@ -142,7 +167,7 @@
 </td>
 <td>
 <details class="rule-card">
-<summary><span class="badge">rule</span><span class="rule-id">spawn_to_ops_dynamic</span></summary>
+<summary><span class="badge">rule</span><span class="rule-id">spawn_to_ops_dynamic</span><span class="driver-tags"><span class="driver-tag driver-engine">engine-runtime-driven</span></span></summary>
 <div class="rule-body">
 <div class="rule-section"><div class="label">pre</div>
 <div class="value pre">group_by in {3,4} AND engine_quota_demand &gt; 0</div></div>
@@ -157,7 +182,20 @@ repair_days == 0</div></div>
 </details>
 </td>
 <td>
-<div class="empty">—</div>
+<details class="rule-card">
+<summary><span class="badge">rule</span><span class="rule-id">spawn_to_svc_planned</span><span class="driver-tags"><span class="driver-tag driver-engine">engine-runtime-driven</span></span></summary>
+<div class="rule-body">
+<div class="rule-section"><div class="label">pre</div>
+<div class="value pre">group_by in {3,4} AND planned_birth_signal == 1</div></div>
+<div class="rule-section"><div class="label">post</div>
+<div class="value post">state == 3
+AND
+repair_days == 0</div></div>
+<div class="rule-section"><div class="label">effects</div>
+<div class="value">set state := 3</div></div>
+<div class="notes">Planned birth 0-&gt;3 (contract placeholder). Disabled until planned-birth source data is integrated.</div>
+</div>
+</details>
 </td>
 <td>
 <div class="empty">—</div>
@@ -178,7 +216,7 @@ repair_days == 0</div></div>
 </td>
 <td>
 <details class="rule-card">
-<summary><span class="badge">rule</span><span class="rule-id">ops_to_svc_on_planner_exit</span></summary>
+<summary><span class="badge">rule</span><span class="rule-id">ops_to_svc_on_planner_exit</span><span class="driver-tags"><span class="driver-tag driver-planner">planner-status-driven</span></span></summary>
 <div class="rule-body">
 <div class="rule-section"><div class="label">pre</div>
 <div class="value pre">group_by in {3,4} AND aircraft_number != 0 AND planner_status != 2</div></div>
@@ -191,27 +229,14 @@ repair_days == 0</div></div>
 </details>
 </td>
 <td>
-<details class="rule-card">
-<summary><span class="badge">rule</span><span class="rule-id">ops_to_repair_by_limit</span></summary>
-<div class="rule-body">
-<div class="rule-section"><div class="label">pre</div>
-<div class="value pre">group_by in {3,4} AND (oh &gt; 0 AND ppr &gt;= oh) AND NOT ((ll &gt; 0 AND sne &gt;= ll) OR (br &gt; 0 AND ppr &gt;= br)) AND NOT (planner_status == 2 OR (planner_status == 4 AND planner_active_trigger == 1))</div></div>
-<div class="rule-section"><div class="label">post</div>
-<div class="value post">state == 4
-AND
-aircraft_number == 0</div></div>
-<div class="rule-section"><div class="label">effects</div>
-<div class="value">set state := 4</div></div>
-<div class="notes">Resource-driven detach to repair.</div>
-</div>
-</details>
+<div class="empty">—</div>
 </td>
 <td>
 <details class="rule-card">
-<summary><span class="badge">rule</span><span class="rule-id">ops_to_storage_terminal</span></summary>
+<summary><span class="badge">rule</span><span class="rule-id">ops_to_storage_terminal</span><span class="driver-tags"><span class="driver-tag driver-engine">engine-runtime-driven</span></span></summary>
 <div class="rule-body">
 <div class="rule-section"><div class="label">pre</div>
-<div class="value pre">group_by in {3,4} AND ((ll &gt; 0 AND sne &gt;= ll) OR (br &gt; 0 AND ppr &gt;= br))</div></div>
+<div class="value pre">group_by in {3,4} AND ((ll &gt; 0 AND sne_next &gt;= ll) OR (br &gt; 0 AND ppr_next &gt;= br))</div></div>
 <div class="rule-section"><div class="label">post</div>
 <div class="value post">state == 6
 AND
@@ -224,10 +249,10 @@ aircraft_number == 0</div></div>
 </td>
 <td>
 <details class="rule-card">
-<summary><span class="badge">rule</span><span class="rule-id">ops_to_unsvc_onwing_by_limit</span></summary>
+<summary><span class="badge">rule</span><span class="rule-id">ops_to_unsvc_onwing_by_limit</span><span class="driver-tags"><span class="driver-tag driver-planner">planner-status-driven</span><span class="driver-tag driver-engine">engine-runtime-driven</span></span></summary>
 <div class="rule-body">
 <div class="rule-section"><div class="label">pre</div>
-<div class="value pre">group_by in {3,4} AND (oh &gt; 0 AND ppr &gt;= oh) AND NOT ((ll &gt; 0 AND sne &gt;= ll) OR (br &gt; 0 AND ppr &gt;= br)) AND (planner_status == 2 OR (planner_status == 4 AND planner_active_trigger == 1))</div></div>
+<div class="value pre">group_by in {3,4} AND (oh &gt; 0 AND ppr_next &gt;= oh) AND NOT ((ll &gt; 0 AND sne_next &gt;= ll) OR (br &gt; 0 AND ppr_next &gt;= br)) AND (planner_status == 2 OR (planner_status == 4 AND planner_active_trigger == 1))</div></div>
 <div class="rule-section"><div class="label">post</div>
 <div class="value post">state == 7
 AND
@@ -245,7 +270,7 @@ aircraft_number != 0</div></div>
 </td>
 <td>
 <details class="rule-card">
-<summary><span class="badge">rule</span><span class="rule-id">svc_to_ops_on_planner_ops</span></summary>
+<summary><span class="badge">rule</span><span class="rule-id">svc_to_ops_on_planner_ops</span><span class="driver-tags"><span class="driver-tag driver-planner">planner-status-driven</span></span></summary>
 <div class="rule-body">
 <div class="rule-section"><div class="label">pre</div>
 <div class="value pre">group_by in {3,4} AND aircraft_number != 0 AND planner_status == 2</div></div>
@@ -275,34 +300,21 @@ aircraft_number != 0</div></div>
 <div class="empty">—</div>
 </td>
 <td>
-<details class="rule-card">
-<summary><span class="badge">rule</span><span class="rule-id">repair_to_ops_runtime</span></summary>
-<div class="rule-body">
-<div class="rule-section"><div class="label">pre</div>
-<div class="value pre">group_by in {3,4} AND day0_state(psn) != 4 AND repair_days &gt;= repair_time AND planner_status == 2</div></div>
-<div class="rule-section"><div class="label">post</div>
-<div class="value post">state == 2
-AND
-aircraft_number != 0</div></div>
-<div class="rule-section"><div class="label">effects</div>
-<div class="value">set state := 2</div></div>
-<div class="notes">Runtime repair exit must go to operations path.</div>
-</div>
-</details>
+<div class="empty">—</div>
 </td>
 <td>
 <details class="rule-card">
-<summary><span class="badge">rule</span><span class="rule-id">repair_to_svc_day0_only</span></summary>
+<summary><span class="badge">rule</span><span class="rule-id">repair_to_svc</span><span class="driver-tags"><span class="driver-tag driver-engine">engine-runtime-driven</span></span></summary>
 <div class="rule-body">
 <div class="rule-section"><div class="label">pre</div>
-<div class="value pre">group_by in {3,4} AND day0_state(psn) == 4 AND repair_days &gt;= repair_time</div></div>
+<div class="value pre">group_by in {3,4} AND repair_days &gt;= repair_time</div></div>
 <div class="rule-section"><div class="label">post</div>
 <div class="value post">state == 3
 AND
 aircraft_number == 0</div></div>
 <div class="rule-section"><div class="label">effects</div>
 <div class="value">set state := 3</div></div>
-<div class="notes">4-&gt;3 is allowed only for day0 repair cohort.</div>
+<div class="notes">Repair exits to serviceable.</div>
 </div>
 </details>
 </td>
@@ -342,7 +354,7 @@ aircraft_number == 0</div></div>
 </td>
 <td>
 <details class="rule-card">
-<summary><span class="badge">rule</span><span class="rule-id">unsvc_to_ops</span></summary>
+<summary><span class="badge">rule</span><span class="rule-id">unsvc_to_ops</span><span class="driver-tags"><span class="driver-tag driver-planner">planner-status-driven</span></span></summary>
 <div class="rule-body">
 <div class="rule-section"><div class="label">pre</div>
 <div class="value pre">group_by in {3,4} AND planner_status == 2 AND aircraft_number != 0 AND intent_state == 2</div></div>
@@ -401,7 +413,7 @@ aircraft_number == 0</div></div>
 <td>l2_ops_resource_edges</td>
 <td>rtc_l2_ops_resource_edges</td>
 <td>2</td>
-<td>2-&gt;4 (detached repair), 2-&gt;7 (on-wing unsvc), 2-&gt;6 (storage).</td>
+<td>2-&gt;7 (on-wing unsvc), 2-&gt;6 (storage).</td>
 </tr>
 <tr>
 <td>4</td>
@@ -417,7 +429,7 @@ aircraft_number == 0</div></div>
 <td>l2_repair_exit</td>
 <td>rtc_l2_repair_exit</td>
 <td>4</td>
-<td>4-&gt;3 only for day0 cohort; runtime repair exit to 2.</td>
+<td>4-&gt;3 repair exit path.</td>
 </tr>
 <tr>
 <td>6</td>

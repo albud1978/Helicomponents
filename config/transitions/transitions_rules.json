@@ -185,6 +185,36 @@
       "notes": "Маршрут в unserviceable при unmet storage path."
     },
     {
+      "id": "ops_to_svc_demote_v7",
+      "from": 2,
+      "to": 3,
+      "pre": { "expr": "needs_demote == 1" },
+      "post": {
+        "all": [
+          { "expr": "state == 3" },
+          { "expr": "transition_2_to_3 == 1" },
+          { "expr": "limiter == 0" }
+        ]
+      },
+      "owner_module": "rtc_state_transitions_v7",
+      "notes": "Phase 3 apply demote: operations -> serviceable."
+    },
+    {
+      "id": "svc_to_ops_p1_v7",
+      "from": 3,
+      "to": 2,
+      "pre": { "expr": "promoted == 1" },
+      "post": {
+        "all": [
+          { "expr": "state == 2" },
+          { "expr": "transition_3_to_2 == 1" },
+          { "expr": "commit_p1 == 1" }
+        ]
+      },
+      "owner_module": "rtc_state_transitions_v7",
+      "notes": "Phase 3 apply P1 promote: serviceable -> operations."
+    },
+    {
       "id": "p2_unsvc_to_ops_v8",
       "from": 7,
       "to": 2,

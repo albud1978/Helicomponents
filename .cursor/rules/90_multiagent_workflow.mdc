@@ -261,7 +261,8 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 - **beforeSubmitPrompt → user_comm_audit.py**: логирует метаданные пользовательского промпта для трассировки governance-gate.
 - **beforeSubmitPrompt → orchestrator_guard.py**: инжектирует напоминание о запрете кодинга при каждом промпте.
 - **beforeSubmitPrompt → connection_fail_clear.py**: снимает флаг connection fail после явного подтверждения пользователя (`продолжай/готово`).
-- **preToolUse → pre_close_guard.py**: блокирует `--close-workflow`, если в Agent KG нет handoff от `governance-compliance` и `docs-curator`.
+- **preToolUse → ssot_approval_guard.py**: блокирует правки `config/transitions/*.json` и `make sync-domain-graph*` без явного human approval (`approval_hint=yes` + `workflow_id` в audit-логе).
+- **preToolUse → pre_close_guard.py**: блокирует `--close-workflow`, если в Agent KG нет handoff от `governance-compliance` и `docs-curator`, а также если в handoff оркестратора не зафиксировано явное решение `graph_update=yes|no` (GraphImpactProposal).
 - **afterFileEdit → audit_code_edit.py**: логирует все правки в `code/` и `tools/` в `.cursor/hooks/code_edit_audit.log`.
 - **postToolUseFailure → connection_fail_set.py**: ставит флаг при падении Shell/MCP.
 - **preToolUse → connection_fail_block.py**: блокирует tool-вызовы при connection fail.
@@ -272,7 +273,8 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 2. Есть handoff от `docs-curator` для текущего `workflow_id`.
 3. В этих handoff заполнены `trace_id` и `plan_step_id`.
 4. Для high-risk задач заполнен `ApprovalGate` (`id/status/source`) в handoff оркестратора.
-5. Для high-risk задач в handoff оркестратора заполнен `DriftCheck`.
+5. В handoff оркестратора заполнен `DriftCheck` (обязательно для закрытия; для low-risk допускается краткая форма).
+6. В handoff оркестратора обязательно зафиксирован `GraphImpactProposal` через `graph_update=yes|no` (для `yes` — с `ApprovalGate` по policy).
 
 ### Self-check оркестратора (обязательно)
 Перед КАЖДЫМ вызовом Write, StrReplace или Shell оркестратор ОБЯЗАН выполнить проверку:
