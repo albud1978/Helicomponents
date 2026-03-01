@@ -27,6 +27,7 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription):
         "repair": 4,
         "reserve": 5,
         "storage": 6,
+        "unserviceable": 7,
     }
 
     layer = model.newLayer("layer_units_save_pre_state")

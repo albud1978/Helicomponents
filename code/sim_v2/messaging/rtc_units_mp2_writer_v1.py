@@ -39,16 +39,8 @@ FLAMEGPU_AGENT_FUNCTION({fn_name}, flamegpu::MessageNone, flamegpu::MessageNone)
 
     // Фактическое состояние (по функции)
     const unsigned int state = {state_id}u;
-    unsigned int state_out = state;
-    unsigned int pre_state_out = pre_state_id;
-    if (active == 1u) {{
-        if (state_out == 5u) {{
-            state_out = 3u;
-        }}
-        if (pre_state_out == 5u) {{
-            pre_state_out = 3u;
-        }}
-    }}
+    const unsigned int state_out = state;
+    const unsigned int pre_state_out = pre_state_id;
 
     // Записываем в MacroProperty массивы через .exchange()
     auto mp2_psn = FLAMEGPU->environment.getMacroProperty<unsigned int, {buffer_size}u>("mp2_units_psn");
@@ -88,6 +80,7 @@ def register_rtc(model: fg.ModelDescription, agent: fg.AgentDescription,
         "repair": 4,
         "reserve": 5,
         "storage": 6,
+        "unserviceable": 7,
     }
 
     layer = model.newLayer("layer_units_mp2_write_v1")

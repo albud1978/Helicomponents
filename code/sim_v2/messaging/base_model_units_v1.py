@@ -68,25 +68,28 @@ class V1BaseModelUnits:
     def _setup_macro_properties(self, env_data: Dict[str, object]):
         max_frames = int(env_data.get('units_frames_total', UNITS_MAX_FRAMES))
         max_days = int(env_data.get('days_total_u16', UNITS_MAX_DAYS))
+        max_groups = int(env_data.get('max_groups', MAX_GROUPS))
+        if max_groups <= 0:
+            max_groups = MAX_GROUPS
 
         self._mp2_max_frames = max_frames
         self._mp2_max_days = max_days
 
         # === FIFO очереди ===
-        self.env.newMacroPropertyUInt32("mp_svc_head", MAX_GROUPS)
-        self.env.newMacroPropertyUInt32("mp_svc_tail", MAX_GROUPS)
-        self.env.newMacroPropertyUInt32("mp_rsv_head", MAX_GROUPS)
-        self.env.newMacroPropertyUInt32("mp_rsv_tail", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_svc_head", max_groups)
+        self.env.newMacroPropertyUInt32("mp_svc_tail", max_groups)
+        self.env.newMacroPropertyUInt32("mp_rsv_head", max_groups)
+        self.env.newMacroPropertyUInt32("mp_rsv_tail", max_groups)
 
-        self.env.newMacroPropertyUInt32("mp_queue_head", MAX_GROUPS)
-        self.env.newMacroPropertyUInt32("mp_queue_tail", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("mp_queue_head", max_groups)
+        self.env.newMacroPropertyUInt32("mp_queue_tail", max_groups)
         self.env.newMacroPropertyUInt32("mp_replacement_request", max_frames)
         self.env.newMacroPropertyUInt32("mp_replacement_group", max_frames)
 
-        self.env.newMacroPropertyUInt32("units_pool_count", MAX_GROUPS)
-        self.env.newMacroPropertyUInt32("units_ops_count", MAX_GROUPS)
-        self.env.newMacroPropertyUInt32("units_repair_count", MAX_GROUPS)
-        self.env.newMacroPropertyUInt32("mp_request_count", MAX_GROUPS)
+        self.env.newMacroPropertyUInt32("units_pool_count", max_groups)
+        self.env.newMacroPropertyUInt32("units_ops_count", max_groups)
+        self.env.newMacroPropertyUInt32("units_repair_count", max_groups)
+        self.env.newMacroPropertyUInt32("mp_request_count", max_groups)
 
         # === MP планеров (dt + status + assembly_trigger) ===
         MAX_PLANERS = 400
@@ -135,6 +138,7 @@ class V1BaseModelUnits:
         agent.newState("repair")
         agent.newState("reserve")
         agent.newState("storage")
+        agent.newState("unserviceable")
 
         agent.newVariableUInt("idx", 0)
         agent.newVariableUInt("psn", 0)

@@ -157,6 +157,12 @@ class AgentPopulationUnitsBuilderV1:
             gb = unit['group_by']
             group_counts[gb] = group_counts.get(gb, 0) + 1
 
+        if self.units_data:
+            max_group_by = max(unit['group_by'] for unit in self.units_data)
+        else:
+            max_group_by = 0
+        max_groups = max_group_by + 1
+
         # Получаем версию
         version_date_int = (self.version_date - date(1970, 1, 1)).days
 
@@ -177,6 +183,8 @@ class AgentPopulationUnitsBuilderV1:
             'group_counts': group_counts,
             'reserve_slots': reserve_slots,
             'group_scope': list(self.group_scope),
+            'max_group_by': max_group_by,
+            'max_groups': max_groups,
         }
 
         return env_data
@@ -286,7 +294,8 @@ class AgentPopulationUnitsBuilderV1:
             'serviceable': fg.AgentVector(agent_def),
             'repair': fg.AgentVector(agent_def),
             'reserve': fg.AgentVector(agent_def),
-            'storage': fg.AgentVector(agent_def)
+            'storage': fg.AgentVector(agent_def),
+            'unserviceable': fg.AgentVector(agent_def),
         }
 
         status_to_state = {
@@ -294,7 +303,8 @@ class AgentPopulationUnitsBuilderV1:
             3: 'serviceable',
             4: 'repair',
             5: 'reserve',
-            6: 'storage'
+            6: 'storage',
+            7: 'unserviceable',
         }
 
         units_by_group = {}
@@ -321,15 +331,13 @@ class AgentPopulationUnitsBuilderV1:
         idx = 0
         for gb in sorted(units_by_group.keys()):
             for unit in units_by_group[gb]:
+                # Day0 статус загружается 1:1 без remap.
                 status_id = unit['status_id']
                 if status_id not in status_to_state:
-                    status_id = 4
-
-                if status_id == 5:
-                    status_id = 3
-
-                if status_id == 2 and unit['aircraft_number'] == 0:
-                    status_id = 3
+                    raise ValueError(
+                        f"Неизвестный status_id={status_id} "
+                        f"для psn={unit['psn']} group_by={unit['group_by']}"
+                    )
 
                 state_name = status_to_state[status_id]
                 pop = populations[state_name]
@@ -395,6 +403,8 @@ class AgentPopulationUnitsBuilderV1:
                     agent.setVariableUInt("intent_state", 4)
                 elif status_id == 6:
                     agent.setVariableUInt("intent_state", 6)
+                elif status_id == 7:
+                    agent.setVariableUInt("intent_state", 7)
                 else:
                     agent.setVariableUInt("intent_state", 2)
 
@@ -455,7 +465,14 @@ class AgentPopulationUnitsBuilderV1:
             populations['reserve'] = spawn_pop
             print(f"   ✅ Создано {idx - len(self.units_data)} spawn-слотов")
 
-        all_states = ['operations', 'serviceable', 'repair', 'reserve', 'storage']
+        all_states = [
+            'operations',
+            'serviceable',
+            'repair',
+            'reserve',
+            'storage',
+            'unserviceable',
+        ]
         for state_name in all_states:
             pop = populations.get(state_name, fg.AgentVector(agent_def))
             simulation.setPopulationData(pop, state_name)
