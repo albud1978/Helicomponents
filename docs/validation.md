@@ -75,7 +75,22 @@ source config/load_env.sh
 export CUBE_CONFIG_PATH="$PWD/config"
 ```
 
-### 2) Правильная последовательность симуляции для двух датасетов
+### 2) Канонический ETL-прогон для 3 датасетов
+
+```bash
+# D1: полная очистка и загрузка "с нуля" (TEST)
+printf "1\n1\n" | python3 code/extract/extract_master.py
+
+# D2: дозагрузка новой даты в PROD
+printf "2\n2\n" | python3 code/extract/extract_master.py
+
+# D3: дозагрузка новой даты в PROD
+printf "3\n2\n" | python3 code/extract/extract_master.py
+```
+
+Если в PROD появляется выбор политики версии (rewrite/append/cancel), для регламентного перезапуска выбирать `rewrite`.
+
+### 3) Каноническая последовательность симуляции для 3 датасетов
 
 ```bash
 # D1: первый датасет с очисткой таблиц
@@ -83,9 +98,12 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-
 
 # D2: второй датасет БЕЗ drop
 python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-12-30
+
+# D3: третий датасет БЕЗ drop
+python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2026-02-21
 ```
 
-### 3) Потоковый массовый прогон валидаций
+### 4) Потоковый массовый прогон валидаций
 
 Актуальный раннер: `code/validation/run_all_stream.py`.
 
@@ -100,19 +118,19 @@ python3 code/validation/run_all_stream.py --dataset 20250704:1 --dataset 2025123
 python3 code/validation/run_all_stream.py --all-datasets
 ```
 
-### 4) Принцип опционального запуска
+### 5) Принцип опционального запуска
 
 - Без `--dataset` и без `--all-datasets` раннер валидации не запускает проверки.
 - В этом режиме он только показывает подсказку и список обнаруженных датасетов.
 - Это защищает от случайного автозапуска на новых данных.
 
-### 5) Что делать при новом датасете
+### 6) Что делать при новом датасете
 
 1. Сначала прогнать симуляцию с нужным `--version-date`.
 2. Проверить ключ через `--list-datasets` (формат `YYYYMMDD:ID`).
 3. Явно передать этот ключ в `--dataset`.
 
-### 6) Примечание по legacy-раннеру
+### 7) Примечание по legacy-раннеру
 
 - `code/validation/run_all.py` оставлен для совместимости.
 - Для новых прогонов использовать `code/validation/run_all_stream.py`, так как он читает актуальный список валидаторов из SSoT (`invariants.json`) и поддерживает потоковый вывод.

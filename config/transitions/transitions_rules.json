@@ -78,7 +78,7 @@
     { "order": 4, "phase": "Pre snapshot", "layer": "layer_save_pre_status", "function": "rtc_save_pre_status_*", "state": "all active", "notes": "Снимок pre_status_id до любых transitions." },
     { "order": 5, "phase": "Deterministic spawn", "layer": "layer_det_spawn", "function": "HF_DeterministicSpawn", "state": "host", "notes": "Опциональный детерминированный spawn 0->3." },
     { "order": 6, "phase": "Phase 0", "layer": "v8_repair_line_assign_repair", "function": "rtc_repair_line_assign_repair_v8", "state": "4->4", "notes": "Синхронизация line_id при входе/нахождении в repair." },
-    { "order": 7, "phase": "Phase 0", "layer": "v7_repair_to_svc", "function": "rtc_repair_to_svc_v7", "state": "4->3", "notes": "Детерминированный выход из ремонта по exit_date." },
+    { "order": 7, "phase": "Phase 0", "layer": "v7_repair_to_svc", "function": "rtc_repair_to_svc_v7", "state": "4->4", "notes": "Postprocess: выход из ремонта выполняется вне runtime matrix (repair exit вне transitions rules)." },
     { "order": 8, "phase": "Phase 1", "layer": "v8_ops_increment", "function": "rtc_ops_increment_v8", "state": "2->2", "notes": "Инкремент sne/ppr с учетом adaptive_days/limiter." },
     { "order": 9, "phase": "Phase 1", "layer": "v8_unsvc_decrement", "function": "rtc_unsvc_decrement_v8", "state": "7->7", "notes": "Декремент repair_days у unserviceable." },
     { "order": 10, "phase": "Phase 1", "layer": "v8_ops_to_storage", "function": "rtc_ops_to_storage_v8", "state": "2->6", "notes": "Приоритет terminal routing." },
@@ -246,20 +246,6 @@
       },
       "owner_module": "rtc_quota_v8",
       "notes": "Приоритет внутри QM type-first: Mi-17(P2->P3) затем Mi-8(P2->P3). Claim metadata является SSOT для восстановления repairline occupancy в export."
-    },
-    {
-      "id": "repair_to_svc_v8",
-      "from": 4,
-      "to": 3,
-      "pre": { "expr": "current_day >= exit_date" },
-      "post": {
-        "all": [
-          { "expr": "state == 3" },
-          { "expr": "repair_days == 0" }
-        ]
-      },
-      "owner_module": "rtc_state_transitions_v7",
-      "notes": "Детерминированный выход из ремонта."
     }
   ]
 }

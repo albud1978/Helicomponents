@@ -37,17 +37,28 @@ def format_condition(cond: dict) -> str:
     return ""
 
 
+def normalize_driver_tag(tag: str) -> str:
+    if tag == "planner-status-driven":
+        return "plane-status-driven"
+    if tag == "engine-runtime-driven":
+        return "components-status-driven"
+    return tag
+
+
 def render_driver_tags(tags: list) -> str:
     if not tags:
         return ""
     html = ['<span class="driver-tags">']
     for tag in tags:
-        tag_text = escape_html(str(tag))
+        normalized = normalize_driver_tag(str(tag))
+        tag_text = escape_html(normalized)
         tag_class = "driver-tag"
-        if tag == "planner-status-driven":
-            tag_class += " driver-planner"
-        elif tag == "engine-runtime-driven":
-            tag_class += " driver-engine"
+        if normalized == "plane-status-driven":
+            tag_class += " driver-plane"
+        elif normalized == "components-status-driven":
+            tag_class += " driver-components"
+        elif normalized == "quota-driven":
+            tag_class += " driver-quota"
         html.append(f'<span class="{tag_class}">{tag_text}</span>')
     html.append("</span>")
     return "".join(html)
@@ -281,14 +292,15 @@ def build_html(transitions_data: dict) -> str:
     html.append("    .from-header { text-align: left; }")
     html.append("    .empty { color: #888; text-align: center; }")
     html.append("    details.rule-card { margin: 6px 0; border: 1px solid #ddd; border-radius: 6px; padding: 6px; background: #fafafa; }")
-    html.append("    summary { cursor: pointer; list-style: none; }")
+    html.append("    summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }")
     html.append("    summary::-webkit-details-marker { display: none; }")
     html.append("    .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; background: #2a5bd7; color: white; font-size: 11px; margin-right: 6px; }")
     html.append("    .rule-id { font-weight: 600; margin-right: 8px; }")
     html.append("    .driver-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; }")
     html.append("    .driver-tag { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #e0e0e0; border: 1px solid #c8c8c8; color: #222; }")
-    html.append("    .driver-tag.driver-planner { background: #f3c18b; border-color: #e2a55f; color: #4a2d00; }")
-    html.append("    .driver-tag.driver-engine { background: #b7d7f1; border-color: #8fbde8; color: #0b2b4a; }")
+    html.append("    .driver-tag.driver-plane { background: #f3c18b; border-color: #e2a55f; color: #4a2d00; }")
+    html.append("    .driver-tag.driver-components { background: #b7d7f1; border-color: #8fbde8; color: #0b2b4a; }")
+    html.append("    .driver-tag.driver-quota { background: #c4e8c2; border-color: #92cc8c; color: #18431b; }")
     html.append("    .rule-body { margin-top: 8px; }")
     html.append("    .rule-section { margin-bottom: 6px; }")
     html.append("    .label { font-size: 11px; color: #444; text-transform: uppercase; }")
