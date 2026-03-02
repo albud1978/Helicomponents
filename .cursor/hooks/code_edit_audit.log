@@ -1507,3 +1507,49 @@
   edit[2] old='        f'<summary><span class="badge">rule</span><span class="rule-id">{rule_id}</span></summary>'' new='        f'<summary><span class="badge">rule</span><span class="rule-id">{rule_id}</span>{driver_tags}</summary>''
   edit[3] old='' new='    html.append("    .driver-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; }")\n    htm'
 
+[2026-03-01 18:57:17 UTC] conv=b6807826 gen=2d92ad12 file=tools/transitions_viewer/build_l2_engines_transitions_viewer.py
+  edit[0] old='        if tag == "planner-status-driven":\n            tag_class += " driver-planner"\n        elif tag == "engine-runtim' new='        if tag == "plane-status-driven":\n            tag_class += " driver-plane"\n        elif tag == "components-status'
+  edit[1] old='    html.append("    .driver-tag.driver-planner { background: #f3c18b; border-color: #e2a55f; color: #4a2d00; }")\n    ht' new='    html.append("    .driver-tag.driver-plane { background: #f3c18b; border-color: #e2a55f; color: #4a2d00; }")\n    html'
+
+[2026-03-01 19:08:36 UTC] conv=a1a3d595 gen=90fe69f6 file=tools/transitions_viewer/build_l2_engines_transitions_viewer.py
+  edit[0] old='' new='def normalize_driver_tag(tag: str) -> str:\n    if tag == "planner-status-driven":\n        return "plane-status-driven"\n '
+  edit[1] old='        tag_text = escape_html(str(tag))' new='        normalized = normalize_driver_tag(str(tag))\n        tag_text = escape_html(normalized)'
+  edit[2] old='        if tag == "plane-status-driven":' new='        if normalized == "plane-status-driven":'
+  edit[3] old='        elif tag == "components-status-driven":' new='        elif normalized == "components-status-driven":'
+  edit[4] old='        elif tag == "quota-driven":' new='        elif normalized == "quota-driven":'
+  edit[5] old='    html.append("    summary { cursor: pointer; list-style: none; }")' new='    html.append("    summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: center; g'
+
+[2026-03-02 10:12:03 UTC] conv=279ae156 gen=3d33774d file=code/extract/dual_loader.py
+  edit[0] old='                pandas_df = process_program_ac_precheck_d1(pandas_df, client)' new='                print(\n                    "⚠️ [SKIP] D1 precheck для status_id=2 временно отключен по решению "\n       '
+  edit[1] old='                print(f"⚠️ Ошибка precheck D1: {e}")' new='                print(f"⚠️ Ошибка импорта precheck D1: {e}")'
+
+[2026-03-02 10:12:14 UTC] conv=279ae156 gen=3d33774d file=code/extract/dual_loader.py
+  edit[0] old='                pandas_df = process_program_ac_precheck_status0_terminal_d1(\n                    pandas_df,\n            ' new='                print(\n                    "⚠️ [SKIP] D1 precheck status_id=0 → terminal(6) временно отключен "\n        '
+  edit[1] old='                print(f"⚠️ Ошибка precheck D1 status_id=0: {e}")' new='                print(f"⚠️ Ошибка импорта precheck D1 status_id=0: {e}")'
+
+[2026-03-02 10:12:21 UTC] conv=279ae156 gen=3d33774d file=code/extract/extract_master.py
+  edit[0] old='            'critical': False' new='            'critical': False,\n            'skip': True,\n            'skip_reason': 'D1 precheck runner временно отключе'
+
+[2026-03-02 10:12:27 UTC] conv=279ae156 gen=3d33774d file=code/extract/extract_master.py
+  edit[0] old='' new='            if step.get('skip'):\n                reason = step.get('skip_reason', 'skip requested')\n                logg'
+
+[2026-03-02 10:58:56 UTC] conv=072610d5 gen=0d6a75b6 file=code/extract/dual_loader.py
+  edit[0] old='' new='                elif col == 'group_by':\n                    pandas_df[col] = 0\n                    print(f"   ➕ Добавлен'
+
+[2026-03-02 13:45:39 UTC] conv=eae25708 gen=831c3397 file=code/extract/dual_loader.py
+  edit[0] old='' new='            default_values = {\n                'status_id': 0,\n                'aircraft_number': 0,\n                'ac'
+  edit[1] old='                if col in ['status_id', 'aircraft_number', 'ac_type_mask']:\n                    pandas_df[col] = 0\n     ' new='                if col not in default_values:\n                    raise ValueError(\n                        f"Неизвестна'
+
+[2026-03-02 16:16:24 UTC] conv=095a3fb0 gen=cbc6bbc7 file=code/extract/heli_pandas_terminal_br_gate.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nФинальный BR-gate для heli_pandas.\n\nЛогика:\n- Обрабатывает ТОЛЬКО status_id IN (1, 7)\n- Для в'
+
+[2026-03-02 16:16:32 UTC] conv=095a3fb0 gen=cbc6bbc7 file=code/extract/extract_master.py
+  edit[0] old='' new='        {\n            'script': 'heli_pandas_terminal_br_gate.py',\n            'description': 'Финальный BR-gate: status'
+  edit[1] old='                                                         'repair_days_calculator.py']:' new='                                                         'repair_days_calculator.py', 'heli_pandas_terminal_br_gate.py']'
+
+[2026-03-02 16:19:24 UTC] conv=1e0d48d5 gen=89ddc12c file=code/extract/heli_pandas_terminal_br_gate.py
+  edit[0] old='  AND serialno IN (\n      SELECT hp.serialno' new='  AND (serialno, partseqno_i, group_by) IN (\n      SELECT hp.serialno, hp.partseqno_i, hp.group_by'
+
+[2026-03-02 16:21:55 UTC] conv=7913800d gen=51f39ba7 file=code/sim_v2/messaging/base_model_messaging.py
+  edit[0] old='' new='        agent.newVariableUInt("s6_started", 0)'
+
