@@ -226,7 +226,9 @@ class ExtractMaster:
             'description': 'Program AC Precheck D1 - корректировка status_id для D1',
             'dependencies': ['heli_pandas', 'md_components', 'flight_program_fl'],
             'result_table': 'heli_pandas',
-            'critical': False
+            'critical': False,
+            'skip': True,
+            'skip_reason': 'D1 precheck runner временно отключен по решению (runtime status routing в симуляции).'
         },
         {
             'script': 'heli_pandas_component_status.py',
@@ -269,6 +271,13 @@ class ExtractMaster:
             'script': 'repair_days_calculator.py',
             'description': 'Расчет repair_days для ВС в ремонте',
             'dependencies': ['md_components', 'heli_pandas', 'status_overhaul', 'dict_digital_values_flat'],
+            'result_table': 'heli_pandas',
+            'critical': True
+        },
+        {
+            'script': 'heli_pandas_terminal_br_gate.py',
+            'description': 'Финальный BR-gate: status_id=1/7 → terminal (6) по br_effective',
+            'dependencies': ['md_components', 'heli_pandas'],
             'result_table': 'heli_pandas',
             'critical': True
         },
@@ -533,7 +542,7 @@ class ExtractMaster:
                                                          'heli_pandas_group_by_enricher.py', 'program_ac_precheck_runner.py',
                                                          'heli_pandas_component_status.py', 'heli_pandas_serviceable_status.py',
                                                          'heli_pandas_repair_status.py', 'heli_pandas_storage_status.py',
-                                                         'repair_days_calculator.py']:
+                                                         'repair_days_calculator.py', 'heli_pandas_terminal_br_gate.py']:
                 cmd_with_params.extend(['--dataset-path', self.dataset_path])
             
             # Добавляем дополнительные аргументы шага
@@ -735,6 +744,13 @@ class ExtractMaster:
         
         for i, step in enumerate(self.EXTRACT_PIPELINE, 1):
             logger.info(f"\n📋 ЭТАП {i}/{total_steps}: {step['script']}")
+            
+            if step.get('skip'):
+                reason = step.get('skip_reason', 'skip requested')
+                logger.warning(f"⏭️ ЭТАП {i}/{total_steps} пропущен: {step['script']}")
+                logger.warning(f"⚠️ Причина: {reason}")
+                success_count += 1
+                continue
             
             # Проверка зависимостей
             if not self.validate_dependencies(step):
