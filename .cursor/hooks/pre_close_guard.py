@@ -169,6 +169,34 @@ def _policy_violations(kg_data: Dict[str, object], workflow_id: str) -> List[str
     return violations
 
 
+def _workflow_handoffs(kg_data: Dict[str, object], workflow_id: str) -> List[Dict[str, object]]:
+    handoffs = kg_data.get("handoffs", [])
+    if not isinstance(handoffs, list):
+        return []
+    result: List[Dict[str, object]] = []
+    for item in handoffs:
+        if not isinstance(item, dict):
+            continue
+        if item.get("workflow_id") == workflow_id:
+            result.append(item)
+    return result
+
+
+def _latest_orchestrator_handoff(
+    handoffs: List[Dict[str, object]]
+) -> Dict[str, object]:
+    orchestrator = [h for h in handoffs if str(h.get("agent")) == "orchestrator"]
+    if not orchestrator:
+        return {}
+    orchestrator.sort(key=lambda h: str(h.get("created_at") or ""))
+    return orchestrator[-1]
+
+
+def _has_explicit_graph_decision(handoff: Dict[str, object]) -> bool:
+    value = _normalize_text(handoff.get("graph_update")).lower()
+    return value in {"yes", "true", "1", "да", "no", "false", "0", "нет"}
+
+
 def _deny(reason: str) -> None:
     sys.stdout.write(json.dumps({"decision": "deny", "reason": reason}))
 
@@ -249,6 +277,28 @@ def main() -> None:
             "Закрытие workflow заблокировано: обнаружены policy-нарушения в handoff "
             f"для {workflow_id}: {details}. "
             "Исправьте handoff (risk/artifacts/approval) и повторите --close-workflow."
+        )
+        return
+
+    wf_handoffs = _workflow_handoffs(kg_data, workflow_id)
+    orch = _latest_orchestrator_handoff(wf_handoffs)
+    if not orch:
+        _deny(
+            "Закрытие workflow заблокировано: отсутствует handoff orchestrator. "
+            "Требуется явное решение по GraphImpactProposal (graph_update=yes|no)."
+        )
+        return
+    if not _has_explicit_graph_decision(orch):
+        _deny(
+            "Закрытие workflow заблокировано: в handoff orchestrator не зафиксировано "
+            "явное решение GraphImpactProposal (graph_update=yes|no). "
+            "Запишите handoff orchestrator и повторите --close-workflow."
+        )
+        return
+    if not _normalize_text(orch.get("drift_check")):
+        _deny(
+            "Закрытие workflow заблокировано: в handoff orchestrator отсутствует DriftCheck. "
+            "Нужно кратко зафиксировать обоснование по scope/GraphImpactProposal и повторить --close-workflow."
         )
         return
 

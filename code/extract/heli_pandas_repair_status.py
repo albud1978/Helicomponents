@@ -5,6 +5,7 @@
 Логика:
 1. Если target_date < version_date (ремонт завершился) → status_id=2 (Эксплуатация)
 2. Если target_date >= version_date (ремонт идёт) → status_id=4 (Ремонт) + repair_days
+   Приоритет: condition='ИСПРАВНЫЙ' — агрегаты не переводим в status_id=4 в этом модуле.
 
 Формула repair_days: repair_time - (target_date - version_date)
 - repair_time берётся из md_components через связь partseqno_i = partno_comp
@@ -105,6 +106,26 @@ def count_future_target_date(client, version_date: date, version_id: int) -> int
       AND target_date IS NOT NULL
       AND target_date != toDate('1970-01-01')
       AND target_date >= %(version_date)s
+      AND (
+          toUInt32(ifNull(group_by, 0)) <= 2
+          OR ifNull(condition, '') != 'ИСПРАВНЫЙ'
+      )
+    """
+    result = client.execute(query, {"version_date": version_date, "version_id": version_id})
+    return int(result[0][0])
+
+
+def count_condition_ok_aggregates(client, version_date: date, version_id: int) -> int:
+    """Подсчёт агрегатов с condition='ИСПРАВНЫЙ' и валидным target_date"""
+    query = """
+    SELECT count(*)
+    FROM heli_pandas
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND toUInt32(ifNull(group_by, 0)) > 2
+      AND condition = 'ИСПРАВНЫЙ'
+      AND target_date IS NOT NULL
+      AND target_date != toDate('1970-01-01')
     """
     result = client.execute(query, {"version_date": version_date, "version_id": version_id})
     return int(result[0][0])
@@ -167,6 +188,10 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
       AND target_date IS NOT NULL
       AND target_date != toDate('1970-01-01')
       AND target_date >= %(version_date)s
+      AND (
+          toUInt32(ifNull(group_by, 0)) <= 2
+          OR ifNull(condition, '') != 'ИСПРАВНЫЙ'
+      )
     """
     client.execute("SET mutations_sync = 1")
     client.execute(query_status, {"version_date": version_date, "version_id": version_id})
@@ -213,6 +238,10 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
       AND hp.target_date IS NOT NULL
       AND hp.target_date != toDate('1970-01-01')
       AND hp.target_date >= %(version_date)s
+      AND (
+          toUInt32(ifNull(hp.group_by, 0)) <= 2
+          OR ifNull(hp.condition, '') != 'ИСПРАВНЫЙ'
+      )
     """
     result = client.execute(select_query, {"version_date": version_date, "version_id": version_id})
     
@@ -260,9 +289,14 @@ def main() -> int:
     # Подсчёт кандидатов
     past_count = count_past_target_date(client, version_date, version_id)
     future_count = count_future_target_date(client, version_date, version_id)
-    
+    condition_ok_count = count_condition_ok_aggregates(client, version_date, version_id)
+
     print(f"📊 Агрегатов с target_date в ПРОШЛОМ (→ status_id=2): {past_count}")
     print(f"📊 Агрегатов с target_date в БУДУЩЕМ (→ status_id=4): {future_count}")
+    print(
+        "⚠️ Найдено агрегатов с condition='ИСПРАВНЫЙ' и валидным target_date: "
+        f"{condition_ok_count}. Они исключаются из перевода в status_id=4."
+    )
 
     if past_count == 0 and future_count == 0:
         print("✅ Нет агрегатов для обработки")

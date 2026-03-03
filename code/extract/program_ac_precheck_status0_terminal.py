@@ -1,23 +1,14 @@
 #!/usr/bin/env python3
 """
-Precheck D1 для записей с status_id == 2 на этапе обогащения heli_pandas
-
-Логика (перед первым днём симуляции):
-- Для group_by ∈ {1,2} и status_id == 2 берём dt = daily_hours(D1)
-- Считаем rem_ll0 = ll - sne, rem_oh0 = oh - ppr (вечер D0)
-- Если rem_ll0 < dt → status_id = 6 (хранение)
-- Иначе если rem_oh0 < dt:
-    * если выбранный BR (из br_mi8/br_mi17 по маске) == 0 или sne + dt ≥ BR → status_id = 6
-    * иначе → status_id = 7 (ремонтопригодный)
-
-Примечания:
-- BR выбирается по маске типов (из ac_typ → ac_type_mask): Ми‑8 → br_mi8, Ми‑17 → br_mi17 (ед.: минуты)
+D1 precheck для status_id=0: переводит только в terminal (6) по ресурсной логике.
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
 from typing import Dict, List
+
+from extract.program_ac_status_processor import PLANER_PARTNOS
 
 
 def _load_daily_map_for_d1(client) -> Dict[int, int]:
@@ -54,26 +45,29 @@ def _mask_from_ac_typ(ac_typ: str) -> int:
     return AC_TYPE_MASKS.get(str(ac_typ).strip(), 0)
 
 
-def process_program_ac_precheck_d1(pandas_df, client):
-    """Модифицирует pandas_df на месте: корректирует status_id для D1 precheck.
-
-    Меняет только строки с status_id == 2 и group_by ∈ {1,2}.
-    """
+def process_program_ac_precheck_status0_terminal_d1(pandas_df, client):
+    """Модифицирует pandas_df на месте: D1 precheck для status_id=0 → terminal(6)."""
     if pandas_df is None or len(pandas_df) == 0:
         return pandas_df
 
     # Нужные колонки с безопасными значениями по умолчанию
-    for col in ['group_by', 'status_id', 'aircraft_number', 'll', 'oh', 'sne', 'ppr', 'partseqno_i', 'ac_typ']:
+    for col in [
+        'status_id', 'aircraft_number', 'll', 'oh', 'sne', 'ppr',
+        'partseqno_i', 'ac_typ', 'partno',
+    ]:
         if col not in pandas_df.columns:
-            pandas_df[col] = 0 if col != 'ac_typ' else ''
+            if col in ('ac_typ', 'partno'):
+                pandas_df[col] = ''
+            else:
+                pandas_df[col] = 0
 
     daily_map = _load_daily_map_for_d1(client)
     br_map = _load_br_map(client)
 
-    # Фильтр кандидатов (status_id == 2)
+    # Фильтр кандидатов (status_id == 0, только планеры по partno)
     mask_candidates = (
-        (pandas_df['status_id'] == 2)
-        & (pandas_df['group_by'].isin([1, 2]))
+        (pandas_df['status_id'] == 0)
+        & (pandas_df['partno'].isin(PLANER_PARTNOS))
     )
     idxs: List[int] = list(pandas_df[mask_candidates].index)
 
@@ -102,13 +96,5 @@ def process_program_ac_precheck_d1(pandas_df, client):
             br = b8 if (mask & 32) else (b17 if (mask & 64) else 0)
             if br == 0 or (sne + dt) >= br:
                 pandas_df.at[idx, 'status_id'] = 6
-            else:
-                pandas_df.at[idx, 'status_id'] = 7
-            continue
 
     return pandas_df
-
-
-
-
-

@@ -9,6 +9,9 @@
     ],
     "preToolUse": [
       {
+        "command": "python3 .cursor/hooks/ssot_approval_guard.py"
+      },
+      {
         "command": "python3 .cursor/hooks/pre_close_guard.py"
       },
       {

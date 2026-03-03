@@ -842,9 +842,25 @@ def main(version_date=None, version_id=None):
             print(f"🔧 Этап 2b: Пред‑проверка D1 (LL/OH/BR) для status_id=2...")
             try:
                 from extract.program_ac_precheck_next_day import process_program_ac_precheck_d1
-                pandas_df = process_program_ac_precheck_d1(pandas_df, client)
+                print(
+                    "⚠️ [SKIP] D1 precheck для status_id=2 временно отключен по решению "
+                    "(runtime status routing в симуляции)."
+                )
             except Exception as e:
-                print(f"⚠️ Ошибка precheck D1: {e}")
+                print(f"⚠️ Ошибка импорта precheck D1: {e}")
+
+            # ЭТАП 2c: D1 precheck для status_id=0 → terminal(6)
+            print(f"🔧 Этап 2c: D1 precheck для status_id=0 → terminal(6)...")
+            try:
+                from extract.program_ac_precheck_status0_terminal import (
+                    process_program_ac_precheck_status0_terminal_d1,
+                )
+                print(
+                    "⚠️ [SKIP] D1 precheck status_id=0 → terminal(6) временно отключен "
+                    "по решению (runtime status routing в симуляции)."
+                )
+            except Exception as e:
+                print(f"⚠️ Ошибка импорта precheck D1 status_id=0: {e}")
             
             # ЭТАП 3: Обработка статусов неактивности планеров (МИ-8Т, МИ-8П и т.д.)
             print(f"🔧 Этап 3: Статусы неактивности планеров...")
@@ -883,28 +899,30 @@ def main(version_date=None, version_id=None):
         if missing_columns:
             print(f"⚠️ Отсутствующие колонки: {missing_columns}")
             # Добавляем отсутствующие колонки с дефолтными значениями
+            default_values = {
+                'status_id': 0,
+                'aircraft_number': 0,
+                'ac_type_mask': 0,
+                'lease_restricted': 0,
+                'group_by': 0,
+                'repair_days': None,
+                'partseqno_i': None,
+                'psn': None,
+                'address_i': None,
+                'ac_type_i': None,
+                'oh': None,
+                'oh_threshold': None,
+                'll': None,
+                'sne': None,
+                'ppr': None,
+            }
             for col in missing_columns:
-                if col in ['status_id', 'aircraft_number', 'ac_type_mask']:
-                    pandas_df[col] = 0
-                    print(f"   ➕ Добавлена колонка {col}: 0")
-                elif col == 'repair_days':
-                    pandas_df[col] = None  # Nullable Int16 поле
-                    print(f"   ➕ Добавлена колонка {col}: None")
-                elif col == 'status_change':
-                    pandas_df[col] = 0
-                    print(f"   ➕ Добавлена колонка {col}: 0")
-                elif col in ['partseqno_i', 'psn', 'address_i', 'ac_type_i']:
-                    pandas_df[col] = None  # Nullable UInt полея
-                    print(f"   ➕ Добавлена колонка {col}: None")
-                elif col in ['oh', 'oh_threshold', 'll', 'sne', 'ppr']:
-                    pandas_df[col] = None
-                    print(f"   ➕ Добавлена колонка {col}: None")
-                elif col == 'lease_restricted':
-                    pandas_df[col] = 0
-                    print(f"   ➕ Добавлена колонка {col}: 0")
-                else:
-                    pandas_df[col] = ''
-                    print(f"   ➕ Добавлена колонка {col}: ''")
+                if col not in default_values:
+                    raise ValueError(
+                        f"Неизвестная missing column в heli_pandas: {col}"
+                    )
+                pandas_df[col] = default_values[col]
+                print(f"   ➕ Добавлена колонка {col}: {default_values[col]!r}")
         
         if extra_columns:
             print(f"⚠️ Лишние колонки: {extra_columns}")

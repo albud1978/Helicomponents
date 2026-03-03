@@ -488,6 +488,7 @@ class V2BaseModelMessaging:
         agent.newVariableUInt("intent_state")
         agent.newVariableUInt("prev_intent", 0)  # Для event-driven: отслеживание изменений
         agent.newVariableUInt("bi_counter", 1)  # Служебное поле для BI (всегда 1)
+        agent.newVariableUInt("s6_started", 0)
         
         # Transition флаги — V6 архитектура
         agent.newVariableUInt("transition_0_to_2", 0)  # spawn → operations

@@ -10,6 +10,8 @@ alwaysApply: true
 - **Главный агент (Orchestrator)**: формирует план, распределяет задачи, синтезирует результаты, инициирует governance‑гейты и финальное согласование. **Кодинг в `code/**` запрещён; правила/конфиги/доки — разрешены.** Для исследования кодовой базы использует встроенный `explore` subagent как инструмент (не отдельная роль). Профиль: `.cursor/agents/orchestrator.md`.
 - **КРИТИЧЕСКИЙ ЗАПРЕТ**: Текущий ассистент действует как главный агент. Перед КАЖДЫМ вызовом Write/StrReplace/Shell проверяй: путь в `code/**` или `tools/**`? Если ДА — СТОП, делегируй через Task tool кодеру. Нарушение = системный сбой governance.
 - **Subagents**: специализированные исполнители (`coder-flame`, `coder-general`, `reviewer-flame`, `validator-judge`, `capsule-builder`, `analyst-sql-graph`, `governance-compliance`, `docs-curator`) работают в своей зоне ответственности.
+- **Глубина делегирования (обязательно)**: разрешён только один уровень делегирования (orchestrator → subagent). Subagent'ам запрещено порождать новых subagent'ов (запрет 3-го уровня и любой вложенности) без явного разрешения Алексея в текущем чате.
+- **Enforcement по вложенности**: при попытке nested delegation — немедленная остановка фазы, фиксация policy violation в handoff и эскалация человеку.
 - **Человек (Алексей)**: утверждает архитектурные/алгоритмические/схемные изменения и любые решения с высоким риском.
 - **ETL/Extract/СУБД задачи**: выполняют `coder-general` и `analyst-sql-graph` по зоне ответственности.
 - **BI-контур (упрощённый, текущий этап)**: работаем в `personal supersetbi sandbox` (действующий инстанс с существующими дашбордами); deploy/clone в `corporate sandbox` — только по явной команде человека; production не трогаем (только handoff-пакет для админов).
@@ -249,6 +251,7 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 ### Governance control-plane (обязательно для high-risk)
 - `governance-compliance` не пишет код и не меняет доменные данные; его задача — policy check и risk verdict.
 - Минимальный verdict-формат: `policy_status`, `scope_match`, `traceability_status`, `human_gate_status`, `decision`.
+- В каждый verdict добавить проверку делегирования: `delegation_depth_status=pass|fail` и `nested_subagent_detected=yes|no`.
 - При `decision=reject|escalate` оркестратор не имеет права закрыть workflow без реакции (исправление или эскалация человеку).
 - Вызов `governance-compliance` обязателен для всех задач с изменениями в `config/transitions/**`, `config/transitions/invariants.json`, `.cursor/rules/**`, `.cursor/agents/**` и перед любым `make sync-domain-graph`.
 
@@ -258,7 +261,8 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 - **beforeSubmitPrompt → user_comm_audit.py**: логирует метаданные пользовательского промпта для трассировки governance-gate.
 - **beforeSubmitPrompt → orchestrator_guard.py**: инжектирует напоминание о запрете кодинга при каждом промпте.
 - **beforeSubmitPrompt → connection_fail_clear.py**: снимает флаг connection fail после явного подтверждения пользователя (`продолжай/готово`).
-- **preToolUse → pre_close_guard.py**: блокирует `--close-workflow`, если в Agent KG нет handoff от `governance-compliance` и `docs-curator`.
+- **preToolUse → ssot_approval_guard.py**: блокирует правки `config/transitions/*.json` и `make sync-domain-graph*` без явного human approval (`approval_hint=yes` + `workflow_id` в audit-логе).
+- **preToolUse → pre_close_guard.py**: блокирует `--close-workflow`, если в Agent KG нет handoff от `governance-compliance` и `docs-curator`, а также если в handoff оркестратора не зафиксировано явное решение `graph_update=yes|no` (GraphImpactProposal).
 - **afterFileEdit → audit_code_edit.py**: логирует все правки в `code/` и `tools/` в `.cursor/hooks/code_edit_audit.log`.
 - **postToolUseFailure → connection_fail_set.py**: ставит флаг при падении Shell/MCP.
 - **preToolUse → connection_fail_block.py**: блокирует tool-вызовы при connection fail.
@@ -269,7 +273,8 @@ Scope, Invariants (≤12, ссылка на invariants.json), Decisions (≤7), 
 2. Есть handoff от `docs-curator` для текущего `workflow_id`.
 3. В этих handoff заполнены `trace_id` и `plan_step_id`.
 4. Для high-risk задач заполнен `ApprovalGate` (`id/status/source`) в handoff оркестратора.
-5. Для high-risk задач в handoff оркестратора заполнен `DriftCheck`.
+5. В handoff оркестратора заполнен `DriftCheck` (обязательно для закрытия; для low-risk допускается краткая форма).
+6. В handoff оркестратора обязательно зафиксирован `GraphImpactProposal` через `graph_update=yes|no` (для `yes` — с `ApprovalGate` по policy).
 
 ### Self-check оркестратора (обязательно)
 Перед КАЖДЫМ вызовом Write, StrReplace или Shell оркестратор ОБЯЗАН выполнить проверку:
