@@ -217,6 +217,22 @@ python "deploy/bi-as-code/scripts/superset_git_sync.py" \
   --overwrite
 ```
 
+### Critical mapping rule after import (mandatory)
+- Do not trust raw numeric `dataset_id` across Superset instances.
+- `dataset_id` values are local metadata IDs and may point to different physical tables on another instance.
+- For chart rebinding and filter targets, always map by `table_name` first (`sim_masterv2_v9`, `sim_repairline_v9`, etc.), then resolve to local `dataset_id`.
+- Typical failure signatures of wrong mapping:
+  - `UNKNOWN_IDENTIFIER` for valid columns (`pre_status_id`, `status_count_ffill`, etc.);
+  - `Columns missing in dataset` for chart-specific fields (`line_id`, `day_u16`, `aircraft_number`).
+
+### Post-import smoke check (mandatory)
+- Validate key charts via API `/api/v1/chart/data` before handoff:
+  - `Датасет 1`
+  - `Датасет 2`
+  - `График Ремонта`
+  - `График поставки ВС`
+- Success criterion: all responses are `200` and no ClickHouse identifier/column errors in payload.
+
 ### Regular back-and-forth workflow
 - A changed BI in UI -> export -> commit/push.
 - B pulls -> import --overwrite.
