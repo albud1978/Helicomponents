@@ -1,5 +1,28 @@
 # Changelog
 
+## [03-03-2026] - Superset API-only contract + Docker guard hooks
+
+### Изменения
+- `.env`:
+  - добавлены переменные удалённого Superset API:
+    - `SUPERSET_API_BASE_URL=http://10.96.96.47:8088`
+    - `SUPERSET_API_PROVIDER`
+    - `SUPERSET_API_USERNAME`
+    - `SUPERSET_API_PASSWORD`
+    - `SUPERSET_API_TIMEOUT_SEC`
+- `deploy/bi-as-code/scripts/superset_git_sync.py`:
+  - значения по умолчанию для `--base-url/--username/--password/--provider/--timeout-sec` теперь читаются из переменных окружения `SUPERSET_API_*`.
+- `.cursor/hooks/superset_docker_guard.py` + `.cursor/hooks.json`:
+  - добавлен preToolUse-hook, блокирующий Docker/Superset runtime команды из этого репозитория.
+- `deploy/bi-as-code/README.md`:
+  - зафиксирован активный контракт доступа: только API на `10.96.96.47:8088`;
+  - локальные Docker-инструкции помечены как архивные (неиспользуемые в этом проекте).
+- `docs/validation.md`:
+  - обновлён mini-runbook Superset: фильтрация по `version_date`/`version_date_ddmmyyyy`, без опоры на `version_id`.
+
+### Контекст
+- Принято правило: Docker runtime Superset управляется внешним проектом; в данном репозитории допустимы только API-операции для BI-артефактов.
+
 ## [27-02-2026] - MVP L2 engines 3/4: Phase 0 контракт, messaging контур, D3 run
 
 ### Изменения

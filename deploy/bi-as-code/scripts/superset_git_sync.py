@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import shutil
 import tempfile
 import zipfile
@@ -240,12 +241,18 @@ def cmd_import(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    default_base_url = os.getenv("SUPERSET_API_BASE_URL", "http://127.0.0.1:8088")
+    default_username = os.getenv("SUPERSET_API_USERNAME", "admin")
+    default_password = os.getenv("SUPERSET_API_PASSWORD", "admin")
+    default_provider = os.getenv("SUPERSET_API_PROVIDER", "db")
+    default_timeout = int(os.getenv("SUPERSET_API_TIMEOUT_SEC", "120"))
+
     p = argparse.ArgumentParser(description="Superset dashboard bundle sync via Git.")
-    p.add_argument("--base-url", default="http://127.0.0.1:8088")
-    p.add_argument("--username", default="admin")
-    p.add_argument("--password", default="admin")
-    p.add_argument("--provider", default="db")
-    p.add_argument("--timeout-sec", type=int, default=120)
+    p.add_argument("--base-url", default=default_base_url)
+    p.add_argument("--username", default=default_username)
+    p.add_argument("--password", default=default_password)
+    p.add_argument("--provider", default=default_provider)
+    p.add_argument("--timeout-sec", type=int, default=default_timeout)
 
     sub = p.add_subparsers(dest="cmd", required=True)
 

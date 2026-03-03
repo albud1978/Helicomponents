@@ -16,6 +16,9 @@
       },
       {
         "command": "python3 .cursor/hooks/connection_fail_block.py"
+      },
+      {
+        "command": "python3 .cursor/hooks/superset_docker_guard.py"
       }
     ],
     "beforeSubmitPrompt": [
