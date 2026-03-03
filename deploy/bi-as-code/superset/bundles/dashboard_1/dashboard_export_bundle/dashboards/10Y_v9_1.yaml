@@ -236,22 +236,22 @@ metadata:
         - col: version_date_ddmmyyyy
           op: IN
           val:
-          - 04-07-2025
+          - 30-12-2025
       filterState:
-        label: 04-07-2025
+        excludeFilterValues: false
+        label: 30-12-2025
         validateMessage: false
         validateStatus: false
         value:
-        - 04-07-2025
-        excludeFilterValues: false
+        - 30-12-2025
     cascadeParentIds: []
     scope:
-      rootPath:
-      - ROOT_ID
       excluded:
       - 1
       - 5
       - 6
+      rootPath:
+      - ROOT_ID
     type: NATIVE_FILTER
     description: ''
   - id: NATIVE_FILTER-CW_8-YB_Qt7yXNH-ZCpsD
@@ -272,18 +272,14 @@ metadata:
         - P1Y
     cascadeParentIds: []
     scope:
-      rootPath:
-      - ROOT_ID
       excluded:
       - 1
       - 5
       - 6
+      rootPath:
+      - ROOT_ID
     type: NATIVE_FILTER
     description: ''
-    chartsInScope:
-    - 2
-    - 3
-    tabsInScope: []
   - id: NATIVE_FILTER-wErbsbhFDxsgxbuIk9zrl
     controlValues:
       enableEmptyFilter: false
@@ -318,8 +314,18 @@ metadata:
       defaultToFirstItem: false
       creatable: true
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
+    requiredFirst:
+      target:
+        checked: false
+        id: filters_NATIVE_FILTER-P72_pzFv-MdBw37NioFnT_controlValues_defaultToFirstItem
+        prefixCls: ant-checkbox
+        className: ant-wave-target css-1drql43
+        disabled: false
+        type: checkbox
+      nativeEvent:
+        isTrusted: true
     name: "\u0412\u0435\u0440\u0441\u0438\u044F \u0434\u0430\u0442\u0430\u0441\u0435\
       \u0442\u0430 2"
     filterType: filter_select
@@ -333,28 +339,28 @@ metadata:
         - col: version_date_ddmmyyyy
           op: IN
           val:
-          - 30-12-2025
+          - 21-02-2026
       filterState:
-        label: 30-12-2025
         validateMessage: false
         validateStatus: false
+        label: 21-02-2026
         value:
-        - 30-12-2025
-        excludeFilterValues: false
+        - 21-02-2026
+        excludeFilterValues: true
+      ownState:
+        coltypeMap:
+          version_date_ddmmyyyy: 1
+        search: ''
     cascadeParentIds: []
     scope:
-      rootPath:
-      - ROOT_ID
       excluded:
       - 2
       - 5
       - 6
+      rootPath:
+      - ROOT_ID
     type: NATIVE_FILTER
     description: ''
-    chartsInScope:
-    - 1
-    - 4
-    tabsInScope: []
   - id: NATIVE_FILTER-ApsxKfSqFfexSJ7qg484_
     controlValues:
       sortAscending: true
@@ -417,47 +423,6 @@ metadata:
     - 1
     - 4
     tabsInScope: []
-  - id: NATIVE_FILTER-GANTT-VERSION-LOCAL-V2
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: false
-      searchAllOptions: false
-      inverseSelection: false
-    name: "\u0413\u0440\u0430\u0444\u0438\u043A \u0440\u0435\u043C\u043E\u043D\u0442\
-      \u0430"
-    filterType: filter_select
-    targets:
-    - column:
-        name: version_date_ddmmyyyy
-      datasetUuid: 3964e9cb-10b4-4efa-9a77-9f8933b18f2e
-    defaultDataMask:
-      extraFormData:
-        filters:
-        - col: version_date_ddmmyyyy
-          op: IN
-          val:
-          - 30-12-2025
-      filterState:
-        label: 30-12-2025
-        value:
-        - 30-12-2025
-        validateMessage: false
-        validateStatus: false
-        excludeFilterValues: false
-    cascadeParentIds: []
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded:
-      - 2
-      - 1
-      - 6
-    type: NATIVE_FILTER
-    description: "\u041D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u044B\u0439\
-      \ \u0432\u044B\u0431\u043E\u0440 version_date \u0442\u043E\u043B\u044C\u043A\
-      \u043E \u0434\u043B\u044F Gantt \u0447\u0430\u0440\u0442\u0430"
   - id: NATIVE_FILTER-SUPPLY-VERSION-V1
     controlValues:
       enableEmptyFilter: false
@@ -479,30 +444,27 @@ metadata:
         - col: version_date_ddmmyyyy
           op: IN
           val:
-          - 04-07-2025
+          - 21-02-2026
       filterState:
-        label: 04-07-2025
+        excludeFilterValues: false
+        label: 21-02-2026
         validateMessage: false
         validateStatus: false
         value:
-        - 04-07-2025
-        excludeFilterValues: false
+        - 21-02-2026
     cascadeParentIds: []
     scope:
-      rootPath:
-      - ROOT_ID
       excluded:
       - 1
       - 2
       - 5
+      rootPath:
+      - ROOT_ID
     type: NATIVE_FILTER
     description: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0444\u0438\
       \u043B\u044C\u0442\u0440 \u0432\u0435\u0440\u0441\u0438\u0438 \u0434\u043B\u044F\
       \ \u0433\u0438\u0441\u0442\u043E\u0433\u0440\u0430\u043C\u043C\u044B \u043F\u043E\
       \u0441\u0442\u0430\u0432\u043E\u043A"
-    chartsInScope:
-    - 6
-    tabsInScope: []
   - id: NATIVE_FILTER-SUPPLY-TYPE-V1
     controlValues:
       enableEmptyFilter: false
@@ -548,21 +510,62 @@ metadata:
     - datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
     defaultDataMask:
       extraFormData:
-        time_grain_sqla: P1Y
+        time_grain_sqla: P3M
       filterState:
-        label: Year
+        label: Quarter
         value:
-        - P1Y
+        - P3M
     cascadeParentIds: []
     scope:
-      rootPath:
-      - ROOT_ID
       excluded:
       - 2
       - 5
       - 1
+      rootPath:
+      - ROOT_ID
     type: NATIVE_FILTER
     description: ''
+  - id: NATIVE_FILTER-GANTT-VERSION-LOCAL-V2
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      creatable: true
+      multiSelect: false
+      searchAllOptions: false
+      inverseSelection: false
+    name: "\u0413\u0440\u0430\u0444\u0438\u043A \u0440\u0435\u043C\u043E\u043D\u0442\
+      \u0430"
+    filterType: filter_select
+    targets:
+    - column:
+        name: version_date_ddmmyyyy
+      datasetUuid: 3964e9cb-10b4-4efa-9a77-9f8933b18f2e
+    defaultDataMask:
+      extraFormData:
+        filters:
+        - col: version_date_ddmmyyyy
+          op: IN
+          val:
+          - 21-02-2026
+      filterState:
+        excludeFilterValues: false
+        label: 21-02-2026
+        validateMessage: false
+        validateStatus: false
+        value:
+        - 21-02-2026
+    cascadeParentIds: []
+    scope:
+      excluded:
+      - 2
+      - 1
+      - 6
+      rootPath:
+      - ROOT_ID
+    type: NATIVE_FILTER
+    description: "\u041D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u044B\u0439\
+      \ \u0432\u044B\u0431\u043E\u0440 version_date \u0442\u043E\u043B\u044C\u043A\
+      \u043E \u0434\u043B\u044F Gantt \u0447\u0430\u0440\u0442\u0430"
   map_label_colors:
     '1': '#003594'
     '2': '#7CA3DC'
