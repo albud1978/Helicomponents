@@ -723,21 +723,40 @@ class LimiterV8Orchestrator:
         # Динамический спавн (после P3): anti-starvation reserve для Mi-8
         # ═══════════════════════════════════════════════════════════════
         det_spawn = getattr(self, '_deterministic_spawn_count', 0)
-        total_dynamic_slots = max(
-            0,
-            model_build.RTC_MAX_FRAMES - self.frames - det_spawn
-        )
-        dynamic_reserve_mi8 = 8 if total_dynamic_slots >= 8 else total_dynamic_slots
-        dynamic_reserve_mi17 = total_dynamic_slots - dynamic_reserve_mi8
-        if dynamic_reserve_mi17 > 50:
-            dynamic_reserve_mi17 = 50
+        env_first_dynamic_idx = self.env_data.get('first_dynamic_idx')
+        env_dynamic_reserve_mi17 = self.env_data.get('dynamic_reserve_mi17')
+        use_env_spawn = False
+        first_dynamic_idx = None
+        total_dynamic_slots = None
+        if env_first_dynamic_idx is not None and env_dynamic_reserve_mi17 is not None:
+            try:
+                first_dynamic_idx = int(env_first_dynamic_idx)
+                env_dynamic_reserve_mi17 = int(env_dynamic_reserve_mi17)
+                if 0 <= first_dynamic_idx <= self.frames and env_dynamic_reserve_mi17 >= 0:
+                    total_dynamic_slots = max(0, self.frames - first_dynamic_idx)
+                    dynamic_reserve_mi17 = min(env_dynamic_reserve_mi17, total_dynamic_slots)
+                    remaining_slots = max(0, total_dynamic_slots - dynamic_reserve_mi17)
+                    dynamic_reserve_mi8 = min(8, remaining_slots)
+                    use_env_spawn = True
+            except (TypeError, ValueError):
+                use_env_spawn = False
+        if not use_env_spawn:
+            total_dynamic_slots = max(
+                0,
+                model_build.RTC_MAX_FRAMES - self.frames - det_spawn
+            )
+            dynamic_reserve_mi8 = 8 if total_dynamic_slots >= 8 else total_dynamic_slots
+            dynamic_reserve_mi17 = total_dynamic_slots - dynamic_reserve_mi8
+            if dynamic_reserve_mi17 > 50:
+                dynamic_reserve_mi17 = 50
+            first_dynamic_idx = self.frames + det_spawn
         self._dynamic_reserve_mi17 = dynamic_reserve_mi17
         self._dynamic_reserve_mi8 = dynamic_reserve_mi8
         base_acn_spawn = 100000 + det_spawn
         spawn_env_data = {
-            'first_dynamic_idx': self.frames + det_spawn,
-            'first_dynamic_idx_mi17': self.frames + det_spawn,
-            'first_dynamic_idx_mi8': self.frames + det_spawn + dynamic_reserve_mi17,
+            'first_dynamic_idx': first_dynamic_idx,
+            'first_dynamic_idx_mi17': first_dynamic_idx,
+            'first_dynamic_idx_mi8': first_dynamic_idx + dynamic_reserve_mi17,
             'dynamic_reserve_mi17': dynamic_reserve_mi17,
             'dynamic_reserve_mi8': dynamic_reserve_mi8,
             'base_acn_spawn_mi17': base_acn_spawn,
@@ -780,7 +799,11 @@ class LimiterV8Orchestrator:
         # ═══════════════════════════════════════════════════════════════
         rtc_mp2_export.register_mp2_write_layer(self.model, heli_agent)
         # Включаем spawn слоты в MP2 drain
-        total_agents_with_spawn = self.frames + det_spawn + dynamic_reserve_mi17 + dynamic_reserve_mi8
+        total_agents_with_spawn = (
+            self.frames if use_env_spawn
+            else self.frames + det_spawn + dynamic_reserve_mi17 + dynamic_reserve_mi8
+        )
+        self._total_agents_with_spawn = total_agents_with_spawn
         self.hf_mp2_drain = rtc_mp2_export.register_mp2_drain(
             self.model, self.end_day, total_agents_with_spawn
         )
@@ -906,7 +929,11 @@ class LimiterV8Orchestrator:
         dyn17 = getattr(self, '_dynamic_reserve_mi17', 0)
         dyn8 = getattr(self, '_dynamic_reserve_mi8', 0)
         det_spawn = getattr(self, '_deterministic_spawn_count', 0)
-        total_export_agents = self.frames + det_spawn + dyn17 + dyn8
+        total_export_agents = getattr(
+            self,
+            '_total_agents_with_spawn',
+            self.frames + det_spawn + dyn17 + dyn8
+        )
         
         # Все поля (включая "статические") читаются из MP2 буферов
         # Fallback не используется

@@ -19,6 +19,7 @@ SCRIPTS = [
     ("INV-8", "inv8_storage_frozen.py"),
     ("INV-9", "inv9_limiter_exit.py"),
     ("INV-10", "inv10_turnover_balance.py"),
+    ("INV-11", "inv11_spawn_limit_saturation.py"),
     ("TEMP-1", "temp1_repair_duration.py"),
     ("TEMP-4", "temp4_no_infinite_repair.py"),
     ("TEMP-5", "temp5_repair_hybrid_vector.py"),
