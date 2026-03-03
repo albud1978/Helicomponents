@@ -132,6 +132,17 @@
       "last_validated": "2026-02-15",
       "last_result": "PASS (0 balance violations, 0 illegal transitions, datasets 20250704 + 20251230)",
       "notes": "Закон сохранения потоков. Постпроцессинг P2/P3 включён (Вариант B, 2026-02-17) — реконструирует окно ремонта (7→4→2, 1→4→2) с корректным обновлением pre_status_id. Ремонты также отслеживаются в sim_repairline_v9. Начальная популяция по pre_status_id (не status_id) для учёта Day0 переходов."
+    },
+    {
+      "id": "INV-11",
+      "claim": "Нет post-warmup дефицита ops при насыщении dynamic spawn (Mi-17)",
+      "expr": "if dynamic_spawned_mi17 >= dynamic_reserve_mi17 then post_warmup_deficit_days == 0",
+      "scope": "per_dataset",
+      "severity": "HIGH",
+      "validator": "code/validation/inv11_spawn_limit_saturation.py",
+      "last_validated": "2026-03-03",
+      "last_result": "PENDING (new validator)",
+      "notes": "Для диагностики лимитов dynamic birth, не заменяет INV-2."
     }
   ],
 

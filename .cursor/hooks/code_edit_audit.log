@@ -1553,3 +1553,24 @@
 [2026-03-02 16:21:55 UTC] conv=7913800d gen=51f39ba7 file=code/sim_v2/messaging/base_model_messaging.py
   edit[0] old='' new='        agent.newVariableUInt("s6_started", 0)'
 
+[2026-03-03 12:12:14 UTC] conv=3bf40da5 gen=bddff172 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        total_dynamic_slots = max(\n            0,\n            model_build.RTC_MAX_FRAMES - self.frames - det_spawn\n     ' new='        env_first_dynamic_idx = self.env_data.get('first_dynamic_idx')\n        env_dynamic_reserve_mi17 = self.env_data.'
+  edit[1] old='            'first_dynamic_idx': self.frames + det_spawn,\n            'first_dynamic_idx_mi17': self.frames + det_spawn,' new='            'first_dynamic_idx': first_dynamic_idx,\n            'first_dynamic_idx_mi17': first_dynamic_idx,\n           '
+  edit[2] old='        total_agents_with_spawn = self.frames + det_spawn + dynamic_reserve_mi17 + dynamic_reserve_mi8' new='        total_agents_with_spawn = (\n            self.frames if use_env_spawn\n            else self.frames + det_spawn + '
+
+[2026-03-03 12:12:18 UTC] conv=3bf40da5 gen=bddff172 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='        total_export_agents = self.frames + det_spawn + dyn17 + dyn8' new='        total_export_agents = getattr(\n            self,\n            '_total_agents_with_spawn',\n            self.frames'
+
+[2026-03-03 12:26:31 UTC] conv=3a5316b3 gen=6370f850 file=code/sim_v2/messaging/orchestrator_limiter_v8.py
+  edit[0] old='                    max_total_dynamic = max(0, self.frames - first_dynamic_idx)\n                    total_dynamic_slots ' new='                    total_dynamic_slots = max(0, self.frames - first_dynamic_idx)\n                    dynamic_reserve_mi'
+
+[2026-03-03 12:46:24 UTC] conv=12536de6 gen=66e5bed0 file=code/validation/inv11_spawn_limit_saturation.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nINV-11: Спавн упёрся в лимит, а post-warmup дефицит ops остаётся.\n\nFAIL только если:\n  - dyna'
+
+[2026-03-03 12:46:54 UTC] conv=12536de6 gen=66e5bed0 file=code/validation/run_all.py
+  edit[0] old='' new='    ("INV-11", "inv11_spawn_limit_saturation.py"),'
+
+[2026-03-03 12:47:25 UTC] conv=12536de6 gen=66e5bed0 file=code/validation/inv11_spawn_limit_saturation.py
+  edit[0] old='' new='from pathlib import Path'
+  edit[1] old='' new='sys.path.insert(0, str(Path(__file__).parent.parent))\n'
+
