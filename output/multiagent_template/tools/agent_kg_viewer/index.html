@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent KG Viewer</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; max-width: 1300px; }
+    h1, h2 { margin: 0 0 8px; }
+    .meta { color: #666; font-size: 12px; margin-bottom: 8px; }
+    .section { margin-top: 18px; }
+    .section-note { font-size: 12px; color: #666; margin: 2px 0 8px; }
+    .empty { color: #888; font-style: italic; }
+    .table-wrap { overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; vertical-align: top; }
+    th { font-size: 11px; text-transform: uppercase; color: #555; background: #f7f7f7; }
+  </style>
+</head>
+<body>
+  <h1>Agent KG Viewer</h1>
+  <div class="meta">Generated at 2026-02-15 11:56:06 UTC</div>
+  <div class="meta">Default sources: config/agent_kg.json, config/capsules_manifest.json</div>
+  <div class="meta">Run: python3 tools/agent_kg_viewer/build_agent_kg_viewer.py</div>
+  <div class="section">
+    <h2>Текущий статус исполнения</h2>
+    <div class="section-note">Активные workflow и их последнее событие.</div>
+<div class="empty">Нет данных</div>
+  </div>
+  <div class="section">
+    <h2>Последние взаимодействия агентов</h2>
+    <div class="section-note">Последние handoff/context события (до 25 записей).</div>
+<div class="empty">Нет данных</div>
+  </div>
+  <div class="section">
+    <h2>Краткая сводка</h2>
+<div class="table-wrap"><table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>workflows</td><td>0</td></tr><tr><td>handoffs</td><td>0</td></tr><tr><td>contexts</td><td>0</td></tr><tr><td>capsules</td><td>0</td></tr></tbody></table></div>
+  </div>
+</body>
+</html>

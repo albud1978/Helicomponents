@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUseFailure": [
+      {
+        "command": "python3 .cursor/hooks/connection_fail_set.py",
+        "matcher": "Shell|MCP"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "python3 .cursor/hooks/pre_close_guard.py"
+      },
+      {
+        "command": "python3 .cursor/hooks/connection_fail_block.py"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "python3 .cursor/hooks/connection_fail_clear.py"
+      },
+      {
+        "command": "python3 .cursor/hooks/user_comm_audit.py"
+      },
+      {
+        "command": "python3 .cursor/hooks/orchestrator_guard.py"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "python3 .cursor/hooks/audit_code_edit.py"
+      }
+    ]
+  }
+}
