@@ -8,6 +8,18 @@
 - Production is treated as a handoff target for corporate admins.
 - Any clone/deploy action to corporate sandbox is executed **only** by explicit user command.
 
+## Active access contract (mandatory)
+- Superset BI access endpoint: `http://10.96.96.47:8088/`.
+- Operational mode in this repo: **API-only** (dashboards/charts/datasets create/update, bundle export/import).
+- Credentials are provided via repository `.env` keys:
+  - `SUPERSET_API_BASE_URL`
+  - `SUPERSET_API_PROVIDER`
+  - `SUPERSET_API_USERNAME`
+  - `SUPERSET_API_PASSWORD`
+  - `SUPERSET_API_TIMEOUT_SEC`
+- **Strict prohibition:** do not run Docker/Superset runtime commands from this repository. Docker runtime is managed from another project.
+- Required permissions: non-admin API role with rights to dashboards/charts/datasets and bundle import/export.
+
 ## Roles (strict BI model)
 - `orchestrator`: plans phases, controls gates, assembles handoff.
 - `analyst-sql-graph`: validates KPI semantics and aggregation correctness.
@@ -96,7 +108,7 @@ SUPERSET_PORT=8089 docker compose -p superset2 \
 
 If these five points are read, a new agent has enough context to deploy and continue regular A <-> B synchronization.
 
-### One-time bootstrap on any machine after `git pull`
+### One-time bootstrap on any machine after `git pull` (ARCHIVED; do not use in this repo)
 1) Prepare local env for Superset:
 ```bash
 cp "deploy/superset-local/.env.example" "deploy/superset-local/.env"
@@ -104,13 +116,11 @@ cp "deploy/superset-local/.env.example" "deploy/superset-local/.env"
 ```
 
 2) Start local Superset:
-```bash
-docker compose -f "deploy/superset-local/docker-compose.yml" up -d --build
-```
+> Archived instruction. Local Docker runtime must not be managed from this repository.
 
 3) Health check:
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:8088/health"
+curl -s -o /dev/null -w "%{http_code}\n" "${SUPERSET_API_BASE_URL:-http://10.96.96.47:8088}/health"
 ```
 
 ### WSL2 notes (if machine is Windows + WSL)
@@ -120,15 +130,17 @@ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:8088/health"
 - `127.0.0.1:8088` is valid from WSL and Windows browser in standard Docker Desktop setup.
 - If corporate policies remap networking, keep `SUPERSET_PORT` configurable in `deploy/superset-local/.env`.
 
-### Repo-only mode (no cloud registry, local build on each machine)
+### Repo-only mode (no cloud registry, local build on each machine) — ARCHIVED
 Use this mode when both machines have Docker Desktop/WSL and you want full reproducibility only via Git.
 
 1) Build custom Superset image with `echarts6_gantt` plugin from repository source:
+> Archived instruction. Do not execute in this repository.
 ```bash
 bash "deploy/superset-local/scripts/build_superset_with_plugin.sh"
 ```
 
 2) Start stack with plugin override:
+> Archived instruction. Do not execute in this repository.
 ```bash
 bash "deploy/superset-local/start_local_plugin.sh"
 ```
@@ -137,7 +149,7 @@ bash "deploy/superset-local/start_local_plugin.sh"
 ```bash
 python - <<'PY'
 import requests
-base="http://127.0.0.1:8088"
+base="${SUPERSET_API_BASE_URL:-http://10.96.96.47:8088}"
 s=requests.Session()
 t=s.post(base+"/api/v1/security/login",json={"username":"admin","password":"admin","provider":"db","refresh":True},timeout=30).json()["access_token"]
 h={"Authorization":f"Bearer {t}"}
@@ -181,12 +193,9 @@ What import does:
 #### Notes and limits (archived)
 - Scripts are kept for reference; not used in standard workflow.
 - Keep `.env` local and never commit secrets.
-### Export current BI state to Git (machine A)
+### Export current BI state to Git (machine A, API-only)
 ```bash
 python "deploy/bi-as-code/scripts/superset_git_sync.py" \
-  --base-url "http://127.0.0.1:8088" \
-  --username "admin" \
-  --password "admin" \
   export \
   --dashboard-ids "1" \
   --output-dir "deploy/bi-as-code/superset/bundles/dashboard_1"
@@ -199,14 +208,10 @@ git commit -m "sync superset dashboard bundle"
 git push
 ```
 
-### Import BI state from Git (machine B)
+### Import BI state from Git (machine B, API-only)
 ```bash
 git pull
-bash "deploy/superset-local/start_local_plugin.sh"
 python "deploy/bi-as-code/scripts/superset_git_sync.py" \
-  --base-url "http://127.0.0.1:8088" \
-  --username "admin" \
-  --password "admin" \
   import \
   --bundle-dir "deploy/bi-as-code/superset/bundles/dashboard_1" \
   --overwrite
@@ -226,9 +231,9 @@ python "deploy/bi-as-code/scripts/superset_git_sync.py" \
 3) Create `.env` from `.env.example`. Set `CLICKHOUSE_PORT=8123` (HTTP, for `clickhousedb://`).
 4) Run `bash deploy/superset-local/start_local_plugin.sh` (not base `start_local.sh`).
 5) Health check: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8088/health` -> `200`.
-6) Import bundle and check dashboard `1` + chart `5`.
+6) Import bundle and check dashboard `1` + chart `5` via remote API endpoint.
 7) If import requires DB password map, use key `databases/clickhouse.yaml`.
-8) If `echarts6_gantt is not registered` then startup used wrong compose path; repeat step 4.
+8) If `echarts6_gantt is not registered`, escalate to external Docker runtime owner (another project). Do not run local Docker commands here.
 
 ### Critical notes
 - `.env` is local-only and ignored; never commit secrets.
@@ -259,8 +264,4 @@ python "deploy/bi-as-code/scripts/superset_git_sync.py" \
   --overwrite \
   --passwords-file "/tmp/superset_passwords.json"
 ```
-- If UI still shows old assets, restart container and hard refresh:
-```bash
-docker restart superset-local
-# browser: Ctrl+Shift+R
-```
+- If UI still shows old assets, use hard refresh (`Ctrl+Shift+R`) and re-run API import/export sync.

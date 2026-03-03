@@ -43,10 +43,12 @@
   3) проверка `run_all_stream` по обоим dataset-ключам.
 
 ### Мини-runbook для Superset
-- Всегда фильтровать `version_date` и `version_id` в датасете/чарте.
+- Всегда фильтровать по `version_date` (или вычисляемому `version_date_ddmmyyyy`).
+- Не использовать `version_id` как разделитель датасетов, если в витрине он неуникален.
 - Временная колонка: `day_date`; grain: `day/month/year`.
 - Не строить графики по всем версиям сразу (это размывает метрики и увеличивает скан партиций).
 - Для тяжёлых чартов использовать предагрегации по дням (status/repairline daily counts) и затем строить month/year поверх них.
+- Контур доступа: удалённый Superset API `http://10.96.96.47:8088/`; Docker runtime из этого репозитория не управляется.
 
 ## Методология
 - `docs/architecture/validation_rules.md` — методология SQL‑first валидации, heli_pandas проверки, NVRTC правила.
