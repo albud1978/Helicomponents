@@ -23,6 +23,23 @@
 ### Контекст
 - Принято правило: Docker runtime Superset управляется внешним проектом; в данном репозитории допустимы только API-операции для BI-артефактов.
 
+## [03-03-2026] - BI sync hardening: datasource remap и пост-импорт smoke-check
+
+### Изменения
+- `deploy/bi-as-code/README.md`:
+  - добавлено обязательное правило remap после import: chart/filter datasource сопоставляется по `table_name`, а не по "сырым" числовым `dataset_id`;
+  - добавлен обязательный post-import smoke-check через `/api/v1/chart/data` для 4 ключевых чартов:
+    - `Датасет 1`
+    - `Датасет 2`
+    - `График Ремонта`
+    - `График поставки ВС`
+
+### Контекст
+- Зафиксированы инциденты меж-инстансного дрейфа Superset metadata:
+  - `График поставки ВС`: метрика с `pre_status_id` при ошибочной привязке к `sim_repairline_v9` (unknown identifier);
+  - `График Ремонта`: ошибка `Columns missing in dataset` при ошибочной привязке к `sim_masterv2_v9_ffill_daily`.
+- Корневая причина: одинаковая ClickHouse БД, но разные локальные `dataset_id` в разных Superset инстансах.
+
 ## [27-02-2026] - MVP L2 engines 3/4: Phase 0 контракт, messaging контур, D3 run
 
 ### Изменения
