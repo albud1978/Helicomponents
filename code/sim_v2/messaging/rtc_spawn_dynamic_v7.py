@@ -287,6 +287,25 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8, flamegpu::MessageNone, flam
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_change_day", day);
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_id", 2u);  // operations
     FLAMEGPU->agent_out.setVariable<unsigned int>("pre_status_id", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p1", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p2", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p3", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("promoted", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("needs_demote", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("decision_p2", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("decision_p3", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_candidate", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_claim_start_day", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_claim_end_day", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_claim_source", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_promoted", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_needs_demote", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_repair_candidate", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_repair_line_id", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_repair_line_day", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_bucket_seen", 0u);
     
     // DISABLED (state5-unused): FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 1u);
     FLAMEGPU->agent_out.setVariable<unsigned short>(
@@ -451,6 +470,25 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8_mi8, flamegpu::MessageNone, 
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_change_day", day);
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_id", 2u);  // operations
     FLAMEGPU->agent_out.setVariable<unsigned int>("pre_status_id", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p1", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p2", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p3", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("promoted", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("needs_demote", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("decision_p2", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("decision_p3", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_candidate", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_claim_start_day", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_claim_end_day", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("repair_claim_source", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_promoted", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_needs_demote", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_repair_candidate", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_repair_line_id", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_repair_line_day", 0xFFFFFFFFu);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("debug_bucket_seen", 0u);
     
     // DISABLED (state5-unused): FLAMEGPU->agent_out.setVariable<unsigned int>("transition_5_to_2", 1u);
     FLAMEGPU->agent_out.setVariable<unsigned short>(
@@ -525,6 +563,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v7, flamegpu::MessageNone, flam
     // V7 флаги
     FLAMEGPU->agent_out.setVariable<unsigned int>("promoted", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("needs_demote", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p1", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p2", 0u);
+    FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p3", 0u);
     
     // Limiter (будет вычислен в limiter_on_entry)
     FLAMEGPU->agent_out.setVariable<unsigned short>("limiter", 0u);

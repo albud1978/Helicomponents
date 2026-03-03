@@ -70,6 +70,7 @@ position:
     children:
     - ROW-JNG-3xa7mc-rgHyZdhngk
     - ROW-PyuKNJXpIPpzsI74cXQUa
+    - ROW-supply-births-v1
     - ROW-echarts6-gantt-50704
     id: GRID_ID
     parents:
@@ -116,6 +117,31 @@ position:
     - ROOT_ID
     - GRID_ID
     type: ROW
+  CHART-supply-births-v1:
+    children: []
+    id: CHART-supply-births-v1
+    meta:
+      chartId: 6
+      height: 48
+      sliceName: "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430 (0\u21922, 0\u2192\
+        3)"
+      uuid: c2ed6e5e-5905-47d2-91ad-d525d1373633
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-supply-births-v1
+    type: CHART
+  ROW-supply-births-v1:
+    children:
+    - CHART-supply-births-v1
+    id: ROW-supply-births-v1
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
 metadata:
   chart_configuration:
     '1':
@@ -141,6 +167,7 @@ metadata:
     - 1
     - 2
     - 5
+    - 6
   color_scheme: supersetColors
   refresh_frequency: 0
   color_scheme_domain:
@@ -202,7 +229,7 @@ metadata:
     targets:
     - column:
         name: version_date_ddmmyyyy
-      datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
+      datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
     defaultDataMask:
       extraFormData:
         filters:
@@ -216,7 +243,7 @@ metadata:
         validateStatus: false
         value:
         - 04-07-2025
-        excludeFilterValues: true
+        excludeFilterValues: false
     cascadeParentIds: []
     scope:
       rootPath:
@@ -224,6 +251,7 @@ metadata:
       excluded:
       - 1
       - 5
+      - 6
     type: NATIVE_FILTER
     description: ''
   - id: NATIVE_FILTER-CW_8-YB_Qt7yXNH-ZCpsD
@@ -234,7 +262,7 @@ metadata:
       \u044C 1"
     filterType: filter_timegrain
     targets:
-    - datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
+    - datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
     defaultDataMask:
       extraFormData:
         time_grain_sqla: P1Y
@@ -249,6 +277,7 @@ metadata:
       excluded:
       - 1
       - 5
+      - 6
     type: NATIVE_FILTER
     description: ''
     chartsInScope:
@@ -268,7 +297,7 @@ metadata:
     targets:
     - column:
         name: group_by
-      datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
+      datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
     defaultDataMask:
       extraFormData: {}
       filterState: {}
@@ -278,6 +307,7 @@ metadata:
       excluded:
       - 1
       - 5
+      - 6
       rootPath:
       - ROOT_ID
     type: NATIVE_FILTER
@@ -296,7 +326,7 @@ metadata:
     targets:
     - column:
         name: version_date_ddmmyyyy
-      datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
+      datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
     defaultDataMask:
       extraFormData:
         filters:
@@ -310,7 +340,7 @@ metadata:
         validateStatus: false
         value:
         - 30-12-2025
-        excludeFilterValues: true
+        excludeFilterValues: false
     cascadeParentIds: []
     scope:
       rootPath:
@@ -318,6 +348,7 @@ metadata:
       excluded:
       - 2
       - 5
+      - 6
     type: NATIVE_FILTER
     description: ''
     chartsInScope:
@@ -332,7 +363,7 @@ metadata:
       \u044C 2"
     filterType: filter_timegrain
     targets:
-    - datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
+    - datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
     defaultDataMask:
       extraFormData:
         time_grain_sqla: P1Y
@@ -347,6 +378,7 @@ metadata:
       excluded:
       - 2
       - 5
+      - 6
     type: NATIVE_FILTER
     description: ''
     chartsInScope:
@@ -366,7 +398,7 @@ metadata:
     targets:
     - column:
         name: group_by
-      datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
+      datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
     defaultDataMask:
       extraFormData: {}
       filterState: {}
@@ -378,6 +410,7 @@ metadata:
       excluded:
       - 2
       - 5
+      - 6
     type: NATIVE_FILTER
     description: ''
     chartsInScope:
@@ -412,7 +445,48 @@ metadata:
         - 30-12-2025
         validateMessage: false
         validateStatus: false
-        excludeFilterValues: true
+        excludeFilterValues: false
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded:
+      - 2
+      - 1
+      - 6
+    type: NATIVE_FILTER
+    description: "\u041D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u044B\u0439\
+      \ \u0432\u044B\u0431\u043E\u0440 version_date \u0442\u043E\u043B\u044C\u043A\
+      \u043E \u0434\u043B\u044F Gantt \u0447\u0430\u0440\u0442\u0430"
+  - id: NATIVE_FILTER-SUPPLY-VERSION-V1
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      creatable: true
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430: \u0432\u0435\u0440\u0441\
+      \u0438\u044F \u0434\u0430\u0442\u0430\u0441\u0435\u0442\u0430"
+    filterType: filter_select
+    targets:
+    - column:
+        name: version_date_ddmmyyyy
+      datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
+    defaultDataMask:
+      extraFormData:
+        filters:
+        - col: version_date_ddmmyyyy
+          op: IN
+          val:
+          - 04-07-2025
+      filterState:
+        label: 04-07-2025
+        validateMessage: false
+        validateStatus: false
+        value:
+        - 04-07-2025
+        excludeFilterValues: false
     cascadeParentIds: []
     scope:
       rootPath:
@@ -420,10 +494,75 @@ metadata:
       excluded:
       - 1
       - 2
+      - 5
     type: NATIVE_FILTER
-    description: "\u041D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u044B\u0439\
-      \ \u0432\u044B\u0431\u043E\u0440 version_date \u0442\u043E\u043B\u044C\u043A\
-      \u043E \u0434\u043B\u044F Gantt \u0447\u0430\u0440\u0442\u0430"
+    description: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0444\u0438\
+      \u043B\u044C\u0442\u0440 \u0432\u0435\u0440\u0441\u0438\u0438 \u0434\u043B\u044F\
+      \ \u0433\u0438\u0441\u0442\u043E\u0433\u0440\u0430\u043C\u043C\u044B \u043F\u043E\
+      \u0441\u0442\u0430\u0432\u043E\u043A"
+    chartsInScope:
+    - 6
+    tabsInScope: []
+  - id: NATIVE_FILTER-SUPPLY-TYPE-V1
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      creatable: true
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430: \u0442\u0438\u043F \u0412\
+      \u0421"
+    filterType: filter_select
+    targets:
+    - column:
+        name: group_by
+      datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded:
+      - 1
+      - 2
+      - 5
+    type: NATIVE_FILTER
+    description: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0444\u0438\
+      \u043B\u044C\u0442\u0440 \u0442\u0438\u043F\u0430 \u0412\u0421 \u0434\u043B\u044F\
+      \ \u0433\u0438\u0441\u0442\u043E\u0433\u0440\u0430\u043C\u043C\u044B \u043F\u043E\
+      \u0441\u0442\u0430\u0432\u043E\u043A"
+    chartsInScope:
+    - 6
+    tabsInScope: []
+  - id: NATIVE_FILTER-jjU1NwtMu3BOnjlUgrXZ9
+    controlValues:
+      enableEmptyFilter: false
+    name: "\u0413\u0440\u0430\u043D\u0443\u043B\u044F\u0440\u043D\u043E\u0441\u0442\
+      \u044C \u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0438"
+    filterType: filter_timegrain
+    targets:
+    - datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
+    defaultDataMask:
+      extraFormData:
+        time_grain_sqla: P1Y
+      filterState:
+        label: Year
+        value:
+        - P1Y
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded:
+      - 2
+      - 5
+      - 1
+    type: NATIVE_FILTER
+    description: ''
   map_label_colors:
     '1': '#003594'
     '2': '#7CA3DC'
