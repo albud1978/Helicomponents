@@ -24,42 +24,42 @@ params:
   legendType: scroll
   metrics:
   - expressionType: SQL
-    sqlExpression: ROUND(AVGIf(status_count_ffill, status_id = 1))
+    sqlExpression: ROUND(SUMIf(status_count_ffill, status_id = 1) / countDistinct(day_date))
     column: null
     aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
     label: "\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435"
   - expressionType: SQL
-    sqlExpression: ROUND(AVGIf(status_count_ffill, status_id = 2))
+    sqlExpression: ROUND(SUMIf(status_count_ffill, status_id = 2) / countDistinct(day_date))
     column: null
     aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
     label: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0438"
   - expressionType: SQL
-    sqlExpression: ROUND(AVGIf(status_count_ffill, status_id = 3))
+    sqlExpression: ROUND(SUMIf(status_count_ffill, status_id = 3) / countDistinct(day_date))
     column: null
     aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
     label: "\u0418\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435"
   - expressionType: SQL
-    sqlExpression: ROUND(AVGIf(status_count_ffill, status_id = 4))
+    sqlExpression: ROUND(SUMIf(status_count_ffill, status_id = 4) / countDistinct(day_date))
     column: null
     aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
     label: "\u0420\u0435\u043C\u043E\u043D\u0442"
   - expressionType: SQL
-    sqlExpression: ROUND(AVGIf(status_count_ffill, status_id = 6))
+    sqlExpression: ROUND(SUMIf(status_count_ffill, status_id = 6) / countDistinct(day_date))
     column: null
     aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
     label: "\u0421\u043F\u0438\u0441\u0430\u043D\u0438\u0435"
   - expressionType: SQL
-    sqlExpression: ROUND(AVGIf(status_count_ffill, status_id = 7))
+    sqlExpression: ROUND(SUMIf(status_count_ffill, status_id = 7) / countDistinct(day_date))
     column: null
     aggregate: null
     datasourceWarning: false
@@ -128,31 +128,33 @@ query_context: "{\"datasource\": {\"id\": 1, \"type\": \"table\"}, \"force\": fa
   : \"BASE_AXIS\", \"expressionType\": \"SQL\", \"label\": \"day_date\", \"sqlExpression\"\
   : \"day_date\", \"timeGrain\": \"P1Y\"}], \"custom_form_data\": {}, \"custom_params\"\
   : {}, \"extras\": {\"having\": \"\", \"time_grain_sqla\": \"P1Y\", \"where\": \"\
-  version_date IN (20250704,20251230)\"}, \"filters\": [{\"col\": \"day_date\", \"\
-  op\": \"TEMPORAL_RANGE\", \"val\": \"No filter\"}], \"metrics\": [{\"expressionType\"\
-  : \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill, status_id = 1))\"\
+  \"}, \"filters\": [{\"col\": \"day_date\", \"op\": \"TEMPORAL_RANGE\", \"val\":\
+  \ \"No filter\"}], \"metrics\": [{\"expressionType\": \"SQL\", \"sqlExpression\"\
+  : \"ROUND(SUMIf(status_count_ffill, status_id = 1) / countDistinct(day_date))\"\
   , \"column\": null, \"aggregate\": null, \"datasourceWarning\": false, \"hasCustomLabel\"\
   : true, \"label\": \"\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435\"}, {\"expressionType\"\
-  : \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill, status_id = 2))\"\
+  : \"SQL\", \"sqlExpression\": \"ROUND(SUMIf(status_count_ffill, status_id = 2) /\
+  \ countDistinct(day_date))\", \"column\": null, \"aggregate\": null, \"datasourceWarning\"\
+  : false, \"hasCustomLabel\": true, \"label\": \"\u041E\u043F\u0435\u0440\u0430\u0446\
+  \u0438\u0438\"}, {\"expressionType\": \"SQL\", \"sqlExpression\": \"ROUND(SUMIf(status_count_ffill,\
+  \ status_id = 3) / countDistinct(day_date))\", \"column\": null, \"aggregate\":\
+  \ null, \"datasourceWarning\": false, \"hasCustomLabel\": true, \"label\": \"\u0418\
+  \u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435\"}, {\"expressionType\": \"SQL\"\
+  , \"sqlExpression\": \"ROUND(SUMIf(status_count_ffill, status_id = 4) / countDistinct(day_date))\"\
   , \"column\": null, \"aggregate\": null, \"datasourceWarning\": false, \"hasCustomLabel\"\
-  : true, \"label\": \"\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0438\"}, {\"expressionType\"\
-  : \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill, status_id = 3))\"\
-  , \"column\": null, \"aggregate\": null, \"datasourceWarning\": false, \"hasCustomLabel\"\
-  : true, \"label\": \"\u0418\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435\"},\
-  \ {\"expressionType\": \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill,\
-  \ status_id = 4))\", \"column\": null, \"aggregate\": null, \"datasourceWarning\"\
-  : false, \"hasCustomLabel\": true, \"label\": \"\u0420\u0435\u043C\u043E\u043D\u0442\
-  \"}, {\"expressionType\": \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill,\
-  \ status_id = 6))\", \"column\": null, \"aggregate\": null, \"datasourceWarning\"\
+  : true, \"label\": \"\u0420\u0435\u043C\u043E\u043D\u0442\"}, {\"expressionType\"\
+  : \"SQL\", \"sqlExpression\": \"ROUND(SUMIf(status_count_ffill, status_id = 6) /\
+  \ countDistinct(day_date))\", \"column\": null, \"aggregate\": null, \"datasourceWarning\"\
   : false, \"hasCustomLabel\": true, \"label\": \"\u0421\u043F\u0438\u0441\u0430\u043D\
-  \u0438\u0435\"}, {\"expressionType\": \"SQL\", \"sqlExpression\": \"ROUND(AVGIf(status_count_ffill,\
-  \ status_id = 7))\", \"column\": null, \"aggregate\": null, \"datasourceWarning\"\
-  : false, \"hasCustomLabel\": true, \"label\": \"\u041D\u0435\u0438\u0441\u043F\u0440\
-  \u0430\u0432\u043D\u044B\u0435\"}], \"order_desc\": true, \"orderby\": [[{\"columnType\"\
-  : \"BASE_AXIS\", \"expressionType\": \"SQL\", \"label\": \"day_date\", \"sqlExpression\"\
-  : \"toStartOfDay(toDateTime(day_date))\"}, true]], \"post_processing\": [], \"row_limit\"\
-  : 10000, \"series_columns\": [], \"series_limit\": 0, \"time_offsets\": [], \"url_params\"\
-  : {}}], \"result_format\": \"json\", \"result_type\": \"full\"}"
+  \u0438\u0435\"}, {\"expressionType\": \"SQL\", \"sqlExpression\": \"ROUND(SUMIf(status_count_ffill,\
+  \ status_id = 7) / countDistinct(day_date))\", \"column\": null, \"aggregate\":\
+  \ null, \"datasourceWarning\": false, \"hasCustomLabel\": true, \"label\": \"\u041D\
+  \u0435\u0438\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435\"}], \"order_desc\"\
+  : true, \"orderby\": [[{\"columnType\": \"BASE_AXIS\", \"expressionType\": \"SQL\"\
+  , \"label\": \"day_date\", \"sqlExpression\": \"toStartOfDay(toDateTime(day_date))\"\
+  }, true]], \"post_processing\": [], \"row_limit\": 10000, \"series_columns\": [],\
+  \ \"series_limit\": 0, \"time_offsets\": [], \"url_params\": {}}], \"result_format\"\
+  : \"json\", \"result_type\": \"full\"}"
 cache_timeout: null
 uuid: 9b737e74-c71b-423d-9cb4-31ea86c8bb58
 version: 1.0.0
