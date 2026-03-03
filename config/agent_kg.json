@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-03-02T16:51:28Z",
+    "updated_at": "2026-03-02T17:17:52Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -1552,6 +1552,15 @@
       "status": "active",
       "created_at": "2026-03-02T16:50:50Z",
       "updated_at": "2026-03-02T16:51:28Z"
+    },
+    {
+      "workflow_id": "W_bi_bundle_charts_20260302",
+      "goal": "Правки BI bundle charts для Superset",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "active",
+      "created_at": "2026-03-02T17:16:46Z",
+      "updated_at": "2026-03-02T17:17:52Z"
     }
   ],
   "handoffs": [
@@ -12115,6 +12124,37 @@
       "open_questions": "",
       "graph_update": "нет",
       "created_at": "2026-03-02T16:51:28Z"
+    },
+    {
+      "handoff_id": "handoff_W_bi_bundle_charts_20260302_coder-general_84981171",
+      "workflow_id": "W_bi_bundle_charts_20260302",
+      "agent": "coder-general",
+      "user_goal": "Нужно внести точечные правки в BI bundle charts для Superset.",
+      "goal": "Нужно внести точечные правки в BI bundle charts для Superset.",
+      "changes": "Обновлены metrics и query_context (where + sqlExpression) в charts/2_2.yaml и charts/1_1.yaml.",
+      "facts": "rg: нет совпадений AVGIf(status_count_ffill) и version_date IN (20250704,20251230) в обоих файлах.",
+      "assumptions": "UI Superset не проверялся; только правки YAML bundle.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:bi_bundle_charts:2026-03-02T00:00:00Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "Локальные правки YAML bundle без изменения внешних контрактов.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "нет",
+      "created_at": "2026-03-02T17:17:52Z"
     }
   ],
   "contexts": [
@@ -13800,6 +13840,15 @@
       "agent": "analyst-sql-graph",
       "created_at": "2026-03-02T16:50:50Z",
       "updated_at": "2026-03-02T16:50:50Z"
+    },
+    {
+      "context_id": "ctx_W_bi_bundle_charts_20260302_phase_start_acd84311",
+      "workflow_id": "W_bi_bundle_charts_20260302",
+      "context_type": "phase_start",
+      "content": "Старт правок BI bundle charts (dashboard_1 charts 2_2.yaml, 1_1.yaml).",
+      "agent": "coder-general",
+      "created_at": "2026-03-02T17:16:46Z",
+      "updated_at": "2026-03-02T17:16:46Z"
     }
   ]
 }

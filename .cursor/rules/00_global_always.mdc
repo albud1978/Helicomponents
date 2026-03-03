@@ -48,6 +48,9 @@ alwaysApply: true
 - Deploy/clone BI-артефактов в corporate sandbox выполнять только по явной команде Алексея в текущем чате.
 - Production BI-контур на текущем этапе не трогать: разрешён только handoff-пакет для админов, без apply/deploy действий.
 - Требования брендбука и список corporate Superset инстансов считаются входными артефактами от Алексея; до их получения допускаются только шаблонные контракты/заготовки.
+- **API-first (обязательно):** перед любыми BI-действиями сначала проверять доступность Superset API (`GET /health`). Если health=`200`, выполнять только API-операции (`superset_git_sync.py import/export`, PATCH/PUT через API) без запуска build/start скриптов.
+- **Запрещено** запускать `start_local*.sh`, `build_superset_with_plugin.sh`, `docker build`/пересборку как первый шаг, если API уже доступен.
+- Пересборка/рестарт контейнеров допускается только при `health != 200` (или недоступном API) и/или по явной команде Алексея в текущем чате.
 
 ## SSoT доменной модели
 - **Единственный источник истины** по переходам, слоям и квотам — JSON: `config/transitions/transitions_rules.json`, `config/transitions/quota_rules.json`.
