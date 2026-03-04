@@ -49,6 +49,15 @@ def _build_base_url(raw: str) -> str:
     return raw.rstrip("/")
 
 
+def _require_non_empty(name: str, value: str | None) -> str:
+    if value and value.strip():
+        return value.strip()
+    raise RuntimeError(
+        f"Missing required parameter: {name}. "
+        f"Pass it explicitly or set corresponding SUPERSET_API_* env var."
+    )
+
+
 def _login(
     base_url: str,
     username: str,
@@ -241,9 +250,9 @@ def cmd_import(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    default_base_url = os.getenv("SUPERSET_API_BASE_URL", "http://127.0.0.1:8088")
-    default_username = os.getenv("SUPERSET_API_USERNAME", "admin")
-    default_password = os.getenv("SUPERSET_API_PASSWORD", "admin")
+    default_base_url = os.getenv("SUPERSET_API_BASE_URL")
+    default_username = os.getenv("SUPERSET_API_USERNAME")
+    default_password = os.getenv("SUPERSET_API_PASSWORD")
     default_provider = os.getenv("SUPERSET_API_PROVIDER", "db")
     default_timeout = int(os.getenv("SUPERSET_API_TIMEOUT_SEC", "120"))
 
@@ -282,6 +291,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    args.base_url = _require_non_empty("--base-url / SUPERSET_API_BASE_URL", args.base_url)
+    args.username = _require_non_empty("--username / SUPERSET_API_USERNAME", args.username)
+    args.password = _require_non_empty("--password / SUPERSET_API_PASSWORD", args.password)
     return int(args.func(args))
 
 

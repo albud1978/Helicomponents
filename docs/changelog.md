@@ -1,5 +1,25 @@
 # Changelog
 
+## [04-03-2026] - BI remediation: fail-fast для Superset API + security/policy cleanup
+
+### Изменения
+- `deploy/bi-as-code/scripts/superset_git_sync.py`:
+  - убраны небезопасные fallback значения (`127.0.0.1`, `admin/admin`);
+  - добавлен fail-fast: `--base-url/--username/--password` (или `SUPERSET_API_*`) теперь обязательны.
+- `deploy/bi-as-code/README.md`:
+  - добавлен отдельный блок политики секретов (private env/template env + обязательная ротация после переноса);
+  - уточнено, что `deploy/superset-local/**` хранится как архив/reference и не является исполняемым контуром в API-only режиме.
+- `deploy/bi-as-code/SUPERSET_API_CURSOR_PLAYBOOK.md`:
+  - исправлены форматные артефакты таблиц (`SUPERSET_API_PASSWORD`, endpoint patterns, footnote);
+  - добавлена явная пометка, что адреса песочницы являются defaults и должны заменяться в новом проекте.
+- `deploy/bi-as-code/README.md` и `deploy/bi-as-code/SUPERSET_API_CURSOR_PLAYBOOK.md`:
+  - добавлено явное пояснение по `SUPERSET_API_PROVIDER=db`;
+  - зафиксирован фактический auth-flow: `login -> JWT -> csrf -> write requests (Bearer + X-CSRFToken)`;
+  - отдельно отмечено, что используется не статический API key, а сессионный JWT.
+
+### Контекст
+- Пакет закрывает выявленные риски: drift/небезопасные fallback в API-sync, неоднозначность режима API-only, и недостаточную формализацию secret hygiene.
+
 ## [03-03-2026] - Playbook переработан под новый проект + встроен полный skill-pack
 
 ### Изменения

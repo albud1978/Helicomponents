@@ -14,6 +14,10 @@
 | Superset API base URL                    | `http://10.96.96.47:8088`  |
 | ClickHouse HTTP (для SQL-проверок, опц.) | `http://10.95.19.132:8123` |
 
+Важно:
+- Эти адреса приведены как рабочие defaults песочницы.
+- Для нового проекта их нужно заменить на адреса целевого контура и обновить `SUPERSET_API_*`.
+
 
 ## Контракт доступа
 
@@ -31,9 +35,25 @@
 | `SUPERSET_API_BASE_URL`    | `http://10.96.96.47:8088` | Базовый URL Superset    |
 | `SUPERSET_API_PROVIDER`    | `db`                      | Провайдер авторизации   |
 | `SUPERSET_API_USERNAME`    | `bi_api_user`             | Логин API-пользователя  |
-| `SUPERSET_API_PASSWORD`    | `*`**                     | Пароль API-пользователя |
+| `SUPERSET_API_PASSWORD`    | `***`                     | Пароль API-пользователя |
 | `SUPERSET_API_TIMEOUT_SEC` | `120`                     | Таймаут запросов        |
 
+
+## Что означает `SUPERSET_API_PROVIDER`
+
+- В нашем контуре используется: `SUPERSET_API_PROVIDER=db`.
+- Это не "провайдер API-ключа", а backend аутентификации для `/api/v1/security/login`.
+- `db` означает вход по `username/password`, хранящимся в metadata БД Superset.
+
+### Актуальный auth-flow (JWT + CSRF)
+
+| Шаг | Endpoint | Что передаём | Что получаем |
+| --- | --- | --- | --- |
+| 1 | `POST /api/v1/security/login` | `username`, `password`, `provider=db`, `refresh=true` | `access_token` (JWT) |
+| 2 | `GET /api/v1/security/csrf_token/` | `Authorization: Bearer <access_token>` | `csrf_token` |
+| 3 | write-запросы (`POST/PUT/DELETE`) | `Authorization: Bearer <access_token>`, `X-CSRFToken: <csrf_token>` | Выполнение API-операции |
+
+Итог: используется не статический API key, а сессионный JWT, полученный через login API.
 
 ## Порядок подключения (обязательно)
 
@@ -55,14 +75,14 @@
 | Auth                    | `/api/v1/security/login`                                 | `POST`                | ✅          | ✅       |
 | CSRF                    | `/api/v1/security/csrf_token/`                           | `GET`                 | ✅          | ✅       |
 | Dashboard               | `/api/v1/dashboard/*`                                    | `GET/POST/PUT/DELETE` | ✅*         | ✅       |
-| Chart                   | `/api/v1/chart/`*                                        | `GET/POST/PUT/DELETE` | ✅*         | ✅       |
-| Dataset                 | `/api/v1/dataset/`*                                      | `GET/POST/PUT/DELETE` | ✅*         | ✅       |
+| Chart                   | `/api/v1/chart/*`                                        | `GET/POST/PUT/DELETE` | ✅*         | ✅       |
+| Dataset                 | `/api/v1/dataset/*`                                      | `GET/POST/PUT/DELETE` | ✅*         | ✅       |
 | Dashboard export/import | `/api/v1/dashboard/export`, `/api/v1/dashboard/import`   | `GET/POST`            | ✅*         | ✅       |
 | Chart render            | `/api/v1/chart/data`                                     | `POST`                | ✅*         | ✅       |
-| Users/Roles/Permissions | `/api/v1/security/`*, `/api/v1/user/*`, `/api/v1/role/*` | `GET/POST/PUT/DELETE` | ❌ (обычно) | ✅       |
+| Users/Roles/Permissions | `/api/v1/security/*`, `/api/v1/user/*`, `/api/v1/role/*` | `GET/POST/PUT/DELETE` | ❌ (обычно) | ✅       |
 
 
- при наличии соответствующих RBAC разрешений.
+\* при наличии соответствующих RBAC разрешений.
 
 ## Правила миграции между инстансами (обязательные)
 
