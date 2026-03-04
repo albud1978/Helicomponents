@@ -1,436 +1,443 @@
-# Superset API-only Playbook for Cursor AI
+# Superset API Playbook для нового BI-проекта (Cursor AI)
 
 ## Назначение
-- Этот документ предназначен для передачи в другие проекты как стандарт подключения и работы с Superset через API.
-- Контур: только API-режим, без управления Docker runtime из репозитория.
 
-## Контекст Cursor AI
+- Это универсальная инструкция для запуска BI-разработки в новом проекте через Superset API.
+- Документ не зависит от типа автоматизации и применим в любом проектном контуре.
+- В документе оставлены рабочие адреса нашей песочницы как дефолт.
 
-| Параметр | Значение |
-|---|---|
-| Среда | Cursor AI (агентный режим) |
-| Текущая модель в нашем контуре | `gpt-5.3-codex-high` |
-| Базовый Superset endpoint | `http://10.96.96.47:8088/` |
-| Обязательный режим работы | API-only |
-| Docker runtime из этого репозитория | Запрещен политикой |
+## Дефолтные адреса песочницы (можно переиспользовать в новом проекте)
 
-## Кто выполняет BI-разработку (по нашим правилам)
 
-| Контур | Ответственный |
-|---|---|
-| Мультиагентный workflow (по `.cursor/rules/90_multiagent_workflow.mdc`) | `coder-general` |
-| Семантическая BI-проверка (метрики/агрегации/фильтры) | `analyst-sql-graph` |
-| Документация BI артефактов | `docs-curator` |
-| Оркестрация и гейты | `orchestrator` |
+| Контур                                   | Адрес                      |
+| ---------------------------------------- | -------------------------- |
+| Superset API base URL                    | `http://10.96.96.47:8088`  |
+| ClickHouse HTTP (для SQL-проверок, опц.) | `http://10.95.19.132:8123` |
 
-Рекомендуемый project-skill для Cursor AI:
-- `.cursor/skills/bi-superset-api/SKILL.md` (применять для задач Superset BI-as-code в API-only режиме).
 
-## Режимы использования playbook
+## Контракт доступа
 
-| Режим | Как применять |
-|---|---|
-| Multi-agent | Оркестратор делегирует реализацию BI в `coder-general`, SQL/semantic checks в `analyst-sql-graph`, документацию в `docs-curator` |
-| Single-agent | Один агент выполняет те же шаги последовательно: реализация -> semantic checks -> smoke-check -> doc sync |
-
-Принцип совместимости: содержание этого playbook одинаково для обоих режимов; меняется только распределение ролей.
+- Режим работы: **API-only**.
+- Docker/Superset runtime из BI-репозитория не управляется.
+- Права разделяются на:
+  - `api_user` — рабочие BI API-операции;
+  - `admin/security manager` — provisioning пользователей/ролей/глобальных политик.
 
 ## Переменные окружения
 
-| Переменная | Назначение | Пример |
-|---|---|---|
-| `SUPERSET_API_BASE_URL` | Базовый URL Superset API | `http://10.96.96.47:8088` |
-| `SUPERSET_API_PROVIDER` | Провайдер авторизации | `db` |
-| `SUPERSET_API_USERNAME` | Логин API-пользователя | `bi_api_user` |
-| `SUPERSET_API_PASSWORD` | Пароль API-пользователя | `***` |
-| `SUPERSET_API_TIMEOUT_SEC` | Таймаут HTTP-запросов | `120` |
 
-## Обязательный Docker-guard hook (рекомендация для всех проектов)
+| Переменная                 | Значение по умолчанию     | Назначение              |
+| -------------------------- | ------------------------- | ----------------------- |
+| `SUPERSET_API_BASE_URL`    | `http://10.96.96.47:8088` | Базовый URL Superset    |
+| `SUPERSET_API_PROVIDER`    | `db`                      | Провайдер авторизации   |
+| `SUPERSET_API_USERNAME`    | `bi_api_user`             | Логин API-пользователя  |
+| `SUPERSET_API_PASSWORD`    | `*`**                     | Пароль API-пользователя |
+| `SUPERSET_API_TIMEOUT_SEC` | `120`                     | Таймаут запросов        |
 
-| Пункт | Рекомендация |
-|---|---|
-| Что сделать | Включить preToolUse hook, который блокирует любые Docker/Superset runtime команды в этом репозитории |
-| Зачем | Исключить случайное управление runtime из проекта, где разрешен только API-only режим |
-| Где хранить | `.cursor/hooks/superset_docker_guard.py` + регистрация в `.cursor/hooks.json` |
-| Что блокировать | `docker`, `docker compose`, `deploy/superset-local/*`, `start_local_plugin.sh`, `build_superset_with_plugin.sh` |
 
-Пример минимального guard-скрипта:
+## Порядок подключения (обязательно)
 
-```python
-#!/usr/bin/env python3
-import json
-import re
-import sys
 
-DOCKER_PATTERN = re.compile(r"(^|\\s)docker(\\s|$)")
-BLOCK_MARKERS = (
-    "deploy/superset-local/",
-    "start_local_plugin.sh",
-    "build_superset_with_plugin.sh",
-    "superset-local",
-)
+| Шаг | Endpoint                       | Метод                 | Ожидаемый результат         |
+| --- | ------------------------------ | --------------------- | --------------------------- |
+| 1   | `/health`                      | `GET`                 | `200`                       |
+| 2   | `/api/v1/security/login`       | `POST`                | Получен `access_token`      |
+| 3   | `/api/v1/security/csrf_token/` | `GET`                 | Получен CSRF token          |
+| 4   | Целевые read/write endpoints   | `GET/POST/PUT/DELETE` | Выполнены BI-операции       |
+| 5   | `/api/v1/chart/data`           | `POST`                | Успешный render smoke-check |
 
-def allow():
-    sys.stdout.write(json.dumps({"decision": "allow"}))
 
-def deny(reason: str):
-    sys.stdout.write(json.dumps({"decision": "deny", "reason": reason}))
+## Матрица API-операций (`api_user` vs `admin`)
 
-def main():
-    raw = sys.stdin.read()
-    payload = json.loads(raw) if raw else {}
-    if payload.get("tool_name") != "Shell":
-        allow()
-        return
-    tool_input = payload.get("tool_input", {})
-    command = (tool_input.get("command") or payload.get("command") or "").strip().lower()
-    if command and (DOCKER_PATTERN.search(command) or any(m in command for m in BLOCK_MARKERS)):
-        deny("Политика API-only: Docker/Superset runtime запрещен в этом репозитории.")
-        return
-    allow()
 
-if __name__ == "__main__":
-    main()
+| Зона                    | Endpoint                                                 | Методы                | `api_user` | `admin` |
+| ----------------------- | -------------------------------------------------------- | --------------------- | ---------- | ------- |
+| Auth                    | `/api/v1/security/login`                                 | `POST`                | ✅          | ✅       |
+| CSRF                    | `/api/v1/security/csrf_token/`                           | `GET`                 | ✅          | ✅       |
+| Dashboard               | `/api/v1/dashboard/*`                                    | `GET/POST/PUT/DELETE` | ✅*         | ✅       |
+| Chart                   | `/api/v1/chart/`*                                        | `GET/POST/PUT/DELETE` | ✅*         | ✅       |
+| Dataset                 | `/api/v1/dataset/`*                                      | `GET/POST/PUT/DELETE` | ✅*         | ✅       |
+| Dashboard export/import | `/api/v1/dashboard/export`, `/api/v1/dashboard/import`   | `GET/POST`            | ✅*         | ✅       |
+| Chart render            | `/api/v1/chart/data`                                     | `POST`                | ✅*         | ✅       |
+| Users/Roles/Permissions | `/api/v1/security/`*, `/api/v1/user/*`, `/api/v1/role/*` | `GET/POST/PUT/DELETE` | ❌ (обычно) | ✅       |
+
+
+ при наличии соответствующих RBAC разрешений.
+
+## Правила миграции между инстансами (обязательные)
+
+1. Не доверять "сырым" `dataset_id` при переносе между инстансами.
+2. Маппить datasource chart/filter по `table_name`, затем подставлять локальный `dataset_id`.
+3. После import всегда запускать smoke-check рендера.
+
+## Методы проверки рендера
+
+
+| Метод                    | Что проверяет                              | Команда/endpoint             | Критерий PASS                                          |
+| ------------------------ | ------------------------------------------ | ---------------------------- | ------------------------------------------------------ |
+| Server-side chart render | SQL/метрики/фильтры на стороне Superset+CH | `POST /api/v1/chart/data`    | HTTP `200`, без `UNKNOWN_IDENTIFIER`/`Columns missing` |
+| Metadata integrity       | Связи chart <-> dashboard <-> filters      | `GET /api/v1/dashboard/{id}` | Нет битых ссылок и неверных datasource                 |
+| UI render check          | Фактическое отображение графика            | UI + `Ctrl+Shift+R`          | Нет `Data error`                                       |
+| SQL direct check (опц.)  | Сырой SQL вне Superset                     | Запрос напрямую в CH         | SQL выполняется и возвращает ожидаемые поля            |
+
+
+## Быстрый API-чек (универсальный)
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" "${SUPERSET_API_BASE_URL}/health"
 ```
 
-Пример подключения в `.cursor/hooks.json`:
+## Рекомендуемый набор Cursor Skills
 
-```json
-{
-  "preToolUse": [
-    { "command": "python3 .cursor/hooks/superset_docker_guard.py" }
-  ]
-}
-```
+Оговорка:
+- Этот набор ориентирован на мультиагентную разработку.
+- Решение о необходимости подключения и фактическом использовании skills принимает пользователь проекта.
 
-## Порядок подключения (обязательный)
 
-| Шаг | Действие | Endpoint | Метод | Обязательно |
-|---|---|---|---|---|
-| 1 | Проверить доступность сервиса | `/health` | `GET` | Да |
-| 2 | Получить access token | `/api/v1/security/login` | `POST` | Да |
-| 3 | Получить CSRF token для write-операций | `/api/v1/security/csrf_token/` | `GET` | Да |
-| 4 | Выполнить целевые read/write операции | `/api/v1/*` | `GET/POST/PUT/DELETE` | Да |
-| 5 | Выполнить smoke-check рендера | `/api/v1/chart/data` | `POST` | Да |
+| Skill                            | Назначение                                                                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `bi-superset-api-implementer`    | Внесение изменений в dashboard/chart/dataset через Superset API, rebinding datasource по `table_name`, export/import bundle |
+| `bi-superset-semantic-validator` | Проверка семантики BI: метрики, фильтры, `time_grain`, `orderby`, совместимость SQL с реальной схемой датасета              |
+| `bi-superset-render-smoke`       | Техническая проверка рендера через `/api/v1/chart/data` и диагностика ошибок (`UNKNOWN_IDENTIFIER`, `Columns missing`)      |
+| `bi-superset-doc-sync`           | Синхронизация технической документации после BI-изменений (changelog, runbook, migration notes)                             |
 
-## Матрица API-методов и прав
 
-### Рабочие методы (BI-as-code)
+## Как установить skills в новом проекте
 
-| Зона | Endpoint pattern | Методы | API user (non-admin) | Admin | Комментарий |
-|---|---|---|---|---|---|
-| Аутентификация | `/api/v1/security/login` | `POST` | ✅ | ✅ | Выдача JWT |
-| CSRF | `/api/v1/security/csrf_token/` | `GET` | ✅ | ✅ | Нужен для write |
-| Датасеты | `/api/v1/dataset/`, `/api/v1/dataset/{id}` | `GET/POST/PUT/DELETE` | ✅* | ✅ | Доступ зависит от RBAC |
-| Чарты | `/api/v1/chart/`, `/api/v1/chart/{id}` | `GET/POST/PUT/DELETE` | ✅* | ✅ | Основной слой BI |
-| Дашборды | `/api/v1/dashboard/`, `/api/v1/dashboard/{id}` | `GET/POST/PUT/DELETE` | ✅* | ✅ | Основной слой BI |
-| Export bundle | `/api/v1/dashboard/export/` | `GET` | ✅* | ✅ | Экспорт ZIP |
-| Import bundle | `/api/v1/dashboard/import/` | `POST` | ✅* | ✅ | Обычно с `overwrite` |
-| Рендер/SQL чарта | `/api/v1/chart/data` | `POST` | ✅* | ✅ | Техническая проверка |
-| SQL Lab (опц.) | `/api/v1/sqllab/*` | `GET/POST` | ⚠️ опционально | ✅ | Часто отключено для API user |
+1. Создать каталог skill в проекте по пути:
+  - `.cursor/skills/<любой_идентификатор_skill>/`
+2. Положить файл инструкции в:
+  - `.cursor/skills/<любой_идентификатор_skill>/SKILL.md`
+3. При необходимости использовать персональные skills (вне репозитория):
+  - `~/.cursor/skills/<любой_идентификатор_skill>/SKILL.md`
+4. Проверить, что Cursor подхватывает skill на релевантных BI-задачах.
 
-\* только при явном назначении соответствующих RBAC permissions.
+## Мини-чеклист запуска нового BI-проекта
 
-### Методы/зоны, обычно доступные только админу
+- Настроены `SUPERSET_API_*`.
+- Проверены `health/login/csrf`.
+- Подтверждён RBAC для `api_user`.
+- Подключен как минимум один релевантный skill (или набор skills по необходимости проекта).
+- Проверены render smoke-check и datasource remap правила.
 
-| Зона | Endpoint pattern | Методы | Типовой доступ |
-|---|---|---|---|
-| Пользователи | `/api/v1/user/`, `/api/v1/user/{id}` | `GET/POST/PUT/DELETE` | Admin / Security Manager |
-| Роли | `/api/v1/role/`, `/api/v1/role/{id}` | `GET/POST/PUT/DELETE` | Admin / Security Manager |
-| Permission management | `/api/v1/security/permissions/*` | `GET/POST/PUT/DELETE` | Admin / Security Manager |
-| Управление DB-коннектами | `/api/v1/database/`, `/api/v1/database/{id}` | `POST/PUT/DELETE` | Admin (или отдельная повышенная роль) |
-| Security policy объекты (RLS/guest/security) | Security endpoints | `POST/PUT/DELETE` | Admin / Security Manager |
+---
 
-## Роль `api_user`: расширенный реестр разрешений (dashboard-as-a-code)
+## Приложение A. Полный реестр разрешений роли `api_user` (dashboard-as-a-code)
 
-Ниже приведен реестр, который используется в нашем контуре для роли `api_user` (по вашему каталогу "144 permissions").  
-Формат: `permission [id]`.
+Коротко про API-контур:
+
+- Superset API (v1) — REST-слой для работы с dashboard/chart/dataset/database, import/export, explore и SQL Lab.
+- Практически все write-операции требуют JWT + CSRF.
+- Права на endpoint зависят от набора permission, назначенных роли.
+- Ниже приведён полный реестр для `api_user` (по каталогу из рабочей песочницы).
 
 ### Глобальный доступ
 
-| Разрешения |
-|---|
-| `all database access on all_database_access [212]` |
-| `all datasource access on all_datasource_access [211]` |
+
+| #   | Permission                                       | ID  | Описание                    |
+| --- | ------------------------------------------------ | --- | --------------------------- |
+| 1   | `all database access on all_database_access`     | 212 | Доступ ко всем базам данных |
+| 2   | `all datasource access on all_datasource_access` | 211 | Доступ ко всем датасетам    |
+
 
 ### Dashboard
 
-| Разрешения |
-|---|
-| `can read on Dashboard [15]` |
-| `can write on Dashboard [16]` |
-| `can export on Dashboard [104]` |
-| `can get embedded on Dashboard [106]` |
-| `can set embedded on Dashboard [108]` |
-| `can delete embedded on Dashboard [107]` |
-| `can cache dashboard screenshot on Dashboard [105]` |
-| `can drill on Dashboard [220]` |
-| `can view chart as table on Dashboard [219]` |
-| `can view query on Dashboard [218]` |
-| `can tag on Dashboard [222]` |
-| `can read on DashboardFilterStateRestApi [101]` |
-| `can write on DashboardFilterStateRestApi [102]` |
-| `can read on DashboardPermalinkRestApi [103]` |
-| `can write on DashboardPermalinkRestApi [104]` |
-| `can read on EmbeddedDashboard [116]` |
-| `menu access on Dashboards [197]` |
+
+| #   | Permission                                    | ID  |
+| --- | --------------------------------------------- | --- |
+| 3   | `can read on Dashboard`                       | 15  |
+| 4   | `can write on Dashboard`                      | 16  |
+| 5   | `can export on Dashboard`                     | 104 |
+| 6   | `can get embedded on Dashboard`               | 106 |
+| 7   | `can set embedded on Dashboard`               | 108 |
+| 8   | `can delete embedded on Dashboard`            | 107 |
+| 9   | `can cache dashboard screenshot on Dashboard` | 105 |
+| 10  | `can drill on Dashboard`                      | 220 |
+| 11  | `can view chart as table on Dashboard`        | 219 |
+| 12  | `can view query on Dashboard`                 | 218 |
+| 13  | `can tag on Dashboard`                        | 222 |
+| 14  | `can read on DashboardFilterStateRestApi`     | 101 |
+| 15  | `can write on DashboardFilterStateRestApi`    | 102 |
+| 16  | `can read on DashboardPermalinkRestApi`       | 103 |
+| 17  | `can write on DashboardPermalinkRestApi`      | 104 |
+| 18  | `can read on EmbeddedDashboard`               | 116 |
+| 19  | `menu access on Dashboards`                   | 197 |
+
 
 ### Chart
 
-| Разрешения |
-|---|
-| `can read on Chart [7]` |
-| `can write on Chart [8]` |
-| `can export on Chart [93]` |
-| `can warm up cache on Chart [94]` |
-| `can tag on Chart [221]` |
-| `menu access on Charts [198]` |
+
+| #   | Permission                   | ID  |
+| --- | ---------------------------- | --- |
+| 20  | `can read on Chart`          | 7   |
+| 21  | `can write on Chart`         | 8   |
+| 22  | `can export on Chart`        | 93  |
+| 23  | `can warm up cache on Chart` | 94  |
+| 24  | `can tag on Chart`           | 221 |
+| 25  | `menu access on Charts`      | 198 |
+
 
 ### Dataset
 
-| Разрешения |
-|---|
-| `can read on Dataset [11]` |
-| `can write on Dataset [12]` |
-| `can export on Dataset [110]` |
-| `can duplicate on Dataset [113]` |
-| `can get or create dataset on Dataset [114]` |
-| `can get drill info on Dataset [111]` |
-| `can warm up cache on Dataset [112]` |
-| `menu access on Datasets [199]` |
+
+| #   | Permission                             | ID  |
+| --- | -------------------------------------- | --- |
+| 26  | `can read on Dataset`                  | 11  |
+| 27  | `can write on Dataset`                 | 12  |
+| 28  | `can export on Dataset`                | 110 |
+| 29  | `can duplicate on Dataset`             | 113 |
+| 30  | `can get or create dataset on Dataset` | 114 |
+| 31  | `can get drill info on Dataset`        | 111 |
+| 32  | `can warm up cache on Dataset`         | 112 |
+| 33  | `menu access on Datasets`              | 199 |
+
 
 ### Database
 
-| Разрешения |
-|---|
-| `can read on Database [17]` |
-| `can write on Database [18]` |
-| `can export on Database [109]` |
-| `can upload on Database [25]` |
-| `menu access on Databases [196]` |
 
-### Datasource / API query
+| #   | Permission                 | ID  |
+| --- | -------------------------- | --- |
+| 34  | `can read on Database`     | 17  |
+| 35  | `can write on Database`    | 18  |
+| 36  | `can export on Database`   | 109 |
+| 37  | `can upload on Database`   | 25  |
+| 38  | `menu access on Databases` | 196 |
 
-| Разрешения |
-|---|
-| `can get on Datasource [149]` |
-| `can get column values on Datasource [115]` |
-| `can external metadata on Datasource [151]` |
-| `can external metadata by name on Datasource [152]` |
-| `can samples on Datasource [153]` |
-| `can query on Api [148]` |
-| `can query form data on Api [147]` |
-| `can time range on Api [146]` |
+
+### Datasource
+
+
+| #   | Permission                                    | ID  |
+| --- | --------------------------------------------- | --- |
+| 39  | `can get on Datasource`                       | 149 |
+| 40  | `can get column values on Datasource`         | 115 |
+| 41  | `can external metadata on Datasource`         | 151 |
+| 42  | `can external metadata by name on Datasource` | 152 |
+| 43  | `can samples on Datasource`                   | 153 |
+| 44  | `can query on Api`                            | 148 |
+| 45  | `can query form data on Api`                  | 147 |
+| 46  | `can time range on Api`                       | 146 |
+
 
 ### Explore
 
-| Разрешения |
-|---|
-| `can explore on Superset [155]` |
-| `can explore json on Superset [162]` |
-| `can read on Explore [117]` |
-| `can read on ExploreFormDataRestApi [119]` |
-| `can write on ExploreFormDataRestApi [118]` |
-| `can read on ExplorePermalinkRestApi [121]` |
-| `can write on ExplorePermalinkRestApi [120]` |
-| `can fetch datasource metadata on Superset [161]` |
+
+| #   | Permission                                  | ID  |
+| --- | ------------------------------------------- | --- |
+| 47  | `can explore on Superset`                   | 155 |
+| 48  | `can explore json on Superset`              | 162 |
+| 49  | `can read on Explore`                       | 117 |
+| 50  | `can read on ExploreFormDataRestApi`        | 119 |
+| 51  | `can write on ExploreFormDataRestApi`       | 118 |
+| 52  | `can read on ExplorePermalinkRestApi`       | 121 |
+| 53  | `can write on ExplorePermalinkRestApi`      | 120 |
+| 54  | `can fetch datasource metadata on Superset` | 161 |
+
 
 ### SQL Lab
 
-| Разрешения |
-|---|
-| `can read on SQLLab [133]` |
-| `can execute sql query on SQLLab [135]` |
-| `can get results on SQLLab [132]` |
-| `can estimate query cost on SQLLab [134]` |
-| `can export csv on SQLLab [131]` |
-| `can format sql on SQLLab [130]` |
-| `can sqllab on Superset [217]` |
-| `can sqllab history on Superset [158]` |
-| `can csv on Superset [214]` |
-| `can read on SqlLabPermalinkRestApi [137]` |
-| `can write on SqlLabPermalinkRestApi [136]` |
-| `can read on Query [19]` |
-| `menu access on SQL Lab [207]` |
-| `menu access on SQL Editor [208]` |
-| `menu access on Query Search [210]` |
-| `menu access on Saved Queries [209]` |
 
-### TabState / TableSchema
+| #   | Permission                            | ID  |
+| --- | ------------------------------------- | --- |
+| 55  | `can read on SQLLab`                  | 133 |
+| 56  | `can execute sql query on SQLLab`     | 135 |
+| 57  | `can get results on SQLLab`           | 132 |
+| 58  | `can estimate query cost on SQLLab`   | 134 |
+| 59  | `can export csv on SQLLab`            | 131 |
+| 60  | `can format sql on SQLLab`            | 130 |
+| 61  | `can sqllab on Superset`              | 217 |
+| 62  | `can sqllab history on Superset`      | 158 |
+| 63  | `can csv on Superset`                 | 214 |
+| 64  | `can read on SqlLabPermalinkRestApi`  | 137 |
+| 65  | `can write on SqlLabPermalinkRestApi` | 136 |
+| 66  | `can read on Query`                   | 19  |
+| 67  | `menu access on SQL Lab`              | 207 |
+| 68  | `menu access on SQL Editor`           | 208 |
+| 69  | `menu access on Query Search`         | 210 |
+| 70  | `menu access on Saved Queries`        | 209 |
 
-| Разрешения |
-|---|
-| `can activate on TabStateView [174]` |
-| `can get on TabStateView [168]` |
-| `can post on TabStateView [170]` |
-| `can put on TabStateView [169]` |
-| `can delete on TabStateView [173]` |
-| `can delete query on TabStateView [171]` |
-| `can migrate query on TabStateView [172]` |
-| `can delete on TableSchemaView [166]` |
-| `can expanded on TableSchemaView [167]` |
-| `can post on TableSchemaView [165]` |
+
+### TabStateView (SQL вкладки)
+
+
+| #   | Permission                          | ID  |
+| --- | ----------------------------------- | --- |
+| 71  | `can activate on TabStateView`      | 174 |
+| 72  | `can get on TabStateView`           | 168 |
+| 73  | `can post on TabStateView`          | 170 |
+| 74  | `can put on TabStateView`           | 169 |
+| 75  | `can delete on TabStateView`        | 173 |
+| 76  | `can delete query on TabStateView`  | 171 |
+| 77  | `can migrate query on TabStateView` | 172 |
+| 78  | `can delete on TableSchemaView`     | 166 |
+| 79  | `can expanded on TableSchemaView`   | 167 |
+| 80  | `can post on TableSchemaView`       | 165 |
+
 
 ### SavedQuery
 
-| Разрешения |
-|---|
-| `can read on SavedQuery [1]` |
-| `can write on SavedQuery [2]` |
-| `can export on SavedQuery [126]` |
-| `can list on SavedQuery [125]` |
 
-### Import / Export API
+| #   | Permission                 | ID  |
+| --- | -------------------------- | --- |
+| 81  | `can read on SavedQuery`   | 1   |
+| 82  | `can write on SavedQuery`  | 2   |
+| 83  | `can export on SavedQuery` | 126 |
+| 84  | `can list on SavedQuery`   | 125 |
 
-| Разрешения |
-|---|
-| `can import on ImportExportRestApi [123]` |
-| `can export on ImportExportRestApi [122]` |
+
+### Import / Export
+
+
+| #   | Permission                          | ID  |
+| --- | ----------------------------------- | --- |
+| 85  | `can import on ImportExportRestApi` | 123 |
+| 86  | `can export on ImportExportRestApi` | 122 |
+
 
 ### Tags
 
-| Разрешения |
-|---|
-| `can read on Tag [129]` |
-| `can write on Tag [128]` |
-| `can bulk create on Tag [127]` |
-| `can tags on TagView [176]` |
-| `can list on Tags [175]` |
-| `menu access on Tags [204]` |
 
-### Reports / Alerts
+| #   | Permission               | ID  |
+| --- | ------------------------ | --- |
+| 87  | `can read on Tag`        | 129 |
+| 88  | `can write on Tag`       | 128 |
+| 89  | `can bulk create on Tag` | 127 |
+| 90  | `can tags on TagView`    | 176 |
+| 91  | `can list on Tags`       | 175 |
+| 92  | `menu access on Tags`    | 204 |
 
-| Разрешения |
-|---|
-| `can read on ReportSchedule [5]` |
-| `can write on ReportSchedule [6]` |
-| `menu access on Alerts & Report [205]` |
+
+### Reports & Alerts
+
+
+| #   | Permission                       | ID  |
+| --- | -------------------------------- | --- |
+| 93  | `can read on ReportSchedule`     | 5   |
+| 94  | `can write on ReportSchedule`    | 6   |
+| 95  | `menu access on Alerts & Report` | 205 |
+
 
 ### Annotation
 
-| Разрешения |
-|---|
-| `can read on Annotation [9]` |
-| `can write on Annotation [10]` |
-| `menu access on Annotation Layers [206]` |
 
-### Security / Auth related
+| #   | Permission                         | ID  |
+| --- | ---------------------------------- | --- |
+| 96  | `can read on Annotation`           | 9   |
+| 97  | `can write on Annotation`          | 10  |
+| 98  | `menu access on Annotation Layers` | 206 |
 
-| Разрешения |
-|---|
-| `can read on SecurityRestApi [185]` |
-| `can read on security [139]` |
-| `can read on RowLevelSecurity [186]` |
-| `can read on CurrentUserRestApi [99]` |
-| `can write on CurrentUserRestApi [100]` |
-| `can userinfo on UserDBModelView [34]` |
-| `resetmypassword on UserDBModelView [39]` |
-| `can this form get on ResetMyPasswordView [30]` |
-| `can this form post on ResetMyPasswordView [31]` |
-| `can add on UserRegistrationsRestAPI [179]` |
-| `can delete on UserRegistrationsRestAPI [181]` |
-| `can edit on UserRegistrationsRestAPI [182]` |
-| `can list on UserRegistrationsRestAPI [183]` |
-| `can show on UserRegistrationsRestAPI [180]` |
-| `can read on user [id не указан в реестре]` |
+
+### Security & Auth
+
+
+| #   | Permission                                  | ID  |
+| --- | ------------------------------------------- | --- |
+| 99  | `can read on SecurityRestApi`               | 185 |
+| 100 | `can read on security`                      | 139 |
+| 101 | `can read on RowLevelSecurity`              | 186 |
+| 102 | `can read on CurrentUserRestApi`            | 99  |
+| 103 | `can write on CurrentUserRestApi`           | 100 |
+| 104 | `can userinfo on UserDBModelView`           | 34  |
+| 105 | `resetmypassword on UserDBModelView`        | 39  |
+| 106 | `can this form get on ResetMyPasswordView`  | 30  |
+| 107 | `can this form post on ResetMyPasswordView` | 31  |
+| 108 | `can add on UserRegistrationsRestAPI`       | 179 |
+| 109 | `can delete on UserRegistrationsRestAPI`    | 181 |
+| 110 | `can edit on UserRegistrationsRestAPI`      | 182 |
+| 111 | `can list on UserRegistrationsRestAPI`      | 183 |
+| 112 | `can show on UserRegistrationsRestAPI`      | 180 |
+| 113 | `can read on user`                          | —   |
+
 
 ### Theme / CSS
 
-| Разрешения |
-|---|
-| `can read on Theme [95]` |
-| `can write on Theme [96]` |
-| `can export on Theme [97]` |
-| `can read on CssTemplate [3]` |
-| `can write on CssTemplate [4]` |
-| `menu access on Themes [203]` |
-| `menu access on CSS Templates [202]` |
 
-### Permalinks / Share
+| #   | Permission                     | ID  |
+| --- | ------------------------------ | --- |
+| 114 | `can read on Theme`            | 95  |
+| 115 | `can write on Theme`           | 96  |
+| 116 | `can export on Theme`          | 97  |
+| 117 | `can read on CssTemplate`      | 3   |
+| 118 | `can write on CssTemplate`     | 4   |
+| 119 | `menu access on Themes`        | 203 |
+| 120 | `menu access on CSS Templates` | 202 |
 
-| Разрешения |
-|---|
-| `can dashboard permalink on Superset [156]` |
-| `can dashboard on Superset [160]` |
-| `can share dashboard on Superset [215]` |
-| `can share chart on Superset [216]` |
-| `can slice on Superset [163]` |
 
-### Superset core
+### Permalinks & Share
 
-| Разрешения |
-|---|
-| `can warm up cache on Superset [157]` |
-| `can language pack on Superset [164]` |
-| `can invalidate on CacheRestApi [92]` |
-| `can read on AvailableDomains [91]` |
-| `can read on AdvancedDataType [90]` |
-| `can get on OpenApi [86]` |
-| `can show on SwaggerView [87]` |
-| `can get on MenuApi [88]` |
-| `can list on AsyncEventsRestApi [89]` |
-| `can recent activity on Log [138]` |
 
-### Plugins / Dynamic
+| #   | Permission                            | ID  |
+| --- | ------------------------------------- | --- |
+| 121 | `can dashboard permalink on Superset` | 156 |
+| 122 | `can dashboard on Superset`           | 160 |
+| 123 | `can share dashboard on Superset`     | 215 |
+| 124 | `can share chart on Superset`         | 216 |
+| 125 | `can slice on Superset`               | 163 |
 
-| Разрешения |
-|---|
-| `can show on DynamicPlugin [142]` |
-| `menu access on Plugins [201]` |
 
-### Menu navigation
+### Superset Core
 
-| Разрешения |
-|---|
-| `menu access on Home [194]` |
-| `menu access on Data [195]` |
-| `menu access on Manage [200]` |
-| `menu access on Action Log [192]` |
 
-## Provisioning `api_user` и рабочее использование через API (dashboard-as-a-code)
+| #   | Permission                       | ID  |
+| --- | -------------------------------- | --- |
+| 126 | `can warm up cache on Superset`  | 157 |
+| 127 | `can language pack on Superset`  | 164 |
+| 128 | `can invalidate on CacheRestApi` | 92  |
+| 129 | `can read on AvailableDomains`   | 91  |
+| 130 | `can read on AdvancedDataType`   | 90  |
+| 131 | `can get on OpenApi`             | 86  |
+| 132 | `can show on SwaggerView`        | 87  |
+| 133 | `can get on MenuApi`             | 88  |
+| 134 | `can list on AsyncEventsRestApi` | 89  |
+| 135 | `can recent activity on Log`     | 138 |
 
-Важно: шаг создания/назначения роли сервисному пользователю выполняется **только администратором**.  
-Это **не** право роли `api_user`.
 
-| Этап | Кто выполняет | Endpoint | Метод | Пример |
-|---|---|---|---|---|
-| Создать service account и назначить роль `api_user` | Admin / Security Manager | `/api/v1/security/users/` | `POST` | `{\"username\":\"svc_bi\",\"password\":\"***\",\"roles\":[<api_user_role_id>],\"active\":true}` |
-| Получить JWT | `api_user` (или сервис от его имени) | `/api/v1/security/login/` | `POST` | `{\"username\":\"svc_bi\",\"password\":\"***\",\"provider\":\"db\",\"refresh\":true}` |
-| Выполнять BI API-операции | `api_user` | любой `/api/v1/*` в рамках выданных прав | `GET/POST/PUT/DELETE` | `Authorization: Bearer <access_token>` |
+### Plugins & Dynamic
 
-Примечание: в некоторых версиях Superset endpoint создания пользователя/ролей может отличаться по пути.  
-Перед автоматизацией проверяйте OpenAPI (`/api/v1/_openapi` или Swagger UI) на конкретном инстансе.
 
-## Ролевой профиль (рекомендуемый baseline)
+| #   | Permission                  | ID  |
+| --- | --------------------------- | --- |
+| 136 | `can show on DynamicPlugin` | 142 |
+| 137 | `menu access on Plugins`    | 201 |
 
-| Профиль | Разрешено | Запрещено |
-|---|---|---|
-| API ReadOnly | Только `GET` + `/health` | Любые write-операции |
-| API Editor | Read + create/update chart/dashboard/dataset + import/export + `/chart/data` | RBAC/user/role/security admin действия |
-| Admin | Полный API-контур | Нет технических ограничений (только governance) |
 
-## Критические правила миграции между инстансами
+### Menu навигация
 
-| Правило | Почему |
-|---|---|
-| Никогда не полагаться на "сырой" `dataset_id` между инстансами | `dataset_id` локальный для конкретного Superset metadata DB |
-| Всегда маппить datasource по `table_name` | Исключает ложные привязки чарта к другой таблице |
-| После import делать smoke-check `/api/v1/chart/data` | Быстро ловит `UNKNOWN_IDENTIFIER` и `Columns missing in dataset` |
 
-## Наши методы проверки рендера
+| #   | Permission                  | ID  |
+| --- | --------------------------- | --- |
+| 138 | `menu access on Home`       | 194 |
+| 139 | `menu access on Data`       | 195 |
+| 140 | `menu access on Manage`     | 200 |
+| 141 | `menu access on Action Log` | 192 |
 
-| Метод | Что проверяет | Как запускать | Критерий успеха |
-|---|---|---|---|
-| Server-side render smoke | Валидность SQL/метрик/фильтров чарта | `POST /api/v1/chart/data` с `query_context` чарта | HTTP `200`, без ошибок ClickHouse |
-| Dashboard metadata integrity | Корректность связей chart<->dashboard<->filters | `GET /api/v1/dashboard/{id}` + проверка `json_metadata/position_json` | Нет ссылок на неверные dataset/chart IDs |
-| UI визуальный рендер | Фактическое отображение чарта в интерфейсе | Открыть dashboard/chart в UI, затем hard refresh (`Ctrl+Shift+R`) | Чарт отображается, без Data error |
-| SQL контроль в ClickHouse (опц.) | Корректность сырого запроса вне Superset | Выполнить SQL напрямую в CH (`SELECT ...`) | SQL выполняется и возвращает ожидаемые поля |
 
-## Мини-чеклист перед передачей другим проектам
-- Проверен `/health` целевого Superset.
-- Проверен login + CSRF для API user.
-- Подтверждены права API user на чтение/запись нужных BI объектов.
-- Выполнен export/import bundle.
-- Выполнен datasource remap по `table_name` (если перенос между инстансами).
-- Выполнен smoke-check через `/api/v1/chart/data` для ключевых чартов.
-- Выполнена UI-проверка рендера после hard refresh.
+## Как использовать этот блок в новом проекте
+
+```bash
+# 1) Admin/Security Manager создает service account и назначает роль api_user
+POST /api/v1/security/users/
+{
+  "username": "your_service_account",
+  "password": "...",
+  "roles": [<api_user_role_id>],
+  "active": true
+}
+
+# 2) api_user получает access token
+POST /api/v1/security/login/
+{"username": "...", "password": "...", "provider": "db", "refresh": true}
+
+# 3) api_user использует токен для рабочих BI-операций
+Authorization: Bearer <access_token>
+```
+
+Ключевые возможности `api_user` для dashboard-as-a-code:
+
+- CRUD для Dashboard/Chart/Dataset/Database (при наличии RBAC);
+- Import/Export дашбордов и датасетов;
+- Embedded-операции с дашбордами;
+- SQL execution/получение результатов;
+- Tags и Reports;
+- Global datasource/database access (если включён соответствующий permission).
+
