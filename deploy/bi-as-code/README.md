@@ -20,6 +20,14 @@
 - **Запрещено** управлять Docker/Superset runtime из этого репозитория.
 - Нужна роль API-пользователя с правами на dashboards/charts/datasets и import/export.
 
+### Уточнение по `SUPERSET_API_PROVIDER`
+- Текущее значение: `SUPERSET_API_PROVIDER=db`.
+- Это backend аутентификации для `/api/v1/security/login`, а не "провайдер API-ключа".
+- Модель авторизации в нашем контуре:
+  1. Login по `username/password/provider=db` -> получение `access_token` (JWT)
+  2. Получение `csrf_token` через `/api/v1/security/csrf_token/`
+  3. Все `POST/PUT/DELETE` выполняются с `Bearer + X-CSRFToken`
+
 ## Роли (строгая BI-модель)
 - `orchestrator`: планирование фаз, контроль гейтов, сбор handoff.
 - `analyst-sql-graph`: проверка семантики KPI, агрегаций и фильтров.
@@ -49,6 +57,16 @@
 - Любые артефакты должны быть идемпотентны и ревью-пригодны в Git.
 - Экстренные runtime-фиксы обязательно backport в source-артефакты.
 
+## Политика секретов (обязательно)
+- Локальный рабочий файл: `.env.private` (или локальный `.env`, не в Git).
+- Шаблон для передачи между проектами: `.env.template` / `.env.example` без реальных значений.
+- После миграций/копирования репозитория в новый контур выполнять ротацию:
+  - `SUPERSET_API_PASSWORD`
+  - `CLICKHOUSE_PASSWORD`
+  - `NEO4J_PASSWORD` / `DOMAIN_NEO4J_PASSWORD`
+  - `AURA_API_KEY`
+- Запрещено передавать реальные секреты через commit, bundle и текстовые отчеты.
+
 ## Модель изоляции инстансов
 - Каждый инстанс Superset изолирован (своя metadata DB).
 - Состояние между инстансами передаётся через Git bundle.
@@ -65,7 +83,7 @@
 - `deploy/bi-as-code/contracts/**`
 - `deploy/bi-as-code/superset/**`
 - `deploy/bi-as-code/scripts/superset_git_sync.py`
-- `deploy/superset-local/**` (кроме секретов в `.env`)
+- `deploy/superset-local/**` как архивные reference-артефакты (исполнение из этого репозитория запрещено API-only политикой)
 - `superset-frontend/plugins/plugin-chart-echarts6-gantt/**`
 - `.cursor/hooks/code_edit_audit.log` версионируется
 - `.cursor/hooks/user_comm_audit.log` локальный и в Git не синхронизируется
