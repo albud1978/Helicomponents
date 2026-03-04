@@ -1,5 +1,19 @@
 # Changelog
 
+## [03-03-2026] - Superset API-only onboarding matrix for external projects
+
+### Изменения
+- `deploy/bi-as-code/README.md`:
+  - добавлен новый раздел `API-only onboarding for external projects (tabular runbook)`;
+  - добавлена таблица пошагового подключения к Superset API (`health -> login -> csrf -> read/write -> export/import -> chart/data smoke-check`);
+  - добавлена матрица рабочих API-методов для BI-as-code (datasets/charts/dashboards/export/import/chart-data/sql-lab);
+  - добавлена таблица привилегированных (admin-only) API зон;
+  - добавлена роль-матрица `API ReadOnly / API Editor / Admin`;
+  - добавлены обязательные правила меж-инстансной миграции (mapping по `table_name`, post-import smoke-check).
+
+### Контекст
+- Раздел предназначен как переиспользуемая инструкция для других проектов при подключении к корпоративному Superset в режиме API-only, без управления Docker runtime.
+
 ## [03-03-2026] - Superset API-only contract + Docker guard hooks
 
 ### Изменения
