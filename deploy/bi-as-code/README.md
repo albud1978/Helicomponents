@@ -20,6 +20,65 @@
 - **Strict prohibition:** do not run Docker/Superset runtime commands from this repository. Docker runtime is managed from another project.
 - Required permissions: non-admin API role with rights to dashboards/charts/datasets and bundle import/export.
 
+## API-only onboarding for external projects (tabular runbook)
+
+> Scope: this section is a ready-to-reuse contract for other projects connecting to Superset in API-only mode.
+> Important: effective permissions depend on Superset RBAC on your instance; the table below reflects the expected baseline policy.
+
+### Connection sequence (mandatory)
+
+| Step | Action | Endpoint | Method | API user | Admin |
+|---|---|---|---|---|---|
+| 1 | Check service health | `/health` | `GET` | ✅ | ✅ |
+| 2 | Obtain JWT access token | `/api/v1/security/login` | `POST` | ✅ | ✅ |
+| 3 | Obtain CSRF token for write requests | `/api/v1/security/csrf_token/` | `GET` | ✅ | ✅ |
+| 4 | Read BI objects (dataset/chart/dashboard) | `/api/v1/dataset/*`, `/api/v1/chart/*`, `/api/v1/dashboard/*` | `GET` | ✅ | ✅ |
+| 5 | Export bundle | `/api/v1/dashboard/export/` | `GET` | ✅ (with export perms) | ✅ |
+| 6 | Import bundle | `/api/v1/dashboard/import/` | `POST` | ✅ (with import perms) | ✅ |
+| 7 | Smoke-check chart SQL execution | `/api/v1/chart/data` | `POST` | ✅ | ✅ |
+
+### Operational API methods (BI as Code scope)
+
+| Area | Endpoint pattern | Methods | API user (non-admin) | Admin | Notes |
+|---|---|---|---|---|---|
+| Auth | `/api/v1/security/login` | `POST` | ✅ | ✅ | Returns access token |
+| CSRF | `/api/v1/security/csrf_token/` | `GET` | ✅ | ✅ | Required for `POST/PUT/DELETE` |
+| Datasets | `/api/v1/dataset/`, `/api/v1/dataset/{id}` | `GET`, `POST`, `PUT`, `DELETE` | ✅* | ✅ | `POST/PUT/DELETE` only if explicit dataset write perms |
+| Charts | `/api/v1/chart/`, `/api/v1/chart/{id}` | `GET`, `POST`, `PUT`, `DELETE` | ✅* | ✅ | Core BI editing surface |
+| Dashboards | `/api/v1/dashboard/`, `/api/v1/dashboard/{id}` | `GET`, `POST`, `PUT`, `DELETE` | ✅* | ✅ | Core BI editing surface |
+| Dashboard export | `/api/v1/dashboard/export/` | `GET` | ✅* | ✅ | Bundle ZIP export |
+| Dashboard import | `/api/v1/dashboard/import/` | `POST` | ✅* | ✅ | `overwrite` allowed by policy |
+| Query execution for chart | `/api/v1/chart/data` | `POST` | ✅* | ✅ | Used for smoke-check and runtime validation |
+| SQL Lab (optional) | `/api/v1/sqllab/*` | `GET/POST` | ⚠️ optional | ✅ | Usually disabled for narrow API roles |
+
+\* depends on granted RBAC permissions in your Superset instance.
+
+### Admin-only / privileged API surface (normally not granted to API user)
+
+| Area | Endpoint pattern | Methods | Default access |
+|---|---|---|---|
+| Users management | `/api/v1/user/`, `/api/v1/user/{id}` | `GET/POST/PUT/DELETE` | Admin/Security Manager |
+| Roles management | `/api/v1/role/`, `/api/v1/role/{id}` | `GET/POST/PUT/DELETE` | Admin/Security Manager |
+| Permissions management | `/api/v1/security/permissions/*` | `GET/POST/PUT/DELETE` | Admin/Security Manager |
+| Database credentials / secure connection config | `/api/v1/database/`, `/api/v1/database/{id}` | `POST/PUT/DELETE` | Admin (or tightly controlled elevated role) |
+| Security policy objects (RLS/guest/security setup) | security-related endpoints | `POST/PUT/DELETE` | Admin/Security Manager |
+
+### Role policy baseline for API-only mode
+
+| Role profile | Allowed | Forbidden |
+|---|---|---|
+| API ReadOnly | `GET` on dataset/chart/dashboard, `/health` | Any write operation |
+| API Editor (recommended) | Read + create/update dashboard/chart/dataset, export/import bundles, `/chart/data` smoke-check | RBAC/user/role management, infra/runtime ops |
+| Admin | Full API surface | None (still governed by project policy) |
+
+### Hard requirements for cross-instance migration
+
+| Rule | Why |
+|---|---|
+| Map datasources by `table_name`, not raw `dataset_id` | `dataset_id` is local metadata and differs across instances |
+| Run post-import smoke-check on key charts (`/api/v1/chart/data`) | Detects broken bindings and SQL errors before handoff |
+| Keep Docker runtime out of this repository | This repo is API-only by governance contract |
+
 ## Roles (strict BI model)
 - `orchestrator`: plans phases, controls gates, assembles handoff.
 - `analyst-sql-graph`: validates KPI semantics and aggregation correctness.
