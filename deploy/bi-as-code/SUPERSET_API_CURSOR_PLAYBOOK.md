@@ -14,6 +14,27 @@
 | Обязательный режим работы | API-only |
 | Docker runtime из этого репозитория | Запрещен политикой |
 
+## Кто выполняет BI-разработку (по нашим правилам)
+
+| Контур | Ответственный |
+|---|---|
+| Мультиагентный workflow (по `.cursor/rules/90_multiagent_workflow.mdc`) | `coder-general` |
+| Семантическая BI-проверка (метрики/агрегации/фильтры) | `analyst-sql-graph` |
+| Документация BI артефактов | `docs-curator` |
+| Оркестрация и гейты | `orchestrator` |
+
+Рекомендуемый project-skill для Cursor AI:
+- `.cursor/skills/bi-superset-api/SKILL.md` (применять для задач Superset BI-as-code в API-only режиме).
+
+## Режимы использования playbook
+
+| Режим | Как применять |
+|---|---|
+| Multi-agent | Оркестратор делегирует реализацию BI в `coder-general`, SQL/semantic checks в `analyst-sql-graph`, документацию в `docs-curator` |
+| Single-agent | Один агент выполняет те же шаги последовательно: реализация -> semantic checks -> smoke-check -> doc sync |
+
+Принцип совместимости: содержание этого playbook одинаково для обоих режимов; меняется только распределение ролей.
+
 ## Переменные окружения
 
 | Переменная | Назначение | Пример |
