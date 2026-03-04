@@ -1,5 +1,34 @@
 # Changelog
 
+## [03-03-2026] - Superset Cursor playbook: Docker-guard рекомендация и расширенный API registry
+
+### Изменения
+- `deploy/bi-as-code/SUPERSET_API_CURSOR_PLAYBOOK.md`:
+  - добавлена обязательная рекомендация по установке Cursor preToolUse hook для запрета Docker/Superset runtime-команд;
+  - добавлен пример `superset_docker_guard.py` и пример подключения в `.cursor/hooks.json`;
+  - расширен раздел API: добавлен реестр разрешений роли `api_user` (сгруппировано по объектам), включая Dashboard/Chart/Dataset/Database/Explore/SQL Lab/Security/Theme/Share/Core;
+  - добавлен табличный блок provisioning/usage `api_user` через API с разделением ролей: `create user` выполняет `Admin/Security Manager`, `api_user` выполняет login и рабочие BI API-вызовы;
+  - добавлены примечания по валидации endpoint-путей через OpenAPI/Swagger на конкретном инстансе.
+
+### Контекст
+- Документ доведен до формата "готово к рассылке" для внешних проектов, которые работают с Superset в режиме dashboard-as-a-code из Cursor AI.
+
+## [03-03-2026] - BI: вынесен отдельный playbook для Cursor AI и внешних проектов
+
+### Изменения
+- Добавлен отдельный документ:
+  - `deploy/bi-as-code/SUPERSET_API_CURSOR_PLAYBOOK.md`
+- В документе зафиксированы:
+  - API-only порядок подключения;
+  - матрица методов и прав (`API user` vs `Admin`);
+  - перечень admin-only зон API;
+  - текущая модель в контуре Cursor AI (`gpt-5.3-codex-high`);
+  - методы проверки рендера (server-side `/api/v1/chart/data`, metadata integrity, UI hard refresh, SQL контроль).
+- Из `deploy/bi-as-code/README.md` убран крупный onboarding-раздел, чтобы основной runbook оставался компактным.
+
+### Контекст
+- Документ выделен отдельно для последующей рассылки в другие проекты без зависимости от внутренней структуры основного README.
+
 ## [03-03-2026] - Superset API-only onboarding matrix for external projects
 
 ### Изменения
