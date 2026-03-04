@@ -1,283 +1,174 @@
-# BI as Code (Sandbox + Prod Handoff)
+# BI as Code (sandbox + handoff)
 
-## Scope Freeze (current stage)
-- Active scope: `personal sandbox -> corporate sandbox`.
-- **Single transfer mode: Mode B (repo-only) only.**
-- Exact clone mode is out of active process and is not used by default.
-- Production deploy is **not** executed by project agents at this stage.
-- Production is treated as a handoff target for corporate admins.
-- Any clone/deploy action to corporate sandbox is executed **only** by explicit user command.
+## Область и текущие ограничения
+- Текущий контур: `personal sandbox -> corporate sandbox`.
+- Поддерживаемый режим переноса: **только Mode B (repo-only)**.
+- Exact clone переведён в архив и в штатном процессе не используется.
+- Продакшен из этого репозитория не деплоится: только handoff-пакет для внешних администраторов.
+- Любой deploy/clone в corporate sandbox выполняется только по явной команде человека.
 
-## Active access contract (mandatory)
-- Superset BI access endpoint: `http://10.96.96.47:8088/`.
-- Operational mode in this repo: **API-only** (dashboards/charts/datasets create/update, bundle export/import).
-- Credentials are provided via repository `.env` keys:
+## Активный контракт доступа (обязательно)
+- Режим работы в этом репозитории: **API-only** (create/update dashboards/charts/datasets, export/import bundle).
+- Адрес Superset берётся из переменной окружения: `SUPERSET_API_BASE_URL`.
+  - Пример универсального значения: `https://superset.example.corp`.
+- Учетные данные/параметры:
   - `SUPERSET_API_BASE_URL`
   - `SUPERSET_API_PROVIDER`
   - `SUPERSET_API_USERNAME`
   - `SUPERSET_API_PASSWORD`
   - `SUPERSET_API_TIMEOUT_SEC`
-- **Strict prohibition:** do not run Docker/Superset runtime commands from this repository. Docker runtime is managed from another project.
-- Required permissions: non-admin API role with rights to dashboards/charts/datasets and bundle import/export.
+- **Запрещено** управлять Docker/Superset runtime из этого репозитория.
+- Нужна роль API-пользователя с правами на dashboards/charts/datasets и import/export.
 
-## Roles (strict BI model)
-- `orchestrator`: plans phases, controls gates, assembles handoff.
-- `analyst-sql-graph`: validates KPI semantics and aggregation correctness.
-- `coder-general`: maintains BI artifacts and API applier in this directory.
-- `governance-compliance`: policy/risk verdict before preview handoff.
-- `docs-curator`: keeps runbooks/changelog/doc sync.
-- `corp BI admins` (external): execute production deployment by approved runbook.
+## Роли (строгая BI-модель)
+- `orchestrator`: планирование фаз, контроль гейтов, сбор handoff.
+- `analyst-sql-graph`: проверка семантики KPI, агрегаций и фильтров.
+- `coder-general`: поддержка BI-артефактов и API-applier в `deploy/bi-as-code/**`.
+- `governance-compliance`: policy/risk verdict перед handoff.
+- `docs-curator`: синхронизация runbook/changelog/документации.
+- `corp BI admins` (внешний контур): выполнение production deploy по утверждённому runbook.
 
-## Directory layout
-- `contracts/` - semantic and brandbook contracts.
-- `domains/` - domain-level BI declarations.
-- `superset/datasets/` - dataset manifests.
-- `superset/charts/` - chart manifests.
-- `superset/dashboards/` - dashboard manifests and layout metadata.
-- `scripts/` - dry-run/apply/rollback tools.
-- `release/` - handoff artifacts and templates for preview/prod.
+## Структура каталога
+- `contracts/` - семантические и брендовые контракты.
+- `domains/` - доменные BI-декларации.
+- `superset/datasets/` - манифесты датасетов.
+- `superset/charts/` - манифесты чартов.
+- `superset/dashboards/` - манифесты дашбордов и layout metadata.
+- `scripts/` - утилиты export/import/dry-run.
+- `release/` - handoff-артефакты для review/prod.
 
-## Operational gates
-1. Scope and role matrix approved.
-2. `semantic_contract` is defined.
-3. `brandbook_contract` is provided and mapped.
-4. Explicit command to deploy/clone into corporate sandbox is received.
-5. Production handoff package is complete and validated (without prod apply).
+## Операционные гейты
+1. Согласованы scope и role matrix.
+2. Определён `semantic_contract`.
+3. Получен и сопоставлен `brandbook_contract`.
+4. Получена явная команда на deploy/clone в corporate sandbox.
+5. Подготовлен и валидирован production handoff package (без prod apply).
 
-## Safety rules
-- No secrets in Git. Use environment variables or secured secret stores.
-- All artifacts are idempotent and reviewable in Git before apply.
-- Runtime emergency patches must be backported into source artifacts.
+## Правила безопасности
+- Секреты не коммитим; использовать переменные окружения/секрет-хранилища.
+- Любые артефакты должны быть идемпотентны и ревью-пригодны в Git.
+- Экстренные runtime-фиксы обязательно backport в source-артефакты.
 
-## Instance isolation model
+## Модель изоляции инстансов
+- Каждый инстанс Superset изолирован (своя metadata DB).
+- Состояние между инстансами передаётся через Git bundle.
+- Без явного import содержимое инстансов расходится.
 
-Each machine runs a **fully isolated** Superset instance:
-- Separate Docker containers and named volumes (no shared state between machines).
-- Superset metadata DB (PostgreSQL) is local to each machine.
-- **Git bundle is the only state transfer mechanism** between instances.
-- Starting Superset on machine B from the same `docker-compose.yml` does NOT affect machine A in any way.
+### Что означает "одинаковое содержимое"
+После bootstrap новый инстанс пуст. Чтобы синхронизировать:
+1) `git pull`
+2) `import --overwrite` из bundle (см. ниже)
 
-### What "same content" means
-After bootstrap, a fresh instance has **no dashboards**. To replicate content from another machine:
-1. Pull the latest Git state (`git pull`).
-2. Run `import --overwrite` (see section below).
+## Git migration mode (A <-> B)
 
-Content is in sync only after explicit import. Without import, instances diverge independently.
+### Что хранится в Git для BI-переноса
+- `deploy/bi-as-code/contracts/**`
+- `deploy/bi-as-code/superset/**`
+- `deploy/bi-as-code/scripts/superset_git_sync.py`
+- `deploy/superset-local/**` (кроме секретов в `.env`)
+- `superset-frontend/plugins/plugin-chart-echarts6-gantt/**`
+- `.cursor/hooks/code_edit_audit.log` версионируется
+- `.cursor/hooks/user_comm_audit.log` локальный и в Git не синхронизируется
 
-### Running two instances on the same machine
-Possible, but requires three isolation parameters:
-
-| Parameter | Default | Override |
-|---|---|---|
-| Container names | `superset-local`, `superset-db-local`, `superset-redis-local` | Remove `container_name` from compose or rename |
-| Port | `8088` | Set `SUPERSET_PORT=8089` in `.env` |
-| Compose project | directory name | `docker compose -p superset2 -f ...` |
-
-Example (second instance on port 8089):
-```bash
-SUPERSET_PORT=8089 docker compose -p superset2 \
-  -f "deploy/superset-local/docker-compose.yml" up -d --build
-```
-
-## Scope Freeze: ONLY Mode B (repo-only)
-
-> **The only supported migration mode is Mode B (repo-only via Git bundle + plugin image build from source).**
-> Exact-clone mode (container snapshot) is archived and not used in regular workflow.
-> New agents must NOT use exact-clone scripts unless explicitly instructed by the user.
-
-## Git migration mode (regular A <-> B sync)
-
-### What is now stored in Git for migration
-- `deploy/superset-local/` (Docker compose + init/config/scripts), except secrets in `.env`.
-- `deploy/bi-as-code/contracts/` (semantic + brandbook contracts).
-- `deploy/bi-as-code/superset/` (BI manifests and exported bundle directory).
-- `deploy/bi-as-code/scripts/superset_git_sync.py` (export/import controller via Superset API).
-- `superset-frontend/plugins/plugin-chart-echarts6-gantt/` (custom chart source for local plugin image build).
-- `.cursor/hooks/code_edit_audit.log` is versioned for project traceability.
-- `.cursor/hooks/user_comm_audit.log` is local-only and not synchronized via Git.
-
-### Mandatory onboarding for a new agent (read order)
-1) `README.md` (section `BI (Superset)` and migration pointers).
-2) `deploy/bi-as-code/README.md` (this file, full runbook).
-3) `.cursor/rules/00_global_always.mdc` and `.cursor/rules/90_multiagent_workflow.mdc` (governance and workflow).
-4) Latest audit entries:
-   - `.cursor/hooks/code_edit_audit.log` (in Git)
-   - `.cursor/hooks/user_comm_audit.log` (local machine only)
-5) Current BI artifact state in Git:
+### Onboarding нового агента (обязательно)
+1) Прочитать `README.md` (секция BI/Superset).
+2) Прочитать этот файл `deploy/bi-as-code/README.md`.
+3) Прочитать `.cursor/rules/00_global_always.mdc` и `.cursor/rules/90_multiagent_workflow.mdc`.
+4) Проверить audit:
+   - `.cursor/hooks/code_edit_audit.log` (в Git)
+   - `.cursor/hooks/user_comm_audit.log` (локально)
+5) Проверить актуальный bundle:
    - `deploy/bi-as-code/superset/bundles/dashboard_1/`
 
-If these five points are read, a new agent has enough context to deploy and continue regular A <-> B synchronization.
-
-### One-time bootstrap on any machine after `git pull` (ARCHIVED; do not use in this repo)
-1) Prepare local env for Superset:
-```bash
-cp "deploy/superset-local/.env.example" "deploy/superset-local/.env"
-# fill real secrets in deploy/superset-local/.env (do not commit)
-```
-
-2) Start local Superset:
-> Archived instruction. Local Docker runtime must not be managed from this repository.
-
-3) Health check:
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" "${SUPERSET_API_BASE_URL:-http://10.96.96.47:8088}/health"
-```
-
-### WSL2 notes (if machine is Windows + WSL)
-- Run all commands from Linux side (WSL shell), not from PowerShell.
-- Keep repo in Linux filesystem (e.g. `/home/<user>/...`) for faster Docker bind-mounts.
-- Ensure Docker Desktop integration with WSL distro is enabled.
-- `127.0.0.1:8088` is valid from WSL and Windows browser in standard Docker Desktop setup.
-- If corporate policies remap networking, keep `SUPERSET_PORT` configurable in `deploy/superset-local/.env`.
-
-### Repo-only mode (no cloud registry, local build on each machine) — ARCHIVED
-Use this mode when both machines have Docker Desktop/WSL and you want full reproducibility only via Git.
-
-1) Build custom Superset image with `echarts6_gantt` plugin from repository source:
-> Archived instruction. Do not execute in this repository.
-```bash
-bash "deploy/superset-local/scripts/build_superset_with_plugin.sh"
-```
-
-2) Start stack with plugin override:
-> Archived instruction. Do not execute in this repository.
-```bash
-bash "deploy/superset-local/start_local_plugin.sh"
-```
-
-3) Verify chart type is registered:
-```bash
-python - <<'PY'
-import requests
-base="${SUPERSET_API_BASE_URL:-http://10.96.96.47:8088}"
-s=requests.Session()
-t=s.post(base+"/api/v1/security/login",json={"username":"admin","password":"admin","provider":"db","refresh":True},timeout=30).json()["access_token"]
-h={"Authorization":f"Bearer {t}"}
-r=s.get(base+"/api/v1/chart/",headers=h,params={"q":"(page:0,page_size:1)"},timeout=30)
-print("api_ok", r.status_code)
-PY
-```
-If dashboard still says `Item with key "echarts6_gantt" is not registered`, run hard refresh (`Ctrl+Shift+R`) and ensure startup used `docker-compose.plugin.yml`.
-This guarantees plugin registration and chart rendering. Visual fine-tuning from one-off runtime asset patches must be reapplied only if explicitly required.
-
-### ~~Exact 1:1 clone mode~~ (ARCHIVED — do not use)
-> **ARCHIVED. Not part of regular workflow. Scripts kept for reference only.**
-> Use Mode B (repo-only) instead. See `Scope Freeze` section above.
-
-#### Source machine (export exact clone)
-```bash
-bash "deploy/superset-local/scripts/export_exact_superset_clone.sh"
-```
-
-Default output:
-- `output/superset_exact_clone_<UTC>/superset-image.tar`
-- `output/superset_exact_clone_<UTC>/superset_meta.dump`
-- `output/superset_exact_clone_<UTC>/superset_home.tar.gz`
-- `output/superset_exact_clone_<UTC>/image_ref.txt`
-
-Transfer that output directory to the target machine by any secure channel.
-
-#### Target machine (import exact clone)
-```bash
-bash "deploy/superset-local/scripts/import_exact_superset_clone.sh" \
-  "output/superset_exact_clone_<UTC>"
-```
-
-What import does:
-1) `docker load` image tar.
-2) Recreates Superset metadata DB from dump.
-3) Starts compose with plugin override using imported image.
-4) Restores `superset_home` archive (if present).
-5) Waits for health check.
-
-#### Notes and limits (archived)
-- Scripts are kept for reference; not used in standard workflow.
-- Keep `.env` local and never commit secrets.
-### Export current BI state to Git (machine A, API-only)
+## Экспорт текущего BI-состояния в Git (машина A)
 ```bash
 python "deploy/bi-as-code/scripts/superset_git_sync.py" \
+  --base-url "${SUPERSET_API_BASE_URL}" \
+  --username "${SUPERSET_API_USERNAME}" \
+  --password "${SUPERSET_API_PASSWORD}" \
+  --provider "${SUPERSET_API_PROVIDER:-db}" \
   export \
   --dashboard-ids "1" \
   --output-dir "deploy/bi-as-code/superset/bundles/dashboard_1"
 ```
 
-Then:
 ```bash
 git add deploy/bi-as-code/superset/bundles/dashboard_1
 git commit -m "sync superset dashboard bundle"
 git push
 ```
 
-### Import BI state from Git (machine B, API-only)
+## Импорт BI-состояния из Git (машина B)
 ```bash
 git pull
 python "deploy/bi-as-code/scripts/superset_git_sync.py" \
+  --base-url "${SUPERSET_API_BASE_URL}" \
+  --username "${SUPERSET_API_USERNAME}" \
+  --password "${SUPERSET_API_PASSWORD}" \
+  --provider "${SUPERSET_API_PROVIDER:-db}" \
   import \
   --bundle-dir "deploy/bi-as-code/superset/bundles/dashboard_1" \
   --overwrite
 ```
 
-### Critical mapping rule after import (mandatory)
-- Do not trust raw numeric `dataset_id` across Superset instances.
-- `dataset_id` values are local metadata IDs and may point to different physical tables on another instance.
-- For chart rebinding and filter targets, always map by `table_name` first (`sim_masterv2_v9`, `sim_repairline_v9`, etc.), then resolve to local `dataset_id`.
-- Typical failure signatures of wrong mapping:
-  - `UNKNOWN_IDENTIFIER` for valid columns (`pre_status_id`, `status_count_ffill`, etc.);
-  - `Columns missing in dataset` for chart-specific fields (`line_id`, `day_u16`, `aircraft_number`).
+## Критичное правило маппинга после import
+- Нельзя доверять "сырым" числовым `dataset_id` между инстансами.
+- `dataset_id` — локальный metadata ID и может указывать на другую физическую таблицу.
+- При rebinding chart/filter сначала маппить datasource по `table_name`, затем подставлять локальный `dataset_id`.
+- Типовые сигнатуры неправильного маппинга:
+  - `UNKNOWN_IDENTIFIER` для валидных полей (`pre_status_id`, `status_count_ffill` и т.д.);
+  - `Columns missing in dataset` для `line_id`, `day_u16`, `aircraft_number`.
 
-### Post-import smoke check (mandatory)
-- Validate key charts via API `/api/v1/chart/data` before handoff:
+## Post-import smoke-check (обязательно)
+- До handoff проверить ключевые чарты через API `/api/v1/chart/data`:
   - `Датасет 1`
   - `Датасет 2`
   - `График Ремонта`
   - `График поставки ВС`
-- Success criterion: all responses are `200` and no ClickHouse identifier/column errors in payload.
+- Критерий успеха: все ответы `200`, без ClickHouse identifier/column ошибок.
 
-### Regular back-and-forth workflow
-- A changed BI in UI -> export -> commit/push.
-- B pulls -> import --overwrite.
-- B changed BI in UI -> export -> commit/push.
-- A pulls -> import --overwrite.
+## Регулярный цикл синхронизации
+- A изменил BI в UI -> export -> commit/push.
+- B сделал pull -> import --overwrite.
+- B изменил BI в UI -> export -> commit/push.
+- A сделал pull -> import --overwrite.
 
-### New agent post-pull checklist (mandatory, Mode B only)
-1) Read this file fully. Confirm scope: local sandbox only, Mode B.
-2) Verify plugin source exists:
-   - `superset-frontend/plugins/plugin-chart-echarts6-gantt/package.json`
-   - `superset-frontend/plugins/plugin-chart-echarts6-gantt/src/plugin/Echarts6Gantt.tsx`
-3) Create `.env` from `.env.example`. Set `CLICKHOUSE_PORT=8123` (HTTP, for `clickhousedb://`).
-4) Run `bash deploy/superset-local/start_local_plugin.sh` (not base `start_local.sh`).
-5) Health check: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8088/health` -> `200`.
-6) Import bundle and check dashboard `1` + chart `5` via remote API endpoint.
-7) If import requires DB password map, use key `databases/clickhouse.yaml`.
-8) If `echarts6_gantt is not registered`, escalate to external Docker runtime owner (another project). Do not run local Docker commands here.
-
-### Critical notes
-- `.env` is local-only and ignored; never commit secrets.
-- `deploy/superset-local/scripts/export_exact_superset_clone.sh` and `import_exact_superset_clone.sh` are kept in repository, but not part of active Mode B workflow.
-- `code_edit_audit.log` is versioned by design for traceability:
+## Чеклист после `git pull` (Mode B)
+1) Подтвердить, что контур API-only.
+2) Проверить переменные `SUPERSET_API_*` в локальной `.env`.
+3) Проверить health:
 ```bash
-git add ".cursor/hooks/code_edit_audit.log"
+curl -s -o /dev/null -w "%{http_code}\n" "${SUPERSET_API_BASE_URL}/health"
 ```
-- If dashboard bundle contains database YAML requiring passwords, pass JSON maps to import:
+4) Выполнить import bundle.
+5) Выполнить smoke-check ключевых чартов.
+6) Если требуется карта паролей БД, использовать ключ `databases/clickhouse.yaml`.
+7) Если чарт не рендерится, сначала `Ctrl+Shift+R`, затем повторный import/export sync.
+
+## Критические примечания
+- `.env` локальный файл, не коммитится.
+- Скрипты exact clone в `deploy/superset-local/scripts/*exact*` оставлены как архивные reference-артефакты.
+- Если bundle содержит database YAML с секретами, при import передавать JSON-карты:
   - `--passwords-file`
   - `--ssh-tunnel-passwords-file`
   - `--ssh-tunnel-private-key-passwords-file`
   - `--ssh-tunnel-private-keys-file`
-- Important for `--passwords-file`: key must be the path inside bundle ZIP, not database display name.
-  - For current bundle, use key: `"databases/clickhouse.yaml"`.
-  - Example:
+- Для `--passwords-file` ключ должен быть путём внутри ZIP bundle, а не display name базы.
+  - Для текущего bundle: `databases/clickhouse.yaml`.
+
+Пример:
 ```bash
 cat > /tmp/superset_passwords.json <<'EOF'
 {"databases/clickhouse.yaml":"REPLACE_WITH_REAL_PASSWORD"}
 EOF
 
 python "deploy/bi-as-code/scripts/superset_git_sync.py" \
-  --base-url "http://127.0.0.1:8088" \
-  --username "admin" \
-  --password "admin" \
+  --base-url "${SUPERSET_API_BASE_URL}" \
+  --username "${SUPERSET_API_USERNAME}" \
+  --password "${SUPERSET_API_PASSWORD}" \
+  --provider "${SUPERSET_API_PROVIDER:-db}" \
   import \
   --bundle-dir "deploy/bi-as-code/superset/bundles/dashboard_1" \
   --overwrite \
   --passwords-file "/tmp/superset_passwords.json"
 ```
-- If UI still shows old assets, use hard refresh (`Ctrl+Shift+R`) and re-run API import/export sync.
