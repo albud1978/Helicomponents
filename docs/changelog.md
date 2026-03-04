@@ -1,5 +1,22 @@
 # Changelog
 
+## [03-03-2026] - BI skill для `coder-general` + режимы multi/single-agent в playbook
+
+### Изменения
+- Добавлен проектный skill:
+  - `.cursor/skills/bi-superset-api/SKILL.md`
+- В skill зафиксированы:
+  - API-only ограничения для Superset BI;
+  - базовый workflow правок/валидации (`health/login/csrf -> diagnose -> patch -> chart/data smoke-check -> bundle/doc sync`);
+  - правило datasource remap по `table_name` для меж-инстансного переноса;
+  - разделение admin-only provisioning и рабочих операций `api_user`.
+- `deploy/bi-as-code/SUPERSET_API_CURSOR_PLAYBOOK.md`:
+  - добавлен явный раздел "кто выполняет BI-разработку по правилам" (owner: `coder-general`);
+  - добавлен раздел совместимости playbook для `multi-agent` и `single-agent` систем.
+
+### Контекст
+- Доработка выполнена по запросу на привязку BI-процесса к ответственному агенту и поддержку сценариев, где playbook используется не только в мультиагентном, но и в одноагентном контуре.
+
 ## [03-03-2026] - Superset Cursor playbook: Docker-guard рекомендация и расширенный API registry
 
 ### Изменения
