@@ -1,19 +1,24 @@
-slice_name: "Поставка Ми-17"
-description: ''
+slice_name: "\u0413\u0440\u0430\u0444\u0438\u043A \u043F\u043E\u0441\u0442\u0430\u0432\
+  \u043A\u0438 \u0412\u0421"
+description: null
 certified_by: null
 certification_details: null
-viz_type: big_number_total
+viz_type: echarts_timeseries_bar
 params:
-  datasource: 3__table
-  viz_type: big_number_total
-  metric:
-    aggregate: null
+  datasource: 1__table
+  viz_type: echarts_timeseries_bar
+  slice_id: 6
+  x_axis: day_date
+  time_grain_sqla: P1Y
+  metrics:
+  - aggregate: null
     column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
-    label: "Поставка Ми-17"
-    sqlExpression: COUNTIf(group_by = 2 AND pre_status_id = 0 AND status_id IN (2, 3))
+    label: "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430"
+    sqlExpression: COUNTIf(pre_status_id = 0 AND status_id IN (2, 3))
+  groupby: []
   adhoc_filters:
   - clause: WHERE
     comparator: No filter
@@ -21,16 +26,71 @@ params:
     operator: TEMPORAL_RANGE
     subject: day_date
   row_limit: 70000
-  time_grain_sqla: P1Y
-  subheader: ''
+  truncate_metric: true
+  show_empty_columns: false
+  comparison_type: values
+  annotation_layers: []
+  forecastPeriods: 10
+  forecastInterval: 0.8
+  orientation: vertical
+  x_axis_title_margin: 15
+  y_axis_title_margin: 15
+  y_axis_title_position: Left
+  sort_series_type: sum
+  color_scheme: supersetColors
+  time_shift_color: true
+  show_value: true
+  only_total: true
+  show_legend: true
+  legendType: scroll
+  legendOrientation: top
+  x_axis_time_format: '%Y-%m'
+  xAxisLabelInterval: auto
   y_axis_format: SMART_NUMBER
-  show_trend_line: false
-  start_y_axis_at_zero: true
+  y_axis_bounds:
+  - null
+  - null
+  truncateXAxis: true
+  rich_tooltip: true
+  showTooltipTotal: true
+  tooltipTimeFormat: '%d-%m-%Y'
   extra_form_data: {}
   dashboards:
   - 1
-query_context: '{"datasource":{"id":3,"type":"table"},"force":false,"queries":[{"filters":[{"col":"day_date","op":"TEMPORAL_RANGE","val":"No filter"}],"extras":{"time_grain_sqla":"P1Y","having":"","where":""},"applied_time_extras":{},"columns":[],"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Поставка Ми-17","sqlExpression":"COUNTIf(group_by = 2 AND pre_status_id = 0 AND status_id IN (2, 3))"}],"orderby":[[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Поставка Ми-17","sqlExpression":"COUNTIf(group_by = 2 AND pre_status_id = 0 AND status_id IN (2, 3))"},false]],"annotation_layers":[],"row_limit":70000,"series_columns":[],"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"time_offsets":[],"post_processing":[]}],"form_data":{"datasource":"3__table","viz_type":"big_number_total","metric":{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Поставка Ми-17","sqlExpression":"COUNTIf(group_by = 2 AND pre_status_id = 0 AND status_id IN (2, 3))"},"adhoc_filters":[{"clause":"WHERE","comparator":"No filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"day_date"}],"row_limit":70000,"time_grain_sqla":"P1Y","subheader":"","y_axis_format":"SMART_NUMBER","show_trend_line":false,"start_y_axis_at_zero":true,"extra_form_data":{},"dashboards":[1]},"result_format":"json","result_type":"full"}'
+query_context: '{"datasource": {"id": 1, "type": "table"}, "force": false, "queries":
+  [{"filters": [{"col": "day_date", "op": "TEMPORAL_RANGE", "val": "No filter"}],
+  "extras": {"time_grain_sqla": "P1Y", "having": "", "where": ""}, "applied_time_extras":
+  {}, "columns": [{"timeGrain": "P1Y", "columnType": "BASE_AXIS", "sqlExpression":
+  "day_date", "label": "day_date", "expressionType": "SQL", "isColumnReference": true}],
+  "metrics": [{"aggregate": null, "column": null, "datasourceWarning": false, "expressionType":
+  "SQL", "hasCustomLabel": true, "label": "\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430",
+  "sqlExpression": "COUNTIf(pre_status_id = 0 AND status_id IN (2, 3))"}], "orderby":
+  [[{"aggregate": null, "column": null, "datasourceWarning": false, "expressionType":
+  "SQL", "hasCustomLabel": true, "label": "\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430",
+  "sqlExpression": "COUNTIf(pre_status_id = 0 AND status_id IN (2, 3))"}, false]],
+  "annotation_layers": [], "row_limit": 70000, "series_columns": [], "series_limit":
+  0, "group_others_when_limit_reached": false, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}, "time_offsets": [], "post_processing":
+  [{"operation": "pivot", "options": {"index": ["day_date"], "columns": [], "aggregates":
+  {"\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430": {"operator": "mean"}}, "drop_missing_columns":
+  true}}, {"operation": "flatten"}]}], "form_data": {"datasource": "1__table", "viz_type":
+  "echarts_timeseries_bar", "slice_id": 6, "x_axis": "day_date", "time_grain_sqla":
+  "P1Y", "metrics": [{"aggregate": null, "column": null, "datasourceWarning": false,
+  "expressionType": "SQL", "hasCustomLabel": true, "label": "\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430",
+  "sqlExpression": "COUNTIf(pre_status_id = 0 AND status_id IN (2, 3))"}], "groupby":
+  [], "adhoc_filters": [{"clause": "WHERE", "comparator": "No filter", "expressionType":
+  "SIMPLE", "operator": "TEMPORAL_RANGE", "subject": "day_date"}], "row_limit": 70000,
+  "truncate_metric": true, "show_empty_columns": false, "comparison_type": "values",
+  "annotation_layers": [], "forecastPeriods": 10, "forecastInterval": 0.8, "orientation":
+  "vertical", "x_axis_title_margin": 15, "y_axis_title_margin": 15, "y_axis_title_position":
+  "Left", "sort_series_type": "sum", "color_scheme": "supersetColors", "time_shift_color":
+  true, "show_value": true, "only_total": true, "show_legend": true, "legendType":
+  "scroll", "legendOrientation": "top", "x_axis_time_format": "%Y-%m", "xAxisLabelInterval":
+  "auto", "y_axis_format": "SMART_NUMBER", "y_axis_bounds": [null, null], "truncateXAxis":
+  true, "rich_tooltip": true, "showTooltipTotal": true, "tooltipTimeFormat": "%d-%m-%Y",
+  "extra_form_data": {}, "dashboards": [1], "force": false, "result_format": "json",
+  "result_type": "full"}, "result_format": "json", "result_type": "full"}'
 cache_timeout: null
-uuid: 80dc02e0-b435-4c28-b87f-1fdb684273d7
+uuid: c2ed6e5e-5905-47d2-91ad-d525d1373633
 version: 1.0.0
 dataset_uuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
