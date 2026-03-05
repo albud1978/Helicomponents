@@ -1,5 +1,4 @@
-dashboard_title: "\u041F\u043B\u0430\u043D\u0435\u0440\u044B 10Y \u0413\u0438\u0441\
-  \u0442\u043E\u0433\u0440\u0430\u043C\u043C\u0430 v9"
+dashboard_title: Планеры 10Y Гистограмма v9
 description: null
 css: "/* HC_HIDE_PIVOT_STUB_HEADERS */\n[data-test-chart-id=\"245\"] table thead th:first-child,\n\
   [data-test-chart-id=\"249\"] table thead th:first-child {\n  width: 0 !important;\n\
@@ -25,8 +24,8 @@ position:
     meta:
       chartId: 2
       height: 50
-      sliceName: "\u0414\u0430\u0442\u0430\u0441\u0435\u0442 2"
-      sliceNameOverride: "\u0414\u0430\u0442\u0430\u0441\u0435\u0442 1"
+      sliceName: Датасет 2
+      sliceNameOverride: Датасет 1
       uuid: 9b737e74-c71b-423d-9cb4-31ea86c8bb58
       width: 12
     parents:
@@ -38,11 +37,10 @@ position:
     children: []
     id: CHART-echarts6-gantt-50704
     meta:
-      chartId: 5
+      chartId: 3
       height: 83
       showTitle: false
-      sliceName: "\u0413\u0440\u0430\u0444\u0438\u043A \u0420\u0435\u043C\u043E\u043D\
-        \u0442\u0430"
+      sliceName: График Ремонта
       uuid: 477a8860-224a-4681-b0f9-bfb7003f3670
       width: 12
     parents:
@@ -56,8 +54,8 @@ position:
     meta:
       chartId: 1
       height: 50
-      sliceName: "\u0414\u0430\u0442\u0430\u0441\u0435\u0442 1"
-      sliceNameOverride: "\u0414\u0430\u0442\u0430\u0441\u0435\u0442 2"
+      sliceName: Датасет 1
+      sliceNameOverride: Датасет 2
       uuid: 63424c89-e6e1-4a92-814f-cf4c7f37d15c
       width: 12
     parents:
@@ -71,6 +69,7 @@ position:
     - ROW-JNG-3xa7mc-rgHyZdhngk
     - ROW-PyuKNJXpIPpzsI74cXQUa
     - ROW-supply-births-v1
+    - ROW-kpi-supply-v1
     - ROW-echarts6-gantt-50704
     id: GRID_ID
     parents:
@@ -79,8 +78,7 @@ position:
   HEADER_ID:
     id: HEADER_ID
     meta:
-      text: "\u041F\u043B\u0430\u043D\u0435\u0440\u044B 10Y \u0413\u0438\u0441\u0442\
-        \u043E\u0433\u0440\u0430\u043C\u043C\u0430 v9"
+      text: Планеры 10Y Гистограмма v9
     type: HEADER
   ROOT_ID:
     children:
@@ -117,14 +115,23 @@ position:
     - ROOT_ID
     - GRID_ID
     type: ROW
+  ROW-supply-births-v1:
+    children:
+    - CHART-supply-births-v1
+    id: ROW-supply-births-v1
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
   CHART-supply-births-v1:
     children: []
     id: CHART-supply-births-v1
     meta:
-      chartId: 6
+      chartId: 8
       height: 48
-      sliceName: "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430 (0\u21922, 0\u2192\
-        3)"
+      sliceName: График поставки ВС
       uuid: c2ed6e5e-5905-47d2-91ad-d525d1373633
       width: 12
     parents:
@@ -132,10 +139,99 @@ position:
     - GRID_ID
     - ROW-supply-births-v1
     type: CHART
-  ROW-supply-births-v1:
+  CHART-kpi-supply-mi8-v1:
+    children: []
+    id: CHART-kpi-supply-mi8-v1
+    meta:
+      chartId: 9
+      height: 26
+      sliceName: Поставка Ми-8
+      uuid: 34fa28cb-999a-4c43-8106-29850095a71d
+      width: 2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-kpi-supply-v1
+    type: CHART
+  CHART-kpi-supply-mi17-v1:
+    children: []
+    id: CHART-kpi-supply-mi17-v1
+    meta:
+      chartId: 10
+      height: 26
+      sliceName: Поставка Ми-17
+      uuid: 80dc02e0-b435-4c28-b87f-1fdb684273d7
+      width: 2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-kpi-supply-v1
+    type: CHART
+  CHART-kpi-exit6-mi8-v1:
+    children: []
+    id: CHART-kpi-exit6-mi8-v1
+    meta:
+      chartId: 11
+      height: 26
+      sliceName: Выбыло Ми-8
+      uuid: 991871e1-1fa4-48c2-8a7d-f098393327df
+      width: 2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-kpi-supply-v1
+    type: CHART
+  CHART-kpi-exit6-mi17-v1:
+    children: []
+    id: CHART-kpi-exit6-mi17-v1
+    meta:
+      chartId: 5
+      height: 26
+      sliceName: Выбыло Ми-17
+      uuid: d82297a2-c9f5-48de-8092-838ec8d50e24
+      width: 2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-kpi-supply-v1
+    type: CHART
+  CHART-kpi-sne-mi8-v1:
+    children: []
+    id: CHART-kpi-sne-mi8-v1
+    meta:
+      chartId: 6
+      height: 26
+      sliceName: Налет, ч Ми-8
+      uuid: 424c8912-dab6-45a9-b133-9093f401826e
+      width: 2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-kpi-supply-v1
+    type: CHART
+  CHART-kpi-sne-mi17-v1:
+    children: []
+    id: CHART-kpi-sne-mi17-v1
+    meta:
+      chartId: 7
+      height: 26
+      sliceName: Налет, ч Ми-17
+      uuid: 6c6db54e-bf20-46dc-ba57-22477520e0cf
+      width: 2
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-kpi-supply-v1
+    type: CHART
+  ROW-kpi-supply-v1:
     children:
-    - CHART-supply-births-v1
-    id: ROW-supply-births-v1
+    - CHART-kpi-supply-mi8-v1
+    - CHART-kpi-supply-mi17-v1
+    - CHART-kpi-exit6-mi8-v1
+    - CHART-kpi-exit6-mi17-v1
+    - CHART-kpi-sne-mi8-v1
+    - CHART-kpi-sne-mi17-v1
+    id: ROW-kpi-supply-v1
     meta:
       background: BACKGROUND_TRANSPARENT
     parents:
@@ -166,8 +262,14 @@ metadata:
     chartsInScope:
     - 1
     - 2
+    - 3
     - 5
     - 6
+    - 7
+    - 8
+    - 9
+    - 10
+    - 11
   color_scheme: supersetColors
   refresh_frequency: 0
   color_scheme_domain:
@@ -195,23 +297,23 @@ metadata:
   label_colors:
     '1': '#003594'
     '2': '#7CA3DC'
-    "\u0421\u043F\u0438\u0441\u0430\u043D\u0438\u0435": '#003594'
-    "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0438": '#7CA3DC'
-    "\u0418\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435": '#008C5F'
-    "\u0420\u0435\u043C\u043E\u043D\u0442": '#FFC332'
-    "\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435": '#737576'
-    "\u041D\u0435\u0438\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435": '#DC2328'
-    "\u041C\u0438-8": '#003594'
-    "\u041C\u0438-17": '#7CA3DC'
-    "\u0422\u0438\u043F \u0412\u0421: \u041C\u0438-8": '#003594'
-    "\u0422\u0438\u043F \u0412\u0421: \u041C\u0438-17": '#7CA3DC'
+    Списание: '#003594'
+    Операции: '#7CA3DC'
+    Исправные: '#008C5F'
+    Ремонт: '#FFC332'
+    Хранение: '#737576'
+    Неисправные: '#DC2328'
+    Ми-8: '#003594'
+    Ми-17: '#7CA3DC'
+    'Тип ВС: Ми-8': '#003594'
+    'Тип ВС: Ми-17': '#7CA3DC'
   shared_label_colors:
-  - "\u0418\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435"
-  - "\u041D\u0435\u0438\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435"
-  - "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0438"
-  - "\u0420\u0435\u043C\u043E\u043D\u0442"
-  - "\u0421\u043F\u0438\u0441\u0430\u043D\u0438\u0435"
-  - "\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435"
+  - Исправные
+  - Неисправные
+  - Операции
+  - Ремонт
+  - Списание
+  - Хранение
   timed_refresh_immune_slices: []
   cross_filters_enabled: true
   native_filter_configuration:
@@ -223,8 +325,7 @@ metadata:
       multiSelect: true
       searchAllOptions: false
       inverseSelection: false
-    name: "\u0412\u0435\u0440\u0441\u0438\u044F \u0434\u0430\u0442\u0430\u0441\u0435\
-      \u0442\u0430 1"
+    name: Версия датасета 1
     filterType: filter_select
     targets:
     - column:
@@ -250,6 +351,12 @@ metadata:
       - 1
       - 5
       - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
       rootPath:
       - ROOT_ID
     type: NATIVE_FILTER
@@ -258,8 +365,7 @@ metadata:
     controlValues:
       sortAscending: true
       enableEmptyFilter: false
-    name: "\u0413\u0440\u0430\u043D\u0443\u043B\u044F\u0440\u043D\u043E\u0441\u0442\
-      \u044C 1"
+    name: Гранулярность 1
     filterType: filter_timegrain
     targets:
     - datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
@@ -276,6 +382,12 @@ metadata:
       - 1
       - 5
       - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
       rootPath:
       - ROOT_ID
     type: NATIVE_FILTER
@@ -288,7 +400,7 @@ metadata:
       multiSelect: true
       searchAllOptions: false
       inverseSelection: false
-    name: "\u0422\u0438\u043F \u0412\u0421 1"
+    name: Тип ВС 1
     filterType: filter_select
     targets:
     - column:
@@ -304,6 +416,12 @@ metadata:
       - 1
       - 5
       - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
       rootPath:
       - ROOT_ID
     type: NATIVE_FILTER
@@ -326,8 +444,7 @@ metadata:
         type: checkbox
       nativeEvent:
         isTrusted: true
-    name: "\u0412\u0435\u0440\u0441\u0438\u044F \u0434\u0430\u0442\u0430\u0441\u0435\
-      \u0442\u0430 2"
+    name: Версия датасета 2
     filterType: filter_select
     targets:
     - column:
@@ -346,7 +463,7 @@ metadata:
         label: 21-02-2026
         value:
         - 21-02-2026
-        excludeFilterValues: true
+        excludeFilterValues: false
       ownState:
         coltypeMap:
           version_date_ddmmyyyy: 1
@@ -357,6 +474,12 @@ metadata:
       - 2
       - 5
       - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
       rootPath:
       - ROOT_ID
     type: NATIVE_FILTER
@@ -365,8 +488,7 @@ metadata:
     controlValues:
       sortAscending: true
       enableEmptyFilter: false
-    name: "\u0413\u0440\u0430\u043D\u0443\u043B\u044F\u0440\u043D\u043E\u0441\u0442\
-      \u044C 2"
+    name: Гранулярность 2
     filterType: filter_timegrain
     targets:
     - datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
@@ -385,6 +507,12 @@ metadata:
       - 2
       - 5
       - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
     type: NATIVE_FILTER
     description: ''
     chartsInScope:
@@ -399,7 +527,7 @@ metadata:
       multiSelect: true
       searchAllOptions: false
       inverseSelection: false
-    name: "\u0422\u0438\u043F \u0412\u0421 2"
+    name: Тип ВС 2
     filterType: filter_select
     targets:
     - column:
@@ -417,6 +545,12 @@ metadata:
       - 2
       - 5
       - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
     type: NATIVE_FILTER
     description: ''
     chartsInScope:
@@ -431,8 +565,7 @@ metadata:
       multiSelect: true
       searchAllOptions: false
       inverseSelection: false
-    name: "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430: \u0432\u0435\u0440\u0441\
-      \u0438\u044F \u0434\u0430\u0442\u0430\u0441\u0435\u0442\u0430"
+    name: 'Поставка: версия датасета'
     filterType: filter_select
     targets:
     - column:
@@ -461,50 +594,11 @@ metadata:
       rootPath:
       - ROOT_ID
     type: NATIVE_FILTER
-    description: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0444\u0438\
-      \u043B\u044C\u0442\u0440 \u0432\u0435\u0440\u0441\u0438\u0438 \u0434\u043B\u044F\
-      \ \u0433\u0438\u0441\u0442\u043E\u0433\u0440\u0430\u043C\u043C\u044B \u043F\u043E\
-      \u0441\u0442\u0430\u0432\u043E\u043A"
-  - id: NATIVE_FILTER-SUPPLY-TYPE-V1
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    name: "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430: \u0442\u0438\u043F \u0412\
-      \u0421"
-    filterType: filter_select
-    targets:
-    - column:
-        name: group_by
-      datasetUuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds: []
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded:
-      - 1
-      - 2
-      - 5
-    type: NATIVE_FILTER
-    description: "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u0444\u0438\
-      \u043B\u044C\u0442\u0440 \u0442\u0438\u043F\u0430 \u0412\u0421 \u0434\u043B\u044F\
-      \ \u0433\u0438\u0441\u0442\u043E\u0433\u0440\u0430\u043C\u043C\u044B \u043F\u043E\
-      \u0441\u0442\u0430\u0432\u043E\u043A"
-    chartsInScope:
-    - 6
-    tabsInScope: []
+    description: Локальный фильтр версии для гистограммы поставок
   - id: NATIVE_FILTER-jjU1NwtMu3BOnjlUgrXZ9
     controlValues:
       enableEmptyFilter: false
-    name: "\u0413\u0440\u0430\u043D\u0443\u043B\u044F\u0440\u043D\u043E\u0441\u0442\
-      \u044C \u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0438"
+    name: Гранулярность Поставки
     filterType: filter_timegrain
     targets:
     - datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
@@ -521,6 +615,12 @@ metadata:
       - 2
       - 5
       - 1
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
       rootPath:
       - ROOT_ID
     type: NATIVE_FILTER
@@ -533,8 +633,7 @@ metadata:
       multiSelect: false
       searchAllOptions: false
       inverseSelection: false
-    name: "\u0413\u0440\u0430\u0444\u0438\u043A \u0440\u0435\u043C\u043E\u043D\u0442\
-      \u0430"
+    name: График ремонта
     filterType: filter_select
     targets:
     - column:
@@ -560,24 +659,28 @@ metadata:
       - 2
       - 1
       - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
       rootPath:
       - ROOT_ID
     type: NATIVE_FILTER
-    description: "\u041D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u044B\u0439\
-      \ \u0432\u044B\u0431\u043E\u0440 version_date \u0442\u043E\u043B\u044C\u043A\
-      \u043E \u0434\u043B\u044F Gantt \u0447\u0430\u0440\u0442\u0430"
+    description: Независимый выбор version_date только для Gantt чарта
   map_label_colors:
     '1': '#003594'
     '2': '#7CA3DC'
-    "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0438": '#7CA3DC'
-    "\u0421\u043F\u0438\u0441\u0430\u043D\u0438\u0435": '#003594'
-    "\u041D\u0435\u0438\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435": '#DC2328'
-    "\u0418\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435": '#008C5F'
-    "\u0420\u0435\u043C\u043E\u043D\u0442": '#FFC332'
-    "\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435": '#737576'
-    "\u041C\u0438-8": '#003594'
-    "\u041C\u0438-17": '#7CA3DC'
-    "\u0422\u0438\u043F \u0412\u0421: \u041C\u0438-8": '#003594'
-    "\u0422\u0438\u043F \u0412\u0421: \u041C\u0438-17": '#7CA3DC'
+    Операции: '#7CA3DC'
+    Списание: '#003594'
+    Неисправные: '#DC2328'
+    Исправные: '#008C5F'
+    Ремонт: '#FFC332'
+    Хранение: '#737576'
+    Ми-8: '#003594'
+    Ми-17: '#7CA3DC'
+    'Тип ВС: Ми-8': '#003594'
+    'Тип ВС: Ми-17': '#7CA3DC'
 theme_uuid: null
 version: 1.0.0
