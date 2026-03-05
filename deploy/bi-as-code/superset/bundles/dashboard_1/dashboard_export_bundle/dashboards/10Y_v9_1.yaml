@@ -546,7 +546,7 @@ metadata:
     filterType: filter_select
     targets:
     - column:
-        name: group_by
+        name: group_by_label
       datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
     defaultDataMask:
       extraFormData: {}
@@ -694,7 +694,7 @@ metadata:
     filterType: filter_select
     targets:
     - column:
-        name: group_by
+        name: group_by_label
       datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
     defaultDataMask:
       extraFormData: {}
