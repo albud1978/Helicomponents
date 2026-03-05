@@ -1,5 +1,5 @@
 database_name: clickhouse
-sqlalchemy_uri: clickhousedb://default:XXXXXXXXXX@10.95.19.132:8123/default
+sqlalchemy_uri: clickhousedb://default:quie1ahpoo5Su0wohpaedae8keeph6bi@10.95.19.132:8123/default?secure=false
 cache_timeout: null
 expose_in_sqllab: true
 allow_run_async: false
@@ -13,6 +13,5 @@ extra:
   metadata_cache_timeout: {}
   schemas_allowed_for_file_upload: []
 impersonate_user: false
-configuration_method: sqlalchemy_form
 uuid: bd3097bd-d46e-46db-b5ee-31b3f6d8c67b
 version: 1.0.0

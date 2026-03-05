@@ -1,0 +1,69 @@
+slice_name: "\u0412\u0441\u0435\u0433\u043E \u0412\u0421 \u043D\u0430 \u043A\u043E\
+  \u043D\u0435\u0446"
+description: null
+certified_by: null
+certification_details: null
+viz_type: big_number_total
+params:
+  datasource: 2__table
+  viz_type: big_number_total
+  metric:
+    aggregate: null
+    column: null
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: "\u0412\u0441\u0435\u0433\u043E \u0412\u0421 \u043D\u0430 \u043A\u043E\u043D\
+      \u0435\u0446"
+    sqlExpression: arraySum(arrayMap(t -> t.2, arrayFilter(t -> t.1 = arrayMax(arrayMap(x
+      -> x.1, groupArrayIf((day_date, status_count_ffill), group_by IN (1, 2)))),
+      groupArrayIf((day_date, status_count_ffill), group_by IN (1, 2)))))
+  adhoc_filters:
+  - clause: WHERE
+    comparator: No filter
+    expressionType: SIMPLE
+    operator: TEMPORAL_RANGE
+    subject: day_date
+  row_limit: 70000
+  time_grain_sqla: P1Y
+  subheader: ''
+  y_axis_format: SMART_NUMBER
+  show_trend_line: false
+  start_y_axis_at_zero: true
+  extra_form_data: {}
+  dashboards:
+  - 1
+  annotation_layers: []
+query_context: "{\"datasource\":{\"id\":2,\"type\":\"table\"},\"force\":false,\"queries\"\
+  :[{\"filters\":[{\"col\":\"day_date\",\"op\":\"TEMPORAL_RANGE\",\"val\":\"No filter\"\
+  }],\"extras\":{\"time_grain_sqla\":\"P1Y\",\"having\":\"\",\"where\":\"\"},\"applied_time_extras\"\
+  :{},\"columns\":[],\"metrics\":[{\"aggregate\":null,\"column\":null,\"datasourceWarning\"\
+  :false,\"expressionType\":\"SQL\",\"hasCustomLabel\":true,\"label\":\"\u0412\u0441\
+  \u0435\u0433\u043E \u0412\u0421 \u043D\u0430 \u043A\u043E\u043D\u0435\u0446\",\"\
+  sqlExpression\":\"arraySum(arrayMap(t -> t.2, arrayFilter(t -> t.1 = arrayMax(arrayMap(x\
+  \ -> x.1, groupArrayIf((day_date, status_count_ffill), group_by IN (1, 2)))), groupArrayIf((day_date,\
+  \ status_count_ffill), group_by IN (1, 2)))))\"}],\"orderby\":[[{\"aggregate\":null,\"\
+  column\":null,\"datasourceWarning\":false,\"expressionType\":\"SQL\",\"hasCustomLabel\"\
+  :true,\"label\":\"\u0412\u0441\u0435\u0433\u043E \u0412\u0421 \u043D\u0430 \u043A\
+  \u043E\u043D\u0435\u0446\",\"sqlExpression\":\"arraySum(arrayMap(t -> t.2, arrayFilter(t\
+  \ -> t.1 = arrayMax(arrayMap(x -> x.1, groupArrayIf((day_date, status_count_ffill),\
+  \ group_by IN (1, 2)))), groupArrayIf((day_date, status_count_ffill), group_by IN\
+  \ (1, 2)))))\"},false]],\"annotation_layers\":[],\"row_limit\":70000,\"series_columns\"\
+  :[],\"series_limit\":0,\"order_desc\":true,\"url_params\":{},\"custom_params\":{},\"\
+  custom_form_data\":{},\"time_offsets\":[],\"post_processing\":[]}],\"form_data\"\
+  :{\"datasource\":\"2__table\",\"viz_type\":\"big_number_total\",\"metric\":{\"aggregate\"\
+  :null,\"column\":null,\"datasourceWarning\":false,\"expressionType\":\"SQL\",\"\
+  hasCustomLabel\":true,\"label\":\"\u0412\u0441\u0435\u0433\u043E \u0412\u0421 \u043D\
+  \u0430 \u043A\u043E\u043D\u0435\u0446\",\"sqlExpression\":\"arraySum(arrayMap(t\
+  \ -> t.2, arrayFilter(t -> t.1 = arrayMax(arrayMap(x -> x.1, groupArrayIf((day_date,\
+  \ status_count_ffill), group_by IN (1, 2)))), groupArrayIf((day_date, status_count_ffill),\
+  \ group_by IN (1, 2)))))\"},\"adhoc_filters\":[{\"clause\":\"WHERE\",\"comparator\"\
+  :\"No filter\",\"expressionType\":\"SIMPLE\",\"operator\":\"TEMPORAL_RANGE\",\"\
+  subject\":\"day_date\"}],\"row_limit\":70000,\"time_grain_sqla\":\"P1Y\",\"subheader\"\
+  :\"\",\"y_axis_format\":\"SMART_NUMBER\",\"show_trend_line\":false,\"start_y_axis_at_zero\"\
+  :true,\"extra_form_data\":{},\"dashboards\":[1]},\"result_format\":\"json\",\"result_type\"\
+  :\"full\"}"
+cache_timeout: null
+uuid: dbeab458-f910-470a-b826-6af94234dff3
+version: 1.0.0
+dataset_uuid: 500f4b0d-760d-40fc-9570-3533d904dce1

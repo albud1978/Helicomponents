@@ -1,11 +1,11 @@
 slice_name: "\u0413\u0440\u0430\u0444\u0438\u043A \u0420\u0435\u043C\u043E\u043D\u0442\
   \u0430"
-description: ''
+description: null
 certified_by: null
 certification_details: null
 viz_type: echarts6_gantt
 params:
-  datasource: 2__table
+  datasource: 3__table
   viz_type: echarts6_gantt
   slice_name: ECharts6 Gantt (custom-flight style) v20250704
   groupby:
@@ -47,14 +47,14 @@ params:
     "\u0422\u0438\u043F \u0412\u0421: \u041C\u0438-17": '#7CA3DC'
     '1': '#003594'
     '2': '#7CA3DC'
-query_context: "{\"datasource\": {\"id\": 2, \"type\": \"table\"}, \"queries\": [{\"\
+query_context: "{\"datasource\": {\"id\": 3, \"type\": \"table\"}, \"queries\": [{\"\
   columns\": [\"line_id\", \"day_date\", \"group_by\", \"day_u16\"], \"metrics\":\
   \ [{\"expressionType\": \"SIMPLE\", \"column\": {\"column_name\": \"aircraft_number\"\
   }, \"aggregate\": \"MAX\", \"label\": \"MAX(aircraft_number)\"}], \"filters\": [{\"\
   col\": \"group_by\", \"op\": \"IN\", \"val\": [1, 2]}, {\"col\": \"aircraft_number\"\
   , \"op\": \">\", \"val\": 0}], \"extras\": {\"having\": \"\", \"where\": \"\"},\
   \ \"row_limit\": 70000, \"orderby\": [], \"time_offsets\": [], \"post_processing\"\
-  : [], \"time_grain_sqla\": null}], \"form_data\": {\"datasource\": \"2__table\"\
+  : [], \"time_grain_sqla\": null}], \"form_data\": {\"datasource\": \"3__table\"\
   , \"viz_type\": \"echarts6_gantt\", \"slice_name\": \"ECharts6 Gantt (custom-flight\
   \ style) v20250704\", \"groupby\": [\"line_id\", \"day_date\", \"group_by\", \"\
   day_u16\"], \"metrics\": [{\"expressionType\": \"SIMPLE\", \"column\": {\"column_name\"\
