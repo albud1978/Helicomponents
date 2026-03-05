@@ -1,0 +1,43 @@
+slice_name: Выбыло Ми-17
+description: ''
+certified_by: null
+certification_details: null
+viz_type: big_number_total
+params:
+  datasource: 3__table
+  viz_type: big_number_total
+  metric:
+    aggregate: null
+    column: null
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Выбыло Ми-17
+    sqlExpression: COUNTIf(group_by = 2 AND pre_status_id != 6 AND status_id = 6)
+  adhoc_filters:
+  - clause: WHERE
+    comparator: No filter
+    expressionType: SIMPLE
+    operator: TEMPORAL_RANGE
+    subject: day_date
+  row_limit: 70000
+  time_grain_sqla: P1Y
+  subheader: ''
+  y_axis_format: SMART_NUMBER
+  show_trend_line: false
+  start_y_axis_at_zero: true
+  extra_form_data: {}
+  dashboards:
+  - 1
+query_context: '{"datasource":{"id":3,"type":"table"},"force":false,"queries":[{"filters":[{"col":"day_date","op":"TEMPORAL_RANGE","val":"No
+  filter"}],"extras":{"time_grain_sqla":"P1Y","having":"","where":""},"applied_time_extras":{},"columns":[],"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Выбыло
+  Ми-17","sqlExpression":"COUNTIf(group_by = 2 AND pre_status_id != 6 AND status_id
+  = 6)"}],"orderby":[[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Выбыло
+  Ми-17","sqlExpression":"COUNTIf(group_by = 2 AND pre_status_id != 6 AND status_id
+  = 6)"},false]],"annotation_layers":[],"row_limit":70000,"series_columns":[],"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"time_offsets":[],"post_processing":[]}],"form_data":{"datasource":"3__table","viz_type":"big_number_total","metric":{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Выбыло
+  Ми-17","sqlExpression":"COUNTIf(group_by = 2 AND pre_status_id != 6 AND status_id
+  = 6)"},"adhoc_filters":[{"clause":"WHERE","comparator":"No filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"day_date"}],"row_limit":70000,"time_grain_sqla":"P1Y","subheader":"","y_axis_format":"SMART_NUMBER","show_trend_line":false,"start_y_axis_at_zero":true,"extra_form_data":{},"dashboards":[1]},"result_format":"json","result_type":"full"}'
+cache_timeout: null
+uuid: d82297a2-c9f5-48de-8092-838ec8d50e24
+version: 1.0.0
+dataset_uuid: 27fba67d-02f3-45ea-8ce7-b123ec15839f
