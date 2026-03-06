@@ -1,5 +1,30 @@
 # Changelog
 
+## [06-03-2026] - Operational agent model: новые аналитики + governance pre-gate/pre-close
+
+### Изменения
+- `.cursor/agents/`:
+  - добавлены новые профили `research-graph-analyst`, `bi-semantic-analyst`, `sql-checker`;
+  - `analyst-sql-graph` переведен в legacy compatibility профиль;
+  - модели выровнены: `orchestrator`, `coder-flame`, `research-graph-analyst`, `bi-semantic-analyst` -> `gpt-5.4-high`, routine/check роли -> `auto`.
+- `.cursor/hooks/pre_gate_guard.py`:
+  - добавлен operational `pre_gate` для dispatch subagent-ов;
+  - enforced: наличие `workflow_id`, active workflow в `config/agent_kg.json`, явный возврат `Handoff` оркестратору.
+- `.cursor/hooks/pre_close_guard.py`:
+  - логика выровнена под governance verdict `allow | needs_human_gate | reject`;
+  - закрытие workflow теперь опирается на verdict governance и обязательные handoff/traceability поля, а не на старую псевдо-матрицу риска.
+- `.cursor/hooks/orchestrator_guard.py` и `.cursor/hooks/orchestrator_write_guard.py`:
+  - обновлены под новый allowlist оркестратора и встроенные `pre_gate / pre_close`.
+- `.cursor/rules/90_multiagent_workflow.mdc`:
+  - канонический pipeline переписан в operational-формат: `orchestrator -> pre_gate -> worker -> review/validate -> pre_close -> docs/capsule -> final handoff`;
+  - governance больше не описывается как боковая производственная ветка, а как встроенный checker переходов;
+  - handoff всех subagent-ов явно возвращается в `orchestrator`.
+- `deploy/bi-as-code/README.md` и `.cursor/skills/bi-superset-api/SKILL.md`:
+  - роли BI-контура синхронизированы с новой агентной моделью.
+
+### Контекст
+- Пакет переводит агентную схему из “договоренности в правилах” в operational governance-контур с реальными `pre_gate` / `pre_close` guard-ами и явным возвратом handoff в `orchestrator`.
+
 ## [04-03-2026] - BI remediation: fail-fast для Superset API + security/policy cleanup
 
 ### Изменения

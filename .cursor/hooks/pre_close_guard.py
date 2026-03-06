@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""preToolUse hook: блокирует --close-workflow без governance/docs handoff.
+"""preToolUse hook: блокирует --close-workflow без operational pre-close условий.
 
 Проверка применяется только к Shell-вызовам `code/utils/agent_kg.py --close-workflow`.
-Для закрытия workflow должны существовать handoff от:
-- governance-compliance
-- docs-curator
+Для закрытия workflow должны существовать:
+- handoff от `governance-compliance` с decision `allow`
+- handoff от `docs-curator`
+- handoff orchestrator с `graph_update=yes|no` и `drift_check`
 """
 
 import json
@@ -17,7 +18,6 @@ from typing import Dict, List, Tuple
 
 REQUIRED_AGENTS = ("governance-compliance", "docs-curator")
 KG_RELATIVE_PATH = Path("config/agent_kg.json")
-RISK_TIERS_WITH_REQUIRED_ARTIFACTS = {"medium", "high"}
 
 
 def _extract_shell_command(payload: Dict[str, object]) -> str:
@@ -118,55 +118,16 @@ def _is_na_like(value: object) -> bool:
     return normalized in {"n/a", "n/a (low-risk)", "na"}
 
 
-def _policy_violations(kg_data: Dict[str, object], workflow_id: str) -> List[str]:
-    """Проверяет policy-поля risk/artifacts/approval для handoff workflow."""
-    violations: List[str] = []
-    handoffs = kg_data.get("handoffs", [])
-    if not isinstance(handoffs, list):
-        return violations
-
-    for item in handoffs:
-        if not isinstance(item, dict):
-            continue
-        if item.get("workflow_id") != workflow_id:
-            continue
-
-        handoff_id = _normalize_text(item.get("handoff_id")) or "<unknown_handoff>"
-        risk_tier = _normalize_text(item.get("risk_tier")).lower()
-        if risk_tier in RISK_TIERS_WITH_REQUIRED_ARTIFACTS:
-            required = {
-                "plan_card": item.get("plan_card"),
-                "evidence_pack": item.get("evidence_pack"),
-                "compliance_checklist": item.get("compliance_checklist"),
-            }
-            missing = [
-                key
-                for key, value in required.items()
-                if not _normalize_text(value) or _is_na_like(value)
-            ]
-            if missing:
-                violations.append(
-                    f"{handoff_id}: risk_tier={risk_tier}, отсутствуют обязательные артефакты: "
-                    + ", ".join(missing)
-                )
-
-        graph_update = _normalize_text(item.get("graph_update"))
-        if _is_true_like(graph_update):
-            approval_fields = {
-                "approval_gate_id": item.get("approval_gate_id"),
-                "approval_status": item.get("approval_status"),
-                "approval_source": item.get("approval_source"),
-            }
-            missing_approval = [
-                key for key, value in approval_fields.items() if not _normalize_text(value)
-            ]
-            if missing_approval:
-                violations.append(
-                    f"{handoff_id}: graph_update={graph_update}, не заполнены approval-поля: "
-                    + ", ".join(missing_approval)
-                )
-
-    return violations
+def _normalize_governance_decision(value: object) -> str:
+    normalized = _normalize_text(value).lower()
+    mapping = {
+        "allow": "allow",
+        "approve": "allow",
+        "needs_human_gate": "needs_human_gate",
+        "escalate": "needs_human_gate",
+        "reject": "reject",
+    }
+    return mapping.get(normalized, "")
 
 
 def _workflow_handoffs(kg_data: Dict[str, object], workflow_id: str) -> List[Dict[str, object]]:
@@ -268,15 +229,24 @@ def main() -> None:
         )
         return
 
-    policy_issues = _policy_violations(kg_data, workflow_id)
-    if policy_issues:
-        details = "; ".join(policy_issues[:3])
-        if len(policy_issues) > 3:
-            details = f"{details}; ... +{len(policy_issues) - 3} ещё"
+    governance = handoffs_by_agent.get("governance-compliance", {})
+    decision = _normalize_governance_decision(governance.get("decision"))
+    if not decision:
         _deny(
-            "Закрытие workflow заблокировано: обнаружены policy-нарушения в handoff "
-            f"для {workflow_id}: {details}. "
-            "Исправьте handoff (risk/artifacts/approval) и повторите --close-workflow."
+            "Закрытие workflow заблокировано: в handoff governance-compliance отсутствует "
+            "явный decision (`allow|needs_human_gate|reject`)."
+        )
+        return
+    if decision == "reject":
+        _deny(
+            "Закрытие workflow заблокировано: governance-compliance вернул `reject`. "
+            "Исправьте замечания и обновите handoff перед `--close-workflow`."
+        )
+        return
+    if decision == "needs_human_gate":
+        _deny(
+            "Закрытие workflow заблокировано: governance-compliance требует human gate "
+            "(`needs_human_gate`). Получите подтверждение человека и обновите verdict."
         )
         return
 
