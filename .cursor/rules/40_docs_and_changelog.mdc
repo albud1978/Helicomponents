@@ -1,0 +1,18 @@
+---
+description: Docs, changelog and handoff artifact discipline
+globs:
+  - "docs/**"
+  - "README.md"
+  - "deploy/bi-as-code/release/**"
+  - ".cursor/rules/**"
+  - ".cursor/agents/**"
+alwaysApply: false
+---
+# Docs and changelog
+
+- `docs-curator` подключается для high-risk задач и задач с реальным doc/process/handoff impact; не нужно форсировать полный docs-cycle для low-risk housekeeping без эффекта на операторов.
+- `docs/changelog.md` хранит короткий аудит принятых изменений: что изменилось, кто проводил review/validation/governance, итог.
+- Изменения в правилах агентов, governance и workflow должны иметь понятный след в changelog или в финальном handoff, чтобы root cause analysis не зависел от памяти чата.
+- Handoff-пакеты BI (`deployment_manifest`, `env_overrides_template`, `runbook`, `acceptance_report`, `brandbook_conformance_report`) обновляются только когда задача реально затрагивает release/process boundary.
+- Новые `.md` файлы без явного разрешения человека не создавать; по умолчанию обновлять существующие документы.
+- `capsule-builder` используется только когда меняется устойчивое доменное знание; для локальных process-правок капсула обычно не требуется.

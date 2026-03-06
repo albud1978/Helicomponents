@@ -1,1 +1,23 @@
+---
+description: Simulation core pipeline and downstream boundaries
+globs:
+  - "code/sim_v2/**"
+  - "config/transitions/**"
+  - "code/validation/**"
+  - "deploy/bi-as-code/**"
+alwaysApply: false
+---
+# SIM V2 pipeline
+
+- Основной e2e-поток проекта: `runtime simulation -> ClickHouse exports -> validation -> BI`.
+- Истина исполнения находится в `code/sim_v2/**`; BI является downstream-веткой и не может использоваться как первичное доказательство корректности симуляции.
+- Архитектурные контракты и правила переходов живут в `config/transitions/**`; изменения там считаются semantic/high-risk и требуют governance discipline.
+- Любые изменения, затрагивающие RepairLine/quota/spawn/postprocess, нужно оценивать на влияние минимум на:
+  - `sim_masterv2_v9`
+  - `sim_repairline_v9`
+  - downstream validation
+  - downstream BI artifacts
+- Для задач на симуляцию и переходы соблюдать последовательность: `analysis -> implement -> review -> validation -> BI/doc sync`.
+- `group_by` является обязательным измерением в runtime, validation и BI-слое; смешивание групп без явной обработки запрещено.
+- `Domain Graph` рассматривается только как производная визуализация; решение о логике переходов принимается по JSON/runtime, а не по Neo4j.
 

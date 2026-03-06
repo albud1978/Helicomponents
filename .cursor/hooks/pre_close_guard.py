@@ -2,10 +2,10 @@
 """preToolUse hook: блокирует --close-workflow без operational pre-close условий.
 
 Проверка применяется только к Shell-вызовам `code/utils/agent_kg.py --close-workflow`.
-Для закрытия workflow должны существовать:
-- handoff от `governance-compliance` с decision `allow`
-- handoff от `docs-curator`
-- handoff orchestrator с `graph_update=yes|no` и `drift_check`
+Проверка риск-ориентированная:
+- low-risk: обязателен orchestrator handoff с `graph_update=yes|no` и `drift_check`
+- medium-risk: дополнительно обязателен handoff `governance-compliance`
+- high-risk: дополнительно обязательны handoff `governance-compliance` и `docs-curator`
 """
 
 import json
@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 
-REQUIRED_AGENTS = ("governance-compliance", "docs-curator")
+MEDIUM_RISK_REQUIRED_AGENTS = ("governance-compliance",)
+HIGH_RISK_REQUIRED_AGENTS = ("governance-compliance", "docs-curator")
 KG_RELATIVE_PATH = Path("config/agent_kg.json")
 
 
@@ -63,13 +64,13 @@ def _load_agent_kg(repo_root: Path) -> Dict[str, object]:
 
 
 def _latest_required_handoffs(
-    kg_data: Dict[str, object], workflow_id: str
+    kg_data: Dict[str, object], workflow_id: str, required_agents: Tuple[str, ...]
 ) -> Tuple[Dict[str, Dict[str, object]], List[str]]:
     """Возвращает последние handoff по обязательным агентам и список отсутствующих."""
     latest: Dict[str, Dict[str, object]] = {}
     handoffs = kg_data.get("handoffs", [])
     if not isinstance(handoffs, list):
-        return latest, list(REQUIRED_AGENTS)
+        return latest, list(required_agents)
 
     for item in handoffs:
         if not isinstance(item, dict):
@@ -77,7 +78,7 @@ def _latest_required_handoffs(
         if item.get("workflow_id") != workflow_id:
             continue
         agent = item.get("agent")
-        if agent not in REQUIRED_AGENTS:
+        if agent not in required_agents:
             continue
         current = latest.get(agent)
         if current is None:
@@ -86,7 +87,7 @@ def _latest_required_handoffs(
         if (item.get("created_at") or "") > (current.get("created_at") or ""):
             latest[agent] = item
 
-    missing = [agent for agent in REQUIRED_AGENTS if agent not in latest]
+    missing = [agent for agent in required_agents if agent not in latest]
     return latest, missing
 
 
@@ -130,6 +131,28 @@ def _normalize_governance_decision(value: object) -> str:
     return mapping.get(normalized, "")
 
 
+def _normalize_risk_tier(value: object) -> str:
+    normalized = _normalize_text(value).lower()
+    if normalized in {"low", "medium", "high"}:
+        return normalized
+    return "low"
+
+
+def _extract_checklist_value(text: str, key: str) -> str:
+    match = re.search(rf"\b{re.escape(key)}\s*=\s*([A-Za-z_]+)\b", text, flags=re.IGNORECASE)
+    if match:
+        return match.group(1).strip().lower()
+    return ""
+
+
+def _required_agents_for_risk(risk_tier: str) -> Tuple[str, ...]:
+    if risk_tier == "high":
+        return HIGH_RISK_REQUIRED_AGENTS
+    if risk_tier == "medium":
+        return MEDIUM_RISK_REQUIRED_AGENTS
+    return ()
+
+
 def _workflow_handoffs(kg_data: Dict[str, object], workflow_id: str) -> List[Dict[str, object]]:
     handoffs = kg_data.get("handoffs", [])
     if not isinstance(handoffs, list):
@@ -156,6 +179,40 @@ def _latest_orchestrator_handoff(
 def _has_explicit_graph_decision(handoff: Dict[str, object]) -> bool:
     value = _normalize_text(handoff.get("graph_update")).lower()
     return value in {"yes", "true", "1", "да", "no", "false", "0", "нет"}
+
+
+def _derive_governance_decision(
+    governance: Dict[str, object], orchestrator_handoff: Dict[str, object]
+) -> str:
+    explicit = _normalize_governance_decision(governance.get("decision"))
+    if explicit:
+        return explicit
+
+    checklist = _normalize_text(governance.get("compliance_checklist"))
+    explicit = _normalize_governance_decision(_extract_checklist_value(checklist, "decision"))
+    if explicit:
+        return explicit
+
+    policy_status = _extract_checklist_value(checklist, "policy_status")
+    scope_match = _extract_checklist_value(checklist, "scope_match")
+    traceability_status = _extract_checklist_value(checklist, "traceability_status")
+    if not traceability_status:
+        traceability_status = _extract_checklist_value(checklist, "traceability")
+    human_gate_status = _extract_checklist_value(checklist, "human_gate_status")
+
+    if policy_status == "fail" or scope_match == "no" or traceability_status == "fail":
+        return "reject"
+
+    approval_status = _normalize_text(orchestrator_handoff.get("approval_status")).lower()
+    gate_required = _is_true_like(governance.get("human_gate_required"))
+    if human_gate_status == "missing" or (gate_required and approval_status != "approved"):
+        return "needs_human_gate"
+
+    if policy_status == "pass" and scope_match == "yes" and traceability_status == "pass":
+        if human_gate_status in {"ok", "not_required", ""}:
+            return "allow"
+
+    return ""
 
 
 def _deny(reason: str) -> None:
@@ -207,12 +264,24 @@ def main() -> None:
         )
         return
 
-    handoffs_by_agent, missing = _latest_required_handoffs(kg_data, workflow_id)
+    wf_handoffs = _workflow_handoffs(kg_data, workflow_id)
+    orch = _latest_orchestrator_handoff(wf_handoffs)
+    if not orch:
+        _deny(
+            "Закрытие workflow заблокировано: отсутствует handoff orchestrator. "
+            "Требуется handoff orchestrator с risk_tier, drift_check и graph_update."
+        )
+        return
+
+    risk_tier = _normalize_risk_tier(orch.get("risk_tier"))
+    required_agents = _required_agents_for_risk(risk_tier)
+
+    handoffs_by_agent, missing = _latest_required_handoffs(kg_data, workflow_id, required_agents)
     if missing:
         missing_text = ", ".join(missing)
         _deny(
             "Закрытие workflow заблокировано: отсутствуют обязательные handoff "
-            f"для {workflow_id}: {missing_text}. "
+            f"для {workflow_id} (risk_tier={risk_tier}): {missing_text}. "
             "Сначала получите и запишите handoff, затем повторите --close-workflow."
         )
         return
@@ -229,35 +298,29 @@ def main() -> None:
         )
         return
 
-    governance = handoffs_by_agent.get("governance-compliance", {})
-    decision = _normalize_governance_decision(governance.get("decision"))
-    if not decision:
-        _deny(
-            "Закрытие workflow заблокировано: в handoff governance-compliance отсутствует "
-            "явный decision (`allow|needs_human_gate|reject`)."
-        )
-        return
-    if decision == "reject":
-        _deny(
-            "Закрытие workflow заблокировано: governance-compliance вернул `reject`. "
-            "Исправьте замечания и обновите handoff перед `--close-workflow`."
-        )
-        return
-    if decision == "needs_human_gate":
-        _deny(
-            "Закрытие workflow заблокировано: governance-compliance требует human gate "
-            "(`needs_human_gate`). Получите подтверждение человека и обновите verdict."
-        )
-        return
+    if "governance-compliance" in handoffs_by_agent:
+        governance = handoffs_by_agent.get("governance-compliance", {})
+        decision = _derive_governance_decision(governance, orch)
+        if not decision:
+            _deny(
+                "Закрытие workflow заблокировано: не удалось вывести governance verdict "
+                "из handoff governance-compliance. Запишите `decision=...` в "
+                "`ComplianceChecklist` и повторите --close-workflow."
+            )
+            return
+        if decision == "reject":
+            _deny(
+                "Закрытие workflow заблокировано: governance-compliance вернул `reject`. "
+                "Исправьте замечания и обновите handoff перед `--close-workflow`."
+            )
+            return
+        if decision == "needs_human_gate":
+            _deny(
+                "Закрытие workflow заблокировано: governance-compliance требует human gate "
+                "(`needs_human_gate`). Получите подтверждение человека и обновите verdict."
+            )
+            return
 
-    wf_handoffs = _workflow_handoffs(kg_data, workflow_id)
-    orch = _latest_orchestrator_handoff(wf_handoffs)
-    if not orch:
-        _deny(
-            "Закрытие workflow заблокировано: отсутствует handoff orchestrator. "
-            "Требуется явное решение по GraphImpactProposal (graph_update=yes|no)."
-        )
-        return
     if not _has_explicit_graph_decision(orch):
         _deny(
             "Закрытие workflow заблокировано: в handoff orchestrator не зафиксировано "

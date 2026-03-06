@@ -1,0 +1,17 @@
+---
+description: SQL-first validation and invariant discipline
+globs:
+  - "code/validation/**"
+  - "config/transitions/invariants.json"
+  - "docs/**"
+alwaysApply: false
+---
+# Validation SQL-first
+
+- Финальный verdict по инвариантам и результатам симуляции выносится через переиспользуемые скрипты в `code/validation/**`.
+- Ad-hoc SQL допустим только для разведки и локального fact-check; финальный pass/fail на его основе не фиксируется.
+- Перед валидацией нужно явно зафиксировать scope проверки: `version_id`, `version_date`, таблица и `group_by`, если он релевантен.
+- Источник истины по инвариантам — `config/transitions/invariants.json`; Neo4j и BI-визуализации не заменяют validation layer.
+- Обновление `invariants.json` разрешено только по явной команде Алексея после успешной проверки.
+- Если задача не меняет simulation semantics, допускается пропустить validator-этап, но причина должна быть явно записана в `Facts` или `Assumptions`.
+- Для BI-задач render/smoke-check — это отдельный уровень контроля, а не замена SQL-first validation.

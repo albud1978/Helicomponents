@@ -233,7 +233,7 @@ def write_handoff(args: argparse.Namespace) -> None:
     data["handoffs"].append(handoff)
 
     # Обновляем workflow
-    workflow["phase"] = args.phase or "implementation"
+    workflow["phase"] = args.phase or workflow.get("phase") or "implementation"
     workflow["owner"] = args.next_owner or "orchestrator"
     workflow["updated_at"] = _now()
 

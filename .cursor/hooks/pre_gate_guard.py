@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""preToolUse hook: governance pre-gate для dispatch subagent-ов.
+"""preToolUse hook: dispatch pre-gate для dispatch subagent-ов.
 
 Operational rules:
 - любой dispatch subagent должен быть привязан к workflow_id
 - workflow_id должен существовать в Agent KG и быть active
 - prompt должен явно требовать возврат Handoff оркестратору
+- сам hook не заменяет `governance-compliance`; governance вызывается оркестратором отдельно по risk/policy
 """
 
 from __future__ import annotations
