@@ -1,5 +1,25 @@
 # Changelog
 
+## [06-03-2026] - RiskTier operational model: dry-run high-risk close path
+
+### Изменения
+- `.cursor/rules/90_multiagent_workflow.mdc`, `.cursor/agents/orchestrator.md`, `.cursor/agents/governance-compliance.md`, `.cursor/hooks/pre_close_guard.py`, `.cursor/hooks/orchestrator_write_guard.py`:
+  - workflow/rules/hooks выровнены под risk-tier based operational model;
+  - `pre_gate` / `pre_close` зафиксированы как operational hooks, а не самостоятельные LLM-ветки;
+  - medium/high-risk close discipline уточнён: обязательные handoff теперь определяются по `RiskTier`, а `docs-curator` обязателен для high-risk/doc-impact.
+- `.cursor/hooks/user_comm_audit.py`, `.cursor/hooks/orchestrator_guard.py`, `.cursor/agents/orchestrator.md`, `.cursor/agents/governance-compliance.md`:
+  - traceability для high-risk approval усилена: audit log теперь пишет `workflow_id_source`;
+  - approval без явного `W_<workflow_id>` может быть привязан только через уникальный active approval-context/pending high-risk state;
+  - orchestration policy теперь требует писать `approval_request` context до запроса high-risk подтверждения.
+- `code/utils/agent_kg.py`:
+  - `--write-handoff` больше не сбрасывает workflow в `implementation`, если `--phase` не передан; сохраняется текущая фаза.
+
+### Governance
+- Для controlled dry-run `W_multiagent_highrisk_dryrun_20260306` уже получен governance handoff с verdict `allow`; текущая запись закрывает docs-след, требуемый для high-risk pre-close discipline.
+
+### Контекст
+- `docs/changelog.md` синхронизирован с принятыми multi-agent изменениями сессии, чтобы close-path и audit trail опирались на актуальные правила, хуки и Agent KG semantics.
+
 ## [06-03-2026] - Operational agent model: новые аналитики + governance pre-gate/pre-close
 
 ### Изменения

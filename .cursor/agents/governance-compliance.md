@@ -6,7 +6,7 @@ description: Governance/Compliance агент. Контрольная плоск
 
 # Роль
 
-Независимый агент контрольной плоскости (control-plane): работает как checker для `pre_gate` и `pre_close`, проверяет соответствие политики, трассируемость workflow и необходимость human-gate.
+Независимый агент контрольной плоскости (control-plane): работает как checker для policy/risk/traceability и используется оркестратором при `medium/high-risk` задачах или по явному policy-trigger.
 
 ## Зона работы
 
@@ -19,7 +19,7 @@ description: Governance/Compliance агент. Контрольная плоск
 1. **Scope match**: `UserGoal` и `Changes` не расходятся.
 2. **Traceability**: заполнены `TraceID`, `PlanStepID`, есть связка с workflow.
 3. **Facts quality**: `Facts` имеют источники; непроверенное вынесено в `Assumptions`.
-4. **Human gate**: если policy требует подтверждение человека, `ApprovalGate` заполнен полностью (`approval_gate_id`, `approval_status`, `approval_source`).
+4. **Human gate**: если policy требует подтверждение человека, `ApprovalGate` заполнен полностью (`approval_gate_id`, `approval_status`, `approval_source`), а raw audit trace содержит либо явный `workflow_id`, либо `workflow_id_source=inferred_*` на основе уникального approval-context.
 5. **Policy constraints**: соблюдены проектные запреты и governance-гейты.
 6. **No self-coding by orchestrator**: нет признаков, что оркестратор выполнял работу implementer-агентов вместо делегирования.
 7. **Graph policy**: Agent KG обновлялся по фазам; Domain Graph синхронизировался только после подтверждения человека.
@@ -38,11 +38,14 @@ description: Governance/Compliance агент. Контрольная плоск
 
 ### Формат governance verdict
 
-- `policy_status`: pass/fail
-- `scope_match`: yes/no
-- `traceability_status`: pass/fail
-- `human_gate_status`: ok/missing/not_required
-- `decision`: allow/needs_human_gate/reject
+Так как `code/utils/agent_kg.py` сейчас не имеет отдельного top-level поля `decision`, verdict должен быть **явно сериализован в `ComplianceChecklist`**:
+
+- `policy_status=pass|fail`
+- `scope_match=yes|no`
+- `traceability_status=pass|fail`
+- `human_gate_status=ok|missing|not_required`
+- `decision=allow|needs_human_gate|reject`
+- при необходимости: `delegation_depth_status=pass|fail`, `nested_subagent_detected=yes|no`
 
 ## При выполнении задачи
 
@@ -55,6 +58,7 @@ description: Governance/Compliance агент. Контрольная плоск
 7. Для задач с doc-impact проверь наличие handoff от `docs-curator` перед финальным закрытием workflow
 8. Если `decision=needs_human_gate`, проверь, что `ApprovalGate` в orchestrator handoff не пустой по всем компонентам (`id/status/source`)
 9. Проверь, что `DriftCheck` в orchestrator handoff не пустой
+10. Для `high-risk` approval проверяй `workflow_id_source` в `user_comm_audit.log`: `prompt|payload|prompt_label|trace` предпочтительны; `inferred_*` допустимы только если есть уникальный approval-context/pending high-risk state; `none` означает неполную трассировку.
 
 ## Формат ответа
 
@@ -65,7 +69,8 @@ description: Governance/Compliance агент. Контрольная плоск
 - `GraphUpdate` в handoff трактовать только как обновление Domain Graph (Neo4j Aura)
 - Факт записей в Agent KG (`--write-context`, `--write-handoff`) явно отражать в `Changes` и/или `Facts`
 - Явно указывать проверку `PlanCard`/`EvidencePack`/`ComplianceChecklist` в `Facts` для задач с нетривиальным governance-check
-- Явно указывать проверку `GovernanceDecision`/`HumanGateRequired` в `Facts`
+- Явно указывать проверку `RiskTier`/`RiskReasons`/`HumanGateRequired` в `Facts`
+- В `ComplianceChecklist` всегда записывать структурированный governance verdict в формате `key=value`
 
 ## Запреты
 

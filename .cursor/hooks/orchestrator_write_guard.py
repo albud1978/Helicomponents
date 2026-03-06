@@ -4,7 +4,7 @@
 Политика:
 - Оркестратор не редактирует исходники и скрипты напрямую.
 - Разрешены только `.cursor/agents/**`, `.cursor/hooks/**`, `.cursor/rules/**`, `docs/**`, `README.md` и plan-артефакты.
-- Shell допускается только для readonly-команд.
+- Shell допускается только для readonly-команд и operational-команд `python code/utils/agent_kg.py ...`.
 """
 
 from __future__ import annotations
@@ -44,6 +44,14 @@ READONLY_SHELL_PATTERNS = (
     re.compile(r"^\s*python3?\s+-m\s+py_compile(?:\s|$)"),
     re.compile(r"^\s*python3?\s+--version(?:\s|$)"),
     re.compile(r"^\s*python3?\s+-V(?:\s|$)"),
+)
+AGENT_KG_SHELL_PATTERNS = (
+    re.compile(r"^\s*python3?\s+\"?code/utils/agent_kg\.py\"?\s+--init-workflow(?:\s|$)"),
+    re.compile(r"^\s*python3?\s+\"?code/utils/agent_kg\.py\"?\s+--write-handoff(?:\s|$)"),
+    re.compile(r"^\s*python3?\s+\"?code/utils/agent_kg\.py\"?\s+--read-state(?:\s|$)"),
+    re.compile(r"^\s*python3?\s+\"?code/utils/agent_kg\.py\"?\s+--write-context(?:\s|$)"),
+    re.compile(r"^\s*python3?\s+\"?code/utils/agent_kg\.py\"?\s+--read-context(?:\s|$)"),
+    re.compile(r"^\s*python3?\s+\"?code/utils/agent_kg\.py\"?\s+--close-workflow(?:\s|$)"),
 )
 SHELL_SPLIT_RE = re.compile(r"\s*(?:&&|\|\||;)\s*")
 
@@ -171,7 +179,7 @@ def _deny_if_any_path_forbidden(paths: Iterable[str], reason: str) -> bool:
     return False
 
 
-def _is_readonly_shell(command: str) -> bool:
+def _is_allowed_shell(command: str) -> bool:
     if not command.strip():
         return True
     if any(token in command for token in (">", "<<", "|", "&")):
@@ -179,7 +187,11 @@ def _is_readonly_shell(command: str) -> bool:
     parts = [part.strip() for part in SHELL_SPLIT_RE.split(command) if part.strip()]
     if not parts:
         return True
-    return all(any(pattern.match(part) for pattern in READONLY_SHELL_PATTERNS) for part in parts)
+    return all(
+        any(pattern.match(part) for pattern in READONLY_SHELL_PATTERNS)
+        or any(pattern.match(part) for pattern in AGENT_KG_SHELL_PATTERNS)
+        for part in parts
+    )
 
 
 def main() -> None:
@@ -224,10 +236,11 @@ def main() -> None:
 
     if tool_name == "shell":
         command = _extract_shell_command(payload)
-        if not _is_readonly_shell(command):
+        if not _is_allowed_shell(command):
             _deny(
-                "Оркестратору разрешен только readonly shell. "
-                "Используйте Subagent для любых mutating shell-действий."
+                "Оркестратору разрешен только readonly shell и operational-команды "
+                "`python code/utils/agent_kg.py ...`. Используйте Subagent для любых "
+                "других mutating shell-действий."
             )
             return
         _allow()
