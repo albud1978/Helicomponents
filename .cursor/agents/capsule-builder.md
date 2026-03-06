@@ -1,6 +1,6 @@
 ---
 name: capsule-builder
-model: gpt-5.2-codex-high
+model: auto
 description: Сборщик/редактор Context Capsule (docs/*_capsule.md). Используй после приёмки оркестратором.
 ---
 

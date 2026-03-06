@@ -1,6 +1,6 @@
 ---
 name: reviewer-flame
-model: gpt-5.2-codex-high
+model: auto
 description: Ревьюер FLAME GPU/CUDA кода. Вызывай для code review RTC модулей и симуляции. Используй проактивно после написания или изменения CUDA/RTC кода.
 ---
 

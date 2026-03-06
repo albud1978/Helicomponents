@@ -1,6 +1,6 @@
 ---
 name: docs-curator
-model: gpt-5.2-codex-high
+model: auto
 description: Документационный агент. Поддерживает согласованность docs/changelog/README с принятыми решениями.
 ---
 
@@ -27,7 +27,7 @@ description: Документационный агент. Поддерживае
 
 - Нет расхождения между `UserGoal` и `Changes`.
 - Все утверждения в документации подтверждены источником (файл/лог/handoff).
-- Для high-risk задач есть ссылка на `ApprovalGate` и verdict `governance-compliance`.
+- Для задач с human-gate или policy-check есть ссылка на `ApprovalGate` и verdict `governance-compliance`.
 - Нет устаревших ссылок на удаленные роли/правила/хуки.
 
 ## Формат ответа

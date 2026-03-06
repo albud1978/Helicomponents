@@ -1,6 +1,6 @@
 ---
 name: validator-judge
-model: gpt-5.2-codex-high
+model: auto
 description: Валидатор результатов симуляции. SQL-first проверка инвариантов в ClickHouse. Используй проактивно после прогона симуляции для верификации результатов.
 ---
 

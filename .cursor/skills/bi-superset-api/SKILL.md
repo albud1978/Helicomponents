@@ -53,7 +53,9 @@ description: Implements and maintains Superset BI artifacts in API-only mode for
 
 ### Multi-agent
 - Реализация BI: `coder-general`
-- Semantic checks: `analyst-sql-graph`
+- BI semantics: `bi-semantic-analyst`
+- Routine SQL checks: `sql-checker`
+- Repo / graph research: `research-graph-analyst`
 - Документация: `docs-curator`
 
 ### Single-agent

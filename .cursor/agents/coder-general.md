@@ -1,6 +1,6 @@
 ---
 name: coder-general
-model: gpt-5.2-codex-high
+model: auto
 description: Разработчик общего кода (не FLAME GPU). Используй для ETL/Extract/analysis/utils/config/docs.
 ---
 

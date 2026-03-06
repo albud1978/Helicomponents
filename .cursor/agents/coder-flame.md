@@ -1,6 +1,6 @@
 ---
 name: coder-flame
-model: gpt-5.2-codex-high
+model: gpt-5.4-high
 description: FLAME GPU/CUDA разработчик для RTC модулей и симуляции. Вызывай для написания кода в code/sim_v2/messaging/. Используй проактивно при задачах на реализацию CUDA/RTC кода.
 ---
 

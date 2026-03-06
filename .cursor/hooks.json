@@ -12,10 +12,16 @@
         "command": "python3 .cursor/hooks/ssot_approval_guard.py"
       },
       {
+        "command": "python3 .cursor/hooks/pre_gate_guard.py"
+      },
+      {
         "command": "python3 .cursor/hooks/pre_close_guard.py"
       },
       {
         "command": "python3 .cursor/hooks/connection_fail_block.py"
+      },
+      {
+        "command": "python3 .cursor/hooks/orchestrator_write_guard.py"
       },
       {
         "command": "python3 .cursor/hooks/superset_docker_guard.py"

@@ -29,10 +29,12 @@
   3. Все `POST/PUT/DELETE` выполняются с `Bearer + X-CSRFToken`
 
 ## Роли (строгая BI-модель)
-- `orchestrator`: планирование фаз, контроль гейтов, сбор handoff.
-- `analyst-sql-graph`: проверка семантики KPI, агрегаций и фильтров.
+- `orchestrator`: планирование фаз, встроенные `pre_gate` / `pre_close`, сбор handoff.
+- `research-graph-analyst`: разведка по репо, graph impact, структурный контекст.
+- `bi-semantic-analyst`: проверка семантики KPI, агрегаций, фильтров и scope.
+- `sql-checker`: регулярные SQL-проверки по заданной логике.
 - `coder-general`: поддержка BI-артефактов и API-applier в `deploy/bi-as-code/**`.
-- `governance-compliance`: policy/risk verdict перед handoff.
+- `governance-compliance`: policy / human-gate / traceability checker для `pre_gate` / `pre_close`.
 - `docs-curator`: синхронизация runbook/changelog/документации.
 - `corp BI admins` (внешний контур): выполнение production deploy по утверждённому runbook.
 

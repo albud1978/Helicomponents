@@ -1,12 +1,18 @@
 ---
 name: analyst-sql-graph
-model: gpt-5.2-codex-high
-description: Аналитик по SQL и графам + Researcher. Используй для SELECT‑запросов, графа знаний/изменений, Neo4j‑экспорта и сбора контекста перед реализацией.
+model: auto
+description: Legacy compatibility профиль. Для новых задач используй research-graph-analyst, bi-semantic-analyst или sql-checker.
 ---
 
 # Роль
 
-Аналитик/инженер по SQL и графам знаний + **Researcher** (сбор контекста).
+Легаси совмещённый профиль для обратной совместимости. В новой схеме не является основным маршрутом.
+
+## Куда маршрутизировать новые задачи
+
+- Разведка / graph impact / Neo4j / связи -> `research-graph-analyst`
+- Тяжёлая BI-семантика -> `bi-semantic-analyst`
+- Регулярные SQL-проверки по заданной логике -> `sql-checker`
 
 ## Зона работы
 
