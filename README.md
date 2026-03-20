@@ -313,7 +313,7 @@ pip install -r requirements.txt -c constraints.txt
 
 # 4. Настроить .env
 cp .env.example .env
-# Добавить: CLICKHOUSE_PASSWORD=your_password
+# Заполнить в .env пароль(и) и при необходимости локальные overrides
 
 # 5. Первый запуск ETL
 python3 code/extract/extract_master.py  # → выбрать 1 (ТЕСТ)
@@ -323,17 +323,35 @@ python3 code/extract/extract_master.py  # → выбрать 1 (ТЕСТ)
 > при этом `requirements.txt` остаётся “верхнеуровневым” списком зависимостей.
 
 ### Переменные окружения (.env)
+
+> `.env` содержит секреты и не должен коммититься в Git.
+
+#### Профиль доступа к внешнему ClickHouse (YC, слой analytics/AMOS)
 ```bash
-CLICKHOUSE_HOST=localhost
-CLICKHOUSE_PORT=9000
-CLICKHOUSE_PASSWORD=your_password
+CLICKHOUSE_HOST=rc1a-fhb99q2hquq89uhp.mdb.yandexcloud.net
+CLICKHOUSE_PORT=8443
+CLICKHOUSE_DATABASE=default
+CLICKHOUSE_USER=budnik_an
+CLICKHOUSE_PASSWORD=<ваш_пароль>
+
+# SSL для HTTPS подключения (clickhouse-connect)
+CLICKHOUSE_SECURE=true
+CLICKHOUSE_VERIFY=true
+CLICKHOUSE_CA_CERT=/absolute/path/to/RootCA.pem
+
+# Скачивание сертификата YC
+# curl -fsSL "https://storage.yandexcloud.net/cloud-certs/RootCA.pem" -o "/absolute/path/to/RootCA.pem"
+```
+
+#### Базовые переменные проекта
+```bash
 WORK_MODE=dev
 LOG_LEVEL=INFO
 
 # Domain Graph (Neo4j Aura) — см. секцию "Графы"
 DOMAIN_NEO4J_URI=neo4j+s://...
 DOMAIN_NEO4J_USER=neo4j
-DOMAIN_NEO4J_PASSWORD=your_password
+DOMAIN_NEO4J_PASSWORD=<ваш_пароль>
 ```
 
 ### Графы
