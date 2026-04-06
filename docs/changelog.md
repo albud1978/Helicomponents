@@ -1,5 +1,20 @@
 # Changelog
 
+## [20-03-2026] - README: зафиксированы форматы доступов к ClickHouse и AMOS
+
+### Изменения
+- `README.md`:
+  - добавлен единый раздел с форматами подключения к локальному ClickHouse и внешнему YC DWH;
+  - зафиксирован альтернативный namespace `DWH_CLICKHOUSE_*` для внешнего DWH;
+  - добавлена таблица слоёв DWH (`source`, `staging`, `analytics`, `integrated`, `reports`);
+  - добавлены канонические ключи доступа к объектам AMOS: `ac_registr`, `registration_code`, `aircraft_number`, `psn`, `partno`, `serialno`, `partseqno_i`;
+  - зафиксированы правила доступа по датам: `processing_date_at`, `report_date`, `readout_date`;
+  - добавлены практические рекомендации по ключам сравнения (`psn + partno`) и оговорки по enriched/derived полям витрины;
+  - добавлена ссылка на справочник схемы: `data_input/master_data/Database-Description39331920032025_0.csv`.
+
+### Контекст
+- Форматы доступов по ClickHouse и AMOS ранее были размазаны между `README`, отчётами `output/*` и рабочим контекстом чата. Раздел в `README.md` фиксирует их как единый быстрый справочник внутри проекта.
+
 ## [06-03-2026] - RiskTier operational model: dry-run high-risk close path
 
 ### Изменения
