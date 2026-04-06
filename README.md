@@ -343,6 +343,87 @@ CLICKHOUSE_CA_CERT=/absolute/path/to/RootCA.pem
 # curl -fsSL "https://storage.yandexcloud.net/cloud-certs/RootCA.pem" -o "/absolute/path/to/RootCA.pem"
 ```
 
+#### Альтернативный namespace для внешнего DWH
+```bash
+# Используйте, если в .env уже заняты CLICKHOUSE_* под локальный/рабочий контур.
+DWH_CLICKHOUSE_HOST=rc1a-fhb99q2hquq89uhp.mdb.yandexcloud.net
+DWH_CLICKHOUSE_PORT=8443
+DWH_CLICKHOUSE_DATABASE=default
+DWH_CLICKHOUSE_USER=budnik_an
+DWH_CLICKHOUSE_PASSWORD=<ваш_пароль>
+
+DWH_CLICKHOUSE_SECURE=true
+DWH_CLICKHOUSE_VERIFY=true
+DWH_CLICKHOUSE_CA_CERT=/absolute/path/to/RootCA.pem
+```
+
+### Форматы доступа к данным
+
+Ниже зафиксированы практические форматы доступа, которые используются в проекте для ClickHouse и AMOS-данных.
+
+#### Форматы подключения
+
+| Контур | Как подключаться | Где задаётся |
+|---|---|---|
+| Локальный / рабочий ClickHouse проекта | `config/database_config.yaml` + ENV `CLICKHOUSE_*` | `config/database_config.yaml`, `.env` |
+| Внешний YC DWH (AMOS) | HTTPS / SSL через `clickhouse-connect` | `.env` (`CLICKHOUSE_*` или `DWH_CLICKHOUSE_*`) |
+| Внутренние ETL/validation скрипты | Обычно читают `CLICKHOUSE_*` | `config/load_env.sh`, `config/database_config.yaml` |
+| Ad-hoc анализ внешнего DWH | Предпочтительно через `DWH_CLICKHOUSE_*` | `.env`, локальные Python/SQL скрипты |
+
+#### Форматы доступа по слоям DWH
+
+| Слой | Как читать | Что означает |
+|---|---|---|
+| `source` | `source.amos_heli_*` | Сырые исторические AMOS-таблицы за всё время |
+| `staging` | `staging.amos_heli_*` | Промежуточный слой загрузки/подготовки |
+| `analytics` | `analytics.amos_heli_*_view` | Представления поверх `source` |
+| `integrated` | `integrated.amos_heli_*` | Материализованные промежуточные таблицы DAG |
+| `reports` | `reports.amos_heli_*` | Финальные витрины / отчётные датасеты |
+
+#### Форматы идентификации объектов AMOS
+
+| Объект | Канонические ключи | Комментарий |
+|---|---|---|
+| Планер / ВС в AMOS | `ac_registr` | Базовый ключ борта в `amos_heli_*`, например `06012` |
+| Полный регистрационный код | `ac_registr_prefix + ac_registr` | Например `RA-06012` |
+| Проектный числовой ключ ВС | `aircraft_number` | Используется в extract/simulation, например `6012`; не равен автоматически AMOS internal aircraft key |
+| Агрегат / компонент | `psn` | Базовый идентификатор rotable в AMOS |
+| Позиция номенклатуры | `partno` | Партномер агрегата |
+| Серийный номер | `serialno` | Серийник агрегата |
+| Внутренний ID партномера | `partseqno_i` | Внутренний идентификатор номенклатуры в AMOS |
+
+#### Форматы доступа по датам
+
+| Контур | Поле даты | Как использовать |
+|---|---|---|
+| Сырые таблицы `source` | `processing_date_at` | Для исторических snapshot/as-of срезов |
+| Финальные витрины `reports` | `report_date` | Для датирования готового датасета |
+| История счетчиков | `readout_date` | Для даты фактического считывания, а не только загрузки в DWH |
+
+#### Форматы сравнения и привязки
+
+| Сценарий | Рекомендуемый ключ |
+|---|---|
+| Сравнение `Status_Components` между датасетами | `psn + partno` |
+| Идентификация одного агрегата | `psn`, при проверке полезно держать рядом `partno` и `serialno` |
+| Поиск борта в AMOS | `ac_registr` или полный `RA-XXXXX` |
+| Привязка к extract/симуляции | `aircraft_number` / `registration_code` |
+
+#### Важные оговорки по полям
+
+Для финального датасета оборотных агрегатов (`reports.amos_heli_rotables_components_status`) часть полей является `derived/enriched`, а не прямой копией сырого AMOS. В частности это относится к `LL`, `OH`, `OH_threshold`, а также к части полей `ppr`, `sne`, `location`, `condition`, `removal_date`, `target_date`.
+
+Поэтому:
+
+- сравнение этих полей между raw/source и reports нужно трактовать как сравнение логики витрины, а не побайтового равенства;
+- при расследовании историй агрегатов идентичность объекта лучше опирать на `psn + partno` и только затем смотреть enrichment-поля.
+
+#### Справочник схемы AMOS
+
+Полное описание полей AMOS, которое используется как вспомогательный справочник по таблицам/полям:
+
+- `data_input/master_data/Database-Description39331920032025_0.csv`
+
 #### Базовые переменные проекта
 ```bash
 WORK_MODE=dev
