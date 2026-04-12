@@ -2,11 +2,12 @@
 """
 Микросервис установки status_id для агрегатов (финальный этап).
 
-Обрабатывает четыре категории:
+Обрабатывает пять категорий:
 1. Beyond Repair: sne >= br → status_id=6 (Хранение)
 2. ДОНОР: condition='ДОНОР' → status_id=6 (Хранение)
 3. ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР: condition='ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР' → status_id=6 (Хранение)
 4. Оставшиеся НЕИСПРАВНЫЕ: → status_id=7 (unserviceable/ремонтопригодный), repair_days=0
+5. Fallback: любые агрегаты со status_id=0 (не попавшие в ветки выше, без учёта condition) → status_id=7, repair_days=0
 
 Логика блока 4:
 - Неисправные агрегаты без target_date → unserviceable (status_id=7, нет реального плана ремонта)
@@ -230,31 +231,27 @@ def main() -> int:
         f"dry-run={'ON' if args.dry_run else 'OFF'}"
     )
 
-    # Подсчёт кандидатов
+    params = {"version_date": version_date, "version_id": version_id}
+
+    # --- Блок 1: sne >= br → хранение (6) ---
     candidates_count = fetch_stats(client, version_date, version_id)
     print(f"📊 Неисправных агрегатов с sne >= br (beyond repair): {candidates_count}")
 
     if candidates_count == 0:
-        print("✅ Нет агрегатов для перевода в хранение")
-        return 0
-
-    # Показываем примеры
-    if args.dry_run:
-        print("\n📝 DRY-RUN — примеры кандидатов:")
+        print("ℹ️ Нет агрегатов (sne >= br) для перевода в хранение")
+    elif args.dry_run:
+        print("\n📝 DRY-RUN — примеры кандидатов (BR):")
         details = fetch_candidates_details(client, version_date, version_id, limit=10)
         for d in details:
             print(f"   {d['serialno']} ({d['partno']}): sne={d['sne']:,} > br={d['br']:,}")
-        print(f"\n📝 DRY-RUN завершён без изменений")
-        return 0
-
-    # Выполняем обновление
-    run_update(client, version_date, version_id)
-    
-    # Проверяем результат
-    remaining = fetch_stats(client, version_date, version_id)
-    updated = candidates_count - remaining
-    
-    print(f"✅ Обновлено: {updated} агрегатов (sne >= br) → status_id=6 (Хранение)")
+        print("📝 DRY-RUN: блок BR без записи в БД")
+    else:
+        run_update(client, version_date, version_id)
+        remaining = fetch_stats(client, version_date, version_id)
+        updated = candidates_count - remaining
+        print(
+            f"✅ Обновлено: {updated} агрегатов (sne >= br) → status_id=6 (Хранение)"
+        )
 
     # --- Блок 2: ДОНОР → Хранение ---
     donor_count_sql = """
@@ -266,7 +263,6 @@ def main() -> int:
       AND version_date = %(version_date)s
       AND version_id = %(version_id)s
     """
-    params = {"version_date": version_date, "version_id": version_id}
     donor_count = int(client.execute(donor_count_sql, params)[0][0])
     
     if donor_count > 0:
@@ -353,7 +349,41 @@ def main() -> int:
             )
     else:
         print("ℹ️ Нет оставшихся НЕИСПРАВНЫХ агрегатов со status_id=0")
-    
+
+    # --- Блок 5: Fallback — агрегаты со status_id=0 без учёта condition → как «неисправный» (7) ---
+    # Закрывает редкие значения condition (рекламация и т.п.), не попавшие в явные ветки выше.
+    # Только group_by > 2; планеры (1,2) не трогаем.
+    fallback_sql = """
+    SELECT count(*)
+    FROM heli_pandas
+    WHERE toUInt32(ifNull(group_by, 0)) > 2
+      AND toUInt8(ifNull(status_id, 0)) = 0
+      AND version_date = %(version_date)s
+      AND version_id = %(version_id)s
+    """
+    fallback_count = int(client.execute(fallback_sql, params)[0][0])
+    if fallback_count > 0:
+        print(
+            f"📊 Агрегатов со status_id=0 (fallback, любой condition): {fallback_count}"
+        )
+        if not args.dry_run:
+            fallback_update_sql = """
+            ALTER TABLE heli_pandas
+            UPDATE status_id = 7, repair_days = 0
+            WHERE toUInt32(ifNull(group_by, 0)) > 2
+              AND toUInt8(ifNull(status_id, 0)) = 0
+              AND version_date = %(version_date)s
+              AND version_id = %(version_id)s
+            """
+            client.execute("SET mutations_sync = 1")
+            client.execute(fallback_update_sql, params)
+            print(
+                f"✅ Fallback: обновлено {fallback_count} агрегатов → "
+                f"status_id=7 (как неисправный/unserviceable), repair_days=0"
+            )
+    else:
+        print("ℹ️ Нет агрегатов для fallback (status_id=0)")
+
     return 0
 
 

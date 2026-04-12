@@ -25,6 +25,39 @@ python3 code/utils/prep_source_dataset.py --dataset data_input/source_data/v_202
 
 После нормализации запускайте пайплайн как обычно: **`python3 code/extract/extract_master.py`**.
 
+## Снимок таблиц перед экстрактом (бэкап для сравнения)
+
+Чтобы зафиксировать текущее состояние конвейера экстракта в ClickHouse и сравнивать его с результатом после новой загрузки (или откатить логику вручную по SQL), используйте:
+
+- **`code/utils/backup_clickhouse_etl_snapshot.py`** — копия MergeTree-таблиц в **отдельную базу на том же сервере** (`hc_snapshot_<suffix>`; по умолчанию суффикс `YYYY_MM_DD` из текущей даты).
+  - **`--scope etl`** (по умолчанию): только таблицы конвейера экстракта и словари — `heli_pandas`, `heli_raw`, `md_components`, `status_overhaul`, `program_ac`, `flight_program_ac`, `flight_program_fl`, `dict_digital_values_flat`, `dict_partno_flat`, `dict_serialno_flat`, `dict_owner_flat`, `dict_ac_type_flat`, `dict_aircraft_number_flat`, `dict_status_flat`. Без `sim_*`, OLAP и прочих тяжёлых таблиц в рабочей базе.
+  - **`--scope all`**: все MergeTree-таблицы в рабочей базе из `config/database_config.yaml` — может быть очень долго и занимать много места; включайте осознанно.
+  - Режимы: **`--dry-run`** (оценка строк) и **`--execute`** (создание БД и `INSERT … SELECT`). Если база-снимок с таким именем уже есть, нужен **`--replace`** (пересоздание).
+  - Имя снимка можно задать явно: **`--suffix pre_extract_2026_04_08`** (только буквы, цифры, подчёркивание).
+
+Примеры:
+
+```bash
+python3 code/utils/backup_clickhouse_etl_snapshot.py --dry-run
+python3 code/utils/backup_clickhouse_etl_snapshot.py --execute --replace
+python3 code/utils/backup_clickhouse_etl_snapshot.py --execute --suffix pre_v2026_04_08
+```
+
+Сравнение «до/после»: одинаковые запросы к `default.<таблица>` и к `hc_snapshot_<suffix>.<таблица>` (например, группировки по `version_date`, `version_id` в `heli_pandas`).
+
+## Удаление одного среза версии в ClickHouse
+
+Чтобы убрать из СУБД **только один прогон** загрузки (пара `version_date` + `version_id`), не затрагивая другие даты и версии:
+
+- **`code/utils/delete_etl_version_slice.py`** — для каждой таблицы из фиксированного списка проверяет наличие колонок `version_date` и `version_id` и выполняет `DELETE` по условию. Таблицы без этих колонок (например, неверсионный словарь, если такой попадёт в список) пропускаются.
+
+```bash
+python3 code/utils/delete_etl_version_slice.py --version-date 2026-04-08 --version-id 1 --dry-run
+python3 code/utils/delete_etl_version_slice.py --version-date 2026-04-08 --version-id 1 --execute
+```
+
+Удаление необратимо без предварительного снимка; перед массовыми правками рекомендуется **`backup_clickhouse_etl_snapshot.py`**.
+
 ## 📊 Итоги последнего тестового Extract (21-11-2025)
 
 | Таблица | Назначение | Кол-во записей (version 2025-07-04 v1) |
@@ -246,6 +279,8 @@ python3 code/utils/database_cleanup.py
 20. **`heli_pandas_partno_stats.py`** - агрегирует `heli_pandas` по `partno`, выводит статистику (`components`, `aircrafts`) и сохраняет отчёт в `output/heli_pandas_partno_stats_<version>.md` (через `--md-path`).
 21. **`heli_pandas_ops_inventory.py`** - инвентаризация агрегатов на бортах в статусе `status_id=2`, считает количество установленных компонентов по каждому `aircraft_number` и сохраняет отчёт `docs/heli_pandas_ops_inventory_<version>.md`.
 22. **`heli_pandas_ops_other_groups.py`** - для планеров `status_id=2` подсчитывает агрегаты `group_by>2`, сравнивает их количество с нормой `md_components.comp_number`, подсвечивает дефицитные группы и сохраняет отчёт `docs/heli_pandas_ops_other_groups_<version>.md`.
+23. **`utils/backup_clickhouse_etl_snapshot.py`** - снимок ETL-таблиц и словарей в БД `hc_snapshot_<suffix>` на том же ClickHouse (см. раздел «Снимок таблиц перед экстрактом»).
+24. **`utils/delete_etl_version_slice.py`** - удаление строк одного среза `version_date` + `version_id` в версионных таблицах списка ETL/dict (см. раздел «Удаление одного среза версии»).
 
 ## 🔄 Порядок работы скриптов Extract (по Extract Master Pipeline)
 
@@ -648,7 +683,7 @@ repair_days = repair_time - (target_date - version_date).days  # Дни ремо
 - `code/extract/repair_days_calculator.py` - новый скрипт расчета
 - `code/overhaul_status_processor.py` - убран расчет repair_days  
 - `code/extract/extract_master.py` - repair_days_calculator.py перемещен в конец (этап 12)
-- `docs/extract.md` - обновлена документация
+- `docs/architecture/extract.md` - обновлена документация
 
 **Тестирование:** ✅ Все 7 ВС в ремонте получили корректные положительные значения repair_days
 
