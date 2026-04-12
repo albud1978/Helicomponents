@@ -29,7 +29,7 @@
 | `code/` | Активная разработка (ETL, симуляция, утилиты) |
 | `code/sim_v2/` | Оркестратор симуляции FLAME GPU |
 | `docs/` | Документация проекта |
-| `data_input/source_data/` | Входные датасеты (`v_YYYY-MM-DD/`) |
+| `data_input/source_data/` | Входные датасеты (`v_YYYY-MM-DD/`); перед первым extract на новой выгрузке см. `code/utils/prep_source_dataset.py` |
 | `output/` | Выходные отчёты и результаты |
 | `config/` | Конфигурационные файлы (transitions, quotas, invariants) |
 | `logs/` | Логи работы системы |
@@ -53,6 +53,10 @@ export CUBE_CONFIG_PATH="$PWD/config"
 
 # 3. Проверить подключение к БД
 python3 code/utils/test_db_connection.py
+
+# 3b. (опционально) Новая папка v_YYYY-MM-DD: нормализовать Program_AC / lease_restricted
+#     перед extract — см. docs/architecture/extract.md (секция «Утилита нормализации нового датасета»)
+# python3 code/utils/prep_source_dataset.py --dataset data_input/source_data/v_YYYY-MM-DD
 
 # 4. Запустить ETL (интерактивный выбор датасета и режима)
 python3 code/extract/extract_master.py
@@ -255,6 +259,7 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 ### ETL процессы
 | Файл | Описание |
 |------|----------|
+| `code/utils/prep_source_dataset.py` | Нормализация новой выгрузки (`v_YYYY-MM-DD`): заголовок `directorate`, колонка `lease_restricted` по `owner` — см. `docs/architecture/extract.md` |
 | `docs/extract.md` | Извлечение данных (включает проверку комплектности) |
 | `docs/architecture/validation_rules.md` | Правила валидации данных |
 | `docs/architecture/transform.md` | Трансформация данных |

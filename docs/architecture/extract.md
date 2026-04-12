@@ -4,6 +4,27 @@
 
 Этап Extract отвечает за извлечение данных из Excel файлов, первичную загрузку в ClickHouse и обогащение данных.
 
+## Утилита нормализации нового датасета
+
+Перед первым запуском **extract** для новой папки `data_input/source_data/v_YYYY-MM-DD/` имеет смысл прогнать нормализацию исходных Excel:
+
+- **`code/utils/prep_source_dataset.py`** — приводит `Program_AC.xlsx` (заголовок `direction` → `directorate`, если нужно) и добавляет/пересчитывает `lease_restricted` в `Status_Components.xlsx` по колонке `owner` (правило: `'Y'` для владельцев `ГТЛК`, `ВТК-АВИА`, `СБЕР ЛИЗИНГ`; иначе пустая строка, как ожидает `dual_loader`).
+
+Примеры:
+
+```bash
+# Просмотр действий без записи
+python3 code/utils/prep_source_dataset.py --dataset data_input/source_data/v_2026-04-08 --dry-run
+
+# Применить к папке датасета
+python3 code/utils/prep_source_dataset.py --dataset data_input/source_data/v_2026-04-08
+
+# Если колонка lease_restricted уже есть, пересчитать её целиком по owner
+python3 code/utils/prep_source_dataset.py --dataset data_input/source_data/v_2026-04-08 --sync-lease
+```
+
+После нормализации запускайте пайплайн как обычно: **`python3 code/extract/extract_master.py`**.
+
 ## 📊 Итоги последнего тестового Extract (21-11-2025)
 
 | Таблица | Назначение | Кол-во записей (version 2025-07-04 v1) |

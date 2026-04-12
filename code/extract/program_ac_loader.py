@@ -56,6 +56,9 @@ def load_program_ac_data():
         
         # Загружаем Excel файл
         df = pd.read_excel(file_path)
+        if 'direction' in df.columns and 'directorate' not in df.columns:
+            df.rename(columns={'direction': 'directorate'}, inplace=True)
+            print("📎 Алиас колонки: direction → directorate")
         print(f"📖 Загружен Excel файл")
         print(f"📊 Загружено: {len(df)} записей с {len(df.columns)} колонками")
         print(f"📋 Колонки: {list(df.columns)}")

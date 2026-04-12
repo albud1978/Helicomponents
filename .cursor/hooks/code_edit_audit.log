@@ -1574,3 +1574,21 @@
   edit[0] old='' new='from pathlib import Path'
   edit[1] old='' new='sys.path.insert(0, str(Path(__file__).parent.parent))\n'
 
+[2026-04-12 16:23:29 UTC] conv=1698365a gen=25b09458 file=code/extract/program_ac_loader.py
+  edit[0] old='' new='        if 'direction' in df.columns and 'directorate' not in df.columns:\n            df.rename(columns={'direction': 'd'
+
+[2026-04-12 16:35:39 UTC] conv=cfea29d2 gen=301e418d file=code/utils/prep_source_dataset.py
+  edit[0] old='' new='#!/usr/bin/env python3\n"""\nНормализация новой папки датасета ``data_input/source_data/v_YYYY-MM-DD/`` до запуска extract'
+
+[2026-04-12 16:35:45 UTC] conv=cfea29d2 gen=301e418d file=code/utils/prep_source_dataset.py
+  edit[0] old='    df = pd.read_excel(path, engine="openpyxl")\n    nrows = len(df)\n    if nrows >= WARN_ROWCOUNT:\n        print(\n      ' new='    header = pd.read_excel(path, engine="openpyxl", nrows=0)\n    has_lease = "lease_restricted" in header.columns'
+  edit[1] old='    if "owner" not in df.columns:' new='    if "owner" not in header.columns:'
+  edit[2] old='' new='    df = pd.read_excel(path, engine="openpyxl")\n    nrows = len(df)\n    if nrows >= WARN_ROWCOUNT:\n        print(\n      '
+
+[2026-04-12 16:35:46 UTC] conv=cfea29d2 gen=301e418d file=code/utils/prep_source_dataset.py
+  edit[0] old='import os' new=''
+
+[2026-04-12 16:35:47 UTC] conv=cfea29d2 gen=301e418d file=code/utils/prep_source_dataset.py
+  edit[0] old='' new='    import numpy as np'
+  edit[1] old='    def cell_owner(x) -> str:\n        if pd.isna(x):\n            return ""\n        return str(x).strip()\n\n    owners = s' new='    owners = series.map(lambda x: "" if pd.isna(x) else str(x).strip())'
+
