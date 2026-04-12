@@ -1,5 +1,16 @@
 # Changelog
 
+## [12-04-2026] - Утилита нормализации нового датасета перед extract
+
+### Изменения
+- `code/utils/prep_source_dataset.py`: standalone-скрипт для папки `data_input/source_data/v_YYYY-MM-DD/` — заголовок `Program_AC` (`direction`→`directorate` при необходимости), колонка `lease_restricted` в `Status_Components` по правилу `owner` (или пересчёт с `--sync-lease`).
+- `docs/architecture/extract.md`: секция «Утилита нормализации нового датасета» с примерами команд и отсылкой к `extract_master`.
+- `README.md`: ссылка на утилиту в таблице структуры, шаг `3b` в быстром старте, строка в таблице «ETL процессы».
+- Прототип на датасете `v_2026-04-08`: нормализация применена (dry-run затем apply).
+
+### Контекст
+- Упрощает подключение новых выгрузок: согласованные заголовки и `lease_restricted` до входа в `extract_master`.
+
 ## [20-03-2026] - README: зафиксированы форматы доступов к ClickHouse и AMOS
 
 ### Изменения
