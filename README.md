@@ -260,7 +260,9 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 | Файл | Описание |
 |------|----------|
 | `code/utils/prep_source_dataset.py` | Нормализация новой выгрузки (`v_YYYY-MM-DD`): заголовок `directorate`, колонка `lease_restricted` по `owner` — см. `docs/architecture/extract.md` |
-| `docs/extract.md` | Извлечение данных (включает проверку комплектности) |
+| `code/utils/backup_clickhouse_etl_snapshot.py` | Снимок ETL-таблиц в БД `hc_snapshot_*` на том же ClickHouse для сравнения до/после загрузки — см. `docs/architecture/extract.md` |
+| `code/utils/delete_etl_version_slice.py` | Удаление одного среза (`version_date` + `version_id`) в версионных таблицах — см. `docs/architecture/extract.md` |
+| `docs/architecture/extract.md` | Извлечение данных (включает проверку комплектности, утилиты снимка и удаления среза) |
 | `docs/architecture/validation_rules.md` | Правила валидации данных |
 | `docs/architecture/transform.md` | Трансформация данных |
 | `docs/architecture/load.md` | Загрузка результатов |
@@ -494,6 +496,8 @@ export FLAMEGPU_RTC_EXPORT_CACHE_PATH="$(pwd)/.rtc_cache"
 | Проверка комплектности | `python3 code/heli_pandas_ops_other_groups.py --version-date YYYY-MM-DD --version-id 1` | `output/` |
 | Анализ лизинга | `python3 code/heli_pandas_lease_restricted.py` | `output/` |
 | Диагностика БД | `python3 code/utils/test_db_connection.py` | — |
+| Снимок ETL в ClickHouse (сравнение) | `python3 code/utils/backup_clickhouse_etl_snapshot.py --dry-run` затем `--execute` | БД `hc_snapshot_*` на том же сервере; см. `docs/architecture/extract.md` |
+| Удаление среза версии в CH | `python3 code/utils/delete_etl_version_slice.py --version-date YYYY-MM-DD --version-id N --dry-run` затем `--execute` | см. `docs/architecture/extract.md` |
 | Очистка словарей | `python3 code/utils/cleanup_dictionaries.py` | — |
 | Полная очистка | `python3 code/utils/database_cleanup.py` | — |
 
