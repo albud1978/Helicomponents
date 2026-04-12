@@ -161,13 +161,11 @@ activate.sh
 # ============================================================
 # Cursor multiagent artifacts (portable project state)
 # ============================================================
-# Keep all project-level Cursor settings and audit artifacts versioned
+# Keep all project-level Cursor settings versioned; логи хуков — только локально
 !.cursor/
 !.cursor/**
-# Explicitly unignore hook logs (overrides global *.log ignore)
-!.cursor/hooks/*.log
-# Keep user communication audit local-only
-.cursor/hooks/user_comm_audit.log
+# !.cursor/** перекрывает глобальное *.log — снова игнорируем аудит правок/коммуникаций
+.cursor/hooks/*.log
 # Keep generated Python cache ignored inside .cursor
 .cursor/**/__pycache__/
 .cursor/**/*.py[cod]
