@@ -19,6 +19,10 @@ from typing import Dict, List, Tuple
 MEDIUM_RISK_REQUIRED_AGENTS = ("governance-compliance",)
 HIGH_RISK_REQUIRED_AGENTS = ("governance-compliance", "docs-curator")
 KG_RELATIVE_PATH = Path("config/agent_kg.json")
+SUCCESS_CRITERIA_EVIDENCE_RE = re.compile(
+    r"success[_\s-]?criteria|validation_sql|\bINV-\d+\b|\bTEMP-\d+\b|\bGPU-\d+\b|acceptance|manual-check",
+    re.IGNORECASE,
+)
 
 
 def _extract_shell_command(payload: Dict[str, object]) -> str:
@@ -334,6 +338,18 @@ def main() -> None:
             "Нужно кратко зафиксировать обоснование по scope/GraphImpactProposal и повторить --close-workflow."
         )
         return
+
+    if risk_tier == "high":
+        facts_blob = _normalize_text(orch.get("facts"))
+        success_blob = _normalize_text(orch.get("success_criteria"))
+        combined_blob = f"{facts_blob}\n{success_blob}"
+        if not SUCCESS_CRITERIA_EVIDENCE_RE.search(combined_blob):
+            _deny(
+                "Закрытие workflow заблокировано: для high-risk workflow в handoff orchestrator "
+                "не зафиксировано подтверждение `SuccessCriteria`. Нужно ссылаться на validation_sql, "
+                "инвариант (INV-N/TEMP-N/GPU-N), acceptance-проверку или `manual-check: ...` в Facts/SuccessCriteria."
+            )
+            return
 
     _allow()
 

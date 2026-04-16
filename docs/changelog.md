@@ -1,5 +1,41 @@
 # Changelog
 
+## [16-04-2026] - Karpathy-inspired мультиагент: Clarify/Simplicity/Surgical/Goal-Driven
+
+### Изменения
+
+Эволюционное усиление мультиагентного контура по 4 принципам Karpathy, без смены архитектуры. Четыре независимых пакета.
+
+**Пакет 1 — Clarify-before-dispatch + SuccessCriteria**
+- `.cursor/rules/00_global_always.mdc`: добавлены разделы **«Clarify-before-dispatch»** (Ambiguity-scan: ≥2 интерпретации → вопросы человеку; обязательный verifiable `SuccessCriteria` для `implement`; блок high-risk без согласования) и **«Anti-overengineering»** (нет абстракций под единственного потребителя, нет speculative flexibility, `Simplicity test` ≥30%).
+- `.cursor/rules/90_multiagent_workflow.mdc`: в шаблон Handoff добавлено обязательное поле `SuccessCriteria`; правило артефактов для medium/high-risk требует verifiable критерий.
+- `.cursor/agents/orchestrator.md`: добавлен шаг 0 **«Ambiguity-scan»** в anti-drift self-check; в «Разрешено» подтверждено, что `AskQuestion` для уточнений — не нарушение no-coding policy.
+
+**Пакет 2 — Surgical / Simplicity review**
+- `.cursor/agents/reviewer-flame.md`: новая секция **«Surgical / Simplicity review»** с 5 блокирующими чеками (traceability каждой строки к UserGoal/SuccessCriteria; orphan-cleanup scope; no drive-by; no speculative flexibility; simplicity test ≥30%).
+- `.cursor/agents/coder-general.md` и `.cursor/agents/coder-flame.md`: добавлены **SuccessCriteria-gate** (без verifiable критерия — не писать код, вернуть handoff с OpenQuestions) и **test-first для багфиксов** (сначала failing репро, потом фикс).
+
+**Пакет 3a — Унификация Agent KG discipline**
+- `.cursor/agents/research-graph-analyst.md`, `.cursor/agents/bi-semantic-analyst.md`, `.cursor/agents/sql-checker.md`: добавлена секция **«Agent KG discipline»** с обязательным `--write-context phase_start` и `--write-handoff` (TraceID, PlanStepID, Facts, Assumptions, SuccessCriteria).
+
+**Пакет 3b — Handoff-lite + вынос шаблона**
+- `.cursor/rules/91_handoff_template.mdc` (новый): единый источник истины для Full Handoff и Handoff-lite.
+- Handoff-lite для `low-risk` housekeeping: 5 полей (UserGoal, Changes, Facts, RiskTier=low, NextOwner) вместо `N/A`-шума.
+- `.cursor/rules/90_multiagent_workflow.mdc`: inline-шаблон заменён на краткую ссылку на `91_handoff_template.mdc`.
+
+**Пакет 4 — Enforcement через hooks + `--success-criteria`**
+- `.cursor/hooks/pre_gate_guard.py`: для dispatch с `risk_tier in {medium, high}` требуется упоминание `SuccessCriteria` в prompt/tool_input; иначе deny.
+- `.cursor/hooks/pre_close_guard.py`: для `high-risk` workflow обязательно подтверждение критерия в Facts/SuccessCriteria orchestrator handoff (regex: `success_criteria|validation_sql|INV-N|TEMP-N|GPU-N|acceptance|manual-check`).
+- `code/utils/agent_kg.py` (делегировано `coder-general`, workflow `W_karpathy_pkg4`): добавлен аргумент `--success-criteria`, поле `success_criteria` в handoff и вывод в `read_state`.
+
+### Governance
+- Пакеты 1–3: правки в orchestrator-allowlist (`.cursor/**`), без dispatch. Все изменения реверсивные.
+- Пакет 4: `W_karpathy_pkg4` закрыт, coder-general handoff `handoff_W_karpathy_pkg4_coder-general_7dba3ee8`, orchestrator handoff `handoff_W_karpathy_pkg4_orchestrator_03004c89`.
+- Unit smoke-checks хелперов `_extract_risk_tier`, `_has_success_criteria`, `SUCCESS_CRITERIA_EVIDENCE_RE` — pass.
+
+### Контекст
+Адаптирован репо [forrestchang/andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills): 4 принципа закрыты эволюционными правками под существующий supervisor-first мультиагент, без внедрения плагинов и без смены архитектуры. Практика на 1–2 реальных задачах остаётся TODO для ретроспективы и возможных follow-up правок.
+
 ## [12-04-2026] - Документация: снимок ETL и удаление среза версии в ClickHouse
 
 ### Изменения

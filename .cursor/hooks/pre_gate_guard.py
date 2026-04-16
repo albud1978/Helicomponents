@@ -19,6 +19,11 @@ from typing import Any, Dict
 
 KG_RELATIVE_PATH = Path("config/agent_kg.json")
 WORKFLOW_RE = re.compile(r"\bW_[A-Za-z0-9_:-]+\b")
+RISK_TIER_RE = re.compile(r"\brisk[_\s-]?tier\s*[:=]\s*(low|medium|high)\b", re.IGNORECASE)
+SUCCESS_CRITERIA_RE = re.compile(
+    r"success[_\s-]?criteria\s*[:=]",
+    re.IGNORECASE,
+)
 
 
 def _allow() -> None:
@@ -92,6 +97,25 @@ def _has_handoff_to_orchestrator(text: str) -> bool:
     return "handoff" in lowered and ("orchestrator" in lowered or "оркестратор" in lowered)
 
 
+def _extract_risk_tier(text: str, tool_input: Dict[str, Any]) -> str:
+    for key in ("risk_tier", "riskTier"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip().lower()
+    match = RISK_TIER_RE.search(text)
+    if match:
+        return match.group(1).lower()
+    return ""
+
+
+def _has_success_criteria(text: str, tool_input: Dict[str, Any]) -> bool:
+    for key in ("success_criteria", "successCriteria"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value.strip():
+            return True
+    return bool(SUCCESS_CRITERIA_RE.search(text))
+
+
 def main() -> None:
     raw = sys.stdin.read()
     try:
@@ -133,6 +157,15 @@ def main() -> None:
     if not _has_handoff_to_orchestrator(combined):
         _deny(
             "Pre-gate: dispatch subagent заблокирован. Prompt должен явно требовать возврат Handoff оркестратору."
+        )
+        return
+
+    risk_tier = _extract_risk_tier(combined, tool_input)
+    if risk_tier in {"medium", "high"} and not _has_success_criteria(combined, tool_input):
+        _deny(
+            "Pre-gate: dispatch subagent заблокирован. Для medium/high-risk задачи обязателен "
+            "`SuccessCriteria` (SQL/инвариант/скрипт/числовое сравнение). Добавьте `SuccessCriteria: ...` "
+            "в prompt или передайте аргумент `success_criteria` и повторите."
         )
         return
 

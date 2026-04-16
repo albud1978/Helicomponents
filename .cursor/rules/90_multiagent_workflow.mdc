@@ -91,37 +91,17 @@ alwaysApply: true
   - наличие обязательных governance/docs handoff по риску и policy
 
 ## Handoff-шаблон (обязателен)
-Используется всеми агентами как формат ответа:
 
-**Handoff**
-- **UserGoal**: дословная цитата запроса пользователя.
-- **TraceID**: идентификатор трассы (`wf:<workflow_id>:<UTC>`).
-- **PlanStepID**: шаг плана (`P1`, `R2`, `V1` и т.п.).
-- **RiskTier**: `low|medium|high`.
-- **RiskReasons**: 1-3 причины назначения риска.
-- **RiskOwner**: кто назначил риск (`orchestrator`).
-- **RiskValidatedBy**: кто валидировал риск (`governance-compliance` или `N/A` для low-risk).
-- **HumanGateRequired**: `yes|no|conditional` + краткая причина.
-- **PlanCard**: краткая карточка плана.
-- **Changes**: что сделано.
-- **Facts**: что проверено и откуда.
-- **EvidencePack**: структурированный пакет доказательств.
-- **Assumptions**: непроверенное с `Risks if false: ...`.
-- **ComplianceChecklist**: структурированный чек-лист. Для governance-verdict использовать поля вида `policy_status=...; scope_match=...; traceability_status=...; human_gate_status=...; decision=...`.
-- **ApprovalGate**: `N/A` или `gate_id + status + source`.
-- **OpenQuestions**: что осталось неясным.
-- **NextOwner**: кто следующий.
-- **GraphUpdate**: относится только к Domain Graph.
-- **Agent KG logging**: что именно записано в `Agent KG`.
-- **Risks**: 1-3 пункта.
-- **DriftCheck**: только у orchestrator.
-- **ProcessInsights**: только у orchestrator.
+Полный и lite форматы вынесены в [`.cursor/rules/91_handoff_template.mdc`](91_handoff_template.mdc) — единый источник истины для формата ответа всех агентов.
 
-**Правило anti-drift**: если `UserGoal` и `Changes` расходятся по scope — остановка и вопрос человеку.
-**Правило трассировки**: handoff без `TraceID` и `PlanStepID` невалиден.
-**Правило артефактов**:
-- `medium/high-risk`: обязательны `PlanCard`, `EvidencePack`, `ComplianceChecklist`
-- `low-risk`: допускается `N/A (low-risk)`
+Кратко:
+- **Full Handoff** — обязателен для `medium` и `high` risk (все поля: `UserGoal`, `TraceID`, `PlanStepID`, `RiskTier`, `RiskReasons`, `RiskOwner`, `RiskValidatedBy`, `HumanGateRequired`, `SuccessCriteria`, `PlanCard`, `Changes`, `Facts`, `EvidencePack`, `Assumptions`, `ComplianceChecklist`, `ApprovalGate`, `OpenQuestions`, `NextOwner`, `GraphUpdate`, `Agent KG logging`, `Risks`, `DriftCheck` и `ProcessInsights` — только у orchestrator).
+- **Handoff-lite** — разрешён **только для `low-risk` housekeeping** (5 полей: `UserGoal`, `Changes`, `Facts`, `RiskTier=low`, `NextOwner`). Остальные поля допускается опускать полностью, без `N/A`-шума. При повышении risk-tier перейти на Full Handoff и зафиксировать причину.
+
+**Правила валидации** (полный список — в `91_handoff_template.mdc`):
+- anti-drift: `UserGoal` ↔ `Changes` по scope;
+- трассировка: handoff без `TraceID`/`PlanStepID` невалиден (для Handoff-lite `TraceID` пишется через `--write-handoff`, в тексте может опускаться);
+- артефакты: для `medium/high-risk` обязательны `PlanCard`, `EvidencePack`, `ComplianceChecklist`, `SuccessCriteria` (verifiable).
 
 ## Agent KG и графы
 ### Agent KG

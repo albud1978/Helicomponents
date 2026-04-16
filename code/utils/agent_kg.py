@@ -223,6 +223,7 @@ def write_handoff(args: argparse.Namespace) -> None:
         "human_gate_required": human_gate_required,
         "plan_card": plan_card,
         "evidence_pack": evidence_pack,
+        "success_criteria": args.success_criteria or "",
         "compliance_checklist": compliance_checklist,
         "risks": args.risks or "нет",
         "next_owner": args.next_owner or "orchestrator",
@@ -300,6 +301,8 @@ def read_state(args: argparse.Namespace) -> None:
                 print(f"PlanCard: {_short(h.get('plan_card'))}")
             if h.get("evidence_pack"):
                 print(f"EvidencePack: {_short(h.get('evidence_pack'))}")
+            if h.get("success_criteria"):
+                print(f"SuccessCriteria: {_short(h.get('success_criteria'))}")
             if h.get("compliance_checklist"):
                 print(f"ComplianceChecklist: {_short(h.get('compliance_checklist'))}")
             if h.get("drift_check"):
@@ -506,6 +509,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--plan-card", type=str, help="Plan card (handoff)")
     parser.add_argument("--evidence-pack", type=str, help="Evidence pack (handoff)")
+    parser.add_argument(
+        "--success-criteria", type=str, help="Success criteria (handoff)"
+    )
     parser.add_argument(
         "--compliance-checklist", type=str, help="Compliance checklist (handoff)"
     )

@@ -32,15 +32,17 @@ description: FLAME GPU/CUDA разработчик для RTC модулей и 
 
 ## При выполнении задачи
 
-1. Прочитай `config/capsules_manifest.json` → выбери релевантные капсулы → прочитай их для фокусного контекста
-2. Прочитай `config/transitions/invariants.json` — формализованные инварианты (INV-1..INV-9), temporal-контракты (TEMP-1..TEMP-4) и GPU-ограничения (GPU-1..GPU-6)
-3. Изучи существующий код в зоне работы
-4. Соблюдай архитектуру LIMITER V8
-5. Пиши CUDA код в RTC функциях с комментариями
-6. Не нарушай инварианты. Если изменение может нарушить инвариант — эскалация на оркестратора
-7. Тесты запускай только по явному запросу; иначе фиксируй причину в `Facts` или `Assumptions`
-8. В начале фазы записывай context в Agent KG (`--write-context --context-type phase_start --agent coder-flame`)
-9. В конце фазы обязательно записывай handoff в Agent KG (`--write-handoff`) с `TraceID`, `PlanStepID`, `Facts`, `Assumptions`
+1. **SuccessCriteria gate (обязательно до написания кода)**: прочитай `SuccessCriteria` из задачи/контекста. Если поле пустое или не верифицируемо (SQL/инвариант INV-N/TEMP-N/GPU-N/скрипт/числовое сравнение) — **не пиши код**, верни handoff оркестратору с `OpenQuestions` и запросом уточнения.
+2. **Test-first для багфиксов**: для задачи класса «fix bug/regression» сперва сформулируй failing репро (SQL из `validation_sql`, minimal test case, target invariant) и покажи, что он воспроизводит проблему, затем пиши фикс. Если репро невозможен без полного симуляционного пайплайна — явно зафиксируй причину в `Assumptions` с `Risks if false`.
+3. Прочитай `config/capsules_manifest.json` → выбери релевантные капсулы → прочитай их для фокусного контекста
+4. Прочитай `config/transitions/invariants.json` — формализованные инварианты (INV-1..INV-9), temporal-контракты (TEMP-1..TEMP-4) и GPU-ограничения (GPU-1..GPU-6)
+5. Изучи существующий код в зоне работы
+6. Соблюдай архитектуру LIMITER V8 и правило `Anti-overengineering` из `00_global_always.mdc`
+7. Пиши CUDA код в RTC функциях с комментариями
+8. Не нарушай инварианты. Если изменение может нарушить инвариант — эскалация на оркестратора
+9. Тесты запускай только по явному запросу; иначе фиксируй причину в `Facts` или `Assumptions`
+10. В начале фазы записывай context в Agent KG (`--write-context --context-type phase_start --agent coder-flame`)
+11. В конце фазы обязательно записывай handoff в Agent KG (`--write-handoff`) с `TraceID`, `PlanStepID`, `SuccessCriteria`, `Facts`, `Assumptions`
 
 ## Формат ответа
 

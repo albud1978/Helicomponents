@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-03-06T17:08:23Z",
+    "updated_at": "2026-04-16T18:02:22Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -1660,6 +1660,15 @@
       "status": "closed",
       "created_at": "2026-03-06T17:04:10Z",
       "updated_at": "2026-03-06T17:08:23Z"
+    },
+    {
+      "workflow_id": "W_karpathy_pkg4",
+      "goal": "Add --success-criteria argparse flag to write_handoff in code/utils/agent_kg.py",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "closed",
+      "created_at": "2026-04-16T18:00:04Z",
+      "updated_at": "2026-04-16T18:02:22Z"
     }
   ],
   "handoffs": [
@@ -13091,6 +13100,70 @@
       "open_questions": "",
       "graph_update": "no",
       "created_at": "2026-03-06T17:08:20Z"
+    },
+    {
+      "handoff_id": "handoff_W_karpathy_pkg4_coder-general_7dba3ee8",
+      "workflow_id": "W_karpathy_pkg4",
+      "agent": "coder-general",
+      "user_goal": "Добавить --success-criteria в agent_kg.py (handoff + read_state).",
+      "goal": "Добавить --success-criteria в agent_kg.py (handoff + read_state).",
+      "changes": "build_parser: --success-criteria; write_handoff: поле success_criteria; read_state: вывод SuccessCriteria",
+      "facts": "python3 code/utils/agent_kg.py --write-handoff --help | grep success-criteria",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_karpathy_pkg4",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "локальная правка argparse, без изменения архитектуры/логики",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "script help shows --success-criteria flag",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "нет",
+      "created_at": "2026-04-16T18:01:39Z"
+    },
+    {
+      "handoff_id": "handoff_W_karpathy_pkg4_orchestrator_03004c89",
+      "workflow_id": "W_karpathy_pkg4",
+      "agent": "orchestrator",
+      "user_goal": "Add --success-criteria argparse flag to write_handoff in code/utils/agent_kg.py",
+      "goal": "Add --success-criteria argparse flag to write_handoff in code/utils/agent_kg.py",
+      "changes": "coder-general добавил флаг --success-criteria в build_parser, поле handoff['success_criteria'] в write_handoff и вывод в read_state",
+      "facts": "help показывает --success-criteria; повторный --write-handoff с флагом записывает поле в config/agent_kg.json; read-state печатает SuccessCriteria",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "scope не расширен: только 3 точечных правки в agent_kg.py как в плане",
+      "process_insights": "",
+      "trace_id": "wf:W_karpathy_pkg4",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "локальная обратимая правка argparse в code/utils, без изменения алгоритма/инвариантов",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "created_at": "2026-04-16T18:02:18Z"
     }
   ],
   "contexts": [
@@ -14956,6 +15029,24 @@
       "agent": "orchestrator",
       "created_at": "2026-03-06T17:08:23Z",
       "updated_at": "2026-03-06T17:08:23Z"
+    },
+    {
+      "context_id": "ctx_W_karpathy_pkg4_phase_start_dfe78bf8",
+      "workflow_id": "W_karpathy_pkg4",
+      "context_type": "phase_start",
+      "content": "phase_start: coder-general — реализация флага --success-criteria в agent_kg.py",
+      "agent": "coder-general",
+      "created_at": "2026-04-16T18:01:30Z",
+      "updated_at": "2026-04-16T18:01:30Z"
+    },
+    {
+      "context_id": "ctx_W_karpathy_pkg4_closure_4bf798be",
+      "workflow_id": "W_karpathy_pkg4",
+      "context_type": "closure",
+      "content": "Пакет 4 выполнен: --success-criteria добавлен, hooks обновлены",
+      "agent": "orchestrator",
+      "created_at": "2026-04-16T18:02:22Z",
+      "updated_at": "2026-04-16T18:02:22Z"
     }
   ]
 }
