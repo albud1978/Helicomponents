@@ -24,15 +24,17 @@ description: Разработчик общего кода (не FLAME GPU). Ис
 
 ## При выполнении задачи
 
-1. Если задача включает ClickHouse/SQL, сначала прочитай `.cursor/skills/clickhouse-v9-guard/SKILL.md` и соблюдай его
-2. Прочитай `config/capsules_manifest.json` → выбери релевантные капсулы → прочитай их для фокусного контекста
-3. Соблюдай правила проекта и ограничения
-4. Не трогай RTC/GPU код — это зона `coder-flame`
-5. Тесты запускай только по явному запросу; иначе фиксируй причину в `Facts` или `Assumptions`
-6. В начале фазы записывай context в Agent KG (`--write-context --context-type phase_start --agent coder-general`)
-7. В конце фазы обязательно записывай handoff в Agent KG (`--write-handoff`) с `TraceID`, `PlanStepID`, `Facts`, `Assumptions`
-8. Для BI-задач в corporate sandbox: `apply/clone` выполнять только при явной команде человека, по умолчанию использовать `dry-run`
-9. Для production BI: не выполнять deploy/apply, только готовить handoff-пакет для админов
+1. **SuccessCriteria gate (обязательно до написания кода)**: прочитай `SuccessCriteria` из задачи/контекста. Если поле пустое или не верифицируемо (SQL/инвариант/скрипт/числовое сравнение/`manual-check: ...`) — **не пиши код**, верни handoff оркестратору с `OpenQuestions` и запросом уточнения.
+2. **Test-first для багфиксов**: для задачи класса «fix bug/regression» сперва сформулируй failing репро (SQL-запрос/скрипт/минимальный test case), покажи, что он воспроизводит проблему, затем пиши фикс. Если репро невозможен без полного пайплайна — явно зафиксируй причину в `Assumptions` с `Risks if false`.
+3. Если задача включает ClickHouse/SQL, сначала прочитай `.cursor/skills/clickhouse-v9-guard/SKILL.md` и соблюдай его
+4. Прочитай `config/capsules_manifest.json` → выбери релевантные капсулы → прочитай их для фокусного контекста
+5. Соблюдай правила проекта и ограничения (включая `Anti-overengineering` из `00_global_always.mdc`)
+6. Не трогай RTC/GPU код — это зона `coder-flame`
+7. Тесты запускай только по явному запросу; иначе фиксируй причину в `Facts` или `Assumptions`
+8. В начале фазы записывай context в Agent KG (`--write-context --context-type phase_start --agent coder-general`)
+9. В конце фазы обязательно записывай handoff в Agent KG (`--write-handoff`) с `TraceID`, `PlanStepID`, `SuccessCriteria`, `Facts`, `Assumptions`
+10. Для BI-задач в corporate sandbox: `apply/clone` выполнять только при явной команде человека, по умолчанию использовать `dry-run`
+11. Для production BI: не выполнять deploy/apply, только готовить handoff-пакет для админов
 
 ## Формат ответа
 
