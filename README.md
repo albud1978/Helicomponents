@@ -375,7 +375,7 @@ DWH_CLICKHOUSE_CA_CERT=/absolute/path/to/RootCA.pem
 | Локальный / рабочий ClickHouse проекта | `config/database_config.yaml` + ENV `CLICKHOUSE_*` | `config/database_config.yaml`, `.env` |
 | Внешний YC DWH (AMOS) | HTTPS / SSL через `clickhouse-connect` | `.env` (`CLICKHOUSE_*` или `DWH_CLICKHOUSE_*`) |
 | Внутренние ETL/validation скрипты | Обычно читают `CLICKHOUSE_*` | `config/load_env.sh`, `config/database_config.yaml` |
-| Ad-hoc анализ внешнего DWH | Предпочтительно через `DWH_CLICKHOUSE_*` | `.env`, локальные Python/SQL скрипты |
+| Ad-hoc анализ внешнего DWH | Предпочтительно через `DWH_CLICKHOUSE_*` | `.env`; выгрузка в Excel: `python3 code/utils/dwh_direct_load.py --help`. **Совпадение строк/ключей с golden:** `--match-golden` (борта из `Program_AC.xlsx`; `(psn,partno)` для `Status_Components`; порядок как в эталоне). |
 
 #### Форматы доступа по слоям DWH
 
@@ -406,6 +406,14 @@ DWH_CLICKHOUSE_CA_CERT=/absolute/path/to/RootCA.pem
 | Сырые таблицы `source` | `processing_date_at` | Для исторических snapshot/as-of срезов |
 | Финальные витрины `reports` | `report_date` | Для датирования готового датасета |
 | История счетчиков | `readout_date` | Для даты фактического считывания, а не только загрузки в DWH |
+
+**Навигация агента по «дате» в YC DWH:** не смешивать три разных смысла.
+
+- **`valid_from` / `valid_to` в `source.amos_heli_*`** — версия сущности в AMOS (SCD2). Для «какой была карточка на календарный день D» используют as-of: строка актуальна, если `valid_from` ≤ конец D и (`valid_to` IS NULL или `valid_to` > начало D); при нескольких версиях обычно берут нужную ветку по `valid_from` (например `max` среди подходящих). Так воспроизводятся выборки вроде Program_AC / WP в `code/utils/dwh_golden_replay_export.py`.
+- **`processing_date_at`** — когда пачка данных попала в ClickHouse (прогрузка DAG). Нужна, если явно моделируете «последний успешный snapshot загрузки не позже D»; при пустом результате проверяйте `countIf` — у `maxIf` в ClickHouse возможен sentinel вроде `1970-01-01`.
+- **`report_date` в `reports.amos_heli_*`** — готовый дневной срез витрины (например `reports.amos_heli_rotables_components_status`). Витрина появляется с даты первой заливки дагом; для более ранних календарных дат — только реконструкция из `source` / `integrated` с фильтрами DAG, не «сырым» SELECT без обогащения.
+
+Дополнительно: выборка заданий на капремонт (WP) по полю `description`. В админских SQL иногда используют широкий поиск вроде `ILIKE '%КАПИТАЛЬНЫЙ%РЕМОНТ%'` — **в ClickHouse он часто даёт лишние строки** (между подстроками допускается произвольный текст). Безопаснее: после `upperUTF8(replaceAll(description,' ',''))` либо **точное** `'КАПИТАЛЬНЫЙРЕМОНТ'` (как в `dwh_golden_replay_export.py` и контрольных `Status_Overhaul.xlsx`), либо узкое расширение только на осмысленный хвост, например `startsWith(d,'КАПИТАЛЬНЫЙРЕМОНТ(')` для «(доп.работы)» — это добавляет строки **поверх** узкого эталона; сверяйте с бизнес-правилом выгрузки.
 
 #### Форматы сравнения и привязки
 
