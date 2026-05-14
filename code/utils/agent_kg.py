@@ -134,6 +134,14 @@ def write_handoff(args: argparse.Namespace) -> None:
         allowed = {"pending", "approved", "rejected"}
         if args.approval_status not in allowed:
             raise ValueError("--approval-status должен быть pending|approved|rejected")
+    risk_tier_arg = args.risk_tier.strip() if args.risk_tier else ""
+    risk_tier_provided = bool(risk_tier_arg)
+    if not risk_tier_provided and args.agent == "orchestrator":
+        raise ValueError(
+            "orchestrator handoff требует явный --risk-tier "
+            "(low|medium|high); silent default-low заблокирован "
+            "из-за риска пропуска governance close-gates"
+        )
 
     path = _resolve_path(args.kg_path)
     data = _load(path)
@@ -149,8 +157,6 @@ def write_handoff(args: argparse.Namespace) -> None:
     facts = args.facts or ""
     if not facts and evidence_arg:
         facts = f"legacy evidence: {evidence_arg}"
-    risk_tier_arg = args.risk_tier.strip() if args.risk_tier else ""
-    risk_tier_provided = bool(risk_tier_arg)
     if risk_tier_provided:
         risk_tier = risk_tier_arg.lower()
         allowed_risk_tiers = {"low", "medium", "high"}

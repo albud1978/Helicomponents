@@ -15,8 +15,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from kg_io import load_agent_kg
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AGENT_KG_PATH = REPO_ROOT / "config" / "agent_kg.json"
 HYGIENE_STATE_PATH = Path(__file__).resolve().parent / ".hygiene_last_check.txt"
 APPROVAL_CONTEXT_TYPES = {"approval_request", "approval_gate", "pending_approval"}
 APPROVAL_KEYWORDS_RE = re.compile(
@@ -26,18 +28,11 @@ APPROVAL_KEYWORDS_RE = re.compile(
 )
 
 AGENT_MESSAGE = (
-    "НАПОМИНАНИЕ GOVERNANCE: "
-    "Оркестратор не пишет исходники и скрипты напрямую. "
-    "Разрешенный allowlist: .cursor/agents/**, .cursor/hooks/**, .cursor/rules/**, docs/**, README.md и plan-артефакты. "
-    "Для любой реализации вне allowlist используй Task tool и профильного subagent. "
-    "Shell у оркестратора только readonly, кроме operational-команд python code/utils/agent_kg.py ... "
-    "Agent KG ведется write-through: dispatch -> phase_start -> --write-handoff -> --close-workflow. "
-    "Перед dispatch выполняй pre_gate как проверку workflow/handoff discipline; governance-compliance вызывай отдельно для medium/high-risk или policy-sensitive задач. "
-    "Перед запросом high-risk approval сначала запиши approval_request context в Agent KG и укажи W_<workflow_id> в сообщении человеку. "
-    "Перед закрытием workflow пройди pre_close и проверь, что обязательные по риску handoff содержат trace_id и plan_step_id. "
-    "Перед make sync-domain-graph всегда запроси ApprovalGate у человека (с W_<workflow_id>) "
-    "и получи governance-compliance verdict. "
-    "Все handoff subagents возвращаются оркестратору."
+    "Orchestrator: no direct code edits вне allowlist (.cursor/agents/**, .cursor/hooks/**, "
+    ".cursor/rules/**, docs/**, plan-артефакты); используй Task для остального. "
+    "Agent KG write-through: dispatch -> phase_start -> write-handoff -> close-workflow. "
+    "medium/high-risk: зарегистрируй approval_request context до запроса approval; "
+    "governance-compliance verdict обязателен. Subagent handoff -> orchestrator."
 )
 
 
@@ -46,14 +41,7 @@ def _item_ts(item: Dict[str, Any]) -> str:
 
 
 def _load_agent_kg() -> Tuple[Dict[str, Any], str]:
-    try:
-        with open(AGENT_KG_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError) as exc:
-        return {}, f"unavailable:{type(exc).__name__}"
-    if not isinstance(data, dict):
-        return {}, "invalid_root"
-    return data, "ok"
+    return load_agent_kg()
 
 
 def _active_workflows(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -293,16 +281,17 @@ def main() -> None:
     data, state = _load_agent_kg()
     warning = _approval_warning(data, payload) if state == "ok" else ""
     reviewer_warning = _reviewer_flame_warning(data) if state == "ok" else ""
-    status = _agent_kg_status(payload)
-    agent_message = AGENT_MESSAGE
-    if warning:
-        agent_message = f"{agent_message} {warning}"
-    if reviewer_warning:
-        agent_message = f"{agent_message} {reviewer_warning}"
     hygiene = _hygiene_reminder()
-    if hygiene:
-        agent_message = f"{agent_message} {hygiene}"
-    agent_message = f"{agent_message} {status}"
+    status = _agent_kg_status(payload)
+
+    warnings_pool = [w for w in (warning, reviewer_warning, hygiene) if w]
+    shown_warnings = warnings_pool[:2]
+
+    parts = [AGENT_MESSAGE]
+    if shown_warnings:
+        parts.append("GOVERNANCE_STATUS: " + " | ".join(shown_warnings))
+    parts.append(status)
+    agent_message = " ".join(parts)
 
     # Возвращаем continue=true + agentMessage для reinforcement
     result = {

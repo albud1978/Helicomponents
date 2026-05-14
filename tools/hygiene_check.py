@@ -114,13 +114,17 @@ def _stale_capsules(manifest: dict, now: datetime, threshold: timedelta) -> list
         if not isinstance(item, dict):
             continue
         verified = str(item.get("last_verified_against_ssot") or "")
+        staleness_status = str(item.get("staleness_status") or "").strip()
         ts = _parse_date(verified)
-        if ts is not None and ts < cutoff:
+        if staleness_status == "verified":
+            continue
+        if staleness_status == "needs_content_review" or (ts is not None and ts < cutoff):
             stale.append(
                 {
                     "id": str(item.get("id") or ""),
                     "last_verified_against_ssot": verified,
-                    "age_days": _age_days(now, ts),
+                    "age_days": _age_days(now, ts) if ts is not None else 0.0,
+                    "staleness_status": staleness_status,
                 }
             )
     return stale
@@ -245,7 +249,7 @@ def _print_section(title: str, items: list[dict], lines: list[str]) -> None:
         elif title == "Stale capsules":
             lines.append(
                 f"- {item['id']} (last_verified_against_ssot={item['last_verified_against_ssot']}, "
-                f"age={item['age_days']:.1f}d)"
+                f"age={item['age_days']:.1f}d, status={item['staleness_status']})"
             )
         elif title == "Phantom invariants":
             lines.append(f"- {item['capsule_id']} references missing {item['phantom_id']}")
@@ -283,7 +287,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Read-only Agent KG and capsule hygiene check")
     parser.add_argument("--stale-days", type=int, default=1, help="Staleness threshold in days")
     parser.add_argument("--summary-only", action="store_true", help="Print counts only")
-    parser.add_argument("--no-color", action="store_true", help="Disable ANSI color output")
     args = parser.parse_args()
     if args.stale_days < 0:
         print("error: --stale-days must be non-negative", file=sys.stderr)
