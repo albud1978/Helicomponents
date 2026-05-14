@@ -17,32 +17,32 @@
 
 ## Invariants (≤12)
 
-**SSoT**: `config/transitions/invariants.json` (INV-1..INV-9, TEMP-1..TEMP-4, GPU-1..GPU-6)
+**SSoT**: `config/transitions/invariants.json` (11 глобальных INV-1..INV-11, TEMP-1/TEMP-4/TEMP-5, GPU-1..GPU-6) — invariants.json v15
 
 Ключевые (из invariants.json):
 - INV-1: sne ≤ ll в operations — `invariants.json`
-- INV-2: ops_count ≈ target (±1) — `invariants.json`
-- INV-3: в ремонте ≤ repair_number — `invariants.json`
+- INV-2: ops_count == mp4_target (tolerance=0; warmup-исключение [0, repair_time)) — `invariants.json`
+- INV-3: countIf(repair_time>0 AND free_days<repair_time) <= repair_quota; lookback-only семантика, source: sim_repairline_v9; validator: `code/validation/inv3_repair_capacity.py` — PASS — `invariants.json`
 - INV-5: баланс наработок Σdt = Δsne — `invariants.json`
 - INV-9: limiter=0 → выход из ops — `invariants.json`
+- INV-10: баланс оборота initial+entries+spawn=exits+final + LEGAL/ILLEGAL transition_matrix — `invariants.json`
+- INV-11: post-warmup deficit ops при saturation dynamic spawn Mi-17 — `invariants.json`
+- TEMP-5: hybrid repair precondition (per_day_per_group) — `invariants.json`
 - GPU-2: mp5_lin read-only после init — `invariants.json`
 - GPU-6: один переход за шаг — `invariants.json`
 
 Архитектурные (не в invariants.json):
-- V8 — источник истины; противоречия в других документах считаются устаревшими — `docs/architecture/limiter_architecture.md`
-- Для unsvc exit_date удалён; RepairLine — основной механизм ремонта — `docs/architecture/limiter_architecture.md`
+- exit_date НЕ хранится как отдельный MP; вычисляется как `exit_date = repair_time - repair_days` в `rtc_repair_to_svc_v7` (см. TEMP-1 mechanism в invariants.json); RepairLine остаётся основным механизмом claim-based ремонта — `docs/architecture/limiter_architecture.md`
 - `repair_days`: для unsvc декрементируется до 0; для inactive всегда 0 — `docs/architecture/limiter_architecture.md`
-- `MAX_DETERMINISTIC_DATES=500`; лишние даты отбрасываются — `docs/architecture/limiter_architecture.md`
-- Порядок слоёв = порядок регистрации, критичен для логики — `docs/architecture/limiter_architecture.md`
 
 ## Decisions (≤7)
-- V8 использует RepairLine вместо exit_date (пул линий из MP) — `docs/architecture/limiter_architecture.md`
-- `repair_days` введён для unsvc, inactive не декрементируется — `docs/architecture/limiter_architecture.md`
+- V8 использует RepairLine вместо exit_date (пул линий из MP); `repair_days` введён для unsvc (декрементируется до 0), для inactive не декрементируется (всегда 0) — `docs/architecture/limiter_architecture.md`
 - Правило ресурса — next-day dt (чтобы исключить переналёт) — `docs/architecture/limiter_architecture.md`
-- **HF_StepController** (вместо HF_UpdateDayV8) выполняется в конце шага после layer 50 (после квотирования): adaptive_days = MIN(mp_min_limiter, days_to_next_deterministic_date), prev_day = current_day, current_day += adaptive_days; синхронизация MacroProperty → Environment; reset mp_min_limiter = 0xFFFFFFFF. Layers 14–16 удалены — `code/sim_v2/messaging/orchestrator_limiter_v8.py`.
+- **HF_StepController** (вместо HF_UpdateDayV8) выполняется в конце шага после квотирования: adaptive_days = MIN(mp_min_limiter, days_to_next_deterministic_date), prev_day = current_day, current_day += adaptive_days; синхронизация MacroProperty → Environment; reset mp_min_limiter = 0xFFFFFFFF — `code/sim_v2/messaging/orchestrator_limiter_v8.py`.
 - **HF_InitV8 убран**; deterministic_dates_mp инициализируется при сборке модели — `code/sim_v2/messaging/orchestrator_limiter_v8.py`.
-- **Inline limiter**: layer 49 убран как отдельный слой; бинарный поиск встроен в X→ops; early-out в layers 11–12: if (limiter > 0) return false — `code/sim_v2/messaging/rtc_limiter_v8.py`.
+- **Layer numbering V8**: старые "phase 0.5" слои intent-state удалены; текущие orders 12-16 — RepairLine increment/write/publish + reset flags/buffers перед quota; inline limiter — бинарный поиск встроен в X→ops; отдельный layer-49 слой исключён (max order в текущей нумерации = 47) — `code/sim_v2/messaging/orchestrator_limiter_v8.py`, `code/sim_v2/messaging/rtc_limiter_v8.py`.
 - V8 не эквивалентен V7 по переходам; MAX_DETERMINISTIC_DATES=500 (лишние даты отбрасываются) — `docs/architecture/limiter_architecture.md`
+- **MP2/RL export + master-SSoT overlay**: Phase MP2 export (orders 44-45) + Phase RL export (order 46) пишут host dataframes; в `sim_repairline_v9` occupancy реконструируется из `sim_masterv2_v9` claim segments + claimless episodes (runtime acn/gb — телеметрия, не SSoT). Источник: `config/transitions/transitions_rules.json` (lines 118-120); `config/transitions/quota_rules.json` (lines 60-64, 124-128).
 
 ## Impact Paths
 - `code/sim_v2/messaging/orchestrator_limiter_v8.py` → порядок слоёв V8, HF_StepController (end-of-step adaptive), стабильный current_day в шаге → поведение симуляции — `code/sim_v2/messaging/orchestrator_limiter_v8.py`
@@ -53,9 +53,10 @@
 - `docs/architecture/rtc_pipeline_architecture.md` → MP5/mp5_lin инварианты → корректный dt/dn — `docs/architecture/rtc_pipeline_architecture.md`
 - `docs/architecture/validation_rules.md` → SQL-first/инварианты → критерии корректности — `docs/architecture/validation_rules.md`
 - `README.md` → статус V8 как основной архитектуры → зона ответственности — `README.md`
+- MP2 export + RL export → host dataframes → `sim_masterv2_v9` + `sim_repairline_v9` (CH) → validation/BI — `config/transitions/transitions_rules.json`, `config/transitions/quota_rules.json`
 
 ## Validation Proof
-- Формализованные инварианты: `config/transitions/invariants.json` (INV-1..INV-9, TEMP-1..TEMP-4, GPU-1..GPU-6) — SSoT
+- Формализованные инварианты: `config/transitions/invariants.json` (INV-1..INV-11, TEMP-1/TEMP-4/TEMP-5, GPU-1..GPU-6) — SSoT
 - Скрипты валидации: `code/analysis/sim_validation_runner_msg.py`, `code/analysis/sim_validation_quota.py`, `code/validation/validate_state2ops_*.py`
 - `python code/analysis/validate_heli_pandas.py --analyze/--update/--all` — базовая валидация `heli_pandas` — `docs/architecture/validation_rules.md`
 - Проверка отсутствия NVRTC warning'ов (log clean) — `docs/architecture/validation_rules.md`
