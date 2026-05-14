@@ -80,6 +80,7 @@ SELECT ... FROM sim_masterv2_msg WHERE ...
 
 ### Handoff
 - По шаблону `.cursor/rules/91_handoff_template.mdc` (Full для `medium/high-risk`, Lite для `low-risk`); общий процесс — `.cursor/rules/90_multiagent_workflow.mdc`
+- **Usage** *(optional)*: в собственный handoff включай строку `Usage: model=<slug> est_tokens=~<N> source=manual`; orchestrator продублирует это в KG через `--model-slug --est-tokens --token-source` при `--write-handoff`
 - В `Facts` явно указывать, какой dispatch `SuccessCriteria` проверен и каким evidence подтверждён PASS/FAIL
 - В `Facts` указывать SQL/скрипт/таблицу и фактический результат
 - В `Assumptions` выносить только непроверяемые допущения с `Risks if false`

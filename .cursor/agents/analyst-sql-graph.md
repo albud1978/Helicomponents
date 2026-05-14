@@ -67,6 +67,7 @@ description: "DEPRECATED: legacy совмещённый профиль. Новы
 ## Формат ответа
 
 - **Handoff** по шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
+- **Usage** *(optional)*: в собственный handoff включай строку `Usage: model=<slug> est_tokens=~<N> source=manual`; orchestrator продублирует это в KG через `--model-slug --est-tokens --token-source` при `--write-handoff`
 - В `Changes` — какие граф/JSON/SQL затронуты
 - В `Facts` — подтверждённые результаты и источники (SQL/файлы/логи)
 - В `Assumptions` — непроверенное с пометкой `Risks if false`

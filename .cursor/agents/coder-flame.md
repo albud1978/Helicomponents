@@ -48,6 +48,7 @@ description: FLAME GPU/CUDA разработчик для RTC модулей и 
 ## Формат ответа
 
 - **Handoff** Full-формата по `.cursor/rules/91_handoff_template.mdc` (high-risk зона `code/sim_v2/**` и `config/transitions/**` требует Full Handoff с заполненным `ApprovalGate`)
+- **Usage** *(optional)*: в собственный handoff включай строку `Usage: model=<slug> est_tokens=~<N> source=manual`; orchestrator продублирует это в KG через `--model-slug --est-tokens --token-source` при `--write-handoff`
 - В `Changes` — список файлов/функций и ключевые правки
 - В `Facts` — что проверено и источники (файлы/команды/логи)
 - В `Assumptions` — непроверенное с пометкой `Risks if false`

@@ -31,6 +31,7 @@ description: Сборщик/редактор Context Capsule (docs/*_capsule.md)
 ## Формат ответа
 
 - **Handoff** по шаблону `.cursor/rules/91_handoff_template.mdc` (Full для `medium/high-risk`, Lite для `low-risk`); общий процесс — `.cursor/rules/90_multiagent_workflow.mdc`
+- **Usage** *(optional)*: в собственный handoff включай строку `Usage: model=<slug> est_tokens=~<N> source=manual`; orchestrator продублирует это в KG через `--model-slug --est-tokens --token-source` при `--write-handoff`
 - В `Changes` — какие капсулы обновлены и что поменялось
 - В `Facts` — подтверждённые проверки и источники
 - В `Assumptions` — непроверенное с пометкой `Risks if false`
