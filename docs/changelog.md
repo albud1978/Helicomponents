@@ -1,5 +1,53 @@
 # Changelog
 
+## [14-05-2026] - Lightweight token counter (Agent KG + analytics)
+
+Добавлен опциональный token-счётчик в handoff/KG для аналитики выбора моделей и оптимизации. Risk=medium, approved Alexey 22:11. Governance verdict `allow` (5/5).
+
+### Архитектурное решение
+
+В Cursor `.jsonl` транскрипты содержат только `{role, message}` без `usage/tokens/cost` — авто-извлечение невозможно. Источники est_tokens: `manual` (self-report) или `char_estimate` (post-hoc orchestrator) или `unknown` (поле опущено).
+
+### Изменения
+
+- **`code/utils/agent_kg.py`** (`--write-handoff`): +3 optional CLI args:
+  - `--model-slug <gpt-5.5-high|claude-opus-4-7-thinking-high|...>`
+  - `--est-tokens <N>` (int ≥0, ValueError на negative)
+  - `--token-source manual|char_estimate|unknown` (ValueError на invalid)
+  - Поле `usage: {model, est_tokens, source}` в handoff пишется только если задан хотя бы один arg → **backward-compat** для всех legacy handoffs.
+
+- **`tools/token_analytics.py`** (new, 146 LOC): read-only markdown aggregator. Опции `--workflow-id <id>` (scope) и `--summary-only`. Группировка по `(model, agent, risk_tier, source)`. NOTE warning при coverage<50% при total>5. Запускается **только по команде Алексея**, не интегрирован в hygiene/hooks (anti-rot).
+
+- **`.cursor/rules/91_handoff_template.mdc`**: +1 optional `Usage:` поле в Full и Lite разделах. Missing — не блокер.
+
+- **`.cursor/agents/*.md` × 11**: 1-line хинт после строки про Handoff: «в собственный handoff включай Usage: model=... est_tokens=~... source=manual; orchestrator продублирует в KG через `--model-slug --est-tokens --token-source`». Полное 11/11 покрытие (включая deprecated `analyst-sql-graph.md` для буквальности).
+
+### Pilot self-reports (первое использование)
+
+- coder-general (gpt-5.5-high): ~65k est_tokens, source=manual
+- governance-compliance (claude-opus-4-7-thinking-high): ~18k, source=manual
+- orchestrator (claude-opus-4-7-thinking-xhigh): ~30k, source=manual
+
+### Команды для аналитики
+
+```bash
+python3 tools/token_analytics.py --summary-only            # one-line
+python3 tools/token_analytics.py                            # full markdown
+python3 tools/token_analytics.py --workflow-id W_<id>       # scope
+```
+
+### Anti-rot для самого счётчика
+
+- Optional fields → нет нового blocking validation.
+- Не интегрировано в pre_close/pre_gate/hygiene hooks.
+- token_analytics запускается только по команде → нет автоматических метрик-шума.
+- Periodic review через NOTE warning в analytics, когда coverage низкий.
+
+### Open items (для будущего использования)
+
+- char-heuristic source может быть реализован orchestrator post-handoff (auto `len(prompt+response)//4`) если manual coverage будет недостаточной.
+- Pilot accuracy валидируется по мере использования.
+
 ## [14-05-2026] - Post-audit patches (12 fixes: 3 P1 / 5 P2 / 4 P3)
 
 После cleanup-цикла A1..E1 проведён независимый two-model audit (Opus + GPT-5.5-high) с debate Round 1, выявивший 12 consensus-fixes по 3 критериям: executability / anti-overengineering / token economy. Approved Alexey 21:48: «Всё (P1+P2+P3 = 12 fixes)». Risk=medium, governance verdict `allow` (5/5 dimensions).
