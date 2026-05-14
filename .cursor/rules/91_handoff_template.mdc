@@ -22,18 +22,18 @@ alwaysApply: true
 - **SuccessCriteria**: verifiable критерий успеха. Формат: `SQL: ...` / `invariant: INV-N` / `script: path` / `numeric: A == B` / `manual-check: ...` (последнее — только для low-risk). Пустое значение или «make it work» — невалидный handoff для `medium/high-risk`.
 - **PlanCard**: краткая карточка плана.
 - **Changes**: что сделано.
-- **Facts**: что проверено и откуда (файлы/SQL/логи).
-- **EvidencePack**: структурированный пакет доказательств.
+- **EvidencePack**: что проверено и откуда (файлы/SQL/логи) + структурированные доказательства; `Facts` сюда слит, отдельным полем не дублируется.
 - **Assumptions**: непроверенное с `Risks if false: ...`.
 - **ComplianceChecklist**: структурированный чек-лист. Для governance-verdict — поля вида `policy_status=...; scope_match=...; traceability_status=...; human_gate_status=...; decision=...`.
 - **ApprovalGate**: `N/A` или `gate_id + status + source`.
 - **OpenQuestions**: что осталось неясным.
 - **NextOwner**: кто следующий.
 - **GraphUpdate**: относится только к Domain Graph (`yes|no` + причина).
-- **Agent KG logging**: что именно записано в `Agent KG`.
 - **Risks**: 1–3 пункта.
 - **DriftCheck**: только у orchestrator.
 - **ProcessInsights**: только у orchestrator.
+
+> NB: `Agent KG logging` (что именно записано в KG) как поле удалён — фактические записи восстанавливаются из `config/agent_kg.json`; дублировать их в handoff избыточно.
 
 ## Handoff-lite (разрешён только для `low-risk` housekeeping)
 

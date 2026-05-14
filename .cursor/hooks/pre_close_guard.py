@@ -62,9 +62,13 @@ def _extract_workflow_id(command: str) -> str:
 
 
 def _load_agent_kg(repo_root: Path) -> Dict[str, object]:
-    kg_path = repo_root / KG_RELATIVE_PATH
-    with kg_path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from kg_io import load_agent_kg as _kg_load
+
+    data, state = _kg_load()
+    if state != "ok":
+        raise RuntimeError(f"agent_kg unavailable: {state}")
+    return data
 
 
 def _latest_required_handoffs(
@@ -136,10 +140,16 @@ def _normalize_governance_decision(value: object) -> str:
 
 
 def _normalize_risk_tier(value: object) -> str:
+    """Returns 'low'|'medium'|'high' для валидных значений; '' для missing/invalid.
+
+    Caller обязан обрабатывать пустое значение явным deny, чтобы избежать
+    silent fallback на low (риск пропуска governance/docs close-gates для
+    medium/high workflows с malformed orchestrator handoff).
+    """
     normalized = _normalize_text(value).lower()
     if normalized in {"low", "medium", "high"}:
         return normalized
-    return "low"
+    return ""
 
 
 def _extract_checklist_value(text: str, key: str) -> str:
@@ -278,6 +288,12 @@ def main() -> None:
         return
 
     risk_tier = _normalize_risk_tier(orch.get("risk_tier"))
+    if not risk_tier:
+        _deny(
+            "Закрытие workflow заблокировано: orchestrator handoff не содержит валидный risk_tier "
+            "(low|medium|high). Перепиши handoff с явным --risk-tier и повтори --close-workflow."
+        )
+        return
     required_agents = _required_agents_for_risk(risk_tier)
 
     handoffs_by_agent, missing = _latest_required_handoffs(kg_data, workflow_id, required_agents)

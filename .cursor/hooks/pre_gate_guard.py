@@ -14,16 +14,26 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from kg_io import load_agent_kg
 
 KG_RELATIVE_PATH = Path("config/agent_kg.json")
 WORKFLOW_RE = re.compile(r"\bW_[A-Za-z0-9_:-]+\b")
 RISK_TIER_RE = re.compile(r"\brisk[_\s-]?tier\s*[:=]\s*(low|medium|high)\b", re.IGNORECASE)
-SUCCESS_CRITERIA_RE = re.compile(
+SUCCESS_CRITERIA_LABEL_RE = re.compile(
     r"success[_\s-]?criteria\s*[:=]",
     re.IGNORECASE,
 )
+# Verifiable markers: SQL/script/numeric/invariant/INV-N/TEMP-N/GPU-N/acceptance/manual-check (last only OK for low-risk).
+SUCCESS_CRITERIA_VERIFIABLE_RE = re.compile(
+    r"\b(?:SQL\s*:|script\s*:|numeric\s*:|invariant\s*:|INV-\d|TEMP-\d|GPU-\d|"
+    r"acceptance\s*:|manual-check\s*:)",
+    re.IGNORECASE,
+)
+HANDOFF_ARG_KEYS = ("handoff_to", "handoffTo", "next_owner", "nextOwner")
+ORCHESTRATOR_TARGETS = {"orchestrator", "оркестратор"}
 
 
 def _allow() -> None:
@@ -72,12 +82,8 @@ def _extract_workflow_id(text: str, payload: Dict[str, Any], tool_input: Dict[st
 
 
 def _workflow_is_active(repo_root: Path, workflow_id: str) -> bool:
-    kg_path = repo_root / KG_RELATIVE_PATH
-    if not kg_path.exists():
-        return False
-    try:
-        data = json.loads(kg_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    data, state = load_agent_kg()
+    if state != "ok":
         return False
 
     workflows = data.get("workflows", [])
@@ -92,7 +98,11 @@ def _workflow_is_active(repo_root: Path, workflow_id: str) -> bool:
     return False
 
 
-def _has_handoff_to_orchestrator(text: str) -> bool:
+def _has_handoff_to_orchestrator(text: str, tool_input: Dict[str, Any]) -> bool:
+    for key in HANDOFF_ARG_KEYS:
+        value = tool_input.get(key)
+        if isinstance(value, str) and value.strip().lower() in ORCHESTRATOR_TARGETS:
+            return True
     lowered = text.lower()
     return "handoff" in lowered and ("orchestrator" in lowered or "оркестратор" in lowered)
 
@@ -108,12 +118,26 @@ def _extract_risk_tier(text: str, tool_input: Dict[str, Any]) -> str:
     return ""
 
 
-def _has_success_criteria(text: str, tool_input: Dict[str, Any]) -> bool:
+def _verifiable_success_criteria(text: str, tool_input: Dict[str, Any], risk_tier: str) -> Tuple[bool, str]:
+    """Returns (ok, reason). ok=True если SuccessCriteria есть и verifiable для данного риска."""
+    candidate_value = ""
     for key in ("success_criteria", "successCriteria"):
         value = tool_input.get(key)
         if isinstance(value, str) and value.strip():
-            return True
-    return bool(SUCCESS_CRITERIA_RE.search(text))
+            candidate_value = value
+            break
+    if not candidate_value and SUCCESS_CRITERIA_LABEL_RE.search(text):
+        candidate_value = text
+    if not candidate_value:
+        return False, "отсутствует"
+
+    match = SUCCESS_CRITERIA_VERIFIABLE_RE.search(candidate_value)
+    if not match:
+        return False, "значение не содержит verifiable marker (SQL:/script:/numeric:/invariant:/INV-N/TEMP-N/GPU-N/acceptance:/manual-check:)"
+    marker = match.group(0).rstrip(":").strip().lower()
+    if marker == "manual-check" and risk_tier in {"medium", "high"}:
+        return False, "manual-check разрешён только для low-risk; для medium/high требуется SQL/script/numeric/invariant/INV-/TEMP-/GPU-/acceptance"
+    return True, ""
 
 
 def main() -> None:
@@ -154,20 +178,24 @@ def main() -> None:
         )
         return
 
-    if not _has_handoff_to_orchestrator(combined):
+    if not _has_handoff_to_orchestrator(combined, tool_input):
         _deny(
-            "Pre-gate: dispatch subagent заблокирован. Prompt должен явно требовать возврат Handoff оркестратору."
+            "Pre-gate: dispatch subagent заблокирован. Укажите явный возврат Handoff оркестратору: "
+            "либо аргумент `handoff_to=orchestrator` (или `next_owner=orchestrator`), либо явный текст "
+            "в prompt с упоминанием `handoff ... orchestrator`."
         )
         return
 
     risk_tier = _extract_risk_tier(combined, tool_input)
-    if risk_tier in {"medium", "high"} and not _has_success_criteria(combined, tool_input):
-        _deny(
-            "Pre-gate: dispatch subagent заблокирован. Для medium/high-risk задачи обязателен "
-            "`SuccessCriteria` (SQL/инвариант/скрипт/числовое сравнение). Добавьте `SuccessCriteria: ...` "
-            "в prompt или передайте аргумент `success_criteria` и повторите."
-        )
-        return
+    if risk_tier in {"medium", "high"}:
+        ok, reason = _verifiable_success_criteria(combined, tool_input, risk_tier)
+        if not ok:
+            _deny(
+                f"Pre-gate: dispatch subagent заблокирован. SuccessCriteria для {risk_tier}-risk {reason}. "
+                "Допустимые формы: `SuccessCriteria: SQL: <query>`, `script: <path>`, `numeric: A == B`, "
+                "`invariant: INV-N`, `INV-N`/`TEMP-N`/`GPU-N`, `acceptance: ...`."
+            )
+            return
 
     _allow()
 

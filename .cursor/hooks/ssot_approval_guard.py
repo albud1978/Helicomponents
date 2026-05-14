@@ -5,11 +5,14 @@
 - правки JSON SSOT в config/transitions/*.json
 - команды sync-domain-graph через Shell
 
-Требование допуска (workflow-scoped, Variant B):
-- в config/agent_kg.json есть ровно один active workflow
-- для этого workflow зарегистрирован approval_request|approval_gate context
-- в user_comm_audit.log есть строка с workflow_id=<этого workflow> и approval_hint=yes
-- KG unavailable → fail-safe deny
+Требование допуска (workflow-scoped, Variant B с явным selection):
+- при ровно одном active workflow — он выбирается автоматически;
+- при нескольких active — payload (Shell command / ApplyPatch text /
+  tool_input) должен содержать литерал W_<workflow_id> для одного из
+  active workflows; иначе deny с ambiguity reason;
+- для выбранного workflow зарегистрирован approval_request|approval_gate context;
+- в user_comm_audit.log есть строка с workflow_id=<выбранного> и approval_hint=yes;
+- KG unavailable → fail-safe deny.
 """
 
 from __future__ import annotations
@@ -20,10 +23,11 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from kg_io import load_agent_kg
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AUDIT_LOG = Path(__file__).resolve().parent / "user_comm_audit.log"
-AGENT_KG_PATH = REPO_ROOT / "config" / "agent_kg.json"
 APPROVAL_CONTEXT_TYPES = {"approval_request", "approval_gate", "pending_approval"}
 AUDIT_SCAN_LINES = 50
 
@@ -106,15 +110,7 @@ def _is_sensitive_ssot_path(path_rel: str) -> bool:
 
 
 def _load_agent_kg() -> Tuple[Dict[str, Any], str]:
-    """Returns (data, state). state in {ok, unavailable:*, invalid_root}."""
-    try:
-        with AGENT_KG_PATH.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError) as exc:
-        return {}, f"unavailable:{type(exc).__name__}"
-    if not isinstance(data, dict):
-        return {}, "invalid_root"
-    return data, "ok"
+    return load_agent_kg()
 
 
 def _active_workflows(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -177,17 +173,39 @@ def _has_approval_for_workflow(workflow_id: str) -> bool:
     return False
 
 
-def _check_workflow_scoped_approval() -> Tuple[bool, str]:
+def _workflow_ids_in_text(text: str) -> List[str]:
+    return re.findall(r"\bW_[A-Za-z0-9_:-]+\b", text or "")
+
+
+def _select_workflow(active: Dict[str, Dict[str, Any]], payload_text: str) -> Tuple[str, str]:
+    """Returns (workflow_id, reason). workflow_id="" если selection невозможен."""
+    if len(active) == 1:
+        return next(iter(active)), ""
+    if len(active) == 0:
+        return "", "нет active workflow в Agent KG; SSoT-операции запрещены."
+    referenced = sorted(set(_workflow_ids_in_text(payload_text)) & set(active))
+    if len(referenced) == 1:
+        return referenced[0], ""
+    if len(referenced) > 1:
+        return "", (
+            f"ambiguous: payload ссылается на несколько active workflow ({', '.join(referenced)}); "
+            "оставь явное упоминание ровно одного W_<id>."
+        )
+    return "", (
+        f"ambiguous active workflows ({', '.join(sorted(active))}); "
+        "укажи явно W_<id> в payload (Shell command / ApplyPatch description) "
+        "или закрой лишние."
+    )
+
+
+def _check_workflow_scoped_approval(payload_text: str = "") -> Tuple[bool, str]:
     data, state = _load_agent_kg()
     if state != "ok":
         return False, f"SSOT-gate: Agent KG unavailable ({state}); fail-safe deny."
     active = _active_workflows(data)
-    if len(active) == 0:
-        return False, "SSOT-gate: нет active workflow в Agent KG; SSoT-операции запрещены."
-    if len(active) > 1:
-        wids = ", ".join(sorted(active))
-        return False, f"SSOT-gate: ambiguous active workflows ({wids}); закройте лишние или укажите явно."
-    wid = next(iter(active))
+    wid, ambig_reason = _select_workflow(active, payload_text)
+    if not wid:
+        return False, f"SSOT-gate: {ambig_reason}"
     if not _has_approval_request_context(data, wid):
         return False, (
             f"SSOT-gate: для active workflow {wid} нет approval_request context в Agent KG. "
@@ -214,7 +232,7 @@ def main() -> None:
     if tool_name == "Shell":
         command = _extract_shell_command(payload)
         if any(marker in command for marker in SYNC_COMMAND_MARKERS):
-            ok, reason = _check_workflow_scoped_approval()
+            ok, reason = _check_workflow_scoped_approval(command)
             if not ok:
                 _deny(reason)
                 return
@@ -225,7 +243,7 @@ def main() -> None:
         touched_paths = _extract_paths_from_patch(patch_text)
         sensitive_paths = [p for p in touched_paths if _is_sensitive_ssot_path(p)]
         if sensitive_paths:
-            ok, reason = _check_workflow_scoped_approval()
+            ok, reason = _check_workflow_scoped_approval(patch_text)
             if not ok:
                 _deny(f"{reason} Затронуты: {', '.join(sensitive_paths)}")
                 return
