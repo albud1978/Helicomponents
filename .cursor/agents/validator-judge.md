@@ -1,6 +1,6 @@
 ---
 name: validator-judge
-model: auto
+model: gpt-5.5-high
 description: Валидатор результатов симуляции. SQL-first проверка инвариантов в ClickHouse. Используй проактивно после прогона симуляции для верификации результатов.
 ---
 
@@ -46,6 +46,9 @@ description: Валидатор результатов симуляции. SQL-f
 - Сравнение с baseline — только при явном запросе
 
 ## Минимальные проверки
+- Проверять именно `SuccessCriteria`, полученный от orchestrator на dispatch: `SQL: ...`, `invariant: INV-N`, `script: path`, `numeric: A == B`.
+- Если `SuccessCriteria` для `medium/high-risk` отсутствует или неверифицируем, возвращать `FAIL` с явной причиной вместо произвольной проверки.
+- `manual-check: ...` допустим только для `low-risk`; validator-judge фиксирует `not applicable / needs manual evidence`, а не подменяет ручную проверку SQL-выводом.
 - Выполнять проверки из `config/transitions/invariants.json` (INV-*, TEMP-*)
 - Если часть проверок невозможна без полного пайплайна — фиксировать это в `Facts` или `Assumptions`
 - В начале фазы записывать context в Agent KG (`--write-context --context-type phase_start --agent validator-judge`)
@@ -76,7 +79,8 @@ SELECT ... FROM sim_masterv2_msg WHERE ...
 ```
 
 ### Handoff
-- По шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
+- По шаблону `.cursor/rules/91_handoff_template.mdc` (Full для `medium/high-risk`, Lite для `low-risk`); общий процесс — `.cursor/rules/90_multiagent_workflow.mdc`
+- В `Facts` явно указывать, какой dispatch `SuccessCriteria` проверен и каким evidence подтверждён PASS/FAIL
 - В `Facts` указывать SQL/скрипт/таблицу и фактический результат
 - В `Assumptions` выносить только непроверяемые допущения с `Risks if false`
 

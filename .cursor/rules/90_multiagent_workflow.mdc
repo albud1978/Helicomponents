@@ -13,18 +13,54 @@ alwaysApply: true
 - `governance-compliance` вызывается оркестратором **условно по риску и policy**, а не автоматически на каждый шаг.
 
 ## Роли и контур ответственности
-- **Главный агент (Orchestrator)**: формирует план, классифицирует риск, распределяет задачи, синтезирует результаты, инициирует governance-гейты и финальное согласование. Кодинг в `code/**` и `tools/**` запрещён. Разрешён allowlist: `.cursor/agents/**`, `.cursor/hooks/**`, `.cursor/rules/**`, `docs/**`, `README.md`, plan-артефакты.
+- **Главный агент (Orchestrator)**: формирует план, классифицирует риск, распределяет задачи, синтезирует результаты, инициирует governance-гейты и финальное согласование. Оркестратор не пишет production-код и не редактирует runtime/SSoT-конфиги напрямую.
+
+  **Allowlist (можно редактировать сам, ≤3 файла / ≤150 строк / 1 смысловое изменение)**:
+  - `.cursor/agents/**` — профили субагентов
+  - `.cursor/hooks/**` — hooks (включая `.cursor/hooks.json`)
+  - `.cursor/rules/**` — правила проекта
+  - `docs/**` — документация и капсулы (НО: создание новых `.md` — только с явным approval Алексея)
+  - `README.md` — корневой readme
+  - plan-артефакты (`.cursor/plans/**`)
+
+  **Denylist (запрещено напрямую — только через Task tool к coder-flame / coder-general)**:
+  - `code/**` — production-код (FLAME GPU, ETL, utilities, simulation, RTC)
+  - `tools/**` — utility-инструменты
+  - `config/transitions/**` — SSoT доменной модели (дополнительно защищено `ssot_approval_guard.py`)
+  - `config/agent_kg.json` — operational state-store (правки только через `python code/utils/agent_kg.py ...`, прямой edit запрещён)
+  - `config/capsules_manifest.json` — manifest капсул (через `capsule-builder`)
+  - `config/**` все остальные runtime-конфиги (`database_config.yaml`, ENV-файлы и т.п.)
+  - `deploy/**` — BI-as-code артефакты и deploy-скрипты
+  - `archive_vnv_cpu_project/**` — архив, не трогать
+  - `*.ipynb` вне `docs/**` — notebook'и
+  - `.env*`, `credentials.*`, ключи, секреты — никогда
+  - Любые mutating shell-команды кроме `python code/utils/agent_kg.py ...` (readonly shell разрешён — `git status/diff/log/show/branch/rev-parse/ls-files`, `ls`, `pwd`, `py_compile`)
+  - Удаление объектов проекта (файлы/каталоги/доки/таблицы) — только с явным подтверждением Алексея
+
+  **Крупная архитектурная разработка** (>3 файлов или >150 строк или новые публичные контракты) — даже в allowlist делегируется `coder-general` через Task tool после approval Алексея.
+
+  Hard-enforcement: `.cursor/hooks/orchestrator_write_guard.py` (`preToolUse`) физически блокирует попытки записи вне allowlist.
 - **КРИТИЧЕСКИЙ ЗАПРЕТ**: текущий ассистент действует как главный агент. Любая реализация вне allowlist — только через Task/Subagent tool. Оркестратору разрешён только readonly shell и специальное operational-исключение для `python code/utils/agent_kg.py ...`.
-- **Subagents**: `research-graph-analyst`, `bi-semantic-analyst`, `sql-checker`, `coder-flame`, `coder-general`, `reviewer-flame`, `validator-judge`, `capsule-builder`, `governance-compliance`, `docs-curator`.
+- **Subagents**: `research-graph-analyst` (включая routine SELECT/fact-check), `bi-semantic-analyst`, `coder-flame`, `coder-general`, `reviewer-flame`, `validator-judge`, `capsule-builder`, `governance-compliance`, `docs-curator`. Legacy `analyst-sql-graph` оставлен для совместимости и в маршрутизацию не входит.
 - **Глубина делегирования**: только один уровень (orchestrator -> subagent). Nested delegation запрещён без явного разрешения Алексея.
 - **Человек (Алексей)**: утверждает архитектурные/алгоритмические/схемные изменения, high-risk решения и любые необратимые действия.
+
+## Запрет архитектурных исследований и разработки для оркестратора
+
+- Оркестратор не ведёт самостоятельно архитектурные исследования и разработку. Сюда входят: анализ дизайна системы и компонентов, dependency/topology mapping, ревизия и проектирование правил/процессов/хуков/профилей агентов, оценка trade-off архитектурных решений, любое написание/правка production-кода.
+- Это не относится к operational data-проверкам: read-only SQL, `grep`/`rg`, count/lookup в `config/agent_kg.json` и других JSON, точечная сверка фактов из репо. Их оркестратор выполняет сам для оперативной фактологии и handoff/audit.
+- Базовый режим архитектурного исследования: один subagent на `claude-opus-4-7-thinking-high` — **не требует** approval пользователя (Cursor Task tool whitelist для subagent не содержит `xhigh`, использовать `high`).
+- Two-model cross-check (параллельный dispatch двух subagent — `claude-opus-4-7-thinking-high` и `gpt-5.5-high` — с debate-loop до 5 раундов) применяется только при **явном approval пользователя** в текущем чате. Без approval оркестратор может предложить cross-check, но не запускает второго subagent.
+- Архитектурная разработка ведётся по объёму:
+  - **Малый атомарный патч** (≤3 файла, ≤150 строк, одно смысловое изменение) — оркестратор может выполнить сам в allowlist (`.cursor/agents/**`, `.cursor/hooks/**`, `.cursor/rules/**`, `docs/**`) после approval пользователя на предложение.
+  - **Крупная архитектурная разработка** (>3 файлов, >150 строк или новые публичные контракты) — делегируется `coder-general` через Task tool после approval пользователя.
+  - Оба режима сохраняют human-gate; two-model cross-check на исследование/предложение применяется по запросу пользователя.
 
 ## Назначение зон (по умолчанию)
 - **coder-flame**: FLAME GPU/RTC, симуляция и код в `code/sim_v2/messaging/**`.
 - **coder-general**: ETL/Extract/analysis/utils/config/docs/tools и BI-as-code артефакты в `deploy/bi-as-code/**`.
-- **research-graph-analyst**: широкая read-only разведка по репо, архитектуре, Agent KG, Domain Graph и graph impact.
+- **research-graph-analyst**: широкая read-only разведка по репо, архитектуре, Agent KG, Domain Graph, graph impact + routine SELECT/fact-check/pass-fail проверки в ClickHouse (после merge `sql-checker`).
 - **bi-semantic-analyst**: тяжёлая BI-семантика, KPI, фильтры, scope и витрины Superset.
-- **sql-checker**: короткие SELECT/fact-check/pass-fail проверки.
 - **reviewer-flame**: ревью RTC/GPU изменений.
 - **validator-judge**: SQL-first валидация результатов симуляции и инвариантов.
 - **governance-compliance**: policy/risk/traceability checker.
@@ -62,18 +98,63 @@ alwaysApply: true
 ## Решения по коммиту
 - Решение о коммите принимает **оркестратор** по итогам ревью и валидации.
 - Коммит и push выполняются только по явной команде человека.
+- Один коммит не должен смешивать независимые задачи, разные `workflow_id`, разные `SuccessCriteria` или несвязанные `PlanStepID`.
+- Если один workflow содержит несколько самостоятельных логических изменений, оркестратор предлагает отдельные коммиты по scope/`PlanStepID`, но всё равно ждёт явной команды человека.
 
 ## Процесс (канонический цикл)
 1. **Анализ** — сбор фактов, чтение правил/капсул, назначение `RiskTier`.
 2. **Pre-gate** — hook-проверка дисциплины dispatch (`workflow_id`, active workflow, handoff discipline).
-3. **Исследование/проверка** — `research-graph-analyst`, `bi-semantic-analyst`, `sql-checker` по необходимости.
+3. **Исследование/проверка** — `research-graph-analyst`, `bi-semantic-analyst` по необходимости.
 4. **Реализация** — `coder-general` или `coder-flame`.
-5. **Ревью/Валидация** — `reviewer-flame` и/или `validator-judge` по ситуации.
+5. **Ревью/Валидация** — `reviewer-flame` и/или `validator-judge` по ситуации; после `coder-flame` handoff с `risk_tier ∈ {medium, high}` `reviewer-flame` обязателен в том же workflow.
 6. **Governance** — `governance-compliance` для `medium/high-risk` или при policy-trigger.
 7. **Docs** — `docs-curator` для high-risk/doc-impact.
 8. **Capsule** — `capsule-builder` при необходимости.
 9. **Pre-close** — hook-проверка уже записанных артефактов перед `--close-workflow`.
 10. **Handoff/Close** — финальный отчёт, `--write-handoff`, затем `--close-workflow`.
+
+### Матрица 10-step × risk-tier
+
+| # | Шаг | low | medium | high |
+|---|---|---|---|---|
+| 1 | Анализ | required (short) | required | required (with explicit RiskTier rationale) |
+| 2 | Pre-gate | required (auto) | required (auto) | required (auto) |
+| 3 | Исследование / проверка | optional | conditional (audit/verify scope) | required (`research-graph-analyst` или domain expert) |
+| 4 | Реализация | orchestrator allowlist (малый патч) или `coder-general` | `coder-flame` / `coder-general`; orchestrator allowlist малый патч с approval | **mandatory subagent**; orchestrator allowlist только малый патч и только после approval |
+| 5 | Ревью / Валидация | optional (handoff-lite) | required (`reviewer-flame` для FLAME medium; orchestrator independent verify + governance для остальных) | **required** (`reviewer-flame` для FLAME; `validator-judge` для simulation results) |
+| 6 | Governance-compliance | optional | **required** | **required** |
+| 7 | Docs (`docs-curator`) | optional | conditional (если doc/process impact) | **required** |
+| 8 | Capsule (`capsule-builder`) | skip | conditional (если domain context изменился) | conditional (если domain context изменился) |
+| 9 | Pre-close | required (auto) | required (auto) | required (auto) |
+| 10 | Handoff / Close | required (Handoff-lite OK) | required (**Full Handoff**) | required (**Full Handoff** + `ApprovalGate` filled) |
+
+**Дополнения** к матрице:
+- **Human approval gate** перед шагом 4: `high` = required; `medium` = conditional (policy/architecture change); `low` = обычно не требуется.
+- **`approval_request` context (C2):** для `medium/high` обязательно через `python3 code/utils/agent_kg.py --register-approval-request --workflow-id W_<id> --content "..."` до запроса approval. `orchestrator_guard.py` выдаёт soft WARNING при пропуске.
+- **SSoT-gate (D1):** для `high-risk` SSoT-операций (`config/transitions/*.json`, `make sync-domain-graph`) — workflow-scoped hard-block через `ssot_approval_guard.py`.
+- **Reviewer-flame loop (D2):** `coder-flame` `medium/high` → `reviewer-flame` обязателен в том же workflow. `orchestrator_guard.py` выдаёт soft WARNING.
+- **Phase recap (см. ниже):** для `medium/high`, `coder-flame`, длинных задач, resume/compaction — обязательный recap из KG + capsules.
+
+- **Mandatory reviewer-flame loop**: для любого `coder-flame` handoff с `risk_tier ∈ {medium, high}` обязателен последующий `reviewer-flame` handoff **в том же workflow** до его закрытия. `orchestrator_guard.py` (`beforeSubmitPrompt`) выдаёт soft WARNING; жёсткий блок не применяется — оркестратор реагирует превентивно.
+
+### Phase recap
+- В начале фазы делай короткий context recap из файлов, если есть риск context rot: `medium/high-risk`, `coder-flame`, длинная задача, resume/compaction или явный запрос человека.
+- Recap берётся из `config/agent_kg.json` (`workflow_id`, `phase`, `risk_tier`/последний handoff), `config/capsules_manifest.json` и 1-2 релевантных `docs/*_capsule.md`.
+- Капсулы остаются read-only проекциями, не SSoT; при расхождении верить исходным JSON/коду/SQL.
+- Для low-risk housekeeping без context rot phase recap не обязателен, чтобы не раздувать Handoff-lite.
+
+### Daily hygiene check (human-in-the-loop)
+
+- `tools/hygiene_check.py` сканирует `config/agent_kg.json`, `config/capsules_manifest.json` и `config/transitions/invariants.json` на 5 категорий rot:
+  - **Stale workflows** — active дольше `--stale-days` (default 1 день).
+  - **Stale capsules** — `last_verified_against_ssot` старше threshold.
+  - **Phantom invariants** — invariants в манифесте без определения в SSoT.
+  - **Incomplete handoffs** — closed workflows без orchestrator handoff с `trace_id+plan_step_id`.
+  - **Dangling approval_requests** — `approval_request` contexts в workflows active дольше threshold.
+- **Trigger**: `orchestrator_guard.py` запускает `--summary-only` при первом prompt в новом UTC-дне (через state file `.cursor/hooks/.hygiene_last_check.txt`). При findings — добавляет reminder в `agentMessage` с counts.
+- **Human-in-the-loop**: Алексей решает — закрыть workflow, re-verify капсулу, или skip. Никакого hard-block и automated cleanup.
+- **Manual run**: `python3 tools/hygiene_check.py` — детальный отчёт с конкретными ID.
+- Exit `1` при findings (CI-friendly).
 
 ## Что реально делают `pre_gate` и `pre_close`
 ### `pre_gate`
@@ -133,7 +214,7 @@ alwaysApply: true
 - `user_comm_audit.log` — метаданные взаимодействия с человеком.
 - `code_edit_audit.log` — технический след правок.
 - `docs/changelog.md` — короткий аудит изменений и итогов ревью/валидации, когда есть doc-impact.
-- Перед запросом `medium/high-risk` approval orchestrator обязан записать `approval_request` context в `Agent KG`.
+- Перед запросом `medium/high-risk` approval orchestrator обязан зарегистрировать `approval_request` context в `Agent KG` через `python3 code/utils/agent_kg.py --register-approval-request --workflow-id W_<id> --content "..."`. `orchestrator_guard.py` выдаёт soft WARNING (на `beforeSubmitPrompt`), если active medium/high workflow без зарегистрированного context.
 - В пользовательском approval-запросе для `medium/high-risk` должен явно фигурировать `W_<workflow_id>`.
 - `user_comm_audit.py` должен логировать `workflow_id_source`; для `high-risk` approval trace считается полным, если `workflow_id` пришёл явно или был выведен из единственного активного approval-context/pending high-risk state.
 
@@ -151,7 +232,7 @@ alwaysApply: true
 ### Hooks (`.cursor/hooks.json`)
 - `user_comm_audit.py` — лог коммуникации с человеком
 - `orchestrator_guard.py` — policy reinforcement для orchestrator
-- `ssot_approval_guard.py` — human gate для `config/transitions/**` и `make sync-domain-graph`
+- `ssot_approval_guard.py` (preToolUse) — workflow-scoped hard-block для SSoT-операций (Variant B): требует active workflow в Agent KG, зарегистрированный `approval_request` context, и audit-confirmation `approval_hint=yes` для того же `workflow_id`. KG unavailable → fail-safe deny. Auto-invalidate при close-workflow.
 - `pre_gate_guard.py` — dispatch discipline
 - `pre_close_guard.py` — close discipline
 - `orchestrator_write_guard.py` — hard-block на прямой coding оркестратора

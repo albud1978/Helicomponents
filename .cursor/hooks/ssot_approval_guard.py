@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""preToolUse hook: блокирует SSOT-операции без явного human approval.
+"""preToolUse hook: блокирует SSOT-операции без явного workflow-scoped human approval.
 
-Защищает:
+Защищает (без изменений):
 - правки JSON SSOT в config/transitions/*.json
 - команды sync-domain-graph через Shell
 
-Требование допуска:
-- в последней записи user_comm_audit.log должен быть approval_hint=yes
-- и workflow_id должен быть заполнен (не N/A)
+Требование допуска (workflow-scoped, Variant B):
+- в config/agent_kg.json есть ровно один active workflow
+- для этого workflow зарегистрирован approval_request|approval_gate context
+- в user_comm_audit.log есть строка с workflow_id=<этого workflow> и approval_hint=yes
+- KG unavailable → fail-safe deny
 """
 
 from __future__ import annotations
@@ -16,11 +18,14 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Tuple
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AUDIT_LOG = Path(__file__).resolve().parent / "user_comm_audit.log"
+AGENT_KG_PATH = REPO_ROOT / "config" / "agent_kg.json"
+APPROVAL_CONTEXT_TYPES = {"approval_request", "approval_gate", "pending_approval"}
+AUDIT_SCAN_LINES = 50
 
 SENSITIVE_SSOT_FILES = {
     "config/transitions/transitions_rules.json",
@@ -100,33 +105,100 @@ def _is_sensitive_ssot_path(path_rel: str) -> bool:
     return path_rel.startswith("config/transitions/") and path_rel.endswith(".json")
 
 
-def _read_last_audit_flags() -> Dict[str, str]:
-    if not AUDIT_LOG.exists():
-        return {"workflow_id": "N/A", "approval_hint": "no"}
-
+def _load_agent_kg() -> Tuple[Dict[str, Any], str]:
+    """Returns (data, state). state in {ok, unavailable:*, invalid_root}."""
     try:
-        with AUDIT_LOG.open("r", encoding="utf-8") as f:
-            lines = [line.strip() for line in f if line.strip()]
-    except OSError:
-        return {"workflow_id": "N/A", "approval_hint": "no"}
+        with AGENT_KG_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, f"unavailable:{type(exc).__name__}"
+    if not isinstance(data, dict):
+        return {}, "invalid_root"
+    return data, "ok"
 
-    if not lines:
-        return {"workflow_id": "N/A", "approval_hint": "no"}
 
-    last = lines[-1]
-    wf_match = re.search(r"workflow_id=([^\s]+)", last)
-    ap_match = re.search(r"approval_hint=([^\s]+)", last)
+def _active_workflows(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Returns {workflow_id: workflow_dict} только для status=active."""
+    workflows = data.get("workflows", [])
+    if not isinstance(workflows, list):
+        return {}
+
+    active: Dict[str, Dict[str, Any]] = {}
+    for item in workflows:
+        if not isinstance(item, dict):
+            continue
+        workflow_id = str(item.get("workflow_id") or "")
+        if workflow_id and str(item.get("status") or "").lower() == "active":
+            active[workflow_id] = item
+    return active
+
+
+def _has_approval_request_context(data: Dict[str, Any], workflow_id: str) -> bool:
+    """True если в data.contexts есть запись workflow_id+context_type ∈ APPROVAL_CONTEXT_TYPES."""
+    contexts = data.get("contexts", [])
+    if not isinstance(contexts, list):
+        return False
+
+    for item in contexts:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("workflow_id") or "") != workflow_id:
+            continue
+        if str(item.get("context_type") or "") in APPROVAL_CONTEXT_TYPES:
+            return True
+    return False
+
+
+def _audit_flags(line: str) -> Dict[str, str]:
+    wf_match = re.search(r"workflow_id=([^\s]+)", line)
+    ap_match = re.search(r"approval_hint=([^\s]+)", line)
     return {
         "workflow_id": wf_match.group(1) if wf_match else "N/A",
         "approval_hint": ap_match.group(1).lower() if ap_match else "no",
     }
 
 
-def _has_human_approval() -> bool:
-    flags = _read_last_audit_flags()
-    workflow_ok = flags.get("workflow_id", "N/A") not in {"", "N/A", "n/a"}
-    approval_ok = flags.get("approval_hint", "no") == "yes"
-    return workflow_ok and approval_ok
+def _has_approval_for_workflow(workflow_id: str) -> bool:
+    """True если последняя approval_hint=yes строка в AUDIT_LOG относится к workflow_id."""
+    if not AUDIT_LOG.exists():
+        return False
+
+    try:
+        with AUDIT_LOG.open("r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip()]
+    except OSError:
+        return False
+
+    for line in reversed(lines[-AUDIT_SCAN_LINES:]):
+        flags = _audit_flags(line)
+        if flags.get("approval_hint") != "yes":
+            continue
+        return flags.get("workflow_id") == workflow_id
+    return False
+
+
+def _check_workflow_scoped_approval() -> Tuple[bool, str]:
+    data, state = _load_agent_kg()
+    if state != "ok":
+        return False, f"SSOT-gate: Agent KG unavailable ({state}); fail-safe deny."
+    active = _active_workflows(data)
+    if len(active) == 0:
+        return False, "SSOT-gate: нет active workflow в Agent KG; SSoT-операции запрещены."
+    if len(active) > 1:
+        wids = ", ".join(sorted(active))
+        return False, f"SSOT-gate: ambiguous active workflows ({wids}); закройте лишние или укажите явно."
+    wid = next(iter(active))
+    if not _has_approval_request_context(data, wid):
+        return False, (
+            f"SSOT-gate: для active workflow {wid} нет approval_request context в Agent KG. "
+            f"Зарегистрируй: python3 code/utils/agent_kg.py --register-approval-request --workflow-id {wid} --content '...'"
+        )
+    if not _has_approval_for_workflow(wid):
+        return False, (
+            f"SSOT-gate: context зарегистрирован для {wid}, но нет user confirmation (approval_hint=yes) "
+            f"в user_comm_audit.log для этого workflow. Получи явное подтверждение пользователя."
+        )
+    return True, ""
 
 
 def main() -> None:
@@ -138,29 +210,25 @@ def main() -> None:
 
     tool_name = str(payload.get("tool_name") or "")
 
-    # 1) Блок sync-domain-graph без human approval
+    # Sync-domain-graph guard
     if tool_name == "Shell":
         command = _extract_shell_command(payload)
         if any(marker in command for marker in SYNC_COMMAND_MARKERS):
-            if not _has_human_approval():
-                _deny(
-                    "SSOT-gate: sync-domain-graph заблокирован без явного human approval. "
-                    "Добавьте подтверждение пользователя (approval_hint=yes) и workflow_id (например W_<id>) в текущем чате."
-                )
+            ok, reason = _check_workflow_scoped_approval()
+            if not ok:
+                _deny(reason)
                 return
 
-    # 2) Блок правок config/transitions/*.json без human approval
+    # SSoT JSON ApplyPatch guard
     if tool_name == "ApplyPatch":
         patch_text = _extract_applypatch_text(payload)
         touched_paths = _extract_paths_from_patch(patch_text)
         sensitive_paths = [p for p in touched_paths if _is_sensitive_ssot_path(p)]
-        if sensitive_paths and not _has_human_approval():
-            _deny(
-                "SSOT-gate: правка JSON SSOT заблокирована без явного human approval. "
-                f"Затронуты: {', '.join(sensitive_paths)}. "
-                "Нужно подтверждение пользователя и workflow_id в текущем чате."
-            )
-            return
+        if sensitive_paths:
+            ok, reason = _check_workflow_scoped_approval()
+            if not ok:
+                _deny(f"{reason} Затронуты: {', '.join(sensitive_paths)}")
+                return
 
     _allow()
 

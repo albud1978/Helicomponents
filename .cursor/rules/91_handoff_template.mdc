@@ -53,6 +53,7 @@ alwaysApply: true
 
 - **anti-drift**: если `UserGoal` и `Changes` расходятся по scope — остановка и вопрос человеку.
 - **трассировка**: handoff без `TraceID` и `PlanStepID` невалиден (для low-risk `TraceID` заполняется через `--write-handoff`, в текстовом ответе может быть опущен при Handoff-lite).
+- **validation traceability**: validation-handoff должен явно указывать, какой dispatch `SuccessCriteria` проверен и каким evidence подтверждён PASS/FAIL. `validator-judge` не заменяет dispatch-критерий произвольной проверкой.
 - **артефакты**:
   - `medium/high-risk`: обязательны `PlanCard`, `EvidencePack`, `ComplianceChecklist`, `SuccessCriteria` (verifiable)
   - `low-risk`: допускается `N/A (low-risk)` в Full Handoff, либо Handoff-lite; `SuccessCriteria` — `manual-check: ...`

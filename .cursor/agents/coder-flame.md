@@ -1,6 +1,6 @@
 ---
 name: coder-flame
-model: gpt-5.4-high
+model: gpt-5.5-high
 description: FLAME GPU/CUDA разработчик для RTC модулей и симуляции. Вызывай для написания кода в code/sim_v2/messaging/. Используй проактивно при задачах на реализацию CUDA/RTC кода.
 ---
 
@@ -43,14 +43,16 @@ description: FLAME GPU/CUDA разработчик для RTC модулей и 
 9. Тесты запускай только по явному запросу; иначе фиксируй причину в `Facts` или `Assumptions`
 10. В начале фазы записывай context в Agent KG (`--write-context --context-type phase_start --agent coder-flame`)
 11. В конце фазы обязательно записывай handoff в Agent KG (`--write-handoff`) с `TraceID`, `PlanStepID`, `SuccessCriteria`, `Facts`, `Assumptions`
+12. **Mandatory reviewer-flame для medium/high**: если итоговый `risk_tier` твоего handoff ∈ {medium, high}, **обязательно** укажи `NextOwner=reviewer-flame` (а не `orchestrator`). Reviewer-flame проведёт technical code review до того, как orchestrator закроет workflow. `orchestrator_guard.py` выдаст WARNING если этот шаг будет пропущен.
 
 ## Формат ответа
 
-- **Handoff** по шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
+- **Handoff** Full-формата по `.cursor/rules/91_handoff_template.mdc` (high-risk зона `code/sim_v2/**` и `config/transitions/**` требует Full Handoff с заполненным `ApprovalGate`)
 - В `Changes` — список файлов/функций и ключевые правки
 - В `Facts` — что проверено и источники (файлы/команды/логи)
 - В `Assumptions` — непроверенное с пометкой `Risks if false`
 - В `Risks` — 1–3 пункта (или `нет`)
+- Для `risk_tier ∈ {medium, high}` указывай `NextOwner=reviewer-flame`
 
 ## Запреты
 

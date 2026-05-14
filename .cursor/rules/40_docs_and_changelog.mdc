@@ -16,3 +16,12 @@ alwaysApply: false
 - Handoff-пакеты BI (`deployment_manifest`, `env_overrides_template`, `runbook`, `acceptance_report`, `brandbook_conformance_report`) обновляются только когда задача реально затрагивает release/process boundary.
 - Новые `.md` файлы без явного разрешения человека не создавать; по умолчанию обновлять существующие документы.
 - `capsule-builder` используется только когда меняется устойчивое доменное знание; для локальных process-правок капсула обычно не требуется.
+
+## complete-milestone (manual checklist)
+
+Чек-лист применяется только к явному закрытию milestone и не запускается автоматически:
+
+- обновить `docs/changelog.md` кратким итогом milestone, если есть doc/process/release impact;
+- обновить релевантные капсулы только если изменилось устойчивое доменное знание;
+- положить milestone-артефакты только в заранее согласованный человеком путь; `archive_vnv_cpu_project/` не использовать;
+- `git tag milestone/<id>` выполнять только по явной команде человека после финального review/validation.

@@ -10,6 +10,7 @@ SSoT: config/agent_kg.json
     python code/utils/agent_kg.py --write-handoff --workflow-id W1 --agent coder-flame --user-goal "цель" --changes "что сделано" --facts "что проверено" --trace-id "wf:123" --plan-step-id "P1" --risk-tier low --risk-reasons "..." --plan-card "N/A (low-risk)" --evidence-pack "N/A (low-risk)" --compliance-checklist "N/A (low-risk)"
     python code/utils/agent_kg.py --read-state --workflow-id W1
     python code/utils/agent_kg.py --write-context --workflow-id W1 --context-type research --content "контент"
+    python code/utils/agent_kg.py --register-approval-request --workflow-id W1 --content "медиум/хай-риск approval pending" --agent orchestrator
     python code/utils/agent_kg.py --read-context --workflow-id W1
     python code/utils/agent_kg.py --close-workflow --workflow-id W1 --close-reason "задача завершена" --agent orchestrator
 """
@@ -378,6 +379,18 @@ def write_context(args: argparse.Namespace) -> None:
     _save(path, data)
 
 
+def register_approval_request(args: argparse.Namespace) -> None:
+    """Регистрирует approval_request context через shortcut."""
+    if not args.workflow_id:
+        raise ValueError("--workflow-id обязателен")
+    args.context_type = "approval_request"
+    if not args.content:
+        args.content = "approval_request: pending human gate"
+    if not args.agent:
+        args.agent = "orchestrator"
+    write_context(args)
+
+
 def read_context(args: argparse.Namespace) -> None:
     """Читает контексты для workflow."""
     if not args.workflow_id:
@@ -470,6 +483,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--write-context", action="store_true", help="Записать контекст"
     )
     mode.add_argument(
+        "--register-approval-request",
+        action="store_true",
+        help="Зарегистрировать approval_request context (shortcut для --write-context --context-type approval_request)",
+    )
+    mode.add_argument(
         "--read-context", action="store_true", help="Прочитать контексты"
     )
     mode.add_argument(
@@ -538,6 +556,8 @@ def main() -> None:
         read_state(args)
     elif args.write_context:
         write_context(args)
+    elif args.register_approval_request:
+        register_approval_request(args)
     elif args.read_context:
         read_context(args)
     elif args.close_workflow:
