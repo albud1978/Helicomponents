@@ -238,6 +238,25 @@ def write_handoff(args: argparse.Namespace) -> None:
         "graph_update": args.graph_update or "нет",
         "created_at": _now(),
     }
+    model_slug = (args.model_slug or "").strip()
+    est_tokens_raw = args.est_tokens
+    token_source = (args.token_source or "").strip().lower()
+
+    if model_slug or est_tokens_raw is not None or token_source:
+        usage_block = {}
+        if model_slug:
+            usage_block["model"] = model_slug
+        if est_tokens_raw is not None:
+            if not isinstance(est_tokens_raw, int) or est_tokens_raw < 0:
+                raise ValueError("--est-tokens должен быть неотрицательным целым")
+            usage_block["est_tokens"] = est_tokens_raw
+        if token_source:
+            if token_source not in {"manual", "char_estimate", "unknown"}:
+                raise ValueError("--token-source должен быть manual|char_estimate|unknown")
+            usage_block["source"] = token_source
+        elif "est_tokens" in usage_block:
+            usage_block["source"] = "unknown"
+        handoff["usage"] = usage_block
     data["handoffs"].append(handoff)
 
     # Обновляем workflow
@@ -543,6 +562,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--next-owner", type=str, help="Следующий владелец (handoff)")
     parser.add_argument("--open-questions", type=str, help="Открытые вопросы (handoff)")
     parser.add_argument("--graph-update", type=str, help="Требуется ли обновление графа (да/нет)")
+    parser.add_argument(
+        "--model-slug",
+        type=str,
+        default=None,
+        help="Модель агента: gpt-5.5-high|claude-opus-4-7-thinking-high|...",
+    )
+    parser.add_argument(
+        "--est-tokens",
+        type=int,
+        default=None,
+        help="Estimate токенов (input+output)",
+    )
+    parser.add_argument(
+        "--token-source",
+        type=str,
+        default=None,
+        help="Источник est_tokens: manual|char_estimate|unknown",
+    )
     parser.add_argument("--context-type", type=str, help="Тип контекста (research/specification/decision)")
     parser.add_argument("--content", type=str, help="Содержимое контекста")
     parser.add_argument("--close-reason", type=str, help="Причина закрытия workflow")
