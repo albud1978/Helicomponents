@@ -1,5 +1,47 @@
 # Changelog
 
+## [14-05-2026] - Post-audit patches (12 fixes: 3 P1 / 5 P2 / 4 P3)
+
+После cleanup-цикла A1..E1 проведён независимый two-model audit (Opus + GPT-5.5-high) с debate Round 1, выявивший 12 consensus-fixes по 3 критериям: executability / anti-overengineering / token economy. Approved Alexey 21:48: «Всё (P1+P2+P3 = 12 fixes)». Risk=medium, governance verdict `allow` (5/5 dimensions).
+
+### P1 (must-fix)
+
+- **AGENT_MESSAGE compress** (`.cursor/hooks/orchestrator_guard.py:28-34`) — 14 строк (~150 tok) → 4 строки (~50 tok). Сохранены allowlist, write-through, medium/high approval discipline, subagent→orchestrator direction.
+- **ssot_approval_guard ambiguous-active fix** (`.cursor/hooks/ssot_approval_guard.py`) — при >1 active workflow требовать explicit `W_<id>` в payload (Shell command / ApplyPatch text); deny с ясным reason. Раньше hard-deny при любом >1 active.
+- **pre_gate strict SuccessCriteria regex** (`.cursor/hooks/pre_gate_guard.py:23-31, 100-145`) — verifiable markers `SQL:|script:|numeric:|invariant:|INV-/TEMP-/GPU-|acceptance:|manual-check:`. `manual-check:` принимается только для low-risk. Раньше принимался любой текст после `SuccessCriteria:`.
+
+### P2 (should-fix)
+
+- **agentMessage stacking priority cap** (`orchestrator_guard.py:286-305`) — pool из 3 conditional warnings (approval, reviewer, hygiene), показывать max 2 в structured `GOVERNANCE_STATUS:` block.
+- **hygiene staleness_status manual override** (`tools/hygiene_check.py`) — `verified` не флагается даже при старой дате; `needs_content_review` флагается даже при свежей. Раньше всегда date-based.
+- **agent_kg.py orchestrator handoff requires --risk-tier** (`code/utils/agent_kg.py`) — `ValueError` при missing risk_tier для `agent=orchestrator`. Backward-compat для других агентов.
+- **pre_close_guard deny missing risk_tier** (`pre_close_guard.py:138-152, 280-285`) — `_normalize_risk_tier` возвращает `""` вместо silent `low`; caller deny с явным reason. Закрывает risk silently → low loophole.
+- **91_handoff_template slim** (`.cursor/rules/91_handoff_template.mdc`) — удалён `Agent KG logging` (повторяет KG); `Facts` слит в `EvidencePack`. Risk-блок (5 полей) сохранён.
+- **pre_gate handoff_to required-arg** (`pre_gate_guard.py:32-33, 95-103, 157-162`) — приоритет: arg `handoff_to|next_owner=orchestrator`. Fallback: text regex (как раньше).
+
+### P3 (could-fix)
+
+- **`--no-color` removed** (`tools/hygiene_check.py`) — dead CLI flag без потребителя.
+- **orchestrator.md KG shell wording** (`.cursor/agents/orchestrator.md:58-78`) — inline exception для `python code/utils/agent_kg.py ...` в КРИТИЧЕСКИЙ ЗАПРЕТ таблице (формальное противоречие с allowlist разрешено).
+- **kg_io.py shared module** (`.cursor/hooks/kg_io.py` новый) — `load_agent_kg() -> (Dict, str)` DRY-фактор. Refactored 4 хука (orchestrator_guard, ssot_approval_guard, pre_gate_guard, pre_close_guard). Без cache (race avoidance per GPT debate).
+- **AGENT_KG_STATUS уже single-line at end** — no-op required.
+
+### Audit methodology
+
+- Two parallel readonly audits: Opus (8 findings P1×2/P2×3/P3×3) + GPT-5.5-high (8 findings P1×2/P2×5/P3×1).
+- Debate Round 1: convergence reached, Round 2 не понадобился. Opus снял anti-finding по capsule schema (factually wrong: hygiene tool не consume `staleness_status`); GPT понизил G2 (default-low) с P1 до P2 и G3 (profile contradiction) до P3.
+- Anti-findings раздел (защита от over-simplification): reviewer-flame loop, 10-step matrix, allowlist/denylist, Lite/Full Handoff distinction, multi-auditor cross-check, counts-only hygiene reminder.
+
+### Verification
+
+- `py_compile` для 7 файлов exit 0; ReadLints clean.
+- 10 smoke-тестов PASS: orchestrator_guard agentMessage 503 chars (раньше >1000); pre_gate reject `make it work` / allow SQL: / allow manual-check для low / deny manual-check для medium; ssot_approval ambiguous deny с info, explicit W_<id> proceeds к approval check; agent_kg.py orchestrator without risk_tier ValueError; validator-judge backward-compat.
+- hygiene 0/0/0/0/0 (flame_gpu больше не флагается из-за staleness_status=verified override).
+
+### Open question (для будущей задачи)
+
+- `user_comm_audit.py` следует усилить: при единственном active `approval_request` context устанавливать `workflow_id_source=inferred_unique_active_approval` — улучшит linkage для high-risk audit. Сейчас medium-tolerated.
+
 ## [14-05-2026] - Multi-agent system cleanup cycle (A1..E1) wrap-up
 
 Завершён 11-шаговый cleanup-цикл мультиагентного контура (A1, A2, B1 Step 1, B1 Step 2, B2, C1, C2, D1, D2, D3, E1) + closing batch. Все шаги одобрены Алексеем в чате 14-05-2026, выполнены один-за-другим с явной верификацией. Каждый workflow зарегистрирован в Agent KG с `--init-workflow → --register-approval-request → handoffs → --close-workflow`.
