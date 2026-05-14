@@ -1,5 +1,36 @@
 # Changelog
 
+## [14-05-2026] - Master branch swap: feature/flame-messaging → master
+
+Replaced `origin/master` (январская работа `c24352ab`, 116 commits с 06-01-2026) на содержимое `feature/flame-messaging` (`7e2c53ab`). Алексей: «вёл разработку в январе в master, но потом забросил за отсутствие перспективы и выбрал единственно верный путь в текущей ветке, довёл до рабочего состояния». Risk=high, approved Alexey 22:35 + final confirm 'yes'.
+
+### Backup и safety
+
+- Январский master сохранён на remote как `master-backup-jan2026-flame-rtc` (commit `c24352ab`) — push выполнен **до** force-replace.
+- Force push с `--force-with-lease=master:c24352ab` (race-condition safety: refuse если remote master сдвинулся).
+- Local `feature/flame-messaging` остаётся на 7e2c53ab — продолжаем там работать или мигрируем.
+
+### Финальное состояние
+
+| Ref | Before | After |
+|---|---|---|
+| `origin/master` | `c24352ab` (январь) | `7e2c53ab` (наша работа) |
+| `origin/master-backup-jan2026-flame-rtc` | (не существовала) | `c24352ab` (январский backup) |
+| `origin/feature/flame-messaging` | `7e2c53ab` | `7e2c53ab` (без изменений) |
+| local `master` | `c24352ab` | `7e2c53ab` |
+| local `feature/flame-messaging` | `7e2c53ab` | `7e2c53ab` |
+
+### Не затронуто
+
+- Stash list: оставлен старый сентябрский WIP (`stash@{0}: WIP on master: c931215c 30.09 рефакторинг оркестратора, спавн не работает`) — можно review/drop позже отдельной задачей.
+- Прочие remote ветки (`cursor/analyze-*`, `cursor/fix-sim-*`) — не тронуты.
+
+### Rollback (если понадобится)
+
+```bash
+git push --force origin master-backup-jan2026-flame-rtc:master
+```
+
 ## [14-05-2026] - Lightweight token counter (Agent KG + analytics)
 
 Добавлен опциональный token-счётчик в handoff/KG для аналитики выбора моделей и оптимизации. Risk=medium, approved Alexey 22:11. Governance verdict `allow` (5/5).

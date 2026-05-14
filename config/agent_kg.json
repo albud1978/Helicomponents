@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-05-14T17:24:41Z",
+    "updated_at": "2026-05-14T17:41:57Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -2190,6 +2190,15 @@
       "status": "closed",
       "created_at": "2026-05-14T17:14:45Z",
       "updated_at": "2026-05-14T17:24:41Z"
+    },
+    {
+      "workflow_id": "W_master_replace_2026_05_14",
+      "goal": "Force-replace origin/master содержимым feature/flame-messaging. Backup январского master в master-backup-jan2026-flame-rtc на remote.",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "closed",
+      "created_at": "2026-05-14T17:41:57Z",
+      "updated_at": "2026-05-14T17:41:57Z"
     }
   ],
   "handoffs": [
@@ -19055,6 +19064,43 @@
         "est_tokens": 30000,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_W_master_replace_2026_05_14_orchestrator_b645b109",
+      "workflow_id": "W_master_replace_2026_05_14",
+      "agent": "orchestrator",
+      "user_goal": "Replace origin/master содержимым feature/flame-messaging; backup январского master на remote",
+      "goal": "Replace origin/master содержимым feature/flame-messaging; backup январского master на remote",
+      "changes": "remote/master-backup-jan2026-flame-rtc=c24352ab created. remote/master force-replaced c24352ab→7e2c53ab. local master synced. changelog updated. (KG записи init/handoff восстановлены после reset --hard).",
+      "facts": "git ls-remote post-execution подтвердил все 3 remote refs. Local clean working tree.",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal ↔ Changes match. No scope creep.",
+      "process_insights": "Force-with-lease с явным hash; backup-first ordering; reset --hard после workflow init стирает KG записи — нужен post-execution re-init для traceability.",
+      "trace_id": "master_replace_2026_05_14",
+      "plan_step_id": "MasterSwap",
+      "approval_gate_id": "alexey_22_35_master_swap",
+      "approval_status": "approved",
+      "approval_source": "chat 22:35 'я бы текущий master вывел в бэкап. а наш поставил вместо' + 'yes'",
+      "risk_tier": "high",
+      "risk_reasons": "force push на master; 116 коммитов январской работы перезаписаны (backup сохранён)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "yes",
+      "plan_card": "Step 1: push master:master-backup-jan2026-flame-rtc. Step 2: verify backup. Step 3: --force-with-lease=master:c24352ab feature->master. Step 4: local reset to origin/master.",
+      "evidence_pack": "STEP1 [new branch] master -> master-backup-jan2026-flame-rtc. STEP3 + c24352ab...7e2c53ab feature/flame-messaging -> master (forced update). Final verify 4 hashes matched.",
+      "success_criteria": "acceptance: 4 ref-точки matched expected (remote master=7e2c53ab, backup=c24352ab, feature=7e2c53ab, local master=7e2c53ab clean)",
+      "compliance_checklist": "policy_status=pass; scope_match=yes; traceability_status=pass; human_gate_status=ok (explicit approval); decision=executed_per_approval",
+      "risks": "Rollback требует force push backup→master; старый stash может conflict с future операциями",
+      "next_owner": "human",
+      "open_questions": "Удалить feature/flame-messaging на remote? Drop сентябрский stash@{0}?",
+      "graph_update": "no",
+      "created_at": "2026-05-14T17:41:57Z",
+      "usage": {
+        "model": "claude-opus-4-7-thinking-xhigh",
+        "est_tokens": 14000,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -21289,6 +21335,24 @@
       "agent": "orchestrator",
       "created_at": "2026-05-14T17:24:41Z",
       "updated_at": "2026-05-14T17:24:41Z"
+    },
+    {
+      "context_id": "ctx_W_master_replace_2026_05_14_approval_request_36b5eada",
+      "workflow_id": "W_master_replace_2026_05_14",
+      "context_type": "approval_request",
+      "content": "Approved Alexey 14-05-2026 22:35: master swap (executed).",
+      "agent": "orchestrator",
+      "created_at": "2026-05-14T17:41:57Z",
+      "updated_at": "2026-05-14T17:41:57Z"
+    },
+    {
+      "context_id": "ctx_W_master_replace_2026_05_14_closure_3b792b22",
+      "workflow_id": "W_master_replace_2026_05_14",
+      "context_type": "closure",
+      "content": "Master swap executed per explicit approval. Backup на remote, master replaced, rollback documented.",
+      "agent": "orchestrator",
+      "created_at": "2026-05-14T17:41:57Z",
+      "updated_at": "2026-05-14T17:41:57Z"
     }
   ]
 }
