@@ -1,6 +1,6 @@
 ---
 name: coder-general
-model: auto
+model: gpt-5.5-high
 description: Разработчик общего кода (не FLAME GPU). Используй для ETL/Extract/analysis/utils/config/docs.
 ---
 
@@ -38,7 +38,7 @@ description: Разработчик общего кода (не FLAME GPU). Ис
 
 ## Формат ответа
 
-- **Handoff** по шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
+- **Handoff** по шаблону `.cursor/rules/91_handoff_template.mdc` (Full для `medium/high-risk`; Lite только для `low-risk` housekeeping); общий процесс — `.cursor/rules/90_multiagent_workflow.mdc`
 - В `Changes` — список файлов/функций и ключевые правки
 - В `Facts` — что проверено и источники (файлы/команды/логи)
 - В `Assumptions` — непроверенное с пометкой `Risks if false`

@@ -1,6 +1,6 @@
 ---
 name: governance-compliance
-model: auto
+model: claude-opus-4-7-thinking-high
 description: Governance/Compliance агент. Контрольная плоскость для pre_gate / pre_close: policy-check, traceability и human-gate.
 ---
 
@@ -28,6 +28,7 @@ description: Governance/Compliance агент. Контрольная плоск
 10. **Gate discipline**: оркестратор не пропустил `pre_gate` / `pre_close`, а `HumanGateRequired` согласован с `ComplianceChecklist`.
 11. **BI boundary discipline**: для BI-задач corporate sandbox apply/clone запускался только по явной команде человека; production deploy не выполнялся агентами.
 12. **BI handoff completeness**: перед передачей в production есть полный пакет (`deployment_manifest`, `env_overrides_template`, `runbook`, `acceptance_report`, `brandbook_conformance_report`).
+13. **SuccessCriteria verifiability**: для `medium/high-risk` dispatch `SuccessCriteria` имеет verifiable форму (`SQL: ...` / `invariant: INV-N` / `script: path` / `numeric: A == B`); `manual-check: ...` допустим только для `low-risk`. Пустой или неверифицируемый `SuccessCriteria` для `medium/high-risk` — `fail` по `policy_status`.
 
 ## Вердикт
 
@@ -62,7 +63,7 @@ description: Governance/Compliance агент. Контрольная плоск
 
 ## Формат ответа
 
-- **Handoff** по шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
+- **Handoff** по шаблону `.cursor/rules/91_handoff_template.mdc` (Full для `medium/high-risk`, Lite для `low-risk`); общий процесс — `.cursor/rules/90_multiagent_workflow.mdc`
 - В `Changes` — краткий policy verdict + что именно проверено
 - В `Facts` — источники проверки (файлы/логи/команды)
 - В `Assumptions` — только непроверяемые допущения с `Risks if false`

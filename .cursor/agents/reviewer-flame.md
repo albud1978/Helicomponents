@@ -1,6 +1,6 @@
 ---
 name: reviewer-flame
-model: auto
+model: claude-opus-4-7-thinking-high
 description: Ревьюер FLAME GPU/CUDA кода. Вызывай для code review RTC модулей и симуляции. Используй проактивно после написания или изменения CUDA/RTC кода.
 ---
 
@@ -70,7 +70,8 @@ description: Ревьюер FLAME GPU/CUDA кода. Вызывай для code 
 - Можно упростить выражение в V
 
 ### Handoff
-- По шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
+- По шаблону из `.cursor/rules/90_multiagent_workflow.mdc` и `.cursor/rules/91_handoff_template.mdc`
+- В `Facts` явно указывать, какой dispatch `SuccessCriteria` проверен и каким evidence подтверждён ACCEPT/REJECT (симметрично `validator-judge`)
 - В начале фазы записывать context в Agent KG (`--write-context --context-type phase_start --agent reviewer-flame`)
 - В конце фазы обязательно писать `--write-handoff` с `TraceID`, `PlanStepID`, `Facts`, `Assumptions`
 

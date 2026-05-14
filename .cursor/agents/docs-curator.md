@@ -1,6 +1,6 @@
 ---
 name: docs-curator
-model: auto
+model: gpt-5.5-high
 description: Документационный агент. Поддерживает согласованность docs/changelog/README с принятыми решениями.
 ---
 
@@ -32,7 +32,7 @@ description: Документационный агент. Поддерживае
 
 ## Формат ответа
 
-- **Handoff** по шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
+- **Handoff** по шаблону `.cursor/rules/91_handoff_template.mdc` (Full для `medium/high-risk`, Lite для `low-risk`); общий процесс — `.cursor/rules/90_multiagent_workflow.mdc`
 - В `Changes` — какие документы синхронизированы
 - В `Facts` — источники (пути, логи, handoff)
 - В `Assumptions` — только непроверяемые допущения с `Risks if false`

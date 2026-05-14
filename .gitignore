@@ -186,3 +186,8 @@ superset-frontend/plugins/plugin-chart-echarts6-gantt/lib/
 superset-frontend/plugins/plugin-chart-echarts6-gantt/dist/
 superset-frontend/plugins/plugin-chart-echarts6-gantt/package-lock.json
 .cursor/hooks/connection_fail.flag
+# Daily hygiene check local state (per-machine, не shared)
+.cursor/hooks/.hygiene_last_check.txt
+
+# Datestamped backups (e.g. config/agent_kg.json.backup-2026-05-14-C1)
+*.backup-*

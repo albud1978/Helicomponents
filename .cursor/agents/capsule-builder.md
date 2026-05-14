@@ -1,6 +1,6 @@
 ---
 name: capsule-builder
-model: auto
+model: gpt-5.5-high
 description: Сборщик/редактор Context Capsule (docs/*_capsule.md). Используй после приёмки оркестратором.
 ---
 
@@ -30,7 +30,7 @@ description: Сборщик/редактор Context Capsule (docs/*_capsule.md)
 
 ## Формат ответа
 
-- **Handoff** по шаблону из `.cursor/rules/90_multiagent_workflow.mdc`
+- **Handoff** по шаблону `.cursor/rules/91_handoff_template.mdc` (Full для `medium/high-risk`, Lite для `low-risk`); общий процесс — `.cursor/rules/90_multiagent_workflow.mdc`
 - В `Changes` — какие капсулы обновлены и что поменялось
 - В `Facts` — подтверждённые проверки и источники
 - В `Assumptions` — непроверенное с пометкой `Risks if false`
