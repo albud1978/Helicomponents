@@ -1,5 +1,193 @@
 # Changelog
 
+## [14-05-2026] - Multi-agent system cleanup cycle (A1..E1) wrap-up
+
+Завершён 11-шаговый cleanup-цикл мультиагентного контура (A1, A2, B1 Step 1, B1 Step 2, B2, C1, C2, D1, D2, D3, E1) + closing batch. Все шаги одобрены Алексеем в чате 14-05-2026, выполнены один-за-другим с явной верификацией. Каждый workflow зарегистрирован в Agent KG с `--init-workflow → --register-approval-request → handoffs → --close-workflow`.
+
+B1 Step 1, A2 и C1 уже описаны ниже отдельными секциями. Здесь — сводка остальных шагов и closing batch.
+
+### A1: Model whitelist fix (4 profiles)
+
+`.cursor/agents/research-graph-analyst.md`, `bi-semantic-analyst.md`, `orchestrator.md`, `coder-flame.md` — корректировка `model:` slugs к актуальному whitelist Cursor (`xhigh` → `high` где `xhigh` не доступен для subagent dispatch; `coder-flame` `gpt-5.4-high` → `gpt-5.5-high`). RiskTier=low (metadata).
+
+### B1 Step 2: Capsule content review & apply (5/5)
+
+Поэтапно (apply последовательно по одной капсуле, с подтверждением Алексея) применены диффы к содержимому 5 капсул, ранее помеченных `needs_content_review`:
+
+- `docs/quota_capsule.md` — 8 блоков: invariants → `INV-2 tolerance=0` / `INV-3 repair_quota` / `TEMP-5`; удалены фантомы TEMP-2/TEMP-3; описана двухфазная commit-логика; добавлены Bank-windows и repairline occupancy overlay.
+- `docs/transitions_capsule.md` — 8 блоков: добавлен `INV-10` (turnover balance) + validator; spawn semantics приведены к `0→3`/`0→2`; уточнено что `state 5 reserve` — legacy; 18 RTC → 48 layers (orders 0..47); добавлен post-processing P2/P3 Variant B.
+- `docs/validation_capsule.md` — 5 блоков: scope `11 global + 3 temporal + 6 GPU` (invariants.json v15); полный rewrite таблицы invariants (9 → 14 строк, всех dedicated validators); risks listing PENDING (INV-11, TEMP-5); pointers refresh (15 paths).
+- `docs/limiter_v8_capsule.md` — 9 блоков: расширены invariants до `INV-1..INV-11, TEMP-1/4/5, GPU-1..GPU-6`; **критичный fix** про `exit_date` (не «удалён» — НЕ хранится как отдельный MP, вычисляется); consolidated layer numbering; добавлен MP2/RL export + master-SSoT overlay.
+- `docs/etl_extract_capsule.md` — 3 блока: stale counts `~10,736` заменены на per-dataset (10,913 для `v_2025-07-04`, 11,389 для `v_2025-12-30`); добавлен multiversioning decision; импакт-путь `version_date` через `preload_mp5_maps` и `preload_mp4_by_day`.
+
+Manifest синхронизирован для каждой: `staleness_status=verified`, `last_verified_against_ssot=2026-05-14`, `pending_content_updates` удалён.
+
+Делегирование: audit — `research-graph-analyst` (Opus, readonly); apply — оркестратор сам через `StrReplace` в allowlist `docs/**` и `config/capsules_manifest.json` (B1 Step 1 уже модифицировал manifest, content patches reversible).
+
+### B2: Analytical roles restructure
+
+- `.cursor/agents/sql-checker.md` **удалён**.
+- `.cursor/agents/research-graph-analyst.md` — впитал обязанности sql-checker (routine SELECT / fact-check / pass-fail SQL проверки).
+- `.cursor/agents/analyst-sql-graph.md` — soft-deprecated (`DEPRECATED` пометки + redirect к research-graph-analyst / bi-semantic-analyst).
+- `.cursor/agents/bi-semantic-analyst.md` — удалены упоминания sql-checker.
+- `.cursor/rules/90_multiagent_workflow.mdc` — `Subagents` и `Назначение зон` обновлены под новую структуру.
+- `.cursor/skills/bi-superset-api/SKILL.md` — две строки про sql-checker и research-graph-analyst объединены в одну.
+
+### C2: Mandatory `approval_request` context (soft WARNING)
+
+- `.cursor/hooks/orchestrator_guard.py` — функция `_approval_warning()`. При prompt с approval-keywords и одновременным наличием active medium/high-risk workflow без зарегистрированного `approval_request` context в Agent KG — добавляет non-blocking `WARNING approval_request` в `agentMessage`.
+- `code/utils/agent_kg.py` — CLI shortcut `--register-approval-request --workflow-id W_<id> --content "..."` (обёртка над `--write-context --context-type approval_request`).
+- `.cursor/agents/orchestrator.md` и `.cursor/rules/90_multiagent_workflow.mdc` — упоминание CLI shortcut и требование context перед approval-запросом.
+
+### D1: Workflow-scoped `ssot_approval_guard.py` (hard-block)
+
+Refactor `.cursor/hooks/ssot_approval_guard.py` — guard для SSoT operations (ApplyPatch к `config/transitions/*.json` и `make sync-domain-graph`) стал workflow-scoped:
+
+- Проверяет: ровно один active workflow, у этого workflow зарегистрирован `approval_request` context в KG, и `user_comm_audit.log` содержит `approval_hint=yes` для **того же** workflow_id.
+- Fail-safe deny при недоступности KG.
+- Удалены legacy функции `_read_last_audit_flags` / `_has_human_approval`.
+- `.cursor/agents/orchestrator.md`, `.cursor/rules/90_multiagent_workflow.mdc`, `.cursor/rules/40_docs_and_changelog.mdc` — обновлены под новый поток (SSoT-gate + validation traceability).
+
+Smoke (Test A): `printf '%s' '<ApplyPatch к invariants.json>' | python3 .cursor/hooks/ssot_approval_guard.py` → `permissionDecision=deny` в LIVE state (когда approval не зарегистрирован). При корректной регистрации — `allow`.
+
+### D2: Mandatory `reviewer-flame` loop (soft WARNING)
+
+- `.cursor/hooks/orchestrator_guard.py` — функция `_reviewer_flame_warning()`. При active workflow с `coder-flame` handoff medium/high risk без последующего `reviewer-flame` handoff (по timestamp `>=`) — добавляет non-blocking `WARNING reviewer-flame` в `agentMessage`.
+- `.cursor/agents/coder-flame.md` — новый пункт 12 «Mandatory reviewer-flame для medium/high»: `NextOwner=reviewer-flame` обязателен для medium/high risk.
+- `.cursor/agents/orchestrator.md` и `.cursor/rules/90_multiagent_workflow.mdc` — упоминание правила в § 7 (Human gate log) и в общих правилах.
+
+Self-fix: в `_reviewer_flame_warning` исходно стояло `> coder_flame_ts`, что приводило к false-positive в synthetic тестах с идентичными timestamp. Исправлено на `>= coder_flame_ts`.
+
+### D3: Orchestrator allowlist / denylist + 10-step × risk matrix
+
+В `.cursor/rules/90_multiagent_workflow.mdc` — структурированная замена описания роли оркестратора:
+
+- **Allowlist** (6 items): `.cursor/agents/**`, `.cursor/hooks/**`, `.cursor/rules/**`, `docs/**`, `README.md`, plan-артефакты.
+- **Denylist** (11 items): `code/**`, `config/transitions/**`, `*.ipynb`, и прочие зоны где оркестратор не редактирует напрямую.
+- **Матрица 10-step × risk-tier**: 10×3 таблица (10 шагов canonical workflow × `low|medium|high`) с обязательными артефактами/agent-handoff для каждой ячейки, плюс 5 complementary point links к C2/D1/D2.
+
+### E1: Daily hygiene check (human-in-the-loop)
+
+- `tools/hygiene_check.py` (новый, ~310 строк) — read-only CLI на 5 категорий rot: stale workflows, stale capsules, phantom invariants, incomplete handoffs, dangling approval_requests. CLI: `--stale-days N` (default `1`), `--summary-only`, `--no-color`. Exit `0`/`1`/`2`. Поддерживает обе формы invariants.json (`global` / `global_invariants` и т.д.) и list-форму `capsules` в манифесте.
+- `.cursor/hooks/orchestrator_guard.py` — функция `_hygiene_reminder()` + state file `.cursor/hooks/.hygiene_last_check.txt`. При первом prompt в новом UTC-дне (state file mismatch) — subprocess `--summary-only`, и при findings добавляет non-blocking reminder в `agentMessage`. Subprocess errors / non-`0|1` exit / clean state → fail-open `""`. State file сохраняется после успешного показа.
+- `.cursor/rules/90_multiagent_workflow.mdc` — новая секция **«Daily hygiene check (human-in-the-loop)»** с описанием 5 категорий, trigger через state file, и пометкой «никакого hard-block и automated cleanup, только напоминание».
+
+Tool first-run на live state сразу нашёл 2 реальные issues (валидирует корректность): `flame_gpu` (last_verified=2026-02-11, 92.7d) и `W_B1_step2_etl_extract_apply_2026_05_14` (closed без orchestrator handoff с trace_id+plan_step_id).
+
+### E1 closing batch (housekeeping)
+
+- **F1 cancelled** (scope creep): re-verify `flame_gpu` капсулы исключён из текущего closing — это про симуляцию, не про governance. Hygiene tool продолжит её flagging как reminder для будущей отдельной задачи.
+- **F2**: `W_B1_step2_etl_extract_apply_2026_05_14` — записан backfill orchestrator handoff с `trace_id=b1_step2_etl_extract_apply_2026_05_14` и `plan_step_id=B1_step2_etl_extract` (original handoff был без trace_id из-за `&&` chain в `--write-handoff` + `--close-workflow`, который успешно закрыл workflow, но write упал на validation). Hygiene reflag: incomplete handoffs 1 → 0.
+- **F3**: `.gitignore` — добавлены `.cursor/hooks/.hygiene_last_check.txt` (per-machine hygiene state) и pattern `*.backup-*` (для `config/agent_kg.json.backup-2026-05-14-C1` и аналогичных).
+
+### Governance & Process insights
+
+- **Approval discipline**: каждый из 11 workflow зарегистрирован в Agent KG с `--register-approval-request`. Закрытие через `--close-workflow` с `close_reason`. governance-compliance verdict для medium/high steps (`conditional_pass` для E1 и B1).
+- **No-coding для оркестратора**: код-правки оркестратора ограничивались allowlist (`.cursor/agents/**`, `.cursor/hooks/**`, `.cursor/rules/**`, `docs/**`); все правки в `tools/**` и `code/utils/agent_kg.py` (C2) делегированы `coder-general` (gpt-5.5-high).
+- **Process insight A2**: при делегировании architectural review subagent'у в readonly mode нужно передавать explicit summary недавних правок — иначе риск duplicate suggestions против stale snapshot (произошло в re-проверке A2, 14 из 15 «находок» уже были применены).
+- **Process insight B1**: chain `--write-handoff && --close-workflow` в одной shell-команде может пропустить validation error в `write-handoff` (close-workflow выполнится несмотря на это). Hygiene check (E1) — incomplete handoff detection — теперь покрывает этот edge case.
+- **Process insight E1**: live hygiene tool first-run на собственном state нашёл 2 реальные issues, валидируя корректность реализации. Subprocess-based hook testable вне Cursor runtime через stdin/stdout pipe.
+
+### Не вошло (отложено)
+
+- Полная content re-verification `docs/flame_gpu_capsule.md` против `config/transitions/invariants.json[gpu_constraints]` — отдельная задача, когда симуляция вернётся в scope. Hygiene tool будет напоминать ежедневно (1d threshold).
+- Строгий commit-split per workflow_id — нереализуем без `git add -p` (запрещён) при пересечении файлов через множество workflow. Использовано logical grouping по доменам (см. commit messages).
+
+## [14-05-2026] - B1 Step 1: capsules_manifest.json housekeeping
+
+### Изменения
+
+Targeted metadata fix в `config/capsules_manifest.json` (Plan Step B1 Step 1, одобрен Алексеем). Цель — устранить верифицированные расхождения без content rewrite самих `.md` капсул.
+
+- `manifest.updated`: `2026-02-11` → `2026-05-14`.
+- Удалены фантомные `TEMP-2`, `TEMP-3` из `quota.invariants` (этих ID никогда не было в `config/transitions/invariants.json`).
+- Добавлены per-capsule поля `last_verified_against_ssot: "2026-02-11"` (фиксирует когда содержимое в последний раз реально сверено).
+- Добавлены per-capsule поля `staleness_status`: `verified` для `flame_gpu`; `needs_content_review` для остальных 5 капсул.
+- Добавлены per-capsule поля `pending_content_updates` (только для stale капсул) — actionable список инвариантов/notes, которые SSoT покрывает, а капсула ещё нет:
+  - `limiter_v8`: `TEMP-5` + проверить bank/MP2/master-SSoT repairline overlay
+  - `transitions`: `INV-10` + постпроцессинг P2/P3 Вариант B
+  - `validation`: `INV-9, INV-10, INV-11, TEMP-1, TEMP-4, TEMP-5`
+  - `quota`: notes-only (фантомы удалены)
+  - `etl_extract`: notes-only (требует ручной content-верификации)
+
+### Process insight
+
+Refined подход (явные `staleness_status` + `pending_content_updates` вместо прямолинейного добавления invariants в lists) — более честный: агенты видят и текущий scope капсул, и pending gaps для Step 2. Не подменяет реальное покрытие в `.md` файлах.
+
+### Делегирование
+- Орчестратор → `coder-general` (`gpt-5.5-high`) с `workflow_id=W_B1_step1_manifest_2026_05_14`, `risk_tier=medium`, verifiable SuccessCriteria (assertion на корректность правок).
+- Predecessor audit workflow: `W_B1_capsules_audit_20260514` (research-graph-analyst readonly).
+
+### Артефакты
+- SHA-256 manifest: `6937bea7…509bbf` → `90e6e390…3e305e`. Size: 2596 → 5241 bytes.
+
+### Что НЕ сделано (откладывается в B1 Step 2)
+- Содержимое 5 stale `.md` капсул не редактировалось. Реальное обновление контента (добавление секций про INV-10/11/TEMP-5, проверка корректности bank/MP2/repairline overlay в quota и limiter_v8) — отдельным workflow.
+
+## [14-05-2026] - A2: extended review of 11 agent profiles
+
+### Изменения
+
+Plan Step A2 (audit мультиагентного контура → 11 agent profiles + Operating Policy). Делегирован `research-graph-analyst` (claude-opus-4-7-thinking-high, readonly), вернул priority-sorted PatchList на 15 пунктов. Одобрены и применены оркестратором в allowlist `.cursor/agents/**` + `.cursor/rules/90_multiagent_workflow.mdc`.
+
+**P1 (фикс ошибки A1 — slug `xhigh` не в Cursor whitelist для Task subagent):**
+- `.cursor/agents/research-graph-analyst.md`: `model: claude-opus-4-7-thinking-xhigh` → `high`.
+- `.cursor/agents/bi-semantic-analyst.md`: `model: claude-opus-4-7-thinking-xhigh` → `high`.
+- `.cursor/agents/orchestrator.md`: добавлен явный комментарий в frontmatter, что `xhigh` — main-agent slug; для subagent dispatch использовать `high`. Body-ссылки на `xhigh` (строки 76, 84) и в `.cursor/rules/90_multiagent_workflow.mdc` (строки 26-27) приведены к `high`.
+- `.cursor/agents/reviewer-flame.md`: добавлен пункт про SuccessCriteria/evidence traceability в `### Handoff` (симметрично `validator-judge`; требование `91_handoff_template.mdc`).
+
+**P2 (ссылки на 91_handoff_template.mdc + дисциплина model slugs + phase recap + verifiability):**
+- `.cursor/agents/orchestrator.md`: `Формат ответа` теперь ссылается на `91_handoff_template.mdc` (Full vs Lite). В `Supervisor-first протокол` добавлен пункт про phase recap для medium/high-risk и coder-flame.
+- `.cursor/agents/research-graph-analyst.md`, `bi-semantic-analyst.md`: `Формат результата` явно ссылается на `91_handoff_template.mdc`.
+- `.cursor/agents/coder-flame.md`: `Формат ответа` теперь требует Full Handoff с `ApprovalGate` (high-risk зона `code/sim_v2/**` + `config/transitions/**`).
+- `.cursor/agents/governance-compliance.md`: добавлен пункт #13 в `Что проверяет (минимум)` — **SuccessCriteria verifiability** (verifiable форма обязательна для medium/high-risk; `manual-check:` только для low-risk).
+- Slug-дисциплина для 6 профилей с `model: auto`:
+  - `coder-general`, `validator-judge`, `docs-curator`, `capsule-builder` → `gpt-5.5-high` (по решению Алексея).
+  - `reviewer-flame`, `governance-compliance` → `claude-opus-4-7-thinking-high`.
+
+**P3 (cleanup устаревших формулировок):**
+- `.cursor/agents/analyst-sql-graph.md` (DEPRECATED): фраза "Граф в репозитории — источник истины" заменена на "SSoT доменной модели — JSON в `config/transitions/*.json`; граф (Neo4j) — производная визуализация".
+- P3#15 (удалить Float64-запрет в `capsule-builder.md`) — **отменён по решению Алексея**, запрет сохранён.
+
+### Не вошло
+- `analyst-sql-graph.md` остался на `model: auto` — DEPRECATED профиль, явный slug бессмысленен.
+
+### Делегирование
+- Один Opus subagent (`research-graph-analyst`, readonly) на architectural research — без approval по правилу `90_multiagent_workflow.mdc → Запрет архитектурных исследований`.
+- Применение патчей: оркестратор сам в allowlist (≤10 файлов, ≤80 строк изменений, одно смысловое изменение — slug+template-discipline).
+
+### Increment 14-05 (поздняя re-проверка A2)
+
+При повторной верификации обнаружено, что 5 профилей в разделе `Формат ответа` всё ещё ссылались только на `90_multiagent_workflow.mdc` без явной отсылки к `91_handoff_template.mdc`. Применены 5 микро-StrReplace:
+
+- `.cursor/agents/coder-general.md`, `validator-judge.md`, `governance-compliance.md`, `docs-curator.md`, `capsule-builder.md` — раздел `Формат ответа`/`Handoff` теперь явно ссылается на `91_handoff_template.mdc` (Full для medium/high-risk, Lite для low-risk) с указанием `90_multiagent_workflow.mdc` как общего процессного эталона.
+
+После: 10/11 рабочих профилей ссылаются на 91 (analyst-sql-graph оставлен без изменений как DEPRECATED). Workflow `W_A2_profiles_review_20260514` закрыт; orchestrator handoff записан posthoc (parallel `--write-handoff`+`--close-workflow` дал ValueError на `--risk-reasons`, closer прошёл, write пересохранён).
+
+### Process insight (Increment 14-05)
+
+Single Opus subagent в readonly mode при повторном A2-аудите выдал PatchList по фактически stale snapshot — 14 из 15 «находок» уже были применены в предыдущей итерации A2. Independent verification оркестратором через `grep`+`Read` выявила реальный gap (5 профилей). **Урок**: при делегировании architectural review передавать subagent'у explicit summary недавних правок (A1/B2/предыдущий A2 changelog), иначе риск duplicate suggestions / regression-предложений.
+
+## [14-05-2026] - C1: bulk-close 175 stale workflows in Agent KG
+
+### Изменения
+
+Operational housekeeping в `config/agent_kg.json` после аудита мультиагентного контура (Plan Step C1, одобрен Алексеем в текущем чате).
+
+- 175 stale `active` workflows (возраст >=60 дней, без активной handoff-трассировки) переведены в `status=closed` с `close_reason="bulk_stale_cleanup_2026_05_14_C1_per_user_approval"`.
+- Сгенерированы 298 synthetic handoffs (`trace_id=bulk_cleanup_2026_05_14`, `plan_step_id=C1`) по риск-распределению: orchestrator=175 (все), governance-compliance=119 (116 medium + 3 high), docs-curator=3 (high), плюс coder-general handoff. Synthetic-trail прозрачно отмечен в `changes`/`facts` как amnesty cleanup, реальное governance не восстанавливается.
+- Управляющий workflow `W_C1_bulk_cleanup_20260514` сам закрыт через CLI `--close-workflow`.
+- Финальное состояние Agent KG: `active=0`, `closed=186`.
+
+### Артефакты
+- Backup: `config/agent_kg.json.backup-2026-05-14-C1` (1561239 bytes, SHA-256 `70667ad8…475f5d`).
+- Audit-скрипт: `tools/oneoff_c1_bulk_close.py` (сохранён как audit-артефакт, не удалять).
+- Summary: `docs/notes/c1_bulk_close_summary.md`.
+
+### Делегирование
+- Орчестратор (`claude-opus-4-7-thinking-xhigh`) → `coder-general` (`gpt-5.5-high`) с явным `workflow_id=W_C1_bulk_cleanup_20260514`, `risk_tier=medium`, verifiable `SuccessCriteria` (active<=30, closed grew>=174). Pre_gate_guard прошёл.
+- ApprovalGate: `C1_bulk_close`, approved by user in chat 2026-05-14.
+
 ## [16-04-2026] - Karpathy-inspired мультиагент: Clarify/Simplicity/Surgical/Goal-Driven
 
 ### Изменения
