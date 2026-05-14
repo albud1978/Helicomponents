@@ -71,6 +71,7 @@ description: Ревьюер FLAME GPU/CUDA кода. Вызывай для code 
 
 ### Handoff
 - По шаблону из `.cursor/rules/90_multiagent_workflow.mdc` и `.cursor/rules/91_handoff_template.mdc`
+- **Usage** *(optional)*: в собственный handoff включай строку `Usage: model=<slug> est_tokens=~<N> source=manual`; orchestrator продублирует это в KG через `--model-slug --est-tokens --token-source` при `--write-handoff`
 - В `Facts` явно указывать, какой dispatch `SuccessCriteria` проверен и каким evidence подтверждён ACCEPT/REJECT (симметрично `validator-judge`)
 - В начале фазы записывать context в Agent KG (`--write-context --context-type phase_start --agent reviewer-flame`)
 - В конце фазы обязательно писать `--write-handoff` с `TraceID`, `PlanStepID`, `Facts`, `Assumptions`

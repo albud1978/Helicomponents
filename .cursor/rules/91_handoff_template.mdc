@@ -32,6 +32,7 @@ alwaysApply: true
 - **Risks**: 1–3 пункта.
 - **DriftCheck**: только у orchestrator.
 - **ProcessInsights**: только у orchestrator.
+- **Usage** *(optional)*: одна строка вида `model=<slug> est_tokens=~<N> source=manual|char_estimate|unknown`. Lightweight token-счётчик для аналитики выбора модели; missing — не блокер.
 
 > NB: `Agent KG logging` (что именно записано в KG) как поле удалён — фактические записи восстанавливаются из `config/agent_kg.json`; дублировать их в handoff избыточно.
 
@@ -44,6 +45,7 @@ alwaysApply: true
 - **Facts**: что проверено и источники.
 - **RiskTier**: `low`.
 - **NextOwner**: кто следующий (или `human` для финального handoff).
+- **Usage** *(optional)*: `model=<slug> est_tokens=~<N> source=manual|char_estimate|unknown`.
 
 Остальные поля допускается опускать полностью (без `N/A`-шума).
 
