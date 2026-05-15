@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-Синхронизация доменного графа (JSON SSoT -> Neo4j Aura).
+Синхронизация доменного графа (JSON SSoT -> Neo4j).
+
+Default: Neo4j Community local (Docker) — см. deploy/neo4j-local/.
+Также работает с Aura/любым Neo4j Server (URI в DOMAIN_NEO4J_URI).
 
 Читает канонические JSON:
   - config/transitions/transitions_rules.json  (переходы, RTC order)
   - config/transitions/quota_rules.json        (квоты, RepairLine, spawn)
 
-Формирует Cypher и пишет в облачный Neo4j Aura.
+Формирует Cypher и пишет в Neo4j.
 
 Переменные окружения:
   DOMAIN_NEO4J_URI, DOMAIN_NEO4J_USER, DOMAIN_NEO4J_PASSWORD, DOMAIN_NEO4J_DB
@@ -36,7 +39,7 @@ MULTIBOM_JSON = os.path.join(
 
 
 def _require_env() -> Tuple[str, str, str, str]:
-    """Читает переменные подключения к Aura."""
+    """Читает переменные подключения к Neo4j."""
     uri = os.getenv("DOMAIN_NEO4J_URI")
     user = os.getenv("DOMAIN_NEO4J_USER")
     password = os.getenv("DOMAIN_NEO4J_PASSWORD")
@@ -854,7 +857,7 @@ def sync(clear: bool = False, dry_run: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Синхронизация доменного графа (JSON -> Neo4j Aura)"
+        description="Синхронизация доменного графа (JSON -> Neo4j)"
     )
     parser.add_argument(
         "--clear",

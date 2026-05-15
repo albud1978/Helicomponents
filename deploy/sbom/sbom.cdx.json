@@ -1,0 +1,494 @@
+{
+  "components": [
+    {
+      "bom-ref": "manual-apache-superset-docker",
+      "type": "application",
+      "name": "Apache Superset",
+      "version": "Docker",
+      "description": "Local sandbox BI service used for dashboards and chart validation",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://superset.apache.org/"
+        },
+        {
+          "type": "distribution",
+          "url": "https://hub.docker.com/r/apache/superset"
+        }
+      ]
+    },
+    {
+      "bom-ref": "manual-clickhouse-server-managed",
+      "type": "application",
+      "name": "ClickHouse Server",
+      "version": "managed",
+      "description": "Managed ClickHouse server used as the project analytical database",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://clickhouse.com/"
+        }
+      ]
+    },
+    {
+      "bom-ref": "requirements-L11",
+      "description": "requirements line 11: clickhouse-connect>=0.7.0",
+      "externalReferences": [
+        {
+          "comment": "implicit dist url",
+          "type": "distribution",
+          "url": "https://pypi.org/simple/clickhouse-connect/"
+        }
+      ],
+      "name": "clickhouse-connect",
+      "purl": "pkg:pypi/clickhouse-connect",
+      "type": "library",
+      "version": "0.10.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "requirements-L10",
+      "description": "requirements line 10: clickhouse-driver>=0.2.6",
+      "externalReferences": [
+        {
+          "comment": "implicit dist url",
+          "type": "distribution",
+          "url": "https://pypi.org/simple/clickhouse-driver/"
+        }
+      ],
+      "name": "clickhouse-driver",
+      "purl": "pkg:pypi/clickhouse-driver",
+      "type": "library",
+      "version": "0.2.10",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "manual-cuda-toolkit-13.0",
+      "type": "framework",
+      "name": "CUDA Toolkit",
+      "version": "13.0",
+      "description": "NVIDIA CUDA Toolkit used locally for GPU development; toolkit binaries are not distributed as project artifacts",
+      "licenses": [
+        {
+          "expression": "LicenseRef-NVIDIA-CUDA-EULA"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://developer.nvidia.com/cuda-toolkit"
+        }
+      ]
+    },
+    {
+      "bom-ref": "manual-cursor-ai-saas",
+      "type": "application",
+      "name": "Cursor AI",
+      "version": "SaaS",
+      "description": "Commercial SaaS used for IDE agent invocations; source code can be sent to LLM providers during use",
+      "licenses": [
+        {
+          "expression": "LicenseRef-Cursor-Commercial"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://cursor.com/"
+        }
+      ]
+    },
+    {
+      "bom-ref": "requirements-L17",
+      "description": "requirements line 17: langgraph",
+      "externalReferences": [
+        {
+          "comment": "implicit dist url",
+          "type": "distribution",
+          "url": "https://pypi.org/simple/langgraph/"
+        }
+      ],
+      "name": "langgraph",
+      "purl": "pkg:pypi/langgraph",
+      "type": "library",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "requirements-L18",
+      "description": "requirements line 18: neo4j",
+      "externalReferences": [
+        {
+          "comment": "implicit dist url",
+          "type": "distribution",
+          "url": "https://pypi.org/simple/neo4j/"
+        }
+      ],
+      "name": "neo4j",
+      "purl": "pkg:pypi/neo4j",
+      "type": "library",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "manual-neo4j-community-server-5.x",
+      "type": "application",
+      "name": "Neo4j Community Server",
+      "version": "5.x",
+      "description": "Dockerized local Domain Graph service, used as a separate process via bolt://localhost:7687 with no source linking",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-3.0-only"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://neo4j.com/product/neo4j-graph-database/"
+        },
+        {
+          "type": "distribution",
+          "url": "https://hub.docker.com/_/neo4j"
+        }
+      ]
+    },
+    {
+      "bom-ref": "requirements-L6",
+      "description": "requirements line 6: numpy>=2.0.0",
+      "externalReferences": [
+        {
+          "comment": "implicit dist url",
+          "type": "distribution",
+          "url": "https://pypi.org/simple/numpy/"
+        }
+      ],
+      "name": "numpy",
+      "purl": "pkg:pypi/numpy",
+      "type": "library",
+      "version": "2.2.6",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "requirements-L7",
+      "description": "requirements line 7: openpyxl>=3.1.0",
+      "externalReferences": [
+        {
+          "comment": "implicit dist url",
+          "type": "distribution",
+          "url": "https://pypi.org/simple/openpyxl/"
+        }
+      ],
+      "name": "openpyxl",
+      "purl": "pkg:pypi/openpyxl",
+      "type": "library",
+      "version": "3.1.5",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "requirements-L5",
+      "description": "requirements line 5: pandas>=2.0.0",
+      "externalReferences": [
+        {
+          "comment": "implicit dist url",
+          "type": "distribution",
+          "url": "https://pypi.org/simple/pandas/"
+        }
+      ],
+      "name": "pandas",
+      "purl": "pkg:pypi/pandas",
+      "type": "library",
+      "version": "2.3.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "requirements-L21",
+      "description": "requirements line 21: pathlib2>=2.3.0",
+      "externalReferences": [
+        {
+          "comment": "implicit dist url",
+          "type": "distribution",
+          "url": "https://pypi.org/simple/pathlib2/"
+        }
+      ],
+      "name": "pathlib2",
+      "purl": "pkg:pypi/pathlib2",
+      "type": "library",
+      "version": "2.3.7.post1",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "manual-pyflamegpu-2.0.0rc4-cuda130",
+      "type": "library",
+      "name": "pyflamegpu",
+      "version": "2.0.0rc4+cuda130",
+      "description": "Dual-licensed AGPL v3 + Commercial; section 13 not triggered by current internal-only architecture",
+      "licenses": [
+        {
+          "license": {
+            "id": "AGPL-3.0-only"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://flamegpu.com/"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/FLAMEGPU/FLAMEGPU2"
+        },
+        {
+          "type": "distribution",
+          "url": "https://whl.flamegpu.com/whl/cuda130/"
+        }
+      ],
+      "purl": "pkg:pypi/pyflamegpu@2.0.0rc4%2Bcuda130"
+    },
+    {
+      "bom-ref": "requirements-L14",
+      "description": "requirements line 14: PyYAML>=6.0",
+      "externalReferences": [
+        {
+          "comment": "implicit dist url",
+          "type": "distribution",
+          "url": "https://pypi.org/simple/PyYAML/"
+        }
+      ],
+      "name": "PyYAML",
+      "purl": "pkg:pypi/pyyaml",
+      "type": "library",
+      "version": "6.0.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "manual-apache-superset-docker"
+    },
+    {
+      "ref": "manual-clickhouse-server-managed"
+    },
+    {
+      "ref": "manual-cuda-toolkit-13.0"
+    },
+    {
+      "ref": "manual-cursor-ai-saas"
+    },
+    {
+      "ref": "manual-neo4j-community-server-5.x"
+    },
+    {
+      "ref": "manual-pyflamegpu-2.0.0rc4-cuda130"
+    },
+    {
+      "ref": "requirements-L10"
+    },
+    {
+      "ref": "requirements-L11"
+    },
+    {
+      "ref": "requirements-L14"
+    },
+    {
+      "ref": "requirements-L17"
+    },
+    {
+      "ref": "requirements-L18"
+    },
+    {
+      "ref": "requirements-L21"
+    },
+    {
+      "ref": "requirements-L5"
+    },
+    {
+      "ref": "requirements-L6"
+    },
+    {
+      "ref": "requirements-L7"
+    }
+  ],
+  "metadata": {
+    "properties": [
+      {
+        "name": "cdx:reproducible",
+        "value": "true"
+      }
+    ],
+    "tools": {
+      "components": [
+        {
+          "description": "CycloneDX Software Bill of Materials (SBOM) generator for Python projects and environments",
+          "externalReferences": [
+            {
+              "type": "build-system",
+              "url": "https://github.com/CycloneDX/cyclonedx-python/actions"
+            },
+            {
+              "type": "distribution",
+              "url": "https://pypi.org/project/cyclonedx-bom/"
+            },
+            {
+              "type": "documentation",
+              "url": "https://cyclonedx-bom-tool.readthedocs.io/"
+            },
+            {
+              "type": "issue-tracker",
+              "url": "https://github.com/CycloneDX/cyclonedx-python/issues"
+            },
+            {
+              "type": "license",
+              "url": "https://github.com/CycloneDX/cyclonedx-python/blob/main/LICENSE"
+            },
+            {
+              "type": "release-notes",
+              "url": "https://github.com/CycloneDX/cyclonedx-python/blob/main/CHANGELOG.md"
+            },
+            {
+              "type": "vcs",
+              "url": "https://github.com/CycloneDX/cyclonedx-python/"
+            },
+            {
+              "type": "website",
+              "url": "https://github.com/CycloneDX/cyclonedx-python/#readme"
+            }
+          ],
+          "group": "CycloneDX",
+          "licenses": [
+            {
+              "license": {
+                "acknowledgement": "declared",
+                "id": "Apache-2.0"
+              }
+            }
+          ],
+          "name": "cyclonedx-py",
+          "type": "application",
+          "version": "7.3.0"
+        },
+        {
+          "description": "Python library for CycloneDX",
+          "externalReferences": [
+            {
+              "type": "build-system",
+              "url": "https://github.com/CycloneDX/cyclonedx-python-lib/actions"
+            },
+            {
+              "type": "distribution",
+              "url": "https://pypi.org/project/cyclonedx-python-lib/"
+            },
+            {
+              "type": "documentation",
+              "url": "https://cyclonedx-python-library.readthedocs.io/"
+            },
+            {
+              "type": "issue-tracker",
+              "url": "https://github.com/CycloneDX/cyclonedx-python-lib/issues"
+            },
+            {
+              "type": "license",
+              "url": "https://github.com/CycloneDX/cyclonedx-python-lib/blob/main/LICENSE"
+            },
+            {
+              "type": "release-notes",
+              "url": "https://github.com/CycloneDX/cyclonedx-python-lib/blob/main/CHANGELOG.md"
+            },
+            {
+              "type": "vcs",
+              "url": "https://github.com/CycloneDX/cyclonedx-python-lib"
+            },
+            {
+              "type": "website",
+              "url": "https://github.com/CycloneDX/cyclonedx-python-lib/#readme"
+            }
+          ],
+          "group": "CycloneDX",
+          "licenses": [
+            {
+              "license": {
+                "acknowledgement": "declared",
+                "id": "Apache-2.0"
+              }
+            }
+          ],
+          "name": "cyclonedx-python-lib",
+          "type": "library",
+          "version": "11.7.0"
+        }
+      ]
+    }
+  },
+  "version": 1,
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6"
+}

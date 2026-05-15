@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Тест подключения к Domain Graph (облачный Neo4j Aura).
+Тест подключения к Domain Graph (Neo4j).
 
 SSoT — JSON-файлы в репозитории (config/transitions/*.json).
-Neo4j Aura — производная для визуализации и Cypher-запросов.
+Default: Neo4j Community local (Docker) — см. deploy/neo4j-local/.
+Aura/любой Neo4j Server поддерживается через DOMAIN_NEO4J_URI.
 """
 
 import os
@@ -39,7 +40,7 @@ def test_connection(name: str, uri: str, user: str, password: str, db: str) -> b
 
 
 def main() -> int:
-    """Проверяет подключение к Domain Graph (Aura)."""
+    """Проверяет подключение к Domain Graph."""
     domain_uri = os.getenv("DOMAIN_NEO4J_URI")
     domain_user = os.getenv("DOMAIN_NEO4J_USER")
     domain_password = os.getenv("DOMAIN_NEO4J_PASSWORD")
