@@ -533,7 +533,20 @@ make neo4j-local-down
 
 Полный quickstart и troubleshooting: `deploy/neo4j-local/README.md`.
 
+**LAN-видимость:** compose биндит порты как `7474:7474` / `7687:7687` (на `0.0.0.0`), и Docker Desktop WSL2 backend форвардит их в Windows host. Если у Windows host LAN-адрес `10.x.x.x` (корп. сеть), Browser UI доступен по `http://<windows-host-ip>:7474` с других машин LAN. Чтобы ограничить до loopback, заменить mapping на `127.0.0.1:7474:7474` / `127.0.0.1:7687:7687`.
+
 **SSoT для домена** — JSON в репозитории (`config/transitions/*.json`, включая `invariants.json`) и код (`code/sim_v2/**`). Domain Graph — производная для визуализации (`code/utils/sync_domain_graph.py` работает с любым Neo4j Server по `DOMAIN_NEO4J_URI`).
+
+**Variant C — Agent KG projection в Neo4j (hybrid):**
+
+Agent KG остаётся JSON SSoT (`config/agent_kg.json` + `config/agent_kg_archive/`), но on-demand можно спроецировать историю workflow/handoff в тот же Neo4j (read-only view, не source-of-truth) для визуального анализа в Browser UI:
+
+```bash
+make kg-project-neo4j        # active KG (быстрый refresh)
+make kg-project-neo4j-full   # active + archive с --reset (полная история)
+```
+
+Schema: `(:Workflow)-[:HAS_HANDOFF]->(:Handoff)-[:BY_AGENT]->(:Agent)`, `(:Workflow)-[:OWNED_BY]->(:Agent)`, `(:Workflow)-[:HAS_CONTEXT]->(:Context)`, `(:Handoff)-[:NEXT_OWNER]->(:Agent)`. Legacy archive handoffs без `handoff_id` получают deterministic synthetic id (`legacy_<sha1>`). Полные правила и примеры Cypher — `docs/agent_kg_projection.md`.
 
 ### RTC кэширование (ускоряет повторные запуски симуляции)
 ```bash

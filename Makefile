@@ -4,6 +4,7 @@ SHELL := /bin/bash
 
 .PHONY: sync-domain-graph sync-domain-graph-clear sync-domain-graph-dry
 .PHONY: neo4j-local-up neo4j-local-down neo4j-local-status neo4j-local-logs
+.PHONY: kg-project-neo4j kg-project-neo4j-full
 .PHONY: agent-kg-viewer transitions-viewer
 
 # Синхронизация доменного графа (JSON SSoT -> Neo4j)
@@ -29,6 +30,12 @@ neo4j-local-status:
 
 neo4j-local-logs:
 	@cd deploy/neo4j-local && docker compose logs -f neo4j
+
+kg-project-neo4j:
+	python3 tools/agent_kg_to_neo4j.py
+
+kg-project-neo4j-full:
+	python3 tools/agent_kg_to_neo4j.py --include-archive --reset
 
 # Визуализация Agent KG (JSON -> HTML)
 agent-kg-viewer:

@@ -2,6 +2,11 @@ services:
   neo4j:
     image: neo4j:5.20-community
     container_name: neo4j-local
+    # Сетевая видимость:
+    # - формат "host_port:container_port" биндит на 0.0.0.0 (как у superset-gateway-local).
+    # - WSL2 (mirrored networking) или Docker Desktop форвардит порты в LAN Windows host,
+    #   поэтому Neo4j будет доступен по адресу Windows host (например http://10.96.96.47:7474).
+    # - Для bind только на loopback заменить на "127.0.0.1:7474:7474" / "127.0.0.1:7687:7687".
     ports:
       - "7474:7474"  # HTTP / Browser UI
       - "7687:7687"  # Bolt protocol
@@ -25,8 +30,8 @@ services:
         ]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 60s
 
 volumes:
   neo4j-data:
