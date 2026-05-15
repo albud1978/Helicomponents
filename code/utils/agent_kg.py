@@ -21,6 +21,7 @@ import os
 import sys
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
@@ -54,11 +55,14 @@ def _load(path: str) -> Dict[str, Any]:
 
 
 def _save(path: str, data: Dict[str, Any]) -> None:
-    """Сохраняет JSON-шину."""
-    data["metadata"]["updated_at"] = _now()
-    with open(path, "w", encoding="utf-8") as f:
+    """Сохраняет JSON-шину атомарно через temporary file + os.replace."""
+    data.setdefault("metadata", {})["updated_at"] = _now()
+    target = Path(path)
+    tmp_path = target.with_suffix(".json.tmp")
+    with tmp_path.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
         f.write("\n")
+    os.replace(tmp_path, target)
 
 
 def _now() -> str:
@@ -80,6 +84,52 @@ def _find_workflow(
     for w in workflows:
         if w.get("workflow_id") == workflow_id:
             return w
+    return None
+
+
+def _archive_root(kg_path: str) -> Path:
+    """Возвращает директорию JSONL-архива для данного active KG файла."""
+    return Path(kg_path).resolve().parent / "agent_kg_archive"
+
+
+def _load_archived_workflow(
+    kg_path: str, workflow_id: str
+) -> Optional[Dict[str, List[Dict[str, Any]]]]:
+    """Ищет workflow в JSONL-архиве и возвращает совместимый state fragment."""
+    archive_root = _archive_root(kg_path)
+    if not archive_root.exists():
+        return None
+
+    for jsonl_path in sorted(archive_root.glob("*/*.jsonl"), reverse=True):
+        workflow: Optional[Dict[str, Any]] = None
+        handoffs: List[Dict[str, Any]] = []
+        contexts: List[Dict[str, Any]] = []
+        try:
+            with jsonl_path.open("r", encoding="utf-8") as f:
+                for raw_line in f:
+                    if workflow_id not in raw_line:
+                        continue
+                    try:
+                        event = json.loads(raw_line)
+                    except json.JSONDecodeError:
+                        continue
+                    if event.get("workflow_id") != workflow_id:
+                        continue
+                    event_type = event.pop("type", "")
+                    if event_type == "workflow":
+                        workflow = event
+                    elif event_type == "handoff":
+                        handoffs.append(event)
+                    elif event_type == "context":
+                        contexts.append(event)
+        except OSError:
+            continue
+        if workflow:
+            return {
+                "workflows": [workflow],
+                "handoffs": handoffs,
+                "contexts": contexts,
+            }
     return None
 
 
@@ -277,6 +327,11 @@ def read_state(args: argparse.Namespace) -> None:
     data = _load(path)
 
     workflow = _find_workflow(data["workflows"], args.workflow_id)
+    if (not workflow) or args.include_archived:
+        archived = _load_archived_workflow(path, args.workflow_id)
+        if archived:
+            data = archived
+            workflow = archived["workflows"][0]
     if not workflow:
         print(f"Workflow не найден: {args.workflow_id}")
         return
@@ -520,6 +575,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument("--kg-path", type=str, help="Путь к agent_kg.json (по умолчанию config/agent_kg.json)")
+    parser.add_argument(
+        "--include-archived",
+        action="store_true",
+        help="Искать workflow в config/agent_kg_archive при read-state",
+    )
     parser.add_argument("--workflow-id", type=str, help="Идентификатор workflow")
     parser.add_argument("--goal", type=str, help="Цель workflow/handoff")
     parser.add_argument("--user-goal", type=str, help="UserGoal для handoff (новый формат)")

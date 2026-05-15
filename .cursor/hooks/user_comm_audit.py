@@ -64,6 +64,50 @@ def _load_agent_kg() -> dict:
         return {}
 
 
+def _previous_hash() -> str | None:
+    if not LOG_PATH.exists():
+        return None
+    try:
+        lines = LOG_PATH.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        print(f"user_comm_audit: failed to read previous hash: {exc}", file=sys.stderr)
+        return None
+    for line in reversed(lines):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        current_hash = entry.get("current_hash") if isinstance(entry, dict) else None
+        return str(current_hash) if current_hash else None
+    return None
+
+
+def _compute_hash(entry: dict, prev_hash: str | None) -> str:
+    content = json.dumps(
+        {
+            key: value
+            for key, value in entry.items()
+            if key not in ("prev_hash", "current_hash")
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(((prev_hash or "") + content).encode("utf-8")).hexdigest()
+
+
+def _append_audit_entry(entry: dict) -> None:
+    prev_hash = _previous_hash()
+    entry["prev_hash"] = prev_hash
+    entry["current_hash"] = _compute_hash(entry, prev_hash)
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+    except OSError as exc:
+        print(f"user_comm_audit: failed to write audit log: {exc}", file=sys.stderr)
+
+
 def _item_ts(item: dict) -> str:
     return str(item.get("updated_at") or item.get("created_at") or "")
 
@@ -167,23 +211,22 @@ def main() -> None:
         prompt, payload, approval_hint == "yes"
     )
 
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     conv_id = (payload.get("conversation_id") or "?")[:8]
     gen_id = (payload.get("generation_id") or "?")[:8]
 
-    line = (
-        f"[{ts}] conv={conv_id} gen={gen_id} "
-        f"prompt_hash={prompt_hash} prompt_len={prompt_len} "
-        f"workflow_id={workflow_id} workflow_id_source={workflow_id_source} "
-        f"approval_hint={approval_hint}"
-    )
-
-    try:
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except OSError:
-        # fail-open: не блокируем работу при ошибке записи лога
-        pass
+    entry = {
+        "timestamp": ts,
+        "action": "beforeSubmitPrompt",
+        "conversation_id": conv_id,
+        "generation_id": gen_id,
+        "prompt_hash": prompt_hash,
+        "prompt_length": prompt_len,
+        "workflow_id": workflow_id,
+        "workflow_id_source": workflow_id_source,
+        "approval_hint": approval_hint,
+    }
+    _append_audit_entry(entry)
 
     sys.stdout.write(json.dumps({"continue": True}))
 
