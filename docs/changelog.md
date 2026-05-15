@@ -1,5 +1,58 @@
 # Changelog
 
+## [15-05-2026] - Compliance remediation P0 batch (8 задач)
+
+Завершён P0 remediation batch по compliance/security/process debt после критического двухмодельного аудита `data_input/analytics/MultiAgent...`. Batch закрывает 8 задач P0.1..P0.8: drift инвариантов, размер Agent KG, audit hash-chain, security/third-party/SBOM, локальный Neo4j и README cleanup.
+
+### P0.1: Drift fix INV-10/11/TEMP-5
+
+- Синхронизированы ссылки на SSoT инвариантов: `INV-1..11`, `TEMP-1`, `TEMP-4`, `TEMP-5`; `GPU-1..6` без изменений.
+- Ключевые артефакты: `.cursor/rules/25_invariants_contract.mdc`, `docs/validation.md`, `docs/architecture/validation_rules.md`, `README.md`.
+
+### P0.2: Agent KG split
+
+- `config/agent_kg.json` уменьшен с `2.0MB` до `226K` (`2,044,976 → 226K bytes`, target `<250K` выполнен).
+- Закрытые workflows/handoffs/contexts вынесены в JSONL-архивы `config/agent_kg_archive/YYYY-MM-DD/W_xxx.jsonl`; `code/utils/agent_kg.py` получил atomic `_save()` через `os.replace` и архивный `--read-state` fallback.
+- Ключевой артефакт: `tools/kg_migrate_archive.py`.
+
+### P0.3: Audit hash-chain
+
+- Новые JSONL-записи audit hooks получили SHA-256 `prev_hash/current_hash` hash-chain.
+- Ключевые артефакты: `.cursor/hooks/audit_code_edit.py`, `.cursor/hooks/user_comm_audit.py`, `tools/audit_verify.py`, `tools/audit_summarize.py`, `docs/audit_summaries/`.
+
+### P0.4: SECURITY.md + CI
+
+- Добавлен корневой `SECURITY.md` с security model, scope, AGPL §13 reference и hardening guidelines.
+- CI quality gate добавлен в `.github/workflows/quality.yml`: JSON validity, Python syntax, INV/TEMP drift check, hygiene, audit verify.
+
+### P0.5: THIRD_PARTY.md
+
+- Добавлен `THIRD_PARTY.md` с SPDX license inventory зависимостей и отдельными секциями для BSD-3-Clause, Apache-2.0, GPL-3.0, AGPL-3.0, NVIDIA EULA и Cursor proprietary.
+- Зафиксированы AGPL §13 boundary cases: internal-only OK, network-exposed service triggers obligation, commercial license path через Sheffield University.
+
+### P0.6: SBOM CycloneDX 1.6
+
+- Добавлен `deploy/sbom/sbom.cdx.json` (`CycloneDX 1.6`, 15 components, 12,614 bytes).
+- Добавлен `deploy/sbom/README.md` с regenerate-инструкцией; manual entries покрывают `pyflamegpu`, CUDA, Neo4j CE, Superset, ClickHouse, Cursor.
+
+### P0.7: Neo4j CE Docker
+
+- Добавлен локальный Neo4j CE контур вместо Aura free: `deploy/neo4j-local/docker-compose.yml`, `deploy/neo4j-local/.env.example`, `deploy/neo4j-local/README.md`.
+- Добавлены Makefile targets `neo4j-local-up`, `neo4j-local-down`, `neo4j-local-status`, `neo4j-local-logs`; docker compose up не запускался без отдельного manual approval.
+- Header cleanup выполнен в `code/utils/sync_domain_graph.py`, `code/utils/test_neo4j_connections.py`, `.cursor/rules/00_global_always.mdc`.
+
+### P0.8: README cleanup (10 issues)
+
+- `README.md` обновлён под актуальность `15-05-2026`: agent list `8→11`, Aura → local, чувствительные URL/hostnames заменены на placeholders, V7 metrics помечены как legacy baseline.
+- Добавлены ссылки на `THIRD_PARTY.md`, `SECURITY.md`, `deploy/sbom/` и секция `Multi-agent framework — переиспользование как template`.
+- Template note: 3-layer pattern `P1.A roadmap` вынесен как готовая база для переиспользования framework как template.
+
+### Governance и pre_close
+
+- Governance verdict: `approve-with-notes`; `policy_status=pass`, `scope_match=yes`, `traceability_status=warn`, `human_gate_status=approved`, `ssot_integrity=intact`.
+- 3 pre_close conditions выполнены: Aura cleanup в `.cursor/agents/orchestrator.md`, `.cursor/agents/governance-compliance.md`, `.cursor/agents/docs-curator.md`, `.cursor/rules/90_multiagent_workflow.mdc`; docs-curator changelog update; orchestrator consolidated handoff pending after this docs step.
+- GraphUpdate: Domain Graph не обновлялся; изменения касаются compliance/docs/process и локального Neo4j deployment контура.
+
 ## [14-05-2026] - Master branch swap: feature/flame-messaging → master
 
 Replaced `origin/master` (январская работа `c24352ab`, 116 commits с 06-01-2026) на содержимое `feature/flame-messaging` (`7e2c53ab`). Алексей: «вёл разработку в январе в master, но потом забросил за отсутствие перспективы и выбрал единственно верный путь в текущей ветке, довёл до рабочего состояния». Risk=high, approved Alexey 22:35 + final confirm 'yes'.
