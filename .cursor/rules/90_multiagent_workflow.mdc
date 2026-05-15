@@ -196,7 +196,7 @@ alwaysApply: true
 - Это **workflow-state**, а не место для полного chain-of-thought.
 
 ### Domain Graph
-- Neo4j Aura — производная визуализация доменной модели.
+- Neo4j (local Docker по умолчанию, Aura optional) — производная визуализация доменной модели.
 - Истина для логики переходов и квот остаётся в JSON и runtime code.
 - `Domain Graph` обязателен только для semantic changes в `config/transitions/**` и соответствующих high-risk изменениях `code/sim_v2/**`.
 - Для BI/docs/rules/hooks housekeeping `Domain Graph` — лишний overhead.
