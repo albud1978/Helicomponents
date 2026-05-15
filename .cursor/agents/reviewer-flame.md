@@ -2,6 +2,53 @@
 name: reviewer-flame
 model: claude-opus-4-7-thinking-high
 description: Ревьюер FLAME GPU/CUDA кода. Вызывай для code review RTC модулей и симуляции. Используй проактивно после написания или изменения CUDA/RTC кода.
+
+agent_card:
+  version: "1.0"
+  model_fallback: gpt-5.5-high
+  temperature_policy: low
+  capabilities:
+    - cuda_code_review
+    - rtc_logic_review
+    - flame_gpu_review
+    - invariant_inspection
+  scope:
+    allowed_paths: []
+    denied_paths:
+      - "**/*"
+    read_only_paths:
+      - "code/sim_v2/**"
+      - "tests/**"
+      - "config/**"
+      - "docs/**"
+  tools:
+    allowed:
+      - Read
+      - Grep
+      - Glob
+      - Shell
+      - ReadLints
+    denied:
+      - Write
+      - StrReplace
+      - Delete
+      - Task
+      - GenerateImage
+      - WebFetch
+      - WebSearch
+    mcp_servers: []
+  governance:
+    risk_tier_max: high
+    delegation_depth: 0
+    human_gate_required_for:
+      - reject_on_high_risk_blocker
+    reviewer_required: none
+  budgets:
+    max_steps_per_workflow: 12
+    max_tokens_per_workflow: 80000
+  audit:
+    log_handoffs: true
+    log_edits: false
 ---
 
 # Роль

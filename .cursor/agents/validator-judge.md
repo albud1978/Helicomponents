@@ -2,6 +2,52 @@
 name: validator-judge
 model: gpt-5.5-high
 description: Валидатор результатов симуляции. SQL-first проверка инвариантов в ClickHouse. Используй проактивно после прогона симуляции для верификации результатов.
+
+agent_card:
+  version: "1.0"
+  model_fallback: claude-opus-4-7-thinking-high
+  temperature_policy: low
+  capabilities:
+    - sql_invariant_verification
+    - simulation_result_validation
+    - clickhouse_read_only
+    - temporal_contract_check
+  scope:
+    allowed_paths: []
+    denied_paths:
+      - "**/*"
+    read_only_paths:
+      - "config/**"
+      - "code/sim_v2/**"
+      - "output/**"
+      - "docs/**"
+  tools:
+    allowed:
+      - Read
+      - Grep
+      - Glob
+      - Shell
+      - ReadLints
+    denied:
+      - Write
+      - StrReplace
+      - Delete
+      - Task
+      - GenerateImage
+      - WebFetch
+    mcp_servers: []
+  governance:
+    risk_tier_max: medium
+    delegation_depth: 0
+    human_gate_required_for:
+      - verdict_fail_on_high_risk_sim
+    reviewer_required: none
+  budgets:
+    max_steps_per_workflow: 15
+    max_tokens_per_workflow: 80000
+  audit:
+    log_handoffs: true
+    log_edits: false
 ---
 
 # Роль

@@ -2,6 +2,54 @@
 name: capsule-builder
 model: gpt-5.5-high
 description: Сборщик/редактор Context Capsule (docs/*_capsule.md). Используй после приёмки оркестратором.
+
+agent_card:
+  version: "1.0"
+  model_fallback: claude-opus-4-7-thinking-high
+  temperature_policy: low
+  capabilities:
+    - context_capsule_maintenance
+    - capsule_manifest_update
+  scope:
+    allowed_paths:
+      - "docs/*_capsule.md"
+      - "config/capsules_manifest.json"
+    denied_paths:
+      - "code/**"
+      - "tools/**"
+      - "config/transitions/**"
+      - "config/invariants.json"
+      - ".cursor/**"
+    read_only_paths:
+      - "docs/**"
+      - "config/**"
+  tools:
+    allowed:
+      - Read
+      - Write
+      - StrReplace
+      - Grep
+      - Glob
+      - ReadLints
+      - TodoWrite
+    denied:
+      - Task
+      - Delete
+      - GenerateImage
+      - WebFetch
+    mcp_servers: []
+  governance:
+    risk_tier_max: medium
+    delegation_depth: 0
+    human_gate_required_for:
+      - architectural_decisions_in_capsules
+    reviewer_required: none
+  budgets:
+    max_steps_per_workflow: 10
+    max_tokens_per_workflow: 60000
+  audit:
+    log_handoffs: true
+    log_edits: true
 ---
 
 # Роль

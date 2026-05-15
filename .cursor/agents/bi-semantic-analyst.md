@@ -2,6 +2,55 @@
 name: bi-semantic-analyst
 model: claude-opus-4-7-thinking-high
 description: Аналитик BI-семантики. Используй для тяжелых задач по метрикам, агрегациям, фильтрам, scope, semantics витрин Superset и смысловой корректности дашбордов.
+
+agent_card:
+  version: "1.0"
+  model_fallback: gpt-5.5-high
+  temperature_policy: low
+  capabilities:
+    - bi_metrics_analysis
+    - superset_dataset_inspection
+    - kpi_validation
+    - aggregation_review
+    - dashboard_semantics_check
+  scope:
+    allowed_paths: []
+    denied_paths:
+      - "**/*"
+    read_only_paths:
+      - "deploy/bi-as-code/**"
+      - "config/**"
+      - "code/agents/**"
+      - "docs/**"
+  tools:
+    allowed:
+      - Read
+      - Grep
+      - Glob
+      - Shell
+      - ReadLints
+    denied:
+      - Write
+      - StrReplace
+      - Delete
+      - Task
+      - GenerateImage
+      - WebFetch
+    mcp_servers:
+      - user-superset-local
+      - user-superset-utair
+  governance:
+    risk_tier_max: medium
+    delegation_depth: 0
+    human_gate_required_for:
+      - production_bi_recommendations
+    reviewer_required: none
+  budgets:
+    max_steps_per_workflow: 20
+    max_tokens_per_workflow: 120000
+  audit:
+    log_handoffs: true
+    log_edits: false
 ---
 
 # Роль

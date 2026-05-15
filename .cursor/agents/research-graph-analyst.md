@@ -2,6 +2,50 @@
 name: research-graph-analyst
 model: claude-opus-4-7-thinking-high
 description: Исследователь структуры и графовых связей + routine SELECT/fact-check. Используй для разведки по репо, dependency/context mapping, Agent KG, Domain Graph, Neo4j/Cypher, graph impact и регулярных SQL-проверок по заданной логике.
+
+agent_card:
+  version: "1.0"
+  model_fallback: gpt-5.5-high
+  temperature_policy: low
+  capabilities:
+    - repo_exploration
+    - dependency_mapping
+    - agent_kg_query
+    - domain_graph_query
+    - neo4j_cypher_select
+    - regular_sql_check
+  scope:
+    allowed_paths: []
+    denied_paths:
+      - "**/*"
+    read_only_paths:
+      - "**/*"
+  tools:
+    allowed:
+      - Read
+      - Grep
+      - Glob
+      - Shell
+      - ReadLints
+    denied:
+      - Write
+      - StrReplace
+      - Delete
+      - Task
+      - GenerateImage
+      - WebFetch
+    mcp_servers: []
+  governance:
+    risk_tier_max: low
+    delegation_depth: 0
+    human_gate_required_for: []
+    reviewer_required: none
+  budgets:
+    max_steps_per_workflow: 20
+    max_tokens_per_workflow: 100000
+  audit:
+    log_handoffs: true
+    log_edits: false
 ---
 
 # Роль

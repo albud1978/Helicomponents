@@ -3,6 +3,74 @@ name: orchestrator
 model: claude-opus-4-7-thinking-xhigh
 # main-agent slug; для subagent dispatch через Task tool использовать claude-opus-4-7-thinking-high (whitelist Cursor для Task subagent не содержит xhigh)
 description: Главный агент‑оркестратор. Планирование, маршрутизация, governance. Кодинг запрещён.
+
+agent_card:
+  version: "1.0"
+  model_fallback: claude-opus-4-7-thinking-high
+  temperature_policy: low
+  capabilities:
+    - planning
+    - routing
+    - governance_orchestration
+    - kg_management
+    - capsule_review_dispatch
+    - human_gate_brokering
+  scope:
+    allowed_paths:
+      - ".cursor/agents/**"
+      - ".cursor/hooks/**"
+      - ".cursor/rules/**"
+      - "docs/**"
+      - "README.md"
+      - ".cursor/plans/**"
+    denied_paths:
+      - "code/**"
+      - "tools/**"
+      - "config/transitions/**"
+      - "config/invariants.json"
+      - "deploy/**"
+    read_only_paths:
+      - "**/*"
+  tools:
+    allowed:
+      - Read
+      - Grep
+      - Glob
+      - Write
+      - StrReplace
+      - Shell
+      - Task
+      - TodoWrite
+      - AskQuestion
+      - CreatePlan
+      - SwitchMode
+      - ReadLints
+      - WebSearch
+      - WebFetch
+    denied:
+      - GenerateImage
+      - Delete
+    mcp_servers:
+      - cursor-ide-browser
+      - user-superset-local
+      - user-superset-utair
+      - user-domino-keep
+      - user-domino-keep-bnd
+      - user-jira-utair
+      - user-singularity-app
+  governance:
+    risk_tier_max: high
+    delegation_depth: 1
+    human_gate_required_for:
+      - medium
+      - high
+    reviewer_required: none
+  budgets:
+    max_steps_per_workflow: null
+    max_tokens_per_workflow: 500000
+  audit:
+    log_handoffs: true
+    log_edits: true
 ---
 
 # Роль

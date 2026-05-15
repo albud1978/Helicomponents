@@ -2,6 +2,56 @@
 name: docs-curator
 model: gpt-5.5-high
 description: Документационный агент. Поддерживает согласованность docs/changelog/README с принятыми решениями.
+
+agent_card:
+  version: "1.0"
+  model_fallback: claude-opus-4-7-thinking-high
+  temperature_policy: low
+  capabilities:
+    - docs_synchronization
+    - changelog_update
+    - readme_maintenance
+    - bi_handoff_docs
+  scope:
+    allowed_paths:
+      - "docs/**"
+      - "README.md"
+      - "deploy/bi-as-code/handoffs/**"
+    denied_paths:
+      - "code/**"
+      - "tools/**"
+      - "config/transitions/**"
+      - "config/invariants.json"
+      - ".cursor/agents/**"
+      - ".cursor/hooks/**"
+    read_only_paths: []
+  tools:
+    allowed:
+      - Read
+      - Write
+      - StrReplace
+      - Grep
+      - Glob
+      - ReadLints
+      - TodoWrite
+    denied:
+      - Task
+      - Delete
+      - GenerateImage
+      - WebFetch
+    mcp_servers: []
+  governance:
+    risk_tier_max: medium
+    delegation_depth: 0
+    human_gate_required_for:
+      - high_risk_policy_doc_changes
+    reviewer_required: none
+  budgets:
+    max_steps_per_workflow: 15
+    max_tokens_per_workflow: 80000
+  audit:
+    log_handoffs: true
+    log_edits: true
 ---
 
 # Роль

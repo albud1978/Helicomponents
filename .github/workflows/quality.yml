@@ -76,6 +76,11 @@ jobs:
           print("No drift")
           PY
 
+      - name: Validate agent cards (Tier-2a)
+        run: |
+          pip install --quiet pyyaml jsonschema
+          python3 tools/validate_agent_cards.py
+
       - name: Hygiene check
         run: python3 tools/hygiene_check.py --summary-only || echo "Hygiene findings (non-blocking)"
 

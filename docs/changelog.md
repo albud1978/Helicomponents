@@ -1,5 +1,20 @@
 # Changelog
 
+## [15-05-2026] - Tier-2a Agent Cards (S3+C1+C3+S4 + C6 из A∪B∪C roadmap)
+
+### Добавлено
+
+- **Agent Cards v1.0:** 10 active profiles в `.cursor/agents/*.md` получили extended YAML frontmatter `agent_card` с модельными fallback, scope/tool governance, human-gate/reviewer правилами, budgets и audit flags.
+- **Schema + validator:** добавлены strict JSON Schema `config/schemas/agent_card.schema.json` и CLI validator `tools/validate_agent_cards.py`; smoke `python3 tools/validate_agent_cards.py` — PASS (`10 PASS`, `1 SKIP` для deprecated `analyst-sql-graph.md`).
+- **CI validation:** `.github/workflows/quality.yml` получил step `Validate agent cards (Tier-2a)` между invariant drift check и hygiene check.
+- **Workflow trace:** `W_tier2a_agent_cards_2026_05_15`; governance verdict: `allow` (`13/13` checks passed).
+
+### Изменено
+
+- **Dependencies:** в `requirements.txt` добавлен `jsonschema>=4.0.0` для schema validation.
+- **YAML parse fix:** в `.cursor/agents/governance-compliance.md` description обёрнут в quotes, чтобы устранить parse error из-за colon.
+- **Deferred scope:** Tier-2b не выполнялся; caps + token analytics вынесены в отдельную итерацию.
+
 ## [15-05-2026] - Tier-1 remediation batch (5 small wins from A∪B∪C roadmap)
 
 Завершён medium-risk Tier-1 batch из объединённого A∪B∪C roadmap: пять локальных process/docs/hook-правок закрыты без изменений SSoT, simulation code и production BI. Governance: `allow_with_notes`; approval context: `ctx_..._approval_request_b834d55a`; handoff: `handoff_..._governance-compliance_6aee5a10`.
