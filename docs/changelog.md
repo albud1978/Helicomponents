@@ -1,5 +1,32 @@
 # Changelog
 
+## [15-05-2026] - Neo4j data fill: Agent KG projection refresh + Domain Graph SSoT sync (high-risk approved)
+
+Выполнено утверждённое заполнение локального Neo4j для Variant C: обновлена обратимая проекция Agent KG и синхронизирован Domain Graph из SSoT JSON. Approval: "Заливай данные туда"; governance verdict: `allow_with_notes`.
+
+### Что синхронизировано
+
+- **Agent KG → Neo4j projection refresh:** `python3 tools/agent_kg_to_neo4j.py --include-archive --reset`.
+- **Domain Graph SSoT sync:** `python3 code/utils/sync_domain_graph.py` → `Synced 441 queries to bolt://localhost:7687`.
+
+### Verified counts в Neo4j
+
+- **Agent KG:** `Workflow=210`, `Handoff=724`, `Context=264`, `Agent=15`, `synthesized_legacy_ids=297`.
+- **Domain nodes:** `BomPartNo=77`, `RTCLayer=48`, `BomGroup=42`, `QuotaFlow=10`, `State=8`, `Rule=8`, `RepairLineRule=8`, `SelectionRule=4`, `BomCompatibilityRule=3`, `BomReplaceabilityRule=3`, `SpawnRule=2`, `BomGroupLevel=2`, `TransitionSpec=1`, `MessageBucket=1`, `BomTemplate=1`, `BomNumberingRule=1`.
+- **Key relations:** `HAS_GROUP=82`, `HAS_PARTNO=77`, `HAS_L2_GROUP=59`, `NEXT_LAYER=47`, `RULE_FOR_GROUP=33`, `HAS_STATE=8`, `HAS_RULE=8`, `FROM_STATE=8`, `TO_STATE=8`, `TRANSITION=8` + minor relation types.
+
+### Scope boundaries
+
+- `config/transitions/*` и `invariants.json` использовались read-only как SSoT для projection.
+- `code/sim_v2/**` не затрагивался.
+- Production BI не затрагивался.
+- Workflow: `W_neo4j_data_fill_2026_05_15`; approval context: `ctx_..._approval_request_10ff8623`; governance handoff: `handoff_..._governance-compliance_eabe079d`.
+
+### Обратимость
+
+- `make sync-domain-graph-clear` — очистить Domain Graph projection.
+- `make kg-project-neo4j-full` — пересоздать Agent KG projection с нуля.
+
 ## [15-05-2026] - Variant C: Neo4j CE Docker deployment + Agent KG projection
 
 Запущен Neo4j Community Edition в Docker (`deploy/neo4j-local/`) с binding на 0.0.0.0 (LAN-видимость через Docker Desktop WSL2 backend → Windows host). Реализована Variant C для Agent KG ↔ Domain Graph: JSON остаётся SSoT, добавлен on-demand projector в тот же Neo4j для визуального анализа истории workflow.
