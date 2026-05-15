@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """afterFileEdit hook: логирует правки в code/ и tools/ для audit trail."""
+import hashlib
 import json
 import sys
 from datetime import datetime, timezone
@@ -26,6 +27,50 @@ def _normalize_path(raw_path: str) -> str:
     return raw_path.replace("\\", "/")
 
 
+def _previous_hash() -> str | None:
+    if not LOG_PATH.exists():
+        return None
+    try:
+        lines = LOG_PATH.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        print(f"audit_code_edit: failed to read previous hash: {exc}", file=sys.stderr)
+        return None
+    for line in reversed(lines):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        current_hash = entry.get("current_hash") if isinstance(entry, dict) else None
+        return str(current_hash) if current_hash else None
+    return None
+
+
+def _compute_hash(entry: dict, prev_hash: str | None) -> str:
+    content = json.dumps(
+        {
+            key: value
+            for key, value in entry.items()
+            if key not in ("prev_hash", "current_hash")
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(((prev_hash or "") + content).encode("utf-8")).hexdigest()
+
+
+def _append_audit_entry(entry: dict) -> None:
+    prev_hash = _previous_hash()
+    entry["prev_hash"] = prev_hash
+    entry["current_hash"] = _compute_hash(entry, prev_hash)
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+    except OSError as exc:
+        print(f"audit_code_edit: failed to write audit log: {exc}", file=sys.stderr)
+
+
 def main() -> None:
     raw = sys.stdin.read()
     try:
@@ -39,21 +84,29 @@ def main() -> None:
         return
 
     edits = payload.get("edits", [])
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     conv_id = payload.get("conversation_id", "?")[:8]
     gen_id = payload.get("generation_id", "?")[:8]
 
-    lines = [f"[{ts}] conv={conv_id} gen={gen_id} file={file_path}"]
-    for i, edit in enumerate(edits):
-        old = (edit.get("old_string") or "")[:MAX_SNIPPET].replace("\n", "\\n")
-        new = (edit.get("new_string") or "")[:MAX_SNIPPET].replace("\n", "\\n")
-        lines.append(f"  edit[{i}] old='{old}' new='{new}'")
-
-    try:
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
-            f.write("\n".join(lines) + "\n\n")
-    except OSError:
-        pass  # не блокируем работу агента при ошибке записи
+    entry = {
+        "timestamp": ts,
+        "action": "afterFileEdit",
+        "conversation_id": conv_id,
+        "generation_id": gen_id,
+        "agent": payload.get("agent") or payload.get("model") or "unknown",
+        "file_path": file_path,
+        "edit_count": len(edits) if isinstance(edits, list) else 0,
+        "edits": [
+            {
+                "index": i,
+                "old": (edit.get("old_string") or "")[:MAX_SNIPPET].replace("\n", "\\n"),
+                "new": (edit.get("new_string") or "")[:MAX_SNIPPET].replace("\n", "\\n"),
+            }
+            for i, edit in enumerate(edits)
+            if isinstance(edit, dict)
+        ],
+    }
+    _append_audit_entry(entry)
 
     sys.stdout.write("{}")
 
