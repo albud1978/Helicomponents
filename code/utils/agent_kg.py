@@ -30,6 +30,22 @@ DEFAULT_KG_PATH = os.path.join(
 )
 DEFAULT_MAX_STEPS = 50
 DEFAULT_MAX_TOKENS = 500000
+RISK_TIER_CHOICES = ("low", "medium", "high")
+HUMAN_GATE_CHOICES = ("yes", "no", "conditional")
+GRAPH_UPDATE_CHOICES = ("yes", "no")
+NEXT_OWNER_CHOICES = (
+    "orchestrator",
+    "coder-general",
+    "coder-flame",
+    "reviewer-flame",
+    "validator-judge",
+    "governance-compliance",
+    "docs-curator",
+    "research-graph-analyst",
+    "bi-semantic-analyst",
+    "capsule-builder",
+    "human",
+)
 
 
 def _resolve_path(path: Optional[str]) -> str:
@@ -467,9 +483,12 @@ def write_handoff(args: argparse.Namespace) -> None:
         "risks": args.risks or "нет",
         "next_owner": args.next_owner or "orchestrator",
         "open_questions": args.open_questions or "",
-        "graph_update": args.graph_update or "нет",
+        "graph_update": args.graph_update or "no",
+        "graph_update_reason": args.graph_update_reason or "",
         "created_at": _now(),
     }
+    if handoff.get("goal") == handoff.get("user_goal"):
+        handoff.pop("goal", None)
     new_usage_arg = (
         args.usage_model is not None
         or args.usage_tokens is not None
@@ -819,14 +838,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Approval status (pending|approved|rejected)",
     )
     parser.add_argument("--approval-source", type=str, help="Approval source (handoff)")
-    parser.add_argument("--risk-tier", type=str, help="Risk tier (low|medium|high)")
+    parser.add_argument(
+        "--risk-tier",
+        type=str,
+        choices=RISK_TIER_CHOICES,
+        help="Risk tier (low|medium|high)",
+    )
     parser.add_argument("--risk-reasons", type=str, help="Причины риска (handoff)")
     parser.add_argument("--risk-owner", type=str, help="Владелец риска (handoff)")
     parser.add_argument(
         "--risk-validated-by", type=str, help="Кем валидирован риск (handoff)"
     )
     parser.add_argument(
-        "--human-gate-required", type=str, help="Human gate required (handoff)"
+        "--human-gate-required",
+        type=str,
+        choices=HUMAN_GATE_CHOICES,
+        help="Human gate required (yes|no|conditional)",
     )
     parser.add_argument("--plan-card", type=str, help="Plan card (handoff)")
     parser.add_argument("--evidence-pack", type=str, help="Evidence pack (handoff)")
@@ -837,9 +864,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--compliance-checklist", type=str, help="Compliance checklist (handoff)"
     )
     parser.add_argument("--risks", type=str, help="Риски (handoff)")
-    parser.add_argument("--next-owner", type=str, help="Следующий владелец (handoff)")
+    parser.add_argument(
+        "--next-owner",
+        type=str,
+        choices=NEXT_OWNER_CHOICES,
+        help="Следующий владелец (handoff)",
+    )
     parser.add_argument("--open-questions", type=str, help="Открытые вопросы (handoff)")
-    parser.add_argument("--graph-update", type=str, help="Требуется ли обновление графа (да/нет)")
+    parser.add_argument(
+        "--graph-update",
+        type=str,
+        choices=GRAPH_UPDATE_CHOICES,
+        help="Требуется ли обновление графа (yes|no)",
+    )
+    parser.add_argument(
+        "--graph-update-reason",
+        type=str,
+        help="Причина решения по обновлению графа (handoff)",
+    )
     parser.add_argument(
         "--model-slug",
         type=str,

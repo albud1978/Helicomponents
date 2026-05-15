@@ -80,19 +80,26 @@ agent_card:
 
 Один из трёх:
 - `allow` — можно продолжать переход по workflow
-- `needs_human_gate` — нужен явный человек в цикле
+- `allow_with_notes` — продолжать можно, но с зафиксированными minor issues
 - `reject` — переход/закрытие запрещён до исправления
 
-### Формат governance verdict
+(`needs_human_gate` входит в `reject` с указанием `exceptions=human_gate_required`.)
 
-Так как `code/utils/agent_kg.py` сейчас не имеет отдельного top-level поля `decision`, verdict должен быть **явно сериализован в `ComplianceChecklist`**:
+### Формат governance verdict (Tier-S S3 — compact 5-field)
 
-- `policy_status=pass|fail`
-- `scope_match=yes|no`
-- `traceability_status=pass|fail`
-- `human_gate_status=ok|missing|not_required`
-- `decision=allow|needs_human_gate|reject`
-- при необходимости: `delegation_depth_status=pass|fail`, `nested_subagent_detected=yes|no`
+`ComplianceChecklist` сериализуется ровно в 5 канонических полях:
+
+- `decision=` enum (`allow` | `allow_with_notes` | `reject`)
+- `required_gates=` enum (`pass` | `partial` | `fail`) — сводный статус всех hook/policy gates (pre_gate, pre_close, ssot, caps, no-nested, no-coding, scope_match, traceability и т.п.)
+- `exceptions=` список названий gates с проблемами через `;`, либо `none` (например: `human_gate_required;scope_drift`)
+- `evidence_refs=` ссылки на файлы/команды/handoff_id через `;` (например: `tools/x.py;handoff_<id>;py_compile=ok`)
+- `approval_ref=` `ctx_<id>` (ссылка на approval-context в KG) либо `N/A`
+
+**Запрещено**: расширенный verbose checklist с полями `policy_status=`, `scope_match=`, `traceability_status=`, `human_gate_status=`, `delegation_depth_status=`, `nested_subagent_detected=` и т.п. Эти проверки делаются как и раньше, но **результат** агрегируется в `required_gates` (общий статус) + `exceptions` (список проблемных). Детализация уезжает в `EvidencePack` если действительно нужна.
+
+**Low-risk handoffs (S5 hard rule)**: для `low-risk` принимай **только Handoff-lite** (5 полей: `UserGoal`, `Changes`, `Facts`, `RiskTier=low`, `NextOwner`). Full Handoff с N/A-полями для low-risk = `decision=reject` с `exceptions=use_handoff_lite`.
+
+**Single pass per workflow**: один governance verdict на workflow. Если возник exception после первого verdict — пиши `governance_update` context (`--write-context --context-type governance_update`), **не** новый full handoff.
 
 ## При выполнении задачи
 
@@ -118,7 +125,7 @@ agent_card:
 - Факт записей в Agent KG (`--write-context`, `--write-handoff`) явно отражать в `Changes` и/или `Facts`
 - Явно указывать проверку `PlanCard`/`EvidencePack`/`ComplianceChecklist` в `Facts` для задач с нетривиальным governance-check
 - Явно указывать проверку `RiskTier`/`RiskReasons`/`HumanGateRequired` в `Facts`
-- В `ComplianceChecklist` всегда записывать структурированный governance verdict в формате `key=value`
+- В `ComplianceChecklist` всегда записывать структурированный governance verdict в **compact 5-field** формате (`decision`, `required_gates`, `exceptions`, `evidence_refs`, `approval_ref`) — см. секцию "Формат governance verdict" выше
 
 ## Запреты
 

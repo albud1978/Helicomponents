@@ -91,7 +91,7 @@
     {
       "path": ".cursor/agents/governance-compliance.md",
       "semver": "1.0.0",
-      "sha256": "076479e7e6b3980283ed53259cc716722c5eb423595f4c55db7aa6e041a56353",
+      "sha256": "4c53fb12df9db6fb2da7f104ec3ff2f0d6164ce806274112ffdbb4a311e12c57",
       "layer": "L1+L3",
       "last_changed": "2026-05-15"
     },
@@ -253,14 +253,14 @@
     {
       "path": ".cursor/rules/90_multiagent_workflow.mdc",
       "semver": "1.0.0",
-      "sha256": "2ce65c6546add09edfcb8426b75a770444522caf402510a0f0c25e7643a70188",
+      "sha256": "df33509e4a2b371ba70a3dbce9a8669eaacd77408a28627238ee270e792e93e0",
       "layer": "L1+L3-thresholds",
       "last_changed": "2026-05-15"
     },
     {
       "path": ".cursor/rules/91_handoff_template.mdc",
       "semver": "1.0.0",
-      "sha256": "3af6ce1d0a4cc10a1ee2ba9f101222b87917b6a2ff4729d38bbf19d57f4ba8a1",
+      "sha256": "5db08fb7c8283e5f40fca260d42645b999f96153e80abd4361f5865374c1d344",
       "layer": "L1",
       "last_changed": "2026-05-15"
     },

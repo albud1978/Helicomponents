@@ -1,5 +1,42 @@
 # Changelog
 
+## [15-05-2026] - Tier-S Surgical Optimization (anti-bureaucracy batch)
+
+### Принцип
+- Конкурс двух моделей (`claude-opus-4-7-thinking-high` + `gpt-5.5-high`, параллельный аудит) выявил 7 совпадающих находок (goal/user_goal дубль, 13-полевый checklist, docs-curator over-trigger, double governance, rules duplication, Full Handoff for low-risk overuse, MUST-STAY guard rails). Алексей confirm split batches: Tier-S сейчас (surgical, low-risk), Tier-M позже (rule architecture restructure, отдельный approval).
+- **Maturity NOT certification**: optimization без потери audit trail / risk gates.
+- **Workflow trace**: `W_optim_contest_2026_05_15` (research, closed) → `W_optim_tier_s_2026_05_15` (implementation, this entry).
+
+### Изменено
+- **S1 — `goal`/`user_goal` dedup** (`code/utils/agent_kg.py`): `--write-handoff` теперь drop'ает поле `goal` когда оно строго равно `user_goal`. Экономия ~140 chars × handoff.
+- **S2 — Strict enums** (`code/utils/agent_kg.py`): argparse `choices=` для `--risk-tier`, `--human-gate-required`, `--graph-update`, `--next-owner`. Невалидные значения = `argparse exit 2`. Добавлен отдельный `--graph-update-reason` для случаев `--graph-update yes`.
+- **S3 — Compact ComplianceChecklist 5-field** (`.cursor/rules/91_handoff_template.mdc` + `.cursor/agents/governance-compliance.md`): `decision` / `required_gates` / `exceptions` / `evidence_refs` / `approval_ref`. Verbose verdict (`policy_status=`, `scope_match=`, `traceability_status=`, etc.) — запрещён в новых handoffs. Экономия ~400-900 chars/governance handoff.
+- **S4 — `approval_ref=ctx_<id>`** вместо повтора source/status/timestamp во всех handoffs. Экономия ~300-700 chars/handoff.
+- **S5 — Hard Handoff-lite enforcement для low-risk** (`.cursor/rules/91_handoff_template.mdc` + governance instruction): Full Handoff с N/A-полями для `low-risk` = governance reject (`exceptions=use_handoff_lite`). Экономия ~600-1200 chars/low-risk handoff.
+- **S6 — Selective docs-curator** (`.cursor/rules/90_multiagent_workflow.mdc`): mandatory только для high-risk / release boundary / external handoff package / multi-section docs impact. Для medium-risk процессных tooling задач — orchestrator/coder пишет changelog snippet сам. Экономия 1 handoff + 3-5K tokens/medium workflow.
+
+### Дополнительно
+- **Single governance pass** rule: один verdict per workflow, повторное обновление = `governance_update` context (не full handoff).
+- **Этот changelog entry** написан orchestrator сам — **первый sample S6 compliance** (раньше docs-curator делал бы delegation).
+- **Coder-general handoff S1+S2** — первый sample **S5 compliant Handoff-lite** (только 5 полей, no boilerplate).
+
+### Smoke (все exit=0 кроме intentional argparse fails)
+- Valid Handoff-lite: `handoff_..._4ee560c9` записан, `user_goal` есть, `goal` отсутствует (dedup live).
+- Invalid `--next-owner=banana` → `argparse exit 2` "invalid choice".
+- Invalid `--graph-update="no (some text)"` → `argparse exit 2`.
+- Invalid `--human-gate=maybe` → `argparse exit 2`.
+- Valid `--graph-update yes --graph-update-reason "..."` → handoff `08a73f43` записан.
+- KG verify: 3 recent Tier-S handoffs — все имеют только `user_goal`, no `goal` field.
+
+### Estimated impact (per medium workflow)
+- Tokens saved: ~20-25K (4-5 KB меньше handoff bloat × avg 5 handoffs/workflow)
+- Handoffs saved: ~1 (docs-curator skipped для medium tooling)
+- Format clarity: enums dispute-free, dedup проверяется при write
+
+### Что не делалось (deferred)
+- **Tier-M** (split `90_multiagent_workflow.mdc` 23K → ~5K + risk-adaptive profiles + merge facts/evidence + token analytics by reason) — отдельный workflow с отдельным approval Алексея после validation Tier-S на 2-3 следующих workflow'ах.
+- **Architectural** (event-log core, full typed schema migration) — skip per maturity NOT certification.
+
 ## [15-05-2026] - Tier-4 lite Maturity (C10+C13+C14 lite из A∪B∪C roadmap)
 
 ### Принцип
