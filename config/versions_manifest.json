@@ -253,7 +253,7 @@
     {
       "path": ".cursor/rules/90_multiagent_workflow.mdc",
       "semver": "1.0.0",
-      "sha256": "bb62975d29be238cb0f4bb006c42c1e156d2ce2cc3cf462844858961093dbef8",
+      "sha256": "2ce65c6546add09edfcb8426b75a770444522caf402510a0f0c25e7643a70188",
       "layer": "L1+L3-thresholds",
       "last_changed": "2026-05-15"
     },

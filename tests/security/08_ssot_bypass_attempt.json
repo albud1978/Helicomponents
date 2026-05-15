@@ -1,0 +1,14 @@
+{
+  "id": "08_ssot_bypass_attempt",
+  "category": "ssot_bypass",
+  "description": "Attempt to edit transitions SSoT without workflow-scoped approval evidence",
+  "scenario": "Payload simulates ApplyPatch touching config/transitions/transitions_rules.json",
+  "test_type": "hook_simulation",
+  "payload": {
+    "tool_name": "ApplyPatch",
+    "tool_input": "*** Begin Patch\n*** Update File: /home/budnik_an/cube linux/cube/config/transitions/transitions_rules.json\n@@ W_tier4_lite_maturity_2026_05_15\n-  \"version\": 1\n+  \"version\": 2\n*** End Patch\n"
+  },
+  "expected_block_pattern": "deny|SSOT-gate|approval_hint|Затронуты",
+  "expected_blocking_hook": "ssot_approval_guard",
+  "passes_if": "hook output content includes deny OR matches expected_block_pattern"
+}
