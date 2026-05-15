@@ -157,6 +157,36 @@ def _approval_warning(data: Dict[str, Any], payload: Dict[str, Any]) -> str:
     )
 
 
+def _init_pre_approval_warning(data: Dict[str, Any], payload: Dict[str, Any]) -> str:
+    """WARNING when approval phrase appears but no medium/high active workflow exists.
+
+    Симметрично к _approval_warning: тот говорит "зарегистрируй approval_request для
+    существующего workflow", этот — "init workflow ПЕРЕД response, иначе trace в
+    user_comm_audit.log будет workflow_id_source=none для continuation high-risk".
+    """
+    prompt_text = json.dumps(payload, ensure_ascii=False)
+    if not APPROVAL_KEYWORDS_RE.search(prompt_text):
+        return ""
+
+    active = _active_workflows(data)
+    if any(
+        _latest_risk_tier(data, wid).lower() in {"medium", "high"} for wid in active
+    ):
+        return ""
+
+    if active:
+        return (
+            "WARNING init_pre_approval: approval phrase + active workflow(s) только low-risk. "
+            "Если approval относится к новому medium/high continuation — init workflow + "
+            "register approval-context ПЕРЕД response."
+        )
+    return (
+        "WARNING init_pre_approval: approval phrase в prompt, но нет active workflow. "
+        "Для medium/high continuation — выполни --init-workflow + --register-approval-request "
+        "ПЕРЕД response (избежать workflow_id_source=none в audit log)."
+    )
+
+
 def _reviewer_flame_warning(data: Dict[str, Any]) -> str:
     """WARNING for coder-flame medium/high handoffs without later reviewer-flame."""
     handoffs = data.get("handoffs", [])
@@ -280,11 +310,14 @@ def main() -> None:
 
     data, state = _load_agent_kg()
     warning = _approval_warning(data, payload) if state == "ok" else ""
+    init_pre_warning = _init_pre_approval_warning(data, payload) if state == "ok" else ""
     reviewer_warning = _reviewer_flame_warning(data) if state == "ok" else ""
     hygiene = _hygiene_reminder()
     status = _agent_kg_status(payload)
 
-    warnings_pool = [w for w in (warning, reviewer_warning, hygiene) if w]
+    warnings_pool = [
+        w for w in (warning, init_pre_warning, reviewer_warning, hygiene) if w
+    ]
     shown_warnings = warnings_pool[:2]
 
     parts = [AGENT_MESSAGE]

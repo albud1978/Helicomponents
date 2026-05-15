@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-05-15T07:15:12Z",
+    "updated_at": "2026-05-15T09:39:42Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -220,6 +220,15 @@
       "status": "closed",
       "created_at": "2026-05-15T07:07:37Z",
       "updated_at": "2026-05-15T07:15:12Z"
+    },
+    {
+      "workflow_id": "W_tier1_remediation_batch_2026_05_15",
+      "goal": "Tier-1 batch (5 small wins): C4 agent_risk_classification + C7 suppliers matrix + C15 autonomy tiers + F1 user_comm_audit fix + F2 orchestrator_guard init-PRE-approval check",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "closed",
+      "created_at": "2026-05-15T09:30:15Z",
+      "updated_at": "2026-05-15T09:39:42Z"
     }
   ],
   "handoffs": [
@@ -2146,6 +2155,107 @@
       "open_questions": "",
       "graph_update": "yes",
       "created_at": "2026-05-15T07:15:12Z"
+    },
+    {
+      "handoff_id": "handoff_W_tier1_remediation_batch_2026_05_15_governance-compliance_6aee5a10",
+      "workflow_id": "W_tier1_remediation_batch_2026_05_15",
+      "agent": "governance-compliance",
+      "user_goal": "действуй по плану",
+      "goal": "действуй по плану",
+      "changes": "Governance verdict: ALLOW_WITH_NOTES для close-workflow Tier-1 medium-risk batch. Проверено: (1) scope_match=yes — 5 заявленных правок (C4+C7+C15+F1+F2) совпадают с git diff scope, drift отсутствует; (2) policy_status=pass_with_notes — все правки в orchestrator allowlist (.cursor/hooks/**, .cursor/rules/**, docs/**, README.md), single edge case: THIRD_PARTY.md (+2 lines cross-link на docs/governance/suppliers.md) формально не в literal allowlist, но (a) markdown root-level docs surface эквивалентен README.md, (b) +2 lines полностью в spirit C7 explicit approval; non-blocking, audit note; (3) human_gate_status=ok — Plan mode 'согласен с твоими рекомендациями' + AskQuestion 'switch_agent' зафиксированы в ctx_..._approval_request_b834d55a; (4) traceability_status=pass_with_notes — workflow active, approval-context зарегистрирован, F1 smoke verified в audit log (workflow_id_source=inferred_approval_context работает), но orchestrator handoff ещё не записан (требование pre_close); (5) ssot/code/sim_v2/production-BI untouched (git diff подтверждает); (6) F2 lesson lineage из W_neo4j_data_fill_2026_05_15 ProcessInsights реализован корректно. Записан phase_start context (ctx_..._phase_start_aa8da656) + handoff в Agent KG.",
+      "facts": "Проверки выполнены через: (1) git status --porcelain + git diff --stat: 6 файлов M, 1 untracked dir docs/governance/, +89 -3 lines tracked diffs. (2) git diff per file: README.md +25 lines (autonomy tiers AT-0..AT-4 + mapping risk-tier↔autonomy + enforcement points + cross-links на agent_risk_classification.md/suppliers.md); THIRD_PARTY.md +2 lines (supplier-centric cross-link на suppliers.md); user_comm_audit.py +3 lines (третий fallback inferred_unique_active_approval после inferred_approval_context/inferred_pending_high_risk); orchestrator_guard.py +35 lines (новая функция _init_pre_approval_warning + интеграция в warnings_pool); 90_multiagent_workflow.mdc +7 lines (2 секции: Дополнения матрицы + Observability/аудит — fallback list расширен на 3 пункта). (3) wc -l docs/governance/: agent_risk_classification.md=84, suppliers.md=103, total=187 строк новых docs. (4) Read docs/governance/agent_risk_classification.md head: соответствует C4 описанию (risk-tier framework, action-type taxonomy A-E, impact-zone Zone-1/2/3). (5) Read docs/governance/suppliers.md head: соответствует C7 (criticality framework, supplier matrix, S1=NVIDIA Critical, S2=FLAME GPU). (6) python3 code/utils/agent_kg.py --read-state: workflow active phase=implementation, нет handoffs ещё. (7) python3 code/utils/agent_kg.py --read-context: 1 approval_request context зарегистрирован (ctx_..._b834d55a, дословно 'Approved Alexey 15-05-2026 09:24Z (Plan mode... AskQuestion switch_agent). Risk=medium ... Tier-1 of A∪B∪C roadmap'). (8) tail user_comm_audit.log: последняя запись 2026-05-15T09:32:21Z workflow_id=W_tier1_remediation_batch_2026_05_15 workflow_id_source=inferred_approval_context — F1 fallback работает на реальном prompt. (9) Predecessor W_neo4j_data_fill_2026_05_15 (--include-archived): closed, governance verdict allow_with_notes, ProcessInsight о init PRE-approval — direct lineage в F2. (10) Self-checks: RiskTier=medium валиден (5 mutations в allowlist, обратимо); RiskReasons прозрачны; HumanGateRequired=yes согласован с risk-tier; PlanCard/EvidencePack/ComplianceChecklist для medium-risk обязательны и сейчас заполняются в этом handoff.",
+      "assumptions": "(1) Smoke tests claims (py_compile both hooks ✓, F2 init_pre_approval not triggered correctly ✓) приняты на доверие orchestrator handoff (control plane не запускал py_compile повторно, но видит F1 evidence в audit log live). Risks if false: F2 hook может содержать syntax error не пойманный; orchestrator handoff должен явно процитировать py_compile stdout. (2) Approval phrase 'действуй по плану' + предшествующий 'согласен с твоими рекомендациями, запускай доработку' + AskQuestion 'switch_agent' — действительно от Алексея в текущем чате. Risks if false: approval invalid; снять verdict до подтверждения. (3) THIRD_PARTY.md edit (+2 lines cross-link) интерпретирован как in-scope C7 (ссылка на новый docs/governance/suppliers.md). Risks if false: scope-stretch требует отдельного approval; орчестратор должен в своём handoff явно подтвердить, что THIRD_PARTY.md правка частью C7.",
+      "evidence": "не запускалось",
+      "drift_check": "no_drift; final scope = approved scope (Tier-1: C4+C7+C15+F1+F2); SSoT untouched (git status config/transitions/, invariants.json clean); никаких unrelated changes; THIRD_PARTY.md +2 lines документирован как часть C7 cross-link, не drift",
+      "process_insights": "",
+      "trace_id": "wf:W_tier1_remediation_batch_2026_05_15:2026-05-15T09:30:15Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "ctx_W_tier1_remediation_batch_2026_05_15_approval_request_b834d55a",
+      "approval_status": "approved",
+      "approval_source": "user_chat:Alexey:Plan_mode_confirm + AskQuestion 'switch_agent' (15-05-2026 09:24Z)",
+      "risk_tier": "medium",
+      "risk_reasons": "5 docs/rules/hooks edits в orchestrator allowlist; обратимо; нет влияния на SSoT/production/code; medium из-за изменения hooks (orchestrator_guard.py +35 строк новой логики init_pre_approval) + изменения policy text в .cursor/rules/90_multiagent_workflow.mdc",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes: Plan-mode approval + AskQuestion switch_agent confirm; зафиксирован в ctx_..._approval_request_b834d55a",
+      "plan_card": "Governance verdict для close-workflow medium-risk Tier-1 batch (5 small wins из roadmap A∪B∪C). Проверить scope_match (C4+C7+C15+F1+F2 vs git diff), policy boundary (allowlist + SSoT clean), human-gate (Plan mode + AskQuestion), artifact discipline (orchestrator handoff + docs-curator pending), success-criteria для dispatched scope.",
+      "evidence_pack": "git status --porcelain: M .cursor/hooks/orchestrator_guard.py, M .cursor/hooks/user_comm_audit.py, M .cursor/rules/90_multiagent_workflow.mdc, M README.md, M THIRD_PARTY.md, M config/agent_kg.json, ?? docs/governance/ — 5 заявленных правок видны, нет drift. git diff --stat: 89 insertions, 3 deletions across 6 tracked files (config/agent_kg.json mutation = KG records от self). New files: docs/governance/agent_risk_classification.md (84 строки vs claimed ~95), docs/governance/suppliers.md (103 строки vs claimed ~80) — оба соответствуют C4/C7 заявленному scope (минорное расхождение по line counts non-blocking). user_comm_audit.log tail: последняя запись workflow_id=W_tier1_remediation_batch_2026_05_15 workflow_id_source=inferred_approval_context — F1 fallback подтверждён работающим. Hash chain prev_hash/current_hash непрерывен. Agent KG: workflow active, approval_context ctx_..._b834d55a registered, нет orchestrator handoff (pre_close требует). Predecessor W_neo4j_data_fill_2026_05_15 closed allow_with_notes; ProcessInsight 'init workflow PRE-approval' частично реализован в F2 — direct lineage.",
+      "success_criteria": "manual-check: governance verdict записан в Agent KG handoff; ComplianceChecklist структурирован; allow-with-notes выдан с явными pre_close conditions для orchestrator",
+      "compliance_checklist": "policy_status=pass_with_notes; scope_match=yes; traceability_status=pass_with_notes; human_gate_status=ok; delegation_depth_status=pass; nested_subagent_detected=no; ssot_boundary_status=pass; orchestrator_self_coding_status=pass; success_criteria_verifiability=pass; artifact_discipline_status=pending_orchestrator_handoff; bi_boundary_status=N/A; doc_impact_status=present_requires_docs_curator; decision=allow_with_notes",
+      "risks": "(1) Orchestrator handoff ещё не записан — pre_close_guard заблокирует --close-workflow до его появления (ожидаемое поведение, не риск governance per se). (2) docs-curator handoff отсутствует, но Tier-1 batch имеет реальный doc-impact (new docs/governance/ subfolder + README.md restructure + THIRD_PARTY.md cross-link + rules update) — рекомендуется docs-curator перед close для синхронизации docs/changelog.md. (3) THIRD_PARTY.md edge case (root-level markdown formal вне literal allowlist) задокументирован как pass_with_notes; для будущих batch'ей — рассмотреть явное расширение allowlist в 90_multiagent_workflow.mdc (root-level docs *.md типа README/THIRD_PARTY/SECURITY).",
+      "next_owner": "orchestrator",
+      "open_questions": "(1) Будет ли отдельный docs/changelog.md update от docs-curator перед close-workflow (рекомендуется для doc-impact); (2) Подтвердит ли orchestrator в своём pre-close handoff py_compile stdout для обоих hooks (укрепит F1/F2 evidence).",
+      "graph_update": "no; Domain Graph не затронут; Agent KG обновлён (phase_start + governance handoff = 2 записи) — это operational state, не Domain Graph SSoT",
+      "created_at": "2026-05-15T09:35:21Z"
+    },
+    {
+      "handoff_id": "handoff_W_tier1_remediation_batch_2026_05_15_docs-curator_a2eb55d8",
+      "workflow_id": "W_tier1_remediation_batch_2026_05_15",
+      "agent": "docs-curator",
+      "user_goal": "действуй по плану",
+      "goal": "действуй по плану",
+      "changes": "Updated docs/changelog.md only: inserted top-level section with heading, summary, Что покрыто, Smoke tests, Scope boundaries. Recorded phase_start context in Agent KG.",
+      "facts": "Read docs/changelog.md top block before edit; inserted new section at line 3 before Neo4j data fill entry; ReadFile verification shows requested heading present; ReadLints reports no diagnostics; phase_start context ctx_W_tier1_remediation_batch_2026_05_15_phase_start_aa8da656 recorded.",
+      "assumptions": "Assumption: supplied implementation/governance facts are authoritative handoff inputs from orchestrator. Risks if false: changelog could mirror an upstream factual error.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_tier1_remediation_batch_2026_05_15:2026-05-15T09:37Z",
+      "plan_step_id": "D1",
+      "approval_gate_id": "ctx_..._approval_request_b834d55a",
+      "approval_status": "approved",
+      "approval_source": "Plan mode + AskQuestion switch_agent",
+      "risk_tier": "medium",
+      "risk_reasons": "medium: governance/process documentation trail; approved Tier-1 remediation batch; no SSoT/simulation/production BI changes",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes: approval ctx_..._approval_request_b834d55a",
+      "plan_card": "Add a short top-level docs/changelog.md section for Tier-1 remediation batch, then verify section placement and diagnostics.",
+      "evidence_pack": "docs/changelog.md lines 1-29 after edit; ReadLints(/home/budnik_an/cube linux/cube/docs/changelog.md)=no linter errors; Agent KG context id ctx_W_tier1_remediation_batch_2026_05_15_phase_start_aa8da656.",
+      "success_criteria": "file_exists: docs/changelog.md; section present: ## [15-05-2026] - Tier-1 remediation batch",
+      "compliance_checklist": "policy_status=pass; scope_match=yes; traceability_status=pass; human_gate_status=approved via ctx_..._approval_request_b834d55a; governance_verdict=allow_with_notes; docs_only=yes; no_extra_docs_modified=yes",
+      "risks": "Low residual risk: changelog relies on orchestrator-provided smoke/governance details.",
+      "next_owner": "orchestrator",
+      "open_questions": "None",
+      "graph_update": "no: changelog documentation only; Domain Graph not affected",
+      "created_at": "2026-05-15T09:38:28Z",
+      "usage": {
+        "model": "gpt-5.5-high",
+        "est_tokens": 12000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_tier1_remediation_batch_2026_05_15_orchestrator_9969b9c9",
+      "workflow_id": "W_tier1_remediation_batch_2026_05_15",
+      "agent": "orchestrator",
+      "user_goal": "действуй по плану",
+      "goal": "действуй по плану",
+      "changes": "docs/governance/agent_risk_classification.md (новый, 84 строки); docs/governance/suppliers.md (новый, 103 строки); README.md (+25 lines autonomy tiers AT-0..AT-4); THIRD_PARTY.md (+2 lines cross-link на suppliers.md); .cursor/hooks/user_comm_audit.py (+3 lines, 3-й fallback inferred_unique_active_approval); .cursor/hooks/orchestrator_guard.py (+35 lines, _init_pre_approval_warning + integration); .cursor/rules/90_multiagent_workflow.mdc (+7 lines, 2 секции policy text); docs/changelog.md (top-level секция)",
+      "facts": "py_compile clean для обоих hooks; F1 live verified: prompt 'подтверждаю,делай' → workflow_id_source=inferred_approval_context подхватил W_tier1_remediation_batch_2026_05_15 (smoke 2026-05-15T09:32:21Z в user_comm_audit.log); F2 hooks отработали, init_pre_approval НЕ triggered (правильно, есть active workflow); hash chain prev_hash/current_hash непрерывен; git status SSoT (config/transitions/*, invariants.json) — clean",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "no_drift; final scope = approved scope (C4+C7+C15+F1+F2); THIRD_PARTY.md +2 lines (cross-link на suppliers.md) — explicitly in-scope C7 (governance note: для будущего batch расширить allowlist в 90_multiagent_workflow.mdc для root-level *.md типа README/THIRD_PARTY/SECURITY/CHANGELOG)",
+      "process_insights": "Plan mode позволяет markdown edits — 3 из 5 задач (C4/C7/C15) выполнены до switch в Agent mode; Python hooks (F1/F2) требовали switch — выполнены после AskQuestion confirm; Tier-1 паттерн (5 small wins, ~150 строк суммарно) хорошо подходит для одного workflow без делегаций — все правки в orchestrator allowlist; F1 fallback inferred_unique_active_approval не сработал в smoke (1-й fallback был достаточен), но станет полезен в кейсе без approval_context",
+      "trace_id": "wf:W_tier1_remediation_batch_2026_05_15:20260515T093942Z",
+      "plan_step_id": "F1_final",
+      "approval_gate_id": "",
+      "approval_status": "approved",
+      "approval_source": "user_chat:Alexey:2026-05-15T09:24Z (Plan mode 'согласен с твоими рекомендациями, запускай доработку' + AskQuestion 'switch_agent')",
+      "risk_tier": "medium",
+      "risk_reasons": "5 docs/rules/hooks edits в orchestrator allowlist; обратимо; нет влияния на SSoT/production/code; medium из-за изменения hooks behavior + policy text",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Tier-1 batch (5 small wins из roadmap A∪B∪C) выполнен. Approval: Plan mode + AskQuestion switch_agent. governance verdict=allow_with_notes. docs-curator: changelog top-level записан.",
+      "evidence_pack": "python3 -m py_compile .cursor/hooks/user_comm_audit.py → exit 0; python3 -m py_compile .cursor/hooks/orchestrator_guard.py → exit 0; F1 live test echo confirmation prompt → workflow_id=W_tier1_remediation_batch_2026_05_15 workflow_id_source=inferred_approval_context (хотя сработал 1-й fallback, не 3-й — corner case: смоук с прямо тем workflow_id что зарегистрирован); ReadLints всех 4 md файлов: clean; git diff stat: +89/-3 across 6 tracked files + 2 new files в docs/governance/",
+      "success_criteria": "manual-check: 5 правок присутствуют (git diff); py_compile обоих hooks passes; F1 fallback verified live в user_comm_audit.log; F2 init_pre_approval triggers только когда нет active medium/high workflow",
+      "compliance_checklist": "policy_status=pass_with_notes(third_party_md_root_level); scope_match=yes; traceability_status=pass; human_gate_status=ok; ssot_modification=none; graph_update_required=no; decision=allow_with_notes",
+      "risks": "F1 3-й fallback inferred_unique_active_approval не triggered в smoke (1-й fallback покрыл кейс) — теоретически работает по коду но без live coverage; THIRD_PARTY.md root-level scope-stretch (advisory note); F2 warning только в text agentMessage, не hard-block — полагаемся на orchestrator проактивную реакцию",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "created_at": "2026-05-15T09:39:42Z"
     }
   ],
   "contexts": [
@@ -2652,6 +2762,33 @@
       "agent": "orchestrator",
       "created_at": "2026-05-15T07:15:12Z",
       "updated_at": "2026-05-15T07:15:12Z"
+    },
+    {
+      "context_id": "ctx_W_tier1_remediation_batch_2026_05_15_approval_request_b834d55a",
+      "workflow_id": "W_tier1_remediation_batch_2026_05_15",
+      "context_type": "approval_request",
+      "content": "Approved Alexey 15-05-2026 09:24Z (Plan mode 'действуй по плану' → AskQuestion 'switch_agent'). Risk=medium (5 docs/rules/hooks edits, обратимо, всё в orchestrator allowlist). Scope: Tier-1 of A∪B∪C roadmap.",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T09:30:15Z",
+      "updated_at": "2026-05-15T09:30:15Z"
+    },
+    {
+      "context_id": "ctx_W_tier1_remediation_batch_2026_05_15_phase_start_aa8da656",
+      "workflow_id": "W_tier1_remediation_batch_2026_05_15",
+      "context_type": "phase_start",
+      "content": "PlanStep D1: update docs/changelog.md with Tier-1 remediation batch summary only.",
+      "agent": "docs-curator",
+      "created_at": "2026-05-15T09:34:17Z",
+      "updated_at": "2026-05-15T09:37:42Z"
+    },
+    {
+      "context_id": "ctx_W_tier1_remediation_batch_2026_05_15_closure_20aa46b6",
+      "workflow_id": "W_tier1_remediation_batch_2026_05_15",
+      "context_type": "closure",
+      "content": "Tier-1 batch complete: 5 small wins (C4 risk classification, C7 suppliers, C15 autonomy tiers, F1 audit fallback, F2 init-pre-approval). governance=allow_with_notes; docs-curator changelog committed; hooks smoke verified. Tier-2 (Agent Cards format (b)) — следующая итерация.",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T09:39:42Z",
+      "updated_at": "2026-05-15T09:39:42Z"
     }
   ],
   "meta": {

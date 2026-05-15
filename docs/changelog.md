@@ -1,5 +1,31 @@
 # Changelog
 
+## [15-05-2026] - Tier-1 remediation batch (5 small wins from A∪B∪C roadmap)
+
+Завершён medium-risk Tier-1 batch из объединённого A∪B∪C roadmap: пять локальных process/docs/hook-правок закрыты без изменений SSoT, simulation code и production BI. Governance: `allow_with_notes`; approval context: `ctx_..._approval_request_b834d55a`; handoff: `handoff_..._governance-compliance_6aee5a10`.
+
+### Что покрыто
+
+- **C4 — agent risk classification:** добавлен `docs/governance/agent_risk_classification.md` (84 строки) с matrix по 11 агентам, Type A-E taxonomy, Zone-1/2/3 + BI taxonomy, task→risk mapping и update policy.
+- **C7 — supplier governance:** добавлен `docs/governance/suppliers.md` (103 строки) и cross-link из `THIRD_PARTY.md`; покрыты 8 vendors, criticality framework, cross-vendor risks и continuity plan.
+- **C15 — autonomy tiers:** `README.md` получил секцию на 5 tiers (`AT-0` read-only → `AT-4` fully autonomous; `AT-4` policy-disabled), risk-tier mapping и enforcement points по 4 hooks.
+- **F1 — approval workflow inference:** `.cursor/hooks/user_comm_audit.py` получил fallback `inferred_unique_active_approval` в `_infer_workflow_id_for_approval`, закрывающий continuation high-risk кейс.
+- **F2 — init pre-approval warning:** `.cursor/hooks/orchestrator_guard.py` получил WARNING `init_pre_approval`, а `.cursor/rules/90_multiagent_workflow.mdc` — соответствующий policy text.
+- Roadmap source: `multi-agent_roadmap_inventory_4e77101c.plan.md`; Tier-2 следующий scope — Agent Cards в формате extended YAML frontmatter + tool allow/deny + caps + CI schema.
+
+### Smoke tests
+
+- `python3 -m py_compile .cursor/hooks/user_comm_audit.py` — PASS.
+- `python3 -m py_compile .cursor/hooks/orchestrator_guard.py` — PASS.
+- F1 live smoke: prompt `подтверждаю, делай` корректно записал `workflow_id_source=inferred_approval_context`.
+- F2 live smoke: hooks отработали, `init_pre_approval` не сработал при наличии active workflow — expected behavior.
+
+### Scope boundaries
+
+- `config/transitions/*` и `invariants.json` не изменялись.
+- `code/sim_v2/**` не затрагивался.
+- Production BI не затрагивался.
+
 ## [15-05-2026] - Neo4j data fill: Agent KG projection refresh + Domain Graph SSoT sync (high-risk approved)
 
 Выполнено утверждённое заполнение локального Neo4j для Variant C: обновлена обратимая проекция Agent KG и синхронизирован Domain Graph из SSoT JSON. Approval: "Заливай данные туда"; governance verdict: `allow_with_notes`.

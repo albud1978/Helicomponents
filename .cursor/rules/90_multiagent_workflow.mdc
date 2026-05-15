@@ -131,6 +131,7 @@ alwaysApply: true
 **Дополнения** к матрице:
 - **Human approval gate** перед шагом 4: `high` = required; `medium` = conditional (policy/architecture change); `low` = обычно не требуется.
 - **`approval_request` context (C2):** для `medium/high` обязательно через `python3 code/utils/agent_kg.py --register-approval-request --workflow-id W_<id> --content "..."` до запроса approval. `orchestrator_guard.py` выдаёт soft WARNING при пропуске.
+- **Init workflow PRE-approval (Tier-1 F2):** для continuation high-risk approval orchestrator должен `--init-workflow` ДО ответа на approval phrase. `orchestrator_guard.py` выдаёт soft WARNING `init_pre_approval` при approval phrase + 0 active medium/high workflow.
 - **SSoT-gate (D1):** для `high-risk` SSoT-операций (`config/transitions/*.json`, `make sync-domain-graph`) — workflow-scoped hard-block через `ssot_approval_guard.py`.
 - **Reviewer-flame loop (D2):** `coder-flame` `medium/high` → `reviewer-flame` обязателен в том же workflow. `orchestrator_guard.py` выдаёт soft WARNING.
 - **Phase recap (см. ниже):** для `medium/high`, `coder-flame`, длинных задач, resume/compaction — обязательный recap из KG + capsules.
@@ -215,8 +216,12 @@ alwaysApply: true
 - `code_edit_audit.log` — технический след правок.
 - `docs/changelog.md` — короткий аудит изменений и итогов ревью/валидации, когда есть doc-impact.
 - Перед запросом `medium/high-risk` approval orchestrator обязан зарегистрировать `approval_request` context в `Agent KG` через `python3 code/utils/agent_kg.py --register-approval-request --workflow-id W_<id> --content "..."`. `orchestrator_guard.py` выдаёт soft WARNING (на `beforeSubmitPrompt`), если active medium/high workflow без зарегистрированного context.
+- **Init workflow PRE-approval (continuation high-risk).** Для continuation high-risk approval'а в существующем чате (где новый scope требует нового `W_<id>`) orchestrator обязан выполнить `--init-workflow` + `--register-approval-request` **до** ответа на approval phrase. Иначе `user_comm_audit.log` зафиксирует `workflow_id_source=none`, что снижает аудит-trace полноту. `orchestrator_guard.py` выдаёт soft WARNING `init_pre_approval`, если approval phrase в prompt + нет active workflow с `risk_tier ∈ {medium, high}`.
 - В пользовательском approval-запросе для `medium/high-risk` должен явно фигурировать `W_<workflow_id>`.
-- `user_comm_audit.py` должен логировать `workflow_id_source`; для `high-risk` approval trace считается полным, если `workflow_id` пришёл явно или был выведен из единственного активного approval-context/pending high-risk state.
+- `user_comm_audit.py` должен логировать `workflow_id_source`; для `high-risk` approval trace считается полным, если `workflow_id` пришёл явно или был выведен из:
+  - единственного активного approval-context (`inferred_approval_context`),
+  - единственного pending high-risk handoff (`inferred_pending_high_risk`),
+  - единственного active workflow при confirmation-like prompt (`inferred_unique_active_approval`) — fallback для continuation после late init.
 
 ## Governance-гейты
 Требуют явного подтверждения человека:

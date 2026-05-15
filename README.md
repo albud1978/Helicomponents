@@ -203,6 +203,31 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 
 Полная template-сборка (extracted core + per-project manifest pattern) запланирована в P1.A (см. `docs/changelog.md`).
 
+### Autonomy tiers (явная taxonomy)
+
+Уровень автономии = насколько action агента требует участия человека. Используется для governance review и для оценки compliance (Compass C15).
+
+- **AT-0 Read-only** — agent только читает (Grep/Read/Glob/SELECT). Никаких mutating actions. Не требует human-gate. Примеры: `research-graph-analyst`, `bi-semantic-analyst`, `validator-judge` в анализе.
+- **AT-1 Suggest** — agent формирует handoff/recommendation, исполнение не делает. Решение остаётся за orchestrator / человеком. Примеры: `governance-compliance` verdict, `reviewer-flame` review.
+- **AT-2 Execute with pre-approval (human gate before)** — agent выполняет action только **после** явного approval человека в чате. Примеры: edit `code/sim_v2/**`, `config/transitions/**`, `invariants.json`, `make sync-domain-graph`, удаление любого объекта проекта, production/corporate BI apply, git force push, master branch swap.
+- **AT-3 Execute with post-review (human review after)** — agent выполняет action, человек/orchestrator ревьюит post-fact с возможностью rollback. Примеры: subagent dispatch с явным prompt, low-medium-risk docs/rules edits, BI personal sandbox изменения, KG handoff/close операции.
+- **AT-4 Fully autonomous (audit-only)** — agent выполняет без gate, audit-log post-fact для review. В текущем проекте **не используется** (политика проекта: всё mutating должно быть как минимум AT-3).
+
+**Mapping risk-tier ↔ autonomy tier:**
+
+- `low` → AT-3 (post-review через audit logs + changelog)
+- `medium` → AT-3 при scope-match, AT-2 при доменно-чувствительных изменениях
+- `high` → AT-2 (всегда human gate before; явные approval phrases в чате)
+
+**Enforcement points** (где autonomy tier проверяется):
+
+- `pre_gate_guard.py` — блокирует dispatch без явного `workflow_id` и approval-context для AT-2 действий
+- `ssot_approval_guard.py` — блокирует AT-2 actions в `config/transitions/**` и `make sync-domain-graph` без human approval
+- `orchestrator_guard.py` — блокирует orchestrator self-coding (path вне allowlist)
+- `pre_close_guard.py` — проверяет наличие orchestrator handoff + traceability перед `--close-workflow`
+
+Подробности по агентам: [`docs/governance/agent_risk_classification.md`](docs/governance/agent_risk_classification.md). Vendor-зависимости и continuity plan: [`docs/governance/suppliers.md`](docs/governance/suppliers.md).
+
 ### Архитектура
 | Файл | Описание |
 |------|----------|
