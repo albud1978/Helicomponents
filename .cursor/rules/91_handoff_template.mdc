@@ -9,45 +9,66 @@ alwaysApply: true
 
 Все агенты возвращают результат в одном из двух форматов. Выбор формата определяется `RiskTier`.
 
+## Enums (строгие значения)
+
+Для совместимости и token economy ряд полей принимает **только** значения из списка:
+
+- **RiskTier**: `low` | `medium` | `high`
+- **HumanGateRequired**: `yes` | `no` | `conditional`
+- **GraphUpdate**: `yes` | `no` (про Domain Graph)
+- **NextOwner**: `orchestrator` | `coder-general` | `coder-flame` | `reviewer-flame` | `validator-judge` | `governance-compliance` | `docs-curator` | `research-graph-analyst` | `bi-semantic-analyst` | `capsule-builder` | `human`
+- **ComplianceChecklist.decision**: `allow` | `allow_with_notes` | `reject`
+- **ComplianceChecklist.required_gates**: `pass` | `partial` | `fail`
+
+Любое значение вне enum — невалидный handoff. Произвольные строки разрешены **только** в полях текста (Changes, EvidencePack, Risks и т.п.).
+
 ## Full Handoff (обязателен для `medium` и `high` risk)
 
-- **UserGoal**: дословная цитата запроса пользователя.
-- **TraceID**: идентификатор трассы (`wf:<workflow_id>:<UTC>`).
-- **PlanStepID**: шаг плана (`P1`, `R2`, `V1` и т.п.).
-- **RiskTier**: `low|medium|high`.
-- **RiskReasons**: 1–3 причины назначения риска.
-- **RiskOwner**: кто назначил риск (`orchestrator`).
+- **UserGoal**: дословная цитата запроса пользователя. Поле `goal` отдельно НЕ пишется, если оно равно `UserGoal` (Tier-S S1 dedup).
+- **TraceID**: `wf:<workflow_id>:<UTC>`.
+- **PlanStepID**: `P1`, `R2`, `V1` и т.п.
+- **RiskTier**: enum (см. выше).
+- **RiskReasons**: 1–3 причины (если risk = `low`, поле опционально).
+- **RiskOwner**: `orchestrator` (или другой агент, назначивший).
 - **RiskValidatedBy**: `governance-compliance` или `N/A` для low-risk.
-- **HumanGateRequired**: `yes|no|conditional` + краткая причина.
-- **SuccessCriteria**: verifiable критерий успеха. Формат: `SQL: ...` / `invariant: INV-N` / `script: path` / `numeric: A == B` / `manual-check: ...` (последнее — только для low-risk). Пустое значение или «make it work» — невалидный handoff для `medium/high-risk`.
-- **PlanCard**: краткая карточка плана.
-- **Changes**: что сделано.
-- **EvidencePack**: что проверено и откуда (файлы/SQL/логи) + структурированные доказательства; `Facts` сюда слит, отдельным полем не дублируется.
-- **Assumptions**: непроверенное с `Risks if false: ...`.
-- **ComplianceChecklist**: структурированный чек-лист. Для governance-verdict — поля вида `policy_status=...; scope_match=...; traceability_status=...; human_gate_status=...; decision=...`.
-- **ApprovalGate**: `N/A` или `gate_id + status + source`.
-- **OpenQuestions**: что осталось неясным.
-- **NextOwner**: кто следующий.
-- **GraphUpdate**: относится только к Domain Graph (`yes|no` + причина).
-- **Risks**: 1–3 пункта.
-- **DriftCheck**: только у orchestrator.
-- **ProcessInsights**: только у orchestrator.
-- **Usage** *(optional)*: одна строка вида `model=<slug> est_tokens=~<N> source=manual|char_estimate|unknown`. Lightweight token-счётчик для аналитики выбора модели; missing — не блокер.
+- **HumanGateRequired**: enum + краткая причина.
+- **SuccessCriteria**: verifiable критерий. Формат: `SQL: ...` / `invariant: INV-N` / `script: path` / `numeric: A == B` / `manual-check: ...` (последнее — только для low-risk). Пустое значение или «make it work» — невалидный handoff для `medium/high-risk`.
+- **PlanCard**: краткая карточка плана (1-3 строки; не дублировать `Changes` и lifecycle, видимые из KG).
+- **Changes**: что сделано (список файлов и сути правок).
+- **EvidencePack**: что проверено + structured evidence (smoke output, файлы, SQL, логи). `Facts` сюда слит, отдельным полем не дублируется.
+- **Assumptions**: непроверенное с `Risks if false: ...` (опционально, если есть).
+- **ComplianceChecklist** (compact, 5 canonical полей, S3):
+  - `decision=` enum (`allow` | `allow_with_notes` | `reject`)
+  - `required_gates=` enum (`pass` | `partial` | `fail`) — сводный статус всех hook/policy gates (pre_gate, pre_close, ssot, caps, no-nested, no-coding и т.п.)
+  - `exceptions=` список названий gates с проблемами, либо `none`
+  - `evidence_refs=` ссылки на файлы/команды/handoff_id, разделённые `;`
+  - `approval_ref=` `ctx_<id>` или `N/A`
+  - Расширенный verbose чек-лист (`policy_status=`, `scope_match=`, `traceability_status=`, etc.) **запрещён в новых handoffs** — детализация уезжает в `EvidencePack` если действительно нужна.
+- **ApprovalGate** (S4): `approval_ref=ctx_<id>` или `N/A`. Полные данные approval (source, status, timestamp) хранятся в KG context, **в handoff не дублируются**.
+- **OpenQuestions**: что осталось неясным (опционально).
+- **NextOwner**: enum (см. выше).
+- **GraphUpdate**: enum (`yes` | `no`) + причина в одну строку, если `yes`.
+- **Risks**: 1–3 пункта (опционально для low-risk).
+- **DriftCheck**: только у orchestrator (1 строка: `UserGoal ↔ Changes scope match: yes/no + комментарий`).
+- **ProcessInsights**: только у orchestrator (опционально).
+- **Usage** *(optional)*: одна строка вида `model=<slug> est_tokens=~<N> source=manual|char_estimate|unknown`. Lightweight token-счётчик; missing — не блокер.
 
 > NB: `Agent KG logging` (что именно записано в KG) как поле удалён — фактические записи восстанавливаются из `config/agent_kg.json`; дублировать их в handoff избыточно.
 
-## Handoff-lite (разрешён только для `low-risk` housekeeping)
+## Handoff-lite (**обязателен** для `low-risk` housekeeping, S5)
 
-Для локальных обратимых правок в `.cursor/**`, docs, BI metadata без влияния на доменную модель допускается компактный формат:
+Для локальных обратимых правок в `.cursor/**`, `docs/**`, BI metadata без влияния на доменную модель **обязателен** компактный формат:
 
 - **UserGoal**: дословная цитата.
 - **Changes**: что сделано (список файлов и сути правок).
 - **Facts**: что проверено и источники.
 - **RiskTier**: `low`.
-- **NextOwner**: кто следующий (или `human` для финального handoff).
+- **NextOwner**: enum.
 - **Usage** *(optional)*: `model=<slug> est_tokens=~<N> source=manual|char_estimate|unknown`.
 
-Остальные поля допускается опускать полностью (без `N/A`-шума).
+Остальные поля **запрещено** включать как `N/A`-плейсхолдеры — пропускай полностью.
+
+**Hard rule (S5)**: для low-risk Full Handoff с `N/A`-полями governance-compliance верифицирует как **reject** — обязательно использовать Handoff-lite. Это устраняет boilerplate noise и принуждает к корректной классификации risk.
 
 Если в ходе работы risk-tier повысился — перейти на Full Handoff и зафиксировать причину повышения в `RiskReasons`.
 
@@ -56,6 +77,11 @@ alwaysApply: true
 - **anti-drift**: если `UserGoal` и `Changes` расходятся по scope — остановка и вопрос человеку.
 - **трассировка**: handoff без `TraceID` и `PlanStepID` невалиден (для low-risk `TraceID` заполняется через `--write-handoff`, в текстовом ответе может быть опущен при Handoff-lite).
 - **validation traceability**: validation-handoff должен явно указывать, какой dispatch `SuccessCriteria` проверен и каким evidence подтверждён PASS/FAIL. `validator-judge` не заменяет dispatch-критерий произвольной проверкой.
+- **enum дисциплина**: значения вне enum (см. секцию выше) = невалидный handoff (governance reject).
+- **goal/user_goal dedup (S1)**: если `goal` field в KG равен `user_goal` — заполняется только один. Не дублировать.
+- **approval_ref vs inline (S4)**: для medium/high risk обязательно `approval_ref=ctx_<id>` либо явный `N/A` с обоснованием. Inline approval data (source/status/timestamp) — запрещено.
+- **compliance compact (S3)**: 5-field checklist обязателен; расширенный verbose checklist отклоняется governance.
+- **low-risk Handoff-lite (S5)**: для `low-risk` — только Handoff-lite. Full Handoff с N/A-полями = governance reject.
 - **артефакты**:
-  - `medium/high-risk`: обязательны `PlanCard`, `EvidencePack`, `ComplianceChecklist`, `SuccessCriteria` (verifiable)
-  - `low-risk`: допускается `N/A (low-risk)` в Full Handoff, либо Handoff-lite; `SuccessCriteria` — `manual-check: ...`
+  - `medium/high-risk`: обязательны `PlanCard`, `EvidencePack`, `ComplianceChecklist` (5-field), `SuccessCriteria` (verifiable)
+  - `low-risk`: только Handoff-lite (5 полей + optional Usage); `SuccessCriteria` — `manual-check: ...`

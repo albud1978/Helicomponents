@@ -91,8 +91,13 @@ alwaysApply: true
 - Оркестратор анализирует handoff'ы и решает следующий шаг.
 - Краткие следы reviewer/validator фиксируются в `docs/changelog.md` при реальном doc-impact.
 - `governance-compliance` и `docs-curator` вызываются **условно**, а не автоматически для каждого workflow:
-  - `governance-compliance` обязателен для `medium/high-risk` задач и всех policy-sensitive переходов.
-  - `docs-curator` обязателен для `high-risk` задач и задач с реальным doc/process/handoff impact.
+  - `governance-compliance` обязателен для `medium/high-risk` задач и всех policy-sensitive переходов. **Single pass per workflow** — повторный verdict в том же workflow заменяется компактным `governance_update` context, не отдельным handoff.
+  - **`docs-curator` обязателен ТОЛЬКО** (Tier-S S6):
+    - `high-risk` workflows;
+    - release boundary (commit/push влияющий на externals);
+    - external handoff package (admin/sandbox deploy);
+    - реальный multi-section docs/changelog impact (несколько разделов или новые файлы в `docs/`).
+  - Для `medium-risk` процессных/tooling workflows `docs-curator` **НЕ mandatory** — orchestrator или coder сам пишет короткий changelog snippet (1 секция в `docs/changelog.md`) либо включает changelog-ready block в финальный orchestrator handoff. Это устраняет ceremonial docs-curator handoffs.
   - `capsule-builder` опционален и используется только когда доменный контекст реально изменился.
 
 ## Решения по коммиту
@@ -122,8 +127,8 @@ alwaysApply: true
 | 3 | Исследование / проверка | optional | conditional (audit/verify scope) | required (`research-graph-analyst` или domain expert) |
 | 4 | Реализация | orchestrator allowlist (малый патч) или `coder-general` | `coder-flame` / `coder-general`; orchestrator allowlist малый патч с approval | **mandatory subagent**; orchestrator allowlist только малый патч и только после approval |
 | 5 | Ревью / Валидация | optional (handoff-lite) | required (`reviewer-flame` для FLAME medium; orchestrator independent verify + governance для остальных) | **required** (`reviewer-flame` для FLAME; `validator-judge` для simulation results) |
-| 6 | Governance-compliance | optional | **required** | **required** |
-| 7 | Docs (`docs-curator`) | optional | conditional (если doc/process impact) | **required** |
+| 6 | Governance-compliance | optional | **required (single pass)** | **required (single pass)** |
+| 7 | Docs (`docs-curator`) | optional | optional (default no; required только при release boundary / external handoff package / multi-section docs impact) | **required** |
 | 8 | Capsule (`capsule-builder`) | skip | conditional (если domain context изменился) | conditional (если domain context изменился) |
 | 9 | Pre-close | required (auto) | required (auto) | required (auto) |
 | 10 | Handoff / Close | required (Handoff-lite OK) | required (**Full Handoff**) | required (**Full Handoff** + `ApprovalGate` filled) |
@@ -183,13 +188,14 @@ alwaysApply: true
 Полный и lite форматы вынесены в [`.cursor/rules/91_handoff_template.mdc`](91_handoff_template.mdc) — единый источник истины для формата ответа всех агентов.
 
 Кратко:
-- **Full Handoff** — обязателен для `medium` и `high` risk (все поля: `UserGoal`, `TraceID`, `PlanStepID`, `RiskTier`, `RiskReasons`, `RiskOwner`, `RiskValidatedBy`, `HumanGateRequired`, `SuccessCriteria`, `PlanCard`, `Changes`, `Facts`, `EvidencePack`, `Assumptions`, `ComplianceChecklist`, `ApprovalGate`, `OpenQuestions`, `NextOwner`, `GraphUpdate`, `Agent KG logging`, `Risks`, `DriftCheck` и `ProcessInsights` — только у orchestrator).
-- **Handoff-lite** — разрешён **только для `low-risk` housekeeping** (5 полей: `UserGoal`, `Changes`, `Facts`, `RiskTier=low`, `NextOwner`). Остальные поля допускается опускать полностью, без `N/A`-шума. При повышении risk-tier перейти на Full Handoff и зафиксировать причину.
+- **Full Handoff** — обязателен для `medium` и `high` risk. Поля: `UserGoal`, `TraceID`, `PlanStepID`, `RiskTier`, `RiskReasons`, `RiskOwner`, `RiskValidatedBy`, `HumanGateRequired`, `SuccessCriteria`, `PlanCard`, `Changes`, `EvidencePack` (`Facts` слит сюда), `Assumptions`, `ComplianceChecklist` (5-field compact, S3), `ApprovalGate` (S4 = `approval_ref=ctx_<id>`), `OpenQuestions`, `NextOwner` (enum), `GraphUpdate` (enum), `Risks`, `DriftCheck` и `ProcessInsights` — только у orchestrator. Поле `goal` не дублирует `UserGoal` (S1).
+- **Handoff-lite** — **обязателен** для `low-risk` housekeeping (S5 hard rule). 5 полей: `UserGoal`, `Changes`, `Facts`, `RiskTier=low`, `NextOwner` (enum) + optional `Usage`. Остальные поля **запрещено** включать как N/A-плейсхолдеры. Low-risk Full Handoff с N/A полями = governance reject. При повышении risk-tier перейти на Full Handoff и зафиксировать причину.
 
 **Правила валидации** (полный список — в `91_handoff_template.mdc`):
 - anti-drift: `UserGoal` ↔ `Changes` по scope;
 - трассировка: handoff без `TraceID`/`PlanStepID` невалиден (для Handoff-lite `TraceID` пишется через `--write-handoff`, в тексте может опускаться);
-- артефакты: для `medium/high-risk` обязательны `PlanCard`, `EvidencePack`, `ComplianceChecklist`, `SuccessCriteria` (verifiable).
+- enum дисциплина: `HumanGateRequired`, `GraphUpdate`, `NextOwner`, `RiskTier`, `ComplianceChecklist.{decision,required_gates}` — только из enum;
+- артефакты: для `medium/high-risk` обязательны `PlanCard`, `EvidencePack`, `ComplianceChecklist` (5-field), `SuccessCriteria` (verifiable).
 
 ## Agent KG и графы
 ### Agent KG
