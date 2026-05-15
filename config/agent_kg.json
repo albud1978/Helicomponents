@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-05-15T13:21:33Z",
+    "updated_at": "2026-05-15T14:40:06Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -358,6 +358,26 @@
       },
       "created_at": "2026-05-15T13:03:02Z",
       "updated_at": "2026-05-15T13:21:33Z"
+    },
+    {
+      "workflow_id": "W_optim_contest_2026_05_15",
+      "goal": "Конкурс 2 моделей (Claude Opus 4.7 thinking-high vs GPT-5.5-high) на best optimization multi-agent framework. Особый упор: лишние циклы + token economy + anti-bureaucracy. Без потери качества audit trail / risk gates. Учитывая требования Google/Deloitte/Anthropic best practices, но БЕЗ certification overhead. Read-only research, deliverable = optimization plan для Алексея approval. Implementation — отдельным workflow.",
+      "phase": "research",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 15,
+        "max_tokens": 200000,
+        "max_cost": null
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 50000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-15T14:40:06Z"
+      },
+      "created_at": "2026-05-15T14:17:59Z",
+      "updated_at": "2026-05-15T14:40:06Z"
     }
   ],
   "handoffs": [
@@ -3402,6 +3422,43 @@
         "est_tokens": 25000,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_W_optim_contest_2026_05_15_orchestrator_7eb90875",
+      "workflow_id": "W_optim_contest_2026_05_15",
+      "agent": "orchestrator",
+      "user_goal": "Конкурс 2 моделей на оптимизацию framework: лишние циклы, токены, anti-bureaucracy, Google/Deloitte alignment без certification overhead",
+      "goal": "Конкурс 2 моделей на оптимизацию framework: лишние циклы, токены, anti-bureaucracy, Google/Deloitte alignment без certification overhead",
+      "changes": "2 parallel independent audits (Claude Opus 4.7 thinking-high + GPT-5.5-high) read 36.7K chars rules + 5+ handoff samples + hooks/governance docs. Synthesis: consolidated plan Tier-S (6 surgical fixes ~20-25K tokens/wf saved) + Tier-M (5 rule updates ~30-40% always-context reduction). Skip architectural (event-log/full schema) per maturity NOT certification. MUST-STAY list confirmed (hash chain, F2, ssot guard, no-coding, no-nested, caps, traceability, privacy). Алексей confirm split batches: Tier-S first, validation, затем Tier-M.",
+      "facts": "Both auditors agreed independently on 7 key findings (goal/user_goal dup, 13-field checklist bloat, docs-curator over-trigger, double governance Tier-3, rules 25-30% duplication, Full Handoff for low-risk overuse, MUST-STAY guard rails). Disagreement on architectural rework resolved: skip event-log, adopt risk-adaptive profiles as Medium not Architectural. Expected impact: 1.5-2M tokens/year saved at 50 workflows scale.",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_optim_contest_2026_05_15:2026-05-15",
+      "plan_step_id": "R2.synthesize.close",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "нет",
+      "created_at": "2026-05-15T14:40:06Z",
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high + gpt-5.5-high (parallel)",
+        "est_tokens": 50000,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -4079,6 +4136,24 @@
       "agent": "orchestrator",
       "created_at": "2026-05-15T13:21:33Z",
       "updated_at": "2026-05-15T13:21:33Z"
+    },
+    {
+      "context_id": "ctx_W_optim_contest_2026_05_15_approval_request_2d74628b",
+      "workflow_id": "W_optim_contest_2026_05_15",
+      "context_type": "approval_request",
+      "content": "Approved Alexey 15-05-2026 19:16 ('теперь давай проведем конкурс среди двух моделей на лучшую оптимизацию без потери качества, оосбый упор на личшние циклы и оптимизацию токенов'). Risk=low (read-only research, 2 parallel explore subagents, no code/SSoT/BI changes). Deliverable: synthesis report + AskQuestion для optimization plan approval.",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T14:17:59Z",
+      "updated_at": "2026-05-15T14:17:59Z"
+    },
+    {
+      "context_id": "ctx_W_optim_contest_2026_05_15_closure_65438420",
+      "workflow_id": "W_optim_contest_2026_05_15",
+      "context_type": "closure",
+      "content": "Research deliverable: consolidated optimization plan synthesized from 2 independent model audits. Алексей approved split batches. Implementation в отдельных workflows W_optim_tier_s_2026_05_15 (low-risk) и W_optim_tier_m_2026_05_15 (medium-risk later).",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T14:40:06Z",
+      "updated_at": "2026-05-15T14:40:06Z"
     }
   ],
   "meta": {
