@@ -31,6 +31,7 @@ DEFAULT_KG_PATH = os.path.join(
 DEFAULT_MAX_STEPS = 50
 DEFAULT_MAX_TOKENS = 500000
 RISK_TIER_CHOICES = ("low", "medium", "high")
+PROFILE_CHOICES = ("low", "medium-fast", "medium-policy", "high-strict")
 HUMAN_GATE_CHOICES = ("yes", "no", "conditional")
 GRAPH_UPDATE_CHOICES = ("yes", "no")
 NEXT_OWNER_CHOICES = (
@@ -128,7 +129,7 @@ def _default_usage() -> Dict[str, Any]:
 
 
 def _init_caps(args: argparse.Namespace) -> Dict[str, Any]:
-    return {
+    caps = {
         "max_steps": args.max_steps
         if args.max_steps is not None
         else DEFAULT_MAX_STEPS,
@@ -137,6 +138,9 @@ def _init_caps(args: argparse.Namespace) -> Dict[str, Any]:
         else DEFAULT_MAX_TOKENS,
         "max_cost": args.max_cost,
     }
+    if args.profile is not None:
+        caps["profile"] = args.profile
+    return caps
 
 
 def _cap_args_present(args: argparse.Namespace) -> bool:
@@ -154,6 +158,8 @@ def _apply_cap_args(caps: Dict[str, Any], args: argparse.Namespace) -> None:
         caps["max_tokens"] = args.max_tokens
     if args.max_cost is not None:
         caps["max_cost"] = args.max_cost
+    if getattr(args, "profile", None) is not None:
+        caps["profile"] = args.profile
 
 
 def _pct(used: float, cap: float) -> Optional[float]:
@@ -298,8 +304,10 @@ def init_workflow(args: argparse.Namespace) -> None:
         existing["phase"] = args.phase or existing.get("phase", "analysis")
         existing["owner"] = args.owner or existing.get("owner", "orchestrator")
         existing["status"] = "active"
-        if isinstance(existing.get("caps"), dict) and _cap_args_present(args):
+        if isinstance(existing.get("caps"), dict):
             _apply_cap_args(existing["caps"], args)
+        elif _cap_args_present(args) or args.profile is not None:
+            existing["caps"] = _init_caps(args)
         existing["updated_at"] = _now()
         print(f"Workflow updated: {args.workflow_id}")
     else:
@@ -364,7 +372,11 @@ def get_caps(args: argparse.Namespace) -> None:
         print(f"Workflow не найден: {args.workflow_id}", file=sys.stderr)
         raise SystemExit(1)
 
-    print(json.dumps(_caps_report(workflow), ensure_ascii=False, indent=2))
+    report = _caps_report(workflow)
+    caps = report.get("caps")
+    if isinstance(caps, dict) and caps.get("profile"):
+        report["profile_label"] = f"profile={caps['profile']}"
+    print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 def write_handoff(args: argparse.Namespace) -> None:
@@ -398,11 +410,19 @@ def write_handoff(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
     handoff_id = f"handoff_{args.workflow_id}_{args.agent}_{uuid.uuid4().hex[:8]}"
-    evidence_arg = args.evidence
-    evidence = evidence_arg if evidence_arg is not None else "не запускалось"
-    facts = args.facts or ""
-    if not facts and evidence_arg:
-        facts = f"legacy evidence: {evidence_arg}"
+    evidence_pack_arg = (args.evidence_pack or "").strip()
+    facts_arg = (args.facts or "").strip()
+    facts = ""
+    if facts_arg and evidence_pack_arg:
+        evidence_pack = f"Facts: {facts_arg}\nEvidence: {evidence_pack_arg}"
+        evidence = evidence_pack
+    elif evidence_pack_arg:
+        evidence_pack = evidence_pack_arg
+        evidence = evidence_pack_arg
+    else:
+        evidence_pack = ""
+        evidence = "не запускалось"
+        facts = facts_arg
     if risk_tier_provided:
         risk_tier = risk_tier_arg.lower()
         allowed_risk_tiers = {"low", "medium", "high"}
@@ -432,14 +452,13 @@ def write_handoff(args: argparse.Namespace) -> None:
         else:
             human_gate_required = "conditional"
     plan_card = (args.plan_card or "").strip()
-    evidence_pack = (args.evidence_pack or "").strip()
     compliance_checklist = (args.compliance_checklist or "").strip()
     if risk_tier in {"medium", "high"}:
         missing = []
         if not plan_card:
             missing.append("--plan-card")
         if not evidence_pack:
-            missing.append("--evidence-pack")
+            missing.append("--evidence/--evidence-pack")
         if not compliance_checklist:
             missing.append("--compliance-checklist")
         if missing:
@@ -819,12 +838,28 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Caps: максимум cost budget workflow",
     )
+    parser.add_argument(
+        "--profile",
+        type=str,
+        choices=PROFILE_CHOICES,
+        default=None,
+        help=(
+            "Per Tier-M M2 risk-adaptive profile, см. "
+            ".cursor/rules/90_multiagent_workflow.mdc"
+        ),
+    )
     parser.add_argument("--user-goal", type=str, help="UserGoal для handoff (новый формат)")
     parser.add_argument("--phase", type=str, help="Фаза (analysis/research/implementation/review/validation)")
     parser.add_argument("--owner", type=str, help="Текущий владелец")
     parser.add_argument("--agent", type=str, help="Агент (для handoff/context)")
     parser.add_argument("--changes", type=str, help="Описание изменений (handoff)")
-    parser.add_argument("--evidence", type=str, help="Доказательства (handoff)")
+    parser.add_argument(
+        "--evidence",
+        "--evidence-pack",
+        dest="evidence_pack",
+        type=str,
+        help="EvidencePack для handoff (--evidence recommended; --evidence-pack legacy)",
+    )
     parser.add_argument("--facts", type=str, help="Факты/проверки (handoff)")
     parser.add_argument("--assumptions", type=str, help="Предположения (handoff)")
     parser.add_argument("--drift-check", type=str, help="Drift check (handoff)")
@@ -856,7 +891,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Human gate required (yes|no|conditional)",
     )
     parser.add_argument("--plan-card", type=str, help="Plan card (handoff)")
-    parser.add_argument("--evidence-pack", type=str, help="Evidence pack (handoff)")
     parser.add_argument(
         "--success-criteria", type=str, help="Success criteria (handoff)"
     )
