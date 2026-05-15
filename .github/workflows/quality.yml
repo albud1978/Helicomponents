@@ -1,0 +1,85 @@
+name: Quality checks
+
+"on":
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: JSON validity check
+        run: |
+          for f in config/transitions/*.json config/agent_kg.json config/capsules_manifest.json; do
+            python3 -m json.tool < "$f" > /dev/null && echo "OK: $f" || (echo "FAIL: $f" && exit 1)
+          done
+
+      - name: Python syntax check
+        run: |
+          python3 -m compileall -q code tools .cursor/hooks
+          echo "All Python files compile"
+
+      - name: Invariant/TEMP drift check
+        run: |
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import re
+          import sys
+
+          inv = json.load(open("config/transitions/invariants.json", encoding="utf-8"))
+          inv_ids = {item["id"] for item in inv.get("global_invariants", [])}
+          temp_ids = {item["id"] for item in inv.get("temporal_invariants", [])}
+          gpu_ids = {item["id"] for item in inv.get("gpu_constraints", [])}
+          print(f"SSoT: {len(inv_ids)} INV, {len(temp_ids)} TEMP, {len(gpu_ids)} GPU")
+
+          inv_numbers = [int(re.search(r"INV-(\d+)", item).group(1)) for item in inv_ids]
+          expected_max = max(inv_numbers)
+          paths = list(pathlib.Path("docs").glob("**/*.md"))
+          paths += list(pathlib.Path(".cursor/rules").glob("*.mdc"))
+          paths.append(pathlib.Path("README.md"))
+
+          drift = []
+          patterns = [
+              re.compile(r"INV-1\.\.(\d+)"),
+              re.compile(r"INV-1\.\.INV-(\d+)"),
+          ]
+          for path in paths:
+              if not path.exists():
+                  continue
+              text = path.read_text(encoding="utf-8")
+              for pattern in patterns:
+                  for match in pattern.finditer(text):
+                      if int(match.group(1)) < expected_max:
+                          drift.append(f"{path}: {match.group(0)} expected INV-1..{expected_max}")
+                          break
+
+          if drift:
+              print("Drift detected:")
+              for item in drift:
+                  print("  ", item)
+              sys.exit(1)
+
+          print("No drift")
+          PY
+
+      - name: Hygiene check
+        run: python3 tools/hygiene_check.py --summary-only || echo "Hygiene findings (non-blocking)"
+
+      - name: Audit verify (if logs exist)
+        run: |
+          for log in .cursor/hooks/code_edit_audit.log .cursor/hooks/user_comm_audit.log; do
+            if [ -f "$log" ]; then
+              python3 tools/audit_verify.py --log-file "$log" || true
+            fi
+          done

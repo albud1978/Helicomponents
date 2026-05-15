@@ -1,0 +1,34 @@
+services:
+  neo4j:
+    image: neo4j:5.20-community
+    container_name: neo4j-local
+    ports:
+      - "7474:7474"  # HTTP / Browser UI
+      - "7687:7687"  # Bolt protocol
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+      - neo4j-import:/import
+    environment:
+      - DOMAIN_NEO4J_USER=${DOMAIN_NEO4J_USER:-neo4j}
+      - DOMAIN_NEO4J_PASSWORD=${DOMAIN_NEO4J_PASSWORD:-changeme-on-first-login}
+      - NEO4J_AUTH=${DOMAIN_NEO4J_USER:-neo4j}/${DOMAIN_NEO4J_PASSWORD:-changeme-on-first-login}
+      - NEO4J_server_memory_pagecache_size=256M
+      - NEO4J_server_memory_heap_initial__size=512M
+      - NEO4J_server_memory_heap_max__size=1G
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "cypher-shell -u \"$${DOMAIN_NEO4J_USER}\" -p \"$${DOMAIN_NEO4J_PASSWORD}\" -a bolt://localhost:7687 'RETURN 1' || exit 1"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  neo4j-data:
+  neo4j-logs:
+  neo4j-import:
