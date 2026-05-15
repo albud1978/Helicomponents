@@ -1,5 +1,57 @@
 # Changelog
 
+## [15-05-2026] - Tier-M Rule Architecture Restructure (post-Tier-S)
+
+### Принцип
+- Tier-M = rule architecture restructure после Tier-S surgical fixes. Это medium-risk batch (изменения структуры rules + risk-adaptive profiles + code extensions; blast radius на ВСЕ future workflows).
+- **Validation gate skipped**: Tier-S final handoff обещал "2-3 medium workflows validation gate" перед Tier-M запуском. Алексей explicit override фразой "запускай tier M" 22:18. Зафиксировано в ProcessInsights orchestrator final handoff и в этом entry (per governance verdict `329a729f` note).
+- **Workflow trace**: `W_optim_tier_m_2026_05_15`.
+
+### Добавлено / изменено
+
+- **M1 — Split `.cursor/rules/90_multiagent_workflow.mdc`**: с 23.4K chars → core **7993 bytes (~130 lines)** + новый **`docs/governance/workflow_appendices.md`** **14042 bytes / 149 lines**. Total 22035 (~94% original, в пределах ±10% target). Core: canonical workflow + risk-adaptive profiles + 10-step matrix + Enforcement + cross-link. Appendices: detail про C2/F2/D1/D2/C11/S5/S1+S2/C12/C9 enhancements + Tier-4 lite maturity tools + Phase recap + Daily hygiene check + pre_gate/pre_close detail + audit fields detail.
+- **M2 — Risk-Adaptive Workflow Profiles** в core: 4-level taxonomy (`low` / `medium-fast` / `medium-policy` / `high-strict`) с явной mapping table (risk-tier → profile → process intensity). Default mapping: `low→low, medium→medium-policy, high→high-strict`. Override `medium → medium-fast` требует обоснование в `RiskReasons`. Хранится в `workflows[].caps.profile` (free-form string).
+- **M3 — Single governance pass rule** в core: один `governance-compliance` handoff per workflow, обновления через `governance_update` context (см. `python3 code/utils/agent_kg.py --write-context --context-type governance_update`).
+- **M4 — `code/utils/agent_kg.py`** extensions:
+  - `--evidence` arg (recommended alias к `--evidence-pack` legacy)
+  - `--facts` + `--evidence` merge → объединяет в `evidence_pack` field с prefix "Facts:" / "Evidence:" (S3 spirit "Facts слит в EvidencePack")
+  - `--profile` arg для `--init-workflow` (enum choices: `low`, `medium-fast`, `medium-policy`, `high-strict`; invalid → argparse exit 2)
+  - `--get-caps` output теперь включает `profile=<value>` если задан
+- **M5 — `tools/token_analytics.py --show-issues`** (NEW mode): 6 detection patterns flag by reason:
+  - `governance_verbose` (agent=governance-compliance, est_tokens > 1500 — pre-S3 hint)
+  - `docs_curator_over_trigger` (agent=docs-curator в medium-risk workflows — pre-S6)
+  - `handoff_bloat` (est_tokens > 2500)
+  - `goal_duplicate_legacy` (handoff.goal == handoff.user_goal — pre-S1)
+  - `verbose_checklist_pre_s3` (compliance_checklist string contains `policy_status=` / `scope_match=` / `traceability_status=` — pre-S3 verbose format)
+  - `low_risk_with_na_boilerplate_pre_s5` (risk_tier=low + N/A в plan_card/evidence_pack/compliance_checklist/approval_gate — pre-S5)
+  - CLI flags: `--summary-only`, `--exit-on-issues` (exit 1 при findings — CI-friendly), `--issue-types <list>` filter, `--workflow-id <id>` filter.
+
+### Smoke (9/9 PASS)
+- M1: core=7993B, appendices=14042B, total=22035B (94% original) — все 8 sanity keywords в core
+- M2: 4 mentions risk-profile keywords в core
+- M3: "Single governance pass" section present
+- M4.1: `--evidence` alias works → `handoff_edd22813`; `--facts + --evidence` merge works → `handoff_06017aa4`
+- M4.2: `--profile medium-fast` → caps `{profile: medium-fast}`; invalid `bananas` → argparse exit 2
+- M5: 233 legacy findings detected — baseline armed (89 goal_dup, 65 verbose_checklist, 43 handoff_bloat, 28 low-risk N/A, 7 gov_verbose, 1 docs_curator)
+- M5 filters: `--issue-types verbose_checklist_pre_s3 --summary-only` → only 65; `--exit-on-issues` → exit 1
+
+### Validation baseline armed
+M5 detected **233 legacy findings** в KG — это baseline до Tier-S+M optimization. Future medium-risk workflows должны показывать **редкие новые findings** этих patterns (только если subagent ignored правила). Можно периодически запускать `python3 tools/token_analytics.py --show-issues --summary-only` для regression check.
+
+### Governance
+- Verdict: `allow_with_notes` (handoff `329a729f` — **first compliant medium-risk governance handoff в новом Tier-S S3 5-field format**, meta-check самих новых правил)
+- Note 1 (S5 exception): 4 smoke fixtures (`edd22813`, `06017aa4`, `ac8befe1`, `30c35720`) — M4 test fixtures для --evidence/merge smoke. Помечены как test artifacts через `governance_update` context, не реиссью.
+- Note 2 (validation gate): explicit Alexey override "запускай tier M" 22:18 — зафиксировано в final orchestrator handoff и этом entry.
+- Single governance pass соблюдён (M3 живая демонстрация).
+
+### Caps utilization
+- Workflow `W_optim_tier_m_2026_05_15`: ~20% steps / ~13% tokens — deep in budget.
+
+### Что не делалось (deferred per maturity NOT certification)
+- Event-log core + generated reports (architectural rework, too aggressive для current scale)
+- Full typed schema migration (defer до >100 workflows/year)
+- pre_close_guard duplicate governance handoff warning (M3 enforcement upgrade — future, не сейчас; правило уже есть, hook enforcement добавим если потребуется)
+
 ## [15-05-2026] - Tier-S Surgical Optimization (anti-bureaucracy batch)
 
 ### Принцип

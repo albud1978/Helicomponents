@@ -10,12 +10,20 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 KG_PATH = REPO_ROOT / "config" / "agent_kg.json"
+ISSUE_TYPES = (
+    "governance_verbose",
+    "docs_curator_over_trigger",
+    "handoff_bloat",
+    "goal_duplicate_legacy",
+    "verbose_checklist_pre_s3",
+    "low_risk_with_na_boilerplate_pre_s5",
+)
 
 
 def _load_kg(path: Path) -> Dict[str, Any]:
@@ -73,6 +81,189 @@ def _usage_tokens(handoff: Dict[str, Any]) -> int:
         return 0
     tokens = usage.get("est_tokens") or 0
     return tokens if isinstance(tokens, int) else 0
+
+
+def _workflow_by_id(kg: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    workflows = kg.get("workflows", [])
+    if not isinstance(workflows, list):
+        return {}
+    return {
+        workflow.get("workflow_id"): workflow
+        for workflow in workflows
+        if isinstance(workflow, dict) and workflow.get("workflow_id")
+    }
+
+
+def _workflow_risk_tier(
+    workflow: Dict[str, Any], handoff: Dict[str, Any]
+) -> Optional[str]:
+    risk_tier = workflow.get("risk_tier")
+    if isinstance(risk_tier, str) and risk_tier:
+        return risk_tier
+    risk_tier = handoff.get("risk_tier")
+    return risk_tier if isinstance(risk_tier, str) and risk_tier else None
+
+
+def _has_standalone_na(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    for line in value.splitlines() or [value]:
+        stripped = line.strip()
+        if stripped == "N/A" or stripped.startswith("N/A ") or stripped.startswith("N/A("):
+            return True
+    return False
+
+
+def _issue(
+    issue_type: str,
+    workflow_id: str,
+    handoff_id: str,
+    message: str,
+) -> Dict[str, str]:
+    return {
+        "type": issue_type,
+        "workflow_id": workflow_id,
+        "handoff_id": handoff_id,
+        "line": message,
+    }
+
+
+def _detect_issues(
+    kg: Dict[str, Any],
+    handoffs: List[Dict[str, Any]],
+    issue_types: set[str],
+) -> List[Dict[str, str]]:
+    workflows = _workflow_by_id(kg)
+    findings: List[Dict[str, str]] = []
+
+    for handoff in handoffs:
+        if not isinstance(handoff, dict):
+            continue
+        workflow_id = str(handoff.get("workflow_id") or "unknown")
+        handoff_id = str(handoff.get("handoff_id") or "unknown")
+        agent = str(handoff.get("agent") or "unknown")
+        workflow = workflows.get(workflow_id, {})
+        risk_tier = _workflow_risk_tier(workflow, handoff)
+        est_tokens = _usage_tokens(handoff)
+
+        if (
+            "governance_verbose" in issue_types
+            and agent == "governance-compliance"
+            and est_tokens > 1500
+        ):
+            findings.append(
+                _issue(
+                    "governance_verbose",
+                    workflow_id,
+                    handoff_id,
+                    f"[governance_verbose] workflow={workflow_id} "
+                    f"handoff={handoff_id} est_tokens={est_tokens} (target <1500)",
+                )
+            )
+
+        if (
+            "docs_curator_over_trigger" in issue_types
+            and agent == "docs-curator"
+            and risk_tier == "medium"
+        ):
+            findings.append(
+                _issue(
+                    "docs_curator_over_trigger",
+                    workflow_id,
+                    handoff_id,
+                    f"[docs_curator_over_trigger] workflow={workflow_id} "
+                    f"handoff={handoff_id} risk=medium",
+                )
+            )
+
+        if "handoff_bloat" in issue_types and est_tokens > 2500:
+            findings.append(
+                _issue(
+                    "handoff_bloat",
+                    workflow_id,
+                    handoff_id,
+                    f"[handoff_bloat] workflow={workflow_id} handoff={handoff_id} "
+                    f"agent={agent} est_tokens={est_tokens} (target <2500)",
+                )
+            )
+
+        if (
+            "goal_duplicate_legacy" in issue_types
+            and "goal" in handoff
+            and handoff.get("goal") == handoff.get("user_goal")
+        ):
+            findings.append(
+                _issue(
+                    "goal_duplicate_legacy",
+                    workflow_id,
+                    handoff_id,
+                    f"[goal_duplicate_legacy] workflow={workflow_id} "
+                    f"handoff={handoff_id} (pre-S1)",
+                )
+            )
+
+        checklist = handoff.get("compliance_checklist")
+        if (
+            "verbose_checklist_pre_s3" in issue_types
+            and isinstance(checklist, str)
+            and (
+                "policy_status=" in checklist
+                or "scope_match=" in checklist
+                or "traceability_status=" in checklist
+            )
+        ):
+            findings.append(
+                _issue(
+                    "verbose_checklist_pre_s3",
+                    workflow_id,
+                    handoff_id,
+                    f"[verbose_checklist_pre_s3] workflow={workflow_id} "
+                    f"handoff={handoff_id} agent={agent}",
+                )
+            )
+
+        if "low_risk_with_na_boilerplate_pre_s5" in issue_types and risk_tier == "low":
+            fields_with_na = [
+                field
+                for field in (
+                    "plan_card",
+                    "evidence_pack",
+                    "compliance_checklist",
+                    "approval_gate",
+                )
+                if _has_standalone_na(handoff.get(field))
+            ]
+            if fields_with_na:
+                findings.append(
+                    _issue(
+                        "low_risk_with_na_boilerplate_pre_s5",
+                        workflow_id,
+                        handoff_id,
+                        f"[low_risk_with_na_boilerplate_pre_s5] workflow={workflow_id} "
+                        f"handoff={handoff_id} fields_with_na={','.join(fields_with_na)}",
+                    )
+                )
+
+    return findings
+
+
+def _parse_issue_types(raw: Optional[str]) -> set[str]:
+    if not raw:
+        return set(ISSUE_TYPES)
+    requested = {item.strip() for item in raw.split(",") if item.strip()}
+    unknown = requested - set(ISSUE_TYPES)
+    if unknown:
+        raise ValueError(f"unknown issue type(s): {', '.join(sorted(unknown))}")
+    return requested
+
+
+def _print_issue_summary(findings: List[Dict[str, str]], issue_types: set[str]) -> None:
+    counts = Counter(finding["type"] for finding in findings)
+    print(f"Total findings: {len(findings)}")
+    print("By issue type:")
+    for issue_type in ISSUE_TYPES:
+        if issue_type in issue_types:
+            print(f"  {issue_type}: {counts.get(issue_type, 0)}")
 
 
 def _pct(used: float, cap: float) -> Optional[float]:
@@ -268,11 +459,23 @@ def main() -> int:
     parser.add_argument("--workflow-summary", help="Detailed report for one workflow")
     parser.add_argument("--top", type=int, default=20, help="Top-N limit for --by-workflow")
     parser.add_argument("--export-json", action="store_true", help="Print machine-readable JSON")
+    parser.add_argument("--show-issues", action="store_true", help="Show Tier-S/Tier-M token hygiene findings")
+    parser.add_argument(
+        "--exit-on-issues",
+        action="store_true",
+        help="Return exit 1 when --show-issues finds any issue",
+    )
+    parser.add_argument(
+        "--issue-types",
+        help="Comma-separated issue types to include for --show-issues",
+    )
     args = parser.parse_args()
     if args.by_workflow and args.workflow_summary:
         parser.error("--by-workflow и --workflow-summary нельзя использовать вместе")
     if args.top < 1:
         parser.error("--top должен быть >= 1")
+    if args.exit_on_issues and not args.show_issues:
+        parser.error("--exit-on-issues требует --show-issues")
 
     try:
         kg = _load_kg(KG_PATH)
@@ -284,6 +487,25 @@ def main() -> int:
     if not isinstance(handoffs, list):
         print("KG.handoffs malformed", file=sys.stderr)
         return 2
+
+    if args.workflow_id:
+        handoffs = [h for h in handoffs if h.get("workflow_id") == args.workflow_id]
+
+    if args.show_issues:
+        try:
+            issue_types = _parse_issue_types(args.issue_types)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
+        findings = _detect_issues(kg, handoffs, issue_types)
+        if args.export_json:
+            print(json.dumps({"findings": findings}, ensure_ascii=False, indent=2))
+            return 1 if args.exit_on_issues and findings else 0
+        if not args.summary_only:
+            for finding in findings:
+                print(finding["line"])
+        _print_issue_summary(findings, issue_types)
+        return 1 if args.exit_on_issues and findings else 0
 
     if args.by_workflow:
         rows = _workflow_rows(kg, args.top)
@@ -303,9 +525,6 @@ def main() -> int:
         else:
             print(_format_workflow_summary(summary))
         return 0
-
-    if args.workflow_id:
-        handoffs = [h for h in handoffs if h.get("workflow_id") == args.workflow_id]
 
     agg = _aggregate(handoffs)
     total = agg["total_handoffs"]
