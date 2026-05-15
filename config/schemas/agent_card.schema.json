@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://helicomponents.local/schemas/agent_card.schema.json",
+  "title": "Cursor agent profile frontmatter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "model",
+    "description",
+    "agent_card"
+  ],
+  "properties": {
+    "name": {
+      "$ref": "#/$defs/kebab_id"
+    },
+    "model": {
+      "$ref": "#/$defs/slug"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "color": {
+      "type": "string"
+    },
+    "agent_card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "model_fallback",
+        "temperature_policy",
+        "capabilities",
+        "scope",
+        "tools",
+        "governance",
+        "budgets",
+        "audit"
+      ],
+      "properties": {
+        "version": {
+          "const": "1.0"
+        },
+        "model_fallback": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/slug"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "temperature_policy": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "auto"
+          ]
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowed_paths",
+            "denied_paths",
+            "read_only_paths"
+          ],
+          "properties": {
+            "allowed_paths": {
+              "$ref": "#/$defs/string_array"
+            },
+            "denied_paths": {
+              "$ref": "#/$defs/string_array"
+            },
+            "read_only_paths": {
+              "$ref": "#/$defs/string_array"
+            }
+          }
+        },
+        "tools": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowed",
+            "denied",
+            "mcp_servers"
+          ],
+          "properties": {
+            "allowed": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "denied": {
+              "$ref": "#/$defs/string_array"
+            },
+            "mcp_servers": {
+              "$ref": "#/$defs/string_array"
+            }
+          }
+        },
+        "governance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "risk_tier_max",
+            "delegation_depth",
+            "human_gate_required_for",
+            "reviewer_required"
+          ],
+          "properties": {
+            "risk_tier_max": {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            "delegation_depth": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "human_gate_required_for": {
+              "$ref": "#/$defs/string_array"
+            },
+            "reviewer_required": {
+              "anyOf": [
+                {
+                  "const": "none"
+                },
+                {
+                  "$ref": "#/$defs/kebab_id"
+                }
+              ]
+            }
+          }
+        },
+        "budgets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_steps_per_workflow",
+            "max_tokens_per_workflow"
+          ],
+          "properties": {
+            "max_steps_per_workflow": {
+              "$ref": "#/$defs/positive_integer_or_null"
+            },
+            "max_tokens_per_workflow": {
+              "$ref": "#/$defs/positive_integer_or_null"
+            }
+          }
+        },
+        "audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "log_handoffs",
+            "log_edits"
+          ],
+          "properties": {
+            "log_handoffs": {
+              "type": "boolean"
+            },
+            "log_edits": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "kebab_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "positive_integer_or_null": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "slug": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "string_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

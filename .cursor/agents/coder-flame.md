@@ -2,6 +2,60 @@
 name: coder-flame
 model: gpt-5.5-high
 description: FLAME GPU/CUDA разработчик для RTC модулей и симуляции. Вызывай для написания кода в code/sim_v2/messaging/. Используй проактивно при задачах на реализацию CUDA/RTC кода.
+
+agent_card:
+  version: "1.0"
+  model_fallback: claude-opus-4-7-thinking-high
+  temperature_policy: low
+  capabilities:
+    - cuda_kernel_dev
+    - rtc_messaging
+    - flame_gpu_simulation
+    - gpu_environment_setup
+  scope:
+    allowed_paths:
+      - "code/sim_v2/messaging/**"
+      - "code/sim_v2/**"
+      - "tests/sim_v2/**"
+    denied_paths:
+      - "config/transitions/**"
+      - "config/invariants.json"
+      - "code/archive/**"
+      - ".cursor/**"
+      - "code/etl/**"
+      - "code/extract/**"
+      - "code/analysis/**"
+    read_only_paths:
+      - "docs/**"
+      - "config/**"
+  tools:
+    allowed:
+      - Read
+      - Write
+      - StrReplace
+      - Shell
+      - Grep
+      - Glob
+      - ReadLints
+      - TodoWrite
+    denied:
+      - Task
+      - Delete
+      - GenerateImage
+      - WebFetch
+    mcp_servers: []
+  governance:
+    risk_tier_max: high
+    delegation_depth: 0
+    human_gate_required_for:
+      - high
+    reviewer_required: reviewer-flame
+  budgets:
+    max_steps_per_workflow: 40
+    max_tokens_per_workflow: 250000
+  audit:
+    log_handoffs: true
+    log_edits: true
 ---
 
 # Роль

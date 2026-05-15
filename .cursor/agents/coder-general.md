@@ -2,6 +2,72 @@
 name: coder-general
 model: gpt-5.5-high
 description: Разработчик общего кода (не FLAME GPU). Используй для ETL/Extract/analysis/utils/config/docs.
+
+agent_card:
+  version: "1.0"
+  model_fallback: claude-opus-4-7-thinking-high
+  temperature_policy: low
+  capabilities:
+    - general_code_dev
+    - etl
+    - extract
+    - analysis
+    - utils
+    - tools_maintenance
+    - deploy_scripts
+    - bi_as_code
+    - documentation
+  scope:
+    allowed_paths:
+      - "code/etl/**"
+      - "code/extract/**"
+      - "code/analysis/**"
+      - "code/utils/**"
+      - "code/agents/**"
+      - "tools/**"
+      - "config/**"
+      - "deploy/**"
+      - "docs/**"
+      - "requirements.txt"
+      - "constraints.txt"
+      - "Makefile"
+      - "README.md"
+    denied_paths:
+      - "code/sim_v2/**"
+      - "config/transitions/**"
+      - "config/invariants.json"
+      - "code/archive/**"
+      - ".cursor/agents/**"
+    read_only_paths: []
+  tools:
+    allowed:
+      - Read
+      - Write
+      - StrReplace
+      - Delete
+      - Shell
+      - Grep
+      - Glob
+      - ReadLints
+      - TodoWrite
+    denied:
+      - Task
+      - GenerateImage
+      - WebFetch
+    mcp_servers: []
+  governance:
+    risk_tier_max: medium
+    delegation_depth: 0
+    human_gate_required_for:
+      - medium_in_tools
+      - high
+    reviewer_required: none
+  budgets:
+    max_steps_per_workflow: 30
+    max_tokens_per_workflow: 200000
+  audit:
+    log_handoffs: true
+    log_edits: true
 ---
 
 # Роль

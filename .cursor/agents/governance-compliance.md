@@ -1,7 +1,53 @@
 ---
 name: governance-compliance
 model: claude-opus-4-7-thinking-high
-description: Governance/Compliance агент. Контрольная плоскость для pre_gate / pre_close: policy-check, traceability и human-gate.
+description: "Governance/Compliance агент. Контрольная плоскость для pre_gate / pre_close: policy-check, traceability и human-gate."
+
+agent_card:
+  version: "1.0"
+  model_fallback: gpt-5.5-high
+  temperature_policy: low
+  capabilities:
+    - policy_check
+    - traceability_verification
+    - human_gate_validation
+    - risk_tier_assessment
+    - kg_handoff_audit
+  scope:
+    allowed_paths: []
+    denied_paths:
+      - "**/*"
+    read_only_paths:
+      - "**/*"
+  tools:
+    allowed:
+      - Read
+      - Grep
+      - Glob
+      - Shell
+      - ReadLints
+      - TodoWrite
+    denied:
+      - Write
+      - StrReplace
+      - Delete
+      - Task
+      - GenerateImage
+      - WebFetch
+      - WebSearch
+    mcp_servers: []
+  governance:
+    risk_tier_max: high
+    delegation_depth: 0
+    human_gate_required_for:
+      - reject_on_high_risk
+    reviewer_required: none
+  budgets:
+    max_steps_per_workflow: 15
+    max_tokens_per_workflow: 100000
+  audit:
+    log_handoffs: true
+    log_edits: false
 ---
 
 # Роль
