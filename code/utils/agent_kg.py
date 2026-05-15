@@ -28,6 +28,8 @@ from typing import Any, Dict, List, Optional
 DEFAULT_KG_PATH = os.path.join(
     os.path.dirname(__file__), "..", "..", "config", "agent_kg.json"
 )
+DEFAULT_MAX_STEPS = 50
+DEFAULT_MAX_TOKENS = 500000
 
 
 def _resolve_path(path: Optional[str]) -> str:
@@ -76,6 +78,134 @@ def _short(text: Optional[str], limit: int = 120) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + "..."
+
+
+def _parse_non_negative_int(value: str) -> int:
+    """argparse type: non-negative integer."""
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("должен быть целым >= 0") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("должен быть целым >= 0")
+    return parsed
+
+
+def _parse_non_negative_float(value: str) -> float:
+    """argparse type: non-negative float."""
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("должен быть числом >= 0") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("должен быть числом >= 0")
+    return parsed
+
+
+def _default_usage() -> Dict[str, Any]:
+    return {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": _now(),
+    }
+
+
+def _init_caps(args: argparse.Namespace) -> Dict[str, Any]:
+    return {
+        "max_steps": args.max_steps
+        if args.max_steps is not None
+        else DEFAULT_MAX_STEPS,
+        "max_tokens": args.max_tokens
+        if args.max_tokens is not None
+        else DEFAULT_MAX_TOKENS,
+        "max_cost": args.max_cost,
+    }
+
+
+def _cap_args_present(args: argparse.Namespace) -> bool:
+    return (
+        args.max_steps is not None
+        or args.max_tokens is not None
+        or args.max_cost is not None
+    )
+
+
+def _apply_cap_args(caps: Dict[str, Any], args: argparse.Namespace) -> None:
+    if args.max_steps is not None:
+        caps["max_steps"] = args.max_steps
+    if args.max_tokens is not None:
+        caps["max_tokens"] = args.max_tokens
+    if args.max_cost is not None:
+        caps["max_cost"] = args.max_cost
+
+
+def _pct(used: float, cap: float) -> Optional[float]:
+    if cap == 0:
+        return 0.0 if used == 0 else 100.0
+    return round((used / cap) * 100, 2)
+
+
+def _caps_report(workflow: Dict[str, Any]) -> Dict[str, Any]:
+    caps = workflow.get("caps")
+    usage = workflow.get("usage")
+    if not isinstance(caps, dict) or not isinstance(usage, dict):
+        return {
+            "workflow_id": workflow.get("workflow_id"),
+            "caps": None,
+            "usage": None,
+            "status": "legacy_no_caps",
+        }
+
+    fields = {
+        "steps": ("max_steps", "cumulative_steps"),
+        "tokens": ("max_tokens", "cumulative_tokens"),
+        "cost": ("max_cost", "cumulative_cost"),
+    }
+    remaining: Dict[str, Optional[float]] = {}
+    utilization: Dict[str, Optional[float]] = {}
+    for name, (cap_key, usage_key) in fields.items():
+        cap_value = caps.get(cap_key)
+        used_value = usage.get(usage_key, 0)
+        if cap_value is None:
+            remaining[name] = None
+            utilization[name] = None
+            continue
+        remaining[name] = cap_value - used_value
+        utilization[name] = _pct(float(used_value), float(cap_value))
+
+    return {
+        "workflow_id": workflow.get("workflow_id"),
+        "caps": caps,
+        "usage": usage,
+        "remaining": remaining,
+        "utilization_pct": utilization,
+    }
+
+
+def _warn_if_caps_exceeded(workflow: Dict[str, Any]) -> None:
+    caps = workflow.get("caps")
+    usage = workflow.get("usage")
+    if not isinstance(caps, dict) or not isinstance(usage, dict):
+        return
+
+    checks = (
+        ("cumulative_steps", "max_steps"),
+        ("cumulative_tokens", "max_tokens"),
+        ("cumulative_cost", "max_cost"),
+    )
+    for usage_key, cap_key in checks:
+        cap_value = caps.get(cap_key)
+        if cap_value is None:
+            continue
+        used_value = usage.get(usage_key, 0)
+        if used_value > cap_value:
+            print(
+                f"WARNING cap_exceeded: {usage_key}={used_value} > {cap_key}={cap_value} "
+                f"для {workflow.get('workflow_id')}. Запусти orchestrator для split workflow "
+                "или повысь caps.",
+                file=sys.stderr,
+            )
 
 
 def _find_workflow(
@@ -152,9 +282,12 @@ def init_workflow(args: argparse.Namespace) -> None:
         existing["phase"] = args.phase or existing.get("phase", "analysis")
         existing["owner"] = args.owner or existing.get("owner", "orchestrator")
         existing["status"] = "active"
+        if isinstance(existing.get("caps"), dict) and _cap_args_present(args):
+            _apply_cap_args(existing["caps"], args)
         existing["updated_at"] = _now()
         print(f"Workflow updated: {args.workflow_id}")
     else:
+        now = _now()
         data["workflows"].append(
             {
                 "workflow_id": args.workflow_id,
@@ -162,13 +295,60 @@ def init_workflow(args: argparse.Namespace) -> None:
                 "phase": args.phase or "analysis",
                 "owner": args.owner or "orchestrator",
                 "status": "active",
-                "created_at": _now(),
-                "updated_at": _now(),
+                "caps": _init_caps(args),
+                "usage": {
+                    "cumulative_steps": 0,
+                    "cumulative_tokens": 0,
+                    "cumulative_cost": 0.0,
+                    "last_updated": now,
+                },
+                "created_at": now,
+                "updated_at": now,
             }
         )
         print(f"Workflow initialized: {args.workflow_id}")
 
     _save(path, data)
+
+
+def set_caps(args: argparse.Namespace) -> None:
+    """Устанавливает caps для существующего workflow."""
+    if not args.workflow_id:
+        raise ValueError("--workflow-id обязателен")
+
+    path = _resolve_path(args.kg_path)
+    data = _load(path)
+    workflow = _find_workflow(data["workflows"], args.workflow_id)
+    if not workflow:
+        print(f"Workflow не найден: {args.workflow_id}", file=sys.stderr)
+        raise SystemExit(1)
+
+    caps = workflow.get("caps")
+    if not isinstance(caps, dict):
+        caps = {"max_steps": None, "max_tokens": None, "max_cost": None}
+        workflow["caps"] = caps
+    if not isinstance(workflow.get("usage"), dict):
+        workflow["usage"] = _default_usage()
+    _apply_cap_args(caps, args)
+    workflow["updated_at"] = _now()
+
+    _save(path, data)
+    print(f"Caps updated: {args.workflow_id}")
+
+
+def get_caps(args: argparse.Namespace) -> None:
+    """Печатает caps/usage report для workflow."""
+    if not args.workflow_id:
+        raise ValueError("--workflow-id обязателен")
+
+    path = _resolve_path(args.kg_path)
+    data = _load(path)
+    workflow = _find_workflow(data["workflows"], args.workflow_id)
+    if not workflow:
+        print(f"Workflow не найден: {args.workflow_id}", file=sys.stderr)
+        raise SystemExit(1)
+
+    print(json.dumps(_caps_report(workflow), ensure_ascii=False, indent=2))
 
 
 def write_handoff(args: argparse.Namespace) -> None:
@@ -219,8 +399,10 @@ def write_handoff(args: argparse.Namespace) -> None:
         if not risk_reasons:
             risk_reasons = "legacy default (risk tier not provided)"
     else:
-        if not risk_reasons:
+        if not risk_reasons and risk_tier in {"medium", "high"}:
             raise ValueError("--risk-reasons обязателен при переданном --risk-tier")
+        if not risk_reasons:
+            risk_reasons = "N/A (low-risk)"
     risk_owner = (args.risk_owner or "").strip() or "orchestrator"
     risk_validated_by = (args.risk_validated_by or "").strip()
     if not risk_validated_by:
@@ -288,22 +470,29 @@ def write_handoff(args: argparse.Namespace) -> None:
         "graph_update": args.graph_update or "нет",
         "created_at": _now(),
     }
-    model_slug = (args.model_slug or "").strip()
-    est_tokens_raw = args.est_tokens
+    new_usage_arg = (
+        args.usage_model is not None
+        or args.usage_tokens is not None
+        or args.usage_cost is not None
+    )
+    model_slug = (args.usage_model or args.model_slug or "").strip()
+    est_tokens_raw = args.usage_tokens if args.usage_tokens is not None else args.est_tokens
     token_source = (args.token_source or "").strip().lower()
 
-    if model_slug or est_tokens_raw is not None or token_source:
+    if model_slug or est_tokens_raw is not None or token_source or args.usage_cost is not None:
         usage_block = {}
         if model_slug:
             usage_block["model"] = model_slug
         if est_tokens_raw is not None:
             if not isinstance(est_tokens_raw, int) or est_tokens_raw < 0:
-                raise ValueError("--est-tokens должен быть неотрицательным целым")
+                raise ValueError("--est-tokens/--usage-tokens должен быть неотрицательным целым")
             usage_block["est_tokens"] = est_tokens_raw
         if token_source:
             if token_source not in {"manual", "char_estimate", "unknown"}:
                 raise ValueError("--token-source должен быть manual|char_estimate|unknown")
             usage_block["source"] = token_source
+        elif new_usage_arg:
+            usage_block["source"] = "manual"
         elif "est_tokens" in usage_block:
             usage_block["source"] = "unknown"
         handoff["usage"] = usage_block
@@ -312,6 +501,15 @@ def write_handoff(args: argparse.Namespace) -> None:
     # Обновляем workflow
     workflow["phase"] = args.phase or workflow.get("phase") or "implementation"
     workflow["owner"] = args.next_owner or "orchestrator"
+    if isinstance(workflow.get("caps"), dict) and isinstance(workflow.get("usage"), dict):
+        usage = workflow["usage"]
+        usage["cumulative_steps"] = int(usage.get("cumulative_steps", 0)) + 1
+        if est_tokens_raw is not None:
+            usage["cumulative_tokens"] = int(usage.get("cumulative_tokens", 0)) + est_tokens_raw
+        if args.usage_cost is not None:
+            usage["cumulative_cost"] = float(usage.get("cumulative_cost", 0.0)) + args.usage_cost
+        usage["last_updated"] = _now()
+        _warn_if_caps_exceeded(workflow)
     workflow["updated_at"] = _now()
 
     _save(path, data)
@@ -573,6 +771,8 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument(
         "--close-workflow", action="store_true", help="Закрыть workflow"
     )
+    mode.add_argument("--set-caps", action="store_true", help="Установить caps workflow")
+    mode.add_argument("--get-caps", action="store_true", help="Прочитать caps workflow")
 
     parser.add_argument("--kg-path", type=str, help="Путь к agent_kg.json (по умолчанию config/agent_kg.json)")
     parser.add_argument(
@@ -582,6 +782,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--workflow-id", type=str, help="Идентификатор workflow")
     parser.add_argument("--goal", type=str, help="Цель workflow/handoff")
+    parser.add_argument(
+        "--max-steps",
+        type=_parse_non_negative_int,
+        default=None,
+        help="Caps: максимум шагов workflow",
+    )
+    parser.add_argument(
+        "--max-tokens",
+        type=_parse_non_negative_int,
+        default=None,
+        help="Caps: максимум token budget workflow",
+    )
+    parser.add_argument(
+        "--max-cost",
+        type=_parse_non_negative_float,
+        default=None,
+        help="Caps: максимум cost budget workflow",
+    )
     parser.add_argument("--user-goal", type=str, help="UserGoal для handoff (новый формат)")
     parser.add_argument("--phase", type=str, help="Фаза (analysis/research/implementation/review/validation)")
     parser.add_argument("--owner", type=str, help="Текущий владелец")
@@ -640,6 +858,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Источник est_tokens: manual|char_estimate|unknown",
     )
+    parser.add_argument(
+        "--usage-model",
+        type=str,
+        default=None,
+        help="Alias для handoff usage.model",
+    )
+    parser.add_argument(
+        "--usage-tokens",
+        type=_parse_non_negative_int,
+        default=None,
+        help="Alias для handoff usage.est_tokens и caps accumulation",
+    )
+    parser.add_argument(
+        "--usage-cost",
+        type=_parse_non_negative_float,
+        default=None,
+        help="Cost increment для workflow usage accumulation",
+    )
     parser.add_argument("--context-type", type=str, help="Тип контекста (research/specification/decision)")
     parser.add_argument("--content", type=str, help="Содержимое контекста")
     parser.add_argument("--close-reason", type=str, help="Причина закрытия workflow")
@@ -665,6 +901,12 @@ def main() -> None:
         read_context(args)
     elif args.close_workflow:
         close_workflow(args)
+    elif args.set_caps:
+        if not _cap_args_present(args):
+            parser.error("--set-caps требует хотя бы один из --max-steps/--max-tokens/--max-cost")
+        set_caps(args)
+    elif args.get_caps:
+        get_caps(args)
 
 
 if __name__ == "__main__":
