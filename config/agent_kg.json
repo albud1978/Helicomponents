@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-05-15T03:00:07Z",
+    "updated_at": "2026-05-15T03:34:49Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -193,6 +193,15 @@
       "status": "closed",
       "created_at": "2026-05-15T02:31:41Z",
       "updated_at": "2026-05-15T03:00:07Z"
+    },
+    {
+      "workflow_id": "W_ci_hotfix_2026_05_15",
+      "goal": "Hotfix CI quality.yml: исключить code/archive/** из compileall, docs/changelog.md + docs/archive/** из drift check",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "closed",
+      "created_at": "2026-05-15T03:31:51Z",
+      "updated_at": "2026-05-15T03:34:49Z"
     }
   ],
   "handoffs": [
@@ -1764,6 +1773,80 @@
         "est_tokens": 35000,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_W_ci_hotfix_2026_05_15_coder-general_9c6b859c",
+      "workflow_id": "W_ci_hotfix_2026_05_15",
+      "agent": "coder-general",
+      "user_goal": "\"ошибка\" — Алексей сообщил о failure CI на скриншоте.",
+      "goal": "\"ошибка\" — Алексей сообщил о failure CI на скриншоте.",
+      "changes": ".github/workflows/quality.yml: Python syntax check now runs compileall with -x ^code/archive/ and message clarifies archive exclusion; Invariant/TEMP drift check builds docs paths excluding archive parts and changelog.md before adding .cursor/rules/*.mdc and README.md.",
+      "facts": "Read config/capsules_manifest.json and docs/validation_capsule.md. Ran YAML lint command: python3 -c \"import yaml; yaml.safe_load(open('.github/workflows/quality.yml'))\" (exit 0). Executed all 5 YAML run steps locally (JSON validity, Python syntax, Invariant/TEMP drift, Hygiene nonblocking, Audit verify) with exit 0; drift step printed No drift. Ran explicit compileall -x command (exit 0). Ran alternative py_compile traversal excluding code/archive/** (302 files, exit 0). ReadLints on .github/workflows/quality.yml: no linter errors. git diff shows product change only in .github/workflows/quality.yml; config/agent_kg.json changed only by mandatory workflow logging.",
+      "assumptions": "GitHub Actions runner environment may differ from local WSL environment; Risks if false: first rerun CI may expose env-specific issues not reproducible locally.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "ci_hotfix_2026_05_15",
+      "plan_step_id": "CIHotfix",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "CI-only workflow hotfix; single YAML file; no runtime/domain semantics changed.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (low-risk)",
+      "human_gate_required": "no — low-risk dispatched CI hotfix",
+      "plan_card": "Patch .github/workflows/quality.yml to exclude code/archive/** from Python syntax compile and exclude docs/changelog.md plus archive docs from invariant drift scan; verify workflow steps locally.",
+      "evidence_pack": "Commands: python3 -m compileall -q -x \"^code/archive/\" code tools .cursor/hooks -> PASS; workflow drift step from YAML -> SSoT: 11 INV, 3 TEMP, 6 GPU / No drift; python3 -c yaml.safe_load(...) -> PASS; YAML run-step executor -> All workflow run steps passed; ReadLints -> no linter errors.",
+      "success_criteria": "acceptance: local reproduction of all 5 CI run steps exits 0; YAML syntax valid via python3 -c yaml.safe_load; only .github/workflows/quality.yml changed as product file; Full Handoff.",
+      "compliance_checklist": "policy_status=pass; scope_match=pass (.github/workflows/quality.yml only as product change); traceability_status=pass (TraceID and PlanStepID provided); human_gate_status=not_required_low_risk; decision=handoff_to_orchestrator",
+      "risks": "First rerun CI on GitHub Actions can still reveal environment-specific issues that are untestable locally.",
+      "next_owner": "orchestrator",
+      "open_questions": "none",
+      "graph_update": "no — CI workflow hotfix only, Domain Graph/SSoT unchanged",
+      "created_at": "2026-05-15T03:33:57Z",
+      "usage": {
+        "model": "gpt-5.5-high",
+        "est_tokens": 12000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_ci_hotfix_2026_05_15_orchestrator_0c70f4b9",
+      "workflow_id": "W_ci_hotfix_2026_05_15",
+      "agent": "orchestrator",
+      "user_goal": "Hotfix CI quality.yml после failure на push dbc5f80f",
+      "goal": "Hotfix CI quality.yml после failure на push dbc5f80f",
+      "changes": "",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "scope-locked: только .github/workflows/quality.yml; no scope creep",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "CI-only fix; 1 workflow file; no domain/runtime semantics; orchestrator-owned artifact",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "Self-approval hotfix: exclude code/archive/** from compileall + docs/changelog.md+archive from drift check",
+      "evidence_pack": "Local PASS всех 5 steps; YAML syntax PASS; 302 active Python files compile; drift check 'No drift'; coder-general handoff registered",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "created_at": "2026-05-15T03:34:49Z",
+      "usage": {
+        "model": "claude-opus-4-7-thinking-xhigh",
+        "est_tokens": 5000,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -2180,6 +2263,33 @@
       "agent": "orchestrator",
       "created_at": "2026-05-15T03:00:07Z",
       "updated_at": "2026-05-15T03:00:07Z"
+    },
+    {
+      "context_id": "ctx_W_ci_hotfix_2026_05_15_approval_request_f9a95ea8",
+      "workflow_id": "W_ci_hotfix_2026_05_15",
+      "context_type": "approval_request",
+      "content": "Self-approval hotfix: CI workflow quality.yml — собственный артефакт оркестратора в P0.4, упал из-за ошибки в scope-определении (не исключил archived/historical). Risk=low (только CI script, не код проекта). Алексей видел failure (скриншот) и сообщил 'ошибка' — implicit approval на fix.",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T03:31:51Z",
+      "updated_at": "2026-05-15T03:31:51Z"
+    },
+    {
+      "context_id": "ctx_W_ci_hotfix_2026_05_15_phase_start_deeb85e4",
+      "workflow_id": "W_ci_hotfix_2026_05_15",
+      "context_type": "phase_start",
+      "content": "CI hotfix scope accepted: edit only .github/workflows/quality.yml; fix compileall archive exclusion and drift-check path filtering; verify local CI steps and YAML syntax.",
+      "agent": "coder-general",
+      "created_at": "2026-05-15T03:32:45Z",
+      "updated_at": "2026-05-15T03:32:45Z"
+    },
+    {
+      "context_id": "ctx_W_ci_hotfix_2026_05_15_closure_755bfd04",
+      "workflow_id": "W_ci_hotfix_2026_05_15",
+      "context_type": "closure",
+      "content": "CI hotfix complete: 2 root causes fixed. All 5 local CI steps PASS.",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T03:34:49Z",
+      "updated_at": "2026-05-15T03:34:49Z"
     }
   ],
   "meta": {
