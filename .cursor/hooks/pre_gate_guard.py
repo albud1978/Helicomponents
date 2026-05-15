@@ -98,6 +98,51 @@ def _workflow_is_active(repo_root: Path, workflow_id: str) -> bool:
     return False
 
 
+def _workflow_caps_status(workflow_id: str) -> Tuple[bool, str]:
+    """Hard-block dispatch когда workflow caps превышены (C11, Tier-2b).
+
+    Legacy workflows без caps/usage пропускаются (backward-compat).
+    Если KG не читается — не блокируем (other guards словят).
+    """
+    data, state = load_agent_kg()
+    if state != "ok":
+        return True, ""
+
+    workflows = data.get("workflows", [])
+    if not isinstance(workflows, list):
+        return True, ""
+
+    for item in workflows:
+        if not isinstance(item, dict) or str(item.get("workflow_id")) != workflow_id:
+            continue
+        caps = item.get("caps")
+        usage = item.get("usage")
+        if not isinstance(caps, dict) or not isinstance(usage, dict):
+            return True, ""
+
+        max_steps = caps.get("max_steps")
+        cum_steps = usage.get("cumulative_steps", 0) or 0
+        if isinstance(max_steps, int) and isinstance(cum_steps, int) and cum_steps >= max_steps:
+            return False, (
+                f"caps_exceeded: cumulative_steps={cum_steps} >= max_steps={max_steps}. "
+                f"Повысь caps `python3 code/utils/agent_kg.py --set-caps --workflow-id {workflow_id} --max-steps <N>` "
+                "или открой новый workflow."
+            )
+
+        max_tokens = caps.get("max_tokens")
+        cum_tokens = usage.get("cumulative_tokens", 0) or 0
+        if isinstance(max_tokens, int) and isinstance(cum_tokens, int) and cum_tokens >= max_tokens:
+            return False, (
+                f"caps_exceeded: cumulative_tokens={cum_tokens} >= max_tokens={max_tokens}. "
+                f"Повысь caps `python3 code/utils/agent_kg.py --set-caps --workflow-id {workflow_id} --max-tokens <N>` "
+                "или открой новый workflow."
+            )
+
+        return True, ""
+
+    return True, ""
+
+
 def _has_handoff_to_orchestrator(text: str, tool_input: Dict[str, Any]) -> bool:
     for key in HANDOFF_ARG_KEYS:
         value = tool_input.get(key)
@@ -176,6 +221,11 @@ def main() -> None:
             f"Pre-gate: dispatch subagent заблокирован. Workflow `{workflow_id}` отсутствует в Agent KG "
             "или не находится в статусе active."
         )
+        return
+
+    caps_ok, caps_reason = _workflow_caps_status(workflow_id)
+    if not caps_ok:
+        _deny(f"Pre-gate: dispatch subagent заблокирован. {caps_reason}")
         return
 
     if not _has_handoff_to_orchestrator(combined, tool_input):

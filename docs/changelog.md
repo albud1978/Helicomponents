@@ -1,5 +1,36 @@
 # Changelog
 
+## [15-05-2026] - Tier-2b Caps + Token analytics (C11 + S5 из A∪B∪C roadmap)
+
+### Добавлено
+
+- **C11 — Agent KG caps:** `code/utils/agent_kg.py` получил CLI args `--set-caps`, `--get-caps`, `--max-steps`, `--max-tokens`, `--max-cost`, `--usage-tokens`, `--usage-model`; workflow record поддерживает опциональные `caps` и `usage`.
+- **C11 — usage accumulation:** `--write-handoff` накапливает `cumulative_steps`/`cumulative_tokens` для workflows с caps и выдаёт soft warning `WARNING cap_exceeded` при превышении.
+- **S5 — token coverage analytics:** `tools/token_analytics.py` получил режимы `--by-workflow --top N`, `--workflow-summary W_<id>` и `--export-json` с utilization% по caps.
+
+### Изменено
+
+- **Pre-gate enforcement:** `.cursor/hooks/pre_gate_guard.py` hard-block'ит `Task` dispatch, когда `cumulative_steps >= max_steps` или `cumulative_tokens >= max_tokens`.
+- **Workflow rules:** `.cursor/rules/90_multiagent_workflow.mdc` получил 2 bullet'а в "Дополнения к матрице": workflow caps и token analytics.
+- **Backward-compat:** legacy workflows без caps работают как раньше (`status=legacy_no_caps`, handoff без accumulation).
+- **Workflow trace:** `W_tier2b_caps_token_2026_05_15`.
+
+### Smoke tests
+
+- `agent_kg.py`: init/get/set caps для новых workflow — PASS.
+- `agent_kg.py --write-handoff`: accumulation до `cumulative_steps=9`, `cumulative_tokens=11000`; soft warning `cap_exceeded` на 9-м handoff — PASS.
+- Legacy workflow `W_tier2a_agent_cards_2026_05_15`: `get-caps` → `status=legacy_no_caps`; `write-handoff` работает без accumulation — PASS.
+- `tools/token_analytics.py --by-workflow --top 5` — markdown report ranked by tokens — PASS.
+- `tools/token_analytics.py --workflow-summary W_test_caps_orch` — detailed markdown с caps/usage/utilization (`steps=112.5%`, `tokens=55%`) — PASS.
+- `.cursor/hooks/pre_gate_guard.py`: workflow `W_test_cap_block` с `max_steps=1` после 1 handoff получил deny `caps_exceeded` — PASS.
+
+### Scope boundaries
+
+- Tier-3 follow-up deferred: S1+S2 template extraction, C12 semver, C9 RACI — отдельным batch'ем.
+- `config/transitions/*` и `invariants.json` не изменялись.
+- `code/sim_v2/**` не затрагивался.
+- Production BI не затрагивался.
+
 ## [15-05-2026] - Tier-2a Agent Cards (S3+C1+C3+S4 + C6 из A∪B∪C roadmap)
 
 ### Добавлено
