@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-05-15T04:30:23Z",
+    "updated_at": "2026-05-15T07:15:12Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -211,6 +211,15 @@
       "status": "closed",
       "created_at": "2026-05-15T04:10:02Z",
       "updated_at": "2026-05-15T04:30:23Z"
+    },
+    {
+      "workflow_id": "W_neo4j_data_fill_2026_05_15",
+      "goal": "Залить данные в локальный Neo4j: (a) обновить Agent KG projection до текущего состояния (kg-project-neo4j-full); (b) Domain Graph SSoT sync (sync-domain-graph) — HIGH RISK",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "closed",
+      "created_at": "2026-05-15T07:07:37Z",
+      "updated_at": "2026-05-15T07:15:12Z"
     }
   ],
   "handoffs": [
@@ -2031,6 +2040,112 @@
       "open_questions": "",
       "graph_update": "no",
       "created_at": "2026-05-15T04:30:23Z"
+    },
+    {
+      "handoff_id": "handoff_W_neo4j_data_fill_2026_05_15_governance-compliance_eabe079d",
+      "workflow_id": "W_neo4j_data_fill_2026_05_15",
+      "agent": "governance-compliance",
+      "user_goal": "Заливай данные туда",
+      "goal": "Заливай данные туда",
+      "changes": "",
+      "facts": "1) git status --porcelain config/transitions/ code/sim_v2/ — пусто, SSoT не модифицировался. 2) python3 code/utils/agent_kg.py --read-state W_neo4j_data_fill_2026_05_15 — phase=implementation, status=active, no handoffs. 3) python3 code/utils/agent_kg.py --read-context — найден ctx_..._approval_request_10ff8623 с дословной цитатой 'Заливай данные туда' и risk=high обоснованием. 4) Previous workflow W_neo4j_deploy_var_c_2026_05_15 имеет orchestrator+coder-general handoffs (closed). 5) user_comm_audit.log around 07:06-07:07 UTC показывает workflow_id_source=none для prompts approval phrase — объяснимо (workflow создан 07:07:37Z, после phrase). 6) RiskTier=high соответствует правилу 00_global_always.mdc (sync-domain-graph в high-risk списке). 7) HumanGateRequired=yes согласован с risk-tier. 8) SuccessCriteria для dispatch — manual-check (для high-risk допустимо только при невозможности verifiable; здесь sync-domain-graph результат объективно verifiable через counts в Neo4j — orchestrator должен отразить это в своём handoff).",
+      "assumptions": "(1) Заявленные counts в Neo4j (Workflow=210/Handoff=724/Domain Graph 16 labels/441 queries) соответствуют действительности. Risks if false: governance verdict опирается на declared evidence; orchestrator должен в своём handoff подтвердить commands и stdout sync_domain_graph.py + cypher counts. (2) Phrase 'Заливай данные туда' в чате 15-05-2026 12:07+05 — действительно от Алексея в продолжение обсуждения Neo4j fill. Risks if false: approval invalid; снять verdict до подтверждения.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_neo4j_data_fill_2026_05_15:20260515T070800Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "high: sync-domain-graph явно в high-risk списке правил (00_global_always.mdc); затрагивает Domain Graph projection; обратимо через make sync-domain-graph-clear, но требует явного human gate",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Governance verdict для close-workflow high-risk Neo4j data fill: проверить scope (a) Agent KG projection refresh, (b) sync-domain-graph; verify human gate ('Заливай данные туда'); verify SSoT not modified; перечислить pre_close conditions",
+      "evidence_pack": "Agent KG state: workflow active, approval-context ctx_..._10ff8623 зарегистрирован, нет orchestrator handoff. Git status: config/transitions/** и code/sim_v2/** clean (не модифицировались). Previous workflow W_neo4j_deploy_var_c_2026_05_15 closed с реальными handoffs (orchestrator + coder-general). user_comm_audit.log: prompts 07:06:24Z (24 chars) и 07:07:08Z (19 chars) workflow_id_source=none, что объясняется тем, что workflow создан в 07:07:37Z (post-approval phrase). Counts Neo4j (Agent KG: Workflow=210, Handoff=724, Context=264, Agent=15; Domain Graph: 16 label types, 441 sync queries) — приняты как декларация из dispatch (control plane не выполняет физическую re-verify Neo4j).",
+      "success_criteria": "manual-check: governance verdict записан в Agent KG; ComplianceChecklist структурирован; allow_with_notes выдан с явным перечнем pre_close conditions",
+      "compliance_checklist": "policy_status=pass; scope_match=yes; traceability_status=pass_with_notes; human_gate_status=ok; delegation_depth_status=pass; nested_subagent_detected=no; ssot_modification=none; graph_update_required=yes (Domain Graph); decision=allow_with_notes",
+      "risks": "(1) audit-trace gap: workflow_id_source=none в user_comm_audit.log для approval prompts (объяснимо temporal gap, но процесс slack: для будущих continuation high-risk approvals оркестратору init workflow PRE-approval). (2) Live Neo4j re-verify не выполнен control plane — declared counts приняты на доверие; orchestrator handoff должен явно цитировать stdout commands. (3) sync-domain-graph обратимо (make sync-domain-graph-clear), но любые downstream-визуализации/queries уже могут опираться на новую projection.",
+      "next_owner": "orchestrator",
+      "open_questions": "Нужно ли усилить policy: для continuation high-risk approvals требовать init workflow PRE-approval (чтобы prompt audit мог содержать workflow_id)? Если да — предложение в orchestrator_guard.py / 90_multiagent_workflow.mdc.",
+      "graph_update": "no",
+      "created_at": "2026-05-15T07:10:46Z",
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 12000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_neo4j_data_fill_2026_05_15_docs-curator_2c361ad3",
+      "workflow_id": "W_neo4j_data_fill_2026_05_15",
+      "agent": "docs-curator",
+      "user_goal": "Заливай данные туда",
+      "goal": "Заливай данные туда",
+      "changes": "docs/changelog.md: added top-level section \"Neo4j data fill: Agent KG projection refresh + Domain Graph SSoT sync (high-risk approved)\" at the top of the changelog. Agent KG: wrote required docs-curator phase_start context before handoff.",
+      "facts": "Existing top section inspected in docs/changelog.md; new section present at line 3 by rg; ReadLints reported no linter errors for docs/changelog.md; phase_start context written as ctx_W_neo4j_data_fill_2026_05_15_phase_start_685f914d.",
+      "assumptions": "Operational counts, approval context, and governance handoff IDs are taken from orchestrator-provided handoff; Risks if false: changelog may preserve inaccurate upstream execution evidence.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_neo4j_data_fill_2026_05_15:2026-05-15T07:14:12Z",
+      "plan_step_id": "D1",
+      "approval_gate_id": "ctx_..._approval_request_10ff8623",
+      "approval_status": "approved",
+      "approval_source": "user chat: \"Заливай данные туда\"",
+      "risk_tier": "high",
+      "risk_reasons": "sync-domain-graph is high-risk; Domain Graph projection state was changed; workflow depends on explicit approval and governance allow_with_notes.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes: explicit approval \"Заливай данные туда\" registered as ctx_..._approval_request_10ff8623.",
+      "plan_card": "Docs-curator D1: update only docs/changelog.md with concise top-level entry documenting Agent KG Neo4j projection refresh, Domain Graph SSoT sync, verified counts, scope boundaries, and reversibility.",
+      "evidence_pack": "docs/changelog.md read before edit; ApplyPatch inserted the section before the previous 15-05-2026 Variant C entry; rg confirmed the required heading; ReadLints returned no errors; Agent KG phase_start context recorded.",
+      "success_criteria": "file_exists + section present `## [15-05-2026] - Neo4j data fill`.",
+      "compliance_checklist": "policy_status=allow_with_notes; scope_match=yes; traceability_status=pass_for_docs_step; human_gate_status=approved; docs_scope=docs/changelog.md_only; decision=pass.",
+      "risks": "If upstream Neo4j counts were copied incorrectly, changelog evidence may need correction; docs step did not independently re-query Neo4j; no runtime code or SSoT JSON modified by docs-curator.",
+      "next_owner": "orchestrator",
+      "open_questions": "none for docs-curator",
+      "graph_update": "yes: Domain Graph SSoT sync was part of D1 workflow evidence; docs-curator did not run additional graph commands.",
+      "created_at": "2026-05-15T07:14:12Z",
+      "usage": {
+        "model": "gpt-5.5-high",
+        "est_tokens": 6500,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_neo4j_data_fill_2026_05_15_orchestrator_cce7f831",
+      "workflow_id": "W_neo4j_data_fill_2026_05_15",
+      "agent": "orchestrator",
+      "user_goal": "Заливай данные туда",
+      "goal": "Заливай данные туда",
+      "changes": "Neo4j projection refreshed (210/724/264/15); Domain Graph synced (16 label types, 441 Cypher queries); docs/changelog.md обновлён (top-level секция 15-05-2026 Neo4j data fill); Agent KG handoffs+contexts добавлены (init/approval/phase_start/governance/docs/this)",
+      "facts": "sync_domain_graph.py stdout='Synced 441 queries to bolt://localhost:7687'; cypher counts verified: Agent KG Workflow=210/Handoff=724/Context=264/Agent=15; Domain Graph: BomPartNo=77, RTCLayer=48, BomGroup=42, QuotaFlow=10, State=8, Rule=8, RepairLineRule=8, SelectionRule=4, BomCompatibilityRule=3, BomReplaceabilityRule=3, SpawnRule=2, BomGroupLevel=2, TransitionSpec=1, MessageBucket=1, BomTemplate=1, BomNumberingRule=1; relations: HAS_GROUP=82, HAS_PARTNO=77, HAS_L2_GROUP=59, NEXT_LAYER=47, RULE_FOR_GROUP=33, HAS_STATE=8, HAS_RULE=8, FROM_STATE=8, TO_STATE=8, TRANSITION=8; git status SSoT clean (config/transitions/* и invariants.json untouched)",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "no_drift; final scope = approved scope (Agent KG refresh + Domain Graph sync); SSoT untouched (git clean); никаких unrelated changes",
+      "process_insights": "Lesson: для continuation high-risk approvals в новом workflow следует выполнить --init-workflow PRE-approval, чтобы prompt audit мог содержать явный workflow_id (сейчас approval-фраза пришла за ~30s до init workflow, что создало workflow_id_source=none в user_comm_audit.log — explainable, но процессно subloop; предложить улучшение в orchestrator_guard.py или 90_multiagent_workflow.mdc как отдельный low-risk patch)",
+      "trace_id": "wf:W_neo4j_data_fill_2026_05_15:20260515T071512Z",
+      "plan_step_id": "F1_final_handoff",
+      "approval_gate_id": "",
+      "approval_status": "approved",
+      "approval_source": "user_chat:Alexey:2026-05-15T12:07+05:00 (дословно: 'Заливай данные туда')",
+      "risk_tier": "high",
+      "risk_reasons": "make sync-domain-graph явно в high-risk списке правил; live Bolt mutating Cypher (441 queries); обратимо через --clear",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Neo4j data fill (Variant C refresh + Domain Graph sync). Approval=approved (chat phrase 'Заливай данные туда'); governance verdict=allow_with_notes; docs-curator changelog добавлен (top-level секция).",
+      "evidence_pack": "python3 tools/agent_kg_to_neo4j.py --include-archive --reset → 'projected: workflows=210 handoffs=724 contexts=264 agents=15 synthesized_legacy_ids=297'; python3 code/utils/sync_domain_graph.py → 'Synced 441 queries to bolt://localhost:7687'; cypher-shell 'MATCH (n) RETURN labels(n)[0],count(n)' confirms above counts; W_neo4j_data_fill_2026_05_15 visible в Neo4j Workflow node",
+      "success_criteria": "numeric: Agent KG Workflow=210 Handoff=724 Context=264 Agent=15; Domain Graph BomPartNo=77 RTCLayer=48 BomGroup=42 QuotaFlow=10 State=8 Rule=8 RepairLineRule=8; sync_domain_graph stdout = 'Synced 441 queries'",
+      "compliance_checklist": "policy_status=pass; scope_match=yes; traceability_status=pass_with_notes(audit_trace_gap_post_approval_init); human_gate_status=ok; ssot_modification=none; graph_update_required=yes; decision=allow_with_notes",
+      "risks": "Live Neo4j projection обратима через --clear, но downstream-запросы/визуализации после sync уже опираются на новую projection; audit-trace gap (workflow_id_source=none для approval prompt) — explainable temporal-порядком; declared counts соответствуют действительности (verified cypher counts inline)",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "yes",
+      "created_at": "2026-05-15T07:15:12Z"
     }
   ],
   "contexts": [
@@ -2501,6 +2616,42 @@
       "agent": "orchestrator",
       "created_at": "2026-05-15T04:29:48Z",
       "updated_at": "2026-05-15T04:29:48Z"
+    },
+    {
+      "context_id": "ctx_W_neo4j_data_fill_2026_05_15_approval_request_10ff8623",
+      "workflow_id": "W_neo4j_data_fill_2026_05_15",
+      "context_type": "approval_request",
+      "content": "Approved Alexey 15-05-2026 12:07: 'Заливай данные туда' (явное approval в чате после verify коннекта с новым паролем). Risk=high (sync-domain-graph явно в high-risk списке правил). Scope: (a) kg-project-neo4j-full — refresh projection (обратимо); (b) sync-domain-graph — пуш JSON SSoT (config/transitions/*) в Neo4j (read-only projection из SSoT, не модифицирует SSoT).",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T07:07:37Z",
+      "updated_at": "2026-05-15T07:07:37Z"
+    },
+    {
+      "context_id": "ctx_W_neo4j_data_fill_2026_05_15_phase_start_685f914d",
+      "workflow_id": "W_neo4j_data_fill_2026_05_15",
+      "context_type": "phase_start",
+      "content": "PlanStep D1 docs-curator phase_start: sync docs/changelog.md only for Neo4j data fill; SuccessCriteria=file_exists + section present '## [15-05-2026] - Neo4j data fill'.",
+      "agent": "docs-curator",
+      "created_at": "2026-05-15T07:10:13Z",
+      "updated_at": "2026-05-15T07:13:43Z"
+    },
+    {
+      "context_id": "ctx_W_neo4j_data_fill_2026_05_15_decision_72292da9",
+      "workflow_id": "W_neo4j_data_fill_2026_05_15",
+      "context_type": "decision",
+      "content": "decision=allow_with_notes. Rationale: материально approval подтверждён (явная фраза 'Заливай данные туда' зафиксирована в approval-context); scope clean (SSoT не модифицирован, операции — только projection в Neo4j, обратимы); risk-tier=high корректен и согласован с human gate. Notes (не блокеры): (1) audit-trace gap workflow_id_source=none в момент approval phrase из-за temporal порядка (workflow создан после phrase) — рекомендовать init workflow PRE-approval для будущих continuation high-risk; (2) declared Neo4j counts приняты декларацией — orchestrator handoff обязан цитировать stdout sync_domain_graph.py и cypher counts. Pre_close conditions: (a) orchestrator Full Handoff с PlanCard/EvidencePack/SuccessCriteria(verifiable: numeric Domain Graph counts)/ApprovalGate(id+status=approved+source=user_chat)/DriftCheck(non-empty)/GraphUpdate=yes/ProcessInsights; (b) docs-curator handoff (high-risk → required) с changelog.md update; (c) pre_close_guard.py pass.",
+      "agent": "governance-compliance",
+      "created_at": "2026-05-15T07:10:57Z",
+      "updated_at": "2026-05-15T07:10:57Z"
+    },
+    {
+      "context_id": "ctx_W_neo4j_data_fill_2026_05_15_closure_9dfb1ad2",
+      "workflow_id": "W_neo4j_data_fill_2026_05_15",
+      "context_type": "closure",
+      "content": "Neo4j data fill complete: Agent KG projection (210/724/264/15) + Domain Graph (441 sync queries, 16 label types). governance=allow_with_notes; docs-curator=done; SSoT untouched. ProcessInsight: init workflow PRE-approval для continuation high-risk (separate low-risk patch ticket).",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T07:15:12Z",
+      "updated_at": "2026-05-15T07:15:12Z"
     }
   ],
   "meta": {
