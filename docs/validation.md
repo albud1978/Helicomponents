@@ -2,8 +2,8 @@
 
 ## SSoT инвариантов
 - **`config/transitions/invariants.json`** — единый формализованный реестр всех инвариантов, temporal-контрактов и GPU-ограничений модели V8.
-  - INV-1..INV-9: глобальные инварианты (sne ≤ ll, ops = target, repair ≤ repair_number, баланс наработок и др.)
-  - TEMP-1..TEMP-4: temporal-контракты (длительность ремонта, минимальное время в unsvc, liveness)
+  - INV-1..INV-11: глобальные инварианты (sne ≤ ll, ops = target, repair ≤ repair_number, баланс наработок и др.)
+  - TEMP-1, TEMP-4, TEMP-5: temporal-контракты (длительность ремонта, минимальное время в unsvc, liveness; TEMP-2/3 deprecated)
   - GPU-1..GPU-6: ограничения платформы FLAME GPU (read/write, mp5_lin read-only, Float64 запрет и др.)
 - Правило Cursor: `.cursor/rules/25_invariants_contract.mdc` — автоматически подтягивается при работе с `code/sim_v2/**`, `code/validation/**`, `code/analysis/**`, `config/transitions/**`.
 

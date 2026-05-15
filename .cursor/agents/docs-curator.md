@@ -37,7 +37,7 @@ description: Документационный агент. Поддерживае
 - В `Changes` — какие документы синхронизированы
 - В `Facts` — источники (пути, логи, handoff)
 - В `Assumptions` — только непроверяемые допущения с `Risks if false`
-- `GraphUpdate` в handoff трактовать только как обновление Domain Graph (Neo4j Aura)
+- `GraphUpdate` в handoff трактовать только как обновление Domain Graph (Neo4j local Docker; Aura optional)
 - Факт записей в Agent KG (`--write-context`, `--write-handoff`) явно отражать в `Changes` и/или `Facts`
 
 ## Запреты

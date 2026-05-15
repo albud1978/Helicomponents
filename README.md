@@ -79,8 +79,8 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 | Что | Значение |
 |-----|----------|
 | Local URL | `http://127.0.0.1:8088` |
-| LAN URL (корп. сеть) | `http://10.95.19.132:8088` |
-| Логин/пароль sandbox | `admin / admin` |
+| LAN URL (корп. сеть) | `http://<corporate-LAN-IP>:8088` (актуальный IP — в локальном `.env`, не публикуется) |
+| Логин/пароль sandbox | `admin / admin` (только для песочницы, **не использовать в production**) |
 | Docker контейнер Superset | `superset-local` |
 | Docker контейнер Postgres | `superset-db-local` |
 | Docker контейнер Redis | `superset-redis-local` |
@@ -170,13 +170,38 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 | Файл | Описание |
 |------|----------|
 | **`.cursor/rules/`** | Модульные правила разработки для Cursor AI |
-| **`.cursor/agents/`** | Субагенты проекта (coder-flame, coder-general, reviewer-flame, validator-judge, capsule-builder, analyst-sql-graph, governance-compliance, docs-curator) |
+| **`.cursor/agents/`** | Субагенты проекта: orchestrator + 9 активных (coder-flame, coder-general, reviewer-flame, validator-judge, capsule-builder, research-graph-analyst, bi-semantic-analyst, governance-compliance, docs-curator) + 1 deprecated (analyst-sql-graph). Состав см. ниже («Multi-agent framework — переиспользование»). |
 | `docs/validation.md` | Операционный runbook: порядок прогона V8 + потоковые валидации без автозапуска |
 | `docs/backlog.md` | Короткие идеи на будущее (формат и правила внутри файла) |
 | `docs/migration.md` | Промт для новых разработчиков |
 | `docs/limiter_v8_capsule.md` | Контекстная капсула LIMITER V8 (handoff) |
 
 Методология отладки логики: см. `.cursor/rules/00_global_always.mdc`.
+
+### Multi-agent framework — переиспользование как template
+
+Состав агентов (`.cursor/agents/`), правила (`.cursor/rules/`), hooks (`.cursor/hooks/`), Agent KG (`config/agent_kg.json` + `config/agent_kg_archive/`) спроектированы как **переиспользуемая основа** для других проектов (P1.A roadmap, 3-layer pattern).
+
+**Layer 1 — Generic core (переносим as-is)**: orchestrator + coder + reviewer + validator + researcher + governance + docs + capsule-builder. Универсальные роли, паттерн сопоставим с Google ADK / Microsoft Magentic-One / KPMG TACO / McKinsey Agentic Mesh.
+
+**Layer 2 — Domain capsules (project-specific)**: `docs/*_capsule.md` несут domain knowledge (FLAME GPU, LIMITER V8, transitions, quota, validation, BI). Меняются полностью при переносе на другой проект.
+
+**Layer 3 — Domain manifests (project-specific)**: assembly recipes — например `coder-flame = coder (Layer 1) + flame_gpu_capsule (Layer 2) + CUDA tools`. В текущей итерации не формализованы как отдельные манифесты, профили в `.cursor/agents/*.md` уже совмещают Layer 1+3.
+
+**Что зависит от проекта**:
+- Все capsules в `docs/*_capsule.md`
+- SSoT JSON paths (сейчас `config/transitions/*.json` — для другого проекта будет своё)
+- Domain-specific агенты (`coder-flame`, `reviewer-flame`, `bi-semantic-analyst`)
+- Hooks с проектными константами (например, FLAME GPU paths в audit hooks)
+
+**Что переносится как есть**:
+- 90% workflow discipline в `.cursor/rules/90_multiagent_workflow.mdc` и `.cursor/rules/91_handoff_template.mdc`
+- Audit infrastructure: `audit_code_edit.py`, `user_comm_audit.py`, hash-chain через `tools/audit_verify.py`, `tools/audit_summarize.py`
+- Agent KG CLI (`code/utils/agent_kg.py`) + migration tool (`tools/kg_migrate_archive.py`)
+- Hygiene check (`tools/hygiene_check.py`) + token analytics (`tools/token_analytics.py`)
+- Governance guards (`pre_gate_guard.py`, `pre_close_guard.py`, `ssot_approval_guard.py`, `orchestrator_write_guard.py`, `orchestrator_guard.py`)
+
+Полная template-сборка (extracted core + per-project manifest pattern) запланирована в P1.A (см. `docs/changelog.md`).
 
 ### Архитектура
 | Файл | Описание |
@@ -189,7 +214,7 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 ### Контракты и инварианты (SSoT)
 | Файл | Описание |
 |------|----------|
-| **`config/transitions/invariants.json`** | Формализованные инварианты (INV-1..9), temporal-контракты (TEMP-1..4), GPU-ограничения (GPU-1..6) |
+| **`config/transitions/invariants.json`** | Формализованные инварианты (INV-1..11), temporal-контракты (TEMP-1, TEMP-4, TEMP-5; TEMP-2/3 deprecated), GPU-ограничения (GPU-1..6) |
 | `config/transitions/transitions_rules.json` | Матрица переходов state→state, condition precedent/subsequent, порядок RTC (51 слой) |
 | `config/transitions/quota_rules.json` | Логика квотирования, RepairLine, spawn |
 
@@ -236,7 +261,7 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 | `orchestrator_adaptive*.py` | Эксперименты с adaptive step |
 | `orchestrator_gpu_only.py` | GPU-only эксперимент |
 
-**Результаты LIMITER V7:**
+**Результаты LIMITER V7 (legacy baseline; актуальный код — V8 выше):**
 - **219 адаптивных шагов** вместо 3650 ежедневных
 - **1.59с** на 10 лет симуляции (**2296 дней/сек**)
 - **100% GPU** — единый вызов `simulate()` без Python-цикла
@@ -282,7 +307,7 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 - **FLAME GPU 2.0.0rc4** — Agent-Based симуляция на GPU
 - **CUDA 13.0** — GPU вычисления
 
-### Версии библиотек (актуально на 03-01-2026)
+### Версии библиотек (актуально на 15-05-2026)
 
 | Библиотека | Версия |
 |------------|--------|
@@ -335,10 +360,11 @@ python3 code/extract/extract_master.py  # → выбрать 1 (ТЕСТ)
 
 #### Профиль доступа к внешнему ClickHouse (YC, слой analytics/AMOS)
 ```bash
-CLICKHOUSE_HOST=rc1a-fhb99q2hquq89uhp.mdb.yandexcloud.net
+# Конкретный hostname / порт / user — в локальном `.env` (не публикуется)
+CLICKHOUSE_HOST=<rcXXX-XXXX.mdb.yandexcloud.net>
 CLICKHOUSE_PORT=8443
 CLICKHOUSE_DATABASE=default
-CLICKHOUSE_USER=budnik_an
+CLICKHOUSE_USER=<your_yc_user>
 CLICKHOUSE_PASSWORD=<ваш_пароль>
 
 # SSL для HTTPS подключения (clickhouse-connect)
@@ -353,10 +379,10 @@ CLICKHOUSE_CA_CERT=/absolute/path/to/RootCA.pem
 #### Альтернативный namespace для внешнего DWH
 ```bash
 # Используйте, если в .env уже заняты CLICKHOUSE_* под локальный/рабочий контур.
-DWH_CLICKHOUSE_HOST=rc1a-fhb99q2hquq89uhp.mdb.yandexcloud.net
+DWH_CLICKHOUSE_HOST=<rcXXX-XXXX.mdb.yandexcloud.net>
 DWH_CLICKHOUSE_PORT=8443
 DWH_CLICKHOUSE_DATABASE=default
-DWH_CLICKHOUSE_USER=budnik_an
+DWH_CLICKHOUSE_USER=<your_yc_user>
 DWH_CLICKHOUSE_PASSWORD=<ваш_пароль>
 
 DWH_CLICKHOUSE_SECURE=true
@@ -444,10 +470,11 @@ DWH_CLICKHOUSE_CA_CERT=/absolute/path/to/RootCA.pem
 WORK_MODE=dev
 LOG_LEVEL=INFO
 
-# Domain Graph (Neo4j Aura) — см. секцию "Графы"
-DOMAIN_NEO4J_URI=neo4j+s://...
+# Domain Graph (Neo4j Community local Docker) — см. секцию "Графы" и `deploy/neo4j-local/`
+DOMAIN_NEO4J_URI=bolt://localhost:7687
 DOMAIN_NEO4J_USER=neo4j
 DOMAIN_NEO4J_PASSWORD=<ваш_пароль>
+DOMAIN_NEO4J_DB=neo4j
 ```
 
 ### Графы
@@ -456,8 +483,8 @@ DOMAIN_NEO4J_PASSWORD=<ваш_пароль>
 
 | Граф | Хранилище | Назначение |
 |------|-----------|------------|
-| **Agent KG** | `config/agent_kg.json` | JSON-шина координации агентов (workflow, handoff, context) |
-| **Domain Graph** | Cloud Neo4j Aura | Визуализация доменной модели (производная от JSON SSoT) |
+| **Agent KG** | `config/agent_kg.json` (active) + `config/agent_kg_archive/` (closed JSONL) | JSON-шина координации агентов (workflow, handoff, context); split applied 15-05-2026 |
+| **Domain Graph** | Neo4j Community local Docker (`deploy/neo4j-local/`) | Визуализация доменной модели (производная от JSON SSoT); GPL v3, used as separate service via bolt:// |
 
 **Agent KG — JSON-шина агентов:**
 ```bash
@@ -477,7 +504,19 @@ python3 code/utils/agent_kg.py --close-workflow --workflow-id "task-123" --close
 make agent-kg-viewer   # -> tools/agent_kg_viewer/index.html
 ```
 
-**Domain Graph — синхронизация в Aura:**
+**Domain Graph — Neo4j Community local Docker:**
+
+Setup (один раз):
+```bash
+# 1. Поднять Neo4j локально (Docker)
+make neo4j-local-up
+# Bolt: bolt://localhost:7687, Browser UI: http://localhost:7474
+
+# 2. Скопировать .env.example и сменить пароль при первом входе через Browser UI
+cp deploy/neo4j-local/.env.example .env  # или добавить переменные в существующий .env
+```
+
+Sync (по необходимости):
 ```bash
 make sync-domain-graph        # MERGE из JSON
 make sync-domain-graph-clear  # Очистить и перезаписать
@@ -485,9 +524,16 @@ make sync-domain-graph-dry    # Показать Cypher без записи
 
 # Проверка подключения
 python3 code/utils/test_neo4j_connections.py
+
+# Управление контейнером
+make neo4j-local-status
+make neo4j-local-logs
+make neo4j-local-down
 ```
 
-**SSoT для домена** — JSON в репозитории (`config/transitions/*.json`, включая `invariants.json`) и код (`code/sim_v2/**`). Domain Graph в Aura — производная для визуализации.
+Полный quickstart и troubleshooting: `deploy/neo4j-local/README.md`.
+
+**SSoT для домена** — JSON в репозитории (`config/transitions/*.json`, включая `invariants.json`) и код (`code/sim_v2/**`). Domain Graph — производная для визуализации (`code/utils/sync_domain_graph.py` работает с любым Neo4j Server по `DOMAIN_NEO4J_URI`).
 
 ### RTC кэширование (ускоряет повторные запуски симуляции)
 ```bash
@@ -600,4 +646,7 @@ export FLAMEGPU_RTC_EXPORT_CACHE_PATH="$(pwd)/.rtc_cache"
 
 ## 📄 Лицензия
 
-MIT License — см. файл `LICENSE`.
+- **Наш код**: MIT License — см. файл `LICENSE`.
+- **Зависимости** (включая non-MIT: pyflamegpu AGPL v3, Neo4j CE GPL v3, CUDA proprietary, etc.) — полный реестр в `THIRD_PARTY.md` с AGPL § 13 анализом.
+- **Security policy**: `SECURITY.md`.
+- **SBOM** (CycloneDX 1.6): `deploy/sbom/sbom.cdx.json`.
