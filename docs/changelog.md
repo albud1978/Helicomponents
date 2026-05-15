@@ -1,5 +1,38 @@
 # Changelog
 
+## [15-05-2026] - Tier-3 Template extraction + RACI + Version drift (C9 + S1+S2 Variant B + C12)
+
+### Добавлено
+
+- **C9 — RACI matrix:** добавлен `docs/governance/raci.md` с матрицей 14 типов action × 9 акторов и mapping operational gates.
+- **S1+S2 Variant B — framework template:** добавлен `framework/manifest.yaml` как inventory L1/L3 и `not_in_template` для zero IDE disruption extraction.
+- **S1+S2 Variant B — extractor:** добавлен `tools/extract_framework.py` со stdlib CLI `--dry-run`/`--force`, L1 extraction и L3 TODO placeholder substitution.
+- **C12 — version baseline:** добавлен `config/versions_manifest.json` с semver + SHA-256 baseline для 48 versioned files.
+- **C12 — drift checker:** добавлен `tools/version_check.py` со статусами `OK`/`DRIFT`/`MISSING`/`UNTRACKED`, режимами `--summary-only`, `--exit-on-drift`, `--update`.
+- **Workflow trace:** `W_tier3_template_2026_05_15`.
+
+### Изменено
+
+- **Template output boundary:** `.gitignore` получил rule `framework/template_out/` для generated artifacts.
+- **Agent card validator:** `tools/validate_agent_cards.py` расширен так, чтобы `--profile` принимал существующий path.
+- **Workflow rules:** `.cursor/rules/90_multiagent_workflow.mdc` получил 4 bullet'а в "Дополнения к матрице": framework template, version drift detection, RACI matrix и token coverage analytics.
+
+### Smoke tests
+
+- `python3 tools/extract_framework.py --dry-run` — PASS.
+- `python3 tools/extract_framework.py --force` — PASS: `40` L1 extracted, `12` L3 stubbed, `20` not_in_template; создан `framework/template_out/`.
+- Sample `orchestrator.md` extraction — PASS: L1 fields preserved, L3 fields replaced by TODO placeholders, body L3 lines marked as `<!-- TODO L3: ... -->`.
+- `python3 tools/version_check.py --summary-only` — PASS: `total=48 ok=48 drift=0 missing=0 untracked=0`.
+- Drift smoke — PASS: temporary change in `docs-curator.md` produced `DRIFT=1` and exit `1` with `--exit-on-drift`; after revert baseline returned to OK.
+- `python3 tools/version_check.py --update` — PASS: hash baseline refreshed.
+
+### Scope boundaries
+
+- Tier-4 follow-up deferred: C8 ISO 42001, C10 OTel GenAI bridge, C13 OWASP Agentic, C14 privacy/residency.
+- `config/transitions/*` и `invariants.json` не изменялись.
+- `code/sim_v2/**` не затрагивался.
+- Production BI не затрагивался.
+
 ## [15-05-2026] - Tier-2b Caps + Token analytics (C11 + S5 из A∪B∪C roadmap)
 
 ### Добавлено

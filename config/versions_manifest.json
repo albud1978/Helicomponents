@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0",
+  "created": "2026-05-15",
+  "purpose": "Semver + SHA-256 content-hash для drift detection в rules/capsules/profiles/hooks/schemas.",
+  "framework_version": "0.1.0",
+  "scope": {
+    "include_paths": [
+      ".cursor/agents/*.md",
+      ".cursor/hooks/*.py",
+      ".cursor/hooks.json",
+      ".cursor/rules/*.mdc",
+      ".cursorrules",
+      "docs/*_capsule.md",
+      "docs/governance/*.md",
+      "config/capsules_manifest.json",
+      "config/schemas/*.json",
+      "framework/manifest.yaml"
+    ],
+    "exclude_paths": [
+      ".cursor/hooks/.hygiene_last_check.txt",
+      ".cursor/hooks/__pycache__/**",
+      "**/__pycache__/**"
+    ]
+  },
+  "files": [
+    {
+      "path": ".cursor/agents/orchestrator.md",
+      "semver": "1.0.0",
+      "sha256": "03fe4a83871a5de0db8fe8b7e2caa54a89e195e475337d3d44e6c6ef949397c2",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15",
+      "notes": "Agent Card v1.0 introduced Tier-2a"
+    },
+    {
+      "path": ".cursor/agents/coder-general.md",
+      "semver": "1.0.0",
+      "sha256": "fc1826b1c7cafdde85a1e9090ad2d9043462ecf70dc5cf9cf7249722628c0617",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/agents/coder-flame.md",
+      "semver": "1.0.0",
+      "sha256": "0a3b9ca396ce595b04b2cbe9be473ce8b356fbd33a057cfa1dfd449400836d02",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/agents/reviewer-flame.md",
+      "semver": "1.0.0",
+      "sha256": "f9a034fcf22f7ab2ec02a44b58f0ca098f1e7e6a7c9f326bad4b85efcfbd607b",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/agents/validator-judge.md",
+      "semver": "1.0.0",
+      "sha256": "dc9c3a94baef5b3a8815e1504fcbcc3c6596e9b6eba8eb3e7eae921ccc03f78c",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/agents/research-graph-analyst.md",
+      "semver": "1.0.0",
+      "sha256": "33379efc0015387c913cf714cac3b884bf2a16d905917adff23859eddb2001cc",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/agents/bi-semantic-analyst.md",
+      "semver": "1.0.0",
+      "sha256": "7a4e5b5c36bc73d73be19e9de6b1acb6e56e9ed27be2f2128087850271a24451",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/agents/docs-curator.md",
+      "semver": "1.0.0",
+      "sha256": "a3129fcefc4bc72908abf461f053a85cfbbb2ec6cc30432eea61fc829d624947",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/agents/capsule-builder.md",
+      "semver": "1.0.0",
+      "sha256": "ac4b4815b516f3547f35fcc052d84e7e22237b67ebe43318e6aca7a8b79e651c",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/agents/governance-compliance.md",
+      "semver": "1.0.0",
+      "sha256": "076479e7e6b3980283ed53259cc716722c5eb423595f4c55db7aa6e041a56353",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/agents/analyst-sql-graph.md",
+      "semver": "0.0.0-deprecated",
+      "sha256": "b4ca5cd8006f08028489db2ad4b1ca99f1885f5f8add9e3c5577dc14d219244a",
+      "layer": "L3",
+      "last_changed": "2026-05-15",
+      "notes": "Deprecated legacy profile; tracked to keep scope baseline closed."
+    },
+    {
+      "path": ".cursor/hooks/orchestrator_guard.py",
+      "semver": "1.0.0",
+      "sha256": "3bee7f773670e91181f9c82c6abb7ab8e265f95776639110a54bca8db3ca2c50",
+      "layer": "L1+L3-thresholds",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/pre_gate_guard.py",
+      "semver": "1.0.0",
+      "sha256": "b5ef4432e7354e2241b5f476be185c766e2a582214eb1b428c150b110a4d4cc8",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/pre_close_guard.py",
+      "semver": "1.0.0",
+      "sha256": "28a59d3e5e2257ee35883f62fee0229e20814443e6c75b1e4839d886d0433f65",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/user_comm_audit.py",
+      "semver": "1.0.0",
+      "sha256": "5f0940fde12030a0d3f1f41f09fad640310d57117b212a43665d400a1dc21ba0",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/ssot_approval_guard.py",
+      "semver": "1.0.0",
+      "sha256": "1af6e03813d26b42a901e548b5f57d2c812e0425627c9729d2b809d6f120edf7",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/superset_docker_guard.py",
+      "semver": "1.0.0",
+      "sha256": "17e26b8ea89a14c420195fe504ff4fde104904b444b358d82be2a3a63bd67960",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/audit_code_edit.py",
+      "semver": "1.0.0",
+      "sha256": "70ac86e832c448bdc437673049cd7ad629876e6d6c4946430f98c267b6b47a78",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/kg_io.py",
+      "semver": "1.0.0",
+      "sha256": "4c83dcb82baec63545905274cffad5c41019728cf86d3e674c9d26a0c4652805",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/orchestrator_write_guard.py",
+      "semver": "1.0.0",
+      "sha256": "f9bd11814020b0c21f9d9b9e11d1cc27bc9846d4023b81e1082e8f7d382e3a27",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/connection_fail_block.py",
+      "semver": "1.0.0",
+      "sha256": "779bfa181b0e27adc113cc12424fedf856a974eb9fc9390ab8385f8e594a5808",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/connection_fail_set.py",
+      "semver": "1.0.0",
+      "sha256": "cc2fa51b46d0c238dcdd41b09374bbb42f2b9d89437d0a80662e88062f675b2b",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks/connection_fail_clear.py",
+      "semver": "1.0.0",
+      "sha256": "0c66a33e10c81b16bcbeced0cfd616255dd0189a6c320164aa06afd948c6a570",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/hooks.json",
+      "semver": "1.0.0",
+      "sha256": "0c09d16d39d7d28dfd07cfb9e2b3a316be9b355a7fb01159375bf08d2348d6ee",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/00_global_always.mdc",
+      "semver": "1.0.0",
+      "sha256": "0da690e89c0914d76d7132c74327c596a05492cfb997841a8077d979d6286c0e",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/10_extract_and_env.mdc",
+      "semver": "1.0.0",
+      "sha256": "1c10756c6b4cee5ea0610af0c817c9e7a578728bdcd278534f7a7ca6fe8dd997",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/20_sim_v2_pipeline.mdc",
+      "semver": "1.0.0",
+      "sha256": "c4a270da63675d1660d06c51aae67fd0e337f202596f5a988bdcadea9906c700",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/21_mp2_export_clickhouse.mdc",
+      "semver": "1.0.0",
+      "sha256": "ea6012cdabd9090be0fc9e01211b72c9eba92bb2735455fedf9c8526a58c95c6",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/25_invariants_contract.mdc",
+      "semver": "1.0.0",
+      "sha256": "bbff06359e9d761e202bd62b5deeaa25ddd9a35c29020db18efefcd2ed41d1b4",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/30_capsules_context.mdc",
+      "semver": "1.0.0",
+      "sha256": "226f7ad04c54d90f13348888c7a4fde5a3cad25f27bff3c0e1cebfde6492838d",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/30_validation_sql_first.mdc",
+      "semver": "1.0.0",
+      "sha256": "606949e7db2423ab1225ecd41a80907f2dbe9049306be8d13cd1c9b2c99cf880",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/40_docs_and_changelog.mdc",
+      "semver": "1.0.0",
+      "sha256": "194ea0744bb32cb9ff3d0393e3210a177b97cac29d69556c07fb5848d0adcfe3",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/90_multiagent_workflow.mdc",
+      "semver": "1.0.0",
+      "sha256": "bb62975d29be238cb0f4bb006c42c1e156d2ce2cc3cf462844858961093dbef8",
+      "layer": "L1+L3-thresholds",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/91_handoff_template.mdc",
+      "semver": "1.0.0",
+      "sha256": "3af6ce1d0a4cc10a1ee2ba9f101222b87917b6a2ff4729d38bbf19d57f4ba8a1",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursor/rules/project.mdc",
+      "semver": "1.0.0",
+      "sha256": "a83a4ab2d43d3024fd9b75687bfccc9f4dfc506ae8cee859e3f5d4fd267ff854",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": ".cursorrules",
+      "semver": "1.0.0",
+      "sha256": "26621720cea4cc7ce4c63e2c5bd31e3589a8465a8263f943d6c84d07d0a08056",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": "docs/validation_capsule.md",
+      "semver": "1.0.0",
+      "sha256": "03c424df47f2301c60c291c487035913435eda05d27061512c941f8453ea03fa",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": "docs/limiter_v8_capsule.md",
+      "semver": "1.0.0",
+      "sha256": "bb6a7a0285f9daf5feab52b2034f85f1be0fc1b96c80f78ffc95f3447b637ab5",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": "docs/quota_capsule.md",
+      "semver": "1.0.0",
+      "sha256": "0b4358f8c544a9ad5cbf16c80ca7aa341b05d63f8ea204e613555d420503e75f",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": "docs/transitions_capsule.md",
+      "semver": "1.0.0",
+      "sha256": "5a4ed39f61168bf448466d6919b6a881fbc35a09d4e9bf5a7217b74349cc5e69",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": "docs/etl_extract_capsule.md",
+      "semver": "1.0.0",
+      "sha256": "5833de42d737e6f96dba8a75a44447e1190214b4f110e061efbb8da85f5e363a",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": "docs/flame_gpu_capsule.md",
+      "semver": "1.0.0",
+      "sha256": "b1cd1b9a007cd2528584d457b32077a6e7c74a0ff310d7ef9fa58b799d613058",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": "docs/governance/agent_risk_classification.md",
+      "semver": "1.0.0",
+      "sha256": "7ad11a5dc8cf8edb8283d6e8905045acb550155ddc976a040d01c0ede56d699e",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15",
+      "notes": "Tier-3 governance document from framework extraction."
+    },
+    {
+      "path": "docs/governance/raci.md",
+      "semver": "1.0.0",
+      "sha256": "c938b9c218b3b5354701ce248f969257dad6f404db09fa891d1d9494b589b437",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15",
+      "notes": "Tier-3 governance document from framework extraction."
+    },
+    {
+      "path": "docs/governance/suppliers.md",
+      "semver": "1.0.0",
+      "sha256": "a0ad46a05d2e1e01bce2b721ed88e95f2259d7459e2ca6a9dc5847cd3503c4e4",
+      "layer": "L3",
+      "last_changed": "2026-05-15",
+      "notes": "Tier-3 governance document from framework extraction."
+    },
+    {
+      "path": "config/capsules_manifest.json",
+      "semver": "1.0.0",
+      "sha256": "301af7a5a8bee948015b7b097d2afe0b0565d61735f6c78b868264c8dba4ce37",
+      "layer": "L3",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": "config/schemas/agent_card.schema.json",
+      "semver": "1.0.0",
+      "sha256": "b491039e18a3312955ec53a6e22cbfae71b2faa2df8033f299c313e5e826b7e1",
+      "layer": "L1",
+      "last_changed": "2026-05-15"
+    },
+    {
+      "path": "framework/manifest.yaml",
+      "semver": "1.0.0",
+      "sha256": "dff42f39a365f12b22d12e04b6c2443ec1b14a1adb193c2a4bd98766538d8691",
+      "layer": "L1+L3",
+      "last_changed": "2026-05-15",
+      "notes": "Framework extraction inventory baseline."
+    }
+  ]
+}

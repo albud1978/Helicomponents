@@ -33,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--profile",
         type=str,
-        help="Validate one profile by name, for example: coder-general.",
+        help="Validate one profile by name or path, for example: coder-general.",
     )
     return parser
 
@@ -51,6 +51,12 @@ def load_schema(path: Path) -> dict[str, Any]:
 
 def resolve_profiles(profile: str | None) -> list[Path]:
     if profile:
+        profile_path = Path(profile)
+        if not profile_path.is_absolute():
+            profile_path = Path.cwd() / profile_path
+        if profile_path.exists():
+            return [profile_path]
+
         profile_name = profile[:-3] if profile.endswith(".md") else profile
         path = AGENTS_DIR / f"{profile_name}.md"
         if not path.exists():
