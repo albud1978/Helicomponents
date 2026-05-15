@@ -1,0 +1,318 @@
+version: "1.0"
+created: "2026-05-15"
+purpose: "Inventory L1 (generic, reusable) vs L3 (project-specific) для multi-agent framework template extraction."
+
+templates:
+  agent_l1_fields: &agent_l1_fields
+    - name
+    - description
+    - agent_card.version
+    - agent_card.temperature_policy
+    - agent_card.capabilities
+    - agent_card.tools.allowed
+    - agent_card.tools.denied
+    - agent_card.governance.risk_tier_max
+    - agent_card.governance.delegation_depth
+    - agent_card.governance.human_gate_required_for
+    - agent_card.governance.reviewer_required
+    - agent_card.budgets
+    - agent_card.audit
+  agent_l3_fields: &agent_l3_fields
+    - model
+    - agent_card.model_fallback
+    - agent_card.scope.allowed_paths
+    - agent_card.scope.denied_paths
+    - agent_card.scope.read_only_paths
+    - agent_card.tools.mcp_servers
+  agent_body: &agent_body
+    l1_default: true
+    l3_patterns: &agent_l3_patterns
+      - "(?i)Helicomponents"
+      - "(?i)code/sim_v2"
+      - "(?i)config/transitions"
+      - "(?i)code/etl"
+      - "(?i)code/extract"
+      - "(?i)code/analysis"
+      - "(?i)deploy/bi-as-code"
+      - "(?i)user-superset"
+      - "(?i)FLAME GPU"
+      - "(?i)ClickHouse"
+      - "(?i)RTC"
+      - "(?i)Superset"
+      - "(?i)Agent KG"
+
+framework_assets:
+  agent_profiles:
+    - path: ".cursor/agents/orchestrator.md"
+      kind: agent_profile
+      l1_fields: *agent_l1_fields
+      l3_fields: *agent_l3_fields
+      body: *agent_body
+    - path: ".cursor/agents/coder-general.md"
+      kind: agent_profile
+      l1_fields: *agent_l1_fields
+      l3_fields: *agent_l3_fields
+      body: *agent_body
+    - path: ".cursor/agents/coder-flame.md"
+      kind: agent_profile
+      l1_fields: *agent_l1_fields
+      l3_fields: *agent_l3_fields
+      body: *agent_body
+    - path: ".cursor/agents/reviewer-flame.md"
+      kind: agent_profile
+      l1_fields: *agent_l1_fields
+      l3_fields: *agent_l3_fields
+      body: *agent_body
+    - path: ".cursor/agents/validator-judge.md"
+      kind: agent_profile
+      l1_fields: *agent_l1_fields
+      l3_fields: *agent_l3_fields
+      body: *agent_body
+    - path: ".cursor/agents/research-graph-analyst.md"
+      kind: agent_profile
+      l1_fields: *agent_l1_fields
+      l3_fields: *agent_l3_fields
+      body: *agent_body
+    - path: ".cursor/agents/bi-semantic-analyst.md"
+      kind: agent_profile
+      l1_fields: *agent_l1_fields
+      l3_fields: *agent_l3_fields
+      body: *agent_body
+    - path: ".cursor/agents/docs-curator.md"
+      kind: agent_profile
+      l1_fields: *agent_l1_fields
+      l3_fields: *agent_l3_fields
+      body: *agent_body
+    - path: ".cursor/agents/capsule-builder.md"
+      kind: agent_profile
+      l1_fields: *agent_l1_fields
+      l3_fields: *agent_l3_fields
+      body: *agent_body
+    - path: ".cursor/agents/governance-compliance.md"
+      kind: agent_profile
+      l1_fields: *agent_l1_fields
+      l3_fields: *agent_l3_fields
+      body: *agent_body
+
+  hooks:
+    - path: ".cursor/hooks/orchestrator_guard.py"
+      kind: hook
+      classification: l1_with_l3_thresholds
+      l3_patterns:
+        - "code/sim_v2"
+        - "config/transitions"
+        - "FLAME"
+        - "BI / Superset|bi-as-code"
+    - path: ".cursor/hooks/pre_gate_guard.py"
+      kind: hook
+      classification: l1
+    - path: ".cursor/hooks/pre_close_guard.py"
+      kind: hook
+      classification: l1
+    - path: ".cursor/hooks/user_comm_audit.py"
+      kind: hook
+      classification: l1
+    - path: ".cursor/hooks/ssot_approval_guard.py"
+      kind: hook
+      classification: l3
+    - path: ".cursor/hooks/superset_docker_guard.py"
+      kind: hook
+      classification: l3
+    - path: ".cursor/hooks/audit_code_edit.py"
+      kind: hook
+      classification: l1
+    - path: ".cursor/hooks/kg_io.py"
+      kind: hook
+      classification: l1
+    - path: ".cursor/hooks/orchestrator_write_guard.py"
+      kind: hook
+      classification: l1_with_l3_paths
+      l3_patterns:
+        - "code/**"
+        - "tools/**"
+        - "config/transitions"
+        - "deploy/**"
+    - path: ".cursor/hooks/connection_fail_block.py"
+      kind: hook
+      classification: l1
+    - path: ".cursor/hooks/connection_fail_set.py"
+      kind: hook
+      classification: l1
+    - path: ".cursor/hooks/connection_fail_clear.py"
+      kind: hook
+      classification: l1
+    - path: ".cursor/hooks.json"
+      kind: hook_config
+      classification: l1_with_l3_references
+      l3_patterns:
+        - "ssot_approval_guard.py"
+        - "superset_docker_guard.py"
+        - "orchestrator_write_guard.py"
+
+  rules:
+    - path: ".cursor/rules/00_global_always.mdc"
+      kind: rule
+      classification: l1_with_l3_sections
+      l3_patterns:
+        - "(?i)Helicomponents"
+        - "(?i)BI / Superset"
+        - "(?i)heli_pandas"
+        - "(?i)mp3_arrays"
+        - "(?i)group_by"
+        - "(?i)Float64"
+        - "(?i)ClickHouse"
+        - "(?i)Mi-8|Mi-17"
+    - path: ".cursor/rules/10_extract_and_env.mdc"
+      kind: rule
+      classification: l3
+    - path: ".cursor/rules/20_sim_v2_pipeline.mdc"
+      kind: rule
+      classification: l3
+    - path: ".cursor/rules/21_mp2_export_clickhouse.mdc"
+      kind: rule
+      classification: l3
+    - path: ".cursor/rules/25_invariants_contract.mdc"
+      kind: rule
+      classification: l3
+    - path: ".cursor/rules/30_capsules_context.mdc"
+      kind: rule
+      classification: l1_with_l3_sections
+      l3_patterns:
+        - "docs/*_capsule.md"
+        - "config/transitions/invariants.json"
+    - path: ".cursor/rules/30_validation_sql_first.mdc"
+      kind: rule
+      classification: l3
+    - path: ".cursor/rules/40_docs_and_changelog.mdc"
+      kind: rule
+      classification: l1_with_l3_paths
+      l3_patterns:
+        - "deploy/bi-as-code"
+        - "config/transitions"
+    - path: ".cursor/rules/90_multiagent_workflow.mdc"
+      kind: rule
+      classification: l1_with_l3_thresholds
+      l3_patterns:
+        - "code/sim_v2"
+        - "FLAME"
+        - "BI / Superset|bi-as-code"
+        - "deploy/bi-as-code"
+    - path: ".cursor/rules/91_handoff_template.mdc"
+      kind: rule
+      classification: l1
+    - path: ".cursor/rules/project.mdc"
+      kind: rule_glue
+      classification: l3
+    - path: ".cursorrules"
+      kind: rule_pointer
+      classification: l1
+
+  code:
+    - path: "code/utils/agent_kg.py"
+      kind: tool
+      classification: l1
+
+  tools:
+    - path: "tools/hygiene_check.py"
+      kind: tool
+      classification: l1
+    - path: "tools/audit_verify.py"
+      kind: tool
+      classification: l1
+    - path: "tools/audit_summarize.py"
+      kind: tool
+      classification: l1
+    - path: "tools/token_analytics.py"
+      kind: tool
+      classification: l1
+    - path: "tools/validate_agent_cards.py"
+      kind: tool
+      classification: l1
+    - path: "tools/kg_migrate_archive.py"
+      kind: tool
+      classification: l1
+    - path: "tools/agent_kg_to_neo4j.py"
+      kind: tool
+      classification: l1_with_l3_uri
+      l3_patterns:
+        - "bolt://localhost:7687"
+
+  docs:
+    - path: "docs/changelog.md"
+      kind: doc
+      classification: l3
+    - path: "docs/governance/agent_risk_classification.md"
+      kind: doc
+      classification: l1_with_l3_examples
+      l3_patterns:
+        - "(?i)Helicomponents"
+        - "code/sim_v2"
+        - "config/transitions"
+    - path: "docs/governance/raci.md"
+      kind: doc
+      classification: l1_with_l3_actions
+      l3_patterns:
+        - "(?i)Helicomponents"
+        - "code/sim_v2"
+        - "bi-as-code"
+    - path: "docs/governance/suppliers.md"
+      kind: doc
+      classification: l3
+    - path: "README.md"
+      kind: doc
+      classification: l3
+
+  config:
+    - path: "config/agent_kg.json"
+      kind: state_store
+      classification: empty_template
+    - path: "config/schemas/agent_card.schema.json"
+      kind: schema
+      classification: l1
+    - path: "config/capsules_manifest.json"
+      kind: capsule_manifest
+      classification: l3
+
+  workflows:
+    - path: ".github/workflows/quality.yml"
+      kind: ci
+      classification: l1_with_l3_paths
+      l3_patterns:
+        - "code/sim_v2"
+        - "code/archive"
+        - "config/transitions"
+
+dependencies:
+  python: ">=3.10"
+  python_packages:
+    - "pyyaml>=6.0"
+    - "jsonschema>=4.0.0"
+    - "neo4j>=5.0.0"
+    - "clickhouse-driver>=0.2.0"
+  external:
+    - name: "Cursor IDE"
+      reason: "Subagent runtime"
+    - name: "Neo4j CE 5.x"
+      reason: "Domain Graph + Agent KG projection (опционально)"
+
+not_in_template:
+  - "config/transitions/**"
+  - "config/invariants.json"
+  - "code/sim_v2/**"
+  - "code/etl/**"
+  - "code/extract/**"
+  - "code/analysis/**"
+  - "deploy/**"
+  - "tests/sim_v2/**"
+  - "tests/extract/**"
+  - "data_input/**"
+  - "output/**"
+  - "logs/**"
+  - "docs/*_capsule.md"
+  - ".cursor/agents/analyst-sql-graph.md"
+  - ".cursor/plans/**"
+  - ".cursor/hooks/*.log"
+  - ".cursor/hooks/.hygiene_last_check.txt"
+  - ".env"
+  - ".env.example"
+  - "tools/oneoff_*.py"

@@ -170,6 +170,9 @@ activate.sh
 .cursor/**/__pycache__/
 .cursor/**/*.py[cod]
 
+# Generated framework extraction output
+framework/template_out/
+
 # ============================================================
 # Local Superset sandbox
 # ============================================================
