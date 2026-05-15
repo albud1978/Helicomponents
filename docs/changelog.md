@@ -1,5 +1,46 @@
 # Changelog
 
+## [15-05-2026] - Variant C: Neo4j CE Docker deployment + Agent KG projection
+
+Запущен Neo4j Community Edition в Docker (`deploy/neo4j-local/`) с binding на 0.0.0.0 (LAN-видимость через Docker Desktop WSL2 backend → Windows host). Реализована Variant C для Agent KG ↔ Domain Graph: JSON остаётся SSoT, добавлен on-demand projector в тот же Neo4j для визуального анализа истории workflow.
+
+### Что сделано
+
+- **Neo4j контейнер:** старый stale `neo4j-local` (Exited 2 months ago) удалён, поднят новый из `neo4j:5.20-community`. Healthcheck `start_period: 30s → 60s` + `retries: 3 → 5`. Контейнер healthy за ~10s.
+- **LAN-видимость:** compose добавил inline-комментарий про pattern `7474:7474`/`7687:7687` (0.0.0.0 implicit, как у `superset-gateway-local`); Browser UI доступен по `http://<windows-host-ip>:7474` с LAN.
+- **Variant C — `tools/agent_kg_to_neo4j.py`** (новый файл, ~280 строк):
+  - On-demand projector Agent KG (JSON + JSONL archives) → Neo4j (read-only view).
+  - Schema: `(:Workflow {id,goal,status,owner,phase,source})-[:HAS_HANDOFF|HAS_CONTEXT|OWNED_BY]`, `(:Handoff {id,agent,plan_step_id,trace_id,risk_tier,...,usage_total_tokens})-[:BY_AGENT|NEXT_OWNER]`, `(:Context {id,type,agent,created_at})`, `(:Agent {name})`.
+  - Idempotent MERGE + constraints на uniqueness.
+  - CLI: `--uri --user --password --db --kg-path --archive-dir --include-archive --dry-run --reset`.
+  - Legacy archive handoffs без `handoff_id` (297/670) получают deterministic synthetic id `legacy_<sha1(workflow_id+agent+created_at)[:12]>`. Active KG strict — handoff без id fails fast.
+- **Документация:** `docs/agent_kg_projection.md` (purpose, schema, Cypher examples, legacy note), README обновлён (раздел LAN-видимость + Variant C). 
+- **Makefile:** `kg-project-neo4j` (active only), `kg-project-neo4j-full` (active + archive + reset).
+
+### Результаты live projection
+
+```
+total: workflows=209 handoffs=722 contexts=262 agents=15 synthesized_legacy_ids=297
+Relationships: HAS_HANDOFF=722, BY_AGENT=722, NEXT_OWNER=522, HAS_CONTEXT=262, OWNED_BY=209
+Top-5 agents (по handoffs за всю историю): orchestrator=219, governance-compliance=130, coder-general=121, coder-flame=102, analyst-sql-graph=101 (deprecated)
+```
+
+### Что НЕ делалось (gates за рамками)
+
+- `make sync-domain-graph` не запускался — это отдельный high-risk gate (SSoT transitions).
+- Production BI-контур не затронут.
+- `config/agent_kg.json` и SSoT JSON не модифицировались.
+
+### Артефакты
+
+- `deploy/neo4j-local/docker-compose.yml` — обновлён (комментарий про LAN, start_period 60s, retries 5).
+- `tools/agent_kg_to_neo4j.py` — новый файл.
+- `docs/agent_kg_projection.md` — новый файл.
+- `Makefile` — новые targets `kg-project-neo4j*`.
+- `README.md` — раздел "Variant C — Agent KG projection в Neo4j (hybrid)" + LAN-видимость pattern.
+
+---
+
 ## [15-05-2026] - Compliance remediation P0 batch (8 задач)
 
 Завершён P0 remediation batch по compliance/security/process debt после критического двухмодельного аудита `data_input/analytics/MultiAgent...`. Batch закрывает 8 задач P0.1..P0.8: drift инвариантов, размер Agent KG, audit hash-chain, security/third-party/SBOM, локальный Neo4j и README cleanup.
