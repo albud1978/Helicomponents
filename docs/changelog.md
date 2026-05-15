@@ -1,5 +1,34 @@
 # Changelog
 
+## [15-05-2026] - Tier-4 lite Maturity (C10+C13+C14 lite из A∪B∪C roadmap)
+
+### Принцип
+
+- **Tier-4 lite = maturity NOT certification:** это практики зрелости для personal/team project, а не certification artifacts.
+- **Skipped:** C8 ISO 42001 SoA и C16-C20 пропущены как certification overhead.
+- **Workflow trace:** `W_tier4_lite_maturity_2026_05_15`.
+
+### Добавлено
+
+- **C10-lite OTel export:** `tools/kg_to_otel.py` экспортирует Agent KG в OTel JSON trace spans для Jaeger/Grafana при необходимости; full Collector setup не добавлялся.
+- **C13-lite Security smoke:** `tools/security_smoke.py` и `tests/security/*.json` покрывают 8 cases: prompt injection, plan deviation, role confusion, tool misuse, caps evasion, secrets leak, SSoT bypass; full AgentDojo benchmark не добавлялся.
+- **C14-lite Privacy:** `docs/governance/privacy.md` фиксирует data lifecycle, а `tools/pii_scan.py` выполняет scan с 9 strict patterns по умолчанию; broad `phone_general` доступен только opt-in через `--include-loose-patterns`; full DPIA framework не добавлялся. Resume-fix coder-general снизил default findings с 1023→0 после перевода `phone_general` в `LOOSE_PII_PATTERNS` (governance N2 закрыт).
+
+### Изменено
+
+- **Workflow rules:** `.cursor/rules/90_multiagent_workflow.mdc` получил краткий bullet про opt-in/non-blocking maturity tools без подробного описания перед upcoming rules cleanup.
+
+### Smoke tests
+
+- `tools/security_smoke.py --summary-only` — PASS: `8/8` security cases.
+- `tools/kg_to_otel.py` — PASS: `117` OTel spans в валидном JSON export.
+- `tools/pii_scan.py --summary-only` — PASS: `0` default strict PII findings.
+
+### Scope boundaries
+
+- C8 ISO 42001 SoA и C16-C20 не выполнялись: certification overhead для personal/team project.
+- Next: rules cleanup — review `.cursor/rules/90_multiagent_workflow.mdc` после 5 batch'ей дополнений.
+
 ## [15-05-2026] - Tier-3 Template extraction + RACI + Version drift (C9 + S1+S2 Variant B + C12)
 
 ### Добавлено

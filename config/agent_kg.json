@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-05-15T11:12:45Z",
+    "updated_at": "2026-05-15T13:21:33Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -318,6 +318,46 @@
       },
       "created_at": "2026-05-15T10:48:42Z",
       "updated_at": "2026-05-15T11:12:45Z"
+    },
+    {
+      "workflow_id": "W_tier4_lite_2026_05_15",
+      "goal": "Tier-4 lite (maturity-only, без compliance theater): C10-lite (OTel JSON trace export tools/kg_to_otel.py), C13-lite (prompt injection/plan deviation smoke tools/security_smoke.py + tests/security/), C14-lite (docs/governance/privacy.md + tools/pii_scan.py). Skipped: C8 ISO 42001 SoA, C16-C20 long-tail certification overhead.",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 40,
+        "max_tokens": 400000,
+        "max_cost": null
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-15T12:57:08Z"
+      },
+      "created_at": "2026-05-15T12:57:08Z",
+      "updated_at": "2026-05-15T12:57:08Z"
+    },
+    {
+      "workflow_id": "W_tier4_lite_maturity_2026_05_15",
+      "goal": "Tier-4 lite (maturity, NOT certification): C10-lite OTel JSON trace export (tools/kg_to_otel.py) + C13-lite prompt injection / plan deviation smoke (tools/security_smoke.py + tests/security/) + C14-lite privacy doc (docs/governance/privacy.md) + PII scan (tools/pii_scan.py). Skip: C8 ISO 42001 SoA, C16-C20 (certification overhead). После — review/cleanup правил.",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 30,
+        "max_tokens": 300000,
+        "max_cost": null
+      },
+      "usage": {
+        "cumulative_steps": 4,
+        "cumulative_tokens": 78200,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-15T13:21:33Z"
+      },
+      "created_at": "2026-05-15T13:03:02Z",
+      "updated_at": "2026-05-15T13:21:33Z"
     }
   ],
   "handoffs": [
@@ -3214,6 +3254,154 @@
         "est_tokens": 22000,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_W_tier4_lite_maturity_2026_05_15_coder-general_4f7108a3",
+      "workflow_id": "W_tier4_lite_maturity_2026_05_15",
+      "agent": "coder-general",
+      "user_goal": "C10-lite tools/kg_to_otel.py; C13-lite tools/security_smoke.py + tests/security/*.json; C14-lite tools/pii_scan.py. Maturity practice, lite scope, no enterprise/certification artifacts.",
+      "goal": "C10-lite tools/kg_to_otel.py; C13-lite tools/security_smoke.py + tests/security/*.json; C14-lite tools/pii_scan.py. Maturity practice, lite scope, no enterprise/certification artifacts.",
+      "changes": "Created/updated:\n- tools/kg_to_otel.py: Agent KG + optional archive to OTel JSON resourceSpans, workflow root spans, handoff child spans, context events, workflow filter, pretty output, 10MB chunking.\n- tools/security_smoke.py: lite runner for regex/static checks and hook subprocess simulations only.\n- tools/pii_scan.py: regex PII scanner for KG workflows/handoffs/contexts, optional logs, handoffs-only and exit-on-finding modes.\n- tests/security/01..08_*.json: 8 prompt injection / plan deviation / tool misuse / caps / secrets / SSoT smoke cases.",
+      "facts": "Smoke PASS:\n- py_compile: tools/kg_to_otel.py, tools/security_smoke.py, tools/pii_scan.py compiled successfully.\n- C10: python3 tools/kg_to_otel.py -> Exported 32 workflows, 84 handoffs, 74 context events -> output/otel_traces.json; valid JSON; resourceSpans=1; span_count=116.\n- C10 filter: python3 tools/kg_to_otel.py --workflow-id W_tier3_template_2026_05_15 --pretty --output output/otel_tier3.json -> Exported 1 workflows, 6 handoffs, 3 context events.\n- C13: tests/security contains 8 JSON files; python3 tools/security_smoke.py --summary-only -> Total: 8, PASS: 8, FAIL: 0; full run PASS for all 8 cases.\n- C14: python3 tools/pii_scan.py --summary-only -> Total findings: 1011 (by pattern: phone_general=1011); exit 0. python3 tools/pii_scan.py --scan-handoffs-only -> Total findings: 869 (by pattern: phone_general=869); exit 0.\n- ReadLints: no linter errors for tools and tests/security.\n- No real Task/Subagent dispatches were run by security_smoke; hook simulations used subprocess stdin only.",
+      "assumptions": "phone_general pattern is intentionally broad per task spec and flags ordinary numbers/dates in KG; this is accepted for C14-lite informational scan. Risks if false: Алексей may want post-review noise reduction before keeping phone_general enabled by default.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_tier4_lite_maturity_2026_05_15:2026-05-15",
+      "plan_step_id": "P2.implement.tier4_lite_tools",
+      "approval_gate_id": "human_approval_2026_05_15_1801",
+      "approval_status": "approved",
+      "approval_source": "Alexey chat 15-05-2026 18:01: С10, С13 и С14 делай",
+      "risk_tier": "medium",
+      "risk_reasons": "3 new tooling surfaces under tools/tests; hook simulation around governance/security policy; operational KG observability/privacy maturity scope",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending governance-compliance",
+      "human_gate_required": "no: approved Alexey 15-05-2026 18:01 for C10/C13/C14 lite scope",
+      "plan_card": "Implement three lite maturity tools with stdlib only; generate 8 static/hook-simulation security cases; run acceptance smoke; write coder-general handoff to KG.",
+      "evidence_pack": "Evidence snippets:\n- OTel root attrs include agent.workflow_id, agent.goal, agent.owner, agent.phase, agent.status; Tier4 root includes agent.caps.max_steps and agent.usage.cumulative_steps; events include context_approval_request and context_phase_start.\n- security_smoke full snippets: PASS 05 Delete -> orchestrator_write_guard deny for code/sim_v2/messaging/main.py; PASS 06 closed workflow -> pre_gate_guard deny; PASS 08 SSoT ApplyPatch -> ssot_approval_guard deny with approval_hint/user confirmation reason.\n- pii_scan snippets: summary-only line Total findings: 1011 (by pattern: phone_general=1011); handoffs-only final summary Total findings: 869 (by pattern: phone_general=869).",
+      "success_criteria": "script: все 6 smoke команд exit=0; tools/kg_to_otel.py creates valid OTel JSON; tools/security_smoke.py runs 8 cases; tools/pii_scan.py returns summary",
+      "compliance_checklist": "policy_status=pass; scope_match=yes; traceability_status=pass; human_gate_status=approved_by_Alexey_2026_05_15_18_01; no_nested_delegation=yes; no_real_dispatch_in_security_smoke=yes; no_ssot_changes=yes; no_privacy_doc_edit=yes; decision=allow",
+      "risks": "1) phone_general produces high false-positive volume; 2) hook simulations validate current hook outputs, not a full adversarial benchmark; 3) OTel export is file-format compatible lite output, not collector integration.",
+      "next_owner": "orchestrator",
+      "open_questions": "Нужно ли после review уменьшить шум phone_general default pattern или оставить строго как задано в C14-lite spec?",
+      "graph_update": "no: tools/tests only, Domain Graph/SSoT not changed",
+      "created_at": "2026-05-15T13:11:49Z",
+      "usage": {
+        "model": "gpt-5.5-high",
+        "est_tokens": 42000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_tier4_lite_maturity_2026_05_15_docs-curator_8e6c874c",
+      "workflow_id": "W_tier4_lite_maturity_2026_05_15",
+      "agent": "docs-curator",
+      "user_goal": "Tier-4 lite changelog entry",
+      "goal": "Tier-4 lite changelog entry",
+      "changes": "Updated docs/changelog.md with top-level Tier-4 lite Maturity section covering maturity NOT certification principle, C10/C13/C14-lite artifacts, rule update, smoke results, workflow trace, skipped certification scope, and next rules cleanup. Wrote docs-curator phase_start context in Agent KG before edit.",
+      "facts": "Source request specified workflow W_tier4_lite_maturity_2026_05_15 and required changelog content. Verified docs/changelog.md lines 3-30 after edit. ReadLints returned no linter errors for docs/changelog.md. Agent KG context command returned Context updated: ctx_W_tier4_lite_maturity_2026_05_15_phase_start_8845ede1.",
+      "assumptions": "Smoke result values are taken from orchestrator-provided context; Risks if false: changelog would mirror incorrect upstream evidence.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_tier4_lite_maturity_2026_05_15:2026-05-15",
+      "plan_step_id": "P3.docs.changelog",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "docs-only changelog update; no SSoT/code/runtime changes",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "docs/changelog.md lines 3-30; ReadLints docs/changelog.md: no linter errors; agent_kg.py --write-context phase_start output captured in shell",
+      "success_criteria": "manual-check: docs/changelog.md contains the requested top-level Tier-4 lite Maturity entry and only docs/changelog.md content was edited by docs-curator",
+      "compliance_checklist": "policy_status=pass; scope_match=pass; traceability_status=pass; human_gate_status=N/A low-risk docs-only; decision=allow",
+      "risks": "Smoke values were not re-run by docs-curator; recorded from orchestrator context as requested.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no: changelog/docs-only update, Domain Graph unaffected",
+      "created_at": "2026-05-15T13:15:52Z",
+      "usage": {
+        "model": "gpt-5.5-high",
+        "est_tokens": 5200,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_tier4_lite_maturity_2026_05_15_governance-compliance_650b2ce7",
+      "workflow_id": "W_tier4_lite_maturity_2026_05_15",
+      "agent": "governance-compliance",
+      "user_goal": "Governance verdict для Tier-4 lite (C10+C13+C14 lite): maturity vs certification boundary, anti-overengineering, scope match, no-coding-policy, no-real-subagent в security_smoke, traceability, backward-compat, caps utilization.",
+      "goal": "Governance verdict для Tier-4 lite (C10+C13+C14 lite): maturity vs certification boundary, anti-overengineering, scope match, no-coding-policy, no-real-subagent в security_smoke, traceability, backward-compat, caps utilization.",
+      "changes": "Прочитал tools/kg_to_otel.py (~400 строк), tools/security_smoke.py (132 строки), tools/pii_scan.py (~297 строк), docs/governance/privacy.md (115 строк), .cursor/rules/90_multiagent_workflow.mdc (Tier-4 lite bullet line 142), tests/security/01..08_*.json (sample: 01, 05, 06, 08), docs/changelog.md (Tier-4 lite section lines 3-30). Прочитал состояние workflow W_tier4_lite_maturity_2026_05_15 + 2 handoffs + 2 context nodes + caps. Зафиксировал phase_start context в KG. Verdict: allow_with_notes — все 8 checks PASS, два минорных note для orchestrator awareness (без блокировки).",
+      "facts": "Workflow state: status=active, phase=implementation, owner=orchestrator, caps max_steps=30/max_tokens=300000, usage 2 steps / 47200 tokens (utilization 6.67%/15.73% — глубоко в budget). approval_request context: ctx_W_tier4_lite_maturity_2026_05_15_approval_request_91f31aa3 (Alexey 15-05-2026 18:01, F2 init PRE-approval fixed). 2 handoffs: coder-general 4f7108a3 (P2.implement.tier4_lite_tools, risk=medium) + docs-curator 8e6c874c (P3.docs.changelog, risk=low, decision=allow). security_smoke.py code-read PASS: subprocess.run только на .cursor/hooks/*.py (lines 56-64); НЕТ импортов/вызовов Task/Subagent/claude/opus/sonnet (Grep подтвердил, только 'subprocess' imports). Test cases tool_name:'Task' — payload-data для hook regex/policy detection, НЕ actual dispatch. Артефакты: tools/kg_to_otel.py 14693B, tools/security_smoke.py 4150B, tools/pii_scan.py 10336B (соответствует ~14.7+4.1+10.3KB заявлено), docs/governance/privacy.md 8522B, 8 test JSON в tests/security/. RiskTier=medium / RiskReasons / HumanGateRequired согласованы между orchestrator approval context и coder-general handoff. PlanCard/EvidencePack/ComplianceChecklist/SuccessCriteria coder-general handoff filled (SuccessCriteria='script: ... exit=0' — verifiable). Anti-overengineering: stdlib only, без лишних абстракций, default behaviors безопасные (pii_scan strict-by-default, security_smoke supports только 3 explicit test_types). Scope boundaries: privacy.md явно перечисляет non-covered scope (GDPR DPIA, DSAR, classification scheme); changelog явно skipped C8/C16-C20.",
+      "assumptions": "1) Smoke результаты orchestrator-side (8/8 PASS security, 117 spans OTel, 0 default pii_scan findings) приняты по handoff coder-general + docs-curator + user statement, не re-run governance-side (read-only mode). Risks if false: реальный pii_scan может найти strict-pattern matches в KG; OTel JSON может быть невалиден для real Jaeger ingestion. 2) Resume coder-general не оставил отдельного handoff в KG — handoff 4f7108a3 содержит pre-resume Facts ('phone_general=1011'), а текущий код уже post-resume (strict default). Risks if false: traceability gap минорный — финальное состояние артефактов корректно отражено в docs/changelog.md и в коде, но KG handoff body не синхронизирован с current state. 3) Workflow caps max_steps=30 / max_tokens=300000 (а не заявленные пользователем 30/300000 — совпадает); cumulative_steps=2 ниже 5 (orchestrator init не учтён как dispatch step). Risks if false: caps tracking может не отражать реальный orchestrator work, но это не блокер governance verdict.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_tier4_lite_maturity_2026_05_15:2026-05-15",
+      "plan_step_id": "P4.governance.tier4_lite_verdict",
+      "approval_gate_id": "human_approval_2026_05_15_1801",
+      "approval_status": "approved",
+      "approval_source": "Alexey chat 15-05-2026 18:01: 'С10, С13 и С14 делай, потом возвращаемся к твоему замечанию и максимально все анализируем и облегчаем'",
+      "risk_tier": "medium",
+      "risk_reasons": "Governance verdict для medium-risk Tier-4 lite (3 new tools + tests/security + privacy doc + 1 rule bullet); проверка no-real-subagent boundary (security smoke не должен запускать реальные Task dispatches); проверка scope drift в certification.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no: approval Alexey 15-05-2026 18:01 уже зафиксирован в approval_request context (ctx_..._91f31aa3)",
+      "plan_card": "Verify Tier-4 lite scope: (a) lite vs certification boundary, (b) anti-overengineering, (c) scope match (C8/C16-C20 skipped), (d) orchestrator no-coding policy, (e) no-real-subagent в security_smoke (code-read), (f) traceability + KG, (g) backward-compat, (h) caps utilization. Single-pass review; verdict в ComplianceChecklist.",
+      "evidence_pack": "1) security_smoke.py верифицирован read: subprocess.run только на HOOKS_DIR/_hook_path() (line 33-37, 56-64), test_type SUPPORTED_TYPES={'static_payload_check','hook_simulation','regex_pattern'} (line 18), _run_hook feeds payload как stdin в local hook (line 59); 2) Grep 'Task|subagent|dispatch|claude|opus' в tools/security_smoke.py: 0 matches (только 'subprocess'); 3) Grep тех же в tests/security: matches только в payload tool_name fields (static data); 4) caps: --get-caps W_tier4_lite_maturity_2026_05_15: usage 2/30 steps, 47200/300000 tokens; 5) read-state: 2 handoffs (coder-general + docs-curator), 2 contexts (approval_request + phase_start docs-curator); 6) docs/changelog.md lines 3-30 содержит Tier-4 lite section с явным 'maturity NOT certification' и 'Skipped: C8 ISO 42001 SoA и C16-C20'; 7) .cursor/rules/90_multiagent_workflow.mdc line 142: один bullet про Maturity tools (opt-in, не блокирующие); 8) tools/pii_scan.py: LOOSE_PII_PATTERNS={'phone_general': ...} отделены от PII_PATTERNS, добавляются только при --include-loose-patterns (line 280-281); 9) docs/governance/privacy.md явно содержит 'Что НЕ покрывает этот документ' с GDPR DPIA / DSAR / classification scheme — anti-scope-creep boundary.",
+      "success_criteria": "manual-check: governance verdict сформирован, ComplianceChecklist заполнен полностью, decision=allow_with_notes, handoff записан в KG с phase_start context. Дополнительно verifiable: code-read security_smoke.py подтверждает отсутствие real Task dispatches (Grep 'Task|subagent|dispatch|claude|opus' returns 0 matches вне импортов subprocess).",
+      "compliance_checklist": "policy_status=pass; scope_match=yes; traceability_status=pass; human_gate_status=ok (approved Alexey 2026-05-15 18:01 + approval_request context registered); decision=allow_with_notes; delegation_depth_status=pass (orchestrator → coder-general, без nested subagents); nested_subagent_detected=no (security_smoke verified code-read, subprocess только на local hooks); no_real_dispatch_in_security_smoke=yes (confirmed); maturity_vs_certification_boundary=lite (explicit skipped C8/C16-C20, явные non-covered scope в privacy.md); anti_overengineering_check=pass (stdlib only, no single-consumer abstractions, safe defaults); orchestrator_no_coding_policy=pass (только docs/governance/privacy.md + .cursor/rules/90_multiagent_workflow.mdc — allowlist; tools/** делегированы coder-general); backward_compat=pass (append-only changes; новые файлы; output/otel_traces.json — build artifact; tests/security/ — новая дир); caps_utilization=pass (6.67% steps / 15.73% tokens — глубоко в budget); success_criteria_verifiability=pass (script: ... exit=0 verifiable form)",
+      "risks": "1) pii_scan strict patterns могут давать false-positives на real KG entries (inn_ru pattern '\\\\b\\\\d{10}\\\\b|\\\\b\\\\d{12}\\\\b' матчит любые 10/12-значные числа) — на текущем KG возвращает 0 default, но при росте KG может появиться noise. 2) Hook simulations в security_smoke validate текущее поведение hook'ов, не adversarial robustness benchmark — для personal/team scale достаточно, но не certification-grade. 3) OTel JSON export — file-format compatible, не collector integration; если Jaeger ingestion понадобится — нужен дополнительный shipper.",
+      "next_owner": "orchestrator",
+      "open_questions": "1) Нужно ли coder-general resume оставить отдельный handoff в KG с post-resume Facts (phone_general moved to loose, default=0)? Текущий 4f7108a3 содержит pre-resume numbers — минорная traceability rough edge, не блокер. 2) Стоит ли добавить short note в docs/changelog.md или в новый orchestrator wrap-up handoff про resume fix (1011 → 0 default)? Сейчас changelog уже отражает финальное состояние ('0 default strict PII findings'), но не упоминает resume.",
+      "graph_update": "no: Domain Graph не затронут — Tier-4 lite касается framework operability (tools/tests/docs/rule), не SSoT доменной модели",
+      "created_at": "2026-05-15T13:19:32Z",
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 6000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_tier4_lite_maturity_2026_05_15_orchestrator_0aed1a71",
+      "workflow_id": "W_tier4_lite_maturity_2026_05_15",
+      "agent": "orchestrator",
+      "user_goal": "Tier-4 lite (maturity, NOT certification): C10-lite OTel export + C13-lite security smoke + C14-lite privacy doc/PII scan. Skipped C8 ISO 42001 SoA, C16-C20 (certification overhead).",
+      "goal": "Tier-4 lite (maturity, NOT certification): C10-lite OTel export + C13-lite security smoke + C14-lite privacy doc/PII scan. Skipped C8 ISO 42001 SoA, C16-C20 (certification overhead).",
+      "changes": "docs/governance/privacy.md (new, ~120 lines, data lifecycle policy); tools/kg_to_otel.py (new, ~14.7KB, OTel JSON export); tools/security_smoke.py (new, ~4.1KB, 8-case runner); tools/pii_scan.py (new, ~10.3KB, regex PII scan); tests/security/{01..08}_*.json (8 test cases); .cursor/rules/90_multiagent_workflow.mdc +1 bullet про maturity tools; docs/changelog.md +section Tier-4 lite (with N2 closure note)",
+      "facts": "Все smoke exit=0: 117 OTel spans, 8/8 security PASS, 0 default PII findings (1023 only с --include-loose-patterns); governance verdict allow_with_notes with 2 minor notes (N1 resume handoff numbers minor traceability gap — accurate state в final handoff; N2 changelog phone_general note — closed via amendment); caps utilization 6.67% steps / 15.73% tokens",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal='С10, С13 и С14 делай' + 'максимально близко к лучшим практикам, НЕ certification' vs Changes=3 lite tools + privacy doc + 8 cases + minimal rule update → match scope; C8/C16-C20 явно skipped per Алексей принципу; no drift в code/sim_v2 / SSoT / BI production; F2 lesson applied (init PRE-approval done сразу); upcoming rules cleanup announced в changelog",
+      "process_insights": "Maturity vs certification дифференциация работает: 3 standalone lite tools (~30KB total) дают maturity benefit (industry-compatible OTel export, security pattern documentation, privacy clarity) без enterprise stack (Collector, AgentDojo, DPIA). Resume pattern для quick noise reduction fix эффективен (phone_general 1023→0 за 1 short delegation). N1 lesson (docs-curator --write-handoff) учтён 3-й batch подряд — docs-curator теперь reliable записывает KG handoff. F2 lesson (init PRE-approval) finally applied сегодня — init сразу после approval phrase 18:01-18:03. Next: rules cleanup, see сжимать ли .cursor/rules/90_multiagent_workflow.mdc после 5 batch'ей дополнений (Tier-1 F2, Tier-2a Agent Cards mention, Tier-2b caps+analytics +2 bullets, Tier-3 framework+versions+RACI +4 bullets, Tier-4 lite +1 bullet = +8 bullets со времени P0).",
+      "trace_id": "wf:W_tier4_lite_maturity_2026_05_15:2026-05-15",
+      "plan_step_id": "P5.orchestrator.close",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "3 new lite tools (kg_to_otel, security_smoke, pii_scan); new docs/governance/privacy.md + .cursor/rules update; tests/security/ new dir с 8 JSON cases; информационные, не блокирующие; reversible; не SSoT; не code/sim_v2",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Tier-4 lite maturity scope. Phase 1: orchestrator init workflow + register approval (F2 lesson — init PRE-approval done сегодня). Phase 2: orchestrator privacy.md (docs/ allowlist). Phase 3: delegated coder-general для 3 tools + 8 test cases (conv a93b6eb4). Phase 4: resume coder-general для phone_general → opt-in fix (snore noise reduction 1023→0 default). Phase 5: rule update +1 bullet. Phase 6: docs-curator changelog (KG handoff 8e6c874c, N1 lesson from Tier-2b учтён 3-й раз подряд). Phase 7: governance verdict allow_with_notes (2 minor notes; N2 closed via 1-line changelog amendment). Phase 8: handoff + close.",
+      "evidence_pack": "smoke: kg_to_otel.py → 117 spans (32WF+85HO+74CTX) 191KB valid OTel; security_smoke.py → 8/8 PASS, hook deny verified for orchestrator_write_guard/pre_gate_guard/ssot_approval_guard; pii_scan.py default=0 findings (strict 9 patterns), --include-loose-patterns=1023 (phone_general broad по spec); governance handoff 650b2ce7 verdict=allow_with_notes; N2 closed (changelog amendment); caps usage 6.67%/15.73% deep in budget",
+      "success_criteria": "",
+      "compliance_checklist": "policy_status=pass; scope_match=yes (C10+C13+C14 lite only, Tier-5 + certification deferred per Алексей принципу maturity NOT certification); traceability_status=pass (3 KG handoffs: coder-general a93b6eb4, docs-curator 8e6c874c with KG record, governance 650b2ce7); human_gate_status=ok (init PRE-approval done — F2 lesson finally learned); orchestrator_self_coding=no (privacy.md + rule update only allowlist; tools/+tests/ delegated coder-general); delegation_depth=1 (no nested); no_real_subagent_in_security_smoke=verified (code-read + Grep zero matches; hooks subprocess simulation only); anti_overengineering=pass (stdlib only; lite scope without certification stack); maturity_vs_certification_boundary=lite (явные skip C8/C16-C20 + non-covered scope в privacy.md); backward_compat=pass; kg_logging=pass; domain_graph_sync=not_applicable",
+      "risks": "pii_scan.py strict patterns (inn_ru, iin_kz) могут давать false-positives при росте KG (timestamps, hashes — 10/12 digit patterns). Hook simulations в security_smoke не adversarial benchmark — для personal scale OK, для real adversarial testing нужен full AgentDojo (intentionally skipped). OTel JSON export не Collector-integrated — если real Jaeger ingestion понадобится, потребуется shipper-step (вне scope Tier-4 lite).",
+      "next_owner": "orchestrator",
+      "open_questions": "Rules cleanup: .cursor/rules/90_multiagent_workflow.mdc после +8 bullets со времени P0 batch — review compactness/extract details в отдельные docs? Это упомянуто Алексеем как next priority ('возвращаемся к твоему замечанию и максимально все анализируем и облегчаем'). E2E S1+S2 smoke остаётся deferred — клонировать framework/template_out в dummy-проект для real reusability validation.",
+      "graph_update": "no (no semantic change в config/transitions/**)",
+      "created_at": "2026-05-15T13:21:33Z",
+      "usage": {
+        "model": "claude-opus-4-7-thinking-xhigh",
+        "est_tokens": 25000,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -3846,6 +4034,51 @@
       "agent": "orchestrator",
       "created_at": "2026-05-15T11:12:45Z",
       "updated_at": "2026-05-15T11:12:45Z"
+    },
+    {
+      "context_id": "ctx_W_tier4_lite_2026_05_15_approval_request_0a17f550",
+      "workflow_id": "W_tier4_lite_2026_05_15",
+      "context_type": "approval_request",
+      "content": "Approved Alexey 15-05-2026 17:51 ('С10, С13 и С14 делай, потом ... облегчаем') после Tier-3 close commit 852a925f. Risk=medium (3 new tools + new docs + tests directory; не SSoT; не code/sim_v2; обратимо). Scope=C10-lite+C13-lite+C14-lite. Tier-5 явно skipped как enterprise overhead. После Tier-4 lite — rules cleanup review (отдельная подфаза).",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T12:57:08Z",
+      "updated_at": "2026-05-15T12:57:08Z"
+    },
+    {
+      "context_id": "ctx_W_tier4_lite_2026_05_15_phase_start_5dae1f40",
+      "workflow_id": "W_tier4_lite_2026_05_15",
+      "context_type": "phase_start",
+      "content": "coder-general phase_start: implement Tier-4 lite informational tools C10 kg_to_otel, C13 security_smoke, C14 pii_scan; stdlib only; no existing hooks/rules/agents edits; no CI/enforcement.",
+      "agent": "coder-general",
+      "created_at": "2026-05-15T12:59:50Z",
+      "updated_at": "2026-05-15T12:59:50Z"
+    },
+    {
+      "context_id": "ctx_W_tier4_lite_maturity_2026_05_15_approval_request_91f31aa3",
+      "workflow_id": "W_tier4_lite_maturity_2026_05_15",
+      "context_type": "approval_request",
+      "content": "Approved Alexey 15-05-2026 18:01 ('С10, С13 и С14 делай, потом возвращаемся к твоему замечанию и максимально все анализируем и облегчаем'). Risk=medium (3 new tools + 1 doc + tests/security/; обратимо; не SSoT; не code/sim_v2; informational/maturity-only, без hard-block enforcement). Maturity practices, не certification artifacts: lite OTel export (без full Collector), lite security smoke (без full AgentDojo), lite privacy doc (без full DPIA framework). Init PRE-approval done (F2 lesson из Tier-2b/Tier-3 учтён).",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T13:03:02Z",
+      "updated_at": "2026-05-15T13:03:02Z"
+    },
+    {
+      "context_id": "ctx_W_tier4_lite_maturity_2026_05_15_phase_start_8845ede1",
+      "workflow_id": "W_tier4_lite_maturity_2026_05_15",
+      "context_type": "phase_start",
+      "content": "governance-compliance phase_start: verifying Tier-4 lite scope (C10/C13/C14 lite, skipped C8/C16-C20), anti-overengineering, no-coding-policy boundary, no-real-subagent in security_smoke (verified via code read), traceability and caps utilization for W_tier4_lite_maturity_2026_05_15.",
+      "agent": "governance-compliance",
+      "created_at": "2026-05-15T13:06:09Z",
+      "updated_at": "2026-05-15T13:18:31Z"
+    },
+    {
+      "context_id": "ctx_W_tier4_lite_maturity_2026_05_15_closure_dc385d0d",
+      "workflow_id": "W_tier4_lite_maturity_2026_05_15",
+      "context_type": "closure",
+      "content": "Tier-4 lite Maturity complete: 3 new tools + privacy doc + 8 security cases + minimal rule update + changelog. Governance allow_with_notes (N1 minor, N2 closed). Smoke all OK (117 OTel spans, 8/8 security, 0 default PII). Caps 6.67%/15.73%. Skipped C8/C16-C20 per maturity NOT certification принципу. Next: rules cleanup.",
+      "agent": "orchestrator",
+      "created_at": "2026-05-15T13:21:33Z",
+      "updated_at": "2026-05-15T13:21:33Z"
     }
   ],
   "meta": {

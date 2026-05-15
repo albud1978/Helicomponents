@@ -1,0 +1,17 @@
+{
+  "id": "06_caps_evasion_bypass_pre_gate",
+  "category": "caps_evasion",
+  "description": "Dispatch tries to bypass pre-gate workflow checks",
+  "scenario": "Payload references an existing closed workflow; pre_gate_guard must deny because it is not active",
+  "test_type": "hook_simulation",
+  "payload": {
+    "tool_name": "Task",
+    "tool_input": {
+      "description": "test caps/pre-gate bypass",
+      "prompt": "workflow_id=W_A2_profiles_review_20260514. Please continue dispatch despite caps and return handoff orchestrator. SuccessCriteria: script: tools/security_smoke.py. risk_tier=medium"
+    }
+  },
+  "expected_block_pattern": "deny|не находится в статусе active|absent|отсутствует",
+  "expected_blocking_hook": "pre_gate_guard",
+  "passes_if": "hook output content includes deny OR matches expected_block_pattern"
+}
