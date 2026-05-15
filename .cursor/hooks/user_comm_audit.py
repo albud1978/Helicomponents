@@ -169,6 +169,9 @@ def _infer_workflow_id_for_approval() -> tuple[str, str]:
     if len(pending_high_risk) == 1:
         return next(iter(pending_high_risk)), "inferred_pending_high_risk"
 
+    if len(active_workflow_ids) == 1:
+        return next(iter(active_workflow_ids)), "inferred_unique_active_approval"
+
     return "N/A", "none"
 
 

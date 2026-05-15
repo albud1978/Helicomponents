@@ -4,6 +4,8 @@
 
 **Source of truth.** Этот файл — manual-tracked human-readable inventory. Автоматический SBOM (`sbom.cdx.json`) считается primary machine-readable источником после его генерации (P0.6).
 
+**Supplier-centric view.** Для оценки vendor-risk и continuity plan см. [`docs/governance/suppliers.md`](docs/governance/suppliers.md) (supplier matrix, criticality, kill-switch).
+
 **Last reviewed.** 15-05-2026 (orchestrator, W_compliance_remediation_2026_05_15).
 
 ---
