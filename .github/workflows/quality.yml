@@ -26,8 +26,8 @@ jobs:
 
       - name: Python syntax check
         run: |
-          python3 -m compileall -q code tools .cursor/hooks
-          echo "All Python files compile"
+          python3 -m compileall -q -x '^code/archive/' code tools .cursor/hooks
+          echo "All active Python files compile (code/archive/** excluded)"
 
       - name: Invariant/TEMP drift check
         run: |
@@ -45,7 +45,10 @@ jobs:
 
           inv_numbers = [int(re.search(r"INV-(\d+)", item).group(1)) for item in inv_ids]
           expected_max = max(inv_numbers)
-          paths = list(pathlib.Path("docs").glob("**/*.md"))
+          paths = [
+              p for p in pathlib.Path("docs").glob("**/*.md")
+              if "archive" not in p.parts and p.name != "changelog.md"
+          ]
           paths += list(pathlib.Path(".cursor/rules").glob("*.mdc"))
           paths.append(pathlib.Path("README.md"))
 
