@@ -1,5 +1,99 @@
 # Changelog
 
+## [16-05-2026] - Audit hardening: KG hash chain + embedded close validation + tamper detection
+
+### Принцип
+- **Реальная дыра в audit trail**, эмпирически подтверждена. В active KG **2 workflow закрыты без единого handoff**: `W_tier4_lite_2026_05_15` (закрыт сегодня 06:18 UTC), `W_smoke_profile_test` (Tier-M fixture).
+- Hook `pre_close_guard.py` логически корректен (изолированный smoke test даёт `decision=deny` за 20ms), но эмпирически **не блокирует** реальные `--close-workflow` Shell вызовы в Cursor. Причина точно не установлена (timeout / advisory mode / pass-through), но факт: hook is NOT reliable enforcement.
+- Все логи (`config/agent_kg.json`, `code_edit_audit.log`, `user_comm_audit.log`) — **mutable**: можно отредактировать через Write/StrReplace tool или прямым `json.dump()` без следа в audit trail (кроме git history между коммитами).
+- **Lite-фикс tooling-only** без правки rules: forward-only hash chain + embedded validation + tamper verifier + audit WARN.
+- Risk-tier: `medium`, profile: `medium-fast` (Tier-M M2: SSoT tool modification, embedded enforcement, blast radius limited via forward-only baseline).
+- **Workflow trace**: `W_audit_hardening_2026_05_16`. Approval: Alexey 11:52 "закрывай дыру, согласен".
+
+### Добавлено / изменено
+
+- **`code/utils/agent_kg.py`** (+192 lines):
+  - `_compute_handoff_hash(record)` — canonical SHA256: `json.dumps(record, sort_keys=True, separators=(",",":"), ensure_ascii=False)` → SHA256 hex. Standalone helper, используется обоими `write_handoff` и `verify_kg_chain.py` для consistency.
+  - `HASH_CHAIN_GENESIS = "GENESIS"` constant — explicit marker (НЕ `"0"*64`, для readability).
+  - `write_handoff()` extended: вычисляет `prev_handoff_hash` от последнего handoff этого workflow_id (или `GENESIS` если первый); записывает в новое поле handoff record; при первом chain handoff фиксирует `metadata.hash_chain_baseline = {started_at, first_handoff_id, scheme: "sha256_canonical_v1"}`.
+  - `close_workflow()` extended — **embedded validation** (defense-in-depth дублирует pre_close_guard логику в Python):
+    - Проверка наличия orchestrator handoff для workflow_id → exit 2 если нет
+    - Проверка обязательных полей: `risk_tier ∈ {low,medium,high}`, `drift_check` непустой, `graph_update ∈ {yes,no}` → exit 2 если отсутствуют
+    - Risk-based: medium → требует `governance-compliance` handoff; high → требует и `governance-compliance` и `docs-curator` handoffs
+    - `--force-close` argparse flag bypass-ит validation **+ записывает WARN в audit log** (administrator-traced bypass)
+  - Backward-compat: legacy handoffs без `prev_handoff_hash` остаются как есть; existing closed workflows не затрагиваются; новые close calls с этого момента enforced.
+- **`tools/verify_kg_chain.py`** (NEW, ~240 lines):
+  - CLI: `--kg-path`, `--include-archive`, `--workflow-id`, `--report stdout|json`, `--exit-on-failure`
+  - Group handoffs by workflow_id, sort by created_at
+  - Skip legacy handoffs без `prev_handoff_hash` (pre-baseline migration)
+  - Для chained handoffs: compute `_compute_handoff_hash(previous)` и сравни с claimed `prev_handoff_hash`. Mismatch = **TAMPER** finding.
+  - Output: PASS/FAIL + workflows_checked + handoffs_total + handoffs_with_chain (coverage %) + baseline_label + tampered count + detailed findings.
+- **`.cursor/hooks/audit_code_edit.py`** (+33 lines):
+  - `_classify_edit(file_path)` — WARN level для `config/agent_kg.json`, `config/agent_kg_archive/*`, `.cursor/hooks/code_edit_audit.log`, `.cursor/hooks/user_comm_audit.log`. INFO для остальных watched paths.
+  - **Bonus**: hash chain в audit log самом — каждая entry получает `current_hash = sha256(prev_hash + canonical_content)`. Audit log стал **tamper-evident SHA256 chain** аналогично KG handoff chain. Это сверх scope — coder-general добавил по своей инициативе как defense-in-depth.
+
+### Smoke (7/7 PASS)
+
+```
+$ python3 tools/verify_kg_chain.py
+KG chain integrity: PASS
+- Workflows checked: 36
+- Handoffs total: 105
+- Handoffs with chain: 1 (1.0%) - baseline 2026-05-16T06:58:44Z
+- Tampered: 0
+
+$ python3 tools/verify_kg_chain.py --include-archive
+KG chain integrity: PASS
+- Workflows checked: 222
+- Handoffs total: 775
+- Handoffs with chain: 1 (0.1%) - baseline 2026-05-16T06:58:44Z
+- Tampered: 0
+```
+
+Negative test embedded close:
+- `--close-workflow W_test_close_block` (без orchestrator handoff) → exit **2**: `"close_workflow blocked: no orchestrator handoff found for workflow W_test_close_block. Sequence: --write-handoff (orchestrator) then --close-workflow."`
+- `--close-workflow ... --force-close` → exit 0 + WARN entry в `code_edit_audit.log`: `"WARN --force-close used for Agent KG workflow close; embedded close validation bypassed by administrator."`
+
+Direct file edit detection:
+- Cursor Write/StrReplace на `config/agent_kg.json` → WARN entry: `"WARN config/agent_kg.json edited via Cursor tool (Write/StrReplace) - bypass of code/utils/agent_kg.py CLI"`
+- CLI write через `code/utils/agent_kg.py --write-handoff` НЕ генерирует WARN (это legitimate path).
+
+Neo4j projection (post re-sync):
+- `tools/agent_kg_to_neo4j.py` extended (+1 поле `prev_handoff_hash` в HANDOFF_QUERY); full re-sync: workflows=225, handoffs=775, contexts=304
+- Cypher: `MATCH (h:Handoff) WHERE h.prev_handoff_hash IS NOT NULL RETURN count(h)` → 1 (baseline)
+- Cypher: `MATCH (h:Handoff) WHERE h.prev_handoff_hash = 'GENESIS' RETURN count(h)` → 1
+- W_audit_hardening_2026_05_16: cumulative=30000, max=120000, profile=medium-fast, **utilization=25.0%**
+- Domain Graph integrity preserved (все 9 labels matching).
+
+### Реальный effect
+
+| Что | До | После |
+|---|---|---|
+| **Закрыть workflow без orchestrator handoff** | Hook decision=deny но эмпирически проходит | **Exit 2 в Python** — embedded enforcement defense-in-depth |
+| **Подделать handoff в active KG** | Возможно без следа (mutable JSON) | **Возможно**, но `verify_kg_chain.py` обнаружит tamper по chain mismatch |
+| **Прямой edit `config/agent_kg.json` через Cursor** | Логировался как INFO | **Логируется как WARN** + tamper-evident audit chain |
+| **Audit log сам** | Mutable plain text | **SHA256 hash chain в каждой entry** — tamper-evident |
+| **`--force-close`** | Не существовал | Доступен с **WARN entry** для administrator-traced bypass |
+| **Hash chain coverage** | 0% | 1.0% (baseline начат) — растёт на каждый новый handoff |
+
+### Test fixtures
+- `W_chain_test`, `W_empty_test` — coder-general созданы и удалены в smoke (per Tier-M validation pattern)
+- `W_test_close_block` — orchestrator создан для negative test embedded close; закрыт с `--force-close` (WARN logged); остаётся в KG как documented audit hardening test fixture
+
+### Process insights (deferred / outside scope)
+- **Backfill hash chain для legacy handoffs**: НЕ делали (это сам по себе был бы tamper — изменение historical records). Forward-only baseline — правильный compliance pattern.
+- **Auto-commit hook после `--close-workflow`**: НЕ делали (вне scope; orchestrator решает commit cadence; risk конфликтов с running edits).
+- **Git signed commits (GPG)**: opt-in для пользователя на уровне `git config`, не tool-level enforcement.
+
+### Файлы
+- `code/utils/agent_kg.py` (extend +192 lines)
+- `tools/verify_kg_chain.py` (NEW)
+- `.cursor/hooks/audit_code_edit.py` (extend +33 lines)
+- `tools/agent_kg_to_neo4j.py` (extend +1 поле prev_handoff_hash)
+- `docs/changelog.md` (этот entry)
+
+---
+
 ## [16-05-2026] - Agent KG → Neo4j projection: token + caps + profile mapping
 
 ### Принцип

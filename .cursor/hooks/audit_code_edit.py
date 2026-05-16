@@ -9,6 +9,12 @@ from pathlib import Path
 
 LOG_PATH = Path(__file__).resolve().parent / "code_edit_audit.log"
 WATCHED_PREFIXES = ("code/", "tools/")
+KG_AUDIT_PATH = "config/agent_kg.json"
+KG_AUDIT_PREFIX = "config/agent_kg_archive/"
+AUDIT_LOG_PATHS = (
+    ".cursor/hooks/code_edit_audit.log",
+    ".cursor/hooks/user_comm_audit.log",
+)
 MAX_SNIPPET = 120  # максимум символов old/new в логе
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -60,6 +66,27 @@ def _compute_hash(entry: dict, prev_hash: str | None) -> str:
     return hashlib.sha256(((prev_hash or "") + content).encode("utf-8")).hexdigest()
 
 
+def _classify_edit(file_path: str) -> tuple[str, str] | None:
+    if file_path == KG_AUDIT_PATH or file_path.startswith(KG_AUDIT_PREFIX):
+        return (
+            "WARN",
+            f"WARN {file_path} edited via Cursor tool (Write/StrReplace) - "
+            "bypass of code/utils/agent_kg.py CLI",
+        )
+    if file_path in AUDIT_LOG_PATHS:
+        return (
+            "WARN",
+            f"WARN {file_path} edited via Cursor tool (Write/StrReplace) - "
+            "audit log integrity event",
+        )
+    if any(file_path.startswith(prefix) for prefix in WATCHED_PREFIXES):
+        return (
+            "INFO",
+            f"INFO {file_path} edited via Cursor tool (Write/StrReplace)",
+        )
+    return None
+
+
 def _append_audit_entry(entry: dict) -> None:
     prev_hash = _previous_hash()
     entry["prev_hash"] = prev_hash
@@ -79,9 +106,11 @@ def main() -> None:
         payload = {}
 
     file_path = _normalize_path(payload.get("file_path", ""))
-    if not any(file_path.startswith(p) for p in WATCHED_PREFIXES):
+    classification = _classify_edit(file_path)
+    if classification is None:
         sys.stdout.write("{}")
         return
+    level, message = classification
 
     edits = payload.get("edits", [])
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -91,6 +120,8 @@ def main() -> None:
     entry = {
         "timestamp": ts,
         "action": "afterFileEdit",
+        "level": level,
+        "message": message,
         "conversation_id": conv_id,
         "generation_id": gen_id,
         "agent": payload.get("agent") or payload.get("model") or "unknown",

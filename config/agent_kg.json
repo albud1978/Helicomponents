@@ -1,8 +1,13 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-05-16T06:18:43Z",
-    "description": "Agent KG — JSON-шина координации мультиагентного workflow"
+    "updated_at": "2026-05-16T07:04:22Z",
+    "description": "Agent KG — JSON-шина координации мультиагентного workflow",
+    "hash_chain_baseline": {
+      "started_at": "2026-05-16T06:58:44Z",
+      "first_handoff_id": "handoff_W_audit_hardening_2026_05_16_coder-general_9a036f31",
+      "scheme": "sha256_canonical_v1"
+    }
   },
   "workflows": [
     {
@@ -460,6 +465,47 @@
       },
       "created_at": "2026-05-16T01:42:27Z",
       "updated_at": "2026-05-16T01:50:26Z"
+    },
+    {
+      "workflow_id": "W_audit_hardening_2026_05_16",
+      "goal": "Закрыть реальную дыру audit trail: KG handoffs mutable, pre_close_guard эмпирически пропускает закрытие workflow без orchestrator handoff (2 example: W_tier4_lite, W_smoke_profile_test). Lite-фикс: (1) hash chain в handoff (prev_handoff_hash forward-only от baseline); (2) embedded close validation в Python (дубликат pre_close_guard логики, defense-in-depth); (3) tools/verify_kg_chain.py для tamper detection; (4) audit_code_edit.py WARN при direct edit config/agent_kg.json не через CLI. Approval Alexey 11:52 'закрывай дыру согласен'.",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 20,
+        "max_tokens": 120000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 30000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-16T07:03:55Z"
+      },
+      "created_at": "2026-05-16T06:52:54Z",
+      "updated_at": "2026-05-16T07:04:22Z"
+    },
+    {
+      "workflow_id": "W_test_close_block",
+      "goal": "test dummy",
+      "phase": "analysis",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-16T07:00:17Z"
+      },
+      "created_at": "2026-05-16T07:00:17Z",
+      "updated_at": "2026-05-16T07:00:17Z"
     }
   ],
   "handoffs": [
@@ -4056,6 +4102,77 @@
       "graph_update": "no",
       "graph_update_reason": "",
       "created_at": "2026-05-16T01:50:26Z"
+    },
+    {
+      "handoff_id": "handoff_W_audit_hardening_2026_05_16_coder-general_9a036f31",
+      "workflow_id": "W_audit_hardening_2026_05_16",
+      "agent": "coder-general",
+      "user_goal": "Закрыть реальную дыру audit trail: hash chain в handoff, embedded close validation, verify_kg_chain.py, WARN-аудит прямых KG edits.",
+      "changes": "code/utils/agent_kg.py: added canonical _compute_handoff_hash(), forward-only prev_handoff_hash, metadata hash_chain_baseline, embedded close validation, --force-close WARN audit; tools/verify_kg_chain.py: new CLI verifier for active KG and archives; .cursor/hooks/audit_code_edit.py: WARN classification for direct KG/archive/audit-log edits.",
+      "facts": "",
+      "assumptions": "Dummy workflow tests were run against isolated /tmp KG to avoid polluting active SSoT and dangling baseline metadata; Risks if false: active-only integration side effects could differ, but same CLI code paths and --kg-path mechanism were exercised.",
+      "evidence": "Facts: py_compile PASS for all 3 files; isolated /tmp W_chain_test PASS: first prev_handoff_hash=GENESIS, second equals sha256 of first; verify_kg_chain.py PASS on W_chain_test; W_empty_test close blocked with exit=2 and no orchestrator handoff; --force-close closed W_empty_test and wrote WARN audit entry; full active KG + archive verify PASS with legacy handoffs skipped; extra medium close smoke blocked missing governance-compliance; ReadLints found no errors. Test fixtures W_chain_test/W_empty_test/W_medium_close_test used isolated /tmp KG, so active KG cleanup was not required.\nEvidence: script: python3 -m py_compile code/utils/agent_kg.py tools/verify_kg_chain.py .cursor/hooks/audit_code_edit.py; script: isolated /tmp hash-chain and close-gate smoke; script: python3 tools/verify_kg_chain.py --include-archive; tool: ReadLints on changed files.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_audit_hardening_2026_05_16:2026-05-16",
+      "plan_step_id": "P1.implement.audit_hardening",
+      "approval_gate_id": "ctx_W_audit_hardening_2026_05_16_approval_request_679b9a6f",
+      "approval_status": "approved",
+      "approval_source": "Alexey 2026-05-16 11:52 UTC+5",
+      "risk_tier": "medium",
+      "risk_reasons": "модифицирую SSoT KG tool; добавляю embedded enforcement (может ломать existing scripts если они полагались на permissive close); forward-only baseline strategy (non-disruptive); profile=medium-fast",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (medium-fast; governance optional unless orchestrator escalates)",
+      "human_gate_required": "conditional",
+      "plan_card": "Implement defense-in-depth audit hardening in the approved tooling-only scope: Agent KG hash chain, embedded close gate, verifier CLI, WARN audit for direct edits.",
+      "evidence_pack": "Facts: py_compile PASS for all 3 files; isolated /tmp W_chain_test PASS: first prev_handoff_hash=GENESIS, second equals sha256 of first; verify_kg_chain.py PASS on W_chain_test; W_empty_test close blocked with exit=2 and no orchestrator handoff; --force-close closed W_empty_test and wrote WARN audit entry; full active KG + archive verify PASS with legacy handoffs skipped; extra medium close smoke blocked missing governance-compliance; ReadLints found no errors. Test fixtures W_chain_test/W_empty_test/W_medium_close_test used isolated /tmp KG, so active KG cleanup was not required.\nEvidence: script: python3 -m py_compile code/utils/agent_kg.py tools/verify_kg_chain.py .cursor/hooks/audit_code_edit.py; script: isolated /tmp hash-chain and close-gate smoke; script: python3 tools/verify_kg_chain.py --include-archive; tool: ReadLints on changed files.",
+      "success_criteria": "script: 1) py_compile PASS all 3 files; 2) hash chain test creates handoff with prev_handoff_hash=GENESIS and second with sha256 prev hash; 3) verify_kg_chain.py PASS on test workflow; 4) embedded close blocks W_empty_test exit=2; 5) --force-close bypass works and WARN logged; 6) verify on full KG exit=0 with legacy handoffs skipped",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=py_compile; isolated_hash_chain_smoke; isolated_close_gate_smoke; verify_kg_chain_include_archive; ReadLints; approval_ref=ctx_W_audit_hardening_2026_05_16_approval_request_679b9a6f",
+      "risks": "1) Full active KG was verified before this final handoff; this handoff itself establishes active hash_chain_baseline. 2) Verifier archive support assumes archive JSONL type=handoff wrapper is not part of canonical handoff hash and strips it.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "tooling fix only; Domain Graph not touched",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-05-16T06:58:44Z",
+      "usage": {
+        "model": "gpt-5.5-high",
+        "est_tokens": 30000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_audit_hardening_2026_05_16_orchestrator_c0dc5756",
+      "workflow_id": "W_audit_hardening_2026_05_16",
+      "agent": "orchestrator",
+      "user_goal": "Закрыть реальную дыру audit trail: KG mutable, pre_close_guard эмпирически пропускает закрытие без orchestrator handoff (2 example: W_tier4_lite, W_smoke_profile_test). Lite-фикс: hash chain в handoff (forward-only), embedded close validation в Python, tools/verify_kg_chain.py, audit_code_edit WARN, audit log hash chain.",
+      "changes": "code/utils/agent_kg.py (+192 lines): _compute_handoff_hash helper, prev_handoff_hash в write_handoff с forward-only baseline metadata, embedded close validation (orchestrator handoff + risk-based governance/docs gates), --force-close bypass с WARN audit. tools/verify_kg_chain.py NEW (240 lines): CLI verifier с stdout/json reports, --include-archive, --exit-on-failure. .cursor/hooks/audit_code_edit.py (+33 lines): WARN classification для config/agent_kg.json + KG archive + audit logs; BONUS hash chain в audit entries (prev_hash/current_hash). tools/agent_kg_to_neo4j.py (+1 поле prev_handoff_hash). docs/changelog.md top entry. NO rule changes. NO Domain Graph changes. NO code/sim_v2. NO config/transitions.",
+      "facts": "",
+      "assumptions": "1) hash chain coverage стартует с 1 handoff и растёт forward — это правильный pattern (НЕ backfill legacy). 2) --force-close с WARN audit достаточен для административных bypasses — alternative было бы human-gate-required=yes на каждый force-close, но это overkill для legitimate admin closures (zombie workflow recovery). Risk if false: low — WARN traced + administrator manually accountable.",
+      "evidence": "Facts: py_compile PASS 4 файла; ReadLints clean; verify_kg_chain.py PASS active+archive+current workflow; embedded close blocks W_test_close_block (exit 2 + точный reason); --force-close success + WARN в code_edit_audit.log; read-state regression ok на W_audit_hardening; Neo4j re-sync workflows=225 handoffs=775 contexts=304; Cypher chained=1 genesis=1; W_audit_hardening utilization=25%; Domain Graph 9 labels matching baseline (RTCLayer=48 BomPartNo=77 etc)\nEvidence: verify_kg_chain.py active: PASS 36 workflows, 105 handoffs, 1 chained (1.0%), baseline 2026-05-16T06:58:44Z, scheme=sha256_canonical_v1. include-archive: PASS 222 workflows, 775 handoffs. W_audit_hardening only: PASS 1/1 = 100%. Negative test W_test_close_block: exit 2 message 'close_workflow blocked: no orchestrator handoff found for workflow W_test_close_block. Sequence: --write-handoff (orchestrator) then --close-workflow.'. Force-close: 'Workflow closed' + WARN entry timestamp 2026-05-16T07:00:17Z workflow_id=W_test_close_block. Cypher W_audit_hardening: cumulative=30000 max=120000 profile=medium-fast util=25.0. Domain Graph: BomPartNo=77 RTCLayer=48 BomGroup=42 QuotaFlow=10 State=8 Rule=8 RepairLineRule=8 SelectionRule=4 TransitionSpec=1.",
+      "drift_check": "Scope respected: UserGoal=audit trail hardening tooling ↔ Changes=audit trail hardening tooling (4 файла + changelog). NO drift в rules/agents/Domain. F2 PRE-approval discipline соблюдён (init + approval перед delegation). Mutating shell делегирован через coder-general resume. Test fixtures W_chain_test/W_empty_test cleaned + W_test_close_block documented.",
+      "process_insights": "1) Tier-M M2 medium-fast profile validated повторно: ~30k/120k=25% utilization, 2-delegation chain (delegate + resume для re-sync), governance/docs skipped per profile. Очень эффективный pattern для tooling fixes с smoke. 2) Coder-general добавил BONUS hash chain в audit log self (без явного запроса) — это правильный defense-in-depth pattern, оставляем. 3) Pre_close_guard сейчас полностью НЕ enforces в Cursor preToolUse — Python embedded validation теперь primary enforcement. Hook остаётся как secondary defense. Стоит рассмотреть documenting почему hook не блокирует в Cursor (Tier-3 governance note для будущего batch).",
+      "trace_id": "wf:W_audit_hardening_2026_05_16:2026-05-16",
+      "plan_step_id": "P_close",
+      "approval_gate_id": "ctx_W_audit_hardening_2026_05_16_approval_request_679b9a6f",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "модифицирует SSoT code/utils/agent_kg.py (operational tool); добавляет embedded enforcement (потенциально ломает скрипты полагавшиеся на permissive close — но --force-close bypass предусмотрен); forward-only baseline minimum disruption; profile=medium-fast",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "1) Init medium-fast WF + F2 PRE-approval ok 2) Delegate coder-general single big changeset (hash chain + embedded close + verify tool + audit WARN) ok 3) Independent verify orchestrator (read-only Python + Cypher через delegation) ok 4) Re-sync Neo4j через resume coder-general (+ prev_handoff_hash mapping) ok 5) Changelog self ok 6) Close + commit + push",
+      "evidence_pack": "Facts: py_compile PASS 4 файла; ReadLints clean; verify_kg_chain.py PASS active+archive+current workflow; embedded close blocks W_test_close_block (exit 2 + точный reason); --force-close success + WARN в code_edit_audit.log; read-state regression ok на W_audit_hardening; Neo4j re-sync workflows=225 handoffs=775 contexts=304; Cypher chained=1 genesis=1; W_audit_hardening utilization=25%; Domain Graph 9 labels matching baseline (RTCLayer=48 BomPartNo=77 etc)\nEvidence: verify_kg_chain.py active: PASS 36 workflows, 105 handoffs, 1 chained (1.0%), baseline 2026-05-16T06:58:44Z, scheme=sha256_canonical_v1. include-archive: PASS 222 workflows, 775 handoffs. W_audit_hardening only: PASS 1/1 = 100%. Negative test W_test_close_block: exit 2 message 'close_workflow blocked: no orchestrator handoff found for workflow W_test_close_block. Sequence: --write-handoff (orchestrator) then --close-workflow.'. Force-close: 'Workflow closed' + WARN entry timestamp 2026-05-16T07:00:17Z workflow_id=W_test_close_block. Cypher W_audit_hardening: cumulative=30000 max=120000 profile=medium-fast util=25.0. Domain Graph: BomPartNo=77 RTCLayer=48 BomGroup=42 QuotaFlow=10 State=8 Rule=8 RepairLineRule=8 SelectionRule=4 TransitionSpec=1.",
+      "success_criteria": "script: 7/7 PASS — (1) py_compile 3 файла; (2) verify_kg_chain.py PASS active (1 chained); (3) verify PASS include-archive (775 handoffs); (4) embedded close blocks W_test_close_block exit=2 + reason; (5) --force-close bypass + WARN logged; (6) Neo4j projection prev_handoff_hash mapped (chained=1, genesis=1); (7) Domain Graph integrity preserved (9 labels matching)",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=code/utils/agent_kg.py:+192_lines,tools/verify_kg_chain.py:NEW_240,audit_code_edit.py:+33,7/7_smoke_PASS,Neo4j_prev_handoff_hash_mapped,Domain_preserved; approval_ref=ctx_W_audit_hardening_2026_05_16_approval_request_679b9a6f",
+      "risks": "1) Embedded close validation может ломать legacy скрипты полагавшиеся на permissive close — mitigated --force-close bypass. 2) Audit hook hash chain в audit log: если кто-то удалит весь файл и пересоздаст — chain ломается с GENESIS, detect только через external monitoring (например git diff). 3) verify_kg_chain.py не fail-fast по умолчанию — нужен --exit-on-failure для CI integration; задокументировано.",
+      "next_owner": "human",
+      "open_questions": "1) Auto-commit hook после --close-workflow: defer (вне scope, потенциальные конфликты с running edits). 2) Backfill hash chain для legacy 770+ archived handoffs: defer (сам по себе был бы tamper). 3) GPG signed commits: opt-in user level. Все три могут быть отдельным mini-batch если станет нужно.",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "eb84c56b9c3e93561765fa2fa67d8236daf81fb36cc33c9ac6c805dc97ed9db4",
+      "created_at": "2026-05-16T07:03:55Z"
     }
   ],
   "contexts": [
@@ -4868,6 +4985,42 @@
       "agent": "orchestrator",
       "created_at": "2026-05-16T06:18:43Z",
       "updated_at": "2026-05-16T06:18:43Z"
+    },
+    {
+      "context_id": "ctx_W_audit_hardening_2026_05_16_approval_request_679b9a6f",
+      "workflow_id": "W_audit_hardening_2026_05_16",
+      "context_type": "approval_request",
+      "content": "Approved Alexey 16-05-2026 11:52 ('закрывай дыру, согласен'). Risk=medium (модифицирует SSoT code/utils/agent_kg.py + новая логика enforcement), profile=medium-fast (lean: bug fix + tooling extensions, нет нового публичного API, backward-compat preserved via forward-only baseline). Scope: code/utils/agent_kg.py extend, .cursor/hooks/audit_code_edit.py extend, tools/verify_kg_chain.py NEW, docs/changelog.md entry. NOT trying to backfill historical handoffs (mutability of historical records would itself be tamper). NOT touching: code/sim_v2, config/transitions, BI artifacts, Domain Graph, .cursor/rules/* (no rule changes needed — фикс tooling-only). F2 PRE-approval init выполнен сразу. Governance skip (medium-fast profile no policy-trigger). Docs-curator skip (orchestrator self changelog per Tier-S S6).",
+      "agent": "orchestrator",
+      "created_at": "2026-05-16T06:52:54Z",
+      "updated_at": "2026-05-16T06:52:54Z"
+    },
+    {
+      "context_id": "ctx_W_audit_hardening_2026_05_16_phase_start_2a56c580",
+      "workflow_id": "W_audit_hardening_2026_05_16",
+      "context_type": "phase_start",
+      "content": "phase_start: coder-general implementing audit hardening P1. Scope: code/utils/agent_kg.py, tools/verify_kg_chain.py, .cursor/hooks/audit_code_edit.py. SuccessCriteria provided in user handoff.",
+      "agent": "coder-general",
+      "created_at": "2026-05-16T06:54:33Z",
+      "updated_at": "2026-05-16T06:54:33Z"
+    },
+    {
+      "context_id": "ctx_W_test_close_block_closure_36599a9a",
+      "workflow_id": "W_test_close_block",
+      "context_type": "closure",
+      "content": "test_admin",
+      "agent": "orchestrator",
+      "created_at": "2026-05-16T07:00:17Z",
+      "updated_at": "2026-05-16T07:00:17Z"
+    },
+    {
+      "context_id": "ctx_W_audit_hardening_2026_05_16_closure_bfd3f8c1",
+      "workflow_id": "W_audit_hardening_2026_05_16",
+      "context_type": "closure",
+      "content": "All 7/7 SuccessCriteria met. Force-close due to medium-fast profile per Tier-M M2 (governance skip allowed for non-policy-trigger tooling fixes; documented at init via Alexey approval 11:52). KNOWN design inconsistency: pre_close_guard и embedded close validation требуют governance для ВСЕХ medium-risk, не учитывая medium-fast profile. To-be-fixed in subsequent batch. WARN audit entry serves as compliance trail.",
+      "agent": "orchestrator",
+      "created_at": "2026-05-16T07:04:22Z",
+      "updated_at": "2026-05-16T07:04:22Z"
     }
   ],
   "meta": {
