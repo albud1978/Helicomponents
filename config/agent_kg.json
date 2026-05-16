@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-05-16T01:50:26Z",
+    "updated_at": "2026-05-16T06:18:43Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow"
   },
   "workflows": [
@@ -324,7 +324,7 @@
       "goal": "Tier-4 lite (maturity-only, без compliance theater): C10-lite (OTel JSON trace export tools/kg_to_otel.py), C13-lite (prompt injection/plan deviation smoke tools/security_smoke.py + tests/security/), C14-lite (docs/governance/privacy.md + tools/pii_scan.py). Skipped: C8 ISO 42001 SoA, C16-C20 long-tail certification overhead.",
       "phase": "implementation",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 40,
         "max_tokens": 400000,
@@ -337,7 +337,7 @@
         "last_updated": "2026-05-15T12:57:08Z"
       },
       "created_at": "2026-05-15T12:57:08Z",
-      "updated_at": "2026-05-15T12:57:08Z"
+      "updated_at": "2026-05-16T06:18:43Z"
     },
     {
       "workflow_id": "W_tier4_lite_maturity_2026_05_15",
@@ -4859,6 +4859,15 @@
       "agent": "orchestrator",
       "created_at": "2026-05-16T01:50:26Z",
       "updated_at": "2026-05-16T01:50:26Z"
+    },
+    {
+      "context_id": "ctx_W_tier4_lite_2026_05_15_closure_c5627296",
+      "workflow_id": "W_tier4_lite_2026_05_15",
+      "context_type": "closure",
+      "content": "Административное закрытие. Batch Tier-4 lite (C10/C13/C14) фактически завершён 15-05-2026 (changelog '[15-05-2026] - Tier-4 lite Maturity'); работа закоммичена в Tier-S/M последовательности (commits 79e74c12, 01b4e1b7). --close-workflow не был вызван в той сессии — housekeeping leftover. Активных delegations нет, работа завершена.",
+      "agent": "orchestrator",
+      "created_at": "2026-05-16T06:18:43Z",
+      "updated_at": "2026-05-16T06:18:43Z"
     }
   ],
   "meta": {
