@@ -37,7 +37,12 @@ RESET_QUERY = "MATCH (n) WHERE n:Workflow OR n:Handoff OR n:Context OR n:Agent D
 WORKFLOW_QUERY = """
 MERGE (w:Workflow {id: $id})
 SET w.goal = $goal, w.status = $status, w.owner = $owner, w.phase = $phase,
-    w.created_at = $created_at, w.updated_at = $updated_at, w.source = $source
+    w.created_at = $created_at, w.updated_at = $updated_at, w.source = $source,
+    w.risk_tier = $risk_tier, w.cumulative_tokens = $cumulative_tokens,
+    w.cumulative_steps = $cumulative_steps, w.max_steps = $max_steps,
+    w.max_tokens = $max_tokens, w.profile = $profile,
+    w.utilization_tokens_pct = $util_tokens, w.utilization_steps_pct = $util_steps,
+    w.last_usage_updated = $last_usage_updated
 WITH w MATCH (a:Agent {name: $owner}) MERGE (w)-[:OWNED_BY]->(a)
 """
 
@@ -48,7 +53,12 @@ SET h.agent = $agent, h.plan_step_id = $plan_step_id, h.trace_id = $trace_id,
     h.risk_validated_by = $risk_validated_by, h.approval_status = $approval_status,
     h.human_gate_required = $human_gate_required, h.graph_update = $graph_update,
     h.drift_check = $drift_check, h.success_criteria = $success_criteria,
-    h.created_at = $created_at, h.usage_total_tokens = $usage_total_tokens
+    h.created_at = $created_at, h.est_tokens = $est_tokens,
+    h.model = $model, h.usage_source = $usage_source,
+    h.next_owner_name = $next_owner, h.evidence_pack_len = $evidence_pack_len,
+    h.changes_len = $changes_len, h.synthesized_legacy = $synthesized_legacy,
+    h.cc_decision = $cc_decision, h.cc_required_gates = $cc_required_gates,
+    h.cc_exceptions = $cc_exceptions, h.cc_approval_ref = $cc_approval_ref
 WITH h MATCH (w:Workflow {id: $workflow_id}) MERGE (w)-[:HAS_HANDOFF]->(h)
 WITH h MATCH (a:Agent {name: $agent}) MERGE (h)-[:BY_AGENT]->(a)
 """
@@ -130,9 +140,41 @@ def _prepare_archive_handoff(record: Dict[str, Any]) -> Dict[str, Any]:
     return item
 
 
-def _usage_total_tokens(usage: Any) -> Any:
-    value = usage.get("total_tokens") if isinstance(usage, dict) else None
+def _int_or_none(value: Any) -> Any:
     return value if isinstance(value, int) else None
+
+
+def _usage_est_tokens(usage: Any) -> Any:
+    if not isinstance(usage, dict):
+        return None
+    # Tier-2b writes est_tokens; total_tokens is kept only for legacy records.
+    value = usage.get("est_tokens") if usage.get("est_tokens") is not None else usage.get("total_tokens")
+    return _int_or_none(value)
+
+
+def _utilization_pct(current: Any, maximum: Any) -> Any:
+    current_int = _int_or_none(current)
+    maximum_int = _int_or_none(maximum)
+    if current_int is None or maximum_int is None or maximum_int <= 0:
+        return None
+    return round((current_int / maximum_int) * 100, 2)
+
+
+def _parse_compliance_checklist(text: Any) -> Dict[str, Any]:
+    """Parse Tier-S S3 compact compliance_checklist into discrete fields."""
+    if not isinstance(text, str) or not text.strip():
+        return {}
+    out = {}
+    for part in text.split(";"):
+        part = part.strip()
+        if "=" not in part:
+            continue
+        key, _, value = part.partition("=")
+        key = key.strip()
+        value = value.strip()
+        if key in ("decision", "required_gates", "exceptions", "evidence_refs", "approval_ref"):
+            out[key] = value if value else None
+    return out
 
 
 def _content_len(content: Any) -> int:
@@ -215,6 +257,12 @@ def _project(settings: argparse.Namespace, data: Projection) -> None:
 
 def _write_workflows(session: Any, workflows: List[Dict[str, Any]]) -> None:
     for workflow in workflows:
+        usage = workflow.get("usage") if isinstance(workflow.get("usage"), dict) else {}
+        caps = workflow.get("caps") if isinstance(workflow.get("caps"), dict) else {}
+        cumulative_tokens = _int_or_none(usage.get("cumulative_tokens"))
+        cumulative_steps = _int_or_none(usage.get("cumulative_steps"))
+        max_tokens = _int_or_none(caps.get("max_tokens"))
+        max_steps = _int_or_none(caps.get("max_steps"))
         session.run(
             WORKFLOW_QUERY,
             id=_require(workflow, "workflow_id", "workflow"),
@@ -225,12 +273,24 @@ def _write_workflows(session: Any, workflows: List[Dict[str, Any]]) -> None:
             created_at=workflow.get("created_at"),
             updated_at=workflow.get("updated_at"),
             source=workflow.get("source", "active"),
+            risk_tier=workflow.get("risk_tier"),
+            cumulative_tokens=cumulative_tokens,
+            cumulative_steps=cumulative_steps,
+            max_steps=max_steps,
+            max_tokens=max_tokens,
+            profile=caps.get("profile"),
+            util_tokens=_utilization_pct(cumulative_tokens, max_tokens),
+            util_steps=_utilization_pct(cumulative_steps, max_steps),
+            last_usage_updated=usage.get("last_updated"),
         )
 
 
 def _write_handoffs(session: Any, handoffs: List[Dict[str, Any]]) -> None:
     for handoff in handoffs:
         handoff_id = _require(handoff, "handoff_id", "handoff")
+        usage = handoff.get("usage") if isinstance(handoff.get("usage"), dict) else {}
+        compliance = _parse_compliance_checklist(handoff.get("compliance_checklist"))
+        next_owner = handoff.get("next_owner")
         session.run(
             HANDOFF_QUERY,
             id=handoff_id,
@@ -246,10 +306,19 @@ def _write_handoffs(session: Any, handoffs: List[Dict[str, Any]]) -> None:
             drift_check=handoff.get("drift_check"),
             success_criteria=handoff.get("success_criteria"),
             created_at=handoff.get("created_at"),
-            usage_total_tokens=_usage_total_tokens(handoff.get("usage")),
+            est_tokens=_usage_est_tokens(usage),
+            model=usage.get("model"),
+            usage_source=usage.get("source"),
+            next_owner=next_owner,
+            evidence_pack_len=_content_len(handoff.get("evidence_pack")),
+            changes_len=_content_len(handoff.get("changes")),
+            synthesized_legacy=bool(handoff.get("synthetic_legacy_id")),
+            cc_decision=compliance.get("decision"),
+            cc_required_gates=compliance.get("required_gates"),
+            cc_exceptions=compliance.get("exceptions"),
+            cc_approval_ref=compliance.get("approval_ref"),
             workflow_id=handoff.get("workflow_id"),
         )
-        next_owner = handoff.get("next_owner")
         if next_owner and str(next_owner).strip().lower() != "human":
             session.run(NEXT_OWNER_QUERY, handoff_id=handoff_id, next_owner=str(next_owner).strip())
 

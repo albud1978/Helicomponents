@@ -1,5 +1,63 @@
 # Changelog
 
+## [16-05-2026] - Agent KG → Neo4j projection: token + caps + profile mapping
+
+### Принцип
+- Hotfix post-Tier-M: после внедрения Tier-2b token counter и Tier-M caps/profile в `code/utils/agent_kg.py` проекция `tools/agent_kg_to_neo4j.py` отставала на ~21h и не маппила новые поля. В Neo4j было 0 handoffs с `est_tokens` и 0 workflows с `cumulative_tokens` — то есть учёт токенов был только в JSON SSoT, но **не виден в графовой проекции**.
+- **Scope clarification**: Agent KG projection (`Workflow`, `Handoff`, `Context`, `Agent` labels) — **НЕ Domain Graph** (`RTCLayer`, `BomPartNo`, `State`, `TransitionSpec`, `Rule`, ...). Эти два графа сосуществуют в одной Neo4j instance, но имеют разный SSoT (Agent KG = `config/agent_kg.json` + archives; Domain Graph = `config/transitions/*.json` + `code/utils/sync_domain_graph.py`).
+- Risk-tier: `medium`, profile: `medium-fast` (Tier-M M2: extension scope tooling, reversible, blast radius на Neo4j projection only).
+- **Workflow trace**: `W_kg_neo4j_tokens_2026_05_16`.
+
+### Добавлено / изменено
+
+- **`tools/agent_kg_to_neo4j.py`** — расширены mapping функции:
+  - **Bug fix**: `_usage_total_tokens` → `_usage_est_tokens`. Tool теперь корректно читает `usage.est_tokens` (Tier-2b token counter) с legacy fallback на `usage.total_tokens`. Neo4j property переименована: `h.usage_total_tokens` → `h.est_tokens`.
+  - **Workflow properties (новые)**: `risk_tier`, `cumulative_tokens`, `cumulative_steps`, `max_steps`, `max_tokens`, `profile` (Tier-M M2 4-level taxonomy), `utilization_tokens_pct`, `utilization_steps_pct` (вычисляемые), `last_usage_updated`.
+  - **Handoff properties (новые)**: `model`, `usage_source` (`manual`/`char_estimate`/`unknown`), `next_owner_name`, `evidence_pack_len`, `changes_len`, `synthesized_legacy` (boolean flag для legacy archived handoffs).
+  - **Tier-S S3 compact compliance_checklist parser**: `_parse_compliance_checklist` разбирает строку `decision=X; required_gates=Y; ...` в discrete fields `cc_decision`, `cc_required_gates`, `cc_exceptions`, `cc_approval_ref`. Legacy verbose format также matches где есть pattern `decision=...` (e.g. governance verdicts pre-Tier-S).
+  - **Backward-compat preserved**: legacy handoffs без `est_tokens` → property = None; legacy workflows без `caps` → `max_tokens`/`profile` = None. **Domain Graph labels не затрагиваются** (RESET_QUERY targets только Agent KG labels).
+  - Объём: +~120 lines new code в одном файле.
+
+### Smoke (6/6 PASS на full re-sync)
+
+```
+$ python3 tools/agent_kg_to_neo4j.py --include-archive --reset
+active: workflows=37 handoffs=103 contexts=88 agents=9
+archive: workflows=186 handoffs=670 contexts=211 agents=11
+total/projected: workflows=223 handoffs=773 contexts=299 agents=15
+constraints=ok reset=ok
+```
+
+Cypher verify:
+- `handoffs.est_tokens > 0`: **55** (target ≥50 PASS) — Tier-2b coverage restored
+- `workflows.cumulative_tokens > 0`: **9** (target ≥8 PASS) — все recent Tier-* workflows видны
+- `workflows.max_tokens` defined: **11** (target ≥8 PASS) — caps mapping работает
+- `workflows.profile` defined: **2** (target ≥1 PASS) — `W_kg_neo4j_tokens_2026_05_16` (medium-fast) + `W_smoke_profile_test`
+- `handoffs.cc_decision` parsed: **196** (target ≥4 PASS) — parser ловит и compact Tier-S S3 format, и legacy verbose governance checklists where `decision=...` substring matches
+- `handoffs.model` defined: **46** (target ≥40 PASS)
+
+Recent workflows sample:
+- `W_kg_neo4j_tokens_2026_05_16`: cumulative=11000, max=100000, profile=medium-fast, **utilization=11.0%**
+- `W_optim_tier_m_2026_05_15`: cumulative=94000, max=350000, **utilization=26.86%**
+- `W_tier3_template_2026_05_15`: cumulative=158200, max=400000, **utilization=39.55%**
+
+Domain Graph integrity (sanity check, NOT touched by `--reset`):
+- `RTCLayer=48, BomPartNo=77, BomGroup=42, QuotaFlow=10, State=8, Rule=8, RepairLineRule=8, SelectionRule=4, TransitionSpec=1` — все совпадают с pre-resync baseline. Domain Graph **полностью сохранён**.
+
+### Process insight (deferred)
+- **Auto-sync after `--close-workflow`**: не реализован в этом workflow (out of scope). Текущий ручной запуск `tools/agent_kg_to_neo4j.py --include-archive` после close — приемлемая стартовая дисциплина. Если sync drift станет повторной проблемой, добавим post-close hook в `.cursor/hooks.json` отдельным mini-workflow.
+
+### Governance / process
+- **F2 PRE-approval** соблюдён: `--init-workflow` + `--register-approval-request` выполнены **сразу** после approval phrase "запускай" (lesson learned из Tier-2b N2 governance warning).
+- **Single delegation chain** (Tier-M M2 medium-fast): orchestrator → coder-general (extend + re-sync resume) → orchestrator close. Без governance/docs-curator/validator (medium-fast profile no policy-trigger).
+- **Mutating shell delegated**: `--reset` re-sync на Neo4j (mutating) сделан через `coder-general` resume (orchestrator allowlist разрешает только `python code/utils/agent_kg.py` operational).
+
+### Файлы
+- `tools/agent_kg_to_neo4j.py` (extend ~120 lines)
+- `docs/changelog.md` (этот entry)
+
+---
+
 ## [15-05-2026] - Tier-M Rule Architecture Restructure (post-Tier-S)
 
 ### Принцип
