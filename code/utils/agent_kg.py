@@ -16,6 +16,7 @@ SSoT: config/agent_kg.json
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -34,6 +35,8 @@ RISK_TIER_CHOICES = ("low", "medium", "high")
 PROFILE_CHOICES = ("low", "medium-fast", "medium-policy", "high-strict")
 HUMAN_GATE_CHOICES = ("yes", "no", "conditional")
 GRAPH_UPDATE_CHOICES = ("yes", "no")
+HASH_CHAIN_GENESIS = "GENESIS"
+HASH_CHAIN_SCHEME = "sha256_canonical_v1"
 NEXT_OWNER_CHOICES = (
     "orchestrator",
     "coder-general",
@@ -95,6 +98,118 @@ def _short(text: Optional[str], limit: int = 120) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + "..."
+
+
+def _compute_handoff_hash(handoff_record: Dict[str, Any]) -> str:
+    """Canonical SHA256 для handoff chain verification."""
+    canonical = json.dumps(
+        handoff_record,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _workflow_handoffs(
+    data: Dict[str, Any], workflow_id: str
+) -> List[Dict[str, Any]]:
+    handoffs = data.get("handoffs", [])
+    if not isinstance(handoffs, list):
+        return []
+    return [
+        handoff
+        for handoff in handoffs
+        if isinstance(handoff, dict) and handoff.get("workflow_id") == workflow_id
+    ]
+
+
+def _latest_handoff(
+    data: Dict[str, Any], workflow_id: str, agent: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    handoffs = _workflow_handoffs(data, workflow_id)
+    if agent is not None:
+        handoffs = [handoff for handoff in handoffs if handoff.get("agent") == agent]
+    if not handoffs:
+        return None
+    handoffs.sort(key=lambda handoff: str(handoff.get("created_at") or ""))
+    return handoffs[-1]
+
+
+def _previous_handoff_hash(data: Dict[str, Any], workflow_id: str) -> str:
+    previous = _latest_handoff(data, workflow_id)
+    if previous is None:
+        return HASH_CHAIN_GENESIS
+    return _compute_handoff_hash(previous)
+
+
+def _ensure_hash_chain_baseline(
+    data: Dict[str, Any], handoff_id: str, started_at: str
+) -> None:
+    metadata = data.setdefault("metadata", {})
+    if "hash_chain_baseline" in metadata:
+        return
+    metadata["hash_chain_baseline"] = {
+        "started_at": started_at,
+        "first_handoff_id": handoff_id,
+        "scheme": HASH_CHAIN_SCHEME,
+    }
+
+
+def _audit_log_path() -> Path:
+    return Path(__file__).resolve().parents[2] / ".cursor" / "hooks" / "code_edit_audit.log"
+
+
+def _previous_audit_hash(log_path: Path) -> Optional[str]:
+    if not log_path.exists():
+        return None
+    try:
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        current_hash = entry.get("current_hash") if isinstance(entry, dict) else None
+        return str(current_hash) if current_hash else None
+    return None
+
+
+def _compute_audit_hash(entry: Dict[str, Any], prev_hash: Optional[str]) -> str:
+    content = json.dumps(
+        {
+            key: value
+            for key, value in entry.items()
+            if key not in ("prev_hash", "current_hash")
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(((prev_hash or "") + content).encode("utf-8")).hexdigest()
+
+
+def _append_audit_warning(message: str, workflow_id: str) -> None:
+    log_path = _audit_log_path()
+    entry = {
+        "timestamp": _now(),
+        "action": "agent_kg_cli",
+        "level": "WARN",
+        "message": message,
+        "workflow_id": workflow_id,
+        "file_path": "config/agent_kg.json",
+    }
+    prev_hash = _previous_audit_hash(log_path)
+    entry["prev_hash"] = prev_hash
+    entry["current_hash"] = _compute_audit_hash(entry, prev_hash)
+    try:
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+    except OSError as exc:
+        print(f"WARNING audit_log_write_failed: {exc}", file=sys.stderr)
 
 
 def _parse_non_negative_int(value: str) -> int:
@@ -410,6 +525,8 @@ def write_handoff(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
     handoff_id = f"handoff_{args.workflow_id}_{args.agent}_{uuid.uuid4().hex[:8]}"
+    created_at = _now()
+    prev_handoff_hash = _previous_handoff_hash(data, args.workflow_id)
     evidence_pack_arg = (args.evidence_pack or "").strip()
     facts_arg = (args.facts or "").strip()
     facts = ""
@@ -504,7 +621,8 @@ def write_handoff(args: argparse.Namespace) -> None:
         "open_questions": args.open_questions or "",
         "graph_update": args.graph_update or "no",
         "graph_update_reason": args.graph_update_reason or "",
-        "created_at": _now(),
+        "prev_handoff_hash": prev_handoff_hash,
+        "created_at": created_at,
     }
     if handoff.get("goal") == handoff.get("user_goal"):
         handoff.pop("goal", None)
@@ -534,6 +652,7 @@ def write_handoff(args: argparse.Namespace) -> None:
         elif "est_tokens" in usage_block:
             usage_block["source"] = "unknown"
         handoff["usage"] = usage_block
+    _ensure_hash_chain_baseline(data, handoff_id, created_at)
     data["handoffs"].append(handoff)
 
     # Обновляем workflow
@@ -737,6 +856,63 @@ def read_context(args: argparse.Namespace) -> None:
             print(f"Content:\n{content}")
 
 
+def _close_blocked(message: str) -> None:
+    print(message, file=sys.stderr)
+    raise SystemExit(2)
+
+
+def _validate_close_workflow(data: Dict[str, Any], workflow_id: str) -> None:
+    orchestrator_handoff = _latest_handoff(data, workflow_id, agent="orchestrator")
+    if orchestrator_handoff is None:
+        _close_blocked(
+            "close_workflow blocked: no orchestrator handoff found for workflow "
+            f"{workflow_id}. Sequence: --write-handoff (orchestrator) then "
+            "--close-workflow."
+        )
+
+    missing_fields = []
+    invalid_fields = []
+    risk_tier = str(orchestrator_handoff.get("risk_tier") or "").strip().lower()
+    if not risk_tier:
+        missing_fields.append("risk_tier")
+    elif risk_tier not in RISK_TIER_CHOICES:
+        invalid_fields.append("risk_tier")
+
+    if not str(orchestrator_handoff.get("drift_check") or "").strip():
+        missing_fields.append("drift_check")
+
+    graph_update = str(orchestrator_handoff.get("graph_update") or "").strip().lower()
+    if not graph_update:
+        missing_fields.append("graph_update")
+    elif graph_update not in GRAPH_UPDATE_CHOICES:
+        invalid_fields.append("graph_update")
+
+    if missing_fields or invalid_fields:
+        parts = []
+        if missing_fields:
+            parts.append(f"missing fields: {', '.join(missing_fields)}")
+        if invalid_fields:
+            parts.append(f"invalid fields: {', '.join(invalid_fields)}")
+        _close_blocked("close_workflow blocked: " + "; ".join(parts))
+
+    required_agents: List[str] = []
+    if risk_tier == "medium":
+        required_agents = ["governance-compliance"]
+    elif risk_tier == "high":
+        required_agents = ["governance-compliance", "docs-curator"]
+
+    missing_agents = [
+        agent
+        for agent in required_agents
+        if _latest_handoff(data, workflow_id, agent=agent) is None
+    ]
+    if missing_agents:
+        _close_blocked(
+            "close_workflow blocked: missing required handoff agents for workflow "
+            f"{workflow_id} (risk_tier={risk_tier}): {', '.join(missing_agents)}"
+        )
+
+
 def close_workflow(args: argparse.Namespace) -> None:
     """Закрывает workflow и опционально записывает причину."""
     if not args.workflow_id:
@@ -749,6 +925,15 @@ def close_workflow(args: argparse.Namespace) -> None:
     if not workflow:
         print(f"Workflow не найден: {args.workflow_id}", file=sys.stderr)
         raise SystemExit(1)
+
+    if args.force_close:
+        _append_audit_warning(
+            "WARN --force-close used for Agent KG workflow close; embedded "
+            "close validation bypassed by administrator.",
+            args.workflow_id,
+        )
+    else:
+        _validate_close_workflow(data, args.workflow_id)
 
     workflow["status"] = "closed"
     if args.phase:
@@ -955,6 +1140,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--context-type", type=str, help="Тип контекста (research/specification/decision)")
     parser.add_argument("--content", type=str, help="Содержимое контекста")
     parser.add_argument("--close-reason", type=str, help="Причина закрытия workflow")
+    parser.add_argument(
+        "--force-close",
+        action="store_true",
+        help="Административно закрыть workflow, пропустив embedded close validation",
+    )
 
     return parser
 

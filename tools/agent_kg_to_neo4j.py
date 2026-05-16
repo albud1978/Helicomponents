@@ -58,7 +58,8 @@ SET h.agent = $agent, h.plan_step_id = $plan_step_id, h.trace_id = $trace_id,
     h.next_owner_name = $next_owner, h.evidence_pack_len = $evidence_pack_len,
     h.changes_len = $changes_len, h.synthesized_legacy = $synthesized_legacy,
     h.cc_decision = $cc_decision, h.cc_required_gates = $cc_required_gates,
-    h.cc_exceptions = $cc_exceptions, h.cc_approval_ref = $cc_approval_ref
+    h.cc_exceptions = $cc_exceptions, h.cc_approval_ref = $cc_approval_ref,
+    h.prev_handoff_hash = $prev_handoff_hash
 WITH h MATCH (w:Workflow {id: $workflow_id}) MERGE (w)-[:HAS_HANDOFF]->(h)
 WITH h MATCH (a:Agent {name: $agent}) MERGE (h)-[:BY_AGENT]->(a)
 """
@@ -317,6 +318,7 @@ def _write_handoffs(session: Any, handoffs: List[Dict[str, Any]]) -> None:
             cc_required_gates=compliance.get("required_gates"),
             cc_exceptions=compliance.get("exceptions"),
             cc_approval_ref=compliance.get("approval_ref"),
+            prev_handoff_hash=handoff.get("prev_handoff_hash"),
             workflow_id=handoff.get("workflow_id"),
         )
         if next_owner and str(next_owner).strip().lower() != "human":
