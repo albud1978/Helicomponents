@@ -33,6 +33,9 @@ alwaysApply: true
 - **RiskValidatedBy**: `governance-compliance` или `N/A` для low-risk.
 - **HumanGateRequired**: enum + краткая причина.
 - **SuccessCriteria**: verifiable критерий. Формат: `SQL: ...` / `invariant: INV-N` / `script: path` / `numeric: A == B` / `manual-check: ...` (последнее — только для low-risk). Пустое значение или «make it work» — невалидный handoff для `medium/high-risk`.
+- **Modules**: список модулей из `config/kg_modules.json` (mandatory для medium/high risk; optional для low). Используется для трассировки доменной области изменений.
+- **Supersedes**: handoff_id, который этот handoff заменяет (optional, не мутирует старый).
+- **ParentWorkflow**: workflow_id родителя (optional, для derived workflows).
 - **PlanCard**: краткая карточка плана (1-3 строки; не дублировать `Changes` и lifecycle, видимые из KG).
 - **Changes**: что сделано (список файлов и сути правок).
 - **EvidencePack**: что проверено + structured evidence (smoke output, файлы, SQL, логи). `Facts` сюда слит, отдельным полем не дублируется.
@@ -62,11 +65,12 @@ alwaysApply: true
 - **UserGoal**: дословная цитата.
 - **Changes**: что сделано (список файлов и сути правок).
 - **Facts**: что проверено и источники.
+- **Modules**: список модулей из `config/kg_modules.json` (optional).
 - **RiskTier**: `low`.
 - **NextOwner**: enum.
 - **Usage** *(optional)*: `model=<slug> est_tokens=~<N> source=manual|char_estimate|unknown`.
 
-Остальные поля **запрещено** включать как `N/A`-плейсхолдеры — пропускай полностью.
+`Supersedes`/`ParentWorkflow` в Handoff-lite опускаются. Остальные поля **запрещено** включать как `N/A`-плейсхолдеры — пропускай полностью.
 
 **Hard rule (S5)**: для low-risk Full Handoff с `N/A`-полями governance-compliance верифицирует как **reject** — обязательно использовать Handoff-lite. Это устраняет boilerplate noise и принуждает к корректной классификации risk.
 
@@ -84,4 +88,13 @@ alwaysApply: true
 - **low-risk Handoff-lite (S5)**: для `low-risk` — только Handoff-lite. Full Handoff с N/A-полями = governance reject.
 - **артефакты**:
   - `medium/high-risk`: обязательны `PlanCard`, `EvidencePack`, `ComplianceChecklist` (5-field), `SuccessCriteria` (verifiable)
-  - `low-risk`: только Handoff-lite (5 полей + optional Usage); `SuccessCriteria` — `manual-check: ...`
+  - `low-risk`: только Handoff-lite (5 полей + optional Modules/Usage); `SuccessCriteria` — `manual-check: ...`
+
+## Эволюция словаря модулей
+
+Модули (`config/kg_modules.json`) — controlled vocabulary, расширяется через handoff-lite (low-risk) при срабатывании одного из тригеров:
+1. Новая капсула в `config/capsules_manifest.json`.
+2. Доля handoff с `modules=["infra"]` >30% за 30 дней (сигнал перегрузки escape hatch).
+3. Явный запрос пользователя.
+
+Splitting/rename — medium-risk (затрагивает интерпретацию истории). Удаление запрещено — только `deprecated=true` + `successor`/`split_into`. Старые handoff не мутируются.
