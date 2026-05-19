@@ -15,8 +15,9 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 from neo4j import GraphDatabase
 
@@ -24,15 +25,17 @@ from neo4j import GraphDatabase
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_KG_PATH = ROOT_DIR / "config" / "agent_kg.json"
 DEFAULT_ARCHIVE_DIR = ROOT_DIR / "config" / "agent_kg_archive"
+DEFAULT_MODULES_PATH = ROOT_DIR / "config" / "kg_modules.json"
 
 CONSTRAINTS = [
     "CREATE CONSTRAINT IF NOT EXISTS FOR (w:Workflow) REQUIRE w.id IS UNIQUE",
     "CREATE CONSTRAINT IF NOT EXISTS FOR (h:Handoff) REQUIRE h.id IS UNIQUE",
     "CREATE CONSTRAINT IF NOT EXISTS FOR (c:Context) REQUIRE c.id IS UNIQUE",
     "CREATE CONSTRAINT IF NOT EXISTS FOR (a:Agent) REQUIRE a.name IS UNIQUE",
+    "CREATE CONSTRAINT IF NOT EXISTS FOR (m:Module) REQUIRE m.id IS UNIQUE",
 ]
 
-RESET_QUERY = "MATCH (n) WHERE n:Workflow OR n:Handoff OR n:Context OR n:Agent DETACH DELETE n"
+RESET_QUERY = "MATCH (n) WHERE n:Workflow OR n:Handoff OR n:Context OR n:Agent OR n:Module DETACH DELETE n"
 
 WORKFLOW_QUERY = """
 MERGE (w:Workflow {id: $id})
@@ -78,11 +81,56 @@ MATCH (a:Agent {name: $next_owner})
 MERGE (h)-[:NEXT_OWNER]->(a)
 """
 
+MODULE_QUERY = """
+MERGE (m:Module {id: $id})
+SET m.domain = $domain, m.not_includes = $not_includes,
+    m.deprecated = $deprecated, m.successor = $successor,
+    m.split_into = $split_into, m.version = $version
+"""
+
+TOUCHES_QUERY = """
+MATCH (h:Handoff {id: $handoff_id})
+UNWIND $modules AS module_id
+MATCH (m:Module {id: module_id})
+MERGE (h)-[:TOUCHES]->(m)
+"""
+
+SUPERSEDES_QUERY = """
+MATCH (h1:Handoff {id: $handoff_id})
+MATCH (h2:Handoff {id: $supersedes})
+MERGE (h1)-[:SUPERSEDES]->(h2)
+"""
+
+DERIVED_FROM_QUERY = """
+MATCH (w1:Workflow {id: $workflow_id})
+MATCH (w2:Workflow {id: $parent_workflow})
+MERGE (w1)-[:DERIVED_FROM]->(w2)
+"""
+
 Projection = Dict[str, List[Dict[str, Any]]]
 
 
 def _empty_projection() -> Projection:
     return {"workflows": [], "handoffs": [], "contexts": []}
+
+
+def _load_modules_config(path: Path = DEFAULT_MODULES_PATH) -> Optional[Dict[str, Any]]:
+    if not path.exists():
+        print(
+            f"WARNING kg_modules_not_found: {path}; skipping Module projection",
+            file=sys.stderr,
+        )
+        return None
+    with path.open("r", encoding="utf-8") as handle:
+        config = json.load(handle)
+    modules = config.get("modules", [])
+    if not isinstance(modules, list):
+        raise ValueError("config/kg_modules.json: field modules must be a list")
+    for module in modules:
+        if not isinstance(module, dict):
+            raise ValueError("config/kg_modules.json: each module must be an object")
+        _require(module, "id", "module")
+    return config
 
 
 def _add_agent(names: Set[str], raw_name: Any) -> None:
@@ -233,7 +281,11 @@ def _merge(active: Projection, archive: Projection) -> Projection:
     return data
 
 
-def _project(settings: argparse.Namespace, data: Projection) -> None:
+def _project(
+    settings: argparse.Namespace,
+    data: Projection,
+    modules_config: Optional[Dict[str, Any]],
+) -> None:
     with GraphDatabase.driver(
         settings.uri,
         auth=(settings.user, settings.password),
@@ -247,13 +299,55 @@ def _project(settings: argparse.Namespace, data: Projection) -> None:
             if settings.reset:
                 session.run(RESET_QUERY)
                 print("reset=ok")
+            if modules_config is not None:
+                _write_modules(session, modules_config)
             for name in sorted(_agents(data)):
                 kind = "orchestrator" if name == "orchestrator" else "subagent"
                 session.run("MERGE (a:Agent {name: $name}) SET a.kind = $kind", name=name, kind=kind)
             _write_workflows(session, data["workflows"])
             _write_handoffs(session, data["handoffs"])
             _write_contexts(session, data["contexts"])
+            if modules_config is not None:
+                _write_memory_relationships(session, data)
     print(f"projected: {_summary(data)}")
+
+
+def _write_modules(session: Any, modules_config: Dict[str, Any]) -> None:
+    version = modules_config.get("version")
+    for module in modules_config.get("modules", []):
+        session.run(
+            MODULE_QUERY,
+            id=_require(module, "id", "module"),
+            domain=module.get("domain"),
+            not_includes=module.get("not_includes"),
+            deprecated=bool(module.get("deprecated", False)),
+            successor=module.get("successor"),
+            split_into=module.get("split_into"),
+            version=version,
+        )
+
+
+def _write_memory_relationships(session: Any, data: Projection) -> None:
+    for handoff in data["handoffs"]:
+        handoff_id = _require(handoff, "handoff_id", "handoff")
+        modules = handoff.get("modules")
+        if isinstance(modules, list) and modules:
+            session.run(TOUCHES_QUERY, handoff_id=handoff_id, modules=modules)
+        supersedes = str(handoff.get("supersedes") or "").strip()
+        if supersedes:
+            session.run(
+                SUPERSEDES_QUERY,
+                handoff_id=handoff_id,
+                supersedes=supersedes,
+            )
+    for workflow in data["workflows"]:
+        parent_workflow = str(workflow.get("parent_workflow") or "").strip()
+        if parent_workflow:
+            session.run(
+                DERIVED_FROM_QUERY,
+                workflow_id=_require(workflow, "workflow_id", "workflow"),
+                parent_workflow=parent_workflow,
+            )
 
 
 def _write_workflows(session: Any, workflows: List[Dict[str, Any]]) -> None:
@@ -367,6 +461,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     settings = _settings(build_parser().parse_args())
+    modules_config = _load_modules_config()
     active = _load_active(settings.kg_path)
     print(f"active: {_summary(active)}")
     archive = _load_archive(settings.archive_dir) if settings.include_archive else _empty_projection()
@@ -377,7 +472,7 @@ def main() -> None:
     if settings.dry_run:
         print("dry_run=true")
         return
-    _project(settings, data)
+    _project(settings, data, modules_config)
 
 
 if __name__ == "__main__":

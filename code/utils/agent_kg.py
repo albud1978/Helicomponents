@@ -29,6 +29,9 @@ from typing import Any, Dict, List, Optional
 DEFAULT_KG_PATH = os.path.join(
     os.path.dirname(__file__), "..", "..", "config", "agent_kg.json"
 )
+DEFAULT_MODULES_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "..", "config", "kg_modules.json"
+)
 DEFAULT_MAX_STEPS = 50
 DEFAULT_MAX_TOKENS = 500000
 RISK_TIER_CHOICES = ("low", "medium", "high")
@@ -50,6 +53,7 @@ NEXT_OWNER_CHOICES = (
     "capsule-builder",
     "human",
 )
+_MODULES_ENUM_CACHE: Dict[str, Dict[str, dict]] = {}
 
 
 def _resolve_path(path: Optional[str]) -> str:
@@ -57,6 +61,65 @@ def _resolve_path(path: Optional[str]) -> str:
     if path:
         return os.path.abspath(path)
     return os.path.abspath(DEFAULT_KG_PATH)
+
+
+def _resolve_repo_path(path: str) -> str:
+    """Определяет путь от корня репозитория, если передан относительный путь."""
+    if path == "config/kg_modules.json":
+        return os.path.abspath(DEFAULT_MODULES_PATH)
+    candidate = Path(path)
+    if candidate.is_absolute():
+        return str(candidate)
+    return str(Path(__file__).resolve().parents[2] / candidate)
+
+
+def _load_modules_enum(path: str = "config/kg_modules.json") -> Dict[str, dict]:
+    """Загружает controlled vocabulary модулей handoff.modules[]."""
+    resolved = _resolve_repo_path(path)
+    if resolved in _MODULES_ENUM_CACHE:
+        return _MODULES_ENUM_CACHE[resolved]
+    if not os.path.exists(resolved):
+        print(
+            f"WARNING kg_modules_not_found: {resolved}; modules enum disabled",
+            file=sys.stderr,
+        )
+        _MODULES_ENUM_CACHE[resolved] = {}
+        return _MODULES_ENUM_CACHE[resolved]
+    with open(resolved, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+    modules = raw.get("modules", [])
+    if not isinstance(modules, list):
+        raise ValueError("config/kg_modules.json: field modules must be a list")
+    enum: Dict[str, dict] = {}
+    for module in modules:
+        if not isinstance(module, dict):
+            raise ValueError("config/kg_modules.json: each module must be an object")
+        module_id = str(module.get("id") or "").strip()
+        if not module_id:
+            raise ValueError("config/kg_modules.json: module without id")
+        enum[module_id] = module
+    _MODULES_ENUM_CACHE[resolved] = enum
+    return enum
+
+
+def _available_modules_text(modules_enum: Dict[str, dict]) -> str:
+    ids = sorted(modules_enum.keys())
+    return ", ".join(ids) if ids else "(none)"
+
+
+def _parse_modules_arg(raw_modules: Optional[str]) -> List[str]:
+    if not raw_modules or not raw_modules.strip():
+        return []
+    modules_enum = _load_modules_enum()
+    available = _available_modules_text(modules_enum)
+    module_ids = [item.strip() for item in raw_modules.split(",") if item.strip()]
+    for module_id in module_ids:
+        record = modules_enum.get(module_id)
+        if record is None:
+            raise ValueError(f"Unknown module id: {module_id}. Available: {available}")
+        if record.get("deprecated"):
+            print(f"WARNING deprecated_module_id: {module_id}", file=sys.stderr)
+    return module_ids
 
 
 def _load(path: str) -> Dict[str, Any]:
@@ -412,6 +475,11 @@ def init_workflow(args: argparse.Namespace) -> None:
 
     path = _resolve_path(args.kg_path)
     data = _load(path)
+    parent_workflow = (args.parent_workflow or "").strip()
+    if parent_workflow and _find_workflow(data["workflows"], parent_workflow) is None:
+        raise ValueError(
+            f"--parent-workflow ссылается на несуществующий workflow_id: {parent_workflow}"
+        )
 
     existing = _find_workflow(data["workflows"], args.workflow_id)
     if existing:
@@ -419,6 +487,8 @@ def init_workflow(args: argparse.Namespace) -> None:
         existing["phase"] = args.phase or existing.get("phase", "analysis")
         existing["owner"] = args.owner or existing.get("owner", "orchestrator")
         existing["status"] = "active"
+        if parent_workflow:
+            existing["parent_workflow"] = parent_workflow
         if isinstance(existing.get("caps"), dict):
             _apply_cap_args(existing["caps"], args)
         elif _cap_args_present(args) or args.profile is not None:
@@ -427,24 +497,25 @@ def init_workflow(args: argparse.Namespace) -> None:
         print(f"Workflow updated: {args.workflow_id}")
     else:
         now = _now()
-        data["workflows"].append(
-            {
-                "workflow_id": args.workflow_id,
-                "goal": args.goal,
-                "phase": args.phase or "analysis",
-                "owner": args.owner or "orchestrator",
-                "status": "active",
-                "caps": _init_caps(args),
-                "usage": {
-                    "cumulative_steps": 0,
-                    "cumulative_tokens": 0,
-                    "cumulative_cost": 0.0,
-                    "last_updated": now,
-                },
-                "created_at": now,
-                "updated_at": now,
-            }
-        )
+        workflow = {
+            "workflow_id": args.workflow_id,
+            "goal": args.goal,
+            "phase": args.phase or "analysis",
+            "owner": args.owner or "orchestrator",
+            "status": "active",
+            "caps": _init_caps(args),
+            "usage": {
+                "cumulative_steps": 0,
+                "cumulative_tokens": 0,
+                "cumulative_cost": 0.0,
+                "last_updated": now,
+            },
+            "created_at": now,
+            "updated_at": now,
+        }
+        if parent_workflow:
+            workflow["parent_workflow"] = parent_workflow
+        data["workflows"].append(workflow)
         print(f"Workflow initialized: {args.workflow_id}")
 
     _save(path, data)
@@ -547,6 +618,20 @@ def write_handoff(args: argparse.Namespace) -> None:
             raise ValueError("--risk-tier должен быть low|medium|high")
     else:
         risk_tier = "low"
+    modules = _parse_modules_arg(args.modules)
+    if risk_tier in {"medium", "high"} and not modules:
+        available = _available_modules_text(_load_modules_enum())
+        raise ValueError(
+            f"--modules обязателен для risk-tier medium/high. Available: {available}"
+        )
+    supersedes = (args.supersedes or "").strip()
+    if supersedes and not any(
+        isinstance(handoff, dict) and handoff.get("handoff_id") == supersedes
+        for handoff in data.get("handoffs", [])
+    ):
+        raise ValueError(
+            f"--supersedes ссылается на несуществующий handoff_id: {supersedes}"
+        )
     risk_reasons = (args.risk_reasons or "").strip()
     if not risk_tier_provided:
         if not risk_reasons:
@@ -624,6 +709,10 @@ def write_handoff(args: argparse.Namespace) -> None:
         "prev_handoff_hash": prev_handoff_hash,
         "created_at": created_at,
     }
+    if modules:
+        handoff["modules"] = modules
+    if supersedes:
+        handoff["supersedes"] = supersedes
     if handoff.get("goal") == handoff.get("user_goal"):
         handoff.pop("goal", None)
     new_usage_arg = (
@@ -1004,6 +1093,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Искать workflow в config/agent_kg_archive при read-state",
     )
     parser.add_argument("--workflow-id", type=str, help="Идентификатор workflow")
+    parser.add_argument("--parent-workflow", type=str, help="Workflow-родитель для derived workflow")
     parser.add_argument("--goal", type=str, help="Цель workflow/handoff")
     parser.add_argument(
         "--max-steps",
@@ -1037,6 +1127,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--phase", type=str, help="Фаза (analysis/research/implementation/review/validation)")
     parser.add_argument("--owner", type=str, help="Текущий владелец")
     parser.add_argument("--agent", type=str, help="Агент (для handoff/context)")
+    parser.add_argument("--modules", type=str, help="Comma-separated module ids для handoff")
+    parser.add_argument("--supersedes", type=str, help="handoff_id предыдущего handoff")
     parser.add_argument("--changes", type=str, help="Описание изменений (handoff)")
     parser.add_argument(
         "--evidence",
