@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-05-19 — Long-term memory: handoff modules + supersedes + parent_workflow
+
+**Workflow**: W_kg_memory_lite_2026_05_19 | **Risk**: low | **Profile**: low
+
+**Changes**:
+- NEW `config/kg_modules.json` — controlled vocabulary из 13 модулей с полями `id`/`domain`/`not_includes`. `extract` + `dwh` объединены в `extract_dwh` (один ETL домен).
+- `code/utils/agent_kg.py`: новые поля handoff `modules[]` (mandatory medium/high, optional low), `supersedes`, `parent_workflow` в workflow record. Валидация против enum (fail-fast на unknown id).
+- `tools/agent_kg_to_neo4j.py`: projection `:Module` нод + `(:Handoff)-[:TOUCHES]->(:Module)`, `[:SUPERSEDES]`, `(:Workflow)-[:DERIVED_FROM]`.
+- `.cursor/rules/91_handoff_template.mdc`: добавлены поля + раздел "Эволюция словаря модулей".
+
+**Rationale**: gbrain-inspired long-term memory с MECE controlled vocabulary; closed-domain (FLAME GPU симуляция) → 13 модулей вместо free-form тегов. JSON остаётся SSoT, Neo4j — производная visualization. Old handoffs forward-compatible.
+
+**Audit**: hash chain не ломается (новые поля добавляются в handoff record и попадают в hash автоматически).
+
 ## [16-05-2026] - Audit hardening: KG hash chain + embedded close validation + tamper detection
 
 ### Принцип

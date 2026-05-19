@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "updated": "2026-05-19",
+  "description": "Контролируемый словарь модулей для поля handoff.modules[]. Используется Agent KG для трассировки изменений по доменным блокам проекта. Эволюция словаря описана в .cursor/rules/91_handoff_template.mdc.",
+  "evolution_policy": {
+    "trigger_new_module": [
+      "Новая капсула в config/capsules_manifest.json",
+      "Доля handoff с modules=['infra'] >30% за 30 дней",
+      "Явный запрос пользователя"
+    ],
+    "approval": "human (low-risk handoff-lite достаточно для additive)",
+    "deprecation": "Старый id помечается deprecated=true + successor/split_into; не удаляется. Старые handoff остаются валидными",
+    "backward_compat": "Старые handoff не мутируются; новые используют актуальный enum"
+  },
+  "modules": [
+    {
+      "id": "extract_dwh",
+      "domain": "ETL: загрузка из AMOS/heli_pandas, dataset bootstrap, flight_program_*, md_components, DWH прямая загрузка (dwh_direct_load), golden replay (dwh_golden_replay_export)",
+      "not_includes": "Не валидация результатов симуляции (это validation). Не BI-дашборды (это bi). Не настройка агентов из загруженных данных (это agent_setup)."
+    },
+    {
+      "id": "agent_setup",
+      "domain": "Начальная популяция агентов из dataset, base_model_units, agent_population_units_v1, spawn dynamic во время симуляции (rtc_spawn_dynamic)",
+      "not_includes": "Не загрузка исходных данных (это extract_dwh). Не определение переходов состояний (это state_transitions). Не подсчёт лимитов операций (это quotas_ops)."
+    },
+    {
+      "id": "state_transitions",
+      "domain": "Матрица переходов состояний агента, condition precedent/subsequent, transitions_rules.json, rtc_state_transitions_v8",
+      "not_includes": "Не применимость компонентов (это applicability). Не подсчёт лимитов операций (это quotas_ops). Не адаптивные шаги (это step_logic)."
+    },
+    {
+      "id": "applicability",
+      "domain": "Применимость компонентов/событий к агенту в текущем состоянии: condition precedent проверки относительно multibom_template",
+      "not_includes": "Не сами переходы состояний (это state_transitions). Не лимиты применения операций (это quotas_ops)."
+    },
+    {
+      "id": "step_logic",
+      "domain": "Адаптивные шаги симуляции, deterministic_dates, host_adaptive_step, orchestrator_limiter_v8, RTC шаговая логика",
+      "not_includes": "Не переходы состояний (это state_transitions). Не квоты операций (это quotas_ops). Не postprocess (это postprocess)."
+    },
+    {
+      "id": "quotas_ops",
+      "domain": "Квотирование операций P1-P4, rtc_quota_v8, quota_rules.json, MessageBucket, лимиты по операциям",
+      "not_includes": "Не repair line логика (это quotas_repair). Не счётчики накопления (это counters)."
+    },
+    {
+      "id": "quotas_repair",
+      "domain": "Repair lines, promote inactive/reserve/serviceable, repair capacity, rtc_repair_lines_v8",
+      "not_includes": "Не общие квоты операций (это quotas_ops). Не сам экспорт repair line данных (это export)."
+    },
+    {
+      "id": "counters",
+      "domain": "Счётчики MP/SNE/балансов: rtc_quota_counters, rtc_quota_count_ops, накопление метрик во время симуляции",
+      "not_includes": "Не сами квоты (это quotas_ops). Не SQL-валидация значений после симуляции (это validation)."
+    },
+    {
+      "id": "export",
+      "domain": "Экспорт результатов симуляции: rtc_mp2_writer, rtc_mp2_export, rtc_repairline_export, 05_export_mp5_excel",
+      "not_includes": "Не постобработка экспортированных данных (это postprocess). Не валидация инвариантов (это validation)."
+    },
+    {
+      "id": "postprocess",
+      "domain": "Постобработка результатов: rtc_mp2_postprocess_active, l2_fullkit_postprocess, агрегация после export",
+      "not_includes": "Не SQL-проверки инвариантов (это validation). Не сам экспорт (это export)."
+    },
+    {
+      "id": "validation",
+      "domain": "SQL-first валидация инвариантов INV-1..11, invariants.json, code/validation/inv*_*.py, sim_validation_*.py",
+      "not_includes": "Не постобработка без проверки против инвариантов (это postprocess). Не BI-визуализация результатов (это bi)."
+    },
+    {
+      "id": "bi",
+      "domain": "BI-as-code: Superset дашборды, чарты, datasets, deploy/bi-as-code, SUPERSET_API_CURSOR_PLAYBOOK",
+      "not_includes": "Не SQL-валидация результатов (это validation). Не сам экспорт данных из симуляции (это export или extract_dwh)."
+    },
+    {
+      "id": "infra",
+      "domain": "Multi-agent system, Agent KG, governance hooks, Domain Graph sync, capsules manifest, docs, .cursor/rules, tooling — escape hatch когда никакой доменный модуль не подходит",
+      "not_includes": "Любой доменный код симуляции (используй конкретный модуль выше). Не злоупотреблять — если >30% handoff за 30 дней попадают сюда, это сигнал расширить словарь."
+    }
+  ]
+}
