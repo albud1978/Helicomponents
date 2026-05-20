@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-05-20 — Neo4j label namespace prefix (Variant C: Domain_* + AgentKG_*)
+
+**Workflow**: W_neo4j_label_prefix_2026_05_20 | **Risk**: low | **Profile**: low | **Parent**: W_neo4j_local_first_2026_05_20
+
+**Changes**:
+- `code/utils/sync_domain_graph.py`: все 16 Domain labels получили префикс `Domain_` (TransitionSpec, State, Rule, QuotaFlow, SelectionRule, RepairLineRule, SpawnRule, MessageBucket, RTCLayer, BomTemplate, BomGroup, BomPartNo, BomGroupLevel, BomNumberingRule, BomCompatibilityRule, BomReplaceabilityRule). Scoped DELETE обновлён.
+- `tools/agent_kg_to_neo4j.py`: все 5 Agent KG labels получили префикс `AgentKG_` (Workflow, Handoff, Context, Agent, Module). `RESET_QUERY` обновлён.
+- `docs/neo4j_browser_favorites_injector.js`: 10 закладок переписаны под новые префиксы.
+- `docs/neo4j_browser_favorites.md`: snippet's обновлены + раздел "Label namespacing convention".
+- `docs/agent_kg_projection.md`: schema description обновлено под `AgentKG_*` префикс.
+
+**Rationale**: разделение двух графов в одной Community-базе для collision-proof архитектуры. Neo4j Community не поддерживает multi-database — namespacing через labels единственный практичный путь. STARTS WITH-based scope позволяет писать scoped DELETE без перечисления каждого label.
+
+**Smoke**: после wipe + re-sync — Domain_*: 219 nodes, AgentKG_*: 1356 nodes, unprefixed: 0. Все 10 favorites проверены на реальной data (workflows=231, handoffs=785, modules touched=10).
+
+**Migration impact**: pre-rename data wiped (восстановлена из JSON SSoT). Старые сохранённые в browser history запросы без префиксов вернут 0 — нужно paste обновлённого injector.
+
+---
+
 ## 2026-05-19 — Long-term memory: handoff modules + supersedes + parent_workflow
 
 **Workflow**: W_kg_memory_lite_2026_05_19 | **Risk**: low | **Profile**: low

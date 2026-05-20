@@ -67,14 +67,11 @@ def _load_json(path: str) -> Dict[str, Any]:
 
 
 def _build_clear_queries() -> List[str]:
-    """Удаляет все доменные узлы (включая устаревшие BomVariant/BomVariantAlias)."""
+    """Удаляет только узлы доменной проекции."""
     return [
         (
-            "MATCH (n) WHERE n:TransitionSpec OR n:State OR n:Rule OR n:QuotaFlow "
-            "OR n:SelectionRule OR n:RepairLineRule OR n:SpawnRule OR n:MessageBucket "
-            "OR n:RTCLayer OR n:BomTemplate OR n:BomVariant OR n:BomGroup "
-            "OR n:BomGroupLevel OR n:BomNumberingRule OR n:BomReplaceabilityRule "
-            "OR n:BomCompatibilityRule OR n:BomVariantAlias OR n:BomPartNo DETACH DELETE n"
+            "MATCH (n) WHERE any(l IN labels(n) WHERE l STARTS WITH 'Domain_') "
+            "DETACH DELETE n"
         ),
     ]
 
@@ -86,7 +83,7 @@ def _build_transitions_queries(data: Dict[str, Any]) -> List[Tuple[str, Dict[str
     # TransitionSpec
     queries.append((
         """
-MERGE (spec:TransitionSpec {id: "transitions_rules"})
+MERGE (spec:Domain_TransitionSpec {id: "transitions_rules"})
 SET spec.version = $version,
     spec.architecture = $architecture,
     spec.matrix_from = $matrix_from,
@@ -105,10 +102,10 @@ SET spec.version = $version,
     for state_id_str, state_name in states.items():
         queries.append((
             """
-MERGE (s:State {id: $state_id})
+MERGE (s:Domain_State {id: $state_id})
 SET s.name = $state_name
 WITH s
-MATCH (spec:TransitionSpec {id: "transitions_rules"})
+MATCH (spec:Domain_TransitionSpec {id: "transitions_rules"})
 MERGE (spec)-[:HAS_STATE]->(s)
 """,
             {"state_id": int(state_id_str), "state_name": state_name},
@@ -128,7 +125,7 @@ MERGE (spec)-[:HAS_STATE]->(s)
 
         queries.append((
             """
-MERGE (r:Rule {id: $rule_id})
+MERGE (r:Domain_Rule {id: $rule_id})
 SET r.from_state = $from_state,
     r.to_state = $to_state,
     r.pre_expr = $pre_expr,
@@ -136,16 +133,16 @@ SET r.from_state = $from_state,
     r.owner_module = $owner_module,
     r.notes = $notes
 WITH r
-MATCH (spec:TransitionSpec {id: "transitions_rules"})
+MATCH (spec:Domain_TransitionSpec {id: "transitions_rules"})
 MERGE (spec)-[:HAS_RULE]->(r)
 WITH r
-MATCH (from_s:State {id: $from_state})
+MATCH (from_s:Domain_State {id: $from_state})
 MERGE (r)-[:FROM_STATE]->(from_s)
 WITH r
-MATCH (to_s:State {id: $to_state})
+MATCH (to_s:Domain_State {id: $to_state})
 MERGE (r)-[:TO_STATE]->(to_s)
 WITH r
-MATCH (from_s:State {id: $from_state}), (to_s:State {id: $to_state})
+MATCH (from_s:Domain_State {id: $from_state}), (to_s:Domain_State {id: $to_state})
 MERGE (from_s)-[t:TRANSITION {rule: $rule_id}]->(to_s)
 """,
             {
@@ -170,7 +167,7 @@ def _build_quota_queries(data: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]
     for step in data.get("quota_flow", []):
         queries.append((
             """
-MERGE (q:QuotaFlow {id: $id})
+MERGE (q:Domain_QuotaFlow {id: $id})
 SET q.owner_module = $owner_module,
     q.expr = $expr,
     q.notes = $notes
@@ -187,7 +184,7 @@ SET q.owner_module = $owner_module,
     for sr in data.get("selection_rules", []):
         queries.append((
             """
-MERGE (s:SelectionRule {id: $id})
+MERGE (s:Domain_SelectionRule {id: $id})
 SET s.expr = $expr,
     s.notes = $notes
 """,
@@ -202,7 +199,7 @@ SET s.expr = $expr,
     for rl in data.get("repair_line_rules", []):
         queries.append((
             """
-MERGE (r:RepairLineRule {id: $id})
+MERGE (r:Domain_RepairLineRule {id: $id})
 SET r.expr = $expr,
     r.notes = $notes
 """,
@@ -217,7 +214,7 @@ SET r.expr = $expr,
     for sp in data.get("spawn_rules", []):
         queries.append((
             """
-MERGE (s:SpawnRule {id: $id})
+MERGE (s:Domain_SpawnRule {id: $id})
 SET s.expr = $expr,
     s.notes = $notes
 """,
@@ -236,7 +233,7 @@ SET s.expr = $expr,
                 continue
             queries.append((
                 """
-MERGE (b:MessageBucket {id: $id})
+MERGE (b:Domain_MessageBucket {id: $id})
 SET b.keys = $keys,
     b.payload = $payload,
     b.notes = $notes
@@ -274,7 +271,7 @@ def _build_rtc_execution_queries(data: Dict[str, Any]) -> List[Tuple[str, Dict[s
             order_label = str(raw_order)
         queries.append((
             """
-MERGE (l:RTCLayer {order: $order})
+MERGE (l:Domain_RTCLayer {order: $order})
 SET l.phase = $phase,
     l.layer = $layer,
     l.function = $function,
@@ -296,8 +293,8 @@ SET l.phase = $phase,
         if prev_order is not None:
             queries.append((
                 """
-MATCH (prev:RTCLayer {order: $prev_order})
-MATCH (curr:RTCLayer {order: $order})
+MATCH (prev:Domain_RTCLayer {order: $prev_order})
+MATCH (curr:Domain_RTCLayer {order: $order})
 MERGE (prev)-[:NEXT_LAYER]->(curr)
 """,
                 {"prev_order": prev_order, "order": order},
@@ -309,8 +306,8 @@ MERGE (prev)-[:NEXT_LAYER]->(curr)
             if from_state.isdigit():
                 queries.append((
                     """
-MATCH (s:State {id: $state_id})
-MATCH (l:RTCLayer {order: $order})
+MATCH (s:Domain_State {id: $state_id})
+MATCH (l:Domain_RTCLayer {order: $order})
 MERGE (l)-[:FROM_STATE]->(s)
 """,
                     {"state_id": int(from_state), "order": order},
@@ -318,8 +315,8 @@ MERGE (l)-[:FROM_STATE]->(s)
             if to_state.isdigit():
                 queries.append((
                     """
-MATCH (s:State {id: $state_id})
-MATCH (l:RTCLayer {order: $order})
+MATCH (s:Domain_State {id: $state_id})
+MATCH (l:Domain_RTCLayer {order: $order})
 MERGE (l)-[:TO_STATE]->(s)
 """,
                     {"state_id": int(to_state), "order": order},
@@ -511,7 +508,7 @@ def _build_bom_queries(data: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]
 
     queries.append((
         """
-MERGE (t:BomTemplate {id: $id})
+MERGE (t:Domain_BomTemplate {id: $id})
 SET t.version = $version,
     t.description = $description
 """,
@@ -528,7 +525,7 @@ SET t.version = $version,
         partno_count = len(partno_list) if isinstance(partno_list, (list, tuple)) else 0
         queries.append((
             """
-MERGE (g:BomGroup {group_by: $group_by})
+MERGE (g:Domain_BomGroup {group_by: $group_by})
 SET g.group_title = $group_title,
     g.ac_type_mask_effective = $ac_type_mask_effective,
     g.partno_members = $partno_members,
@@ -554,11 +551,11 @@ SET g.group_title = $group_title,
             partno_id = f"{entry['group_by']}::{partno_str}"
             queries.append((
                 """
-MERGE (p:BomPartNo {id: $partno_id})
+MERGE (p:Domain_BomPartNo {id: $partno_id})
 SET p.partno = $partno,
     p.group_by = $group_by
 WITH p
-MATCH (g:BomGroup {group_by: $group_by})
+MATCH (g:Domain_BomGroup {group_by: $group_by})
 MERGE (g)-[:HAS_PARTNO]->(p)
 """,
                 {
@@ -587,14 +584,14 @@ MERGE (g)-[:HAS_PARTNO]->(p)
                 range_value = str(range_value)
             queries.append((
                 """
-MERGE (l:BomGroupLevel {id: $id})
+MERGE (l:Domain_BomGroupLevel {id: $id})
 SET l.tier = $tier,
     l.label = $label,
     l.groups = $groups,
     l.group_range = $group_range,
     l.notes = $notes
 WITH l
-MATCH (t:BomTemplate {id: $template_id})
+MATCH (t:Domain_BomTemplate {id: $template_id})
 MERGE (t)-[:HAS_GROUP_LEVEL]->(l)
 """,
                 {
@@ -611,9 +608,9 @@ MERGE (t)-[:HAS_GROUP_LEVEL]->(l)
             for group_id in groups:
                 queries.append((
                     """
-MERGE (g:BomGroup {group_by: $group_by})
+MERGE (g:Domain_BomGroup {group_by: $group_by})
 WITH g
-MATCH (l:BomGroupLevel {id: $level_id})
+MATCH (l:Domain_BomGroupLevel {id: $level_id})
 MERGE (l)-[:HAS_GROUP]->(g)
 """,
                     {
@@ -635,8 +632,8 @@ MERGE (l)-[:HAS_GROUP]->(g)
     if parent_id and child_id:
         queries.append((
             """
-MATCH (l1:BomGroupLevel {id: $parent_id})
-MATCH (l2:BomGroupLevel {id: $child_id})
+MATCH (l1:Domain_BomGroupLevel {id: $parent_id})
+MATCH (l2:Domain_BomGroupLevel {id: $child_id})
 MERGE (l1)-[:HAS_LEVEL]->(l2)
 """,
             {"parent_id": parent_id, "child_id": child_id},
@@ -661,8 +658,8 @@ MERGE (l1)-[:HAS_LEVEL]->(l2)
                     continue
                 queries.append((
                     """
-MATCH (l1:BomGroup {group_by: $l1_group_by})
-MATCH (l2:BomGroup {group_by: $l2_group_by})
+MATCH (l1:Domain_BomGroup {group_by: $l1_group_by})
+MATCH (l2:Domain_BomGroup {group_by: $l2_group_by})
 MERGE (l1)-[rel:HAS_L2_GROUP]->(l2)
 SET rel.via = $via,
     rel.ac_type_mask = $ac_type_mask
@@ -693,13 +690,13 @@ SET rel.via = $via,
                     level_notes.append(f"{level_id}:{note}")
         queries.append((
             """
-MERGE (n:BomNumberingRule {id: $id})
+MERGE (n:Domain_BomNumberingRule {id: $id})
 SET n.group_number = $group_number,
     n.level_fields = $level_fields,
     n.level_notes = $level_notes,
     n.notes = $notes
 WITH n
-MATCH (t:BomTemplate {id: $template_id})
+MATCH (t:Domain_BomTemplate {id: $template_id})
 MERGE (t)-[:HAS_NUMBERING_RULE]->(n)
 """,
             {
@@ -722,9 +719,9 @@ MERGE (t)-[:HAS_NUMBERING_RULE]->(n)
             for group_id in groups:
                 queries.append((
                     """
-MERGE (g:BomGroup {group_by: $group_by})
+MERGE (g:Domain_BomGroup {group_by: $group_by})
 WITH g
-MATCH (t:BomTemplate {id: $template_id})
+MATCH (t:Domain_BomTemplate {id: $template_id})
 MERGE (t)-[:HAS_GROUP]->(g)
 """,
                     {
@@ -741,7 +738,7 @@ MERGE (t)-[:HAS_GROUP]->(g)
             continue
         queries.append((
             """
-MERGE (r:BomCompatibilityRule {id: $id})
+MERGE (r:Domain_BomCompatibilityRule {id: $id})
 SET r.title = $title,
     r.type = $rule_type,
     r.scope = $scope,
@@ -751,7 +748,7 @@ SET r.title = $title,
     r.alias_to = $alias_to,
     r.notes = $notes
 WITH r
-MATCH (t:BomTemplate {id: $template_id})
+MATCH (t:Domain_BomTemplate {id: $template_id})
 MERGE (t)-[:HAS_COMPATIBILITY_RULE]->(r)
 """,
             {
@@ -772,8 +769,8 @@ MERGE (t)-[:HAS_COMPATIBILITY_RULE]->(r)
         for group_id in group_scope:
             queries.append((
                 """
-MATCH (r:BomCompatibilityRule {id: $id})
-MATCH (g:BomGroup {group_by: $group_by})
+MATCH (r:Domain_BomCompatibilityRule {id: $id})
+MATCH (g:Domain_BomGroup {group_by: $group_by})
 MERGE (r)-[:RULE_FOR_GROUP]->(g)
 """,
                 {"id": rule_id, "group_by": int(group_id)},
@@ -787,13 +784,13 @@ MERGE (r)-[:RULE_FOR_GROUP]->(g)
             rule_id = rule.get("id") or f"RB{idx}"
             queries.append((
                 """
-MERGE (r:BomReplaceabilityRule {id: $id})
+MERGE (r:Domain_BomReplaceabilityRule {id: $id})
 SET r.result_kind = $result_kind,
     r.expr = $expr,
     r.notes = $notes,
     r.title = $title
 WITH r
-MATCH (t:BomTemplate {id: $template_id})
+MATCH (t:Domain_BomTemplate {id: $template_id})
 MERGE (t)-[:HAS_REPLACEABILITY_RULE]->(r)
 """,
                 {
