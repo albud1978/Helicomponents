@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-05-19T04:55:06Z",
+    "updated_at": "2026-05-20T13:46:10Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -548,6 +548,94 @@
       "created_at": "2026-05-19T04:53:37Z",
       "updated_at": "2026-05-19T04:53:45Z",
       "parent_workflow": "W_kg_memory_lite_2026_05_19"
+    },
+    {
+      "workflow_id": "W_neo4j_favorites_2026_05_20",
+      "goal": "Neo4j Browser Favorites + scoped DELETE verification",
+      "phase": "analysis",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-20T04:01:22Z"
+      },
+      "created_at": "2026-05-20T04:01:08Z",
+      "updated_at": "2026-05-20T04:01:22Z",
+      "parent_workflow": "W_kg_memory_lite_2026_05_19"
+    },
+    {
+      "workflow_id": "W_neo4j_favorites_injector_2026_05_20",
+      "goal": "JS injector для Neo4j Browser Favorites (one-paste delivery)",
+      "phase": "analysis",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-20T04:07:31Z"
+      },
+      "created_at": "2026-05-20T04:07:31Z",
+      "updated_at": "2026-05-20T04:07:31Z",
+      "parent_workflow": "W_neo4j_favorites_2026_05_20"
+    },
+    {
+      "workflow_id": "W_neo4j_local_first_2026_05_20",
+      "goal": "Park Aura, switch local-first, refresh projection, fix favorites",
+      "phase": "analysis",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-20T06:00:50Z"
+      },
+      "created_at": "2026-05-20T06:00:50Z",
+      "updated_at": "2026-05-20T06:00:50Z",
+      "parent_workflow": "W_neo4j_favorites_injector_2026_05_20"
+    },
+    {
+      "workflow_id": "W_neo4j_label_prefix_2026_05_20",
+      "goal": "Label namespace prefix: Domain_* + AgentKG_* в обоих projection скриптах",
+      "phase": "analysis",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-20T13:46:09Z"
+      },
+      "created_at": "2026-05-20T13:37:58Z",
+      "updated_at": "2026-05-20T13:46:10Z",
+      "parent_workflow": "W_neo4j_local_first_2026_05_20"
     }
   ],
   "handoffs": [
@@ -4395,6 +4483,222 @@
       "modules": [
         "infra"
       ]
+    },
+    {
+      "handoff_id": "handoff_W_neo4j_favorites_2026_05_20_orchestrator_408383cd",
+      "workflow_id": "W_neo4j_favorites_2026_05_20",
+      "agent": "orchestrator",
+      "user_goal": "Сделать рабочие закладки для Neo4j Browser и проверить scoped DELETE в agent_kg_to_neo4j.py",
+      "changes": "NEW docs/neo4j_browser_favorites.md (15+ готовых Cypher для Domain Graph, Agent KG, isolation health); docs/agent_kg_projection.md дополнен ссылкой на favorites.",
+      "facts": "Проверка scoped DELETE: tools/agent_kg_to_neo4j.py строка 38 RESET_QUERY = 'MATCH (n) WHERE n:Workflow OR n:Handoff OR n:Context OR n:Agent OR n:Module DETACH DELETE n' — Agent KG labels изолированы при reset, Domain Graph не затрагивается. Симметрично sync_domain_graph.py (только Domain labels). Cross-isolation health check включён в favorites (Detect Accidental Cross-Edges = должно быть 0).",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "docs-only addition",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-05-20T04:01:08Z",
+      "modules": [
+        "infra"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_neo4j_favorites_2026_05_20_orchestrator_5adafa1b",
+      "workflow_id": "W_neo4j_favorites_2026_05_20",
+      "agent": "orchestrator",
+      "user_goal": "Сделать рабочие закладки для Neo4j Browser и проверить scoped DELETE в agent_kg_to_neo4j.py",
+      "changes": "NEW docs/neo4j_browser_favorites.md (15+ готовых Cypher); docs/agent_kg_projection.md дополнен ссылкой.",
+      "facts": "scoped DELETE проверен: tools/agent_kg_to_neo4j.py:38 RESET_QUERY изолирован на Agent KG labels (Workflow|Handoff|Context|Agent|Module). Симметрично sync_domain_graph.py. Cross-isolation health добавлен в favorites.",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal (закладки + проверка DELETE) полностью покрыт Changes (docs/neo4j_browser_favorites.md + verification). Не вышел за scope.",
+      "process_insights": "Embedded close validation корректно блокировал предыдущий close без drift_check — defence-in-depth работает.",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "docs-only",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "6f94e627e4359cfb91c641d0e20faefb678564f9b5532320c5c155694d1b888e",
+      "created_at": "2026-05-20T04:01:22Z",
+      "modules": [
+        "infra"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_neo4j_favorites_injector_2026_05_20_orchestrator_5742c21e",
+      "workflow_id": "W_neo4j_favorites_injector_2026_05_20",
+      "agent": "orchestrator",
+      "user_goal": "А ты можешь их вставить сразу в браузер",
+      "changes": "NEW docs/neo4j_browser_favorites_injector.js (15 favorites, defensive merge с existing localStorage, поддерживает Neo4j Browser 4.x/5.x); docs/neo4j_browser_favorites.md — добавлен раздел 'Способ A — Автоматический инжектор' в шапку с инструкцией paste-в-Console.",
+      "facts": "Server-side вставка в чужой Browser невозможна (Favorites = client-side localStorage). Injector работает defensively: безопасный парсинг (try/except), reuse существующей папки Helicomponents если есть, удаление только своих устаревших закладок (по folder.id), не трогает чужие. Используются стандартные ключи Neo4j Browser localStorage: neo4j.documents + neo4j.folders (валидно для 4.x/5.x).",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal (вставить в браузер) реализован через client-side инжектор. Не вышел за scope (не пытался server-side hack или MCP browser — оба бесполезны).",
+      "process_insights": "Когда server-side delivery невозможен из-за client/server boundary, правильный путь — generate-and-paste pattern (один paste пользователя). Не пытаться обмануть архитектуру.",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "docs-only addition",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-05-20T04:07:31Z",
+      "modules": [
+        "infra"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_neo4j_local_first_2026_05_20_orchestrator_00c2a2dc",
+      "workflow_id": "W_neo4j_local_first_2026_05_20",
+      "agent": "orchestrator",
+      "user_goal": "запаркуй пока аура, работаем только с локальным и туда должны были перевезти доменный граф и граф знаний реплицировать регулярно",
+      "changes": ".env: Aura закомментирован (5 строк) + DOMAIN_NEO4J_* активирован на bolt://localhost:7687 с локальным паролем из deploy/neo4j-local/.env. Sync: 442 queries Domain + 229/784/310/15 Agent KG. docs/neo4j_browser_favorites_injector.js перезаписан под 10 targeted закладок (Domain Full Schema, State Transitions Matrix, Quotas Ops, Quotas Repair, RTC Pipeline 48 functions, Agent KG Full Schema, Last 50 Handoffs, Last 10 Orchestrator→Human, Modules Touched, Sanity Check). docs/neo4j_browser_favorites.md обновлён под новый набор + добавлены текущие counts.",
+      "facts": "Все 10 запросов проверены на реальной данной локального Docker: 1=110 reps/101 edges (schema visual), 2=8 transitions, 3=10 QuotaFlow, 4=14 repair rules, 5=48 RTCLayer + 47 NEXT_LAYER, 6=9 Agent KG reps + 6 edges, 7=784 handoffs available, 8=211 orch→human handoffs available, 9=9 TOUCHES + 3 modules used, 10=1570 total nodes. Aura запаркована (DNS не резолвится из WSL). Module/TOUCHES/SUPERSEDES/DERIVED_FROM появились в local после фрешного sync.",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal scope: park Aura + local-first + replication + favorites fix. Все реализовано. Не вышел за scope (не делал отдельный Makefile target — это явный 'не надо такого плана').",
+      "process_insights": "Корень проблемы 'пустых табличек' оказался в env namespace: .env корня указывал на недоступную Aura, а Browser смотрел в local Docker. Раздельные .env файлы (root vs deploy/neo4j-local/) создали путаницу. Резолюция через явное закомментирование Aura + перенос креденшелов в корневой .env устраняет двусмысленность.",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "env config rename + fresh re-projection (data восстанавливается из JSON SSoT)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-05-20T06:00:50Z",
+      "modules": [
+        "infra"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_neo4j_label_prefix_2026_05_20_coder-general_deec296b",
+      "workflow_id": "W_neo4j_label_prefix_2026_05_20",
+      "agent": "coder-general",
+      "user_goal": "Разделить два графа в одном Neo4j Community инстансе через label prefix. Domain Graph → Domain_*, Agent KG → AgentKG_*. Данные восстанавливаются из JSON SSoT после переименования.",
+      "changes": "Изменены файлы:\n- code/utils/sync_domain_graph.py: Domain labels в Cypher переименованы в Domain_*; clear scope переведен на labels STARTS WITH 'Domain_'.\n- tools/agent_kg_to_neo4j.py: Agent KG labels, constraints, RESET_QUERY и MATCH/MERGE переименованы в AgentKG_*.",
+      "facts": "Статика: py_compile OK для code/utils/sync_domain_graph.py и tools/agent_kg_to_neo4j.py; rg old label literals в целевых Cypher дал 0 matches; ReadLints: no linter errors.\nDry-run/connection: Domain dry-run OK, 441 queries; Agent KG dry-run OK, active workflows=45 handoffs=115 contexts=101 agents=9; Neo4j connectivity=ok db=neo4j nodes_before_wipe=1570.\nRe-sync: wiped nodes=1570, remaining=0; Domain Graph synced 441 queries; Agent KG projected with archive workflows=231 handoffs=785 contexts=312 agents=15 synthesized_legacy_ids=297.\nSmoke labels: Domain_* nodes=219; AgentKG_* nodes=1356; unprefixed nodes total=0.\nSmoke old labels: Workflow=0, Handoff=0, Context=0, State=0, Rule=0, QuotaFlow=0, RTCLayer=0, BomTemplate=0.",
+      "assumptions": "Симуляционные/SQL validation tests не запускались: задача меняет только Neo4j visualization labels и не меняет JSON SSoT или runtime semantics. Risks if false: если внешние Neo4j bookmarks ожидают старые labels, им потребуется обновление оркестратором/docs.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_neo4j_label_prefix_2026_05_20:2026-05-20T13:42:28Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "additive rename",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "manual-check: после wipe/re-sync все labels имеют префикс Domain_* или AgentKG_*, старые Workflow/Handoff/Context/State/Rule/QuotaFlow/RTCLayer/BomTemplate = 0",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-05-20T13:42:28Z",
+      "modules": [
+        "infra"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_neo4j_label_prefix_2026_05_20_orchestrator_92e80b8b",
+      "workflow_id": "W_neo4j_label_prefix_2026_05_20",
+      "agent": "orchestrator",
+      "user_goal": "Разделить два графа в одном Neo4j Community инстансе через label prefix (Вариант C)",
+      "changes": "code/utils/sync_domain_graph.py (16 Domain labels → Domain_*); tools/agent_kg_to_neo4j.py (5 Agent KG labels → AgentKG_*, RESET_QUERY обновлён); docs/neo4j_browser_favorites_injector.js (10 favorites с STARTS WITH-based queries); docs/neo4j_browser_favorites.md (новый раздел Label namespacing convention); docs/agent_kg_projection.md (schema под префиксы); docs/changelog.md (запись 2026-05-20).",
+      "facts": "Coder-general выполнил wipe (1570 удалено) + re-sync обоих графов из JSON SSoT. Smoke оркестратора: Domain_* 219 nodes, AgentKG_* 1356 nodes, unprefixed 0. Все 10 favorites проверены через Python neo4j driver: 01 schema visual (reps=83, edges=74), 02 transitions=8, 03 quotas=10, 04 repair rules=14, 05 RTC layers=48 + 47 NEXT_LAYER, 06 Agent KG schema (reps=9, edges=6), 07 last 50 handoffs available (785 total), 08 orch->human=212 available, 09 modules touched=10, 10 sanity Agent KG=1356/Domain=219.",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal scope (Вариант C label prefix) полностью реализован. Не делал лишнего: не трогал JSON SSoT, не делал второй контейнер, не делал Makefile-target.",
+      "process_insights": "Label prefix + STARTS WITH в запросах даёт scoped DELETE и Browser group-by без удвоения контейнеров. Стоимость миграции: 2 файла rename + одноразовый wipe данных (восстановлено из JSON SSoT за один sync).",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "additive label rename, no logic change, data restored from JSON SSoT",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "d27cc2d62ae84f39dcbc31a86b8fff1112320e1cbe42fe655637a50d62796f71",
+      "created_at": "2026-05-20T13:46:09Z",
+      "modules": [
+        "infra"
+      ]
     }
   ],
   "contexts": [
@@ -5270,6 +5574,51 @@
       "agent": "orchestrator",
       "created_at": "2026-05-19T04:55:06Z",
       "updated_at": "2026-05-19T04:55:06Z"
+    },
+    {
+      "context_id": "ctx_W_neo4j_favorites_2026_05_20_closure_4a7e176c",
+      "workflow_id": "W_neo4j_favorites_2026_05_20",
+      "context_type": "closure",
+      "content": "Browser favorites + scoped DELETE verified",
+      "agent": "orchestrator",
+      "created_at": "2026-05-20T04:01:22Z",
+      "updated_at": "2026-05-20T04:01:22Z"
+    },
+    {
+      "context_id": "ctx_W_neo4j_favorites_injector_2026_05_20_closure_69d4252f",
+      "workflow_id": "W_neo4j_favorites_injector_2026_05_20",
+      "context_type": "closure",
+      "content": "Injector delivered, ready for one-paste install",
+      "agent": "orchestrator",
+      "created_at": "2026-05-20T04:07:31Z",
+      "updated_at": "2026-05-20T04:07:31Z"
+    },
+    {
+      "context_id": "ctx_W_neo4j_local_first_2026_05_20_closure_c1a2bd8c",
+      "workflow_id": "W_neo4j_local_first_2026_05_20",
+      "context_type": "closure",
+      "content": "Aura parked, local active с фрешным sync обоих графов, 10 favorites переписаны под реальную data",
+      "agent": "orchestrator",
+      "created_at": "2026-05-20T06:00:50Z",
+      "updated_at": "2026-05-20T06:00:50Z"
+    },
+    {
+      "context_id": "ctx_W_neo4j_label_prefix_2026_05_20_phase_start_04ed50d2",
+      "workflow_id": "W_neo4j_label_prefix_2026_05_20",
+      "context_type": "phase_start",
+      "content": "coder-general стартовал low-risk additive rename Neo4j labels. SuccessCriteria: smoke после wipe/re-sync показывает только Domain_* и AgentKG_* labels; старые Workflow/Handoff/Context/State/Rule/QuotaFlow/RTCLayer/BomTemplate = 0.",
+      "agent": "coder-general",
+      "created_at": "2026-05-20T13:39:20Z",
+      "updated_at": "2026-05-20T13:39:20Z"
+    },
+    {
+      "context_id": "ctx_W_neo4j_label_prefix_2026_05_20_closure_ac6bffdf",
+      "workflow_id": "W_neo4j_label_prefix_2026_05_20",
+      "context_type": "closure",
+      "content": "Label prefix реализован для обоих графов, smoke PASS, favorites переписаны под новые префиксы",
+      "agent": "orchestrator",
+      "created_at": "2026-05-20T13:46:10Z",
+      "updated_at": "2026-05-20T13:46:10Z"
     }
   ],
   "meta": {
