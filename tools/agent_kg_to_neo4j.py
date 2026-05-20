@@ -28,17 +28,17 @@ DEFAULT_ARCHIVE_DIR = ROOT_DIR / "config" / "agent_kg_archive"
 DEFAULT_MODULES_PATH = ROOT_DIR / "config" / "kg_modules.json"
 
 CONSTRAINTS = [
-    "CREATE CONSTRAINT IF NOT EXISTS FOR (w:Workflow) REQUIRE w.id IS UNIQUE",
-    "CREATE CONSTRAINT IF NOT EXISTS FOR (h:Handoff) REQUIRE h.id IS UNIQUE",
-    "CREATE CONSTRAINT IF NOT EXISTS FOR (c:Context) REQUIRE c.id IS UNIQUE",
-    "CREATE CONSTRAINT IF NOT EXISTS FOR (a:Agent) REQUIRE a.name IS UNIQUE",
-    "CREATE CONSTRAINT IF NOT EXISTS FOR (m:Module) REQUIRE m.id IS UNIQUE",
+    "CREATE CONSTRAINT IF NOT EXISTS FOR (w:AgentKG_Workflow) REQUIRE w.id IS UNIQUE",
+    "CREATE CONSTRAINT IF NOT EXISTS FOR (h:AgentKG_Handoff) REQUIRE h.id IS UNIQUE",
+    "CREATE CONSTRAINT IF NOT EXISTS FOR (c:AgentKG_Context) REQUIRE c.id IS UNIQUE",
+    "CREATE CONSTRAINT IF NOT EXISTS FOR (a:AgentKG_Agent) REQUIRE a.name IS UNIQUE",
+    "CREATE CONSTRAINT IF NOT EXISTS FOR (m:AgentKG_Module) REQUIRE m.id IS UNIQUE",
 ]
 
-RESET_QUERY = "MATCH (n) WHERE n:Workflow OR n:Handoff OR n:Context OR n:Agent OR n:Module DETACH DELETE n"
+RESET_QUERY = "MATCH (n) WHERE n:AgentKG_Workflow OR n:AgentKG_Handoff OR n:AgentKG_Context OR n:AgentKG_Agent OR n:AgentKG_Module DETACH DELETE n"
 
 WORKFLOW_QUERY = """
-MERGE (w:Workflow {id: $id})
+MERGE (w:AgentKG_Workflow {id: $id})
 SET w.goal = $goal, w.status = $status, w.owner = $owner, w.phase = $phase,
     w.created_at = $created_at, w.updated_at = $updated_at, w.source = $source,
     w.risk_tier = $risk_tier, w.cumulative_tokens = $cumulative_tokens,
@@ -46,11 +46,11 @@ SET w.goal = $goal, w.status = $status, w.owner = $owner, w.phase = $phase,
     w.max_tokens = $max_tokens, w.profile = $profile,
     w.utilization_tokens_pct = $util_tokens, w.utilization_steps_pct = $util_steps,
     w.last_usage_updated = $last_usage_updated
-WITH w MATCH (a:Agent {name: $owner}) MERGE (w)-[:OWNED_BY]->(a)
+WITH w MATCH (a:AgentKG_Agent {name: $owner}) MERGE (w)-[:OWNED_BY]->(a)
 """
 
 HANDOFF_QUERY = """
-MERGE (h:Handoff {id: $id})
+MERGE (h:AgentKG_Handoff {id: $id})
 SET h.agent = $agent, h.plan_step_id = $plan_step_id, h.trace_id = $trace_id,
     h.risk_tier = $risk_tier, h.risk_owner = $risk_owner,
     h.risk_validated_by = $risk_validated_by, h.approval_status = $approval_status,
@@ -63,47 +63,47 @@ SET h.agent = $agent, h.plan_step_id = $plan_step_id, h.trace_id = $trace_id,
     h.cc_decision = $cc_decision, h.cc_required_gates = $cc_required_gates,
     h.cc_exceptions = $cc_exceptions, h.cc_approval_ref = $cc_approval_ref,
     h.prev_handoff_hash = $prev_handoff_hash
-WITH h MATCH (w:Workflow {id: $workflow_id}) MERGE (w)-[:HAS_HANDOFF]->(h)
-WITH h MATCH (a:Agent {name: $agent}) MERGE (h)-[:BY_AGENT]->(a)
+WITH h MATCH (w:AgentKG_Workflow {id: $workflow_id}) MERGE (w)-[:HAS_HANDOFF]->(h)
+WITH h MATCH (a:AgentKG_Agent {name: $agent}) MERGE (h)-[:BY_AGENT]->(a)
 """
 
 CONTEXT_QUERY = """
-MERGE (c:Context {id: $id})
+MERGE (c:AgentKG_Context {id: $id})
 SET c.context_type = $context_type, c.agent = $agent,
     c.created_at = $created_at, c.updated_at = $updated_at,
     c.content_len = $content_len, c.content_type = $content_type
-WITH c MATCH (w:Workflow {id: $workflow_id}) MERGE (w)-[:HAS_CONTEXT]->(c)
+WITH c MATCH (w:AgentKG_Workflow {id: $workflow_id}) MERGE (w)-[:HAS_CONTEXT]->(c)
 """
 
 NEXT_OWNER_QUERY = """
-MATCH (h:Handoff {id: $handoff_id})
-MATCH (a:Agent {name: $next_owner})
+MATCH (h:AgentKG_Handoff {id: $handoff_id})
+MATCH (a:AgentKG_Agent {name: $next_owner})
 MERGE (h)-[:NEXT_OWNER]->(a)
 """
 
 MODULE_QUERY = """
-MERGE (m:Module {id: $id})
+MERGE (m:AgentKG_Module {id: $id})
 SET m.domain = $domain, m.not_includes = $not_includes,
     m.deprecated = $deprecated, m.successor = $successor,
     m.split_into = $split_into, m.version = $version
 """
 
 TOUCHES_QUERY = """
-MATCH (h:Handoff {id: $handoff_id})
+MATCH (h:AgentKG_Handoff {id: $handoff_id})
 UNWIND $modules AS module_id
-MATCH (m:Module {id: module_id})
+MATCH (m:AgentKG_Module {id: module_id})
 MERGE (h)-[:TOUCHES]->(m)
 """
 
 SUPERSEDES_QUERY = """
-MATCH (h1:Handoff {id: $handoff_id})
-MATCH (h2:Handoff {id: $supersedes})
+MATCH (h1:AgentKG_Handoff {id: $handoff_id})
+MATCH (h2:AgentKG_Handoff {id: $supersedes})
 MERGE (h1)-[:SUPERSEDES]->(h2)
 """
 
 DERIVED_FROM_QUERY = """
-MATCH (w1:Workflow {id: $workflow_id})
-MATCH (w2:Workflow {id: $parent_workflow})
+MATCH (w1:AgentKG_Workflow {id: $workflow_id})
+MATCH (w2:AgentKG_Workflow {id: $parent_workflow})
 MERGE (w1)-[:DERIVED_FROM]->(w2)
 """
 
@@ -303,7 +303,7 @@ def _project(
                 _write_modules(session, modules_config)
             for name in sorted(_agents(data)):
                 kind = "orchestrator" if name == "orchestrator" else "subagent"
-                session.run("MERGE (a:Agent {name: $name}) SET a.kind = $kind", name=name, kind=kind)
+                session.run("MERGE (a:AgentKG_Agent {name: $name}) SET a.kind = $kind", name=name, kind=kind)
             _write_workflows(session, data["workflows"])
             _write_handoffs(session, data["handoffs"])
             _write_contexts(session, data["contexts"])
