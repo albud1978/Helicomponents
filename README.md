@@ -63,10 +63,19 @@ python3 code/extract/extract_master.py
 
 # 5. Запустить симуляцию V8 (LIMITER)
 python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
-  --version-date YYYY-MM-DD --steps 3650 --enable-mp2 --drop-table
+  --version-date YYYY-MM-DD --end-day 3650 --drop-table
 ```
 
 > **Эталонная команда V8:** V8 НЕ использует `--modules` (порядок слоёв зашит в `build_model()`).  
+> **Флаги orchestrator_limiter_v8.py (argparse):**
+> - `--version-date YYYY-MM-DD` (required) — версия датасета
+> - `--end-day 3650` (default) — последний день симуляции (10 лет)
+> - `--max-steps 10000` (default) — защитный лимит шагов цикла
+> - `--drop-table` — пересоздать `sim_masterv2_v9` и `sim_repairline_v9` перед прогоном
+>
+> Опция `--enable-mp2` отсутствует: MP2-экспорт всегда включён в V8.
+> При прогоне нескольких версий подряд `--drop-table` указывать только в первом запуске — partition'ы `(version_date, …)` сами держат версии раздельно; повторный drop сотрёт результаты предыдущих версий в этой серии.
+>
 > **SSoT по порядку слоёв:** `config/transitions/transitions_rules.json` (секция `rtc_execution_order`).  
 > **Полные команды с параметрами:** см. `.cursor/rules/` (секции "Загрузка данных" и "Команда запуска симуляции")
 
