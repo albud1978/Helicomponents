@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-05-20T13:46:10Z",
+    "updated_at": "2026-05-21T09:22:44Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -636,6 +636,153 @@
       "created_at": "2026-05-20T13:37:58Z",
       "updated_at": "2026-05-20T13:46:10Z",
       "parent_workflow": "W_neo4j_local_first_2026_05_20"
+    },
+    {
+      "workflow_id": "W_readme_flags_fix_2026_05_21",
+      "goal": "fix README flags drift for orchestrator_limiter_v8.py to match argparse",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 3000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-21T02:25:14Z"
+      },
+      "created_at": "2026-05-21T02:24:17Z",
+      "updated_at": "2026-05-21T02:25:14Z"
+    },
+    {
+      "workflow_id": "W_sim_v8_perf_baseline_2026_05_21",
+      "goal": "perf baseline: 3 runs x 4 datasets V8 simulation on PowerHome via VPN",
+      "phase": "validation",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 6000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-21T02:25:14Z"
+      },
+      "created_at": "2026-05-21T02:24:42Z",
+      "updated_at": "2026-05-21T02:25:14Z"
+    },
+    {
+      "workflow_id": "W_kg_enforcement_pack_2026_05_21",
+      "goal": "Enforce Agent KG workflow creation for any mutation in code/config/deploy/tools or simulation start",
+      "phase": "review",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 30,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-policy"
+      },
+      "usage": {
+        "cumulative_steps": 4,
+        "cumulative_tokens": 69000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-21T09:22:44Z"
+      },
+      "created_at": "2026-05-21T09:00:52Z",
+      "updated_at": "2026-05-21T09:22:44Z"
+    },
+    {
+      "workflow_id": "W_session_20260521T090323Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/smoke_test.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-21T09:03:23Z"
+      },
+      "created_at": "2026-05-21T09:03:23Z",
+      "updated_at": "2026-05-21T09:13:48Z"
+    },
+    {
+      "workflow_id": "W_housekeeping_20260521T090515Z",
+      "goal": "low-risk housekeeping edit of docs/foo.md",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-21T09:05:15Z"
+      },
+      "created_at": "2026-05-21T09:05:15Z",
+      "updated_at": "2026-05-21T09:13:48Z"
+    },
+    {
+      "workflow_id": "W_housekeeping_20260521T091156Z",
+      "goal": "low-risk housekeeping edit of docs/sc2b.md",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-21T09:11:56Z"
+      },
+      "created_at": "2026-05-21T09:11:56Z",
+      "updated_at": "2026-05-21T09:13:48Z"
+    },
+    {
+      "workflow_id": "W_session_20260521T091156Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/sc3.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-05-21T09:11:56Z"
+      },
+      "created_at": "2026-05-21T09:11:56Z",
+      "updated_at": "2026-05-21T09:13:48Z"
     }
   ],
   "handoffs": [
@@ -4699,6 +4846,336 @@
       "modules": [
         "infra"
       ]
+    },
+    {
+      "handoff_id": "handoff_W_readme_flags_fix_2026_05_21_orchestrator_4ac1614c",
+      "workflow_id": "W_readme_flags_fix_2026_05_21",
+      "agent": "orchestrator",
+      "user_goal": "если ты столкнулся с проблемами в документах, внеси правки для ясности и мне нужен тайминг всех симуляций",
+      "changes": "README.md L64-72: --steps -> --end-day; убран --enable-mp2 (MP2 хардкодом enable_mp2=True в orchestrator_limiter_v8.py L1828); добавлено пояснение про --drop-table только в первом запуске серии; перечислены реальные argparse флаги (--version-date, --end-day 3650 default, --max-steps 10000 default, --drop-table)",
+      "facts": "orchestrator_limiter_v8.py L1756-1760: argparse реально принимает --version-date (required), --end-day (default 3650), --max-steps (default 10000), --drop-table (action=store_true); MP2 жёстко enable_mp2=True (L1828); опции --steps/--enable-mp2 в коде НЕТ; .cursor/rules/ команду запуска не дублирует — дрейф был только в README.md",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-05-21T02:24:17Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 1500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_sim_v8_perf_baseline_2026_05_21_orchestrator_1c763ab2",
+      "workflow_id": "W_sim_v8_perf_baseline_2026_05_21",
+      "agent": "orchestrator",
+      "user_goal": "Нам важно прогнать все датасеты последовательно в установленном порядке через симуляцию",
+      "changes": "Запущена серия orchestrator_limiter_v8.py по 4 датасетам (2025-07-04 [drop-table], 2025-12-30, 2026-02-21, 2026-04-08) с --end-day 3650; 3 повторных прогона серии; логи в logs/sim_v8_*.log + logs/sim_v8_r2_*.log + logs/sim_v8_r3_*.log; --drop-table только в первом запуске серии; ВАЛИДАЦИЯ ops=target ПРОЙДЕНА для всех 4 датасетов во всех прогонах",
+      "facts": "Run1 series wall=274s (первый датасет 206s из-за RTC cold compile в CUDASimulation(model)); Run2 wall=100s; Run3 wall=87s; стабильно: GPU per dataset ~5.5s, internal Время общее ~11s после прогрева; sim_masterv2_v9 rows: 2025-07-04=86468, 2025-12-30=87966, 2026-02-21=86655, 2026-04-08=85893; sim_repairline_v9: 65700 строк на каждую версию; rtc_cache=732 файлов (681M); CH=10.95.19.132 через FortiClient VPN (fctvpn*); первый cold-start Run1 = compile RTC между build_model и populate_agents (silent ~185s), не CH I/O",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-05-21T02:24:42Z",
+      "modules": [
+        "step_logic"
+      ],
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 4500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_readme_flags_fix_2026_05_21_orchestrator_8e361ca9",
+      "workflow_id": "W_readme_flags_fix_2026_05_21",
+      "agent": "orchestrator",
+      "user_goal": "если ты столкнулся с проблемами в документах, внеси правки для ясности и мне нужен тайминг всех симуляций",
+      "changes": "README.md L64-72: --steps -> --end-day; убран --enable-mp2 (MP2 хардкодом enable_mp2=True в orchestrator_limiter_v8.py L1828); добавлено пояснение про --drop-table только в первом запуске серии",
+      "facts": "orchestrator_limiter_v8.py L1756-1760: argparse реально принимает --version-date (required), --end-day (default 3650), --max-steps (default 10000), --drop-table (action=store_true); MP2 жёстко enable_mp2=True (L1828); .cursor/rules/ команду запуска не дублирует — дрейф был только в README.md",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — правка README флагов V8 строго соответствует запросу 'если столкнулся с проблемами в документах, внеси правки для ясности'",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "80dce24ea6e812bc765c5316abd1f1afe9694d0b2dc31bfcb21a6ca1dc74bb7f",
+      "created_at": "2026-05-21T02:25:14Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 1500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_sim_v8_perf_baseline_2026_05_21_orchestrator_41d17d79",
+      "workflow_id": "W_sim_v8_perf_baseline_2026_05_21",
+      "agent": "orchestrator",
+      "user_goal": "Нам важно прогнать все датасеты последовательно в установленном порядке через симуляцию",
+      "changes": "Запущена серия orchestrator_limiter_v8.py по 4 датасетам с --end-day 3650; 3 повтора серии; логи logs/sim_v8_*.log, sim_v8_r2_*.log, sim_v8_r3_*.log; ВАЛИДАЦИЯ ops=target ПРОЙДЕНА на всех 12 запусках",
+      "facts": "Run1 wall=274s (cold: 206s/22s/23s/23s); Run2 wall=100s; Run3 wall=87s; GPU per dataset ~5.5s стабильно; первый cold-start = RTC compile в CUDASimulation(model) между build_model и populate_agents (~185s silent), не CH; sim_masterv2_v9 rows: 86468/87966/86655/85893; sim_repairline_v9: 65700 на каждую; rtc_cache=732 файлов",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — серия из 4 датасетов в установленном порядке (2025-07-04 -> 2025-12-30 -> 2026-02-21 -> 2026-04-08) прогнана 3 раза, ops=target PASS на всех 12 запусках",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "72967d5d28699d7f3fe0c918a98c53aee12d5f73f7abdee5779d62ac1bdc6d61",
+      "created_at": "2026-05-21T02:25:14Z",
+      "modules": [
+        "step_logic"
+      ],
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 1500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_kg_enforcement_pack_2026_05_21_coder-general_e61342c9",
+      "workflow_id": "W_kg_enforcement_pack_2026_05_21",
+      "agent": "coder-general",
+      "user_goal": "делай все 4 пункта",
+      "changes": "code/sim_v2/messaging/orchestrator_limiter_v8.py:1762-1825\n- Added nested _kg_guard() inside main() immediately after args = parser.parse_args().\n- Added local-only imports json, datetime/timezone, pathlib.Path inside the guard.\n- Guard allows KG_GUARD_BYPASS=1, AGENT_KG_WORKFLOW_ID, or recent active workflow from config/agent_kg.json; otherwise prints operator hint and exits 2.\n- No top-level imports, argparse flags, build_model(), RTC kernels, CUDASimulation, populate/build/simulate logic, or __main__ block changed.",
+      "facts": "",
+      "assumptions": "Assumption: 60-minute active workflow window and env bypass semantics are exactly as specified. Risks if false: guard may block or allow runs differently than operator policy expects.",
+      "evidence": "Facts: Read config/capsules_manifest.json and docs/limiter_v8_capsule.md for scope; edited only code/sim_v2/messaging/orchestrator_limiter_v8.py main() preflight region.\nReadLints on code/sim_v2/messaging/orchestrator_limiter_v8.py: no linter errors found.\ngit diff -- code/sim_v2/messaging/orchestrator_limiter_v8.py shows a single hunk under main() after parse_args().\nEvidence: 1) python3 -m py_compile code/sim_v2/messaging/orchestrator_limiter_v8.py\nResult: exit 0 (command chain continued; no compile output).\n\n2) KG_GUARD_BYPASS=1 python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-04 --end-day 1 2>&1 | first 5 lines\nObserved:\n✅ Environment variables автоматически загружены из /media/DATA_BIG/Projects/Heli/Helicomponents/.env\n⚠️  KG_GUARD_BYPASS=1 — workflow check skipped\n\n======================================================================\n🚀 LIMITER V8 — Архитектура с RepairLine\n\n3) unset AGENT_KG_WORKFLOW_ID KG_GUARD_BYPASS; python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-04 --end-day 1; echo exit=$?\nObserved early lines:\n✓ KG workflow: W_kg_enforcement_pack_2026_05_21 (from agent_kg.json)\n...\nexit=0\nNote: the requested smoke command continued past the early guard into the normal one-day simulation path and wrote sim_masterv2_v9/sim_repairline_v9 rows; semantic validation result was outside this guard task scope.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_kg_enforcement_pack_2026_05_21:2026-05-21T09:10:49Z",
+      "plan_step_id": "P4",
+      "approval_gate_id": "ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0",
+      "approval_status": "approved",
+      "approval_source": "human_chat_2026-05-21_13:59",
+      "risk_tier": "medium",
+      "risk_reasons": "Approved change in code/sim_v2/messaging; early in-process startup guard can block simulation runs; scope constrained to main() preflight before heavy operations.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Add minimal in-process KG traceability guard immediately after CLI parsing and before any welcome print / ClickHouse / simulation work.",
+      "evidence_pack": "Facts: Read config/capsules_manifest.json and docs/limiter_v8_capsule.md for scope; edited only code/sim_v2/messaging/orchestrator_limiter_v8.py main() preflight region.\nReadLints on code/sim_v2/messaging/orchestrator_limiter_v8.py: no linter errors found.\ngit diff -- code/sim_v2/messaging/orchestrator_limiter_v8.py shows a single hunk under main() after parse_args().\nEvidence: 1) python3 -m py_compile code/sim_v2/messaging/orchestrator_limiter_v8.py\nResult: exit 0 (command chain continued; no compile output).\n\n2) KG_GUARD_BYPASS=1 python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-04 --end-day 1 2>&1 | first 5 lines\nObserved:\n✅ Environment variables автоматически загружены из /media/DATA_BIG/Projects/Heli/Helicomponents/.env\n⚠️  KG_GUARD_BYPASS=1 — workflow check skipped\n\n======================================================================\n🚀 LIMITER V8 — Архитектура с RepairLine\n\n3) unset AGENT_KG_WORKFLOW_ID KG_GUARD_BYPASS; python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-04 --end-day 1; echo exit=$?\nObserved early lines:\n✓ KG workflow: W_kg_enforcement_pack_2026_05_21 (from agent_kg.json)\n...\nexit=0\nNote: the requested smoke command continued past the early guard into the normal one-day simulation path and wrote sim_masterv2_v9/sim_repairline_v9 rows; semantic validation result was outside this guard task scope.",
+      "success_criteria": "script: python3 -m py_compile code/sim_v2/messaging/orchestrator_limiter_v8.py exits 0\nscript: KG_GUARD_BYPASS=1 python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-04 --end-day 1 2>&1 | head -5 contains KG_GUARD_BYPASS=1 — workflow check skipped\nscript: unset AGENT_KG_WORKFLOW_ID KG_GUARD_BYPASS; python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-04 --end-day 1; echo exit=$? contains ✓ KG workflow: W_kg_enforcement_pack_2026_05_21 (from agent_kg.json)",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=reviewer-flame_pending; evidence_refs=py_compile; bypass_smoke; active_kg_smoke; approval_ref=ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0",
+      "risks": "Guard can block valid runs when Agent KG is stale; KG_GUARD_BYPASS=1 can be misused outside emergency/local contexts; reviewer should confirm no runtime/RTC semantics changed.",
+      "next_owner": "reviewer-flame",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No domain graph update: traceability guard only, no transition/invariant/domain model change.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-05-21T09:10:49Z",
+      "modules": [
+        "step_logic"
+      ],
+      "usage": {
+        "model": "gpt-5.5-medium",
+        "est_tokens": 18000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_kg_enforcement_pack_2026_05_21_reviewer-flame_37b5b267",
+      "workflow_id": "W_kg_enforcement_pack_2026_05_21",
+      "agent": "reviewer-flame",
+      "user_goal": "делай все 4 пункта",
+      "changes": "Review-only. No file writes. Examined git diff of code/sim_v2/messaging/orchestrator_limiter_v8.py (+63/-0 lines) and surrounding context L1-L40 (top-level imports) and L1750-L1850 (main() before/after insertion point).",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: Dispatch SuccessCriteria checked: 'KG-guard insertion does not touch RTC/CUDA/simulation lifecycle/CLI'. Evidence supporting ACCEPT: (i) git diff confirms additive-only edit at single insertion point L1763-L1825; (ii) source read of L1-L40 confirms no top-level import changes; (iii) source read of L1750-L1850 confirms call site precedes all CUDA-related calls in main(); (iv) nested function uses stdlib-only local imports; (v) sys.exit(2) on failure path executes before any pyflamegpu/CUDA initialization. ACCEPT (pass). Verdict: pass.\nEvidence: 1) Diff scope: addition of nested function _kg_guard() at L1764-L1823 + single call site _kg_guard() at L1825; no deletions; +63 lines, 1 file (within minimal-diff cap <=3 files, <=150 lines). 2) Top-level imports unchanged (L26-L29: import os, sys, time, argparse) — no new GPU/CUDA modules introduced. 3) Local imports inside _kg_guard scoped to nested function: 'import json' (L1765), 'from datetime import datetime, timezone' (L1766), 'from pathlib import Path' (L1767) — stdlib only, zero overlap with pyflamegpu/cuda/cupy/torch. 4) Call site _kg_guard() at L1825 is placed AFTER args = parser.parse_args() (L1762) and BEFORE 'print(LIMITER V8 — Архитектура с RepairLine)' (L1827-L1829), get_client() (L1832-L1833), DROP/CREATE TABLE (L1835-L1842) and ALL downstream simulation construction — build_model(), fg.CUDASimulation(self.model), populate_agents(), simulate() are reached only after _kg_guard() returns success. 5) On failure path (file missing / JSON invalid / no active workflow) the guard calls sys.exit(2) BEFORE any FLAME GPU host call → no CUDA context created → no RTC kernel cache touched → exit is clean. 6) Function reads only: env vars (KG_GUARD_BYPASS, AGENT_KG_WORKFLOW_ID via os.environ.get) and file config/agent_kg.json (read-only via Path.read_text). No writes to filesystem, no mutation of global state, no new module-level identifiers. 7) CLI argparse contract preserved: parser is built at L1756-L1760 with original flags --version-date, --end-day, --max-steps, --drop-table; _kg_guard does NOT touch parser or args object. 8) RTC kernel functions (rtc_state_transitions_v7/v8, rtc_quota_v7, rtc_spawn_dynamic_v7) are defined elsewhere in the file (not in the diff range) and remain byte-identical. 9) Capsule/invariants: no INV-* / TEMP-* / GPU-* invariants touched (guard runs on host before GPU init; cannot violate GPU-1..GPU-6 race/memory constraints). 10) Surgical/Simplicity review: every added line traces to UserGoal (KG-guard enforcement); no orphan cleanup; no drive-by refactors; no speculative flexibility (single BYPASS env, single env override, single file lookup — all explicitly requested by SuccessCriteria); fail-fast via sys.exit(2) with explicit diagnostic, no silent fallback. Verdict: pass. Notes (non-blocking): (a) datetime.fromisoformat('Z' -> '+00:00') replacement is compatible with Python 3.10+; remains correct on 3.11+. (b) If timestamp field is malformed, ValueError will propagate as uncaught exception — acceptable fail-fast per project rule against silent try/except. (c) active_window_sec=3600 hardcoded; matches docstring '60 min' — could be promoted to a module constant later if reused, but not required by current SuccessCriteria. Verdict: pass.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_kg_enforcement_pack_2026_05_21:20260521T091457Z",
+      "plan_step_id": "R4",
+      "approval_gate_id": "ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Review of code edit in code/sim_v2/messaging/orchestrator_limiter_v8.py; medium-policy profile; CUDA/RTC adjacency requires explicit non-touch verification.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "R4: review of KG-guard nested function inserted in main() between args parse and welcome print. Confirm zero touch on CUDA/RTC paths and minimal-diff policy.",
+      "evidence_pack": "Facts: Dispatch SuccessCriteria checked: 'KG-guard insertion does not touch RTC/CUDA/simulation lifecycle/CLI'. Evidence supporting ACCEPT: (i) git diff confirms additive-only edit at single insertion point L1763-L1825; (ii) source read of L1-L40 confirms no top-level import changes; (iii) source read of L1750-L1850 confirms call site precedes all CUDA-related calls in main(); (iv) nested function uses stdlib-only local imports; (v) sys.exit(2) on failure path executes before any pyflamegpu/CUDA initialization. ACCEPT (pass). Verdict: pass.\nEvidence: 1) Diff scope: addition of nested function _kg_guard() at L1764-L1823 + single call site _kg_guard() at L1825; no deletions; +63 lines, 1 file (within minimal-diff cap <=3 files, <=150 lines). 2) Top-level imports unchanged (L26-L29: import os, sys, time, argparse) — no new GPU/CUDA modules introduced. 3) Local imports inside _kg_guard scoped to nested function: 'import json' (L1765), 'from datetime import datetime, timezone' (L1766), 'from pathlib import Path' (L1767) — stdlib only, zero overlap with pyflamegpu/cuda/cupy/torch. 4) Call site _kg_guard() at L1825 is placed AFTER args = parser.parse_args() (L1762) and BEFORE 'print(LIMITER V8 — Архитектура с RepairLine)' (L1827-L1829), get_client() (L1832-L1833), DROP/CREATE TABLE (L1835-L1842) and ALL downstream simulation construction — build_model(), fg.CUDASimulation(self.model), populate_agents(), simulate() are reached only after _kg_guard() returns success. 5) On failure path (file missing / JSON invalid / no active workflow) the guard calls sys.exit(2) BEFORE any FLAME GPU host call → no CUDA context created → no RTC kernel cache touched → exit is clean. 6) Function reads only: env vars (KG_GUARD_BYPASS, AGENT_KG_WORKFLOW_ID via os.environ.get) and file config/agent_kg.json (read-only via Path.read_text). No writes to filesystem, no mutation of global state, no new module-level identifiers. 7) CLI argparse contract preserved: parser is built at L1756-L1760 with original flags --version-date, --end-day, --max-steps, --drop-table; _kg_guard does NOT touch parser or args object. 8) RTC kernel functions (rtc_state_transitions_v7/v8, rtc_quota_v7, rtc_spawn_dynamic_v7) are defined elsewhere in the file (not in the diff range) and remain byte-identical. 9) Capsule/invariants: no INV-* / TEMP-* / GPU-* invariants touched (guard runs on host before GPU init; cannot violate GPU-1..GPU-6 race/memory constraints). 10) Surgical/Simplicity review: every added line traces to UserGoal (KG-guard enforcement); no orphan cleanup; no drive-by refactors; no speculative flexibility (single BYPASS env, single env override, single file lookup — all explicitly requested by SuccessCriteria); fail-fast via sys.exit(2) with explicit diagnostic, no silent fallback. Verdict: pass. Notes (non-blocking): (a) datetime.fromisoformat('Z' -> '+00:00') replacement is compatible with Python 3.10+; remains correct on 3.11+. (b) If timestamp field is malformed, ValueError will propagate as uncaught exception — acceptable fail-fast per project rule against silent try/except. (c) active_window_sec=3600 hardcoded; matches docstring '60 min' — could be promoted to a module constant later if reused, but not required by current SuccessCriteria. Verdict: pass.",
+      "success_criteria": "manual-check: reviewer-flame confirms KG-guard insertion at L1764-L1825 does not modify RTC kernel sources, build_model(), fg.CUDASimulation(self.model), populate_agents(), simulate(), simulation lifecycle, invariants, transitions, quotas, or CLI argparse contract; minimal diff (+63 lines, 1 file) respected.",
+      "compliance_checklist": "decision=allow required_gates=pass exceptions=none evidence_refs=git diff code/sim_v2/messaging/orchestrator_limiter_v8.py;Read L1-L40,L1750-L1850;handoff_W_kg_enforcement_pack_2026_05_21_coder-general_e61342c9 approval_ref=ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0",
+      "risks": "None blocking. Minor non-blocking notes captured in EvidencePack (datetime parsing compat, hardcoded active_window_sec, uncaught ValueError on malformed timestamp — acceptable fail-fast).",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "e0e330f5d0b7a71866f57e9448cd4daeb9f4e9666776e6caa306e2d28d003225",
+      "created_at": "2026-05-21T09:15:49Z",
+      "modules": [
+        "step_logic"
+      ],
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 6500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_kg_enforcement_pack_2026_05_21_governance-compliance_48d8f5aa",
+      "workflow_id": "W_kg_enforcement_pack_2026_05_21",
+      "agent": "governance-compliance",
+      "user_goal": "делай все 4 пункта",
+      "changes": "Governance verdict: allow_with_notes. Проверено: (1) approval gate ctx_*_approval_f5724ea0 присутствует, явный chat consent 2026-05-21 13:59 'делай все 4 пункта' зафиксирован в KG; (2) scope match — 4 правки в Changes ↔ 4 пункта в approval-context PlanCard, расхождений нет; (3) high-risk зона code/sim_v2/messaging/orchestrator_limiter_v8.py делегирована coder-general (не orchestrator self-coding), reviewer-flame pass подтвердил отсутствие касания RTC/CUDA/simulation logic — orchestrator self-coding только в allowlist (.cursor/hooks/** + ~/.cursor/hooks.json user-level); (4) sequential pipeline соблюдён: P4 coder-general → R4 reviewer-flame pass → G1 governance (single pass); (5) no nested subagents (orchestrator → 1-level dispatch); (6) SSoT не затронут (нет правок config/transitions/**, invariants.json, make sync-domain-graph); (7) BI/production не затронуты; (8) handoff format compliance — оба subagent handoff содержат PlanCard/EvidencePack/ComplianceChecklist (5-field) согласно 91_handoff_template; enums корректны; (9) anti-overengineering: единый bypass KG_GUARD_BYPASS=1 (shared между hook и in-process guard), отдельный opt-out KG_AUTO_BOOTSTRAP=0 для auto-bootstrap (разные concerns); 60-min window не параметризован — KISS; нет лишних флагов/опций; (10) обработка ошибок — fail-fast c sys.exit(2) + явный hint в orchestrator_limiter_v8 KG-guard; silent fail-open в observation hooks (audit_code_edit / edit_workflow_guard) ловит конкретные exception types (OSError, JSONDecodeError, CalledProcessError, TimeoutExpired) для non-blocking путей audit/bootstrap — соответствует политике 'try/except не для скрытия ошибок' (специфичные exceptions, intentional fail-open наблюдательного слоя, fail-safe BLOCK для critical paths).",
+      "facts": "",
+      "assumptions": "Assumption: F2 PRE-approval 'делай все 4 пункта' покрывает все 4 правки в их финальном виде (включая argparse-level scope для orchestrator_limiter_v8 без касания simulation logic). Risks if false: если человек подразумевал иную трактовку правки #4 — нужен повторный consent. Источник: ctx_*_approval_f5724ea0 явно перечисляет '~/.cursor/hooks.json (user-level), .cursor/hooks/**, code/sim_v2/messaging/orchestrator_limiter_v8.py (только argparse-level guard в main() БЕЗ касания simulation logic / build_model / RTC kernels)' — формулировка явная, риск низкий.",
+      "evidence": "Источники проверки: (a) config/agent_kg.json read-state W_kg_enforcement_pack_2026_05_21 (workflow active, 2 handoffs, 3 context entries включая approval); (b) ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0 content — явная цитата approval; (c) handoff_W_kg_enforcement_pack_2026_05_21_coder-general_e61342c9 (P4 implement, RiskTier=medium, evidence=py_compile+smoke); (d) handoff_W_kg_enforcement_pack_2026_05_21_reviewer-flame_37b5b267 (R4 review pass, evidence=10-point CUDA/RTC non-touch verification); (e) .cursor/hooks/edit_workflow_guard.py — прочитан полностью (242 строки), preToolUse contract корректен, классификация critical/housekeeping/neutral, fail-safe deny на критических путях; (f) .cursor/hooks/audit_code_edit.py — прочитан полностью (220 строк), afterFileEdit, _has_active_workflow возвращает True на KG read fail (fail-open для observation), _bootstrap_session_workflow корректно ловит KG_AUTO_BOOTSTRAP=0; (g) code/sim_v2/messaging/orchestrator_limiter_v8.py L1755-1842 — KG-guard nested в main() между args=parse_args() (L1762) и welcome print (L1827); локальные stdlib импорты; sys.exit(2) до GPU/RTC init; (h) .cursor/hooks.json — preToolUse регистрация edit_workflow_guard с matcher=Write|StrReplace|EditNotebook; (i) ~/.cursor/hooks.json + dispatch_workspace_hook.sh — wrapper корректно обрабатывает отсутствующие скрипты (exit 0 = no-op), workspace detection через CURSOR_WORKSPACE_FOLDER → PWD → walk-up; (j) SuccessCriteria SC#1-4 PASS (валидированы оркестратором, не предмет governance review). PlanCard/EvidencePack/ComplianceChecklist проверены в обоих subagent handoff. RiskTier=medium, RiskReasons заполнены, HumanGateRequired=conditional (coder-general) / no (reviewer-flame) — согласованы с approval-context.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_kg_enforcement_pack_2026_05_21:20260521T0916Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0",
+      "approval_status": "approved",
+      "approval_source": "human_chat_2026-05-21_13:59",
+      "risk_tier": "medium",
+      "risk_reasons": "Пакет затрагивает code/sim_v2/** (формально high-risk зона), но scope strictly bounded explicit human approval: argparse-level guard БЕЗ касания CUDA/RTC/simulation logic; reviewer-flame pass; medium-policy profile обоснован",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "G1: single governance pass для пакета из 4 правок (user-home hooks wrapper; edit_workflow_guard preToolUse; audit_code_edit auto-bootstrap; orchestrator_limiter_v8 in-process KG-guard). Проверены: approval gate, scope match, no-nested, no self-coding, anti-overengineering, error handling. Verdict: allow_with_notes.",
+      "evidence_pack": "Источники проверки: (a) config/agent_kg.json read-state W_kg_enforcement_pack_2026_05_21 (workflow active, 2 handoffs, 3 context entries включая approval); (b) ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0 content — явная цитата approval; (c) handoff_W_kg_enforcement_pack_2026_05_21_coder-general_e61342c9 (P4 implement, RiskTier=medium, evidence=py_compile+smoke); (d) handoff_W_kg_enforcement_pack_2026_05_21_reviewer-flame_37b5b267 (R4 review pass, evidence=10-point CUDA/RTC non-touch verification); (e) .cursor/hooks/edit_workflow_guard.py — прочитан полностью (242 строки), preToolUse contract корректен, классификация critical/housekeeping/neutral, fail-safe deny на критических путях; (f) .cursor/hooks/audit_code_edit.py — прочитан полностью (220 строк), afterFileEdit, _has_active_workflow возвращает True на KG read fail (fail-open для observation), _bootstrap_session_workflow корректно ловит KG_AUTO_BOOTSTRAP=0; (g) code/sim_v2/messaging/orchestrator_limiter_v8.py L1755-1842 — KG-guard nested в main() между args=parse_args() (L1762) и welcome print (L1827); локальные stdlib импорты; sys.exit(2) до GPU/RTC init; (h) .cursor/hooks.json — preToolUse регистрация edit_workflow_guard с matcher=Write|StrReplace|EditNotebook; (i) ~/.cursor/hooks.json + dispatch_workspace_hook.sh — wrapper корректно обрабатывает отсутствующие скрипты (exit 0 = no-op), workspace detection через CURSOR_WORKSPACE_FOLDER → PWD → walk-up; (j) SuccessCriteria SC#1-4 PASS (валидированы оркестратором, не предмет governance review). PlanCard/EvidencePack/ComplianceChecklist проверены в обоих subagent handoff. RiskTier=medium, RiskReasons заполнены, HumanGateRequired=conditional (coder-general) / no (reviewer-flame) — согласованы с approval-context.",
+      "success_criteria": "manual-check: governance verdict записан в KG как handoff + ComplianceChecklist (5-field compact), workflow готов к pre_close с allow_with_notes",
+      "compliance_checklist": "decision=allow_with_notes required_gates=pass exceptions=none evidence_refs=handoff_W_kg_enforcement_pack_2026_05_21_coder-general_e61342c9;handoff_W_kg_enforcement_pack_2026_05_21_reviewer-flame_37b5b267;ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0;.cursor/hooks/edit_workflow_guard.py;.cursor/hooks/audit_code_edit.py;.cursor/hooks.json;~/.cursor/hooks.json;code/sim_v2/messaging/orchestrator_limiter_v8.py:1764-1825 approval_ref=ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0",
+      "risks": "(1) silent fail-open в audit_code_edit._has_active_workflow при KG read failure теоретически может пропустить bootstrap, но это observation hook без блокирующих последствий — non-blocking; (2) hardcoded 60-min / 30-min window в guard: при долгих фоновых сессиях могут принудить к re-init — приемлемо для KISS; (3) KG_GUARD_BYPASS=1 потенциально может быть злоупотреблен — mitigated audit-log WARN строкой в edit_workflow_guard и явным print в orchestrator_limiter_v8.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Domain Graph не затронут (нет правок config/transitions/** / invariants.json)",
+      "prev_handoff_hash": "cc5a0418f731af07a68c6e678b230997991b4b92229ab9513c1dccf2ba0bfad2",
+      "created_at": "2026-05-21T09:20:27Z",
+      "modules": [
+        "infra",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 9500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_kg_enforcement_pack_2026_05_21_orchestrator_ff7f4c1b",
+      "workflow_id": "W_kg_enforcement_pack_2026_05_21",
+      "agent": "orchestrator",
+      "user_goal": "делай все 4 пункта",
+      "changes": "(1) ~/.cursor/hooks.json (новый, 12 entries) + ~/.cursor/hooks/dispatch_workspace_hook.sh (новый, +x, 60L); (2) .cursor/hooks/edit_workflow_guard.py (новый, 200L) + .cursor/hooks.json L31-34 (регистрация preToolUse matcher=Write|StrReplace|EditNotebook); (3) .cursor/hooks/audit_code_edit.py L1-30/+_has_active_workflow/+_bootstrap_session_workflow/L120-122 (auto_bootstrap_workflow field); (4) code/sim_v2/messaging/orchestrator_limiter_v8.py L1764-1825 (_kg_guard nested in main(), вызов L1825 ДО welcome print)",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "SC#1 (4/4): hooks.json валидный JSON 12 entries; wrapper +x; existing hook dispatched OK; nonexistent hook no-op exit 0. SC#2 (2/2): code/test_sc2.py decision=deny + hint в audit log; docs/sc2b.md auto-bootstrap W_housekeeping + ALLOW. SC#3 (2/2): _bootstrap_session_workflow с window=0 создаёт W_session; KG_AUTO_BOOTSTRAP=0 None. SC#4 (4/4 ветки): env, bypass, active WF, deny (rc=2). Sub-handoffs: coder-general e61342c9, reviewer-flame 37b5b267 (pass), governance-compliance 48d8f5aa (allow_with_notes). HumanGate detail: F2 PRE-approval ctx_*_approval_f5724ea0 (Алексей 2026-05-21 13:59 'делай все 4 пункта').",
+      "drift_check": "UserGoal Changes scope match: yes — все 4 запрошенных правки реализованы, scope не расширен, по 1 файлу на правку, reviewer-flame подтвердил отсутствие касания CUDA/RTC в #4",
+      "process_insights": "1. 4-правочный пакет в одном workflow без эскалаций. 2. Sequential pipeline (orchestrator self -> coder-general -> reviewer-flame -> governance -> close). 3. Single governance pass. 4. Approval ctx_*_approval_f5724ea0 цитируется во всех handoffs.",
+      "trace_id": "wf:W_kg_enforcement_pack_2026_05_21:2026-05-21T09:22:44Z",
+      "plan_step_id": "O_final",
+      "approval_gate_id": "ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0",
+      "approval_status": "approved",
+      "approval_source": "user-chat",
+      "risk_tier": "medium",
+      "risk_reasons": "user-level hooks setup; new preToolUse guard for Write/StrReplace/EditNotebook; code/sim_v2/** touch (scope-limited to argparse-level startup guard)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "4-правочный enforcement-пакет: (1) user-level Cursor hooks + wrapper dispatcher; (2) preToolUse edit_workflow_guard.py с CRITICAL/HOUSEKEEPING/NEUTRAL матрицей; (3) afterFileEdit auto-bootstrap W_session_*; (4) in-process KG-guard в orchestrator_limiter_v8.py main().",
+      "evidence_pack": "SC#1 (4/4): hooks.json валидный JSON 12 entries; wrapper +x; existing hook dispatched OK; nonexistent hook no-op exit 0. SC#2 (2/2): code/test_sc2.py decision=deny + hint в audit log; docs/sc2b.md auto-bootstrap W_housekeeping + ALLOW. SC#3 (2/2): _bootstrap_session_workflow с window=0 создаёт W_session; KG_AUTO_BOOTSTRAP=0 None. SC#4 (4/4 ветки): env, bypass, active WF, deny (rc=2). Sub-handoffs: coder-general e61342c9, reviewer-flame 37b5b267 (pass), governance-compliance 48d8f5aa (allow_with_notes). HumanGate detail: F2 PRE-approval ctx_*_approval_f5724ea0 (Алексей 2026-05-21 13:59 'делай все 4 пункта').",
+      "success_criteria": "script: SC1-4 (см. EvidencePack); все 4 PASS",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=handoff_coder-general_e61342c9;handoff_reviewer-flame_37b5b267;handoff_governance-compliance_48d8f5aa;SC1-4_PASS; approval_ref=ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0",
+      "risks": "(1) hooks experimental cursor api wrapper зависит от cwd=workspace; (2) bootstrap workflows накапливаются — нужна периодическая чистка через --force-close; (3) KG_GUARD_BYPASS=1 может быть оставлен в env между сессиями",
+      "next_owner": "human",
+      "open_questions": "Дублировать workspace edit_workflow_guard в user-level hooks.json через wrapper — отдельный low-risk follow-up workflow при необходимости",
+      "graph_update": "no",
+      "graph_update_reason": "no domain graph / transitions / invariants changes",
+      "prev_handoff_hash": "4b589a1452fb9c5c9fb28da4a49bf0d1609dfd750f1fa00c956c9ef4697f25df",
+      "created_at": "2026-05-21T09:22:44Z",
+      "modules": [
+        "infra",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 35000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -5619,6 +6096,96 @@
       "agent": "orchestrator",
       "created_at": "2026-05-20T13:46:10Z",
       "updated_at": "2026-05-20T13:46:10Z"
+    },
+    {
+      "context_id": "ctx_W_readme_flags_fix_2026_05_21_closure_01f7456c",
+      "workflow_id": "W_readme_flags_fix_2026_05_21",
+      "context_type": "closure",
+      "content": "Handoff-lite committed with drift_check + graph_update; embedded validation passed",
+      "agent": "orchestrator",
+      "created_at": "2026-05-21T02:25:14Z",
+      "updated_at": "2026-05-21T02:25:14Z"
+    },
+    {
+      "context_id": "ctx_W_sim_v8_perf_baseline_2026_05_21_closure_4ce699b0",
+      "workflow_id": "W_sim_v8_perf_baseline_2026_05_21",
+      "context_type": "closure",
+      "content": "Handoff-lite committed with drift_check + graph_update; embedded validation passed",
+      "agent": "orchestrator",
+      "created_at": "2026-05-21T02:25:14Z",
+      "updated_at": "2026-05-21T02:25:14Z"
+    },
+    {
+      "context_id": "ctx_W_kg_enforcement_pack_2026_05_21_approval_f5724ea0",
+      "workflow_id": "W_kg_enforcement_pack_2026_05_21",
+      "context_type": "approval",
+      "content": "F2 PRE-approval: пользователь Алексей в чате 2026-05-21 13:59 ответил 'делай все 4 пункта' на план из 4 правок: (1) ~/.cursor/hooks.json wrapper, (2) edit_workflow_guard.py, (3) audit_code_edit.py auto-bootstrap, (4) orchestrator_limiter_v8.py in-process guard. Risk-tier=medium, profile=medium-policy. Explicit allowed paths: ~/.cursor/hooks.json (user-level), .cursor/hooks/**, code/sim_v2/messaging/orchestrator_limiter_v8.py (только argparse-level guard в main() БЕЗ касания simulation logic / build_model / RTC / CUDASimulation)",
+      "agent": "orchestrator",
+      "created_at": "2026-05-21T09:00:52Z",
+      "updated_at": "2026-05-21T09:00:52Z"
+    },
+    {
+      "context_id": "ctx_W_kg_enforcement_pack_2026_05_21_plan_card_f40b722d",
+      "workflow_id": "W_kg_enforcement_pack_2026_05_21",
+      "context_type": "plan_card",
+      "content": "4 правки в одном пакете: (1) ~/.cursor/hooks.json + wrapper bash — hooks работают независимо от workspace experimental-флагов; (2) .cursor/hooks/edit_workflow_guard.py — preToolUse guard на Write/StrReplace/EditNotebook: BLOCK для code/**/config/**/deploy/**/tools/** без active workflow, warn+auto-init для docs/**/README.md/.cursor/rules/**, env KG_GUARD_BYPASS=1 для emergency; (3) .cursor/hooks/audit_code_edit.py — afterFileEdit fallback: если нет active workflow за 30 мин → auto-init W_session_<UTC>; (4) code/sim_v2/messaging/orchestrator_limiter_v8.py — guard в main() ДО build_model: требует AGENT_KG_WORKFLOW_ID env или active workflow в KG (<1ч)",
+      "agent": "orchestrator",
+      "created_at": "2026-05-21T09:00:52Z",
+      "updated_at": "2026-05-21T09:00:52Z"
+    },
+    {
+      "context_id": "ctx_W_kg_enforcement_pack_2026_05_21_phase_start_abe41a3a",
+      "workflow_id": "W_kg_enforcement_pack_2026_05_21",
+      "context_type": "phase_start",
+      "content": "governance-compliance: single governance pass G1 для пакета KG enforcement (4 правки). Scope: проверка compliance c 00_global_always / 90_multiagent_workflow / 91_handoff_template; approval gate, high-risk зона code/sim_v2/**, anti-overengineering, обработка ошибок.",
+      "agent": "governance-compliance",
+      "created_at": "2026-05-21T09:07:25Z",
+      "updated_at": "2026-05-21T09:18:18Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260521T090323Z_closure_dab21320",
+      "workflow_id": "W_session_20260521T090323Z",
+      "context_type": "closure",
+      "content": "smoke artifact from W_kg_enforcement_pack_2026_05_21 validation; auto-bootstrap test only",
+      "agent": "orchestrator",
+      "created_at": "2026-05-21T09:13:48Z",
+      "updated_at": "2026-05-21T09:13:48Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260521T090515Z_closure_bd48217e",
+      "workflow_id": "W_housekeeping_20260521T090515Z",
+      "context_type": "closure",
+      "content": "smoke artifact from W_kg_enforcement_pack_2026_05_21 validation; auto-bootstrap test only",
+      "agent": "orchestrator",
+      "created_at": "2026-05-21T09:13:48Z",
+      "updated_at": "2026-05-21T09:13:48Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260521T091156Z_closure_0e387319",
+      "workflow_id": "W_housekeeping_20260521T091156Z",
+      "context_type": "closure",
+      "content": "smoke artifact from W_kg_enforcement_pack_2026_05_21 validation; auto-bootstrap test only",
+      "agent": "orchestrator",
+      "created_at": "2026-05-21T09:13:48Z",
+      "updated_at": "2026-05-21T09:13:48Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260521T091156Z_closure_16b4019e",
+      "workflow_id": "W_session_20260521T091156Z",
+      "context_type": "closure",
+      "content": "smoke artifact from W_kg_enforcement_pack_2026_05_21 validation; auto-bootstrap test only",
+      "agent": "orchestrator",
+      "created_at": "2026-05-21T09:13:48Z",
+      "updated_at": "2026-05-21T09:13:48Z"
+    },
+    {
+      "context_id": "ctx_W_kg_enforcement_pack_2026_05_21_closure_f08df45e",
+      "workflow_id": "W_kg_enforcement_pack_2026_05_21",
+      "context_type": "closure",
+      "content": "Все 4 правки реализованы и валидированы: hooks wrapper + edit_workflow_guard + audit_code_edit auto-bootstrap + orchestrator_limiter_v8 KG-guard. SC1-4 PASS, reviewer-flame pass, governance allow_with_notes. NextOwner=human.",
+      "agent": "orchestrator",
+      "created_at": "2026-05-21T09:22:44Z",
+      "updated_at": "2026-05-21T09:22:44Z"
     }
   ],
   "meta": {

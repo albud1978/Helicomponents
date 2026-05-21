@@ -1760,6 +1760,69 @@ def main():
     parser.add_argument("--drop-table", action="store_true", help="Пересоздать таблицу")
     
     args = parser.parse_args()
+
+    def _kg_guard():
+        import json
+        from datetime import datetime, timezone
+        from pathlib import Path
+
+        active_window_sec = 3600
+
+        if os.environ.get("KG_GUARD_BYPASS") == "1":
+            print("⚠️  KG_GUARD_BYPASS=1 — workflow check skipped")
+            return
+
+        env_workflow_id = os.environ.get("AGENT_KG_WORKFLOW_ID")
+        if env_workflow_id:
+            print(f"✓ KG workflow: {env_workflow_id} (from env)")
+            return
+
+        repo_root = Path(__file__).resolve().parents[3]
+        kg_path = repo_root / "config" / "agent_kg.json"
+        if not kg_path.is_file():
+            print(f"❌ KG-guard: Agent KG file is not available: {kg_path}")
+            sys.exit(2)
+
+        try:
+            data = json.loads(kg_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            print(f"❌ KG-guard: cannot read Agent KG file {kg_path}: {exc}")
+            sys.exit(2)
+        except json.JSONDecodeError as exc:
+            print(f"❌ KG-guard: invalid Agent KG JSON in {kg_path}: {exc}")
+            sys.exit(2)
+
+        now = datetime.now(timezone.utc)
+        for workflow in data.get("workflows", []):
+            if workflow.get("status") != "active":
+                continue
+
+            timestamp = workflow.get("updated_at") or workflow.get("created_at")
+            if not timestamp:
+                continue
+
+            workflow_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            if workflow_time.tzinfo is None:
+                workflow_time = workflow_time.replace(tzinfo=timezone.utc)
+            if (now - workflow_time).total_seconds() <= active_window_sec:
+                print(f"✓ KG workflow: {workflow.get('workflow_id')} (from agent_kg.json)")
+                return
+
+        print("""❌ KG-guard: no active workflow found in Agent KG (updated_at < 60 min) and AGENT_KG_WORKFLOW_ID env not set.
+
+Run simulation requires Agent KG traceability. Options:
+  1) Init workflow:
+     python3 code/utils/agent_kg.py --init-workflow --workflow-id W_sim_<descr>_<UTC> \\
+       --user-goal "<...>" --owner orchestrator --phase validation --profile low
+
+  2) Reuse existing active workflow:
+     export AGENT_KG_WORKFLOW_ID=<existing_wf>
+
+  3) Emergency bypass (NOT for production runs):
+     export KG_GUARD_BYPASS=1""")
+        sys.exit(2)
+
+    _kg_guard()
     
     print("\n" + "=" * 70)
     print("🚀 LIMITER V8 — Архитектура с RepairLine")
