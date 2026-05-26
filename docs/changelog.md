@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-05-26 — FLAME GPU 2 rc4 smoke-test + L2 engines arch verification
+
+**Workflow**: W_smoke_mp_persistence_2026_05_26 | **Risk**: medium | **Profile**: medium-fast
+
+**Changes**:
+- NEW `code/sim_v2/tests/smoke_mp_persistence.py` (+ `__init__.py`): изолированный smoke-тест на 12 экспериментов A–J эмпирически проверяющий персистентность MacroProperty, поведение `sim.reset()`/`simulate()`, изоляцию инстансов, стоимость холостых RTC-слоёв, SubModel + mapped macro и хостовый roundtrip mp2 в `pyflamegpu 2.0.0rc4+cuda120` на RTX PRO 6000 Blackwell. Production-код не трогали.
+- `docs/architecture/engines_sim_approaches.md`: добавлен §13 «Эмпирическая верификация rc4 (smoke-test 2026-05-26)» со сводкой подтверждений / контр-фактов / открытых пробелов архитектурного решения E/C/D.
+
+**Workflow**: orchestrator → coder-flame (create) → coder-flame (header + env-blocker report) → reviewer-flame (`accept_with_notes`) → coder-flame (3 nit-fixes). Lint clean, exit code 0.
+
+**Empirical findings (rc4 + sm_120, host-only — RTC blocked by env)**:
+- PASS: A (MP persists across `simulate()` without reset), C (init re-runs on every `simulate()` — gating by phase обязателен), D (step counter accumulates 10→20), E (different `CUDASimulation` instances изолированы по MP), I-2 (different `ModelDescription` изолированы), I-4 (хостовый roundtrip mp2 на планерных 88k ячеек ≈ 42–43 мс через python; экстраполяция на 30 агрегатов ≈ 23 c консервативно).
+- **FAIL — КОНТР-ФАКТ к гипотезе ТЗ §0**: B — `sim.reset()` в rc4 НЕ обнуляет MacroProperty (env-property правильно сбрасывается в default, но MP сохраняет 111). Перепроверено независимым host-only репро. Затереть MP можно только явной HostFunction-записью.
+- FAIL (ожидаемо): I-1 — `HostMacroProperty*` в rc4 не имеет `__cuda_array_interface__`, нет device-aware setter; запись MP из CuPy-буфера без хоста невозможна.
+
+**Environment blocker (не дефект теста)**: pyflamegpu rc4+cuda120 + GPU sm_120 → -arch=sm_120 (auto, override отсутствует) → NVRTC compile fail (conda cuda13 mismatch) ИЛИ NVJITLINK_ERROR_PTX_COMPILE (CUDA 12.6 nvjitlink). Условие восстановления: CUDA Toolkit ≥ 12.8 системно или wheel pyflamegpu+cuda13. Воспроизводится и на встроенном `code/utils/rtc_smoketest.py`. Production-RTC на этой машине сейчас тоже не запустится. Эксперименты F/G/H/I-3/J — заблокированы (код PoC написан, ждёт починки среды).
+
+**Open questions for follow-up**:
+- B FAIL: подтвердить в FLAME GPU 2 issue tracker — документированное поведение rc4 или баг.
+- Решающие числа для архитектуры engines L2 (G — cost holostyh RTC-слоёв для Var E; I-3/J — submodel mapped-macro для Var D) — после починки RTC прогон того же smoke без правок добавит эти данные.
+
+---
+
 ## 2026-05-20 — Neo4j label namespace prefix (Variant C: Domain_* + AgentKG_*)
 
 **Workflow**: W_neo4j_label_prefix_2026_05_20 | **Risk**: low | **Profile**: low | **Parent**: W_neo4j_local_first_2026_05_20
