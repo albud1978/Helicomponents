@@ -1,0 +1,98 @@
+---
+description: FLAME GPU runtime environment (SSoT) — what python to use, what NOT to do
+globs:
+  - "code/sim_v2/**"
+  - "code/utils/rtc_smoketest.py"
+  - "code/sim_v2/tests/**"
+alwaysApply: false
+---
+
+# FLAME GPU runtime environment (SSoT — закреплено после регрессии 2026-05-26)
+
+## TL;DR — правильный запуск FLAME-задач на этой машине
+
+```bash
+/home/albud/miniconda3/envs/cuda13/bin/python3 <script>.py
+```
+
+**Прямо conda python, без активации venv.** Не `python3`, не `source activate.sh && python3` — конкретный путь.
+
+## Что есть на машине (закреплено)
+
+| Компонент | Значение | Где |
+|---|---|---|
+| **GPU** | NVIDIA RTX PRO 6000 Blackwell, compute_cap = 12.0 (sm_120) | hardware |
+| **Driver** | NVIDIA 580.142, CUDA Version 13.0 | nvidia-smi |
+| **Conda env (рабочая для FLAME)** | `cuda13` | `~/miniconda3/envs/cuda13/` |
+| **CUDA toolkit (рабочий)** | 13.0.88 | внутри conda env `cuda13` |
+| **pyflamegpu (рабочий wheel)** | `2.0.0rc4+cuda130` | `~/miniconda3/envs/cuda13/lib/python3.12/site-packages/pyflamegpu/` |
+| **Python (рабочий для FLAME)** | conda Python 3.12 | `/home/albud/miniconda3/envs/cuda13/bin/python3` |
+| **Конфигурация — источник истины** | `requirements.txt` (строка `pyflamegpu==2.0.0rc4+cuda130`) | репо |
+| **RTC cache prefix (свидетельство рабочей связки)** | `13000_120_1_2.0.0-rc.4+d2ba2cc_*` | `.rtc_cache/` |
+
+`13000_120` в имени cache-файла = CUDA 13.0.0 + compute_cap 12.0 (sm_120) → подтверждает, что **cuda130 wheel + conda cuda13 + sm_120** есть и работает.
+
+## Что НЕЛЬЗЯ делать (накопленные грабли)
+
+1. **НЕ устанавливать pyflamegpu в проектный `.venv/`.**
+   Если pyflamegpu есть в `.venv/lib/python3.12/site-packages/`, он **перекрывает** conda-овский cuda130 wheel (потому что `activate.sh` экспортирует `VIRTUAL_ENV`, и venv site-packages идёт раньше conda в Python `sys.path`).
+   Это приведёт к попытке использовать неправильно собранный wheel (например, `cuda120`) → NVRTC headers mismatch / NVJITLINK_ERROR_PTX_COMPILE для `-arch=sm_120`.
+
+2. **НЕ ставить системный `python3 -m pip install pyflamegpu`** — он также может попасть в venv, если venv активен.
+
+3. **НЕ запускать FLAME-скрипты через `python3` после `source activate.sh`** — это даёт venv python, не conda python. Признаки попадания в неправильный python:
+   - `which python3` показывает `/media/.../Helicomponents/.venv/bin/python3` (двойной mount: тот же путь доступен как `/media/DATA_BIG/...` и как `/media/albud/8C327EB0327E9F40/...`).
+   - `import pyflamegpu` либо падает с `ModuleNotFoundError`, либо показывает версию `cuda120` вместо `cuda130`.
+
+4. **НЕ "лечить" pyflamegpu через `pip uninstall` / `pip install` в venv** — это ломает чужое окружение. Если pyflamegpu в venv не нужен, оставить как есть; для FLAME-задач использовать conda python напрямую.
+
+5. **НЕ изменять `activate.sh` или `config/load_env.sh` без явного согласования** — там тонкая логика приоритетов CUDA_PATH/conda/venv.
+
+6. **НЕ пытаться обойти sm_120** через системную CUDA 12.6 (`/usr/local/cuda-12.6`) — её `nvjitlink` не знает sm_120, link падает с `NVJITLINK_ERROR_PTX_COMPILE`. Conda cuda13 — единственный путь.
+
+## Симптомы и диагностика (если RTC падает)
+
+Перед "починкой среды" обязательно проверить, какой python подхватился:
+
+```bash
+/home/albud/miniconda3/envs/cuda13/bin/python3 -c "import pyflamegpu as fg; print(fg.__version__, fg.__file__)"
+# Ожидаемо:
+#   2.0.0rc4+cuda130
+#   /home/albud/miniconda3/envs/cuda13/lib/python3.12/site-packages/pyflamegpu/__init__.py
+```
+
+Если так — RTC должен работать. Sanity-check:
+
+```bash
+/home/albud/miniconda3/envs/cuda13/bin/python3 code/utils/rtc_smoketest.py
+# Ожидаемо: "RTC smoketest: OK"
+```
+
+Если падает с `detail::curandState undefined` / `compile errors` — это **mismatch wheel**:
+не conda python, либо в venv стоит лишний pyflamegpu, либо CUDA_PATH перебит на системную.
+
+Если падает с `NVJITLINK_ERROR_PTX_COMPILE` для `-arch=sm_120` — это **системная CUDA**:
+CUDA_PATH указывает на `/usr/local/cuda-12.6/`, чей `nvjitlink` не знает sm_120. Вернуть `CUDA_PATH=$HOME/miniconda3/targets/x86_64-linux` либо запускать через conda python без активации venv-а.
+
+## Запуск ETL / heli_pandas / Superset (не-FLAME задачи)
+
+Для не-FLAME пайплайнов (ETL, heli_pandas, Superset) использовать стандартный путь из `10_extract_and_env.mdc`:
+
+```bash
+source activate.sh
+python3 <script>.py
+```
+
+Это активирует и conda cuda13, и venv; для ETL/Superset venv-овские зависимости как раз нужны.
+
+**Только FLAME-задачи (`code/sim_v2/**`, `code/utils/rtc_smoketest.py`) — через явный conda-путь `/home/albud/miniconda3/envs/cuda13/bin/python3`.**
+
+## Правка инфраструктуры (если нужно)
+
+Если хочется, чтобы `python3` после `source activate.sh` указывал на conda, а не на venv — это правка `activate.sh` (deactivate venv после conda activate, либо вообще не активировать venv для FLAME-сессий). **Любая правка `activate.sh` / `config/load_env.sh` — medium-risk, требует явного согласования Алексея в чате.**
+
+## История регрессии 2026-05-26
+
+- Smoke-тест `code/sim_v2/tests/smoke_mp_persistence.py` сначала запускался под `source activate.sh && python3` → venv python с `pyflamegpu cuda120` → NVRTC fail на sm_120 → F/G/H/I-3/J помечены как "N/A: env blocker".
+- Реальная причина: pyflamegpu cuda120 был установлен в venv (вероятно когда-то по ошибке через `pip install` в активной venv-сессии), перекрывая conda cuda130. Условия среды (conda cuda13 + Blackwell + sm_120) корректны и рабочи — что подтверждает `.rtc_cache` с префиксом `13000_120_1_*` от последнего успешного прогона V8 20 мая 2026.
+- Фикс: запускать FLAME через `/home/albud/miniconda3/envs/cuda13/bin/python3` напрямую. RTC smoketest при этом моментально проходит.
