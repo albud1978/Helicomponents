@@ -550,17 +550,36 @@ class FillDailyPlanerStatusHostFunction(fg.HostFunction):
 - **`HostMacroProperty*` API rc4 узок** — `get/set/zero` + индексация; нет `__cuda_array_interface__`. Любая загрузка из CuPy-буфера в MP проходит через CPU.
 - **MP должны явно затираться** на смене фазы там, где это критично (например, MP2 буферы adaptive-резолюции между phase-1 и phase-2). `reset()` здесь не помощник — нужны explicit `HF_ClearMP` слои.
 
-### 13.4. Environment blocker (на момент 2026-05-26)
+### 13.4. RTC-блок первого прогона — это была ошибка выбора python, не свойство среды
 
-- **GPU**: NVIDIA RTX PRO 6000 Blackwell, `compute_cap = 12.0 → sm_120`.
-- **Установлено**: `pyflamegpu 2.0.0rc4+cuda120` (не cuda130, как указано в шапке документа в §контекст).
-- **Авто-arch**: pyflamegpu rc4 выставляет `-arch=sm_120` по compute_cap GPU; override через env-флаг или `CUDASimulation_Config` отсутствует.
-- **Связка `source activate.sh`** (conda env `cuda13` + pyflamegpu cuda120) → NVRTC headers mismatch (`detail::curandState undefined` cascading errors).
-- **Альтернатива** (conda deactivate + `CUDA_PATH=/usr/local/cuda-12.6`) → NVRTC compile проходит, но JIT-link падает: `NVJITLINK_ERROR_PTX_COMPILE` для `-arch=sm_120` (CUDA 12.6 nvjitlink не знает sm_120).
-- Тот же блок воспроизводится на встроенном `code/utils/rtc_smoketest.py` — это **общее ограничение текущей сборки**, не специфика smoke-теста или новой модели.
-- **Условие восстановления RTC**: либо обновить CUDA Toolkit до **≥ 12.8** (системно), либо получить wheel `pyflamegpu`, пересобранный под CUDA 13.
+В первом прогоне smoke F/G/H/I-3/J помечены как «N/A: env blocker», потому что запуск шёл через `source activate.sh && python3` — VIRTUAL_ENV перекрывает conda python в PATH, и Python подхватывал из `.venv/lib/python3.12/site-packages/` лишний (поставленный когда-то по ошибке) `pyflamegpu-2.0.0rc4+cuda120`, который не знает sm_120 и потому падает на NVRTC headers / NVJITLINK.
 
-> **Operational note**: до починки среды любая попытка прогнать production V8 / engines MVP / smoke-test RTC-части завершится с теми же ошибками компиляции / линка. Это **не** дефект архитектуры Варианта E/D и не блокирует архитектурное решение, но **блокирует** прогон финальных решающих чисел G и J.
+**Реальное рабочее окружение** на этой машине (закреплено в `.cursor/rules/15_flame_environment.mdc`):
+
+| Компонент | Значение |
+|---|---|
+| GPU | NVIDIA RTX PRO 6000 Blackwell, compute_cap = 12.0 (sm_120) |
+| Driver | NVIDIA 580.142, CUDA Version 13.0 |
+| Conda env | `cuda13` (CUDA toolkit 13.0.88) |
+| pyflamegpu | `2.0.0rc4+cuda130` в `~/miniconda3/envs/cuda13/lib/python3.12/site-packages/` |
+| Python для FLAME | `/home/albud/miniconda3/envs/cuda13/bin/python3` (явно, без активации venv) |
+| Свидетельство рабочей связки | `.rtc_cache/` содержит файлы с префиксом `13000_120_1_2.0.0-rc.4+d2ba2cc_*` — это CUDA 13.0.0 + compute_cap 12.0 (sm_120) — оставлены последним успешным прогоном V8 от 20 мая 2026 |
+
+**Правильный запуск smoke** (даёт полную таблицу A–J без правок теста):
+
+```bash
+/home/albud/miniconda3/envs/cuda13/bin/python3 \
+    code/sim_v2/tests/smoke_mp_persistence.py
+```
+
+RTC sanity-check на этой же связке моментально проходит:
+
+```bash
+/home/albud/miniconda3/envs/cuda13/bin/python3 code/utils/rtc_smoketest.py
+# RTC smoketest: OK
+```
+
+> **Operational note**: production-симуляция V8 / engines MVP в этом окружении исторически запускается именно через conda python, что и подтверждают свежие `.rtc_cache` файлы и логи `logs/sim_v8_*` от 20 мая 2026. Архитектурное решение по Вариантам E/C/D не упирается в среду — пробелы G/I-3/J закрываются повторным прогоном того же smoke с правильным python.
 
 ### 13.5. Пробелы для архитектурного решения E vs C vs D
 

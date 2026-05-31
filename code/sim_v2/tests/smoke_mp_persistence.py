@@ -2,12 +2,18 @@
 """
 Smoke-test: персистентность MacroProperty и изоляция слоёв между simulate().
 
-Платформа: pyflamegpu 2.0.0rc4+cuda120, RTX PRO 6000 Blackwell.
+Платформа: pyflamegpu 2.0.0rc4+cuda130 (conda env cuda13), RTX PRO 6000 Blackwell.
 Дата: 2026-05-26.
 
-Запускать из активированной среды проекта:
-    source /media/DATA_BIG/Projects/Heli/Helicomponents/activate.sh
-    python3 code/sim_v2/tests/smoke_mp_persistence.py
+ЗАПУСКАТЬ ЯВНО ЧЕРЕЗ CONDA PYTHON (без активации venv):
+
+    /home/albud/miniconda3/envs/cuda13/bin/python3 \\
+        code/sim_v2/tests/smoke_mp_persistence.py
+
+НЕ ЗАПУСКАТЬ через `source activate.sh && python3 ...` — VIRTUAL_ENV
+перекрывает conda python, и если в .venv установлен лишний
+pyflamegpu+cuda120, RTC упадёт на sm_120. Подробности и правила —
+.cursor/rules/15_flame_environment.mdc.
 
 rc4 API notes:
 - seed задаётся через sim.SimulationConfig().random_seed, setRandomSimulationSeed нет;
@@ -18,12 +24,8 @@ rc4 API notes:
 - SubModel добавляется в layer по attach-name из newSubModel(), а shared
   MacroProperty маппится через SubEnvironment().mapMacroProperty().
 
-Итог гипотез §0 после прогона от 2026-05-26 на rc4 + sm_120
-(RTX PRO 6000 Blackwell):
-
-Host-only эксперименты (A/B/C/D/E/I-1/I-2/I-4) выполнены полностью.
-RTC-зависимые (F/G/H/I-3/J) заблокированы окружением — см.
-§"Environment blocker" ниже.
+Итог гипотез §0 после первого прогона 2026-05-26 (host-only часть, conda
+python ещё не использовался — venv с cuda120 wheel перекрывал conda cuda130):
 
 Гипотеза §0(1) "simulate() без reset сохраняет MacroProperty":
     ПОДТВЕРЖДЕНО (A, B Run 1).
@@ -50,19 +52,11 @@ python for-loop): I-4 даёт абсолютную цену; экстрапол
 (~545×) — для архитектурного сравнения. Учти, что это python-цикл и оценка
 консервативна — нативный numpy bulk get/set был бы быстрее.
 
-Environment blocker для F/G/H/I-3/J (не баг теста):
-- GPU compute_cap = 12.0 (sm_120, Blackwell). pyflamegpu rc4 авто-выставляет
-  -arch=sm_120 (override через env/Config отсутствует).
-- Активная связка `source activate.sh`: conda cuda13 + pyflamegpu cuda120 →
-  NVRTC headers mismatch (detail::curandState undefined → cascading errors).
-- Альтернатива (conda deactivate + CUDA_PATH=/usr/local/cuda-12.6): NVRTC
-  compile проходит, но JIT-link падает с NVJITLINK_ERROR_PTX_COMPILE для
-  -arch=sm_120 (CUDA 12.6 nvjitlink не знает sm_120; нужна CUDA Toolkit 12.8+
-  или wheel pyflamegpu, пересобранный под CUDA 13).
-- Встроенный code/utils/rtc_smoketest.py воспроизводит тот же блок — это
-  ограничение среды, не специфика smoke-теста.
-- Условие восстановления RTC: либо CUDA Toolkit >= 12.8 (системно), либо
-  замена pyflamegpu rc4+cuda120 на сборку под cuda13.
+Environment blocker для F/G/H/I-3/J в первом прогоне был результатом
+неправильного выбора python (venv с pyflamegpu cuda120 перекрывал conda
+cuda130). После перехода на явный conda python — RTC заработал моментально
+(подтверждено `code/utils/rtc_smoketest.py: OK`). Полный прогон A–J
+выполняется одной командой выше.
 """
 
 from __future__ import annotations
