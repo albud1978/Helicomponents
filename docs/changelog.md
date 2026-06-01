@@ -1,8 +1,26 @@
 # Changelog
 
+## 2026-06-01 — V8 simulation: удаление no-op слоя repair-line assign + SSoT sync
+
+**Workflow**: W_sim_remove_d2_noop_20260601T200344Z | **Risk**: high | **Profile**: high-strict | **Status**: committed
+
+**Changes**:
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py` + `rtc_repair_lines_v8.py`: удалён no-op слой `v8_repair_line_assign_repair` (`rtc_repair_line_assign_repair_v8` — обе ветки `return ALIVE`, без записей/сообщений). Слоёв 46 -> 45.
+- `config/transitions/transitions_rules.json` (SSoT): `rtc_execution_order` приведён 48 -> 45. Удалены order 6 (`v8_repair_line_assign_repair`), 37 (`v8_reset_buffers_spawn`), 38 (`v8_count_agents_spawn` — последние два были stale от предыдущего commit), перенумерация 0..44.
+- `tools/transitions_viewer/index.html`: регенерирован из SSoT.
+- `docs/architecture/limiter_architecture.md`: обновлён stale-фрагмент порядка слоёв.
+- Neo4j (derived view): `make sync-domain-graph` — Synced 435 queries.
+
+**Review / Governance**: `reviewer-flame` — `allow_with_notes` (no-op подтверждён по git HEAD, 0 orphan-refs, `register_phase0_deterministic` интактен; flagged SSoT divergence). Human-gate: Алексей согласовал full+Neo4j scope в чате.
+
+**Evidence**:
+- Поведение не изменилось: baseline `version_id=8001` vs `8003`, EXCEPT-both-ways = 0 по `sim_masterv2_v9` И `sim_repairline_v9` на 4 датасетах. Счётчики строк совпали (master 86468/87966/86655/85893; repairline 65700×4).
+
+---
+
 ## 2026-06-01 — V8 simulation dedup post-quota spawn recount
 
-**Workflow**: W_sim_dedup_spawn_recount_20260601T175545Z | **Risk**: high | **Profile**: high-strict | **Status**: waiting human-gate before commit
+**Workflow**: W_sim_dedup_spawn_recount_20260601T175545Z | **Risk**: high | **Profile**: high-strict | **Status**: committed (90943db0)
 
 **Changes**:
 - `code/sim_v2/messaging/rtc_quota_v8.py::register_post_quota_counts_v8`: устранены два дублирующих слоя пост-квотного пересчёта `v8_reset_buffers_spawn` + `v8_count_agents_spawn`.

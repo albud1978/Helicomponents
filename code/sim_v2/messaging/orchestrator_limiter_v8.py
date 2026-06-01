@@ -662,7 +662,8 @@ class LimiterV8Orchestrator:
         # ═══════════════════════════════════════════════════════════════
         
         # Фаза 0: Детерминированные переходы (repair→svc, spawn→ops) — из V7
-        rtc_repair_lines_v8.register_repair_line_assign_for_repair_exit(self.model, heli_agent)
+        # REMOVED (W_sim_remove_d2_noop_20260601T200344Z):
+        # v8_repair_line_assign_repair был no-op: обе ветки возвращали ALIVE.
         rtc_state_transitions_v7.register_phase0_deterministic(self.model, heli_agent)
         
         # Фаза 0.5: Копирование exit_date (repair, spawn, unsvc) — V8 compute_global_min игнорирует unsvc
