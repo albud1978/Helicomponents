@@ -43,7 +43,6 @@ import pyflamegpu as fg
 from rtc_quota_v8_base import (
     RTC_RESET_FLAGS,
     RTC_RESET_BUFFERS,
-    RTC_RESET_BUFFERS_SPAWN,
     RTC_COUNT_OPS,
     RTC_COUNT_SVC,
     RTC_COUNT_INACTIVE,
@@ -2105,37 +2104,12 @@ def register_post_quota_counts_v8(model: fg.ModelDescription, agent: fg.AgentDes
     layer_count.addAgentFunction(fn)
     
     print("  ✅ Подсчёт агентов (post)")
-    
-    # Обновляем буферы после post-промоутов, чтобы spawn видел актуальный ops
-    layer_reset_spawn = model.newLayer("v8_reset_buffers_spawn")
-    for state in ["inactive", "operations", "serviceable", "repair", "reserve", "storage", "unserviceable"]:
-        fn_name = f"rtc_reset_quota_v8_spawn_{state}"
-        fn = agent.newRTCFunction(fn_name, RTC_RESET_BUFFERS_SPAWN)
-        fn.setInitialState(state)
-        fn.setEndState(state)
-        layer_reset_spawn.addAgentFunction(fn)
-    print("  ✅ Сброс буферов (spawn)")
-    
-    layer_count_spawn = model.newLayer("v8_count_agents_spawn")
-    fn = agent.newRTCFunction("rtc_count_ops_v8_spawn", RTC_COUNT_OPS)
-    fn.setInitialState("operations")
-    fn.setEndState("operations")
-    layer_count_spawn.addAgentFunction(fn)
-    
-    fn = agent.newRTCFunction("rtc_count_svc_v8_spawn", RTC_COUNT_SVC)
-    fn.setInitialState("serviceable")
-    fn.setEndState("serviceable")
-    layer_count_spawn.addAgentFunction(fn)
-    
-    fn = agent.newRTCFunction("rtc_count_unsvc_v8_spawn", RTC_COUNT_UNSVC_V8)
-    fn.setInitialState("unserviceable")
-    fn.setEndState("unserviceable")
-    layer_count_spawn.addAgentFunction(fn)
-    
-    fn = agent.newRTCFunction("rtc_count_inactive_v8_spawn", RTC_COUNT_INACTIVE)
-    fn.setInitialState("inactive")
-    fn.setEndState("inactive")
-    layer_count_spawn.addAgentFunction(fn)
-    print("  ✅ Подсчёт агентов (spawn)")
+
+    # REMOVED (dedup-spawn-recount): слои v8_reset_buffers_spawn + v8_count_agents_spawn удалены.
+    # Между count_post и spawn-слоями популяции состояний не меняются, а count_* пишут в те же
+    # mi*_count буферы → spawn-пересчёт давал значения, идентичные count_post. commit_p1/p2/p3
+    # уже обнулены reset_post (spawn их не читает). Профиль: ~18% GPU-kernel time + треть memset.
+    # ИНВАРИАНТ: между v8_count_agents_post_quota и v8_spawn_dynamic_mgr ЗАПРЕЩЕНЫ слои,
+    # мутирующие heli-популяции или mi*_*_count буферы — иначе spawn увидит устаревший ops_count.
     print("✅ Post-quota пересчёт зарегистрирован\n")
 

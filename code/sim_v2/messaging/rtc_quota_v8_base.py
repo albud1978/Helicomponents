@@ -72,51 +72,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8, flamegpu::MessageNone, flamegpu::Mes
 }}
 """
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# СБРОС БУФЕРОВ (для spawn: без commit_* чтобы сохранить факты переходов)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-RTC_RESET_BUFFERS_SPAWN = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8_spawn, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Сброс буферов для пересчёта (без commit_* чтобы spawn видел фактические коммиты)
-    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    if (idx != 0u) return flamegpu::ALIVE;
-    
-    auto mi8_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
-    auto mi17_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
-    auto mi8_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
-    auto mi17_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
-    auto mi8_unsvc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_count");
-    auto mi17_unsvc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_count");
-    auto mi8_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
-    auto mi17_unsvc_ready = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
-    auto mi8_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
-    auto mi17_inactive = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
-    auto mi8_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_status_day");
-    auto mi17_unsvc_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_status_day");
-    auto mi8_inactive_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_status_day");
-    auto mi17_inactive_status_day = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_status_day");
-    
-    for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
-        mi8_ops[i].exchange(0u);
-        mi17_ops[i].exchange(0u);
-        mi8_svc[i].exchange(0u);
-        mi17_svc[i].exchange(0u);
-        mi8_unsvc[i].exchange(0u);
-        mi17_unsvc[i].exchange(0u);
-        mi8_unsvc_ready[i].exchange(0u);
-        mi17_unsvc_ready[i].exchange(0u);
-        mi8_inactive[i].exchange(0u);
-        mi17_inactive[i].exchange(0u);
-        mi8_unsvc_status_day[i].exchange(0u);
-        mi17_unsvc_status_day[i].exchange(0u);
-        mi8_inactive_status_day[i].exchange(0u);
-        mi17_inactive_status_day[i].exchange(0u);
-    }}
-    
-    return flamegpu::ALIVE;
-}}
-"""
+# REMOVED (dedup-spawn-recount): RTC_RESET_BUFFERS_SPAWN + rtc_reset_quota_v8_spawn удалены.
+# Слой v8_reset_buffers_spawn был dead code: его reset/count давали значения, идентичные
+# post-quota пересчёту (см. register_post_quota_counts_v8 в rtc_quota_v8.py). commit_* буферы,
+# ради сохранения которых spawn-вариант не чистил их, нигде не читаются (только writers + reset).
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ПОДСЧЁТ АГЕНТОВ

@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-06-01 — V8 simulation dedup post-quota spawn recount
+
+**Workflow**: W_sim_dedup_spawn_recount_20260601T175545Z | **Risk**: high | **Profile**: high-strict | **Status**: waiting human-gate before commit
+
+**Changes**:
+- `code/sim_v2/messaging/rtc_quota_v8.py::register_post_quota_counts_v8`: устранены два дублирующих слоя пост-квотного пересчёта `v8_reset_buffers_spawn` + `v8_count_agents_spawn`.
+- `code/sim_v2/messaging/rtc_quota_v8_base.py`: удалён связанный dead code — orphan-определение `RTC_RESET_BUFFERS_SPAWN` / `rtc_reset_quota_v8_spawn` (~40 строк) и его импорт.
+- Усилен архитектурный инвариант-комментарий: между `v8_count_agents_post_quota` и `v8_spawn_dynamic_mgr` запрещены слои, мутирующие heli-популяции или `mi*_*_count`.
+
+**Review / Governance**: `reviewer-flame` — `allow_with_notes` (notes применены); `governance-compliance` — `allow_with_notes`. Human-gate обязателен: ожидается явный OK Алексея перед commit.
+
+**Evidence**:
+- nsys single run: удалённый kernel `rtc_reset_quota_v8_spawn` занимал ~18% GPU-kernel time; суммарный GPU wall-time снизился 5.90s -> 5.25s. Для production-решения нужен медианный замер.
+- Поведение не изменилось: baseline `version_id=8001` vs `8002`, EXCEPT-both-ways = 0 (IDENTICAL) по `sim_masterv2_v9` + `sim_repairline_v9` на 4 датасетах.
+
+**Caveat / follow-up**:
+- Путь dynamic-spawn эмпирически не покрыт регрессией (`spawn=0` во всех 4 датасетах); эквивалентность принята по code-level анализу. Перед production нужен регресс-тест на датасете с активным dynamic-spawn.
+
+---
+
 ## 2026-05-26 — FLAME GPU 2 rc4 smoke-test + L2 engines arch verification
 
 **Workflow**: W_smoke_mp_persistence_2026_05_26 | **Risk**: medium | **Profile**: medium-fast
