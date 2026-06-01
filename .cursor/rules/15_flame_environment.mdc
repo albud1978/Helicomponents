@@ -12,10 +12,19 @@ alwaysApply: false
 ## TL;DR — правильный запуск FLAME-задач на этой машине
 
 ```bash
+export CUDA_PATH="$HOME/miniconda3/targets/x86_64-linux"
+export LD_LIBRARY_PATH="$HOME/miniconda3/lib:$LD_LIBRARY_PATH"
 /home/albud/miniconda3/envs/cuda13/bin/python3 <script>.py
 ```
 
-**Прямо conda python, без активации venv.** Не `python3`, не `source activate.sh && python3` — конкретный путь.
+**Conda python + ОБЯЗАТЕЛЬНО `LD_LIBRARY_PATH`/`CUDA_PATH`.** Не `python3`, не `source activate.sh && python3`.
+
+> ⚠️ Прямой вызов бинарника `envs/cuda13/bin/python3` БЕЗ `LD_LIBRARY_PATH` падает с
+> `ImportError: libnvrtc.so.13: cannot open shared object file`. CUDA13-рантайм
+> (`libnvrtc.so.13` → `targets/x86_64-linux/lib/libnvrtc.so.13.0.88`) лежит в `$HOME/miniconda3/lib`,
+> а прямой вызов минует conda-активацию, которая в норме (`config/load_env.sh`) и выставляет эти переменные.
+> Альтернатива: `source $HOME/miniconda3/etc/profile.d/conda.sh && conda activate cuda13` (выставит окружение),
+> но при этом НЕ активировать venv (он перекроет conda-wheel — см. грабли ниже).
 
 ## Что есть на машине (закреплено)
 
