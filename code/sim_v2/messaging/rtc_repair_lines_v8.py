@@ -134,18 +134,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_export_v8, flamegpu::MessageNone, flameg
 }}
 """
 
-RTC_REPAIR_LINE_ASSIGN_REPAIR = f"""
-FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_assign_repair_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Назначение линии для repair->serviceable (без порога free_days)
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
-    if (exit_date == 0xFFFFFFFFu || current_day < exit_date) {{
-        return flamegpu::ALIVE;
-    }}
-    // V8: RepairLine используется только для P2/P3 (unsvc/inactive) — выход из repair не занимает линию.
-    return flamegpu::ALIVE;
-}}
-"""
+# REMOVED (W_sim_remove_d2_noop_20260601T200344Z):
+# repair-assign слой был no-op: обе ветки возвращали ALIVE.
 
 RTC_REPAIR_LINE_PUBLISH_STATUS = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_publish_status_v8, flamegpu::MessageNone, flamegpu::MessageArray) {{
@@ -212,16 +202,6 @@ def register_repair_line_pre_quota_layers(model: fg.ModelDescription, repair_lin
     layer_pub.addAgentFunction(fn)
     
     print("  ✅ V8: RepairLine pre-quota слои зарегистрированы")
-
-
-def register_repair_line_assign_for_repair_exit(model: fg.ModelDescription, heli_agent: fg.AgentDescription):
-    """Слой назначения линии для repair→serviceable"""
-    layer = model.newLayer("v8_repair_line_assign_repair")
-    fn = heli_agent.newRTCFunction("rtc_repair_line_assign_repair_v8", RTC_REPAIR_LINE_ASSIGN_REPAIR)
-    fn.setInitialState("repair")
-    fn.setEndState("repair")
-    layer.addAgentFunction(fn)
-    print("  ✅ V8: RepairLine assign (repair) слой зарегистрирован")
 
 
 def register_repair_line_export_layer(model: fg.ModelDescription, repair_line_agent: fg.AgentDescription):

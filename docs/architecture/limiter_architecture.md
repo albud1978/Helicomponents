@@ -61,68 +61,59 @@
 | **ФАЗА -1: Инициализация (Host)** |||||
 | 0 | layer_init_mp5_cumsum | `HF_InitMP5Cumsum` | Host | Готовит кумулятивные часы MP5 для лимитера |
 | 1 | layer_init_repair_lines | `HF_InitRepairLines` | Host | Инициализирует RepairLine по `repair_number` |
+| 2 | layer_init_v8 | `HF_InitV8` | Host | Инициализирует current_day/adaptive окружение V8 |
+| **DAY ADVANCE И PRE-SNAPSHOT** |||||
+| 3 | layer_step_controller | `HF_StepController` | Host | Продвигает current_day по `mp_min_limiter` предыдущего шага |
+| 4 | layer_save_pre_status | `rtc_save_pre_status_*` | active states | Снимок `pre_status_id` до любых переходов |
+| 5 | layer_det_spawn | `HF_DeterministicSpawn` | Host | Опциональный детерминированный spawn 0→3 |
 | **ФАЗА 0: Детерминированные переходы** |||||
-| 2 | v8_repair_line_assign_repair | `rtc_repair_line_assign_repair_v8` | 4→4 | Привязка линий для day0‑ремонта |
-| 3 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Завершение day0‑ремонта по `exit_date` |
-| 4 | v7_spawn_to_ops | `rtc_spawn_to_ops_v7` | 5→2 | Плановый spawn по `exit_date` |
-| **ФАЗА 0.5: Сбор min_exit_date (совместимость)** |||||
-| 5 | v7_reset_exit_date | `rtc_reset_exit_date_v7` | QM | Сброс min_exit_date перед сбором |
-| 6 | v7_copy_exit_date_repair | `rtc_copy_exit_date_repair_v7` | 4 | Сбор ближайшего выхода из ремонта |
-| 7 | v7_copy_exit_date_spawn | `rtc_copy_exit_date_spawn_v7` | 5 | Сбор ближайшего spawn‑события |
-| 8 | v7_copy_exit_date_unsvc | `rtc_copy_exit_date_unsvc_v7` | 7 | Сбор exit_date из unsvc (в V8 не влияет на шаг) |
+| 6 | v7_repair_to_svc | `rtc_repair_to_svc_v7` | 4→3 | Завершение ремонта по `exit_date` |
 | **ФАЗА 1: Operations и ремонтные счётчики** |||||
-| 9 | v8_ops_increment | `rtc_ops_increment_v8` | 2→2 | Начисление налёта и ресурса, шаговый декремент лимитера |
-| 10 | v8_unsvc_decrement | `rtc_unsvc_decrement_v8` | 7→7 | Декремент `repair_days` для unserviceable |
-| 11 | v8_ops_to_storage | `rtc_ops_to_storage_v8` | 2→6 | Списание по LL/BR |
-| 12 | v8_ops_to_unsvc | `rtc_ops_to_unsvc_v8` | 2→7 | Уход в unserviceable по OH (limiter=0 → выход) |
-| **ФАЗА 1.25: V8 pre‑quota adaptive (min_dynamic)** |||||
-| 13 | v8_init | `HF_InitV8` | Host | Подготовка `deterministic_dates` и синхронизация состояния |
-| 14 | v8_collect_min_ops | `rtc_collect_min_dynamic_ops_v8` | 2 | Сбор минимального лимитера по ops |
-| 15 | v8_collect_min_repair | `rtc_collect_min_dynamic_repair_v8` | 4 | Сбор минимальных `repair_days` для day0‑ремонта |
-| 16 | v8_compute_global_min | `rtc_compute_global_min_v8` | QM | Вычисление `adaptive_days` и сброс `min_dynamic` |
-| **ФАЗА 1.3: Update day (вариант B)** |||||
-| 17 | v8_update_day | `HF_UpdateDayV8` | Host | Update day ДО квотирования |
-| **ФАЗА 1.5: RepairLine (pre‑quota)** |||||
-| 18 | v8_repair_line_sync_pre | `rtc_repair_line_sync_v8` | RepairLine | Синхронизация линии из MacroProperty |
-| 19 | v8_repair_line_increment | `rtc_repair_line_increment_v8` | RepairLine | Наращивание `free_days` на шаг |
-| 20 | v8_repair_line_write | `rtc_repair_line_write_v8` | RepairLine | Запись состояния линий в MacroProperty |
-| 21 | v8_repair_line_publish_status | `rtc_repair_line_publish_status_v8` | RepairLine | Сообщение линий в QM (RepairLineStatus) |
+| 7 | v8_ops_increment | `rtc_ops_increment_v8` | 2→2 | Начисление налёта и ресурса, шаговый декремент лимитера |
+| 8 | v8_unsvc_decrement | `rtc_unsvc_decrement_v8` | 7→7 | Декремент `repair_days` для unserviceable |
+| 9 | v8_ops_to_storage | `rtc_ops_to_storage_v8` | 2→6 | Списание по LL/BR |
+| 10 | v8_ops_to_unsvc | `rtc_ops_to_unsvc_v8` | 2→7 | Уход в unserviceable по OH (limiter=0 → выход) |
+| **ФАЗА 1.5: RepairLine (pre-quota)** |||||
+| 11 | v8_repair_line_increment | `rtc_repair_line_increment_v8` | RepairLine | Наращивание `free_days` на шаг |
+| 12 | v8_repair_line_write | `rtc_repair_line_write_v8` | RepairLine | Запись состояния линий в MacroProperty |
+| 13 | v8_repair_line_publish_status | `rtc_repair_line_publish_status_v8` | RepairLine | Сообщение линий в QM (RepairLineStatus) |
 | **ФАЗА 2: Квотирование (MessageBucket)** |||||
-| 22 | v8_reset_flags | `rtc_reset_flags_v8_*` | all | Сброс флагов промоута/демоута |
-| 23 | v8_reset_buffers | `rtc_reset_quota_v8_*` | all | Сброс буферов подсчёта |
-| 24 | v8_count_ops | `rtc_count_ops_v8` | 2 | Подсчёт ops |
-| 25 | v8_count_svc | `rtc_count_svc_v8` | 3 | Подсчёт serviceable |
-| 26 | v8_count_unsvc | `rtc_count_unsvc_v8` | 7 | Подсчёт unserviceable (readiness по `repair_days`) |
-| 27 | v8_count_inactive | `rtc_count_inactive_v8` | 1 | Подсчёт inactive |
-| 28 | v8_quota_manager_bucket | `rtc_quota_manager_v8_bucket` | QM | QuotaManager → QuotaBucket (key=0) |
-| 29 | v8_demote | `rtc_demote_ops_v8` | 2 | Решение демоута ops→svc |
-| 30 | v8_promote_svc_bucket | `rtc_promote_svc_bucket_v8` | 3 | P1 решение по rank (MessageBucket) |
-| 31 | v8_promote_unsvc_bucket | `rtc_promote_unsvc_bucket_v8` | 7 | P2 решение по rank (MessageBucket) |
-| 32 | v8_promote_inactive_bucket | `rtc_promote_inactive_bucket_v8` | 1 | P3 решение по rank (MessageBucket) |
-| 33 | v8_promote_unsvc_commit | `rtc_promote_unsvc_commit_v8` | 7 | Commit P2: бронирование RepairLine |
-| 34 | v8_promote_inactive_commit | `rtc_promote_inactive_commit_v8` | 1 | Commit P3: бронирование RepairLine |
+| 14 | v8_reset_flags | `rtc_reset_flags_v8_*` | all | Сброс флагов промоута/демоута |
+| 15 | v8_reset_buffers | `rtc_reset_quota_v8_*` | all | Сброс буферов подсчёта |
+| 16 | v8_count_ops | `rtc_count_ops_v8` | 2 | Подсчёт ops |
+| 17 | v8_count_svc | `rtc_count_svc_v8` | 3 | Подсчёт serviceable |
+| 18 | v8_count_unsvc | `rtc_count_unsvc_v8` | 7 | Подсчёт unserviceable (readiness по `repair_days`) |
+| 19 | v8_count_inactive | `rtc_count_inactive_v8` | 1 | Подсчёт inactive |
+| 20 | v8_quota_manager_bucket | `rtc_quota_manager_v8_bucket` | QM | QuotaManager → QuotaBucket (key=0) |
+| 21 | v8_demote | `rtc_demote_ops_v8` | 2 | Решение демоута ops→svc |
+| 22 | v8_promote_svc_bucket | `rtc_promote_svc_bucket_v8` | 3 | P1 решение по rank (MessageBucket) |
+| 23 | v8_promote_unsvc_bucket | `rtc_promote_unsvc_bucket_v8` | 7 | P2 решение по rank (MessageBucket) |
+| 24 | v8_promote_inactive_bucket | `rtc_promote_inactive_bucket_v8` | 1 | P3 решение по rank (MessageBucket) |
+| 25 | v8_repair_line_snapshot | `rtc_repair_line_snapshot_v8` | QM | Снимок mutable RepairLine MP перед commit |
+| 26 | v8_promote_unsvc_commit | `rtc_promote_unsvc_commit_v8` | 7 | Commit P2: бронирование RepairLine |
+| 27 | v8_promote_inactive_commit | `rtc_promote_inactive_commit_v8` | 1 | Commit P3: бронирование RepairLine |
 | **ФАЗА 3: Применение квот** |||||
-| 35 | v7_ops_demote | `rtc_ops_demote_v7` | 2→3 | Применение демоута |
-| 36 | v7_svc_to_ops | `rtc_svc_to_ops_v7` | 3→2 | Применение P1 |
-| 37 | v7_unsvc_to_ops | `rtc_unsvc_to_ops_v7` | 7→2 | Применение P2, обнуление PPR |
-| 38 | v7_inactive_to_ops | `rtc_inactive_to_ops_v7` | 1→2 | Применение P3 |
-| **ФАЗА 3.5: RepairLine (post‑quota)** |||||
-| 39 | v8_repair_line_sync_post | `rtc_repair_line_sync_post_v8` | RepairLine | Синхронизация линий после квот |
-| **ФАЗА 3.7: Post‑quota пересчёт** |||||
-| 40 | v8_reset_buffers_post_quota | `rtc_reset_quota_v8_post_*` | all | Сброс буферов после пост‑квотных переходов |
-| 41 | v8_count_agents_post_quota | `rtc_count_*_v8_post` | all | Подсчёт ops/svc/unsvc/inactive после квот |
-| 42 | v8_promote_inactive_post | `rtc_promote_inactive_post_v8` | 1 | Доп. добор из inactive после пост‑квотных переходов |
-| 43 | v8_inactive_to_ops_post | `rtc_inactive_to_ops_post_v8` | 1→2 | Применение post‑добора inactive |
-| **ФАЗА 3.8: Spawn counts** |||||
-| 44 | v8_reset_buffers_spawn | `rtc_reset_quota_v8_spawn_*` | all | Сброс буферов перед spawn |
-| 45 | v8_count_agents_spawn | `rtc_count_*_v8_spawn` | all | Подсчёт ops/svc/unsvc/inactive перед spawn |
+| 28 | v7_ops_demote | `rtc_ops_demote_v7` | 2→3 | Применение демоута |
+| 29 | v7_svc_to_ops | `rtc_svc_to_ops_v7` | 3→2 | Применение P1 |
+| 30 | v7_unsvc_to_ops | `rtc_unsvc_to_ops_v7` | 7→2 | Применение P2, обнуление PPR |
+| 31 | v7_inactive_to_ops | `rtc_inactive_to_ops_v7` | 1→2 | Применение P3 |
+| 32 | v8_repair_line_apply_assignment | `rtc_repair_line_apply_assignment_v8` | RepairLine | Финализация line assignment для telemetry |
+| 33 | v8_repair_line_export | `rtc_repair_line_export_v8` | RepairLine | Экспорт telemetry RepairLine в RL buffers |
+| **ФАЗА 3.7: Post-quota пересчёт** |||||
+| 34 | v8_reset_buffers_post_quota | `rtc_reset_quota_v8_post_*` | all | Сброс буферов после пост-квотных переходов |
+| 35 | v8_count_agents_post_quota | `rtc_count_*_v8_post` | ops/svc/unsvc/inactive | Подсчёт ops/svc/unsvc/inactive после квот |
 | **ФАЗА 4: Динамический спавн** |||||
-| 46 | v8_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr_v8` | SpawnMgr | Дефицит = target − curr_ops − used (P1/P2/P3 commit) |
-| 47 | v8_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket_v8` | Ticket→ops | Создание новых агентов (Mi‑17) |
-| 48 | v8_spawn_dynamic_ticket_mi8 | `rtc_spawn_dynamic_ticket_v8_mi8` | Ticket→ops | Создание новых агентов (Mi‑8) |
+| 36 | v8_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr_v8` | SpawnMgr | Дефицит = target − curr_ops − used (P1/P2/P3 commit) |
+| 37 | v8_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket_v8` | Ticket→ops | Создание новых агентов (Mi-17) |
+| 38 | v8_spawn_dynamic_ticket_mi8 | `rtc_spawn_dynamic_ticket_v8_mi8` | Ticket→ops | Создание новых агентов (Mi-8) |
+| **ДИАГНОСТИКА / LIMITER / EXPORT / SYNC** |||||
+| 39 | layer_spawn_diag | `HF_SpawnDiag` | Host | Диагностический host layer spawn |
 | **ФАЗА 5: Limiter (бинарный поиск)** |||||
-| 49 | L_limiter_entry | `rtc_compute_limiter_on_entry` | 2→2 | Пересчёт limiter при входе/нулевом значении |
-| 50 | L_limiter_min | `rtc_compute_min_limiter` | 2→2 | Сбор минимального limiter по ops |
+| 40 | L_limiter_min | `rtc_compute_min_limiter` | 2→2 | Сбор минимального limiter по ops |
+| 41 | layer_mp2_write | `rtc_mp2_write_*` | active states | Запись агентных полей в MP2 буферы |
+| 42 | layer_mp2_drain | `HF_MP2_Drain` | Host | Drain MP2 буферов в host dataframes |
+| 43 | layer_repairline_drain | `HF_RepairLineDrain` | Host | Drain RL буферов |
+| 44 | layer_sync_day_v5 | `HF_SyncDayV5` | Host | Финальный sync дня для `simulate()` |
 
 ---
 
