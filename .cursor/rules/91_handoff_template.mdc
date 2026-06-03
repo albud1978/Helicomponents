@@ -54,7 +54,7 @@ alwaysApply: true
 - **Risks**: 1–3 пункта (опционально для low-risk).
 - **DriftCheck**: только у orchestrator (1 строка: `UserGoal ↔ Changes scope match: yes/no + комментарий`).
 - **ProcessInsights**: только у orchestrator (опционально).
-- **Usage** *(optional)*: одна строка вида `model=<slug> est_tokens=~<N> source=manual|char_estimate|unknown`. Lightweight token-счётчик; missing — не блокер.
+- **Usage** *(обязательно)*: одна строка вида `model=<slug> est_tokens=~<N> source=manual|char_estimate|unknown`. Каждый handoff обязан нести оценку токенов; пустое значение недопустимо. Если субагент не дал число — orchestrator оценивает сам (`source=char_estimate`). Orchestrator переносит usage в KG (`--model-slug --est-tokens --token-source`) для КАЖДОГО `--write-handoff`, включая собственные, `governance-compliance` и `docs-curator`. Пропуск помечается warning в `pre_close_guard` (не блокирует закрытие).
 
 > NB: `Agent KG logging` (что именно записано в KG) как поле удалён — фактические записи восстанавливаются из `config/agent_kg.json`; дублировать их в handoff избыточно.
 
@@ -68,7 +68,7 @@ alwaysApply: true
 - **Modules**: список модулей из `config/kg_modules.json` (optional).
 - **RiskTier**: `low`.
 - **NextOwner**: enum.
-- **Usage** *(optional)*: `model=<slug> est_tokens=~<N> source=manual|char_estimate|unknown`.
+- **Usage** *(обязательно)*: `model=<slug> est_tokens=~<N> source=manual|char_estimate|unknown` (для low-risk допустим грубый `char_estimate`, но поле не должно быть пустым).
 
 `Supersedes`/`ParentWorkflow` в Handoff-lite опускаются. Остальные поля **запрещено** включать как `N/A`-плейсхолдеры — пропускай полностью.
 
@@ -86,9 +86,10 @@ alwaysApply: true
 - **approval_ref vs inline (S4)**: для medium/high risk обязательно `approval_ref=ctx_<id>` либо явный `N/A` с обоснованием. Inline approval data (source/status/timestamp) — запрещено.
 - **compliance compact (S3)**: 5-field checklist обязателен; расширенный verbose checklist отклоняется governance.
 - **low-risk Handoff-lite (S5)**: для `low-risk` — только Handoff-lite. Full Handoff с N/A-полями = governance reject.
+- **usage coverage**: каждый handoff обязан нести непустой `Usage` (`model` + `est_tokens` + `source`). Если субагент не предоставил — orchestrator оценивает через `char_estimate`. `pre_close_guard` выдаёт warning (не блокирует) при закрытии workflow с handoff'ами без usage.
 - **артефакты**:
   - `medium/high-risk`: обязательны `PlanCard`, `EvidencePack`, `ComplianceChecklist` (5-field), `SuccessCriteria` (verifiable)
-  - `low-risk`: только Handoff-lite (5 полей + optional Modules/Usage); `SuccessCriteria` — `manual-check: ...`
+  - `low-risk`: Handoff-lite (5 полей + обязательный `Usage` + optional `Modules`); `SuccessCriteria` — `manual-check: ...`
 
 ## Эволюция словаря модулей
 
