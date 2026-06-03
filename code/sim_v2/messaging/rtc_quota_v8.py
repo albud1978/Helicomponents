@@ -33,7 +33,7 @@ REPAIR_BANK_MAX = 64
 
 import pyflamegpu as fg
 
-# TODO(message-based-qm): перевести QM на RepairLineStatus/LineAssignment, убрать CAS на MacroProperty.
+# Активный путь RepairLine использует CAS на MacroProperty без message-ветки.
 
 # REMOVED (cleanup-dead-quota-code): register_quota_v8_full, RTC_REPAIR_LINE_SLOTS_V8,
 # RTC_QUOTA_MANAGER_V8_MSG, RTC_QUOTA_DEBUG_P2 — не вызываются оркестратором V8.
@@ -2153,15 +2153,6 @@ def register_quota_v8_full(model, agent, quota_agent):
     fn.setEndState("inactive")
     layer_count.addAgentFunction(fn)
     print("  ✅ Подсчёт агентов")
-    
-    # ═══ V8: Слоты RepairLine (QM) ═══
-    layer_slots = model.newLayer("v8_repair_line_slots")
-    fn = quota_agent.newRTCFunction("rtc_repair_line_slots_v8", RTC_REPAIR_LINE_SLOTS_V8)
-    fn.setInitialState("default")
-    fn.setEndState("default")
-    fn.setMessageInput("RepairLineStatus")
-    layer_slots.addAgentFunction(fn)
-    print("  ✅ Слоты RepairLine (QM)")
     
     # ═══ DEBUG: P2 метрики (QM) ═══
     layer_debug_p2 = model.newLayer("v8_debug_p2")

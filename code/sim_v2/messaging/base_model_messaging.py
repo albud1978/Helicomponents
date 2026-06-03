@@ -22,10 +22,6 @@ except ImportError as e:
     raise RuntimeError(f"pyflamegpu не установлен: {e}")
 
 
-# Максимум ремонтных линий для адресных сообщений RepairLine
-REPAIR_LINES_MAX = 64
-
-
 class V2BaseModelMessaging:
     """Базовая модель V2 с Messaging архитектурой"""
     
@@ -40,8 +36,6 @@ class V2BaseModelMessaging:
         # Messages
         self.msg_planer_report: Optional[fg.MessageDescription] = None
         self.msg_quota_decision: Optional[fg.MessageDescription] = None
-        self.msg_repair_line_status: Optional[fg.MessageDescription] = None
-        self.msg_line_assignment: Optional[fg.MessageDescription] = None
     
     def create_model(self, env_data: Dict[str, object]) -> fg.ModelDescription:
         """Создает модель с messaging архитектурой"""
@@ -142,19 +136,7 @@ class V2BaseModelMessaging:
         self.msg_quota_bucket.newVariableUInt("bank_ready_slots")
         self.msg_quota_bucket.newVariableUInt("today_committable_slots")
 
-        # ═══════════════════════════════════════════════════════════════
-        # Message "RepairLineStatus": RepairLine → QuotaManager (addressed)
-        # ═══════════════════════════════════════════════════════════════
-        self.msg_repair_line_status = self.model.newMessageArray("RepairLineStatus")
-        self.msg_repair_line_status.setLength(REPAIR_LINES_MAX)
-        self.msg_repair_line_status.newVariableUInt("free_days")
-
-        # Message "LineAssignment": QuotaManager → RepairLine (адресное назначение)
-        self.msg_line_assignment = self.model.newMessageArray("LineAssignment")
-        self.msg_line_assignment.setLength(REPAIR_LINES_MAX)
-        self.msg_line_assignment.newVariableUInt("aircraft_number")
-        
-        print("  ✅ Messages: PlanerReport, PlanerEvent, QuotaDecision, QuotaBucket, RepairLineStatus, LineAssignment")
+        print("  ✅ Messages: PlanerReport, PlanerEvent, QuotaDecision, QuotaBucket")
     
     def _setup_quota_agent(self) -> fg.AgentDescription:
         """Настройка агента QuotaManager"""
