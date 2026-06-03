@@ -229,12 +229,36 @@ def _derive_governance_decision(
     return ""
 
 
+def _handoff_has_usage(handoff: Dict[str, object]) -> bool:
+    usage = handoff.get("usage")
+    if not isinstance(usage, dict) or not usage:
+        return False
+    return usage.get("est_tokens") is not None
+
+
+def _handoffs_without_usage(handoffs: List[Dict[str, object]]) -> List[str]:
+    """Возвращает 'agent:handoff_id' для handoff без непустого usage."""
+    missing: List[str] = []
+    for handoff in handoffs:
+        if not isinstance(handoff, dict):
+            continue
+        if _handoff_has_usage(handoff):
+            continue
+        agent = str(handoff.get("agent") or "unknown")
+        handoff_id = str(handoff.get("handoff_id") or "unknown")
+        missing.append(f"{agent}:{handoff_id}")
+    return missing
+
+
 def _deny(reason: str) -> None:
     sys.stdout.write(json.dumps({"decision": "deny", "reason": reason}))
 
 
-def _allow() -> None:
-    sys.stdout.write(json.dumps({"decision": "allow"}))
+def _allow(warning: str = "") -> None:
+    payload: Dict[str, object] = {"decision": "allow"}
+    if warning:
+        payload["agentMessage"] = warning
+    sys.stdout.write(json.dumps(payload, ensure_ascii=False))
 
 
 def main() -> None:
@@ -366,6 +390,18 @@ def main() -> None:
                 "инвариант (INV-N/TEMP-N/GPU-N), acceptance-проверку или `manual-check: ...` в Facts/SuccessCriteria."
             )
             return
+
+    missing_usage = _handoffs_without_usage(wf_handoffs)
+    if missing_usage:
+        warning = (
+            f"WARNING token-coverage: у workflow {workflow_id} "
+            f"{len(missing_usage)}/{len(wf_handoffs)} handoff'ов без непустого usage "
+            f"({', '.join(missing_usage)}). Закрытие разрешено, но orchestrator должен "
+            "заполнять usage (model+est_tokens+source, char_estimate допустим) для каждого "
+            "--write-handoff — см. .cursor/rules/91_handoff_template.mdc."
+        )
+        _allow(warning)
+        return
 
     _allow()
 

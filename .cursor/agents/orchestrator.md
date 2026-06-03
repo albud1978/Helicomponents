@@ -194,12 +194,12 @@ agent_card:
 **Запрет**: нельзя закрывать этап/workflow без записи `--write-handoff`; нельзя закрывать workflow без `--close-workflow`.
 **Запрет**: нельзя закрывать workflow без governance handoff, если задача `medium/high-risk` или `pre_close` потребовал governance-check.
 **Запрет**: нельзя синхронизировать Domain Graph без явного ApprovalGate от человека и последующей проверки `governance-compliance`.
-**Enforcement**: `pre_close_guard.py` на уровне preToolUse блокирует `--close-workflow`, если нет обязательных по риску handoff или если в них не заполнены `trace_id` и `plan_step_id`.
+**Enforcement**: `pre_close_guard.py` на уровне preToolUse блокирует `--close-workflow`, если нет обязательных по риску handoff или если в них не заполнены `trace_id` и `plan_step_id`; дополнительно выдаёт warning (не блокирует), если у handoff'ов workflow отсутствует непустой `usage`.
 
 ## Формат ответа
 
 - **Handoff** по шаблону из `.cursor/rules/91_handoff_template.mdc` (Full для `medium/high-risk`; Handoff-lite только для `low-risk` housekeeping)
-- **Usage** *(optional, для token-аналитики)*: в Handoff и при `agent_kg.py --write-handoff` указывай `--model-slug <slug> --est-tokens <N> --token-source manual` (или `char_estimate` если вычислено heuristically); missing — не блокер, но желателен для оптимизации выбора моделей
+- **Usage** *(обязательно, для token-аналитики)*: в Handoff и при `agent_kg.py --write-handoff` ВСЕГДА указывай `--model-slug <slug> --est-tokens <N> --token-source manual` (или `char_estimate`, если оценено эвристически). Заполняй usage для КАЖДОГО handoff, который пишешь в KG, включая собственные, `governance-compliance` и `docs-curator` — если субагент не дал число, оцени сам через `char_estimate`. Пустой usage недопустим; пропуск помечается warning в `pre_close_guard` (закрытие не блокируется)
 - `GraphUpdate` в handoff трактовать только как обновление Domain Graph (Neo4j local Docker; Aura optional)
 - Факт записей в Agent KG (`--init-workflow`, `--write-context`, `--write-handoff`, `--close-workflow`) явно отражать в `Changes` и/или `Facts`
 - Всегда заполнять `RiskTier`, `RiskReasons`, `RiskOwner`, `RiskValidatedBy`, `HumanGateRequired`

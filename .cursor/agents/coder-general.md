@@ -105,7 +105,7 @@ agent_card:
 ## Формат ответа
 
 - **Handoff** по шаблону `.cursor/rules/91_handoff_template.mdc` (Full для `medium/high-risk`; Lite только для `low-risk` housekeeping); общий процесс — `.cursor/rules/90_multiagent_workflow.mdc`
-- **Usage** *(optional)*: в собственный handoff включай строку `Usage: model=<slug> est_tokens=~<N> source=manual`; orchestrator продублирует это в KG через `--model-slug --est-tokens --token-source` при `--write-handoff`
+- **Usage** *(обязательно)*: в собственный handoff ВСЕГДА включай строку `Usage: model=<slug> est_tokens=~<N> source=manual|char_estimate`; пустой usage недопустим. Orchestrator переносит её в KG через `--model-slug --est-tokens --token-source` при `--write-handoff`; пропуск помечается warning в `pre_close_guard` (не блокирует)
 - В `Changes` — список файлов/функций и ключевые правки
 - В `Facts` — что проверено и источники (файлы/команды/логи)
 - В `Assumptions` — непроверенное с пометкой `Risks if false`

@@ -84,6 +84,6 @@ agent_card:
 ## Формат результата
 
 - Возвращает **Handoff** оркестратору по шаблону `.cursor/rules/91_handoff_template.mdc` (Lite для low-risk, Full для medium/high-risk)
-- **Usage** *(optional)*: в собственный handoff включай строку `Usage: model=<slug> est_tokens=~<N> source=manual`; orchestrator продублирует это в KG через `--model-slug --est-tokens --token-source` при `--write-handoff`
+- **Usage** *(обязательно)*: в собственный handoff ВСЕГДА включай строку `Usage: model=<slug> est_tokens=~<N> source=manual|char_estimate`; пустой usage недопустим. Orchestrator переносит её в KG через `--model-slug --est-tokens --token-source` при `--write-handoff`; пропуск помечается warning в `pre_close_guard` (не блокирует)
 - В `Facts` — только подтвержденные связи, зависимости и найденные артефакты
 - В `Assumptions` — что не удалось проверить и какие риски, если предположение неверно
