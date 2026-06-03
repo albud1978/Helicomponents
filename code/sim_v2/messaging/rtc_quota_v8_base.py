@@ -17,13 +17,14 @@ from model_build import RTC_MAX_FRAMES, MAX_DAYS
 # ═══════════════════════════════════════════════════════════════════════════════
 
 RTC_RESET_BUFFERS = f"""
+// ИНВАРИАНТ self-clear: каждый живой агент пишет все quota-флаги только в свой слот [idx],
+// consumer-ы сканируют [0, RTC_MAX_FRAMES), а хвост после frames_total остаётся нулевым при append-only spawn.
+// Корректность требует отсутствия смерти/reuse idx; если появятся flamegpu::DEAD или setAllowAgentDeath(True),
+// вернуть clear-all или добавить очистку orphan-слотов, иначе stale 1u может остаться в осиротевшем слоте.
 FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    // Сброс буферов квотирования (idx=0 агент)
+    // Параллельный self-clear: каждый агент чистит только собственный слот.
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    if (idx != 0u) return flamegpu::ALIVE;
     
-    // КРИТИЧНО: сбрасываем ВСЕ RTC_MAX_FRAMES слотов,
-    // чтобы включить динамически спавненных агентов!
     auto mi8_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
     auto mi17_ops = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
     auto mi8_svc = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
@@ -49,32 +50,30 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8, flamegpu::MessageNone, flamegpu::Mes
     auto mi8_commit_p3_candidate = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p3_candidate");
     auto mi17_commit_p3_candidate = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p3_candidate");
     
-    for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
-        mi8_ops[i].exchange(0u);
-        mi17_ops[i].exchange(0u);
-        mi8_svc[i].exchange(0u);
-        mi17_svc[i].exchange(0u);
-        mi8_unsvc[i].exchange(0u);
-        mi17_unsvc[i].exchange(0u);
-        mi8_unsvc_ready[i].exchange(0u);
-        mi17_unsvc_ready[i].exchange(0u);
-        mi8_inactive[i].exchange(0u);
-        mi17_inactive[i].exchange(0u);
-        mi8_unsvc_status_day[i].exchange(0u);
-        mi17_unsvc_status_day[i].exchange(0u);
-        mi8_inactive_status_day[i].exchange(0u);
-        mi17_inactive_status_day[i].exchange(0u);
-        mi8_commit_p1[i].exchange(0u);
-        mi17_commit_p1[i].exchange(0u);
-        mi8_commit_p2[i].exchange(0u);
-        mi17_commit_p2[i].exchange(0u);
-        mi8_commit_p3[i].exchange(0u);
-        mi17_commit_p3[i].exchange(0u);
-        mi8_commit_p2_candidate[i].exchange(0u);
-        mi17_commit_p2_candidate[i].exchange(0u);
-        mi8_commit_p3_candidate[i].exchange(0u);
-        mi17_commit_p3_candidate[i].exchange(0u);
-    }}
+    mi8_ops[idx].exchange(0u);
+    mi17_ops[idx].exchange(0u);
+    mi8_svc[idx].exchange(0u);
+    mi17_svc[idx].exchange(0u);
+    mi8_unsvc[idx].exchange(0u);
+    mi17_unsvc[idx].exchange(0u);
+    mi8_unsvc_ready[idx].exchange(0u);
+    mi17_unsvc_ready[idx].exchange(0u);
+    mi8_inactive[idx].exchange(0u);
+    mi17_inactive[idx].exchange(0u);
+    mi8_unsvc_status_day[idx].exchange(0u);
+    mi17_unsvc_status_day[idx].exchange(0u);
+    mi8_inactive_status_day[idx].exchange(0u);
+    mi17_inactive_status_day[idx].exchange(0u);
+    mi8_commit_p1[idx].exchange(0u);
+    mi17_commit_p1[idx].exchange(0u);
+    mi8_commit_p2[idx].exchange(0u);
+    mi17_commit_p2[idx].exchange(0u);
+    mi8_commit_p3[idx].exchange(0u);
+    mi17_commit_p3[idx].exchange(0u);
+    mi8_commit_p2_candidate[idx].exchange(0u);
+    mi17_commit_p2_candidate[idx].exchange(0u);
+    mi8_commit_p3_candidate[idx].exchange(0u);
+    mi17_commit_p3_candidate[idx].exchange(0u);
     
     return flamegpu::ALIVE;
 }}
