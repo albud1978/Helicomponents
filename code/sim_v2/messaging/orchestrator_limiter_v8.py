@@ -762,11 +762,6 @@ class LimiterV8Orchestrator:
             self.model, heli_agent, spawn_env_data
         )
 
-        # Spawn diagnostic (временно)
-        self._hf_spawn_diag = HF_SpawnDiag()
-        layer_spawn_diag = self.model.newLayer("layer_spawn_diag")
-        layer_spawn_diag.addHostFunction(self._hf_spawn_diag)
-
         # ═══════════════════════════════════════════════════════════════
         # ФАЗА 4: Limiter (бинарный поиск)
         # ═══════════════════════════════════════════════════════════════
@@ -791,7 +786,7 @@ class LimiterV8Orchestrator:
         layer_min.addAgentFunction(fn_min)
         
         # ═══════════════════════════════════════════════════════════════
-        # MP2 Export: agent write layer + drain layer + SyncDay layer
+        # MP2 Export: agent write layer + drain layer
         # ═══════════════════════════════════════════════════════════════
         rtc_mp2_export.register_mp2_write_layer(self.model, heli_agent)
         # Включаем spawn слоты в MP2 drain
@@ -842,7 +837,7 @@ class LimiterV8Orchestrator:
         self.base_model.quota_agent.newVariableUInt("computed_adaptive_days", 1)
         self.base_model.quota_agent.newVariableUInt("current_day_cache", 0)
         
-        # V5 слои для совместимости (HF_SyncDayV5 для логирования)
+        # V5 init для совместимости: register_v5 регистрирует HF_InitV5 через addInitFunction.
         self.hf_init_v5, self.hf_sync_v5 = rtc_limiter_v5.register_v5(
             self.model,
             self.base_model.agent,
@@ -851,7 +846,7 @@ class LimiterV8Orchestrator:
             self.end_day,
             verbose_logging=self.enable_mp2,
             enable_v8_reason=True,
-            sync_as_layer=True  # V9/MP2: layer вместо addStepFunction для simulate()
+            sync_as_layer=True  # Не добавлять addStepFunction; HF_InitV5 нужен отдельно.
         )
         
         # V8 StepController перенесён в начало (layer_step_controller, перед QM)
@@ -859,11 +854,6 @@ class LimiterV8Orchestrator:
         # ИСПРАВЛЕНО: НЕ вызываем rtc_limiter_v5.register_v5_final_layers!
         # V5 compute_global_min ПЕРЕЗАПИСЫВАЛ результат V8, вызывая баг ops≠target
         # V8 уже имеет свои слои: v8_compute_global_min + v8_update_day
-        
-        # V9/MP2: SyncDay как layer host function (после MP2 drain)
-        layer_sync = self.model.newLayer("layer_sync_day_v5")
-        layer_sync.addHostFunction(self.hf_sync_v5)
-        print("  ✅ HF_SyncDayV5 зарегистрирован как layer host function")
         
         # V8 Exit condition
         self.hf_exit = rtc_limiter_v8.HF_ExitConditionV8(self.end_day)
@@ -1048,19 +1038,6 @@ class LimiterV8Orchestrator:
             )
         elif rl_data is None:
             print("⚠️ RepairLine Drain не прочитал данные")
-        
-        # Step log (из SyncDay)
-        step_log = self.hf_sync_v5.get_step_log()
-        if step_log:
-            print(f"\n📋 Лог шагов ({len(step_log)} записей):")
-            reason_counts = {}
-            for entry in step_log:
-                for r in entry['reasons']:
-                    key = r.split(':')[0]
-                    reason_counts[key] = reason_counts.get(key, 0) + 1
-            print(f"   Причины шагов:")
-            for reason, count in sorted(reason_counts.items()):
-                print(f"     {reason}: {count}")
         
         t_end = time.perf_counter()
         total_time = t_end - t_start
@@ -1631,35 +1608,6 @@ class HF_InitMP5Cumsum(fg.HostFunction):
         
         self.initialized = True
         print(f"  [HF_InitMP5Cumsum] ✅ Загружено")
-
-
-class HF_SpawnDiag(fg.HostFunction):
-    def __init__(self):
-        super().__init__()
-        self.log_days = {0, 100, 200, 400, 600, 666, 697, 800, 1000, 1500, 2000, 2500, 3000, 3650}
-
-    def run(self, FLAMEGPU):
-        day = FLAMEGPU.environment.getPropertyUInt("current_day")
-        
-        mgr = FLAMEGPU.agent("SpawnDynamicMgr", "default")
-        if mgr.count() == 0:
-            return
-        
-        # HostAgentAPI: для 1 агента sumUInt = значение переменной
-        curr_ops = mgr.sumUInt("debug_curr_ops")
-        target = mgr.sumUInt("debug_target")
-        need = mgr.sumUInt("debug_need")
-        total_spawned = mgr.sumUInt("total_spawned_mi17")
-        curr_ops_8 = mgr.sumUInt("debug_curr_ops_mi8")
-        target_8 = mgr.sumUInt("debug_target_mi8")
-        need_8 = mgr.sumUInt("debug_need_mi8")
-        total_spawned_8 = mgr.sumUInt("total_spawned_mi8")
-        
-        if need > 0 or need_8 > 0 or day in self.log_days:
-            print(
-                f"  SPAWN_DIAG day={day}: Mi17[ops={curr_ops} tgt={target} need={need} spawned={total_spawned}] "
-                f"Mi8[ops={curr_ops_8} tgt={target_8} need={need_8} spawned={total_spawned_8}]"
-            )
 
 
 class HF_InitRepairLines(fg.HostFunction):

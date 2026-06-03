@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-06-03 — V8 simulation: удаление диагностических host-функций (Фаза A перед GPU-adaptive)
+
+**Workflow**: W_sim_remove_diag_hostfns | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
+
+**Контекст**: подготовка к переносу адаптивного шага на GPU. Удалены две host-функции, не влияющие на симуляцию.
+
+**Changes**:
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py` (+3/−55): удалены `HF_SpawnDiag` (класс + wiring + `layer_spawn_diag`) — чистая диагностика (8 чтений `sumUInt` + `print`, ноль device-write); удалён слой `layer_sync_day_v5` (`HF_SyncDayV5`) и потребитель `step_log`. `register_v5` сохранён — он регистрирует нужный `HF_InitV5` через `addInitFunction`.
+
+**Обоснование** (implementation/review/governance evidence): env-writes `HF_SyncDayV5` (current_day/prev_day/adaptive_days/step_days) избыточны — `HF_StepController` пишет те же property в начале шага (`rtc_limiter_optimized.py:410-413`), между шагами они не мутируются, `HF_ExitConditionV8` читает `current_day_mp` (MacroProperty), не env. `step_log` — только print, в ClickHouse не идёт.
+
+**Review**: `reviewer-flame` — APPROVE_WITH_NOTES (load-bearing env-write риска нет; nit: `self.hf_sync_v5`/`hf_init_v5` стали мёртвыми ссылками).
+
+**Evidence**: регрессия `version_id=8010` vs эталон `8005` (4 датасета × 3650 дней) — EXCEPT-both-ways = **0** по master (346979) и repairline (262800), все колонки; `ops=target` PASS на всех 4 датасетах.
+
+---
+
 ## 2026-06-03 — V8 simulation: scalar atomic-тоталы вместо 400-перебора в QM/demote (перф)
 
 **Workflow**: W_sim_qm_scalar_totals | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
