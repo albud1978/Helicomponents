@@ -67,33 +67,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     const unsigned int target_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
     const unsigned int mi8_rt = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
     const unsigned int mi17_rt = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
-    const unsigned int frames = {RTC_MAX_FRAMES}u;
     
-    // Буферы подсчёта
-    auto ops_mi8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_ops_count");
-    auto ops_mi17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_ops_count");
-    auto svc_mi8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
-    auto svc_mi17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
-    auto unsvc_ready_mi8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_ready_count");
-    auto unsvc_ready_mi17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_ready_count");
-    auto ina_mi8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_inactive_count");
-    auto ina_mi17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_inactive_count");
-    
-    unsigned int ops8 = 0u, ops17 = 0u;
-    unsigned int svc8 = 0u, svc17 = 0u;
-    unsigned int unsvc8 = 0u, unsvc17 = 0u;
-    unsigned int ina8 = 0u, ina17 = 0u;
-    
-    for (unsigned int i = 0u; i < frames; ++i) {{
-        ops8 += ops_mi8[i];
-        ops17 += ops_mi17[i];
-        svc8 += svc_mi8[i];
-        svc17 += svc_mi17[i];
-        unsvc8 += unsvc_ready_mi8[i];
-        unsvc17 += unsvc_ready_mi17[i];
-        ina8 += ina_mi8[i];
-        ina17 += ina_mi17[i];
-    }}
+    const unsigned int ops8 = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mi8_ops_total");
+    const unsigned int ops17 = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mi17_ops_total");
+    const unsigned int svc8 = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mi8_svc_total");
+    const unsigned int svc17 = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mi17_svc_total");
+    const unsigned int unsvc8 = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mi8_unsvc_ready_total");
+    const unsigned int unsvc17 = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mi17_unsvc_ready_total");
+    const unsigned int ina8 = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mi8_inactive_total");
+    const unsigned int ina17 = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mi17_inactive_total");
 
     // Передаём текущие ops в MacroProperty для SpawnManager
     auto qm_ops_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("qm_ops_mp");
@@ -498,8 +480,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_unsvc_v8, flamegpu::MessageNone, flamegpu::Mes
         auto status_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_unsvc_status_day");
         count[idx].exchange(1u);
         if (ready) {{
+            auto total = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mi8_unsvc_ready_total");
             ready_count[idx].exchange(1u);
             status_days[idx].exchange(status_change_day);
+            total += 1u;
         }} else {{
             status_days[idx].exchange(0u);
         }}
@@ -509,8 +493,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_count_unsvc_v8, flamegpu::MessageNone, flamegpu::Mes
         auto status_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_unsvc_status_day");
         count[idx].exchange(1u);
         if (ready) {{
+            auto total = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("mi17_unsvc_ready_total");
             ready_count[idx].exchange(1u);
             status_days[idx].exchange(status_change_day);
+            total += 1u;
         }} else {{
             status_days[idx].exchange(0u);
         }}
