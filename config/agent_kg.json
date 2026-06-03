@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-03T03:35:16Z",
+    "updated_at": "2026-06-03T14:41:31Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -999,7 +999,7 @@
       "goal": "Удаление мёртвой message-ветки repair-line (RepairLineStatus/LineAssignment, publish_status/apply_assignment) — упрощение слоёв",
       "phase": "implementation",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -1013,8 +1013,29 @@
         "last_updated": "2026-06-03T03:35:16Z"
       },
       "created_at": "2026-06-03T03:22:14Z",
-      "updated_at": "2026-06-03T03:35:16Z",
+      "updated_at": "2026-06-03T03:35:30Z",
       "parent_workflow": "W_sim_deterministic_line_capture"
+    },
+    {
+      "workflow_id": "W_sim_cleanup_dead_quota_code",
+      "goal": "Housekeeping: удалить мёртвый незарегистрированный код квотирования (register_quota_v8_full triple-quote + dead константы)",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 32000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-03T14:41:31Z"
+      },
+      "created_at": "2026-06-03T14:31:55Z",
+      "updated_at": "2026-06-03T14:41:31Z"
     }
   ],
   "handoffs": [
@@ -6581,6 +6602,85 @@
         "quotas_ops",
         "step_logic"
       ]
+    },
+    {
+      "handoff_id": "handoff_W_sim_cleanup_dead_quota_code_coder-flame_c31ee4c1",
+      "workflow_id": "W_sim_cleanup_dead_quota_code",
+      "agent": "coder-flame",
+      "user_goal": "удалить мёртвый, нигде не вызываемый/не регистрируемый код квотирования; активный путь регистрации слоёв — только register_quota_v8_messages; py_compile + grep обязательны; полную сборку/симуляцию не запускать",
+      "changes": "code/sim_v2/messaging/rtc_quota_v8.py: removed triple-quoted RTC_REPAIR_LINE_SLOTS_V8 block; removed triple-quoted RTC_QUOTA_MANAGER_V8_MSG block; removed triple-quoted RTC_QUOTA_DEBUG_P2 block; removed triple-quoted register_quota_v8_full block; replaced stale REMOVED comment with active-path comment only.",
+      "facts": "",
+      "assumptions": "No runtime behavior change because removed blocks were Python string literals or references inside the removed string literal and were not registered by orchestrator_limiter_v8.py. Risks if false: an out-of-tree caller could have parsed these symbols by text, but in-repo code/sim_v2 rg found no active references.",
+      "evidence": "Facts: Pre-delete rg in code/sim_v2: RTC_REPAIR_LINE_SLOTS_V8 only comment+definition; RTC_QUOTA_MANAGER_V8_MSG only comment+definition; RTC_QUOTA_DEBUG_P2 only comment+definition+use inside deleted register_quota_v8_full block; register_quota_v8_full only comment+triple-quoted def. Active registration confirmed: orchestrator_limiter_v8.py calls rtc_quota_v8.register_quota_v8_messages. Post-delete rg for all four dead symbols: No matches found. Post-delete active path remains: register_quota_v8_messages in rtc_quota_v8.py and orchestrator_limiter_v8.py. ReadLints: no linter errors found.\nEvidence: Command PASS: export CUDA_PATH=\"/home/albud/miniconda3/targets/x86_64-linux\" && export LD_LIBRARY_PATH=\"/home/albud/miniconda3/lib:${LD_LIBRARY_PATH:-}\" && /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_quota_v8.py. rg post-delete dead symbols returned No matches found. Full build/simulation intentionally not run per task; orchestrator owns build-smoke.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_sim_cleanup_dead_quota_code:2026-06-03T14:35:15Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "code/sim_v2/messaging runtime file touched; deletion-only housekeeping; active MessageBucket registration path preserved",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Remove only dead unregistered quota RTC string blocks from rtc_quota_v8.py; preserve register_quota_v8_messages, reset/count/QM bucket/P1/P2/P3 bucket+commit, snapshots and deterministic line capture.",
+      "evidence_pack": "Facts: Pre-delete rg in code/sim_v2: RTC_REPAIR_LINE_SLOTS_V8 only comment+definition; RTC_QUOTA_MANAGER_V8_MSG only comment+definition; RTC_QUOTA_DEBUG_P2 only comment+definition+use inside deleted register_quota_v8_full block; register_quota_v8_full only comment+triple-quoted def. Active registration confirmed: orchestrator_limiter_v8.py calls rtc_quota_v8.register_quota_v8_messages. Post-delete rg for all four dead symbols: No matches found. Post-delete active path remains: register_quota_v8_messages in rtc_quota_v8.py and orchestrator_limiter_v8.py. ReadLints: no linter errors found.\nEvidence: Command PASS: export CUDA_PATH=\"/home/albud/miniconda3/targets/x86_64-linux\" && export LD_LIBRARY_PATH=\"/home/albud/miniconda3/lib:${LD_LIBRARY_PATH:-}\" && /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_quota_v8.py. rg post-delete dead symbols returned No matches found. Full build/simulation intentionally not run per task; orchestrator owns build-smoke.",
+      "success_criteria": "script: py_compile code/sim_v2/messaging/rtc_quota_v8.py PASS; grep: post-delete rg for RTC_REPAIR_LINE_SLOTS_V8|RTC_QUOTA_MANAGER_V8_MSG|RTC_QUOTA_DEBUG_P2|register_quota_v8_full returns zero matches; manual-check: active register_quota_v8_messages path still present in rtc_quota_v8.py and orchestrator_limiter_v8.py",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=rg pre-delete; rg post-delete; py_compile; ReadLints; approval_ref=N/A",
+      "risks": "Full simulation/build not run by instruction; medium-risk review should confirm deletion-only diff did not touch active P2/P3 commit/snapshot logic.",
+      "next_owner": "reviewer-flame",
+      "open_questions": "Parent task requested NextOwner=orchestrator, but coder-flame medium/high role policy requires reviewer-flame before close.",
+      "graph_update": "no",
+      "graph_update_reason": "Dead-code housekeeping only; Domain Graph/SSoT unchanged.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-03T14:36:15Z",
+      "modules": [
+        "quotas_ops",
+        "quotas_repair"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 32000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_sim_cleanup_dead_quota_code_orchestrator_4dfb724f",
+      "workflow_id": "W_sim_cleanup_dead_quota_code",
+      "agent": "orchestrator",
+      "user_goal": "Что у нас еще осталось по оптимизации слоев? -> #3 чистка мёртвого кода",
+      "changes": "rtc_quota_v8.py: -558 строк мёртвого кода (RTC_REPAIR_LINE_SLOTS_V8, RTC_QUOTA_MANAGER_V8_MSG, RTC_QUOTA_DEBUG_P2, register_quota_v8_full); changelog snippet",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "py_compile PASS; rg post-delete=0 в code/sim_v2; reviewer-flame APPROVE; активный путь+детерм.захват не затронуты",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "затронут code/sim_v2/messaging; deletion-only мёртвых строковых литералов",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Удалить мёртвые triple-quoted блоки в rtc_quota_v8.py (не на активном пути register_quota_v8_messages). Build-smoke не нужен (строковые литералы). Verify: py_compile + grep 0 refs + reviewer APPROVE.",
+      "evidence_pack": "py_compile PASS; rg post-delete=0 в code/sim_v2; reviewer-flame APPROVE; активный путь+детерм.захват не затронуты",
+      "success_criteria": "grep: rg dead-symbols code/sim_v2 -> 0 matches; script: py_compile PASS; reviewer-flame APPROVE",
+      "compliance_checklist": "decision=allow;required_gates=pass;exceptions=none;evidence_refs=py_compile;rg;reviewer-handoff;approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "4ce29618663b1b1d947e09f20bb2908e87a620e1d363e54838cc8ad3a62051e6",
+      "created_at": "2026-06-03T14:41:31Z",
+      "modules": [
+        "quotas_ops",
+        "step_logic"
+      ]
     }
   ],
   "contexts": [
@@ -7699,6 +7799,24 @@
       "agent": "coder-flame",
       "created_at": "2026-06-03T03:24:38Z",
       "updated_at": "2026-06-03T03:24:38Z"
+    },
+    {
+      "context_id": "ctx_W_sim_remove_dead_msg_branch_closure_d7b1efb4",
+      "workflow_id": "W_sim_remove_dead_msg_branch",
+      "context_type": "closure",
+      "content": "Мёртвая message-ветка удалена; регрессия 8007 vs 8005 бит-идентична; committed, pushed",
+      "agent": "orchestrator",
+      "created_at": "2026-06-03T03:35:30Z",
+      "updated_at": "2026-06-03T03:35:30Z"
+    },
+    {
+      "context_id": "ctx_W_sim_cleanup_dead_quota_code_phase_start_93183e18",
+      "workflow_id": "W_sim_cleanup_dead_quota_code",
+      "context_type": "phase_start",
+      "content": "reviewer-flame phase_start: deletion-only review of code/sim_v2/messaging/rtc_quota_v8.py (dead RTC strings + register_quota_v8_full)",
+      "agent": "reviewer-flame",
+      "created_at": "2026-06-03T14:33:42Z",
+      "updated_at": "2026-06-03T14:39:15Z"
     }
   ],
   "meta": {
