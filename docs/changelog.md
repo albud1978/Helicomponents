@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-06-03 — V8 simulation: детерминированный захват ремонтных линий (устранение гонки CAS)
+
+**Workflow**: W_sim_deterministic_line_capture | **Risk**: high | **Profile**: high-strict | **Status**: committed
+
+**Проблема**: захват ремонтных линий в P2/P3 commit шёл через гонку параллельных CAS `exchange` на `repair_line_acn_mp` — состояние корректное, но раскладка `line_id↔aircraft` недетерминирована (зависела от порядка GPU-тредов и структуры слоёв). Это давало false-negative регрессии при любом структурном изменении модели.
+
+**Changes**:
+- `code/sim_v2/messaging/rtc_quota_v8.py`: позиционный детерминированный захват в P2/P3 commit. Борт вычисляет `commit_pos` = число коммитящих той же фазы с более высоким приоритетом (**Mi-17 youngest-first → Mi-8 youngest-first**, youngest = больший `idx`) и берёт линию на позиции `commit_pos` в списке свободных линий, отсортированном по min `free_days` (запас сверх окна), tie `line_id`. Один CAS без гонки. Добавлен второй RO-snapshot `v8_repair_line_snapshot_p3` между P2-commit и P3-commit. Bank-fallback детерминирован (`bank_pos = commit_pos - free_total`). Stale-фильтр перенесён в bucket-фазы.
+- `code/sim_v2/messaging/base_model_messaging.py`: новые MacroProperty `mi8/mi17_commit_p2/p3_candidate`.
+- `code/sim_v2/messaging/rtc_quota_v8_base.py`: reset candidate-MP в `RTC_RESET_BUFFERS`.
+- `docs/quota_capsule.md`: Decision 2/3/10 обновлены (line_id↔aircraft теперь ДЕТЕРМИНИРОВАНА).
+
+**Review**: `reviewer-flame` итерация 1 — REJECT (C1 re-snapshot, C2 bank_pos, N1 stale); итерация 2 — APPROVE_WITH_NOTES (все закрыты, M1 косметика).
+
+**Evidence** (4 датасета × 3650 дней, master+repairline):
+- Детерминизм: два независимых прогона `8005` vs `8006` — EXCEPT-both-ways = 0 по всем колонкам (включая `repair_claim_line_id`).
+- vs baseline `8001`: 0 diff по state (status/sne/ppr/repair_days) И по `line_id`/line↔acn (бит-в-бит совпадение).
+- `ops=target` PASS на всех 4 датасетах.
+
+---
+
 ## 2026-06-01 — V8 simulation: удаление no-op слоя repair-line assign + SSoT sync
 
 **Workflow**: W_sim_remove_d2_noop_20260601T200344Z | **Risk**: high | **Profile**: high-strict | **Status**: committed

@@ -379,6 +379,11 @@ class V2BaseModelMessaging:
         self.env.newMacroPropertyUInt32("mi17_commit_p2", max_frames)
         self.env.newMacroPropertyUInt32("mi8_commit_p3", max_frames)
         self.env.newMacroPropertyUInt32("mi17_commit_p3", max_frames)
+        # Per-step commit candidates for deterministic RepairLine capture.
+        self.env.newMacroPropertyUInt32("mi8_commit_p2_candidate", max_frames)
+        self.env.newMacroPropertyUInt32("mi17_commit_p2_candidate", max_frames)
+        self.env.newMacroPropertyUInt32("mi8_commit_p3_candidate", max_frames)
+        self.env.newMacroPropertyUInt32("mi17_commit_p3_candidate", max_frames)
         self.env.newMacroPropertyUInt32("mi8_demote", max_frames)
         self.env.newMacroPropertyUInt32("mi17_demote", max_frames)
         
