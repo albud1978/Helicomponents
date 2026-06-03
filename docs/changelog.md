@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06-03 — V8 simulation: reset-ядро rtc_reset_quota_v8 → parallel self-clear (перф)
+
+**Workflow**: W_sim_reset_parallel_selfclear | **Risk**: high | **Profile**: high-strict | **Status**: committed
+
+**Проблема**: `RTC_RESET_BUFFERS` (`rtc_reset_quota_v8`) обнулял 24 MacroProperty-буфера квотирования последовательным циклом `for i in [0, RTC_MAX_FRAMES=400)` на ОДНОМ треде (guard `idx==0`) = 9600 `exchange(0u)` каждый шаг. По профилю — главный GPU-bottleneck (68% kernel-time).
+
+**Changes**:
+- `code/sim_v2/messaging/rtc_quota_v8_base.py`: убран guard `idx==0` и serial-цикл; каждый живой агент обнуляет 24 буфера только по своему `[idx]` (parallel self-clear). Функция уже регистрируется на все 7 initial states → охват всех живых агентов. Добавлен комментарий-ИНВАРИАНТ: корректность опирается на отсутствие смерти/reuse idx (нет `flamegpu::DEAD`/`setAllowAgentDeath(True)`) и append-only спавн; при будущем вводе смертей — вернуть clear-all или чистить orphan-слоты.
+
+**Обоснование эквивалентности** (read-only анализ `research-graph-analyst`): все 24 буфера пишутся только в `[idx]` своего агента; слоты `[frames_total≈340, 400)` никем не пишутся (append-only spawn, новый idx изначально 0); reset идёт до count-фаз. Смертей агентов в V8 нет.
+
+**Review**: `reviewer-flame` — APPROVE_WITH_NOTES (критических нет; note: долговременный инвариант "no agent death").
+
+**Evidence**:
+- Корректность (4 датасета × 3650 дней): `version_id=8008` (оптимизация) vs детерминированный эталон `8005` — EXCEPT-both-ways = **0** по master (346979) И repairline (262800), все колонки. `ops=target` PASS на всех 4 датасетах.
+- Перф (nsys 2025.3.1, 365 дней, dataset 2026-04-08): `rtc_reset_quota_v8` 105.6 ms (68.4% GPU) → 3.74 ms (7.1%) = **~28× ускорение ядра**; Σ GPU-kernel ~154 ms → ~53 ms (~2.9×).
+
+---
+
 ## 2026-06-03 — V8 simulation: чистка мёртвого незарегистрированного кода квотирования (housekeeping)
 
 **Workflow**: W_sim_cleanup_dead_quota_code | **Risk**: medium | **Profile**: medium-fast | **Status**: committed
