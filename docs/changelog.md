@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-06-03 — V8 simulation: scalar atomic-тоталы вместо 400-перебора в QM/demote (перф)
+
+**Workflow**: W_sim_qm_scalar_totals | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
+
+**Проблема**: после оптимизации reset-ядра новым GPU-лидером стал `rtc_quota_manager_v8_bucket` (QM, ~36% kernel-time, ~654 µs/шаг). QM работает на ОДНОМ агенте и суммировал 8 count-MacroProperty перебором `for i in [0, RTC_MAX_FRAMES=400)` = 3200 зависимых global-чтений на одном треде (latency-bound). Тот же 400-перебор по `mi*_ops_count` был в `rtc_demote_ops_v8` (~185 µs/шаг).
+
+**Changes**:
+- `code/sim_v2/messaging/base_model_messaging.py` (+8): 8 скалярных (size-1) MacroProperty `mi8/mi17_{ops,svc,unsvc_ready,inactive}_total`.
+- `code/sim_v2/messaging/rtc_quota_v8_base.py`, `rtc_quota_v8.py`: count-ядра (`rtc_count_ops/svc/unsvc/inactive_v8`) ведут atomic-инкремент соответствующего скаляра (`total += 1u`) рядом с `count[idx].exchange(1u)` (unsvc — только в ready-ветке). QM и `rtc_demote_ops_v8` читают скаляры напрямую (`operator T()`) вместо перебора. Per-idx массивы и rank-циклы (P1/P2/P3, spawn) сохранены без изменений. Скаляры обнуляются в `RTC_RESET_BUFFERS` под guard `idx==0` (независимо от состава датасета).
+
+**Обоснование эквивалентности** (read-only `research-graph-analyst`): `DeviceMacroProperty::operator+=` = `atomicAdd` для UInt32; сумма коммутативна → результат детерминирован независимо от порядка тредов (нет permutation-эффектов). Size-1 свойство — скаляр (`I=J=K=W=1`), обращение БЕЗ `[0]` (индексация size-1 бросает "property has less dimensions").
+
+**Review**: `reviewer-flame` — REJECT→APPROVE. BLOCK-1: reset-guard `idx==0 && group_by==1` хрупко завязан на ETL-порядок (Mi-8 первыми) → в Mi-17-only сценарии скаляры не обнулялись бы; исправлено на `idx==0`. Рантайм поймал отдельный баг: индексация `[0]` size-1 свойства — исправлено на прямой доступ.
+
+**Evidence**:
+- Корректность (4 датасета × 3650 дней): `version_id=8009` vs эталон `8005` — EXCEPT-both-ways = **0** по master (346979) И repairline (262800), все колонки. `ops=target` PASS на всех 4 датасетах.
+- Перф (nsys 2025.3.1, 365 дней, dataset 2026-04-08): QM 20.29 ms (654 µs/шаг) → 0.73 ms (23.6 µs/шаг) = **~27.7×**; demote 5.73 ms → 0.47 ms = **~12.1×**; overhead count-ядер +~0.14 ms (пренебрежимо). Σ GPU-kernel 56.24 ms → 31.97 ms (~1.76×). Wall-clock simulate() (3650 дней): ~4.14 с → ~3.93 с (~5%).
+
+---
+
 ## 2026-06-03 — V8 simulation: reset-ядро rtc_reset_quota_v8 → parallel self-clear (перф)
 
 **Workflow**: W_sim_reset_parallel_selfclear | **Risk**: high | **Profile**: high-strict | **Status**: committed
