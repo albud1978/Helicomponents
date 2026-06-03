@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-03 — V8 simulation: чистка мёртвого незарегистрированного кода квотирования (housekeeping)
+
+**Workflow**: W_sim_cleanup_dead_quota_code | **Risk**: medium | **Profile**: medium-fast | **Status**: committed
+
+**Контекст**: housekeeping после серии оптимизаций слоёв. Удалены мёртвые `'''...'''` triple-quoted блоки в `rtc_quota_v8.py`, не вызываемые активным путём `register_quota_v8_messages` (MessageBucket).
+
+**Changes**:
+- `code/sim_v2/messaging/rtc_quota_v8.py` (+1/−558): удалены мёртвые triple-quoted блоки `RTC_REPAIR_LINE_SLOTS_V8`, `RTC_QUOTA_MANAGER_V8_MSG`, `RTC_QUOTA_DEBUG_P2`, `register_quota_v8_full`; обновлён комментарий. Активный путь (reset/count/QM-bucket/P1/P2/P3 bucket+commit/snapshot/snapshot_p3) и детерминированный захват (commit_pos/free_total/bank_pos) не затронуты.
+
+**Review**: `reviewer-flame` — APPROVE (deletion-only, 0 висячих ссылок в `code/sim_v2/`, py_compile PASS, рантайм не затронут — удалены только строковые литералы).
+
+---
+
 ## 2026-06-03 — V8 simulation: удаление мёртвой repair-line message-ветки (упрощение слоёв)
 
 **Workflow**: W_sim_remove_dead_msg_branch | **Risk**: high | **Profile**: high-strict | **Status**: committed | **Parent**: W_sim_deterministic_line_capture
