@@ -702,11 +702,6 @@ class LimiterV8Orchestrator:
         # Фаза 3: Переходы после квотирования
         rtc_state_transitions_v7.register_post_quota_v7(self.model, heli_agent)
         
-        # Применение назначений RepairLine после квотирования
-        rtc_repair_lines_v8.register_repair_line_apply_assignment(
-            self.model, self.base_model.repair_line_agent
-        )
-        
         # RepairLine Export: запись состояния в буферы каждый шаг
         rtc_repair_lines_v8.register_repair_line_export_layer(
             self.model, self.base_model.repair_line_agent

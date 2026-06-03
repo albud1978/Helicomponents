@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-06-03 — V8 simulation: удаление мёртвой repair-line message-ветки (упрощение слоёв)
+
+**Workflow**: W_sim_remove_dead_msg_branch | **Risk**: high | **Profile**: high-strict | **Status**: committed | **Parent**: W_sim_deterministic_line_capture
+
+**Контекст**: эта правка (Variant A) ранее откатывалась, т.к. ломала раскладку `line_id` из-за гонки CAS. После устранения гонки (детерминированный захват, выше) удаление мёртвых слоёв стало регрессионно-чистым.
+
+**Changes**:
+- `code/sim_v2/messaging/rtc_repair_lines_v8.py`: удалены `RTC_REPAIR_LINE_PUBLISH_STATUS`, `RTC_REPAIR_LINE_APPLY_ASSIGNMENT`, publish-слой и `register_repair_line_apply_assignment`. `RepairLineStatus` — мёртвая телеметрия (нет активного консьюмера); `LineAssignment` — нет продюсера (слой инертен, export читает MacroProperty-SSoT).
+- `code/sim_v2/messaging/base_model_messaging.py`: удалены объявления сообщений `RepairLineStatus`/`LineAssignment` и дубль-константа `REPAIR_LINES_MAX`.
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py`: удалён вызов apply-assignment регистратора.
+- `code/sim_v2/messaging/rtc_quota_v8.py`: удалена ссылка на `RepairLineStatus` из мёртвой `register_quota_v8_full`; обновлён TODO-комментарий.
+
+**Review**: `reviewer-flame` — APPROVE (висячих ссылок нет, детерминизм не затронут, удалённые слои инертны).
+
+**Evidence** (4 датасета × 3650 дней): Variant A (`version_id=8007`) vs детерминированный эталон (`8005`) — EXCEPT-both-ways = 0 по master И repairline (все колонки), идентичные счётчики строк (346979), ops=target PASS. Бит-идентичность подтверждает: слои были мертвы, детерминированный захват делает структурные изменения безопасными.
+
+---
+
 ## 2026-06-03 — V8 simulation: детерминированный захват ремонтных линий (устранение гонки CAS)
 
 **Workflow**: W_sim_deterministic_line_capture | **Risk**: high | **Profile**: high-strict | **Status**: committed
