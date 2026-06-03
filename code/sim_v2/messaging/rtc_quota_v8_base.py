@@ -44,6 +44,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8, flamegpu::MessageNone, flamegpu::Mes
     auto mi17_commit_p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p2");
     auto mi8_commit_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p3");
     auto mi17_commit_p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p3");
+    auto mi8_commit_p2_candidate = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p2_candidate");
+    auto mi17_commit_p2_candidate = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p2_candidate");
+    auto mi8_commit_p3_candidate = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p3_candidate");
+    auto mi17_commit_p3_candidate = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p3_candidate");
     
     for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
         mi8_ops[i].exchange(0u);
@@ -66,6 +70,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_reset_quota_v8, flamegpu::MessageNone, flamegpu::Mes
         mi17_commit_p2[i].exchange(0u);
         mi8_commit_p3[i].exchange(0u);
         mi17_commit_p3[i].exchange(0u);
+        mi8_commit_p2_candidate[i].exchange(0u);
+        mi17_commit_p2_candidate[i].exchange(0u);
+        mi8_commit_p3_candidate[i].exchange(0u);
+        mi17_commit_p3_candidate[i].exchange(0u);
     }}
     
     return flamegpu::ALIVE;

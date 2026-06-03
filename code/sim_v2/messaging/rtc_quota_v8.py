@@ -633,6 +633,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_snapshot_v8, flamegpu::MessageNone, flam
 }}
 """
 
+# C1: дубликат snapshot для пересоздания RO-снэпшота МЕЖДУ P2-commit и P3-commit.
+# Тело идентично rtc_repair_line_snapshot_v8 (копирует live→ro для
+# line_acn/line_mp/bank_count/bank_head_end — всё, что читает P3), отличается только
+# именем функции, т.к. FLAME GPU требует уникальное имя RTC-функции для каждого слоя.
+RTC_REPAIR_LINE_SNAPSHOT_V8_P3 = RTC_REPAIR_LINE_SNAPSHOT_V8.replace(
+    "rtc_repair_line_snapshot_v8", "rtc_repair_line_snapshot_v8_p3"
+)
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # V8: Промоуты по MessageBucket (P1/P2/P3)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -738,6 +746,20 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_bucket_v8, flamegpu::MessageBucket, fl
         FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
         FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
         FLAMEGPU->setVariable<unsigned int>("decision_p2", 1u);
+        // N1: не помечаем кандидатом stale-агента (status_change_day > claim_start_day),
+        // иначе он инфлирует commit_pos соседей. Используем ту же формулу claim_start_day,
+        // что и commit (current_day - repair_time), для согласованности позиций.
+        const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+        const unsigned int repair_time = (group_by == 1u)
+            ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
+            : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+        const unsigned int claim_start_day = current_day - repair_time;
+        if (status_change_day <= claim_start_day) {{
+            auto p2_candidate = (group_by == 1u)
+                ? FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p2_candidate")
+                : FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p2_candidate");
+            p2_candidate[idx].exchange(1u);
+        }}
     }}
     return flamegpu::ALIVE;
 }}
@@ -815,6 +837,15 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_bucket_v8, flamegpu::MessageBucket,
         FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
         FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
         FLAMEGPU->setVariable<unsigned int>("decision_p3", 1u);
+        // N1: не помечаем кандидатом stale-агента (status_change_day > claim_start_day),
+        // чтобы не инфлировать commit_pos соседей. day>=rt гарантирован проверкой выше.
+        const unsigned int claim_start_day = day - rt;
+        if (status_change_day <= claim_start_day) {{
+            auto p3_candidate = (group_by == 1u)
+                ? FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p3_candidate")
+                : FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p3_candidate");
+            p3_candidate[idx].exchange(1u);
+        }}
     }}
     return flamegpu::ALIVE;
 }}
@@ -1035,6 +1066,8 @@ RTC_PROMOTE_UNSVC_COMMIT_V8 = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int candidate = FLAMEGPU->getVariable<unsigned int>("repair_candidate");
     if (candidate == 0u) return flamegpu::ALIVE;
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int frames = {RTC_MAX_FRAMES}u;
     
     // P2: unsvc→ops ЧЕРЕЗ RepairLine slot (free_days обнуляется)
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
@@ -1065,7 +1098,44 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     
     const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
     const unsigned int max_lines = (repair_quota < {REPAIR_LINES_MAX}u) ? repair_quota : {REPAIR_LINES_MAX}u;
-    
+
+    // N1/C2: stale-агент (status_change_day > claim_start_day) не может занять ни source1
+    // (личное окно), ни прошлое bank-окно (source2_guard) — выходим до вычисления позиции
+    // и любых CAS. Это исключает stale из гонки за bank и согласуется с фильтром
+    // кандидатов в bucket-фазе (commit_pos считает только нестейл-кандидатов).
+    if (status_change_day > claim_start_day) {{
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+        return flamegpu::ALIVE;
+    }}
+
+    auto mi8_p2_candidate = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p2_candidate");
+    auto mi17_p2_candidate = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p2_candidate");
+
+    unsigned int commit_pos = 0u;
+    if (group_by == 1u) {{
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            commit_pos += mi17_p2_candidate[i];
+        }}
+        for (unsigned int i = idx + 1u; i < frames; ++i) {{
+            commit_pos += mi8_p2_candidate[i];
+        }}
+    }} else {{
+        for (unsigned int i = idx + 1u; i < frames; ++i) {{
+            commit_pos += mi17_p2_candidate[i];
+        }}
+    }}
+
+    // C2: число source1-пригодных свободных линий в RO-снэпшоте. Одинаково у всех бортов
+    // фазы (RO неизменен в пределах фазы) → детерминированная граница source1/bank,
+    // не зависящая от исхода отдельных CAS. Заменяет неустойчивый free_line_count для bank_pos.
+    unsigned int free_total = 0u;
+    for (unsigned int i = 0u; i < max_lines; ++i) {{
+        if (line_acn_ro[i] != 0u) continue;
+        if (line_mp_ro[i] < repair_time) continue;
+        ++free_total;
+    }}
+
     bool claimed = false;
     unsigned int chosen_line = 0xFFFFFFFFu;
     unsigned int claim_start = 0xFFFFFFFFu;
@@ -1094,7 +1164,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
         }}
     }}
     
-    // Fallback: line-first/best-fit — минимальный old_days >= repair_time, tie-break: меньший line_id
+    unsigned int free_line_count = 0u;
+
+    // Fallback: deterministic line-first/best-fit by commit_pos.
     if (!claimed) {{
         bool tried[{REPAIR_LINES_MAX}u];
         for (unsigned int i = 0u; i < max_lines; ++i) {{
@@ -1121,17 +1193,27 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
             }}
             tried[best_line] = true;
             
+            if (free_line_count != commit_pos) {{
+                ++free_line_count;
+                continue;
+            }}
+            ++free_line_count;
+
+            if (status_change_day > claim_start_day) {{
+                break;
+            }}
+
             const unsigned int prev_acn = line_acn[best_line].exchange(acn);
             if (prev_acn != 0u) {{
                 line_acn[best_line].exchange(prev_acn);
-                continue;
+                break;
             }}
             
             const unsigned int old_days = line_mp[best_line].exchange(0u);
             if (old_days < repair_time || status_change_day > claim_start_day) {{
                 line_mp[best_line].exchange(old_days);
                 line_acn[best_line].exchange(0u);
-                continue;
+                break;
             }}
             chosen_line = best_line;
             claimed = true;
@@ -1142,8 +1224,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
         }}
     }}
     
-    // Fallback: bank окна (newest-first)
-    if (!claimed) {{
+    // Fallback: deterministic bank windows (newest-first) after source1 positions.
+    // C2: bank_pos = позиция борта среди НЕ получивших source1 = commit_pos - free_total.
+    // Уникальна для каждого борта (commit_pos уникален) и НЕ схлопывается в 0, т.к. не
+    // зависит от free_line_count внутри неуспешной попытки. Вход только при исчерпании
+    // source1-ёмкости (commit_pos >= free_total) → один bank_lock CAS на свою линию.
+    if (!claimed && commit_pos >= free_total) {{
+        const unsigned int bank_pos = commit_pos - free_total;
+        unsigned int seen_bank = 0u;
         bool tried[{REPAIR_LINES_MAX}u];
         for (unsigned int i = 0u; i < max_lines; ++i) {{
             tried[i] = false;
@@ -1169,15 +1257,20 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
             }}
             tried[best_line] = true;
             
+            if (seen_bank != bank_pos) {{
+                ++seen_bank;
+                continue;
+            }}
+
             const unsigned int prev_lock = bank_lock_mp[best_line].exchange(1u);
             if (prev_lock != 0u) {{
-                continue;
+                break;
             }}
             
             unsigned int bank_count = bank_count_ro[best_line];
             if (bank_count == 0u) {{
                 bank_lock_mp[best_line].exchange(0u);
-                continue;
+                break;
             }}
             
             const unsigned int base = best_line * {REPAIR_BANK_MAX}u;
@@ -1187,13 +1280,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
                 bank_start_mp[base].exchange(window_start);
                 bank_end_mp[base].exchange(window_end);
                 bank_lock_mp[best_line].exchange(0u);
-                continue;
+                break;
             }}
             if (status_change_day > window_start) {{
                 bank_start_mp[base].exchange(window_start);
                 bank_end_mp[base].exchange(window_end);
                 bank_lock_mp[best_line].exchange(0u);
-                continue;
+                break;
             }}
             for (unsigned int i = 1u; i < bank_count; ++i) {{
                 const unsigned int from = base + i;
@@ -1266,7 +1359,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
         FLAMEGPU->setVariable<unsigned int>("repair_claim_end_day", claim_end);
         FLAMEGPU->setVariable<unsigned int>("repair_claim_source", claim_source);
         
-        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
         if (group_by == 1u) {{
             auto p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve");
             p2[idx].exchange(1u);
@@ -1460,6 +1552,8 @@ RTC_PROMOTE_INACTIVE_COMMIT_V8 = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int candidate = FLAMEGPU->getVariable<unsigned int>("repair_candidate");
     if (candidate == 0u) return flamegpu::ALIVE;
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int frames = {RTC_MAX_FRAMES}u;
     
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
     auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
@@ -1489,7 +1583,40 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     
     const unsigned int repair_quota = FLAMEGPU->environment.getProperty<unsigned int>("repair_quota");
     const unsigned int max_lines = (repair_quota < {REPAIR_LINES_MAX}u) ? repair_quota : {REPAIR_LINES_MAX}u;
-    
+
+    // N1/C2: см. P2 — stale-агент не может занять ни source1, ни bank, выходим заранее.
+    if (status_change_day > claim_start_day) {{
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+        return flamegpu::ALIVE;
+    }}
+
+    auto mi8_p3_candidate = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p3_candidate");
+    auto mi17_p3_candidate = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p3_candidate");
+
+    unsigned int commit_pos = 0u;
+    if (group_by == 1u) {{
+        for (unsigned int i = 0u; i < frames; ++i) {{
+            commit_pos += mi17_p3_candidate[i];
+        }}
+        for (unsigned int i = idx + 1u; i < frames; ++i) {{
+            commit_pos += mi8_p3_candidate[i];
+        }}
+    }} else {{
+        for (unsigned int i = idx + 1u; i < frames; ++i) {{
+            commit_pos += mi17_p3_candidate[i];
+        }}
+    }}
+
+    // C2: см. P2 — детерминированная граница source1/bank по RO-снэпшоту (после C1
+    // re-snapshot RO у P3 уже отражает занятые P2 линии/банк).
+    unsigned int free_total = 0u;
+    for (unsigned int i = 0u; i < max_lines; ++i) {{
+        if (line_acn_ro[i] != 0u) continue;
+        if (line_mp_ro[i] < repair_time) continue;
+        ++free_total;
+    }}
+
     bool claimed = false;
     unsigned int chosen_line = 0xFFFFFFFFu;
     unsigned int claim_start = 0xFFFFFFFFu;
@@ -1517,6 +1644,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
         }}
     }}
     
+    unsigned int free_line_count = 0u;
+
     if (!claimed) {{
         bool tried[{REPAIR_LINES_MAX}u];
         for (unsigned int i = 0u; i < max_lines; ++i) {{
@@ -1543,17 +1672,27 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
             }}
             tried[best_line] = true;
             
+            if (free_line_count != commit_pos) {{
+                ++free_line_count;
+                continue;
+            }}
+            ++free_line_count;
+
+            if (status_change_day > claim_start_day) {{
+                break;
+            }}
+
             const unsigned int prev_acn = line_acn[best_line].exchange(acn);
             if (prev_acn != 0u) {{
                 line_acn[best_line].exchange(prev_acn);
-                continue;
+                break;
             }}
             
             const unsigned int old_days = line_mp[best_line].exchange(0u);
             if (old_days < repair_time || status_change_day > claim_start_day) {{
                 line_mp[best_line].exchange(old_days);
                 line_acn[best_line].exchange(0u);
-                continue;
+                break;
             }}
             chosen_line = best_line;
             claimed = true;
@@ -1564,8 +1703,14 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
         }}
     }}
     
-    // Fallback: bank окна (newest-first)
-    if (!claimed) {{
+    // Fallback: deterministic bank windows (newest-first) after source1 positions.
+    // C2: bank_pos = позиция борта среди НЕ получивших source1 = commit_pos - free_total.
+    // Уникальна для каждого борта (commit_pos уникален) и НЕ схлопывается в 0, т.к. не
+    // зависит от free_line_count внутри неуспешной попытки. Вход только при исчерпании
+    // source1-ёмкости (commit_pos >= free_total) → один bank_lock CAS на свою линию.
+    if (!claimed && commit_pos >= free_total) {{
+        const unsigned int bank_pos = commit_pos - free_total;
+        unsigned int seen_bank = 0u;
         bool tried[{REPAIR_LINES_MAX}u];
         for (unsigned int i = 0u; i < max_lines; ++i) {{
             tried[i] = false;
@@ -1591,15 +1736,20 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
             }}
             tried[best_line] = true;
             
+            if (seen_bank != bank_pos) {{
+                ++seen_bank;
+                continue;
+            }}
+
             const unsigned int prev_lock = bank_lock_mp[best_line].exchange(1u);
             if (prev_lock != 0u) {{
-                continue;
+                break;
             }}
             
             unsigned int bank_count = bank_count_ro[best_line];
             if (bank_count == 0u) {{
                 bank_lock_mp[best_line].exchange(0u);
-                continue;
+                break;
             }}
             
             const unsigned int base = best_line * {REPAIR_BANK_MAX}u;
@@ -1609,13 +1759,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
                 bank_start_mp[base].exchange(window_start);
                 bank_end_mp[base].exchange(window_end);
                 bank_lock_mp[best_line].exchange(0u);
-                continue;
+                break;
             }}
             if (status_change_day > window_start) {{
                 bank_start_mp[base].exchange(window_start);
                 bank_end_mp[base].exchange(window_end);
                 bank_lock_mp[best_line].exchange(0u);
-                continue;
+                break;
             }}
             for (unsigned int i = 1u; i < bank_count; ++i) {{
                 const unsigned int from = base + i;
@@ -1688,7 +1838,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
         FLAMEGPU->setVariable<unsigned int>("repair_claim_end_day", claim_end);
         FLAMEGPU->setVariable<unsigned int>("repair_claim_source", claim_source);
         
-        const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
         if (group_by == 1u) {{
             auto p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s1");
             p3[idx].exchange(1u);
@@ -1935,6 +2084,13 @@ def register_quota_v8_messages(model, agent, quota_agent):
     fn.setEndState("unserviceable")
     layer_p2_commit.addAgentFunction(fn)
     
+    # C1: пересоздать RO-снэпшот после P2-commit, чтобы P3 видел занятые P2 линии/банк
+    layer_snapshot_p3 = model.newLayer("v8_repair_line_snapshot_p3")
+    fn = quota_agent.newRTCFunction("rtc_repair_line_snapshot_v8_p3", RTC_REPAIR_LINE_SNAPSHOT_V8_P3)
+    fn.setInitialState("default")
+    fn.setEndState("default")
+    layer_snapshot_p3.addAgentFunction(fn)
+
     layer_p3_commit = model.newLayer("v8_promote_inactive_commit")
     fn = agent.newRTCFunction("rtc_promote_inactive_commit_v8", RTC_PROMOTE_INACTIVE_COMMIT_V8)
     fn.setInitialState("inactive")
