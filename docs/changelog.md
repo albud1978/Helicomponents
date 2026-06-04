@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-06-04 — ClickHouse: перепартиционирование sim_*_v9 → PARTITION BY version_date (C)
+
+**Workflow**: W_ch_repartition_vdate_20260604T075830Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
+
+**Контекст**: рычаг C из оптимизации записи. Схема `PARTITION BY (version_date, toYYYYMM(day_date))` дробила каждый INSERT-срез (10 лет) на ~118 месячных parts → write-амплификация. BI-зависимости от месячной партиции отсутствуют.
+
+**Обоснование (первичная проверка Superset 10.96.96.47 через native MCP)**: единственный рабочий дашборд id=1 «Планеры 10Y»; датасеты `sim_masterv2_v9`, `sim_repairline_v9` и virtual `sim_masterv2_v9_ffill_daily`. Все чарты фильтруют `version_date` (exact) + `group_by` + `filter_timegrain` (бакетинг); диапазонного фильтра по `day_date` нет нигде (`TEMPORAL_RANGE='No filter'`). → месячная партиция чтению BI не даёт ничего; `version_date` — единственная полезная для pruning.
+
+**Бенчмарк (`_bench_*`, реальные данные, dropped)**: INSERT 1 среза 0.362с/118 parts → 0.219с/1 part; bulk-load 1.94с/471 → 1.50с/10; чтение (агрегация и тяжёлый ffill CTE) — не хуже, чуть быстрее.
+
+**Changes**:
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py:1846` (CREATE sim_masterv2_v9): `PARTITION BY (version_date, toYYYYMM(day_date))` → `PARTITION BY version_date`.
+- `code/sim_v2/messaging/rtc_repairline_export.py:232` (DDL_REPAIRLINE): то же.
+- ClickHouse in-place свап (CREATE `_new` с version_date → INSERT…SELECT → parity → `EXCHANGE TABLES` atomic): `sim_masterv2_v9` (2 340 698 строк, active parts 588→11), `sim_repairline_v9` (1 642 536 строк, 605→8). Имена таблиц сохранены — Superset не трогался.
+
+**Parity**: count + суммы всех числовых колонок бит-идентичны old↔new по всем 25 `(version_date, version_id)` срезам обеих таблиц. Render smoke (native MCP): чарт 2 (master/ffill) 660мс, чарт 3 (repairline gantt) 71мс — данные корректны.
+
+**Backup/rollback**: старые месячные копии сохранены как `sim_masterv2_v9_bak_monthly`, `sim_repairline_v9_bak_monthly` — **не удалены** (удаление только по отдельному явному разрешению).
+
+---
+
 ## 2026-06-04 — ClickHouse запись: columnar INSERT + убран round-trip в RL-экспорте (A+B)
 
 **Workflow**: W_ch_export_columnar_noroundtrip | **Risk**: medium | **Profile**: medium-policy | **Status**: ready-to-commit

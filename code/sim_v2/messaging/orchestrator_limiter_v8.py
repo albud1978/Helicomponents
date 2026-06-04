@@ -1843,7 +1843,7 @@ Run simulation requires Agent KG traceability. Options:
             commit_p2 UInt32,
             commit_p3 UInt32
         ) ENGINE = MergeTree()
-        PARTITION BY (version_date, toYYYYMM(day_date))
+        PARTITION BY version_date
         ORDER BY (version_date, version_id, day_u16, idx)
     """)
     client.execute("ALTER TABLE sim_masterv2_v9 ADD COLUMN IF NOT EXISTS status_change_day UInt16")
