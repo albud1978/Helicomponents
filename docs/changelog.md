@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-06-03 — V8 simulation: Tier-1 GPU-adaptive шаг — НЕ принят (negative result)
+
+**Workflow**: W_sim_gpu_adaptive_tier1 | **Risk**: high | **Status**: rejected-on-perf (код сохранён в git stash, не закоммичен)
+
+**Гипотеза**: перенос вычисления адаптивного шага с host `HF_StepController` на GPU (2 device RTC-слоя L7a/L7b на QuotaManager + thin env-bridge) уменьшит host-overhead.
+
+**Реализация** (полная, корректная): L7a `rtc_compute_adaptive` (read MP → agent-vars, guard `group_by==1`), L7b `rtc_update_day` (agent-vars → write `current_day_mp`/`adaptive_result_mp`/`mp2_*`, reset `mp_min`), `HF_StepController` → thin bridge (4 D→H read + 4 setProperty), off-by-one шага 0 пред-вычислен в `HF_InitV8`.
+
+**Эквивалентность**: parity vs эталон 8005 (4 датасета × 3650 дней) — **бит-идентично** (EXCEPT-both-ways=0 master 346979 / repairline 262800), ops=target PASS. reviewer-flame APPROVE_WITH_NOTES (GPU-1 split корректен, race закрыт guard'ом).
+
+**Замер wall-clock (2025-07-04, 3650д, 286 шагов)**: baseline = **~3.79с** (3.72/3.76/3.89), Tier-1 = **~4.95с** (4.87/5.03) → Tier-1 **на ~30% МЕДЛЕННЕЕ**.
+
+**Причина регрессии**: (1) +2 запуска device-слоёв/шаг × 286; (2) серийный цикл по `deterministic_dates_mp` на 1 GPU-потоке (`group_by==1`) медленнее CPU; (3) sync thin-bridge не устранён; (4) `HF_StepController` не был bottleneck (cProfile ~0.1мс/шаг Python — переносить было нечего).
+
+**Вывод**: гипотеза опровергнута эмпирически. Host-сторона дорога из-за C++-движка (~48 слоёв) + drain'ов + GPU-ядер, а не StepController. Tier-2 (full gpu-only) не устранит layer-launch/серийный-loop overhead. Решение: Tier-1 не отгружать; код в stash для возможного будущего GPU-only рефакторинга. Knowledge зафиксирован в Agent KG (`ctx_W_sim_gpu_adaptive_tier1_measurement_f3bd93c9`).
+
+---
+
 ## 2026-06-03 — V8 simulation: удаление диагностических host-функций (Фаза A перед GPU-adaptive)
 
 **Workflow**: W_sim_remove_diag_hostfns | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
