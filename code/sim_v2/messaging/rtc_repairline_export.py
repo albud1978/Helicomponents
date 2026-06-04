@@ -235,7 +235,14 @@ SETTINGS index_granularity = 8192
 """
 
 
-def export_repairline_to_ch(ch_client, rows, version_date_int, version_id, drop_table=False):
+def export_repairline_to_ch(
+    ch_client,
+    rows,
+    version_date_int,
+    version_id,
+    drop_table=False,
+    master_projection=None,
+):
     """
     Экспорт ежедневной матрицы RepairLine в ClickHouse.
 
@@ -246,6 +253,9 @@ def export_repairline_to_ch(ch_client, rows, version_date_int, version_id, drop_
         version_date_int: int — YYYYMMDD
         version_id: int
         drop_table: bool — дропнуть таблицу перед созданием
+        master_projection: optional list[tuple] — (aircraft_number, group_by, day_u16,
+            status_id, pre_status_id, commit_p2, commit_p3, repair_claim_line_id,
+            repair_claim_start_day, repair_claim_end_day, repair_claim_source)
 
     Lookback-only: occupancy (aircraft_number/group_by) детерминированно строится из sim_masterv2_v9.
     Runtime telemetry (acn/gb) не используется как источник occupancy, только для выбора line_id
@@ -282,14 +292,17 @@ def export_repairline_to_ch(ch_client, rows, version_date_int, version_id, drop_
         "ADD COLUMN IF NOT EXISTS bank_head_end UInt32"
     )
 
-    master_rows = ch_client.execute(
-        "SELECT aircraft_number, group_by, day_u16, status_id, pre_status_id, "
-        "commit_p2, commit_p3, repair_claim_line_id, repair_claim_start_day, "
-        "repair_claim_end_day, repair_claim_source "
-        "FROM sim_masterv2_v9 "
-        "WHERE version_date=%(vd)s AND version_id=%(vid)s",
-        {'vd': version_date_int, 'vid': version_id},
-    )
+    if master_projection is None:
+        master_rows = ch_client.execute(
+            "SELECT aircraft_number, group_by, day_u16, status_id, pre_status_id, "
+            "commit_p2, commit_p3, repair_claim_line_id, repair_claim_start_day, "
+            "repair_claim_end_day, repair_claim_source "
+            "FROM sim_masterv2_v9 "
+            "WHERE version_date=%(vd)s AND version_id=%(vid)s",
+            {'vd': version_date_int, 'vid': version_id},
+        )
+    else:
+        master_rows = master_projection
 
     acn_map = {}
     master_trace_by_acn = defaultdict(list)
@@ -401,43 +414,45 @@ def export_repairline_to_ch(ch_client, rows, version_date_int, version_id, drop_
     painted_rows = len(occupancy_map)
 
     # Добавляем version_date и version_id к каждой строке
-    full_rows = []
+    columns_data = [[] for _ in range(11)]
     for day, lid, fd, rt, _acn, _gb, bank_count, bank_head_start, bank_head_end in rows:
         key = (int(day), int(lid))
         if key in occupancy_map:
             acn_val, gb_val = occupancy_map[key]
         else:
             acn_val, gb_val = 0, 0
-        full_rows.append(
-            (
-                version_date_int,
-                version_id,
-                day,
-                lid,
-                fd,
-                rt,
-                acn_val,
-                gb_val,
-                bank_count,
-                bank_head_start,
-                bank_head_end,
-            )
+        row_values = (
+            version_date_int,
+            version_id,
+            day,
+            lid,
+            fd,
+            rt,
+            acn_val,
+            gb_val,
+            bank_count,
+            bank_head_start,
+            bank_head_end,
         )
+        for column_data, value in zip(columns_data, row_values):
+            column_data.append(value)
 
     print(
         f"  [RL Export] reconcile: total_rows={total_rows}, painted_rows={painted_rows}, "
         f"claim_rows_painted={claim_rows_painted}, claimless_rows_painted={claimless_rows_painted}"
     )
 
-    if full_rows:
+    row_count = len(columns_data[0])
+    if row_count:
         ch_client.execute(
             "INSERT INTO sim_repairline_v9 "
             "(version_date, version_id, day_u16, line_id, free_days, repair_time, aircraft_number, group_by, "
             "bank_count, bank_head_start, bank_head_end) "
             "VALUES",
-            full_rows,
+            columns_data,
+            columnar=True,
             settings={'max_partitions_per_insert_block': 300}
         )
-        print(f"  ✅ sim_repairline_v9: {len(full_rows)} строк вставлено")
+        print(f"  ✅ sim_repairline_v9: {row_count} строк вставлено")
     else:
         print("  ⚠️ sim_repairline_v9: нет данных для вставки")
