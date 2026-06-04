@@ -939,9 +939,19 @@ class LimiterV8Orchestrator:
         if pp_count > 0:
             print(f"   📦 Постпроцессинг: {pp_count} записей модифицировано ({pp_time:.2f}с)")
         
-        # Построение строк для INSERT
+        # Построение колонок для INSERT
         t_build = time.perf_counter()
-        rows = []
+        columns = [
+            'version_date', 'version_id', 'day_u16',
+            'idx', 'aircraft_number', 'group_by', 'oh', 'br', 'll',
+            'status_id', 'pre_status_id', 'status_change_day', 'sne', 'ppr', 'limiter', 'repair_days',
+            'repair_claim_start_day', 'repair_claim_end_day', 'repair_claim_source',
+            'repair_claim_line_id',
+            'repair_time', 'assembly_time', 'active_trigger', 'assembly_trigger',
+            'daily_today_u32', 'daily_next_u32', 'commit_p2', 'commit_p3'
+        ]
+        columns_data = [[] for _ in columns]
+        master_projection = []
         def _u16(val) -> int:
             return int(val) & 0xFFFF
         def _u8(val) -> int:
@@ -966,27 +976,36 @@ class LimiterV8Orchestrator:
                     claim_start = 0xFFFF
                     claim_end = 0xFFFF
                     claim_line_id = 0xFFFF
-                rows.append([
+                day_u16 = _u16(day)
+                aircraft_number = int(fields['mp2_aircraft_number'][a])
+                group_by = _u8(fields['mp2_group_by'][a])
+                status_id = _u8(status)
+                pre_status_id = _u8(pre_status)
+                claim_start_u16 = _u16(claim_start)
+                claim_end_u16 = _u16(claim_end)
+                claim_source_u8 = _u8(claim_source)
+                claim_line_id_u16 = _u16(claim_line_id)
+                row_values = (
                     version_date_int,
                     version_id,
-                    _u16(day),  # day_u16
+                    day_u16,
                     _u16(fields['mp2_idx'][a]),
-                    int(fields['mp2_aircraft_number'][a]),
-                    _u8(fields['mp2_group_by'][a]),
+                    aircraft_number,
+                    group_by,
                     int(fields['mp2_oh'][a]),
                     int(fields['mp2_br'][a]),
                     int(fields['mp2_ll'][a]),
-                    _u8(status),
-                    _u8(pre_status),
+                    status_id,
+                    pre_status_id,
                     _u16(fields['mp2_status_change_day'][s, a]),
                     int(fields['mp2_sne'][s, a]),
                     int(fields['mp2_ppr'][s, a]),
                     _u16(fields['mp2_limiter'][s, a]),
                     _u16(fields['mp2_repair_days'][s, a]),
-                    _u16(claim_start),
-                    _u16(claim_end),
-                    _u8(claim_source),
-                    _u16(claim_line_id),
+                    claim_start_u16,
+                    claim_end_u16,
+                    claim_source_u8,
+                    claim_line_id_u16,
                     _u16(fields['mp2_repair_time'][s, a]),
                     _u16(fields['mp2_assembly_time'][s, a]),
                     _u8(fields['mp2_active_trigger'][s, a]),
@@ -995,30 +1014,38 @@ class LimiterV8Orchestrator:
                     int(fields['mp2_daily_next'][s, a]),
                     commit_p2,
                     commit_p3,
-                ])
+                )
+                for column_data, value in zip(columns_data, row_values):
+                    column_data.append(value)
+                master_projection.append((
+                    aircraft_number,
+                    group_by,
+                    day_u16,
+                    status_id,
+                    pre_status_id,
+                    int(commit_p2),
+                    int(commit_p3),
+                    claim_line_id_u16,
+                    claim_start_u16,
+                    claim_end_u16,
+                    claim_source_u8,
+                ))
         build_time = time.perf_counter() - t_build
-        print(f"   Строк: {len(rows)} ({build_time:.2f}с)")
+        row_count = len(columns_data[0])
+        print(f"   Строк: {row_count} ({build_time:.2f}с)")
         
         # Batch INSERT
-        if self.clickhouse_client and rows:
+        if self.clickhouse_client and row_count:
             t_insert = time.perf_counter()
-            columns = [
-                'version_date', 'version_id', 'day_u16',
-                'idx', 'aircraft_number', 'group_by', 'oh', 'br', 'll',
-                'status_id', 'pre_status_id', 'status_change_day', 'sne', 'ppr', 'limiter', 'repair_days',
-                'repair_claim_start_day', 'repair_claim_end_day', 'repair_claim_source',
-                'repair_claim_line_id',
-                'repair_time', 'assembly_time', 'active_trigger', 'assembly_trigger',
-                'daily_today_u32', 'daily_next_u32', 'commit_p2', 'commit_p3'
-            ]
             col_str = ', '.join(columns)
             self.clickhouse_client.execute(
                 f"INSERT INTO sim_masterv2_v9 ({col_str}) VALUES",
-                rows,
+                columns_data,
+                columnar=True,
                 settings={'max_partitions_per_insert_block': 300}
             )
             insert_time = time.perf_counter() - t_insert
-            print(f"   ✅ INSERT: {len(rows)} строк ({insert_time:.2f}с)")
+            print(f"   ✅ INSERT: {row_count} строк ({insert_time:.2f}с)")
         
         # ═══════════════════════════════════════════════════════════════
         # RepairLine Export → ClickHouse
@@ -1034,7 +1061,8 @@ class LimiterV8Orchestrator:
             
             rtc_repairline_export.export_repairline_to_ch(
                 self.clickhouse_client, rl_rows,
-                version_date_int, version_id
+                version_date_int, version_id,
+                master_projection=master_projection
             )
         elif rl_data is None:
             print("⚠️ RepairLine Drain не прочитал данные")

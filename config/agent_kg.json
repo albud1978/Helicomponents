@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-04T04:05:12Z",
+    "updated_at": "2026-06-04T05:03:28Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -1204,6 +1204,27 @@
       },
       "created_at": "2026-06-04T02:47:59Z",
       "updated_at": "2026-06-04T04:05:12Z"
+    },
+    {
+      "workflow_id": "W_ch_export_columnar_noroundtrip",
+      "goal": "Ускорить post-simulate запись в ClickHouse: (A) columnar INSERT для MP2 (sim_masterv2_v9) и RL (sim_repairline_v9); (B) убрать round-trip SELECT FROM sim_masterv2_v9 в RL-экспорте, используя in-memory rows. Схему таблиц НЕ менять.",
+      "phase": "governance",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-policy"
+      },
+      "usage": {
+        "cumulative_steps": 3,
+        "cumulative_tokens": 53000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-04T05:03:28Z"
+      },
+      "created_at": "2026-06-04T04:45:24Z",
+      "updated_at": "2026-06-04T05:03:28Z"
     }
   ],
   "handoffs": [
@@ -8241,6 +8262,133 @@
         "est_tokens": 70000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_ch_export_columnar_noroundtrip_coder-general_2b93ad8e",
+      "workflow_id": "W_ch_export_columnar_noroundtrip",
+      "agent": "coder-general",
+      "user_goal": "ЗАДАЧА — две доказуемо bit-identical правки записи в CH: A. Columnar INSERT для MP2/RL; B. убрать round-trip SELECT в RL-экспорте через master_projection; проверка smoke V8_RUN_ID=8020 без --drop-table, строки MP2 ~86465 и RL ~65700.",
+      "changes": "code/sim_v2/messaging/orchestrator_limiter_v8.py: MP2 rows list replaced with 28 column lists in exact INSERT column order; status==0 skip and P2/P3 postprocessing preserved; master_projection collected from the same postprocessed values and passed to RL export.\ncode/sim_v2/messaging/rtc_repairline_export.py: export_repairline_to_ch gained optional master_projection fallback-compatible parameter; SELECT from sim_masterv2_v9 is skipped when provided; RL INSERT now uses 11 column lists with columnar=True.",
+      "facts": "",
+      "assumptions": "Parity bit-identical vs 8005 is intentionally left for validator-judge as requested. Risks if false: exporter could still pass smoke while parity differs in values/order.",
+      "evidence": "Facts: No table schema change was introduced by this patch. No commit was created. No --drop-table was run. The current runtime log does not emit a separate wall-time for RL reconcile+INSERT; repeat run with version_id=8020 was intentionally not performed because existing code does not delete/replace that version and would duplicate rows. system.query_log is unavailable on this ClickHouse instance (Unknown table system.query_log), so server-side INSERT duration could not be recovered after the fact.\nEvidence: ReadLints: no linter errors for edited files.\npy_compile: python3 -m py_compile code/sim_v2/messaging/orchestrator_limiter_v8.py code/sim_v2/messaging/rtc_repairline_export.py exited 0.\nSmoke command completed without --drop-table: V8_RUN_ID=8020, version_date=2025-07-04, end_day=3650.\nSmoke output: simulate=3.42s; MP2 postprocess=0.03s; MP2 build=0.25s; MP2 INSERT=86465 rows in 1.75s; RL interpolation=65700 rows in 0.01s; RL reconcile counters total_rows=65700 painted_rows=33566 claim_rows_painted=33300 claimless_rows_painted=266; RL INSERT printed 65700 rows inserted; total=8.07s.\nCH SELECT scope version_date=20250704/version_id=8020: sim_masterv2_v9 total=86465 by_group=[(1,46618),(2,39847)]; sim_repairline_v9 total=65700 by_group=[(0,32135),(1,7586),(2,25979)].",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_ch_export_columnar_noroundtrip:2026-06-04T04:52:41Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "code/sim_v2 export path; ClickHouse write path; no schema/table drop/no commit",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "Перевести упаковку CH export на columnar=True без изменения схемы/семантики; передать RL in-memory master_projection вместо SELECT; подтвердить smoke на version_id=8020.",
+      "evidence_pack": "Facts: No table schema change was introduced by this patch. No commit was created. No --drop-table was run. The current runtime log does not emit a separate wall-time for RL reconcile+INSERT; repeat run with version_id=8020 was intentionally not performed because existing code does not delete/replace that version and would duplicate rows. system.query_log is unavailable on this ClickHouse instance (Unknown table system.query_log), so server-side INSERT duration could not be recovered after the fact.\nEvidence: ReadLints: no linter errors for edited files.\npy_compile: python3 -m py_compile code/sim_v2/messaging/orchestrator_limiter_v8.py code/sim_v2/messaging/rtc_repairline_export.py exited 0.\nSmoke command completed without --drop-table: V8_RUN_ID=8020, version_date=2025-07-04, end_day=3650.\nSmoke output: simulate=3.42s; MP2 postprocess=0.03s; MP2 build=0.25s; MP2 INSERT=86465 rows in 1.75s; RL interpolation=65700 rows in 0.01s; RL reconcile counters total_rows=65700 painted_rows=33566 claim_rows_painted=33300 claimless_rows_painted=266; RL INSERT printed 65700 rows inserted; total=8.07s.\nCH SELECT scope version_date=20250704/version_id=8020: sim_masterv2_v9 total=86465 by_group=[(1,46618),(2,39847)]; sim_repairline_v9 total=65700 by_group=[(0,32135),(1,7586),(2,25979)].",
+      "success_criteria": "script: V8_RUN_ID=8020 /home/albud/miniconda3/envs/cuda13/bin/python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-04 --end-day 3650 (без --drop-table); numeric: sim_masterv2_v9 count=86465 and sim_repairline_v9 count=65700 for version_date=20250704/version_id=8020",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=governance/docs skipped by explicit user instruction; evidence_refs=ReadLints; py_compile; smoke V8_RUN_ID=8020; CH SELECT counts; approval_ref=N/A",
+      "risks": "Exact RL reconcile+INSERT wall-time was not captured by current logs; query_log unavailable. Changes are in high-sensitivity sim_v2 export path, but scoped to packaging/round-trip removal and smoke passed.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Runtime/export optimization only; no domain graph/SSoT change.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-04T04:52:41Z",
+      "modules": [
+        "export",
+        "quotas_repair"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 33000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_ch_export_columnar_noroundtrip_validator-judge_5e3bb2f4",
+      "workflow_id": "W_ch_export_columnar_noroundtrip",
+      "agent": "validator-judge",
+      "user_goal": "Контекст: workflow W_ch_export_columnar_noroundtrip. Оптимизировали запись в ClickHouse (columnar INSERT + убрали round-trip SELECT в RL-экспорте). Реализация bit-identical по замыслу. Нужна SQL-проверка parity. ЗАДАЧА: подтвердить BIT-IDENTICAL parity между новым тестовым прогоном и baseline: version_id=8020 vs 8005, version_date=20250704, tables sim_masterv2_v9 and sim_repairline_v9; только SELECT.",
+      "changes": "Validation-only: executed read-only ClickHouse SELECT checks for row counts, group_by splits, key uniqueness, supporting checksums, and exact tuple diff counters. No simulation tables or code were mutated; Agent KG phase_start and validation handoff were recorded.",
+      "facts": "",
+      "assumptions": "None.",
+      "evidence": "Facts: Dispatch SuccessCriteria checked: SQL parity for version_date=20250704, new version_id=8020, baseline version_id=8005, group_by-aware counts and exact diff counters for sim_masterv2_v9 and sim_repairline_v9. Evidence: ClickHouse native SELECT via clickhouse_driver, server version 24.10.1.2812. sim_masterv2_v9 counts by group_by: 8005 g1=46618 g2=39847 total=86465; 8020 g1=46618 g2=39847 total=86465; unique keys day_u16,idx=86465 each; duplicate_key_rows=0; diff_rows=0 (only_baseline=0, only_new=0, value_diff=0); supporting checksum xor=FC3745F8BA8456D6, sum=7903667991763028202 for both. sim_repairline_v9 counts by group_by: 8005 g0=32135 g1=7586 g2=25979 total=65700; 8020 g0=32135 g1=7586 g2=25979 total=65700; unique keys day_u16,line_id=65700 each; duplicate_key_rows=0; diff_rows=0 (only_baseline=0, only_new=0, value_diff=0); supporting checksum xor=803091999BDAF4C8, sum=12276343531764498348 for both. Verdict: PASS for both tables.\nEvidence: Dispatch SuccessCriteria checked: SQL parity for version_date=20250704, new version_id=8020, baseline version_id=8005, group_by-aware counts and exact diff counters for sim_masterv2_v9 and sim_repairline_v9. Evidence: ClickHouse native SELECT via clickhouse_driver, server version 24.10.1.2812. sim_masterv2_v9 counts by group_by: 8005 g1=46618 g2=39847 total=86465; 8020 g1=46618 g2=39847 total=86465; unique keys day_u16,idx=86465 each; duplicate_key_rows=0; diff_rows=0 (only_baseline=0, only_new=0, value_diff=0); supporting checksum xor=FC3745F8BA8456D6, sum=7903667991763028202 for both. sim_repairline_v9 counts by group_by: 8005 g0=32135 g1=7586 g2=25979 total=65700; 8020 g0=32135 g1=7586 g2=25979 total=65700; unique keys day_u16,line_id=65700 each; duplicate_key_rows=0; diff_rows=0 (only_baseline=0, only_new=0, value_diff=0); supporting checksum xor=803091999BDAF4C8, sum=12276343531764498348 for both. Verdict: PASS for both tables.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_ch_export_columnar_noroundtrip:20260604T045658Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Validation determines acceptance of export-path optimization; database access is SELECT-only and no production mutation was performed.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (validation-only handoff)",
+      "human_gate_required": "no",
+      "plan_card": "Validate bit-identical parity between baseline 8005 and new 8020 for MP2 and RepairLine exports using ClickHouse SELECT-only checks.",
+      "evidence_pack": "Facts: Dispatch SuccessCriteria checked: SQL parity for version_date=20250704, new version_id=8020, baseline version_id=8005, group_by-aware counts and exact diff counters for sim_masterv2_v9 and sim_repairline_v9. Evidence: ClickHouse native SELECT via clickhouse_driver, server version 24.10.1.2812. sim_masterv2_v9 counts by group_by: 8005 g1=46618 g2=39847 total=86465; 8020 g1=46618 g2=39847 total=86465; unique keys day_u16,idx=86465 each; duplicate_key_rows=0; diff_rows=0 (only_baseline=0, only_new=0, value_diff=0); supporting checksum xor=FC3745F8BA8456D6, sum=7903667991763028202 for both. sim_repairline_v9 counts by group_by: 8005 g0=32135 g1=7586 g2=25979 total=65700; 8020 g0=32135 g1=7586 g2=25979 total=65700; unique keys day_u16,line_id=65700 each; duplicate_key_rows=0; diff_rows=0 (only_baseline=0, only_new=0, value_diff=0); supporting checksum xor=803091999BDAF4C8, sum=12276343531764498348 for both. Verdict: PASS for both tables.\nEvidence: Dispatch SuccessCriteria checked: SQL parity for version_date=20250704, new version_id=8020, baseline version_id=8005, group_by-aware counts and exact diff counters for sim_masterv2_v9 and sim_repairline_v9. Evidence: ClickHouse native SELECT via clickhouse_driver, server version 24.10.1.2812. sim_masterv2_v9 counts by group_by: 8005 g1=46618 g2=39847 total=86465; 8020 g1=46618 g2=39847 total=86465; unique keys day_u16,idx=86465 each; duplicate_key_rows=0; diff_rows=0 (only_baseline=0, only_new=0, value_diff=0); supporting checksum xor=FC3745F8BA8456D6, sum=7903667991763028202 for both. sim_repairline_v9 counts by group_by: 8005 g0=32135 g1=7586 g2=25979 total=65700; 8020 g0=32135 g1=7586 g2=25979 total=65700; unique keys day_u16,line_id=65700 each; duplicate_key_rows=0; diff_rows=0 (only_baseline=0, only_new=0, value_diff=0); supporting checksum xor=803091999BDAF4C8, sum=12276343531764498348 for both. Verdict: PASS for both tables.",
+      "success_criteria": "SQL: group_by-aware row counts must match expected MP2=86465 and RL=65700 for version_id 8020 vs 8005 at version_date 20250704; exact diff_rows must be 0 for sim_masterv2_v9 and sim_repairline_v9.",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=ClickHouse SELECT via clickhouse_driver on sim_masterv2_v9 and sim_repairline_v9; approval_ref=N/A",
+      "risks": "Hash checksums are supporting evidence only; final PASS is based on exact tuple comparison and zero diff counters.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Validation-only parity result; no domain graph or SSoT change.",
+      "prev_handoff_hash": "ed8aa11b20fb1f16e64303bf3758151d4cd23b5d2150d86d85e9ed2860fa26d3",
+      "created_at": "2026-06-04T04:56:58Z",
+      "modules": [
+        "validation",
+        "export",
+        "quotas_repair"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 13500,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_ch_export_columnar_noroundtrip_governance-compliance_c7412e09",
+      "workflow_id": "W_ch_export_columnar_noroundtrip",
+      "agent": "governance-compliance",
+      "user_goal": "Single governance pass before commit A+B for W_ch_export_columnar_noroundtrip (columnar INSERT MP2/RL + remove round-trip SELECT in RL export via master_projection); confirm allow/allow_with_notes/reject for commit.",
+      "changes": "Verdict-only: read-only review of git diff for code/sim_v2/messaging/orchestrator_limiter_v8.py (+62/-20) and code/sim_v2/messaging/rtc_repairline_export.py (+35/-22); read of W_ch_export_columnar_noroundtrip workflow state and last 2 handoffs (coder-general 2b93ad8e, validator-judge 5e3bb2f4); wrote phase_start context + this handoff in Agent KG. Verdict: allow.",
+      "facts": "",
+      "assumptions": "None requiring Risks-if-false caveat. Wall-clock improvement (~12%) is secondary qualitative metric; primary acceptance is bit-identical parity which is PASS.",
+      "evidence": "Facts: Diff verified: git diff code/sim_v2/messaging/orchestrator_limiter_v8.py code/sim_v2/messaging/rtc_repairline_export.py. Workflow + handoffs verified: python3 code/utils/agent_kg.py --read-state --workflow-id W_ch_export_columnar_noroundtrip. RiskTier=medium consistent across all handoffs (coder-general, validator-judge, governance). RiskReasons present. HumanGateRequired=conditional (commit gate pending human command). SuccessCriteria for both dispatch handoffs are verifiable (SQL parity + script smoke). PlanCard/EvidencePack/ComplianceChecklist present in both prior handoffs. validator-judge ComplianceChecklist=allow. No-nested-subagent discipline observed (orch -> coder-general -> orch -> validator-judge -> orch -> governance, single level each). No orchestrator self-coding (changes authored under coder-general handoff). No Domain Graph sync triggered. master_projection=None backward-compat branch evaluated against .cursor/rules/00_global_always.mdc no-fallback rule: deemed acceptable API surface (documented optional kw-arg, semantically identical to SELECT branch per validator parity, no hidden behavior substitution); not flagged as exception.\nEvidence: git diff --stat confirms 2 files only, 97 insertions / 54 deletions, no DDL or schema/SSoT touch. orchestrator_limiter_v8.py: rows-of-lists -> 28 column lists with columnar=True; same _u8/_u16 postprocessing + status==0 skip preserved; master_projection assembled from identical postprocessed values. rtc_repairline_export.py: export_repairline_to_ch gained master_projection optional kw-arg; SELECT FROM sim_masterv2_v9 skipped when projection passed; INSERT uses 11 column lists with columnar=True. validator-judge (handoff 5e3bb2f4): SQL parity 8020 vs 8005 @ version_date=20250704 -> diff_rows=0, only_baseline=0, only_new=0, value_diff=0 for both sim_masterv2_v9 (counts g1=46618 g2=39847 total=86465) and sim_repairline_v9 (counts g0=32135 g1=7586 g2=25979 total=65700); checksum xor/sum identical for both tables; unique keys match row counts (no duplicates). coder-general (handoff 2b93ad8e): py_compile=0, ReadLints clean, smoke V8_RUN_ID=8020 without --drop-table completed, MP2=86465 rows / 1.75s, RL=65700 rows. Modules touched: only code/sim_v2/messaging; no config/transitions, no invariants.json, no .cursor/rules, no docs.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_ch_export_columnar_noroundtrip:20260604T050000Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "code/sim_v2/messaging export path edits; ClickHouse write path; medium-policy profile per workflow caps",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Govern pre-commit pass: scope match check, schema/SSoT/invariants discipline, no-fallback policy assessment for optional master_projection kw-arg, evidence sufficiency review (coder-general smoke + validator-judge SQL parity).",
+      "evidence_pack": "Facts: Diff verified: git diff code/sim_v2/messaging/orchestrator_limiter_v8.py code/sim_v2/messaging/rtc_repairline_export.py. Workflow + handoffs verified: python3 code/utils/agent_kg.py --read-state --workflow-id W_ch_export_columnar_noroundtrip. RiskTier=medium consistent across all handoffs (coder-general, validator-judge, governance). RiskReasons present. HumanGateRequired=conditional (commit gate pending human command). SuccessCriteria for both dispatch handoffs are verifiable (SQL parity + script smoke). PlanCard/EvidencePack/ComplianceChecklist present in both prior handoffs. validator-judge ComplianceChecklist=allow. No-nested-subagent discipline observed (orch -> coder-general -> orch -> validator-judge -> orch -> governance, single level each). No orchestrator self-coding (changes authored under coder-general handoff). No Domain Graph sync triggered. master_projection=None backward-compat branch evaluated against .cursor/rules/00_global_always.mdc no-fallback rule: deemed acceptable API surface (documented optional kw-arg, semantically identical to SELECT branch per validator parity, no hidden behavior substitution); not flagged as exception.\nEvidence: git diff --stat confirms 2 files only, 97 insertions / 54 deletions, no DDL or schema/SSoT touch. orchestrator_limiter_v8.py: rows-of-lists -> 28 column lists with columnar=True; same _u8/_u16 postprocessing + status==0 skip preserved; master_projection assembled from identical postprocessed values. rtc_repairline_export.py: export_repairline_to_ch gained master_projection optional kw-arg; SELECT FROM sim_masterv2_v9 skipped when projection passed; INSERT uses 11 column lists with columnar=True. validator-judge (handoff 5e3bb2f4): SQL parity 8020 vs 8005 @ version_date=20250704 -> diff_rows=0, only_baseline=0, only_new=0, value_diff=0 for both sim_masterv2_v9 (counts g1=46618 g2=39847 total=86465) and sim_repairline_v9 (counts g0=32135 g1=7586 g2=25979 total=65700); checksum xor/sum identical for both tables; unique keys match row counts (no duplicates). coder-general (handoff 2b93ad8e): py_compile=0, ReadLints clean, smoke V8_RUN_ID=8020 without --drop-table completed, MP2=86465 rows / 1.75s, RL=65700 rows. Modules touched: only code/sim_v2/messaging; no config/transitions, no invariants.json, no .cursor/rules, no docs.",
+      "success_criteria": "manual-check: ComplianceChecklist 5-field compact verdict delivered with explicit decision; required_gates summary covers scope/traceability/ssot/no-fallback/evidence; exceptions list complete.",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=handoff_W_ch_export_columnar_noroundtrip_coder-general_2b93ad8e;handoff_W_ch_export_columnar_noroundtrip_validator-judge_5e3bb2f4;git diff code/sim_v2/messaging/orchestrator_limiter_v8.py;git diff code/sim_v2/messaging/rtc_repairline_export.py; approval_ref=N/A",
+      "risks": "Future callers of export_repairline_to_ch that omit master_projection will silently fall back to extra SELECT (one round-trip), losing part of the (B) optimization; not a correctness risk per validator parity, but worth documenting in module docstring or a follow-up note. Not a blocker for commit.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "cbf8fd51a845c2dac351d2b0196ea6a46658a4ddf80d34dfd96411aab29c39e3",
+      "created_at": "2026-06-04T05:03:28Z",
+      "modules": [
+        "export",
+        "postprocess"
+      ],
+      "usage": {
+        "model": "claude-opus-4.7",
+        "est_tokens": 6500,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -9485,6 +9633,15 @@
       "agent": "unknown",
       "created_at": "2026-06-04T04:05:12Z",
       "updated_at": "2026-06-04T04:05:12Z"
+    },
+    {
+      "context_id": "ctx_W_ch_export_columnar_noroundtrip_phase_start_9418d695",
+      "workflow_id": "W_ch_export_columnar_noroundtrip",
+      "context_type": "phase_start",
+      "content": "governance pre-close pass for W_ch_export_columnar_noroundtrip: checking scope match, schema/SSoT discipline, no-fallback policy applicability for master_projection optional kw-arg, evidence sufficiency for medium-policy commit gate",
+      "agent": "governance-compliance",
+      "created_at": "2026-06-04T04:47:49Z",
+      "updated_at": "2026-06-04T05:02:43Z"
     }
   ],
   "meta": {

@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-06-04 — ClickHouse запись: columnar INSERT + убран round-trip в RL-экспорте (A+B)
+
+**Workflow**: W_ch_export_columnar_noroundtrip | **Risk**: medium | **Profile**: medium-policy | **Status**: ready-to-commit
+
+**Контекст**: post-simulate запись в ClickHouse (~5.2с) — узкое место workflow. Профилирование выделило MP2 INSERT (~1.84–2.35с) и RL reconcile+INSERT (~3с, включал лишний round-trip `SELECT FROM sim_masterv2_v9`).
+
+**Changes**:
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py`: MP2 INSERT переведён на `columnar=True` (28 колонок-массивов вместо list of row-lists); сохранены фильтр `status==0 → continue` и постпроцессинг `pre_status==0 and status in (2,3)`. Дополнительно собран `master_projection` из тех же постпроцессированных значений и передан в RL-экспорт.
+- `code/sim_v2/messaging/rtc_repairline_export.py`: `export_repairline_to_ch` получил опциональный `master_projection` (backward-compat: при `None` — прежний `SELECT`); при передаче round-trip `SELECT FROM sim_masterv2_v9` пропускается. RL INSERT переведён на `columnar=True` (11 колонок).
+
+**Эквивалентность**: parity vs эталон 8005 @ 20250704 (3650 дней), обе таблицы — **бит-идентично** (validator-judge: diff-counter=0, checksum идентичны, counts/group_by совпадают — MP2 86465, RL 65700). governance-compliance: allow.
+
+**Эффект**: post-simulate ~5.2с → ~4.65с (~12%, скромно). Columnar дал малый выигрыш на MP2 — узкое место не сериализация клиента, а write-амплификация по ~120 месячным партициям (рычаг C — перепартиционирование, отдельный schema-change workflow с оценкой BI-влияния).
+
+**Follow-up** (не блокер): в docstring `export_repairline_to_ch` отметить, что callers должны передавать `master_projection` при наличии, иначе теряется (B)-оптимизация.
+
+---
+
 ## 2026-06-04 — V8 simulation: drain оптимизация (ExitFunction + static-поля)
 
 **Workflow**: W_sim_drain_exit_static | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
