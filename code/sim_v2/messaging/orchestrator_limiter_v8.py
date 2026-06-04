@@ -970,12 +970,12 @@ class LimiterV8Orchestrator:
                     version_date_int,
                     version_id,
                     _u16(day),  # day_u16
-                    _u16(fields['mp2_idx'][s, a]),
-                    int(fields['mp2_aircraft_number'][s, a]),
-                    _u8(fields['mp2_group_by'][s, a]),
-                    int(fields['mp2_oh'][s, a]),
-                    int(fields['mp2_br'][s, a]),
-                    int(fields['mp2_ll'][s, a]),
+                    _u16(fields['mp2_idx'][a]),
+                    int(fields['mp2_aircraft_number'][a]),
+                    _u8(fields['mp2_group_by'][a]),
+                    int(fields['mp2_oh'][a]),
+                    int(fields['mp2_br'][a]),
+                    int(fields['mp2_ll'][a]),
                     _u8(status),
                     _u8(pre_status),
                     _u16(fields['mp2_status_change_day'][s, a]),
@@ -1337,10 +1337,10 @@ class LimiterV8Orchestrator:
             for a in range(total_agents):
                 if int(fields['mp2_status_id'][s, a]) != 4:
                     continue
-                group_by = int(fields['mp2_group_by'][s, a])
+                group_by = int(fields['mp2_group_by'][a])
                 if group_by not in (1, 2):
                     continue
-                agent_key = int(fields['mp2_idx'][s, a])
+                agent_key = int(fields['mp2_idx'][a])
                 day_set.add(agent_key)
         
         for a in range(total_agents):
@@ -1359,8 +1359,8 @@ class LimiterV8Orchestrator:
                     if claim_start == 0xFFFFFFFF or claim_end == 0xFFFFFFFF or claim_end <= claim_start:
                         continue
                     assembly_time_val = int(fields['mp2_assembly_time'][s, a])
-                    group_by_event = int(fields['mp2_group_by'][s, a])
-                    agent_key = int(fields['mp2_idx'][s, a])
+                    group_by_event = int(fields['mp2_group_by'][a])
+                    agent_key = int(fields['mp2_idx'][a])
                     apply_daily_cap_for_agent = apply_daily_cap and group_by_event in (1, 2)
                     
                     # Собираем кандидатов окна ремонта с guard-условиями

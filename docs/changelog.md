@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-06-04 — V8 simulation: drain оптимизация (ExitFunction + static-поля)
+
+**Workflow**: W_sim_drain_exit_static | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
+
+**Контекст**: drain (чтение MP2/RL GPU-буферов → host) занимал ~28% simulate(). Архитектурный разбор показал два узких места: per-step sync и поэлементное чтение.
+
+**Changes**:
+- `code/sim_v2/messaging/rtc_mp2_export.py`, `rtc_repairline_export.py`: MP2/RL drain переведены с per-step layer host function на `model.addExitFunction(drain)` — исполняются один раз после simulate(), убран per-step `current_day_mp[0]` D→H sync. 6 статичных полей (`mp2_idx, mp2_aircraft_number, mp2_group_by, mp2_ll, mp2_oh, mp2_br`) переведены в size=MAX_FRAMES буферы (запись по `idx`, идемпотентно), drain читает их size=num_agents один раз вместо num_steps×num_agents.
+- `orchestrator_limiter_v8.py`: build-цикл + `_postprocess_promotions` читают статичные поля как `[a]`, динамические как `[s,a]`. self.data['fields']: 19 dynamic (num_steps, num_agents) + 6 static (num_agents,).
+- `config/transitions/transitions_rules.json` (SSoT, layers-манифест, по согласованию): синхронизирован — убраны orders 39/44 (`HF_SpawnDiag`/`HF_SyncDayV5`, удалены в W_sim_remove_diag_hostfns), 42/43 помечены как ExitFunction.
+- `docs/architecture/limiter_architecture.md`: layer-таблица синхронизирована.
+
+**Эквивалентность**: parity vs эталон 8005 (4 датасета × 3650 дней) — **бит-идентично** (EXCEPT-both-ways=0 master 346979 / repairline 262800), ops=target PASS. reviewer-flame APPROVE_WITH_NOTES; governance-compliance allow_with_notes.
+
+**Эффект**: MP2 drain объём чтения 2 438 150 → 1 855 040 значений (−583k), время drain ~1.06с → ~0.81с; **simulate() ~3.79с → ~3.46с (−0.33с, ~9%)**.
+
+**Follow-up** (не блокеры): spawn-регресс на датасете с `dynamic_reserve>0` (parity покрыл spawn=0); orphan-cleanup `self.end_day` в drain-классах; опц. инвариант "ll/oh/br write-once".
+
+---
+
 ## 2026-06-03 — V8 simulation: Tier-1 GPU-adaptive шаг — НЕ принят (negative result)
 
 **Workflow**: W_sim_gpu_adaptive_tier1 | **Risk**: high | **Status**: rejected-on-perf (код сохранён в git stash, не закоммичен)

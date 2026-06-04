@@ -106,14 +106,14 @@
 | 36 | v8_spawn_dynamic_mgr | `rtc_spawn_dynamic_mgr_v8` | SpawnMgr | Дефицит = target − curr_ops − used (P1/P2/P3 commit) |
 | 37 | v8_spawn_dynamic_ticket | `rtc_spawn_dynamic_ticket_v8` | Ticket→ops | Создание новых агентов (Mi-17) |
 | 38 | v8_spawn_dynamic_ticket_mi8 | `rtc_spawn_dynamic_ticket_v8_mi8` | Ticket→ops | Создание новых агентов (Mi-8) |
-| **ДИАГНОСТИКА / LIMITER / EXPORT / SYNC** |||||
-| 39 | layer_spawn_diag | `HF_SpawnDiag` | Host | Диагностический host layer spawn |
 | **ФАЗА 5: Limiter (бинарный поиск)** |||||
 | 40 | L_limiter_min | `rtc_compute_min_limiter` | 2→2 | Сбор минимального limiter по ops |
 | 41 | layer_mp2_write | `rtc_mp2_write_*` | active states | Запись агентных полей в MP2 буферы |
-| 42 | layer_mp2_drain | `HF_MP2_Drain` | Host | Drain MP2 буферов в host dataframes |
-| 43 | layer_repairline_drain | `HF_RepairLineDrain` | Host | Drain RL буферов |
-| 44 | layer_sync_day_v5 | `HF_SyncDayV5` | Host | Финальный sync дня для `simulate()` |
+| **EXPORT (ExitFunction — один раз после simulate())** |||||
+| — | `HF_MP2_Drain` | `HF_MP2_Drain` | Host (Exit) | Drain MP2 буферов; статичные поля (idx/aircraft_number/group_by/ll/oh/br) читаются size=MAX_FRAMES один раз |
+| — | `HF_RepairLineDrain` | `HF_RepairLineDrain` | Host (Exit) | Drain RL буферов |
+
+> **Примечание:** `HF_SpawnDiag` и `HF_SyncDayV5` удалены (W_sim_remove_diag_hostfns). MP2/RL drain переведены с per-step layer на `addExitFunction` (W_sim_drain_exit_static) — исполняются один раз после симуляции, без per-step device→host sync.
 
 ---
 
