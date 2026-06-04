@@ -110,12 +110,10 @@
     { "order": 36, "phase": "Phase 4 spawn", "layer": "v8_spawn_dynamic_mgr", "function": "rtc_spawn_dynamic_mgr_v8", "state": "SpawnDynamicMgr", "notes": "Расчет дефицита после P1/P2/P3 и запись spawn needs." },
     { "order": 37, "phase": "Phase 4 spawn", "layer": "v8_spawn_dynamic_ticket", "function": "rtc_spawn_dynamic_ticket_v8", "state": "SpawnDynamicTicket", "notes": "Создание Mi-17 dynamic 0->2." },
     { "order": 38, "phase": "Phase 4 spawn", "layer": "v8_spawn_dynamic_ticket_mi8", "function": "rtc_spawn_dynamic_ticket_v8_mi8", "state": "SpawnDynamicTicketMi8", "notes": "Создание Mi-8 dynamic 0->2." },
-    { "order": 39, "phase": "Diagnostics", "layer": "layer_spawn_diag", "function": "HF_SpawnDiag", "state": "host", "notes": "Диагностический host layer spawn." },
     { "order": 40, "phase": "Limiter", "layer": "L_limiter_min", "function": "rtc_compute_min_limiter", "state": "2->2", "notes": "Подготовка mp_min_limiter для следующего day advance." },
     { "order": 41, "phase": "MP2 export", "layer": "layer_mp2_write", "function": "rtc_mp2_write_*", "state": "all active", "notes": "Запись агентных полей в MP2 буферы." },
-    { "order": 42, "phase": "MP2 export", "layer": "layer_mp2_drain", "function": "HF_MP2_Drain", "state": "host", "notes": "Drain MP2 буферов в host dataframes." },
-    { "order": 43, "phase": "RL export", "layer": "layer_repairline_drain", "function": "HF_RepairLineDrain", "state": "host", "notes": "Drain RL буферов (включая bank telemetry); при записи в sim_repairline_v9 occupancy накладывается из sim_masterv2_v9 (claim/claimless episodes)." },
-    { "order": 44, "phase": "Sync day", "layer": "layer_sync_day_v5", "function": "HF_SyncDayV5", "state": "host", "notes": "Совместимость и финальный sync дня для simulate()." }
+    { "order": 42, "phase": "MP2 export", "layer": "(ExitFunction)", "function": "HF_MP2_Drain", "state": "host", "notes": "Drain MP2 буферов в host dataframes. ExitFunction: исполняется один раз после simulate(), не ordered layer. Статичные поля (idx/aircraft_number/group_by/ll/oh/br) читаются size=MAX_FRAMES один раз." },
+    { "order": 43, "phase": "RL export", "layer": "(ExitFunction)", "function": "HF_RepairLineDrain", "state": "host", "notes": "Drain RL буферов (включая bank telemetry); ExitFunction: исполняется один раз после simulate(), не ordered layer. При записи в sim_repairline_v9 occupancy накладывается из sim_masterv2_v9 (claim/claimless episodes)." }
   ],
   "rules": [
     {

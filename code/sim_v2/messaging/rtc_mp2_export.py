@@ -3,8 +3,9 @@
 MP2 Export: GPU-side MacroProperty buffers for per-agent per-step state export.
 
 Architecture:
-- Agents write MP2 fields (dynamic + static) to MacroProperty buffers each step
-- Layout: mp2_field[step * MAX_FRAMES + idx]
+- Agents write MP2 dynamic fields to MacroProperty buffers each step
+- Dynamic layout: mp2_field[step * MAX_FRAMES + idx]
+- Static layout: mp2_field[idx] (last-write-wins, same value for spawn slots after birth)
 - After simulate(), HF_MP2_Drain reads buffers into numpy arrays
 - Python reconstructs rows only from MP2 buffers (no fallback)
 
@@ -36,7 +37,7 @@ except ImportError as e:
 # MP2 field names (19 dynamic + 6 static fields)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-MP2_FIELDS = [
+MP2_DYNAMIC_FIELDS = [
     "mp2_status_id",
     "mp2_pre_status_id",
     "mp2_status_change_day",
@@ -56,6 +57,9 @@ MP2_FIELDS = [
     "mp2_repair_claim_end_day",
     "mp2_repair_claim_source",
     "mp2_repair_claim_line_id",
+]
+
+MP2_STATIC_FIELDS = [
     "mp2_idx",
     "mp2_aircraft_number",
     "mp2_group_by",
@@ -63,6 +67,8 @@ MP2_FIELDS = [
     "mp2_oh",
     "mp2_br",
 ]
+
+MP2_FIELDS = MP2_DYNAMIC_FIELDS + MP2_STATIC_FIELDS
 
 # Status ID mapping (FLAME GPU state name -> numeric ID)
 STATUS_MAP = {
@@ -82,8 +88,10 @@ STATUS_MAP = {
 
 def setup_mp2_buffers(env):
     """Declare MP2 export buffers + day_for_step + num_steps."""
-    for name in MP2_FIELDS:
+    for name in MP2_DYNAMIC_FIELDS:
         env.newMacroPropertyUInt(name, MP2_BUF_SIZE)
+    for name in MP2_STATIC_FIELDS:
+        env.newMacroPropertyUInt(name, MAX_FRAMES)
     
     # Step -> day mapping
     env.newMacroPropertyUInt("mp2_day_for_step", MAX_EXPORT_STEPS)
@@ -91,8 +99,14 @@ def setup_mp2_buffers(env):
     # Total number of steps counter (размер 2 чтобы избежать проблемы с индексацией scalar в pyflamegpu)
     env.newMacroPropertyUInt("mp2_num_steps", 2)
     
-    mem_mb = len(MP2_FIELDS) * MP2_BUF_SIZE * 4 / (1024 * 1024)
-    print(f"  ✅ MP2 Export: {len(MP2_FIELDS)} буферов × {MP2_BUF_SIZE} = {mem_mb:.1f} МБ GPU")
+    mem_mb = (
+        len(MP2_DYNAMIC_FIELDS) * MP2_BUF_SIZE
+        + len(MP2_STATIC_FIELDS) * MAX_FRAMES
+    ) * 4 / (1024 * 1024)
+    print(
+        f"  ✅ MP2 Export: {len(MP2_DYNAMIC_FIELDS)} dynamic × {MP2_BUF_SIZE} "
+        f"+ {len(MP2_STATIC_FIELDS)} static × {MAX_FRAMES} = {mem_mb:.1f} МБ GPU"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -167,23 +181,23 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_{state}, flamegpu::MessageNone, flamegpu::
     auto buf_claim_line_id = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_repair_claim_line_id");
     buf_claim_line_id[offset].exchange(FLAMEGPU->getVariable<unsigned int>("repair_line_id"));
     
-    auto buf_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_idx");
-    buf_idx[offset].exchange(FLAMEGPU->getVariable<unsigned int>("idx"));
+    auto buf_idx = FLAMEGPU->environment.getMacroProperty<unsigned int, {STATIC_BUF_SIZE}u>("mp2_idx");
+    buf_idx[idx].exchange(FLAMEGPU->getVariable<unsigned int>("idx"));
     
-    auto buf_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_aircraft_number");
-    buf_acn[offset].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
+    auto buf_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {STATIC_BUF_SIZE}u>("mp2_aircraft_number");
+    buf_acn[idx].exchange(FLAMEGPU->getVariable<unsigned int>("aircraft_number"));
     
-    auto buf_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_group_by");
-    buf_gb[offset].exchange(FLAMEGPU->getVariable<unsigned int>("group_by"));
+    auto buf_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {STATIC_BUF_SIZE}u>("mp2_group_by");
+    buf_gb[idx].exchange(FLAMEGPU->getVariable<unsigned int>("group_by"));
     
-    auto buf_ll = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_ll");
-    buf_ll[offset].exchange(FLAMEGPU->getVariable<unsigned int>("ll"));
+    auto buf_ll = FLAMEGPU->environment.getMacroProperty<unsigned int, {STATIC_BUF_SIZE}u>("mp2_ll");
+    buf_ll[idx].exchange(FLAMEGPU->getVariable<unsigned int>("ll"));
     
-    auto buf_oh = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_oh");
-    buf_oh[offset].exchange(FLAMEGPU->getVariable<unsigned int>("oh"));
+    auto buf_oh = FLAMEGPU->environment.getMacroProperty<unsigned int, {STATIC_BUF_SIZE}u>("mp2_oh");
+    buf_oh[idx].exchange(FLAMEGPU->getVariable<unsigned int>("oh"));
     
-    auto buf_br = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_br");
-    buf_br[offset].exchange(FLAMEGPU->getVariable<unsigned int>("br"));
+    auto buf_br = FLAMEGPU->environment.getMacroProperty<unsigned int, {STATIC_BUF_SIZE}u>("mp2_br");
+    buf_br[idx].exchange(FLAMEGPU->getVariable<unsigned int>("br"));
     
     return flamegpu::ALIVE;
 }}
@@ -206,6 +220,7 @@ def register_mp2_write_layer(model, heli_agent):
             MAX_EXPORT_STEPS=MAX_EXPORT_STEPS,
             MAX_FRAMES=MAX_FRAMES,
             BUF_SIZE=MP2_BUF_SIZE,
+            STATIC_BUF_SIZE=MAX_FRAMES,
         )
         
         fn = heli_agent.newRTCFunction(func_name, rtc_src)
@@ -222,11 +237,10 @@ def register_mp2_write_layer(model, heli_agent):
 
 class HF_MP2_Drain(fg.HostFunction):
     """
-    HostFunction that reads MP2 buffers into Python on the final simulation step.
+    Exit HostFunction that reads MP2 buffers into Python after simulate().
     
-    On each step: does nothing (fast return).
-    On the final step (current_day >= end_day): reads all MP2 buffers + day_for_step
-    into self.data dict with numpy arrays.
+    self.data['fields'] stores dynamic fields as shape=(num_steps, num_agents)
+    and static fields as shape=(num_agents,).
     """
     
     def __init__(self, end_day: int, num_agents: int):
@@ -237,21 +251,11 @@ class HF_MP2_Drain(fg.HostFunction):
     
     def run(self, FLAMEGPU):
         env = FLAMEGPU.environment
-        mp_day = env.getMacroPropertyUInt("current_day_mp")
-        current_day = int(mp_day[0])
-        
-        if current_day < self.end_day:
-            return  # Not final step
-        
-        # Final step — read all buffers
         import numpy as np
         
         # Read step count
-        try:
-            mp_num = env.getMacroPropertyUInt("mp2_num_steps")
-            num_steps = int(mp_num[0])
-        except Exception:
-            num_steps = 0
+        mp_num = env.getMacroPropertyUInt("mp2_num_steps")
+        num_steps = int(mp_num[0])
         if num_steps == 0:
             num_steps = FLAMEGPU.getStepCounter() + 1
         
@@ -264,9 +268,9 @@ class HF_MP2_Drain(fg.HostFunction):
         mp_days = env.getMacroPropertyUInt("mp2_day_for_step")
         days = [int(mp_days[s]) for s in range(num_steps)]
         
-        # Read MP2 field buffers — only for simulated steps and real agents
+        # Read MP2 field buffers — dynamic fields are per step, static fields per agent.
         result = {}
-        for field_name in MP2_FIELDS:
+        for field_name in MP2_DYNAMIC_FIELDS:
             mp = env.getMacroPropertyUInt(field_name)
             arr = np.zeros((num_steps, self.num_agents), dtype=np.uint32)
             for s in range(num_steps):
@@ -275,6 +279,12 @@ class HF_MP2_Drain(fg.HostFunction):
                     val = int(mp[base + a]) & 0xFFFFFFFF
                     arr[s, a] = val
             result[field_name] = arr
+        for field_name in MP2_STATIC_FIELDS:
+            mp = env.getMacroPropertyUInt(field_name)
+            arr = np.zeros(self.num_agents, dtype=np.uint32)
+            for a in range(self.num_agents):
+                arr[a] = int(mp[a]) & 0xFFFFFFFF
+            result[field_name] = arr
         
         self.data = {
             'num_steps': num_steps,
@@ -282,14 +292,16 @@ class HF_MP2_Drain(fg.HostFunction):
             'fields': result,
         }
         
-        total_values = num_steps * self.num_agents * len(MP2_FIELDS)
+        total_values = (
+            num_steps * self.num_agents * len(MP2_DYNAMIC_FIELDS)
+            + self.num_agents * len(MP2_STATIC_FIELDS)
+        )
         print(f"  [MP2 Drain] ✅ Прочитано {total_values:,} значений")
 
 
 def register_mp2_drain(model, end_day: int, num_agents: int):
-    """Register HF_MP2_Drain as a layer host function."""
+    """Register HF_MP2_Drain as an exit host function."""
     drain = HF_MP2_Drain(end_day, num_agents)
-    layer = model.newLayer("layer_mp2_drain")
-    layer.addHostFunction(drain)
-    print(f"  ✅ MP2 Drain зарегистрирован (layer host function)")
+    model.addExitFunction(drain)
+    print(f"  ✅ MP2 Drain зарегистрирован (ExitFunction)")
     return drain

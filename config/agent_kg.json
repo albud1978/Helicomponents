@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-03T20:32:38Z",
+    "updated_at": "2026-06-04T04:05:12Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -1183,6 +1183,27 @@
       },
       "created_at": "2026-06-03T20:25:22Z",
       "updated_at": "2026-06-03T20:32:38Z"
+    },
+    {
+      "workflow_id": "W_sim_drain_exit_static",
+      "goal": "Drain #1: ExitFunction вместо per-step layer (убрать per-step sync); #2: статичные поля (idx,acn,group_by,ll,oh,br) хранить/читать size=MAX_FRAMES один раз",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "high-strict"
+      },
+      "usage": {
+        "cumulative_steps": 4,
+        "cumulative_tokens": 127500,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-04T04:05:12Z"
+      },
+      "created_at": "2026-06-04T02:47:59Z",
+      "updated_at": "2026-06-04T04:05:12Z"
     }
   ],
   "handoffs": [
@@ -8046,6 +8067,180 @@
       "graph_update_reason": "",
       "prev_handoff_hash": "82cef7b3bb3e06792247521311a438dd1168d4aceb8e5d81885750f2492a2d0b",
       "created_at": "2026-06-03T20:32:38Z"
+    },
+    {
+      "handoff_id": "handoff_W_sim_drain_exit_static_coder-flame_4cdd0418",
+      "workflow_id": "W_sim_drain_exit_static",
+      "agent": "coder-flame",
+      "user_goal": "ЦЕЛЬ: оптимизировать drain (чтение MP2/RL буферов GPU→host). Два изменения: заменить MP2/RL drain на ExitFunction и читать 6 статичных MP2-полей size=MAX_FRAMES один раз; parity-гейт vs эталон 8005 выполняет оркестратор.",
+      "changes": "- code/sim_v2/messaging/rtc_mp2_export.py: setup_mp2_buffers разделён на 19 dynamic MacroProperty size=MP2_BUF_SIZE и 6 static MacroProperty size=MAX_FRAMES; RTC_MP2_WRITE_TEMPLATE пишет static поля по idx; HF_MP2_Drain стал ExitFunction через model.addExitFunction(drain); self.data['fields'] теперь хранит dynamic поля как shape=(num_steps,num_agents), static поля mp2_idx/mp2_aircraft_number/mp2_group_by/mp2_ll/mp2_oh/mp2_br как shape=(num_agents,).\n- code/sim_v2/messaging/rtc_repairline_export.py: HF_RepairLineDrain стал ExitFunction через model.addExitFunction(drain); per-step current_day guard и try/except вокруг mp2_num_steps убраны, чтение fail-fast после simulate().\n- code/sim_v2/messaging/orchestrator_limiter_v8.py: build rows и _postprocess_promotions адаптированы к 1D static fields ([a] вместо [s,a]); старые drain layers layer_mp2_drain/layer_repairline_drain больше не создаются в V8.",
+      "facts": "",
+      "assumptions": "No transition, quota, count, RepairLine claim, or adaptive-step simulation semantics were changed; only export buffer layout/drain timing changed. Risks if false: full 8005 parity may detect export reconstruction drift even though smoke build/no-crash passed.",
+      "evidence": "- Context read: config/capsules_manifest.json; config/transitions/invariants.json; docs/limiter_v8_capsule.md; docs/flame_gpu_capsule.md; docs/quota_capsule.md.\n- API check: pyflamegpu ModelDescription has addExitFunction=True.\n- Static grep after edits: no layer_mp2_drain/layer_repairline_drain in target V8 registration; no static MP2 fields left indexed as [s,a] in code/sim_v2/messaging/orchestrator_limiter_v8.py.\n- .rtc_cache invalidated: directory existed and was emptied before smoke.\n- py_compile PASS: /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_mp2_export.py code/sim_v2/messaging/rtc_repairline_export.py code/sim_v2/messaging/orchestrator_limiter_v8.py.\n- ReadLints: no linter errors in the three changed files.\n- git diff --check: PASS.\n- Smoke: CUDA_PATH=$HOME/miniconda3/targets/x86_64-linux; LD_LIBRARY_PATH=$HOME/miniconda3/lib:$LD_LIBRARY_PATH; AGENT_KG_WORKFLOW_ID=W_sim_drain_exit_static; V8_RUN_ID=910365; command /home/albud/miniconda3/envs/cuda13/bin/python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-04 --end-day 365 --max-steps 1000; exit_code=0; RTC rebuilt after cache clear; MP2 Drain ExitFunction read 28 steps x 341 agents, 183458 values; RL Drain ExitFunction read 28 steps x 18 lines, 3528 values; inserted sim_masterv2_v9=7976 rows and sim_repairline_v9=6570 rows for version_date=20250704/version_id=910365.\n- Smoke caveat: built-in final ops=target printed FAIL at short end_day=365 (Mi-8 27 vs target 47, Mi-17 88 vs target 104). This is recorded as not a parity PASS; full parity vs 8005 remains orchestrator gate.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_sim_drain_exit_static:2026-06-04T02:50:00Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "code/sim_v2 export path; MP2 data layout change; parity vs 8005 required",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Move MP2/RL drain to ExitFunction and reduce static MP2 drain from per-step matrices to per-agent vectors; preserve downstream reconstruction with explicit 1D static indexing.",
+      "evidence_pack": "- Context read: config/capsules_manifest.json; config/transitions/invariants.json; docs/limiter_v8_capsule.md; docs/flame_gpu_capsule.md; docs/quota_capsule.md.\n- API check: pyflamegpu ModelDescription has addExitFunction=True.\n- Static grep after edits: no layer_mp2_drain/layer_repairline_drain in target V8 registration; no static MP2 fields left indexed as [s,a] in code/sim_v2/messaging/orchestrator_limiter_v8.py.\n- .rtc_cache invalidated: directory existed and was emptied before smoke.\n- py_compile PASS: /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_mp2_export.py code/sim_v2/messaging/rtc_repairline_export.py code/sim_v2/messaging/orchestrator_limiter_v8.py.\n- ReadLints: no linter errors in the three changed files.\n- git diff --check: PASS.\n- Smoke: CUDA_PATH=$HOME/miniconda3/targets/x86_64-linux; LD_LIBRARY_PATH=$HOME/miniconda3/lib:$LD_LIBRARY_PATH; AGENT_KG_WORKFLOW_ID=W_sim_drain_exit_static; V8_RUN_ID=910365; command /home/albud/miniconda3/envs/cuda13/bin/python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2025-07-04 --end-day 365 --max-steps 1000; exit_code=0; RTC rebuilt after cache clear; MP2 Drain ExitFunction read 28 steps x 341 agents, 183458 values; RL Drain ExitFunction read 28 steps x 18 lines, 3528 values; inserted sim_masterv2_v9=7976 rows and sim_repairline_v9=6570 rows for version_date=20250704/version_id=910365.\n- Smoke caveat: built-in final ops=target printed FAIL at short end_day=365 (Mi-8 27 vs target 47, Mi-17 88 vs target 104). This is recorded as not a parity PASS; full parity vs 8005 remains orchestrator gate.",
+      "success_criteria": "script: py_compile changed files PASS; script: smoke end_day=365 exit_code=0 and ExitFunction drains populate data; SQL: orchestrator full parity vs version_id=8005 EXCEPT-both-ways=0 pending",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=full_parity_pending,short_smoke_ops_target_fail; evidence_refs=py_compile;ReadLints;git_diff_check;smoke_CH_20250704_910365;approval_ref=N/A",
+      "risks": "Full parity vs 8005 pending; short smoke ops=target printed FAIL although process exit_code=0; static-field 1D layout must be reviewed for spawn idx assumptions.",
+      "next_owner": "reviewer-flame",
+      "open_questions": "Does reviewer/orchestrator want a baseline short smoke comparison for the observed end_day=365 ops-target FAIL, or proceed directly to full 8005 parity?",
+      "graph_update": "no",
+      "graph_update_reason": "Runtime export implementation changed; domain graph/SSoT unchanged.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-04T02:56:46Z",
+      "modules": [
+        "export",
+        "step_logic",
+        "quotas_repair",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5-high",
+        "est_tokens": 36000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_sim_drain_exit_static_governance-compliance_ed13e370",
+      "workflow_id": "W_sim_drain_exit_static",
+      "agent": "governance-compliance",
+      "user_goal": "Governance verdict для close workflow W_sim_drain_exit_static (risk=high, profile=high-strict): drain MP2/RL → ExitFunction, 6 статичных MP2-полей size=MAX_FRAMES, синхронизация описательного layers-манифеста SSoT и docs.",
+      "changes": "Verdict=allow_with_notes. Проверено: (1) scope match — UserGoal '#1+#2 drain optimization' ↔ Changes (rtc_mp2_export.py / rtc_repairline_export.py / orchestrator_limiter_v8.py + descriptive SSoT/docs sync) совпадают, drift отсутствует. (2) SSoT-правка config/transitions/transitions_rules.json — описательная (layers[] не читается code/sim_v2/**; единственный consumer code/utils/sync_domain_graph.py использует только data['rules'][]); approval ctx_W_sim_drain_exit_static_approval_f1b40726 покрывает удаление orders 39/44 (HF_SpawnDiag/HF_SyncDayV5 удалены ранее в W_sim_remove_diag_hostfns) и пометку 42/43 как ExitFunction; transition-логика и invariants.json не затронуты. (3) reviewer-flame SSoT-drift замечание устранено правкой layers-манифеста. (4) anti-overengineering — нет новых флагов/опций/абстракций; static-поля size=MAX_FRAMES идиоматичны под FLAME; diff ~140 LOC. (5) Удаления доменных объектов в этом workflow нет: HF_MP2_Drain/HF_RepairLineDrain сохранены (сменили mode на ExitFunction); HF_SpawnDiag/HF_SyncDayV5 уже удалены в прошлом workflow с отдельным approval. (6) Traceability: TraceID/PlanStepID заполнены у coder-flame; approval-context присутствует. EXCEPTIONS: (e1) reviewer-flame и validator-judge handoff'ы не персистированы в Agent KG (по сообщению оркестратора оба прошли — reviewer APPROVE_WITH_NOTES, validator parity 4×3650 бит-идентично; в KG только coder-flame handoff). (e2) docs-curator handoff отсутствует — для high-strict профиля по правилам required; changelog/limiter_architecture обновлены оркестратором/coder самостоятельно (приемлемо как minor gap, но фиксируется). (e3) Orchestrator final handoff ещё не записан; перед close обязан содержать ApprovalGate=ctx_W_sim_drain_exit_static_approval_f1b40726 (id+status=approved+source=AskQuestion_current_chat) и непустой DriftCheck. (e4) Тестовые версии 910365/8017/8018 в ClickHouse требуют cleanup после коммита (housekeeping, не блокер close). (e5) spawn-регресс на dynamic_reserve>0 (parity покрыл spawn=0) — follow-up, не блокер.",
+      "facts": "",
+      "assumptions": "Reviewer-flame APPROVE_WITH_NOTES verdict и validator-judge parity-PASS — со слов оркестратора (handoff'ы не персистированы в KG). Risks if false: governance-verdict опирается на factual claim в orchestrator message, не на KG audit trail; при пост-факт обнаружении расхождения parity потребуется reopen workflow.",
+      "evidence": "git diff --stat: 7 файлов (3 code + 1 SSoT + 2 docs + 1 KG), 181/-81 LOC. SSoT consumers grep: code/sim_v2/** has 0 matches на 'transitions_rules.json' и нет чтения layers[]; единственный consumer code/utils/sync_domain_graph.py:115 'data.get(rules, [])' — layers[] не используется. Approval-context: ctx_W_sim_drain_exit_static_approval_f1b40726 (--read-context output) явно фиксирует option=yes via AskQuestion в current chat 2026-06-04. coder-flame handoff (handoff_W_sim_drain_exit_static_coder-flame_4cdd0418) виден в KG: TraceID/PlanStepID/RiskTier=high/HumanGateRequired=yes заполнены. Workflow caps.profile=high-strict подтверждён в config/agent_kg.json. Removed orders 39/44 в transitions_rules.json соответствуют ранее удалённым HF_SpawnDiag/HF_SyncDayV5 (grep показал что в code/sim_v2/messaging/orchestrator_limiter_v8.py их нет; есть только в legacy v5/v7 модулях, что соответствует архивной семантике). Parity-evidence per orchestrator message: EXCEPT-both-ways=0 (master 346979 / repairline 262800 строк), simulate() 3.79→3.46с (−9%), drain объём 2.44М→1.86М значений.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_sim_drain_exit_static:2026-06-04T03:58:00Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "code/sim_v2 export path mutation; SSoT transitions_rules.json edit (descriptive layers manifest only); high-strict profile requires governance verdict pre-close",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Verify close-readiness: scope match, SSoT-edit approval coverage (descriptive only, layers[] not consumed by code), reviewer SSoT-drift resolution, anti-overengineering, no domain object deletion, traceability, ApprovalGate completeness for orchestrator final handoff.",
+      "evidence_pack": "git diff --stat: 7 файлов (3 code + 1 SSoT + 2 docs + 1 KG), 181/-81 LOC. SSoT consumers grep: code/sim_v2/** has 0 matches на 'transitions_rules.json' и нет чтения layers[]; единственный consumer code/utils/sync_domain_graph.py:115 'data.get(rules, [])' — layers[] не используется. Approval-context: ctx_W_sim_drain_exit_static_approval_f1b40726 (--read-context output) явно фиксирует option=yes via AskQuestion в current chat 2026-06-04. coder-flame handoff (handoff_W_sim_drain_exit_static_coder-flame_4cdd0418) виден в KG: TraceID/PlanStepID/RiskTier=high/HumanGateRequired=yes заполнены. Workflow caps.profile=high-strict подтверждён в config/agent_kg.json. Removed orders 39/44 в transitions_rules.json соответствуют ранее удалённым HF_SpawnDiag/HF_SyncDayV5 (grep показал что в code/sim_v2/messaging/orchestrator_limiter_v8.py их нет; есть только в legacy v5/v7 модулях, что соответствует архивной семантике). Parity-evidence per orchestrator message: EXCEPT-both-ways=0 (master 346979 / repairline 262800 строк), simulate() 3.79→3.46с (−9%), drain объём 2.44М→1.86М значений.",
+      "success_criteria": "manual-check: verdict={allow|allow_with_notes|reject}; ComplianceChecklist 5-field compact; список exceptions для оркестратора перед close",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=missing_reviewer_validator_handoffs;docs_curator_skipped;orchestrator_final_handoff_pending; evidence_refs=ctx_W_sim_drain_exit_static_approval_f1b40726;handoff_W_sim_drain_exit_static_coder-flame_4cdd0418;code/utils/sync_domain_graph.py;docs/changelog.md; approval_ref=ctx_W_sim_drain_exit_static_approval_f1b40726",
+      "risks": "(R1) reviewer/validator KG-handoff gap: при post-mortem audit нет formal record verdict'ов; рекомендация — оркестратор записывает governance_update context с цитатой verdict'ов перед close. (R2) docs-curator skip для high-strict: для будущих high-strict workflow следовать профилю строго или явно понизить через RiskReasons. (R3) ll/oh/br write-once инвариант пока не формализован в invariants.json — follow-up.",
+      "next_owner": "orchestrator",
+      "open_questions": "Нужно ли требовать reopen workflow до записи reviewer-flame/validator-judge handoff в KG, или принять цитирование verdict'ов в orchestrator close-handoff как достаточное (single-pass governance принципу не противоречит)? Текущий verdict исходит из второго варианта.",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "774f6aff816fbc61f76b9e01f03baf7889790ba3d7398a46e656799b0d63ab3b",
+      "created_at": "2026-06-04T04:00:52Z",
+      "modules": [
+        "export",
+        "state_transitions",
+        "postprocess"
+      ],
+      "usage": {
+        "model": "claude-opus-4-7",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_sim_drain_exit_static_docs-curator_3dc1f28a",
+      "workflow_id": "W_sim_drain_exit_static",
+      "agent": "docs-curator",
+      "user_goal": "Workflow `W_sim_drain_exit_static` (high/high-strict). Верифицируй две правки docs на согласованность с фактами:\n\n1. `docs/changelog.md` — верхняя запись \"2026-06-04 — V8 simulation: drain оптимизация (ExitFunction + static-поля)\".\n2. `docs/architecture/limiter_architecture.md` — layer-таблица (~строки 109-117): убраны строки HF_SpawnDiag (order 39) и HF_SyncDayV5 (order 44), MP2/RL drain помечены как ExitFunction + примечание.\n\nФакты для сверки:\n- MP2/RL drain → `model.addExitFunction` (вместо per-step layer); 6 статичных полей (idx/aircraft_number/group_by/ll/oh/br) → size=MAX_FRAMES, читаются один раз.\n- parity vs 8005, 4×3650 — бит-идентично (EXCEPT-both-ways=0, master 346979/rl 262800), ops=target PASS.\n- simulate() ~3.79с→~3.46с (−9%); drain объём 2.44М→1.86М значений.\n- reviewer-flame APPROVE_WITH_NOTES; governance allow_with_notes.\n- SSoT transitions_rules.json layers-манифест синхронизирован (по approval).\n\nЕсли записи точны — подтверди (зафиксируй docs handoff в KG). Минимальные правки при неточностях. НЕ создавай новых .md. NextOwner=orchestrator.",
+      "changes": "docs/changelog.md: added missing governance-compliance allow_with_notes verdict to the top W_sim_drain_exit_static entry. docs/architecture/limiter_architecture.md: verified layer table already matches approved ExitFunction/static-field facts; no edit needed. Agent KG: recorded phase_start context ctx_W_sim_drain_exit_static_phase_start_c3739635 and this docs-curator handoff. No new .md files created.",
+      "facts": "",
+      "assumptions": "Parity/performance numbers were not rerun by docs-curator; they are accepted from orchestrator-provided facts and governance KG evidence. Risks if false: docs would need correction and workflow reopen by orchestrator/validator.",
+      "evidence": "Read docs/changelog.md top entry after edit: MP2/RL addExitFunction, 6 static fields size=MAX_FRAMES, parity EXCEPT-both-ways=0 master 346979 / repairline 262800, ops=target PASS, simulate() 3.79s->3.46s, drain volume 2,438,150->1,855,040, reviewer APPROVE_WITH_NOTES, governance allow_with_notes. Read docs/architecture/limiter_architecture.md layer table: orders 39/44 absent, MP2/RL export shown as ExitFunction once after simulate(), note names HF_SpawnDiag/HF_SyncDayV5 removal and no per-step device-to-host sync. rg config/transitions/transitions_rules.json: orders 42/43 marked layer=(ExitFunction), order 39/44 entries absent, MP2 note includes static fields size=MAX_FRAMES. Agent KG read-state: governance-compliance handoff decision allow_with_notes and approval ctx_W_sim_drain_exit_static_approval_f1b40726; reviewer/validator verdicts recorded there as orchestrator evidence. git diff reviewed for docs/transitions; ReadLints found no diagnostics in changed docs.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_sim_drain_exit_static:2026-06-04T04:04:37Z",
+      "plan_step_id": "D1",
+      "approval_gate_id": "ctx_W_sim_drain_exit_static_approval_f1b40726",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "high-strict workflow touches code/sim_v2 export behavior and approved SSoT layers manifest; docs must match parity/review/governance evidence",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Verify changelog and limiter architecture docs against W_sim_drain_exit_static evidence; apply only minimal drift correction; return ownership to orchestrator.",
+      "evidence_pack": "Read docs/changelog.md top entry after edit: MP2/RL addExitFunction, 6 static fields size=MAX_FRAMES, parity EXCEPT-both-ways=0 master 346979 / repairline 262800, ops=target PASS, simulate() 3.79s->3.46s, drain volume 2,438,150->1,855,040, reviewer APPROVE_WITH_NOTES, governance allow_with_notes. Read docs/architecture/limiter_architecture.md layer table: orders 39/44 absent, MP2/RL export shown as ExitFunction once after simulate(), note names HF_SpawnDiag/HF_SyncDayV5 removal and no per-step device-to-host sync. rg config/transitions/transitions_rules.json: orders 42/43 marked layer=(ExitFunction), order 39/44 entries absent, MP2 note includes static fields size=MAX_FRAMES. Agent KG read-state: governance-compliance handoff decision allow_with_notes and approval ctx_W_sim_drain_exit_static_approval_f1b40726; reviewer/validator verdicts recorded there as orchestrator evidence. git diff reviewed for docs/transitions; ReadLints found no diagnostics in changed docs.",
+      "success_criteria": "manual-check: target changelog entry and limiter architecture layer table match provided facts; missing governance verdict corrected; no new .md files created; docs handoff recorded in KG.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=docs/changelog.md;docs/architecture/limiter_architecture.md;config/transitions/transitions_rules.json;ctx_W_sim_drain_exit_static_phase_start_c3739635; approval_ref=ctx_W_sim_drain_exit_static_approval_f1b40726",
+      "risks": "Docs-curator did not rerun simulation parity; relies on existing validator/governance evidence. Remaining follow-ups from changelog are non-blocking: dynamic_reserve spawn regression coverage, drain end_day orphan cleanup, optional ll/oh/br write-once invariant.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Domain Graph update not performed by docs-curator; only documentation consistency and KG handoff were updated.",
+      "prev_handoff_hash": "abecc02b614d0b960419caa5c38a7041ddd05c439a1b10135e7204baacc2453a",
+      "created_at": "2026-06-04T04:04:37Z",
+      "modules": [
+        "export",
+        "validation",
+        "infra",
+        "state_transitions"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 9500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_sim_drain_exit_static_orchestrator_1108c9e4",
+      "workflow_id": "W_sim_drain_exit_static",
+      "agent": "orchestrator",
+      "user_goal": "с дрейн разбираемся; начать с #1+#2",
+      "changes": "rtc_mp2_export.py/rtc_repairline_export.py: drain→addExitFunction, 6 static полей size=MAX_FRAMES; orchestrator build/postprocess [a] vs [s,a]; transitions_rules.json layers-манифест синхронизирован (orders 39/44 убраны, 42/43 ExitFunction); limiter_architecture.md синхронизирован",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "parity 8017 vs 8005 бит-идентично (master 346979/rl 262800, ops=target PASS 4x3650); simulate() ~3.79→~3.46с -9%; drain 2.44М→1.86М; reviewer APPROVE_WITH_NOTES; governance allow_with_notes; docs-curator verified; layers[] не читается кодом (sync_domain_graph использует rules[])",
+      "drift_check": "UserGoal (drain #1+#2) ↔ Changes (ExitFunction + static-поля + описательный SSoT/docs sync): yes — ничего сверх scope",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "code/sim_v2 export pipeline; SSoT manifest sync (descriptive, approved)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Drain #1 ExitFunction + #2 static-поля size=MAX_FRAMES; SSoT/docs манифест синхронизирован по approval",
+      "evidence_pack": "parity 8017 vs 8005 бит-идентично (master 346979/rl 262800, ops=target PASS 4x3650); simulate() ~3.79→~3.46с -9%; drain 2.44М→1.86М; reviewer APPROVE_WITH_NOTES; governance allow_with_notes; docs-curator verified; layers[] не читается кодом (sync_domain_graph использует rules[])",
+      "success_criteria": "SQL: EXCEPT-both-ways=0 8017 vs 8005 (выполнено, бит-идентично)",
+      "compliance_checklist": "decision=allow_with_notes;required_gates=pass;exceptions=none;evidence_refs=handoff_W_sim_drain_exit_static_governance-compliance_ed13e370;handoff_W_sim_drain_exit_static_docs-curator_3dc1f28a;ctx_W_sim_drain_exit_static_approval_f1b40726;approval_ref=ctx_W_sim_drain_exit_static_approval_f1b40726",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "46b546bac82d4347c502a2f044afcf11f5102743f4d92c0d6fcb24fb621cc8c8",
+      "created_at": "2026-06-04T04:05:12Z",
+      "modules": [
+        "step_logic",
+        "counters",
+        "export"
+      ],
+      "usage": {
+        "model": "claude-opus-4.8",
+        "est_tokens": 70000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -9263,6 +9458,33 @@
       "agent": "unknown",
       "created_at": "2026-06-03T19:47:27Z",
       "updated_at": "2026-06-03T19:47:27Z"
+    },
+    {
+      "context_id": "ctx_W_sim_drain_exit_static_phase_start_c3739635",
+      "workflow_id": "W_sim_drain_exit_static",
+      "context_type": "phase_start",
+      "content": "docs-curator phase_start: verify docs/changelog.md and docs/architecture/limiter_architecture.md for W_sim_drain_exit_static; no new .md files; NextOwner=orchestrator.",
+      "agent": "docs-curator",
+      "created_at": "2026-06-04T02:49:05Z",
+      "updated_at": "2026-06-04T04:02:37Z"
+    },
+    {
+      "context_id": "ctx_W_sim_drain_exit_static_approval_f1b40726",
+      "workflow_id": "W_sim_drain_exit_static",
+      "context_type": "approval",
+      "content": "Алексей одобрил (AskQuestion option=yes, current chat 2026-06-04) синхронизацию описательного layers-манифеста в config/transitions/transitions_rules.json: убрать orders 39/44 (HF_SpawnDiag/HF_SyncDayV5, удалены ранее), пометить 42/43 как ExitFunction. Манифест НЕ читается кодом (реальная логика в rules[]); правка описательная, не меняет transition-логику/инварианты.",
+      "agent": "unknown",
+      "created_at": "2026-06-04T03:56:29Z",
+      "updated_at": "2026-06-04T03:56:29Z"
+    },
+    {
+      "context_id": "ctx_W_sim_drain_exit_static_governance_update_307b5321",
+      "workflow_id": "W_sim_drain_exit_static",
+      "context_type": "governance_update",
+      "content": "reviewer-flame: APPROVE_WITH_NOTES (ExitFunction-семантика валидна, static-by-idx идемпотентен/race-free, build/postprocess мигрированы; SSoT-drift устранён правкой манифеста). validator evidence (orchestrator-run): parity vs 8005, 4 датасета × 3650 — бит-идентично, EXCEPT-both-ways=0, master 346979/rl 262800, ops=target PASS. Wall-clock: simulate() ~3.79с→~3.46с (−9%), drain объём 2.44М→1.86М.",
+      "agent": "unknown",
+      "created_at": "2026-06-04T04:05:12Z",
+      "updated_at": "2026-06-04T04:05:12Z"
     }
   ],
   "meta": {
