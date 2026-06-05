@@ -325,44 +325,6 @@ def collect_quota_manager_state(simulation, quota_desc, day_u16, version_date_in
     return rows
 
 
-def collect_repair_slots_state(simulation, day_u16, version_date_int, version_id,
-                               step_id=0, prev_day=0, adaptive_days=0):
-    """Собирает слоты RepairLine для Mi-17 (временное логирование)."""
-    def _get_env_u32(name: str, default: int = 0) -> int:
-        if hasattr(simulation, "getEnvironmentPropertyUInt"):
-            return int(simulation.getEnvironmentPropertyUInt(name))
-        if hasattr(simulation, "getEnvironmentProperty"):
-            return int(simulation.getEnvironmentProperty(name))
-        return default
-    
-    env_current_day = _get_env_u32("current_day", day_u16)
-    repair_quota = _get_env_u32("repair_quota", 0)
-    
-    try:
-        slots_all = simulation.getEnvironmentMacroPropertyUInt("repair_line_slots_all")
-        slots_count_mp = simulation.getEnvironmentMacroPropertyUInt("repair_line_slots_count_mp")
-    except Exception:
-        return []
-    
-    slots_count = int(slots_count_mp[0]) if len(slots_count_mp) > 0 else 0
-    rows = []
-    limit = repair_quota if repair_quota > 0 else min(len(slots_all), REPAIR_LINES_MAX)
-    for i in range(limit):
-        rows.append({
-            'version_date': version_date_int,
-            'version_id': version_id,
-            'day_u16': day_u16,
-            'debug_step': step_id,
-            'debug_prev_day': prev_day,
-            'debug_adaptive_days': adaptive_days,
-            'debug_current_day': env_current_day,
-            'slot_idx': i,
-            'line_id': int(slots_all[i]),
-            'slots_count': slots_count,
-        })
-    return rows
-
-
 from sim_env_setup import get_client, prepare_env_arrays
 from base_model_messaging import V2BaseModelMessaging
 from precompute_events import compute_mp5_cumsum, find_program_change_days
@@ -376,7 +338,6 @@ import rtc_quota_v8              # V8: квотирование через Repai
 import rtc_repair_agent_v8       # V8: RepairAgent (ОТКЛЮЧЕНО)
 import rtc_repair_lines_v8       # V8: RepairLine sync
 import rtc_limiter_optimized
-import rtc_limiter_v5            # Для совместимости
 import rtc_limiter_v8            # V8: deterministic_dates!
 import rtc_mp2_export
 import rtc_repairline_export
@@ -562,9 +523,6 @@ class LimiterV8Orchestrator:
         self.base_model.env.newMacroPropertyUInt("repair_line_acn_ro_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_bank_count_ro_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_bank_head_end_ro_mp", REPAIR_LINES_MAX)
-        self.base_model.env.newMacroPropertyUInt("repair_line_slots_all", REPAIR_LINES_MAX)
-        self.base_model.env.newMacroPropertyUInt("repair_line_slots_days", REPAIR_LINES_MAX)
-        self.base_model.env.newMacroPropertyUInt("repair_line_slots_count_mp", 1)
         
         # Environment properties
         self.base_model.env.newPropertyUInt("end_day", self.end_day)
@@ -668,28 +626,11 @@ class LimiterV8Orchestrator:
         
         # Фаза 0.5: Копирование exit_date (repair, spawn, unsvc) — V8 compute_global_min игнорирует unsvc
         # REMOVED (remove-phase05): Фаза 0.5 — мёртвый код в V8.
-        # min_exit_date_mp не читается вычислительными функциями V8.
         # register_exit_date_copy(self.model, heli_agent, self.base_model.quota_agent)
         
         # Фаза 1: V8 Operations (next-day dt проверка!)
         rtc_state_transitions_v8.register_ops_transitions_v8(self.model, heli_agent)
         
-        # Фаза 1.5: V8 adaptive (до квотирования) — REMOVED (move-adaptive-to-end)
-        # REMOVED (move-hf-init-v8): HF_InitV8 заменён прямой инициализацией MacroProperty при сборке.
-        # rtc_limiter_v8.register_v8_init(self.model, ...)
-        # REMOVED (move-adaptive-to-end): Слои 14-16 удалены.
-        # Layer 14 дублировал layer 50; layer 15 избыточен; layer 16 перенесён в HF_StepController.
-        # rtc_limiter_v8.register_v8_pre_quota_layers(
-        #     self.model,
-        #     self.base_model.agent,
-        #     self.base_model.quota_agent,
-        #     self.deterministic_dates,
-        #     self.end_day
-        # )
-        
-        # REMOVED (remove-hf-update-day): Заменён HF_StepController после layer 50.
-        # rtc_limiter_v8.register_v8_update_day_layer(self.model, self.end_day)
-
         # RepairLine: increment -> publish (до квотирования)
         rtc_repair_lines_v8.register_repair_line_pre_quota_layers(
             self.model, self.base_model.repair_line_agent
@@ -816,44 +757,10 @@ class LimiterV8Orchestrator:
         # Заполнение значений выполняется после populate_agents (move-hf-init-v8).
         rtc_limiter_v8.setup_v8_macroproperties(self.base_model.env, self.deterministic_dates)
         
-        # V5 MacroProperty для совместимости (только недостающие)
-        # current_day_mp, adaptive_result_mp, min_exit_date_mp, mp_min_limiter — уже в V8
-        # program_changes_mp и num_program_changes — нужны для V7 модулей
-        try:
-            self.base_model.env.newMacroPropertyUInt("program_changes_mp", 150)
-        except:
-            pass
-        try:
-            self.base_model.env.newPropertyUInt("num_program_changes", len(self.program_change_days))
-        except:
-            self.base_model.env.setPropertyUInt("num_program_changes", len(self.program_change_days))
-        
-        # limiter_buffer для V5 copy_limiter
-        try:
-            self.base_model.env.newMacroPropertyUInt("limiter_buffer", model_build.RTC_MAX_FRAMES)
-        except:
-            pass
-        
         self.base_model.quota_agent.newVariableUInt("computed_adaptive_days", 1)
         self.base_model.quota_agent.newVariableUInt("current_day_cache", 0)
         
-        # V5 init для совместимости: register_v5 регистрирует HF_InitV5 через addInitFunction.
-        self.hf_init_v5, self.hf_sync_v5 = rtc_limiter_v5.register_v5(
-            self.model,
-            self.base_model.agent,
-            self.base_model.quota_agent,
-            self.program_change_days,
-            self.end_day,
-            verbose_logging=self.enable_mp2,
-            enable_v8_reason=True,
-            sync_as_layer=True  # Не добавлять addStepFunction; HF_InitV5 нужен отдельно.
-        )
-        
         # V8 StepController перенесён в начало (layer_step_controller, перед QM)
-        
-        # ИСПРАВЛЕНО: НЕ вызываем rtc_limiter_v5.register_v5_final_layers!
-        # V5 compute_global_min ПЕРЕЗАПИСЫВАЛ результат V8, вызывая баг ops≠target
-        # V8 уже имеет свои слои: v8_compute_global_min + v8_update_day
         
         # V8 Exit condition
         self.hf_exit = rtc_limiter_v8.HF_ExitConditionV8(self.end_day)
