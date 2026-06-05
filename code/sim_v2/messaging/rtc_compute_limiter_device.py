@@ -38,7 +38,7 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
         while (lo < hi) {
             unsigned int mid = (lo + hi) / 2u;
             unsigned int accumulated = cumsum[mid * frames + idx] - base_cumsum;
-            if (accumulated >= remaining_oh) {
+            if (accumulated > remaining_oh) {
                 hi = mid;
             } else {
                 lo = mid + 1u;
@@ -46,14 +46,14 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
         }
         if (lo <= end_day) {
             unsigned int final_accumulated = cumsum[lo * frames + idx] - base_cumsum;
-            if (final_accumulated >= remaining_oh) {
-                days_to_oh = lo - current_day;
+            if (final_accumulated > remaining_oh) {
+                days_to_oh = (lo - 1u) - current_day;
                 found_oh = true;
             }
         }
     }
     if (!found_oh) {
-        days_to_oh = (end_day - current_day) + 1u;
+        days_to_oh = end_day - current_day;
     }
     
     unsigned int days_to_ll = end_day - current_day;
@@ -64,7 +64,7 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
         while (lo < hi) {
             unsigned int mid = (lo + hi) / 2u;
             unsigned int accumulated = cumsum[mid * frames + idx] - base_cumsum;
-            if (accumulated >= remaining_ll) {
+            if (accumulated > remaining_ll) {
                 hi = mid;
             } else {
                 lo = mid + 1u;
@@ -72,20 +72,19 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
         }
         if (lo <= end_day) {
             unsigned int final_accumulated = cumsum[lo * frames + idx] - base_cumsum;
-            if (final_accumulated >= remaining_ll) {
-                days_to_ll = lo - current_day;
+            if (final_accumulated > remaining_ll) {
+                days_to_ll = (lo - 1u) - current_day;
                 found_ll = true;
             }
         }
     }
     if (!found_ll) {
-        days_to_ll = (end_day - current_day) + 1u;
+        days_to_ll = end_day - current_day;
     }
     
     unsigned int limiter = (days_to_oh < days_to_ll) ? days_to_oh : days_to_ll;
     
     if (limiter > 65535u) limiter = 65535u;
-    if (limiter == 0u) limiter = 1u;
     
     return (unsigned short)limiter;
 }

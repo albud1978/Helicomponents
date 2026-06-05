@@ -154,7 +154,7 @@
       "id": "ops_to_storage_v8",
       "from": 2,
       "to": 6,
-      "pre": { "expr": "limiter == 0 AND (sne >= ll OR (ppr >= oh AND sne >= br) OR (rem_ll <= rem_oh))" },
+      "pre": { "expr": "sne + dt_next > ll OR (ppr + dt_next > oh AND br > 0 AND sne + dt_next > br)" },
       "post": {
         "all": [
           { "expr": "state == 6" },
@@ -162,22 +162,23 @@
         ]
       },
       "owner_module": "rtc_state_transitions_v8",
-      "notes": "Приоритет terminal routing."
+      "notes": "Уход из ops по прогнозу следующего дня: storage срабатывает, если следующий день строго превысил бы предел; == допустимо. Приоритет storage над unsvc."
     },
     {
       "id": "ops_to_unsvc_v8",
       "from": 2,
       "to": 7,
-      "pre": { "expr": "limiter == 0 AND sne < ll AND ((ppr >= oh AND sne < br) OR rem_oh < rem_ll)" },
+      "pre": { "expr": "NOT (sne + dt_next > ll) AND NOT (br > 0 AND sne + dt_next > br) AND (ppr + dt_next > oh)" },
       "post": {
         "all": [
           { "expr": "state == 7" },
+          { "expr": "limiter == 0" },
           { "expr": "repair_line_id == 0xFFFFFFFF" },
           { "expr": "repair_days == repair_time" }
         ]
       },
       "owner_module": "rtc_state_transitions_v8",
-      "notes": "Маршрут в unserviceable при unmet storage path."
+      "notes": "Уход из ops по прогнозу следующего дня: unsvc срабатывает, если storage не сработал и следующий день строго превысил бы overhaul-предел; == допустимо. Приоритет storage над unsvc."
     },
     {
       "id": "ops_to_svc_demote_v7",

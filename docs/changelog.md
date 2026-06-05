@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06-05 — V8 core: ресурс не превышается; равенство допустимо
+
+**Workflow**: W_sim_v8_resource_no_exceed_20260605T165249Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit | **Governance**: allow_with_notes / required_gates=pass
+
+**Контекст**: в активном V8-ядре симуляции внедрён инвариант: борт никогда не превышает ресурс (`ppr <= oh`, `sne <= ll`); достижение границы (`==`) допустимо. Концепция "сначала летаем, потом меняем статус в конце дня" сохранена: порядок слоёв не менялся.
+
+**Changes**:
+- `code/sim_v2/messaging/rtc_compute_limiter_device.py`: в `compute_limiter_inline` граница бинарного поиска `>=` заменена на `>`, функция возвращает последний безопасный день `L`; убран клэмп `limiter == 0 -> 1`, поэтому adaptive step приземляется на `L`, а не на `L+1`.
+- `code/sim_v2/messaging/rtc_state_transitions_v8.py`: `cond_ops_to_storage_v8` / `cond_ops_to_unsvc_v8` переведены на look-ahead: переход из operations срабатывает, если следующий день (`dt_next`) строго превысил бы предел (`ppr + dt_next > oh` / `sne + dt_next > ll`); гейт `limiter == 0` снят. `rtc_ops_to_unsvc_v8` теперь ставит `limiter = 0` симметрично storage.
+- `config/transitions/transitions_rules.json`: SSoT для `ops_to_storage_v8` / `ops_to_unsvc_v8` приведён в соответствие с look-ahead семантикой. Лишние правки v7-условий откачены как неактивные в v8.
+
+**Приёмка**: baseline dataset `version_date=2026-04-08`, `end_day=3650`, test `version_id=8101` — `count(ppr > oh OR sne > ll)=0` PASS; `entry-edge=0`; `check_2=0`; число бортов совпало с baseline (`group_by=1`: 163, `group_by=2`: 169). Test `version_id=8101` очищен, baseline `8001` сохранён.
+
+**Known boundary**: на последнем дне горизонта (`day=3650`) возможны борты `status_id=2 AND limiter=0`; на `day=3646` таких 0. Это ожидаемо: за горизонтом `dt_next=0`, look-ahead не уводит борт из operations, ресурс при этом НЕ превышен.
+
+**Open item**: `make sync-domain-graph` (Neo4j derived view) НЕ выполнен — требуется отдельное согласование Алексея. JSON-SSoT остаётся источником истины; Neo4j-представление временно отстаёт.
+
+---
+
 ## 2026-06-05 — V8 core: единый device-include compute_limiter (Фаза 2, шаг 4, DRY)
 
 **Workflow**: W_sim_v8_limiter_unify_20260605T155404Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit

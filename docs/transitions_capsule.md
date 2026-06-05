@@ -15,13 +15,13 @@
 
 ## Invariants (≤12)
 
-SSoT: `config/transitions/invariants.json`
+SSoT: `config/transitions/invariants.json` для реестра инвариантов; `config/transitions/transitions_rules.json` для активных pre/post условий переходов.
 
 Связанные с переходами:
-- INV-1: sne ≤ ll в operations — `invariants.json`
+- INV-1 / V8 no-exceed: ресурс не превышается в operations; активные V8-переходы 2→6/2→7 уходят по look-ahead, если следующий день (`dt_next`) СТРОГО превысил бы предел; равенство (`==`) допустимо — `invariants.json`, `transitions_rules.json`
 - INV-4: возврат из unsvc не раньше repair_time — `invariants.json`
 - INV-8: sne/ppr frozen в storage — `invariants.json`
-- INV-9: limiter=0 → обязательный выход из operations — `invariants.json`
+- INV-9: `limiter=0` в активном V8 трактуется как postcondition выхода/границы, а не как precondition немедленного ухода; условия ухода задаются look-ahead в `ops_to_storage_v8`/`ops_to_unsvc_v8` — `invariants.json`, `transitions_rules.json`
 - INV-10: баланс оборота initial+entries+spawn=exits+final; transition_matrix LEGAL: 0→2, 0→3, 1→2, 1→4, 2→3, 2→6, 2→7, 3→2, 4→2, 4→3, 7→2, 7→4 (все прочие — ILLEGAL); validator: `code/validation/inv10_turnover_balance.py` — PASS — `invariants.json`
 - GPU-6: один агент — максимум один переход за шаг — `invariants.json`
 - forbidden_transitions: spawn detect 0→3 (serviceable), spawn dynamic 0→2 (ops); state 5 (reserve) — legacy, не используется в V9 — `invariants.json`
@@ -37,7 +37,7 @@ SSoT: `config/transitions/invariants.json`
 - HF_UpdateDayV8 удалён, заменён на HF_StepController — `code/sim_v2/messaging/orchestrator_limiter_v8.py`
 - Inline limiter: бинарный поиск встроен в X→ops (отдельный layer не нужен) — `code/sim_v2/messaging/rtc_state_transitions_v8.py`, `code/sim_v2/messaging/rtc_limiter_optimized.py`
 - Spawn: детерминированный (detect) 0→3 (serviceable), динамический 0→2 (ops); state 5 (reserve) не используется в V9 — `config/transitions/invariants.json`
-- Layer ops→unsvc обязан ставить repair_days=repair_time; early-out в layers ops→storage/unsvc при limiter > 0 — `config/transitions/invariants.json`, `code/sim_v2/messaging/rtc_state_transitions_v8.py`
+- Layer ops→storage/unsvc работает в end-of-day semantics: сначала выполняется налёт текущего шага, затем look-ahead проверяет, превысил бы следующий день ресурс (`ppr+dt_next>oh` / `sne+dt_next>ll`). `limiter==0` не является гейтом; при уходе `ops→storage` и `ops→unsvc` выставляют `limiter=0`, `ops→unsvc` также ставит `repair_days=repair_time` — `config/transitions/transitions_rules.json`, `code/sim_v2/messaging/rtc_state_transitions_v8.py`
 - Постпроцессинг P2/P3 (Вариант B, 2026-02-17): реконструирует окно ремонта 7→4→2 и 1→4→2 с обновлением pre_status_id; поддерживает баланс оборота (INV-10) и lookback-only repairline-семантику — `config/transitions/invariants.json` (INV-10.notes)
 
 ## Impact Paths
@@ -45,20 +45,20 @@ SSoT: `config/transitions/invariants.json`
 - `transitions_rules.json → rtc_execution_order` → 48 layers (orders 0..47) + HF_StepController → детерминизм результата
 - `code/sim_v2/messaging/orchestrator_limiter_v8.py` → HF_StepController → reset/обновление дня перед квотами
 - `invariants.json → INV-4` → repair_days guard (precondition `repair_days == 0` в правиле `p2_unsvc_to_ops_v8`) → корректность P2
-- `rtc_state_transitions_v8.py` → ops→storage/unsvc (early-out, repair_days=repair_time) → INV-9 / INV-4
+- `rtc_state_transitions_v8.py` → ops→storage/unsvc (look-ahead strict `>`, equality allowed, `limiter=0` postcondition, `repair_days=repair_time`) → resource no-exceed / INV-4
 
 ## Validation Proof
 - Матрица переходов: `code/analysis/sim_validation_transitions.py` (allowed transitions)
 - Условия 2→6/2→7: `code/validation/validate_state2ops_transitions.py`
 - Инкременты: `code/validation/validate_state2ops_increments.py`
-- INV-9: `code/analysis/sim_validation_runner_msg.py` (validate_limiter_exit)
+- V8 resource no-exceed: workflow `W_sim_v8_resource_no_exceed_20260605T165249Z`, `version_date=2026-04-08`, test `version_id=8101`, `end_day=3650` — `count(ppr > oh OR sne > ll)=0`, `entry-edge=0`, `check_2=0`; test version очищен
 - INV-10 (turnover balance + LEGAL/ILLEGAL transitions): `code/validation/inv10_turnover_balance.py` — PASS
-- Формализовано: `config/transitions/invariants.json`
+- Формализовано: `config/transitions/invariants.json` (реестр) и `config/transitions/transitions_rules.json` (активные pre/post условия 2→6/2→7)
 
 ## Risks (≤7) + Mitigations
 - Ошибка порядка слоёв (48 orders) → логические сбои → использовать rtc_execution_order как SSoT
-- Inline limiter в X→ops ломает INV-9 при limiter==0 → покрывать validate_limiter_exit
-- Early-out в layers ops→storage/unsvc пропускает обязательные апдейты → проверять INV-4 и переходы 2→6/2→7
+- Inline limiter / ops→storage/unsvc могут ошибиться на границе `==` vs `>` → покрывать no-exceed (`ppr<=oh`, `sne<=ll`) и entry-edge checks
+- Возврат к `limiter==0` как precondition ухода из ops ломает end-of-day/look-ahead semantics → проверять `transitions_rules.json` и условия 2→6/2→7
 
 ## Open Questions (≤7)
 - Нужен ли переход inactive→serviceable (1→3) минуя operations?
