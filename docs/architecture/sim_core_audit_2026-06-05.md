@@ -111,7 +111,8 @@
 > Ниже — про модули v5/v7, которые **вызывает сам v8** (см. область вверху), а не про устаревшие оркестраторы.
 
 5. **Три реализации «adaptive global min»**: v5, v8 (`RTC_COMPUTE_GLOBAL_MIN_V8`) и фактически активный `HF_StepController`. Активен только третий.
-6. **≥3 копии binary-search `compute_limiter` по `mp5_cumsum`** (`rtc_state_transitions_v7`, `rtc_limiter_optimized`, spawn inline, + Python `precompute_events`). Обязаны совпадать бит-в-бит; есть разные boundary-конвенции (`>` vs `>=`) — риск рассинхрона. Кандидат на единый device-include.
+6. **≥3 копии binary-search `compute_limiter` по `mp5_cumsum`** (`rtc_state_transitions_v7`, `rtc_limiter_optimized`, spawn inline, + Python `precompute_events`). Кандидат на единый device-include.
+   > **Уточнение (2026-06-05, проверено грепом):** заявленное здесь расхождение boundary-конвенций `>`/`>=` между *активными* RTC-копиями **не подтвердилось**. Две активные RTC-копии (`rtc_state_transitions_v7` для P1/P2/P3 и `rtc_spawn_dynamic_v7` для dynamic spawn) **байт-идентичны** (sha256 совпадают, обе `>=`). Граница `>` живёт только в мёртвом коде (`rtc_limiter_optimized.RTC_COMPUTE_LIMITER_ON_ENTRY`, регистрация закомментирована) и в Python day-0 init (`agent_population.compute_limiter_for_agent`). **Сделано:** активная device-функция вынесена в общий `rtc_compute_limiter_device.py` (DRY, byte-identical, плейсхолдер `__CUMSUM_SIZE__` сохранён). Вопрос Python `>` vs RTC `>=` на day-0 — отдельная тема (на текущих данных bit-identical к baseline).
 7. **Двойная инициализация MP** (HF_InitV5 + HF_InitV8), двойное создание `limiter_buffer`/`program_changes_mp`, аллокации в `try/except` (нарушает правило «no try/except для угадывания API»).
 
 ### Пересечение ответственности (SOLID/KISS)

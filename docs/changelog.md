@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-06-05 — V8 core: единый device-include compute_limiter (Фаза 2, шаг 4, DRY)
+
+**Workflow**: W_sim_v8_limiter_unify_20260605T155404Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
+
+**Контекст**: аудит (§2.6) предполагал ≥3 копии binary-search `compute_limiter` с расходящимися границами `>`/`>=` как риск рассинхрона. Проверка грепом (research) **опровергла расхождение**: две АКТИВНЫЕ RTC-копии (`rtc_state_transitions_v7` для P1/P2/P3, `rtc_spawn_dynamic_v7` для dynamic spawn) — **байт-идентичны** (sha256 совпадают, обе `>=`). Граница `>` — только в мёртвом коде и в Python day-0 init. Таким образом шаг 4 = чистый DRY (не фикс бага границ).
+
+**Changes**:
+- `code/sim_v2/messaging/rtc_compute_limiter_device.py` (новый): общая device-функция `DEVICE_FN_COMPUTE_LIMITER` с сохранённым плейсхолдером `__CUMSUM_SIZE__` (без хардкода размера).
+- `rtc_state_transitions_v7.py`, `rtc_spawn_dynamic_v7.py`: локальные байт-идентичные копии заменены импортом общей строки; каждый потребитель применяет прежний `.replace("__CUMSUM_SIZE__", str(RTC_MAX_FRAMES*(MAX_DAYS+1)))`.
+- `docs/architecture/sim_core_audit_2026-06-05.md` §2.6: добавлено уточнение о фактической байт-идентичности активных копий.
+
+**Эквивалентность**: byte-identical. sha256 финальных RTC-источников 5 потребляющих функций (RTC_SVC/UNSVC/INACTIVE_TO_OPS, RTC_SPAWN_DYNAMIC_TICKET_V8/_MI8) совпали с HEAD (validator-judge, без запуска CH/sim). Идентичный RTC-текст → идентичный PTX → bit-identical результат.
+
+**Не тронуто**: Python day-0 `compute_limiter_for_agent` (`>`), мёртвый `rtc_limiter_optimized.RTC_COMPUTE_LIMITER_ON_ENTRY`, legacy. Drift-риск хардкода `1600400u` (reviewer O-1) устранён сохранением плейсхолдера.
+
+---
+
 ## 2026-06-05 — V8 core: удаление мёртвого кода (Фаза 1, шаги 1-3)
 
 **Workflow**: W_sim_v8_deadcode_phase1_20260605T145610Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
