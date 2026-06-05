@@ -3,14 +3,14 @@
 RTC модуль: State Transitions V8 — Next-day dt проверка
 
 АРХИТЕКТУРА V8 (отличия от V7):
-1. Проверка ресурса на СЛЕДУЮЩИЙ день (SNE + dt_next >= LL)
-2. limiter=0 → обязательный выход (EXCEPTION если нет перехода)
+1. Проверка ресурса на СЛЕДУЮЩИЙ день (SNE + dt_next > LL)
+2. limiter=0 синхронизирован с look-ahead выходом на последнем безопасном дне
 3. ops→unsvc НЕ устанавливает exit_date (квотирование через RepairLine)
 
 Порядок проверок (приоритет):
-1. SNE + dt_next >= LL → storage (назначенный ресурс)
-2. PPR + dt_next >= OH AND SNE + dt_next >= BR → storage (нерентабельный ремонт)
-3. PPR + dt_next >= OH AND SNE + dt_next < BR → unserviceable (ремонт нужен)
+1. SNE + dt_next > LL → storage (назначенный ресурс)
+2. PPR + dt_next > OH AND SNE + dt_next > BR → storage (нерентабельный ремонт)
+3. PPR + dt_next > OH AND SNE + dt_next <= BR → unserviceable (ремонт нужен)
 
 dt_next = налёт на день current_day + 1 (из mp5_cumsum)
 
@@ -127,63 +127,72 @@ FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_decrement_v8, flamegpu::MessageNone, flamegpu:
 # V8: Условия переходов с next-day dt проверкой
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Условие V8: SNE + dt_next >= LL ИЛИ (PPR + dt_next >= OH AND SNE + dt_next >= BR)
+# Условие V8: SNE + dt_next > LL ИЛИ (PPR + dt_next > OH AND SNE + dt_next > BR)
 COND_OPS_TO_STORAGE_V8 = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage_v8) {
-    const unsigned short lim = FLAMEGPU->getVariable<unsigned short>("limiter");
-    if (lim > 0u) return false;
-    
-    // limiter=0: безусловный выход из operations. Определяем маршрут.
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
-    
-    // 1. LL исчерпан → storage
-    if (sne >= ll) return true;
-    
-    // 2. OH исчерпан — маршрут зависит от BR
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
-    if (ppr >= oh) {
-        const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
-        return (sne >= br);  // BR исчерпан → storage; иначе → unsvc
+    const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    
+    unsigned int dt_next = 0u;
+    if (current_day < end_day) {
+        auto mp5_cumsum = FLAMEGPU->environment.getMacroProperty<unsigned int, __CUMSUM_SIZE__u>("mp5_cumsum");
+        const unsigned int next_day = current_day + 1u;
+        const unsigned int base_curr = current_day * frames + idx;
+        const unsigned int base_next = next_day * frames + idx;
+        const unsigned int cumsum_curr = mp5_cumsum[base_curr];
+        const unsigned int cumsum_next = mp5_cumsum[base_next];
+        dt_next = (cumsum_next >= cumsum_curr) ? (cumsum_next - cumsum_curr) : 0u;
     }
     
-    // 3. Edge case: limiter=0, но ни sne>=ll, ни ppr>=oh
-    //    Сравниваем какой ресурс ближе к исчерпанию
-    const unsigned int rem_ll = ll - sne;
-    const unsigned int rem_oh = oh - ppr;
-    return (rem_ll <= rem_oh);  // LL ближе → storage
+    const unsigned int sne_next = sne + dt_next;
+    const unsigned int ppr_next = ppr + dt_next;
+    
+    if (sne_next > ll) return true;
+    return (ppr_next > oh && br > 0u && sne_next > br);
 }
-"""
+""".replace("__CUMSUM_SIZE__", str(CUMSUM_SIZE))
 
-# Условие V8: PPR + dt_next >= OH AND SNE + dt_next < BR (переход в unserviceable)
+# Условие V8: PPR + dt_next > OH при сохранении приоритета storage
 COND_OPS_TO_UNSVC_V8 = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
-    const unsigned short lim = FLAMEGPU->getVariable<unsigned short>("limiter");
-    if (lim > 0u) return false;
-    
-    // limiter=0: безусловный выход. Проверяем маршрут.
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
-    
-    // LL исчерпан → storage (приоритет, обработано в cond_ops_to_storage_v8)
-    if (sne >= ll) return false;
-    
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+    const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     
-    // OH исчерпан → unsvc (если BR не исчерпан)
-    if (ppr >= oh) {
-        const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
-        return (sne < br);  // BR не исчерпан → unsvc (ремонтопригоден)
+    unsigned int dt_next = 0u;
+    if (current_day < end_day) {
+        auto mp5_cumsum = FLAMEGPU->environment.getMacroProperty<unsigned int, __CUMSUM_SIZE__u>("mp5_cumsum");
+        const unsigned int next_day = current_day + 1u;
+        const unsigned int base_curr = current_day * frames + idx;
+        const unsigned int base_next = next_day * frames + idx;
+        const unsigned int cumsum_curr = mp5_cumsum[base_curr];
+        const unsigned int cumsum_next = mp5_cumsum[base_next];
+        dt_next = (cumsum_next >= cumsum_curr) ? (cumsum_next - cumsum_curr) : 0u;
     }
     
-    // Edge case: limiter=0, но ни sne>=ll, ни ppr>=oh
-    const unsigned int rem_ll = ll - sne;
-    const unsigned int rem_oh = oh - ppr;
-    return (rem_oh < rem_ll);  // OH ближе → unsvc
+    const unsigned int sne_next = sne + dt_next;
+    const unsigned int ppr_next = ppr + dt_next;
+    
+    // Storage имеет приоритет над unserviceable.
+    if (sne_next > ll) return false;
+    if (br > 0u && sne_next > br) return false;
+    
+    return (ppr_next > oh);
 }
-"""
+""".replace("__CUMSUM_SIZE__", str(CUMSUM_SIZE))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -193,7 +202,7 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
 # ops → storage (2→6)
 RTC_OPS_TO_STORAGE_V8 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // V8: Переход в storage, limiter=0
+    // V8: Переход в storage при строгом превышении ресурса следующим днём
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_6", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
@@ -209,12 +218,13 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v8, flamegpu::MessageNone, flamegpu::
 # V8: Переход в unserviceable без exit_date (квотирование через RepairLine)
 RTC_OPS_TO_UNSVC_V8 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    // V8: Переход в unserviceable
+    // V8: Переход в unserviceable при строгом превышении OH следующим днём
     // exit_date НЕ используется в V8 (квотирование через RepairLine)
     
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_id", 7u);
+    FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     FLAMEGPU->setVariable<unsigned int>("repair_days", FLAMEGPU->getVariable<unsigned int>("repair_time"));
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
