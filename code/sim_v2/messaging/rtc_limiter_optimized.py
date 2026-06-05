@@ -432,19 +432,6 @@ def setup_limiter_macroproperties(env, program_changes: list):
     # MacroProperty для min reduction
     env.newMacroPropertyUInt("mp_min_limiter", 4)  # 4 элемента для atomic
     
-    # Сохраняем program_changes как PropertyArray
-    # API: newPropertyArrayUInt(name, values) без размера
-    max_changes = 150
-    pc_array = [0] * max_changes
-    for i, pc_day in enumerate(program_changes[:max_changes]):
-        pc_array[i] = pc_day
-    env.newPropertyArrayUInt("mp_program_changes_v3", pc_array)
-    
-    # Эти свойства могут уже существовать из rtc_limiter_date
-    try:
-        env.newPropertyUInt("num_program_changes_v3", len(program_changes))
-    except:
-        pass
     try:
         env.newPropertyUInt("adaptive_days", 1)  # По умолчанию 1 день
     except:
@@ -454,7 +441,7 @@ def setup_limiter_macroproperties(env, program_changes: list):
     except:
         pass
     
-    print(f"  ✅ Limiter MacroProperty: mp_min_limiter, mp_program_changes_v3[{len(program_changes)}]")
+    print("  ✅ Limiter MacroProperty: mp_min_limiter")
 
 
 def register_limiter_optimized(model: fg.ModelDescription, agent: fg.AgentDescription,

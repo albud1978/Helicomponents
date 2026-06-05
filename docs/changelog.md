@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-06-05 — V8 core: удаление мёртвого кода (Фаза 1, шаги 1-3)
+
+**Workflow**: W_sim_v8_deadcode_phase1_20260605T145610Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
+
+**Контекст**: аудит активного чейна `orchestrator_limiter_v8.build_model` (`docs/architecture/sim_core_audit_2026-06-05.md`) выявил мёртвый/инертный код, который v8 тащил из legacy-зависимостей. research-агент подтвердил «0 активных читателей» по всему проекту (`code/**` вне archive) для каждого кандидата; reviewer-flame APPROVE; validator-judge — bit-identical PASS.
+
+**Changes** (удалён только подтверждённо мёртвый код, `mp2_quota_gap_mi8/mi17` НЕ тронут — нужен legacy; `rtc_limiter_v5.py` НЕ удалён — нужен legacy):
+- `orchestrator_limiter_v8.py`: убран инертный контур `register_v5` (вызов + `self.hf_init_v5/hf_sync_v5`, импорт `rtc_limiter_v5`); мёртвые MP/property `program_changes_mp`/`num_program_changes`/`limiter_buffer`/`repair_line_slots_{all,days,count_mp}`; неиспользуемая утилита `collect_repair_slots_state`.
+- `rtc_quota_v8.py`: мёртвые импорты `register_publish_report`/`register_apply_decisions`; MP `quota_left_mp`; неподключённая `register_quota_p2_p3_v8` + её decide-RTC `RTC_PROMOTE_UNSVC_V8`/`RTC_PROMOTE_INACTIVE_V8` (активные BUCKET/COMMIT-варианты сохранены).
+- `rtc_limiter_v8.py`: MP `min_dynamic_mp`/`min_exit_date_mp`/`limiter_buffer`; незарегистрированные `RTC_COLLECT_MIN_DYNAMIC_*`/`RTC_COMPUTE_GLOBAL_MIN_V8`/`HF_UpdateDayV8`/`register_v8_pre_quota_layers`/`register_v8_update_day_layer`.
+- `rtc_limiter_optimized.py`: `mp_program_changes_v3`, `num_program_changes_v3`.
+
+**Эквивалентность**: bit-identical на baseline 8001 (before=HEAD, after=working tree). `sim_masterv2_v9` 346979=346979, `sim_repairline_v9` 262800=262800, diff_rows=0 по всем колонкам; adaptive steps 286/289/277/274 совпали. Тестовые version_id 8991/8992 удалены.
+
+**Эффект**: v8 перестал тащить legacy-v5 контур; набор активных MacroProperty сокращён, чейн читаемее. Производительность не цель этого шага (удаление мёртвого кода).
+
+---
+
+## 2026-06-05 — sim load: columnar fetch для preload_mp5_maps (B1)
+
+**Workflow**: W_sim_load_mp5_columnar_20260605T083340Z | **Risk**: medium | **Profile**: medium-policy | **Status**: ready-to-commit
+
+**Контекст**: после A+C главным остатком фазы `prepare_env_arrays` стал `preload_mp5_maps` (~4.3с). Замер: `flight_program_fl` отдаёт 1.668М строк (417 бортов × 4000 дней). Время — в транзите/десериализации row-format кортежей (dict-build всего 0.25с, cumsum — numpy ~0.1с). `execute(..., columnar=True)` тянет те же данные за ~1.5-1.8с.
+
+**Changes**:
+- `code/sim_env_setup.py`: `preload_mp5_maps` — row-format `execute` заменён на `columnar=True` (3 колонки), dict строится через `zip(dates_col, ac_col, hours_col)`. SQL, контракт возврата (`Dict[date, Dict[int,int]]`), warning/logging — без изменений.
+
+**Эквивалентность**: dict **bit-identical** старому (days=4000, rows=1.668М) — проверено сравнением с row-format. env консистентен (frames=341, days=4000, mp5_len=1364341).
+
+**Эффект**: `preload_mp5_maps` ~4.3с → ~1.5-1.8с (прогрето); фаза `prepare_env_arrays` ~5.2с → **~2.6с** (прогрето). Совокупно A+C+B1: исходные ~9-11с → ~2.6с.
+
+**RLE (B2) отклонён**: точек изменения 3.1% (51K из 1.668М) → транзит мог бы упасть до ~0.8с, но требует server-side window + numpy forward-fill expansion с доказательством bit-identical; +0.8с сверх B1 непропорционально риску (KISS).
+
+---
+
 ## 2026-06-04 — sim load: слияние 7 mp1-запросов в 1 + устранение reconnect-churn (A+C)
 
 **Workflow**: W_sim_load_mp1_merge_20260604T102507Z | **Risk**: medium | **Profile**: medium-policy | **Status**: ready-to-commit
