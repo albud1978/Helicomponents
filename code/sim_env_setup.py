@@ -5,7 +5,7 @@
 """
 
 from __future__ import annotations
-from typing import Dict, List, Tuple
+from typing import Dict, List, NamedTuple, Tuple
 from datetime import date
 
 import os
@@ -28,6 +28,16 @@ def _to_uint(value) -> int:
         return int(str(value))
     except (TypeError, ValueError):
         return 0
+
+
+class Mp1Maps(NamedTuple):
+    mp1_map: Dict[int, Tuple[int, int, int, int, int, int]]
+    mp1_oh_map: Dict[int, Tuple[int, int]]
+    mp1_ll_map: Dict[int, int]
+    mp1_ll_mi8_map: Dict[int, int]
+    mp1_second_ll_map: Dict[int, int]
+    mp1_sne_ppr_map: Dict[int, Tuple[int, int]]
+    mp1_repair_number_map: Dict[int, int]
 
 
 def get_client():
@@ -128,295 +138,86 @@ def fetch_versions(client, target_version_date: date = None) -> Tuple[date, int]
     return vd, int(vid)
 
 
-def fetch_mp1_br_rt(client) -> Dict[int, Tuple[int, int, int, int, int, int]]:
-    """Возвращает карту partseq → (br_mi8, br_mi17, br2_mi17, repair_time, partout_time, assembly_time). BR в минутах.
-    br2_mi17 - порог межремонтного для подъёма из inactive (3500ч = 210000 мин).
-    Подбирает: идентификатор (partseq) и имя колонок нормативов по нескольким вариантам.
-    """
-    id_candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
-    rpa_variants = [
-        ("repair_time", "partout_time", "assembly_time"),
-        ("repair_time_mi17", "partout_time_mi17", "assembly_time_mi17"),
-        ("rt_mi17", "pt_mi17", "at_mi17"),
-    ]
-    rows = []
-    last_err: Exception | None = None
-    for id_col in id_candidates:
-        for (rt_col, pt_col, at_col) in rpa_variants:
-            try:
-                sql = (
-                    "SELECT\n"
-                    f"  toUInt32OrZero(toString({id_col})) AS partseq,\n"
-                    "  toUInt32OrZero(toString(br_mi8))  AS br_mi8,\n"
-                    "  toUInt32OrZero(toString(br_mi17)) AS br_mi17,\n"
-                    "  toUInt32OrZero(toString(ifNull(br2_mi17, 0))) AS br2_mi17,\n"
-                    f"  toUInt32OrZero(toString({rt_col})) AS repair_time,\n"
-                    f"  toUInt32OrZero(toString({pt_col})) AS partout_time,\n"
-                    f"  toUInt32OrZero(toString({at_col})) AS assembly_time\n"
-                    "FROM md_components"
-                )
-                test = client.execute(sql)
-                if test:
-                    rows = test
-                    raise StopIteration  # break both loops
-            except StopIteration:
-                last_err = None
-                break
-            except Exception as e:
-                last_err = e
-                rows = []
-                continue
-        if rows:
-            break
-    if not rows and last_err is not None:
-        raise last_err
-    result: Dict[int, Tuple[int, int, int, int, int, int]] = {}
-    for p, b8, b17, b2_17, rt, pt, at in rows:
+def fetch_mp1_all(client) -> Mp1Maps:
+    """Возвращает все MP1-карты из md_components одним SELECT по partno_comp."""
+    rows = client.execute("""
+SELECT toUInt32OrZero(toString(partno_comp)) AS partseq,
+  toUInt32OrZero(toString(br_mi8)) AS br_mi8,
+  toUInt32OrZero(toString(br_mi17)) AS br_mi17,
+  toUInt32OrZero(toString(ifNull(br2_mi17,0))) AS br2_mi17,
+  toUInt32OrZero(toString(repair_time)) AS repair_time,
+  toUInt32OrZero(toString(partout_time)) AS partout_time,
+  toUInt32OrZero(toString(assembly_time)) AS assembly_time,
+  toUInt32OrZero(toString(oh_mi8)) AS oh_mi8,
+  toUInt32OrZero(toString(oh_mi17)) AS oh_mi17,
+  toUInt32OrZero(toString(ll_mi17)) AS ll_mi17,
+  toUInt32OrZero(toString(ll_mi8)) AS ll_mi8,
+  second_ll,
+  repair_number,
+  CASE WHEN sne_new IS NULL THEN 4294967295 ELSE toUInt32OrZero(toString(sne_new)) END AS sne_new,
+  CASE WHEN ppr_new IS NULL THEN 4294967295 ELSE toUInt32OrZero(toString(ppr_new)) END AS ppr_new
+FROM md_components
+""")
+    mp1_map: Dict[int, Tuple[int, int, int, int, int, int]] = {}
+    mp1_oh_map: Dict[int, Tuple[int, int]] = {}
+    mp1_ll_map: Dict[int, int] = {}
+    mp1_ll_mi8_map: Dict[int, int] = {}
+    mp1_second_ll_map: Dict[int, int] = {}
+    mp1_sne_ppr_map: Dict[int, Tuple[int, int]] = {}
+    mp1_repair_number_map: Dict[int, int] = {}
+    repair_number_non_sentinel = 0
+
+    for (
+        p,
+        br_mi8,
+        br_mi17,
+        br2_mi17,
+        repair_time,
+        partout_time,
+        assembly_time,
+        oh_mi8,
+        oh_mi17,
+        ll_mi17,
+        ll_mi8,
+        second_ll,
+        repair_number,
+        sne_new,
+        ppr_new,
+    ) in rows:
         partseq = _to_uint(p)
         if partseq == 0:
             continue
-        result[partseq] = (
-            int(b8 or 0),
-            int(b17 or 0),
-            int(b2_17 or 0),
-            int(rt or 0),
-            int(pt or 0),
-            int(at or 0),
+        mp1_map[partseq] = (
+            int(br_mi8 or 0),
+            int(br_mi17 or 0),
+            int(br2_mi17 or 0),
+            int(repair_time or 0),
+            int(partout_time or 0),
+            int(assembly_time or 0),
         )
-    return result
+        mp1_oh_map[partseq] = (int(oh_mi8 or 0), int(oh_mi17 or 0))
+        mp1_ll_map[partseq] = int(ll_mi17 or 0)
+        mp1_ll_mi8_map[partseq] = int(ll_mi8 or 0)
+        mp1_second_ll_map[partseq] = SECOND_LL_SENTINEL if second_ll is None else int(second_ll)
+        mp1_sne_ppr_map[partseq] = (int(sne_new), int(ppr_new))
+        repair_number_value = 255 if repair_number is None else int(repair_number)
+        mp1_repair_number_map[partseq] = repair_number_value
+        if repair_number_value > 0 and repair_number_value != 255:
+            repair_number_non_sentinel += 1
 
-
-def fetch_mp1_oh(client) -> Dict[int, Tuple[int, int]]:
-    """Возвращает карту partseq → (oh_mi8, oh_mi17). Единицы в минутах.
-    Подбирает корректную колонку идентификатора по очереди: partseqno_i, `partno.comp`, partno_comp, partno.
-    """
-    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
-    rows = []
-    last_err: Exception | None = None
-    for col in candidates:
-        try:
-            sql = (
-                "SELECT\n"
-                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
-                "  toUInt32OrZero(toString(oh_mi8))  AS oh_mi8,\n"
-                "  toUInt32OrZero(toString(oh_mi17)) AS oh_mi17\n"
-                "FROM md_components"
-            )
-            rows = client.execute(sql)
-            if rows:
-                break
-        except Exception as e:
-            last_err = e
-            rows = []
-            continue
-    if not rows and last_err is not None:
-        raise last_err
-    result: Dict[int, Tuple[int, int]] = {}
-    for p, oh8, oh17 in rows:
-        partseq = _to_uint(p)
-        if partseq == 0:
-            continue
-        result[partseq] = (int(oh8 or 0), int(oh17 or 0))
-    return result
-
-
-def fetch_mp1_ll(client) -> Dict[int, int]:
-    """Возвращает карту partseq → ll_mi17 (минуты)."""
-    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
-    rows = []
-    last_err: Exception | None = None
-    for col in candidates:
-        try:
-            sql = (
-                "SELECT\n"
-                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
-                "  toUInt32OrZero(toString(ll_mi17)) AS ll_mi17\n"
-                "FROM md_components"
-            )
-            rows = client.execute(sql)
-            if rows:
-                break
-        except Exception as e:
-            last_err = e
-            rows = []
-            continue
-    if not rows and last_err is not None:
-        raise last_err
-    result: Dict[int, int] = {}
-    for p, ll in rows:
-        partseq = _to_uint(p)
-        if partseq == 0:
-            continue
-        result[partseq] = int(ll or 0)
-    return result
-
-
-def fetch_mp1_ll_mi8(client) -> Dict[int, int]:
-    """Возвращает карту partseq → ll_mi8 (минуты)."""
-    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
-    rows = []
-    last_err: Exception | None = None
-    for col in candidates:
-        try:
-            sql = (
-                "SELECT\n"
-                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
-                "  toUInt32OrZero(toString(ll_mi8)) AS ll_mi8\n"
-                "FROM md_components"
-            )
-            rows = client.execute(sql)
-            if rows:
-                break
-        except Exception as e:
-            last_err = e
-            rows = []
-            continue
-    if not rows and last_err is not None:
-        raise last_err
-    result: Dict[int, int] = {}
-    for p, ll in rows:
-        partseq = _to_uint(p)
-        if partseq == 0:
-            continue
-        result[partseq] = int(ll or 0)
-    return result
-
-
-def fetch_mp1_second_ll(client) -> Dict[int, int]:
-    """Возвращает карту partseq → second_ll (минуты) c поддержкой sentinel для NULL."""
-    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
-    rows = []
-    last_err: Exception | None = None
-    for col in candidates:
-        try:
-            sql = (
-                "SELECT\n"
-                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
-                "  second_ll\n"
-                "FROM md_components"
-            )
-            rows = client.execute(sql)
-            if rows:
-                break
-        except Exception as e:
-            last_err = e
-            rows = []
-            continue
-    if not rows and last_err is not None:
-        raise last_err
-    
-    result: Dict[int, int] = {}
-    for partseq, value in rows:
-        p = _to_uint(partseq)
-        if p == 0:
-            continue
-        if value is None:
-            result[p] = SECOND_LL_SENTINEL
-        else:
-            result[p] = int(value)
-    return result
-
-
-def fetch_mp1_repair_number(client) -> Dict[int, int]:
-    """
-    Возвращает карту partseq → repair_number.
-    
-    ⚠️ ВАЖНО: NULL значения преобразуются в sentinel value 0xFF (255)
-    для совместимости с FLAME GPU (не поддерживает Nullable типы).
-    
-    Интерпретация значений:
-    - 0xFF (255): квота ремонта не задана (было NULL в СУБД)
-    - 0-254: номер квоты ремонта для группировки агрегатов
-    """
-    SENTINEL = 255  # 0xFF - максимальное значение UInt8
-    
-    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
-    rows = []
-    last_err: Exception | None = None
-    for col in candidates:
-        try:
-            sql = (
-                "SELECT\n"
-                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
-                "  repair_number\n"
-                "FROM md_components"
-            )
-            rows = client.execute(sql)
-            if rows:
-                break
-        except Exception as e:
-            last_err = e
-            rows = []
-            continue
-    if not rows and last_err is not None:
-        raise last_err
-    
-    # Преобразуем NULL → SENTINEL (255)
-    result = {}
-    non_null_count = 0
-    for p, rn in rows:
-        partseq = _to_uint(p)
-        if partseq == 0:
-            continue
-        if rn is None:
-            result[partseq] = SENTINEL
-        else:
-            value = int(rn)
-            result[partseq] = value
-            if value > 0:
-                non_null_count += 1
-    
-    print(f"  📊 fetch_mp1_repair_number: загружено {len(result)} записей, из них {non_null_count} с repair_number > 0")
-    if non_null_count > 0:
-        sample = [(k, v) for k, v in list(result.items())[:20] if v > 0 and v != 255]
-        if sample:
-            print(f"     Образцы (partseq, repair_number): {sample[:5]}")
-    
-    return result
-
-
-def fetch_mp1_sne_ppr_new(client) -> Dict[int, Tuple[int, int]]:
-    """
-    Возвращает карту partseq → (sne_new, ppr_new).
-    
-    ⚠️ ВАЖНО: NULL значения преобразуются в sentinel value 0xFFFFFFFF (4294967295)
-    для совместимости с FLAME GPU (не поддерживает Nullable типы).
-    
-    Интерпретация значений:
-    - 0xFFFFFFFF (4294967295): агрегат не выпускается (было NULL в СУБД)
-    - 0: новый агрегат с нулевой наработкой
-    - > 0 и < 4294967295: агрегат с начальной наработкой
-    """
-    SENTINEL = 4294967295  # 0xFFFFFFFF - максимальное значение UInt32
-    
-    candidates = ["partseqno_i", "`partno.comp`", "partno_comp", "partno"]
-    rows = []
-    last_err: Exception | None = None
-    for col in candidates:
-        try:
-            sql = (
-                "SELECT\n"
-                f"  toUInt32OrZero(toString({col})) AS partseq,\n"
-                f"  CASE WHEN sne_new IS NULL THEN {SENTINEL} ELSE toUInt32OrZero(toString(sne_new)) END AS sne_new,\n"
-                f"  CASE WHEN ppr_new IS NULL THEN {SENTINEL} ELSE toUInt32OrZero(toString(ppr_new)) END AS ppr_new\n"
-                "FROM md_components"
-            )
-            rows = client.execute(sql)
-            if rows:
-                break
-        except Exception as e:
-            last_err = e
-            rows = []
-            continue
-    if not rows and last_err is not None:
-        raise last_err
-    result = {}
-    for p, sne, ppr in rows:
-        partseq = _to_uint(p)
-        if partseq == 0:
-            continue
-        result[partseq] = (int(sne), int(ppr))
-    return result
+    print(
+        f"  📊 fetch_mp1_all repair_number: загружено {len(mp1_repair_number_map)} записей, "
+        f"из них {repair_number_non_sentinel} с repair_number > 0 и != 255"
+    )
+    return Mp1Maps(
+        mp1_map=mp1_map,
+        mp1_oh_map=mp1_oh_map,
+        mp1_ll_map=mp1_ll_map,
+        mp1_ll_mi8_map=mp1_ll_mi8_map,
+        mp1_second_ll_map=mp1_second_ll_map,
+        mp1_sne_ppr_map=mp1_sne_ppr_map,
+        mp1_repair_number_map=mp1_repair_number_map,
+    )
 
 
 def fetch_mp3(client, vdate: date, vid: int):
@@ -786,13 +587,15 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
     """
     vdate, vid = fetch_versions(client, version_date)
     mp3_rows, mp3_fields = fetch_mp3(client, vdate, vid)
-    mp1_map = fetch_mp1_br_rt(client)
-    mp1_oh_map = fetch_mp1_oh(client)
-    mp1_ll_map = fetch_mp1_ll(client)
-    mp1_ll_mi8_map = fetch_mp1_ll_mi8(client)
-    mp1_second_ll_map = fetch_mp1_second_ll(client)
-    mp1_sne_ppr_map = fetch_mp1_sne_ppr_new(client)
-    mp1_repair_number_map = fetch_mp1_repair_number(client)
+    (
+        mp1_map,
+        mp1_oh_map,
+        mp1_ll_map,
+        mp1_ll_mi8_map,
+        mp1_second_ll_map,
+        mp1_sne_ppr_map,
+        mp1_repair_number_map,
+    ) = fetch_mp1_all(client)
     mp4_by_day = preload_mp4_by_day(client, vdate)
     mp5_by_day = preload_mp5_maps(client, vdate)
 

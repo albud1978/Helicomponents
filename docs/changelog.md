@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-06-04 — sim load: слияние 7 mp1-запросов в 1 + устранение reconnect-churn (A+C)
+
+**Workflow**: W_sim_load_mp1_merge_20260604T102507Z | **Risk**: medium | **Profile**: medium-policy | **Status**: ready-to-commit
+
+**Контекст**: профилирование прогона выявило `prepare_data`/`prepare_env_arrays` (~9с) как узкое место #1. cProfile: время не в Python-циклах, а в ClickHouse-клиенте. Корень — 7 функций `fetch_mp1_*` с `try/except`-перебором id-колонки `["partseqno_i","`partno.comp`","partno_comp","partno"]`. В реальной схеме `md_components` первые 2 имени не существуют → каждая функция делала 2 провальных запроса (ошибка → `clickhouse_driver` рвёт соединение → реконнект, RTT ~75мс), и лишь 3-й (`partno_comp`) успешен. Итог ~14 провальных запросов + реконнекты.
+
+**Changes**:
+- `code/sim_env_setup.py`: 7 функций `fetch_mp1_*` (br_rt/oh/ll/ll_mi8/second_ll/repair_number/sne_ppr_new) заменены одной `fetch_mp1_all(client)` — ОДИН SELECT по точной колонке `partno_comp` (без try/except-угадывания), возвращает те же 7 карт (`Mp1Maps`). `prepare_env_arrays`: 7 вызовов → 1 с распаковкой в прежние переменные.
+
+**Эквивалентность**: все 7 карт **bit-identical** старым (len=76 каждая, значения совпадают) — проверено сравнением с прямым SQL. env_data консистентен (frames=341, days=4000).
+
+**Эффект**: блок mp1-загрузки 5.47с → 0.167с; фаза `prepare_env_arrays` целиком **~9с → ~5.2с** (−~4с). Остаток фазы — `preload_mp5_maps` (~4.3с, рычаг B, отложен).
+
+**Anti-pattern устранён**: `try/except` для угадывания имён колонок (запрещён правилами проекта) убран в пользу точной схемы.
+
+---
+
 ## 2026-06-04 — ClickHouse: перепартиционирование sim_*_v9 → PARTITION BY version_date (C)
 
 **Workflow**: W_ch_repartition_vdate_20260604T075830Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
