@@ -1,10 +1,10 @@
 {
-  "version": 15,
+  "version": 16,
   "meta": {
     "description": "Глобальные инварианты, temporal-контракты и GPU-ограничения модели V11. Все инварианты обеспечены валидационными скриптами в code/validation/.",
     "ssot": true,
     "created": "2026-02-10",
-    "updated": "2026-02-17",
+    "updated": "2026-06-05",
     "related": ["transitions_rules.json", "quota_rules.json"]
   },
 
@@ -19,13 +19,13 @@
     {
       "id": "INV-1",
       "claim": "СНЭ не превышает life limit",
-      "expr": "forall agent where state == 2: sne <= ll",
+      "expr": "forall agent where group_by in {1,2}: sne <= ll",
       "scope": "per_agent",
       "severity": "CRITICAL",
       "validator": "code/validation/inv1_sne_le_ll.py",
-      "last_validated": "2026-02-14",
-      "last_result": "PASS (0 violations, datasets 20250704 + 20251230)",
-      "notes": "sne всегда <= ll в operations. Механизм: limiter корректно рассчитывается через compute_limiter_inline при входе в ops (P1/P2/P3/spawn), декрементируется в ops_increment, и при limiter=0 агент выходит из ops ДО превышения ресурса"
+      "last_validated": "pending revalidation",
+      "last_result": "pending revalidation",
+      "notes": "sne всегда <= ll по всему жизненному циклу планеров group_by IN (1,2); равенство sne == ll допустимо. Перелёт может материализоваться на exit-day строке с терминальным status_id, поэтому фильтр state == 2 создавал слепое пятно."
     },
     {
       "id": "INV-2",
@@ -143,6 +143,17 @@
       "last_validated": "2026-03-03",
       "last_result": "PENDING (new validator)",
       "notes": "Для диагностики лимитов dynamic birth, не заменяет INV-2."
+    },
+    {
+      "id": "INV-12",
+      "claim": "PPR не превышает overhaul limit (ремонтный ресурс)",
+      "expr": "forall agent where group_by in {1,2}: ppr <= oh",
+      "scope": "per_agent",
+      "severity": "CRITICAL",
+      "validator": "code/validation/inv12_ppr_le_oh.py",
+      "last_validated": "pending revalidation",
+      "last_result": "pending revalidation",
+      "notes": "ppr всегда <= oh по всему жизненному циклу планеров group_by IN (1,2); равенство ppr == oh допустимо. Зеркало INV-1 для ppr/oh: исторически перелёт по ремонтному ресурсу не ловился из-за отсутствия отдельной проверки."
     }
   ],
 

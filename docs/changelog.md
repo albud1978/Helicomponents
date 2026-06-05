@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-06-05 — validation: ресурсные инварианты ловят перелёт V8
+
+**Workflow**: W_sim_validation_resource_coverage_20260605T175234Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit | **Governance**: allow_with_notes / required_gates=partial
+
+**Контекст**: закрыт пробел валидации ресурса: существующие проверки не ловили перелёт (`ppr > oh` / `sne > ll`), который ранее был исправлен в V8-ядре. Root cause: ресурсные проверки фильтровали `status_id=2`, но перелёт материализуется на exit-day строке с терминальным статусом (`6/7`); INV-1 expr в SSoT буквально содержал `where state == 2`. Дополнительно инварианта `ppr <= oh` не существовало вообще. На baseline `8001`: `status_id=2 AND sne>ll` = 0 (INV-1 всегда PASS), а весь `sne>ll` находился на `status_id=6`.
+
+**Changes**:
+- `config/transitions/invariants.json`: SSoT v15→v16; INV-1 expr `state==2` → `group_by in {1,2}` (lifecycle-wide `sne <= ll`, равенство `==` допустимо); добавлен INV-12 `ppr <= oh` как зеркало INV-1, severity CRITICAL, validator `code/validation/inv12_ppr_le_oh.py`.
+- `code/validation/inv1_sne_le_ll.py`: снят фильтр `status_id=2`.
+- `code/validation/inv12_ppr_le_oh.py`: добавлен новый валидатор INV-12.
+- `code/validation/run_all.py`: зарегистрирован INV-12.
+
+**Приёмка**: `inv1`/`inv12` на baseline `version_id=8001`, `version_date=2026-04-08` → FAIL (`violations=593 / 3180`), то есть ловят исторический баг; на fixed-run `version_id=8102`, `version_date=2026-04-08` → PASS (`0 / 0`), без ложных срабатываний. Test `8102` очищен, baseline `8001` сохранён.
+
+**Open follow-up**: `code/validation/validate_state2ops_transitions.py` устарел относительно look-ahead RTC и не реконструируется из снапшотов: RTC обнуляет `daily_next_u32` на exit-строке, плюс используется адаптивный шаг. Точка 4 откачена, ложный валидатор не отгружался. Редизайн — отдельная задача: routing-only проверка (`storage` vs `unsvc` по exit-строке) либо persist next-day `dt` в RTC; требуется согласование Алексея.
+
+**Governance note**: `allow_with_notes / required_gates=partial`; минорный gap — формальный approval-register не вызывался, на будущее обязателен для SSoT-правок.
+
+---
+
 ## 2026-06-05 — V8 core: ресурс не превышается; равенство допустимо
 
 **Workflow**: W_sim_v8_resource_no_exceed_20260605T165249Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit | **Governance**: allow_with_notes / required_gates=pass

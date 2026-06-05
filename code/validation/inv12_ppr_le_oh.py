@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-INV-1: sne <= ll по всему жизненному циклу планеров.
+INV-12: ppr <= oh по всему жизненному циклу планеров.
 
-Проверка не фильтрует status_id: перелёт может материализоваться на
-exit-day строке, где статус уже терминальный, а не operations.
+Проверка не фильтрует status_id: перелёт по ремонтному ресурсу может
+материализоваться на exit-day строке с терминальным статусом.
 """
 import argparse
 import re
@@ -29,7 +29,7 @@ def print_result(name: str, passed: bool, details) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="INV-1: sne <= ll по всему жизненному циклу планеров"
+        description="INV-12: ppr <= oh по всему жизненному циклу планеров"
     )
     parser.add_argument("--version-id", required=True, type=int, help="version_id")
     parser.add_argument(
@@ -57,7 +57,7 @@ def main() -> int:
     SELECT count()
     FROM {table}
     WHERE version_id = %(vid)s{vd_filter}
-      AND sne > ll
+      AND ppr > oh
       AND group_by IN (1, 2)
     """
     violations = client.execute(count_query, params)[0][0]
@@ -67,30 +67,35 @@ def main() -> int:
         sample_query = f"""
         SELECT
             aircraft_number,
+            group_by,
+            status_id,
             day_u16,
-            sne,
-            ll,
-            (sne - ll) AS exceed,
+            ppr,
+            oh,
+            (ppr - oh) AS exceed,
             limiter,
             daily_today_u32
         FROM {table}
         WHERE version_id = %(vid)s{vd_filter}
-          AND sne > ll
+          AND ppr > oh
           AND group_by IN (1, 2)
         ORDER BY exceed DESC
         LIMIT 10
         """
         rows = client.execute(sample_query, params)
-        details.append("top10 sample (acn, day, sne, ll, exceed, limiter, dt):")
+        details.append(
+            "top10 sample (acn, group_by, status, day, "
+            "ppr, oh, exceed, limiter, dt):"
+        )
         for row in rows:
-            acn, day, sne, ll, exceed, limiter, dt = row
+            acn, group_by, status_id, day, ppr, oh, exceed, limiter, dt = row
             details.append(
-                f"  acn={acn}, day={day}, sne={sne}, ll={ll}, "
-                f"exceed={exceed}, limiter={limiter}, dt={dt}"
+                f"  acn={acn}, group_by={group_by}, status={status_id}, day={day}, "
+                f"ppr={ppr}, oh={oh}, exceed={exceed}, limiter={limiter}, dt={dt}"
             )
 
     passed = violations == 0
-    print_result("INV-1 sne<=ll lifecycle", passed, details)
+    print_result("INV-12 ppr<=oh", passed, details)
     return 0 if passed else 1
 
 
