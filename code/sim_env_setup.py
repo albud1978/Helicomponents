@@ -281,16 +281,17 @@ def preload_mp5_maps(client, version_date: date = None) -> Dict[date, Dict[int,i
         result = client.execute("SELECT MAX(version_date) FROM flight_program_fl")
         version_date = result[0][0] if result and result[0][0] else date.today()
     
-    rows = client.execute(
+    dates_col, ac_col, hours_col = client.execute(
         f"""
         SELECT dates, aircraft_number, daily_hours
         FROM flight_program_fl
         WHERE version_date = '{version_date}'
         ORDER BY dates, aircraft_number
-        """
+        """,
+        columnar=True,
     )
     result: Dict[date, Dict[int,int]] = {}
-    for d, ac, h in rows:
+    for d, ac, h in zip(dates_col, ac_col, hours_col):
         m = result.setdefault(d, {})
         m[int(ac)] = int(h or 0)
     
