@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-06T05:34:06Z",
+    "updated_at": "2026-06-06T09:12:38Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -1567,7 +1567,7 @@
       "goal": "Архивировать мёртвый код code/sim_v2/messaging (14 оркестраторов + 16 RTC/event-модулей + adaptive_2_0 + validate_limiter_v3) + убрать 2 висячих импорта из активного orchestrator_limiter_v8 (rtc_quota_v7, rtc_repair_agent_v8)",
       "phase": "governance",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -1575,13 +1575,55 @@
         "profile": "high-strict"
       },
       "usage": {
-        "cumulative_steps": 4,
+        "cumulative_steps": 6,
         "cumulative_tokens": 46700,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-06T05:34:06Z"
+        "last_updated": "2026-06-06T05:39:47Z"
       },
       "created_at": "2026-06-06T05:09:34Z",
-      "updated_at": "2026-06-06T05:34:06Z"
+      "updated_at": "2026-06-06T05:39:47Z"
+    },
+    {
+      "workflow_id": "W_code_rudiments_archive_20260606T070105Z",
+      "goal": "Архивировать 7 orphan-рудиментов вне sim/extract/validation: code/utils/analysis/* (6) + root code/program_ac_precheck_runner.py (дубль extract-версии)",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 20,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 3,
+        "cumulative_tokens": 62000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-06T09:12:38Z"
+      },
+      "created_at": "2026-06-06T07:01:05Z",
+      "updated_at": "2026-06-06T09:12:38Z"
+    },
+    {
+      "workflow_id": "W_session_20260606T091046Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/archive/utils/local_secure_config.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-06T09:10:46Z"
+      },
+      "created_at": "2026-06-06T09:10:46Z",
+      "updated_at": "2026-06-06T09:10:46Z"
     }
   ],
   "handoffs": [
@@ -11149,6 +11191,209 @@
         "est_tokens": 2200,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_W_sim_v2_dead_code_archive_20260606T050934Z_orchestrator_29996c72",
+      "workflow_id": "W_sim_v2_dead_code_archive_20260606T050934Z",
+      "agent": "orchestrator",
+      "user_goal": "1 ... dead_only",
+      "changes": "35 файлов в архив (git mv), -2 импорта +docstring в активном V8, README+changelog обновлены",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "git mv 35 файлов в code/archive/sim_v2_messaging; V8 8105 без ImportError; row counts 85577/65700 == baseline 8104; run_all 15/15 PASS; 8105 очищен, 8001 сохранён; reviewer-flame APPROVE (17/17 live-core); commit 1e5c74b8 pushed",
+      "drift_check": "UserGoal vs Changes scope match: yes — только dead_only, units_v1/утилиты не тронуты, SSoT не тронут",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "Затронута high-risk зона code/sim_v2/** (активный orchestrator_limiter_v8 + 35 перемещённых файлов)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "high-strict: research-map → coder-flame(archive 35 + drop 2 imports) → reviewer APPROVE → validator PASS → governance allow_with_notes → docs → commit/push/close",
+      "evidence_pack": "git mv 35 файлов в code/archive/sim_v2_messaging; V8 8105 без ImportError; row counts 85577/65700 == baseline 8104; run_all 15/15 PASS; 8105 очищен, 8001 сохранён; reviewer-flame APPROVE (17/17 live-core); commit 1e5c74b8 pushed",
+      "success_criteria": "numeric: V8 8105 row counts == 8104 (85577/65700) AND run_all 15/15 PASS AND no ImportError",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=reviewer_handoff_not_recorded_in_kg; evidence_refs=handoff_coder-flame_1bc14291;handoff_validator-judge_09ab320e;handoff_governance_850b1b16;commit_1e5c74b8; approval_ref=ctx_aa6ca408",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "8f603ffb5d79c2f6a41673e55d6822d29b74814409d5a53c0d115412a9d41cc5",
+      "created_at": "2026-06-06T05:39:35Z",
+      "modules": [
+        "step_logic",
+        "state_transitions",
+        "quotas_ops",
+        "quotas_repair",
+        "validation"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_sim_v2_dead_code_archive_20260606T050934Z_docs-curator_0212be05",
+      "workflow_id": "W_sim_v2_dead_code_archive_20260606T050934Z",
+      "agent": "docs-curator",
+      "user_goal": "Обновить docs под архив sim_v2 dead-code",
+      "changes": "docs/changelog.md: запись 2026-06-06 о архиве 35 файлов sim_v2/messaging + bit-identical приёмка; README.md: legacy-ссылки на code/archive/sim_v2_messaging, V8 как активный entry-point",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "ReadLints clean; CI drift-check quality.yml: SSoT 12 INV/3 TEMP/6 GPU, No drift",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "D1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "ReadLints clean; CI drift-check quality.yml: SSoT 12 INV/3 TEMP/6 GPU, No drift",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "6c57d5fdb16adc3f684133384ed07bb351c11aeb662a8d8228a55e4de416700c",
+      "created_at": "2026-06-06T05:39:47Z",
+      "modules": [
+        "validation"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_code_rudiments_archive_20260606T070105Z_coder-general_d203ed88",
+      "workflow_id": "W_code_rudiments_archive_20260606T070105Z",
+      "agent": "coder-general",
+      "user_goal": "Low-risk housekeeping: архивировать 7 orphan-рудиментов через git mv. Workflow: W_code_rudiments_archive_20260606T070105Z. НЕ трогать sim_v2/extract/validation логику. Только перемещение + ARCHIVED-шапки.",
+      "changes": "Перемещены через git mv:\n- code/utils/analysis/add_version_id_fields.py -> code/archive/utils_analysis/add_version_id_fields.py\n- code/utils/analysis/analyze_flame_gpu_fields.py -> code/archive/utils_analysis/analyze_flame_gpu_fields.py\n- code/utils/analysis/corrected_flight_program_analysis.py -> code/archive/utils_analysis/corrected_flight_program_analysis.py\n- code/utils/analysis/detailed_excel_analysis.py -> code/archive/utils_analysis/detailed_excel_analysis.py\n- code/utils/analysis/final_flame_gpu_analysis.py -> code/archive/utils_analysis/final_flame_gpu_analysis.py\n- code/utils/analysis/optimize_flight_program_ac.py -> code/archive/utils_analysis/optimize_flight_program_ac.py\n- code/program_ac_precheck_runner.py -> code/archive/root_superseded/program_ac_precheck_runner.py\nДобавлены ARCHIVED-шапки во все 7 файлов; для root program_ac_precheck_runner добавлена ссылка на актуальную code/extract/program_ac_precheck_runner.py. code/utils/analysis/__init__.py отсутствовал, не создавался и не удалялся.",
+      "facts": "SuccessCriteria verified:\n- rg import/from по code вне archive для 7 module names: 0 matches.\n- extract_master.py использует script_path = Path(__file__).parent / script_name, а script_name='program_ac_precheck_runner.py', значит ссылка ведет на sibling code/extract/program_ac_precheck_runner.py; root-дубль не используется.\n- python3 -m compileall -q -x '^code/archive/' code: PASS (exit 0).\n- git status --short: 7 RM rename+modified entries for requested moves; config/agent_kg.json modified by Agent KG logging.\n- ReadLints по 7 архивным файлам: no linter errors found.",
+      "assumptions": "Тесты/симуляция/ETL не запускались, потому что задача ограничена low-risk перемещением orphan-файлов; Risks if false: если orphan-аудит был неверен, это покрыто повторной rg import/from проверкой по живому code вне archive.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_code_rudiments_archive_20260606T070105Z:2026-06-06T07:04:26Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "manual-check: 7 git mv в code/archive + ARCHIVED headers; rg import/from outside archive = 0; compileall excluding archive PASS; git status shows 7 renames/modified.",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Только архивирование orphan-рудиментов, доменная модель не менялась.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-06T07:04:26Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 14000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_code_rudiments_archive_20260606T070105Z_coder-general_c5f614b4",
+      "workflow_id": "W_code_rudiments_archive_20260606T070105Z",
+      "agent": "coder-general",
+      "user_goal": "Безопасная проверка 11 standalone-утилит вне sim/extract/validation — определить назначение, работоспособность и рекомендацию keep/archive. Workflow: W_code_rudiments_archive_20260606T070105Z.",
+      "changes": "Analysis-only audit of 11 utilities; no audited files modified. Recommendations: KEEP code/heli_pandas_lease_restricted.py; ARCHIVE code/utils/local_secure_config.py, code/utils/secure_config_loader.py, code/utils/universal_init.py, code/utils/clone_sim_master.py, code/utils/check_dependencies.py, code/utils/verify_triggers_vs_planned.py, code/utils/gpu_repair_minimal.py, code/analysis/validate_ops_target_clickhouse.py; CONFIRM code/analysis/export_over_limit_serviceable.py, code/validators/quota_daily_export.py.",
+      "facts": "",
+      "assumptions": "Recommendations are based on static code, importers, compile/help/import smoke, and local overlap checks only; main runtime behavior against live ClickHouse was intentionally not executed. Risks if false: a manual operator may still use orphan standalone scripts outside tracked imports.",
+      "evidence": "Facts: Read all 11 files and relevant capsules (validation, etl_extract, quota). Importer rg over live code outside archive found 0 real importers for all audited utilities (only self/docstring hits). py_compile PASS for all 11 with PYTHONPYCACHEPREFIX=/tmp/helicomponents_pycompile_20260606. git log dates collected for all files. --help PASS for clone_sim_master.py and heli_pandas_lease_restricted.py under python3; --help PASS for export_over_limit_serviceable.py and quota_daily_export.py under source activate.sh. import-smoke PASS for all 11; gpu_repair_minimal imported via conda cuda13 path with CUDA_PATH/LD_LIBRARY_PATH. No ClickHouse mutation, no main execution for mutating/output-writing utilities.\nEvidence: Commands: python3 -m py_compile <11 files> with PYTHONPYCACHEPREFIX=/tmp; rg importer searches under code/ excluding archive by manual result filtering; git log -1 --format=%ci for each file; python3 <safe cli> --help; source activate.sh && python3 <safe cli> --help; importlib import-smoke with PYTHONDONTWRITEBYTECODE=1; conda cuda13 import-smoke for gpu_repair_minimal.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_code_rudiments_archive_20260606T070105Z:2026-06-06T07:12:05Z",
+      "plan_step_id": "R1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Analysis touches code archive decisions; no implementation or data mutation performed; archive/keep decision remains human/orchestrator-owned.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "Safe static audit of 11 standalone utilities with compile/help/import smoke and keep/archive recommendations.",
+      "evidence_pack": "Facts: Read all 11 files and relevant capsules (validation, etl_extract, quota). Importer rg over live code outside archive found 0 real importers for all audited utilities (only self/docstring hits). py_compile PASS for all 11 with PYTHONPYCACHEPREFIX=/tmp/helicomponents_pycompile_20260606. git log dates collected for all files. --help PASS for clone_sim_master.py and heli_pandas_lease_restricted.py under python3; --help PASS for export_over_limit_serviceable.py and quota_daily_export.py under source activate.sh. import-smoke PASS for all 11; gpu_repair_minimal imported via conda cuda13 path with CUDA_PATH/LD_LIBRARY_PATH. No ClickHouse mutation, no main execution for mutating/output-writing utilities.\nEvidence: Commands: python3 -m py_compile <11 files> with PYTHONPYCACHEPREFIX=/tmp; rg importer searches under code/ excluding archive by manual result filtering; git log -1 --format=%ci for each file; python3 <safe cli> --help; source activate.sh && python3 <safe cli> --help; importlib import-smoke with PYTHONDONTWRITEBYTECODE=1; conda cuda13 import-smoke for gpu_repair_minimal.",
+      "success_criteria": "script: py_compile PASS for 11 files; manual-check: table includes purpose/type/importers/date/smoke/overlap/recommendation for each utility; mutation main paths not executed.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=py_compile:/tmp/helicomponents_pycompile_20260606; rg importers; git log dates; help/import smoke; approval_ref=N/A",
+      "risks": "No runtime SELECT/main execution, so data-dependent failures are not excluded; orphan status may miss untracked/manual operator use; archive decisions require orchestrator/Alexey confirmation.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Analysis only; no domain graph or SSoT change.",
+      "prev_handoff_hash": "394c22c8eedd56942ec77d2d1918d34cfbe73823d90068988ce87fd756bc783a",
+      "created_at": "2026-06-06T07:12:05Z",
+      "modules": [
+        "extract_dwh",
+        "validation",
+        "quotas_ops",
+        "infra"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 36000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_code_rudiments_archive_20260606T070105Z_coder-general_f69774f3",
+      "workflow_id": "W_code_rudiments_archive_20260606T070105Z",
+      "agent": "coder-general",
+      "user_goal": "Low-risk housekeeping: архивировать 9 orphan/устаревших утилит через git mv. Workflow: W_code_rudiments_archive_20260606T070105Z. Все 9 подтверждены 0 импортёров (read-only аудит). НЕ трогать логику, только перемещение + ARCHIVED-шапки.",
+      "changes": "git mv 9 файлов: code/utils/local_secure_config.py -> code/archive/utils/local_secure_config.py; code/utils/secure_config_loader.py -> code/archive/utils/secure_config_loader.py; code/utils/universal_init.py -> code/archive/utils/universal_init.py; code/utils/clone_sim_master.py -> code/archive/utils/clone_sim_master.py; code/utils/check_dependencies.py -> code/archive/utils/check_dependencies.py; code/utils/verify_triggers_vs_planned.py -> code/archive/utils/verify_triggers_vs_planned.py; code/utils/gpu_repair_minimal.py -> code/archive/utils/gpu_repair_minimal.py; code/analysis/validate_ops_target_clickhouse.py -> code/archive/analysis/validate_ops_target_clickhouse.py; code/validators/quota_daily_export.py -> code/archive/validators/quota_daily_export.py. Добавлены ARCHIVED-шапки после shebang и перед docstring/from future; уточнены перекрытия для secure_config_loader/local_secure_config, gpu_repair_minimal, validate_ops_target_clickhouse.",
+      "facts": "rg по code вне **/archive/** для 9 module ids: No matches found; python3 -m compileall -q -x '^code/archive/' code: PASS exit 0; git status --short по целевым путям: 9 RM rename+modified entries; code/validators содержит только __pycache__, __init__.py отсутствует; живые файлы подтверждены: code/utils/config_loader.py, code/utils/rtc_smoketest.py, code/analysis/export_over_limit_serviceable.py, code/analysis/validate_heli_pandas.py; ReadLints по 9 архивным файлам: no linter errors.",
+      "assumptions": "Тесты/симуляция не запускались, потому что задача housekeeping без изменения логики; Risks if false: скрытая runtime-зависимость могла быть не import-based, но live-code rg по module ids дал 0.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_code_rudiments_archive_20260606T070105Z:2026-06-06T09:12:38Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "manual-check: 9 git mv renames with ARCHIVED headers; rg live code imports 0; compileall excluding archive PASS; validators folder status reported",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Перемещены orphan/устаревшие утилиты в archive; доменная модель не менялась.",
+      "prev_handoff_hash": "5c72ec3d5c62cd5de18ccd278bee693c5c4345aea35ec455d65a87742147cb62",
+      "created_at": "2026-06-06T09:12:38Z",
+      "modules": [
+        "validation",
+        "infra"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -12627,6 +12872,24 @@
       "agent": "validator-judge",
       "created_at": "2026-06-06T05:23:44Z",
       "updated_at": "2026-06-06T05:23:44Z"
+    },
+    {
+      "context_id": "ctx_W_sim_v2_dead_code_archive_20260606T050934Z_closure_22d8344d",
+      "workflow_id": "W_sim_v2_dead_code_archive_20260606T050934Z",
+      "context_type": "closure",
+      "content": "Архив мёртвого кода sim_v2 завершён, commit 1e5c74b8 запушен",
+      "agent": "orchestrator",
+      "created_at": "2026-06-06T05:39:47Z",
+      "updated_at": "2026-06-06T05:39:47Z"
+    },
+    {
+      "context_id": "ctx_W_code_rudiments_archive_20260606T070105Z_phase_start_df884285",
+      "workflow_id": "W_code_rudiments_archive_20260606T070105Z",
+      "context_type": "phase_start",
+      "content": "Start low-risk housekeeping: archive 9 orphan/stale utilities via git mv and ARCHIVED headers; SuccessCriteria: rg live code imports 0, compileall excluding archive PASS, git status 9 renames, validators folder status reported.",
+      "agent": "coder-general",
+      "created_at": "2026-06-06T07:02:05Z",
+      "updated_at": "2026-06-06T09:09:52Z"
     }
   ],
   "meta": {

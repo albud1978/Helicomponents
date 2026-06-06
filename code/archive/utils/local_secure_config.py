@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (code utils cleanup): orphan/устаревшая утилита, 0 импортёров; перекрыто code/utils/config_loader.py.
 """
 Локальная безопасная система секретов
 ===================================

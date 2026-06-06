@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (code rudiments cleanup): orphan, не импортируется живым кодом (sim_v2/extract/validation).
 """
 Финальный анализ Excel файла OLAP MultiBOM Flame GPU.xlsx
 с правильными заголовками и сопоставлением с базой данных

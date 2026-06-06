@@ -4,7 +4,6 @@ globs:
   - code/sim_v2/**
   - code/validation/**
   - code/analysis/**
-  - code/validators/**
   - config/transitions/**
 ---
 
