@@ -333,9 +333,7 @@ from datetime import date
 # V8 модули
 import rtc_state_transitions_v7  # Детерминированные переходы (repair→svc, spawn→ops)
 import rtc_state_transitions_v8  # V8: next-day dt проверка!
-import rtc_quota_v7              # V7: квотирование (без RepairLine — baseline совместимо!)
 import rtc_quota_v8              # V8: квотирование через RepairLine
-import rtc_repair_agent_v8       # V8: RepairAgent (ОТКЛЮЧЕНО)
 import rtc_repair_lines_v8       # V8: RepairLine sync
 import rtc_limiter_optimized
 import rtc_limiter_v8            # V8: deterministic_dates!
@@ -608,7 +606,6 @@ class LimiterV8Orchestrator:
         # ═══════════════════════════════════════════════════════════════
         # repair_quota = int(self.env_data.get('mi17_repair_quota', 8))
         # repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
-        # self.repair_agent = rtc_repair_agent_v8.create_repair_agent(...)
         self.repair_agent = None  # Отключено для baseline совместимости
         
         # count_repair: подсчитывается динамически или через MacroProperty
@@ -1033,7 +1030,6 @@ class LimiterV8Orchestrator:
         
         # V8: RepairAgent ОТКЛЮЧЁН — не инициализируем популяцию
         # count_repair = self._count_agents_in_state("repair")
-        # rtc_repair_agent_v8.init_repair_agent_population(...)
         
         # Динамический спавн (менеджер + тикеты)
         if hasattr(self, 'spawn_data') and self.spawn_data:

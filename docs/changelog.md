@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-06-06 — sim_v2/messaging: архив legacy dead code вокруг активного V8
+
+**Workflow**: W_sim_v2_dead_code_archive_20260606T050934Z | **Risk**: high | **Profile**: high-strict | **Status**: docs-sync
+
+**Корень**:
+- Активный entry-point — `code/sim_v2/messaging/orchestrator_limiter_v8.py`; legacy-оркестраторы и старые RTC/event-модули не входили в активный V8-чейн.
+- Цель cleanup: убрать мёртвый код из активной зоны без изменения поведения V8.
+
+**Изменено**:
+- `git mv` 35 файлов в `code/archive/sim_v2_messaging/`: 14 старых оркестраторов, 16 RTC/event-модулей, `adaptive_2_0/` (5 файлов) и `validate_limiter_v3.py`.
+- Из активного `code/sim_v2/messaging/orchestrator_limiter_v8.py` удалены 2 висячих импорта (`rtc_quota_v7`, `rtc_repair_agent_v8`) и 2 закомментированные legacy-строки.
+- `code/sim_v2/messaging/__init__.py` обновлён под активный V8-стек.
+
+**Приёмка**:
+- V8 run `8105` стартует без `ImportError`; поведение bit-identical к baseline `8104`.
+- Контрольные строки совпали: `sim_masterv2_v9` = 85577, `sim_repairline_v9` = 65700.
+- `code/validation/run_all.py` — 15/15 PASS; review и validation завершены до docs-sync.
+
+---
+
 ## 2026-06-06 — P2 cleanup: архив старого фреймворка code/analysis/sim_validation_*
 
 **Workflow**: W_validators_p2_archive_20260606T035804Z | **Risk**: medium | **Profile**: medium-fast | **Status**: ready-for-review
