@@ -59,7 +59,7 @@
 - MP2 export + RL export → host dataframes → `sim_masterv2_v9` + `sim_repairline_v9` (CH) → validation/BI — `config/transitions/transitions_rules.json`, `config/transitions/quota_rules.json`
 
 ## Validation Proof
-- Формализованные инварианты: `config/transitions/invariants.json` (INV-1..INV-11, TEMP-1/TEMP-4/TEMP-5, GPU-1..GPU-6) — SSoT
+- Формализованные инварианты: `config/transitions/invariants.json` (INV-1..INV-12, TEMP-1/TEMP-4/TEMP-5, GPU-1..GPU-6) — SSoT
 - Скрипты валидации: `code/analysis/sim_validation_runner_msg.py`, `code/analysis/sim_validation_quota.py`, `code/validation/validate_state2ops_*.py`
 - `python code/analysis/validate_heli_pandas.py --analyze/--update/--all` — базовая валидация `heli_pandas` — `docs/architecture/validation_rules.md`
 - Resource no-exceed acceptance: workflow `W_sim_v8_resource_no_exceed_20260605T165249Z`, baseline dataset `version_date=2026-04-08`, test `version_id=8101` — `count(ppr > oh OR sne > ll)=0`, `entry-edge=0`, `check_2=0`, group counts match baseline; test version очищен
