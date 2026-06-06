@@ -67,7 +67,8 @@ agent_card:
 
 ## Инструменты
 
-- `code/analysis/sim_validation_runner_msg.py`
+- `code/validation/run_all.py`
+- `code/archive/analysis/sim_validation_runner_msg.py` (archived 2026-06-06; legacy class-based)
 - ClickHouse (только SELECT, native протокол)
 
 ## Таблицы

@@ -68,3 +68,11 @@ python3 code/validation/run_all_stream.py --dataset <YYYYMMDD:version_id>
 - `code/archive/analysis/sim_validation_ops_exits.py` → SSoT: `inv9_limiter_exit.py`
 - `code/archive/analysis/repair_gantt_standalone.py` → SSoT: `inv3_repair_capacity.py`
 
+Старый class-based фреймворк (P2, архив 2026-06-06) → SSoT: канонический `run_all.py` (INV-1..12 + TEMP):
+- `code/archive/analysis/sim_validation_runner.py`
+- `code/archive/analysis/sim_validation_runner_msg.py`
+- `code/archive/analysis/sim_validation_quota.py`
+- `code/archive/analysis/sim_validation_transitions.py`
+- `code/archive/analysis/sim_validation_increments.py`
+- `code/archive/analysis/sim_validation_units.py`
+

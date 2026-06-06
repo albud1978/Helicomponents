@@ -3,11 +3,11 @@
 ## Scope
 Трогаем:
 - `config/transitions/invariants.json` (SSoT инвариантов — 12 глобальных (INV-1..INV-12), 3 временных (TEMP-1, TEMP-4, TEMP-5), 6 GPU (GPU-1..GPU-6) — invariants.json v16)
-- `code/analysis/sim_validation_runner_msg.py` (оркестратор валидации MESSAGING)
-- `code/analysis/sim_validation_quota.py` (INV-2: ops vs target)
-- `code/analysis/sim_validation_increments.py` (INV-6: dt>0 только в ops)
+- `code/archive/analysis/sim_validation_runner_msg.py` (archived 2026-06-06; legacy class-based оркестратор MESSAGING, перекрыт `code/validation/run_all.py`)
+- `code/archive/analysis/sim_validation_quota.py` (archived 2026-06-06; legacy INV-2, перекрыт `code/validation/inv2_ops_vs_target.py`)
+- `code/archive/analysis/sim_validation_increments.py` (archived 2026-06-06; legacy INV-6, перекрыт `code/validation/inv6_dt_only_ops.py`)
 - `code/archive/analysis/sim_validation_ops_exits.py` (archived 2026-06-06; ops exits legacy, SSoT-замена: INV-1/INV-9/INV-12)
-- `code/analysis/sim_validation_transitions.py` (матрица переходов)
+- `code/archive/analysis/sim_validation_transitions.py` (archived 2026-06-06; legacy матрица переходов, перекрыт `code/validation/run_all.py`)
 - `code/archive/validation/validate_state2ops_increments.py` (archived 2026-06-06; SSoT-замена: INV-5)
 - `code/archive/validation/validate_state2ops_transitions.py` (archived 2026-06-06; SSoT-замена: INV-9/INV-10)
 - `code/sim_v2/messaging/validate_limiter_flight_hours.py` (INV-7: dt = программа)
@@ -50,7 +50,7 @@ SSoT: `config/transitions/invariants.json`
 ## Decisions (≤7)
 
 1. **SQL-first** — итоговая проверка по данным СУБД (sim_masterv2 экспорт), не по in-memory состоянию GPU. Причина: воспроизводимость + аудит.
-2. **Два оркестратора** — sim_validation_runner.py (legacy V7) и sim_validation_runner_msg.py (MESSAGING V8). Причина: разные архитектуры intent_state vs state-based.
+2. **Legacy class-based оркестраторы заархивированы** — `code/archive/analysis/sim_validation_runner.py` (legacy V7) и `code/archive/analysis/sim_validation_runner_msg.py` (MESSAGING V8); активный канон — `code/validation/run_all.py`.
 3. **Baseline заморожен** — sim_masterv2 baseline не изменяется; сравнение с ним только по запросу.
 4. **Реальные данные only** — синтетика/заглушки запрещены без явного разрешения.
 5. **JIT warnings = дефект** — каждый NVRTC warning исправляется немедленно (GPU-4).
@@ -59,7 +59,7 @@ SSoT: `config/transitions/invariants.json`
 ## Impact Paths
 - `invariants.json` → определяет ЧТО проверять → все скрипты валидации
 - `sim_masterv2` (ClickHouse) → данные для проверки → SQL-запросы
-- `sim_validation_runner_msg.py` → вызывает все суб-валидаторы → итоговый отчёт
+- `code/archive/analysis/sim_validation_runner_msg.py` (archived 2026-06-06) → legacy class-based отчёт, не активный канон
 - Результат валидации → решение о коммите (оркестратор workflow)
 
 ## Validation Proof
@@ -72,12 +72,12 @@ SSoT: `config/transitions/invariants.json`
 - Ложноположительные (warmup window) → INV-2 учитывает warmup
 
 ## Open Questions (≤7)
-- Объединять ли sim_validation_runner.py и sim_validation_runner_msg.py?
+- Legacy `sim_validation_runner.py` / `sim_validation_runner_msg.py` заархивированы; вопрос объединения закрыт P2 cleanup.
 - Нужен ли автоматический Python-скрипт для INV-1 (сейчас только SQL)?
 
 ## Pointers (≤15)
 - `config/transitions/invariants.json`
-- `code/analysis/sim_validation_runner_msg.py`
+- `code/archive/analysis/sim_validation_runner_msg.py` (archived 2026-06-06)
 - `code/validation/inv1_sne_le_ll.py`
 - `code/validation/inv2_ops_vs_target.py`
 - `code/validation/inv3_repair_capacity.py`
