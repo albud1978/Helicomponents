@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (P1 cleanup): устарел/дубликат, SSoT-замена: temp4_no_infinite_repair.py
 """
-INV-3: одновременно в ремонте <= repair_number.
+TEMP-4: нет бесконечного ремонта.
 """
 import argparse
 import re
@@ -25,44 +26,30 @@ def print_result(name: str, passed: bool, details) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="INV-3: одновременно в ремонте <= repair_number"
-    )
+    parser = argparse.ArgumentParser(description="TEMP-4: нет бесконечного ремонта")
     parser.add_argument("--version-id", required=True, type=int, help="version_id")
     parser.add_argument(
         "--table",
         default="sim_masterv2_v9",
         help="Таблица ClickHouse (по умолчанию: sim_masterv2_v9)",
     )
-    parser.add_argument(
-        "--repair-number",
-        type=int,
-        default=20,
-        help="Лимит ремонтов (по умолчанию: 20)",
-    )
     args = parser.parse_args()
     table = validate_table_name(args.table)
     client = get_client()
 
     query = f"""
-    SELECT day_u16, countIf(status_id = 4) AS n_repair
+    SELECT count() AS violations
     FROM {table}
-    WHERE version_id = %(vid)s AND group_by IN (1, 2)
-    GROUP BY day_u16
-    HAVING n_repair > %(limit)s
-    ORDER BY day_u16
+    WHERE version_id = %(vid)s
+      AND day_u16 = (SELECT max(day_u16) FROM {table} WHERE version_id = %(vid)s)
+      AND status_id = 4
+      AND repair_days > repair_time
+      AND group_by IN (1, 2)
     """
-    rows = client.execute(query, {"vid": args.version_id, "limit": args.repair_number})
-    violations = len(rows)
-    sample = rows[:10]
+    violations = client.execute(query, {"vid": args.version_id})[0][0]
     passed = violations == 0
-    details = [
-        f"repair_number={args.repair_number}",
-        f"violations={violations}",
-    ]
-    if sample:
-        details.append(f"sample_days={sample}")
-    print_result("INV-3 repair capacity", passed, details)
+    details = [f"violations={violations}"]
+    print_result("TEMP-4 repair liveness", passed, details)
     return 0 if passed else 1
 
 

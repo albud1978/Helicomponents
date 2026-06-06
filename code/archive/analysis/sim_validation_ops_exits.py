@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (P1 cleanup): устарел/дубликат, SSoT-замена: inv9_limiter_exit.py
 """
 SQL-first валидация выходов из ops для limiter V8.
 

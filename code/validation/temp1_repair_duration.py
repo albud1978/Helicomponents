@@ -67,7 +67,7 @@ def main() -> int:
     # 2) Day0 repair agents: ещё в ремонте на min_day (pre_status=4 AND status=4)
     #    Агенты с pre_status=4, status!=4 уже вышли на day 0 — пропускаем
     day0_query = f"""
-    SELECT aircraft_number, group_by, repair_days, repair_time
+    SELECT version_date, aircraft_number, group_by, repair_days, repair_time
     FROM {table}
     WHERE version_id = %(vid)s{vd_filter}
       AND group_by IN (1, 2)
@@ -76,22 +76,22 @@ def main() -> int:
       AND status_id = 4
     """
     day0_rows = client.execute(day0_query, {**params, "min_day": min_day})
-    day0_set = {(int(r[0]), int(r[1])) for r in day0_rows}
+    day0_set = {(int(r[0]), int(r[1]), int(r[2])) for r in day0_rows}
     # remaining_repair = repair_time - repair_days (оставшийся ремонт)
     day0_remaining = {
-        (int(r[0]), int(r[1])): max(0, int(r[3]) - int(r[2]))
+        (int(r[0]), int(r[1]), int(r[2])): max(0, int(r[4]) - int(r[3]))
         for r in day0_rows
     }
 
     # 3) Все выходы из repair
     all_exits_query = f"""
-    SELECT aircraft_number, group_by, day_u16, repair_days, repair_time, status_id
+    SELECT version_date, aircraft_number, group_by, day_u16, repair_days, repair_time, status_id
     FROM {table}
     WHERE version_id = %(vid)s{vd_filter}
       AND group_by IN (1, 2)
       AND pre_status_id = 4
       AND status_id != 4
-    ORDER BY aircraft_number, group_by, day_u16
+    ORDER BY version_date, aircraft_number, group_by, day_u16
     """
     all_exits = client.execute(all_exits_query, params)
 
@@ -105,8 +105,8 @@ def main() -> int:
     day0_samples = []
     runtime_samples = []
 
-    for acn, gb, day, rd, rt, st in all_exits:
-        key = (int(acn), int(gb))
+    for vdate, acn, gb, day, rd, rt, st in all_exits:
+        key = (int(vdate), int(acn), int(gb))
         if key in day0_set:
             day0_exits += 1
             remaining = int(day0_remaining[key])
@@ -115,7 +115,7 @@ def main() -> int:
                 day0_violations += 1
                 if len(day0_samples) < 5:
                     day0_samples.append(
-                        f"  acn={acn}, gb={gb}, exit_day={day}, "
+                        f"  version_date={vdate}, acn={acn}, gb={gb}, exit_day={day}, "
                         f"remaining_repair={remaining}, actual_duration={actual_duration}, "
                         f"new_status={st}"
                     )
@@ -127,7 +127,7 @@ def main() -> int:
                 runtime_violations += 1
                 if len(runtime_samples) < 5:
                     runtime_samples.append(
-                        f"  acn={acn}, gb={gb}, day={day}, repair_days={rd}, "
+                        f"  version_date={vdate}, acn={acn}, gb={gb}, day={day}, repair_days={rd}, "
                         f"repair_time={rt}, new_status={st}"
                     )
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (P1 cleanup): устарел/дубликат, SSoT-замена: inv3_repair_capacity.py
 """
 Standalone prototype: Repair Gantt scheduler (GPU-agnostic logic).
 

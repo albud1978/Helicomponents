@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (P1 cleanup): устарел/дубликат, SSoT-замена: inv6_dt_only_ops.py
 """
 INV-6: dt > 0 только в operations.
 """
