@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (code utils cleanup): orphan/устаревшая утилита, 0 импортёров; перекрыта живыми модулями или старым workflow.
 """
 Скрипт для клонирования таблицы sim_masterv2 в sim_masterv3
 ⚠️ ВАЖНО: Не удаляет исходную таблицу sim_masterv2!
