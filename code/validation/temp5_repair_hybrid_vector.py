@@ -85,6 +85,7 @@ def main() -> int:
         SELECT
             aircraft_number,
             group_by,
+            version_date,
             day_u16,
             pre_status_id,
             status_id,
@@ -118,12 +119,13 @@ def main() -> int:
         SELECT
             aircraft_number,
             group_by,
+            version_date,
             day_u16,
             repair_claim_line_id,
             repair_claim_start_day,
             repair_claim_end_day,
             row_number() OVER (
-                PARTITION BY group_by, repair_claim_line_id
+                PARTITION BY group_by, version_date, repair_claim_line_id
                 ORDER BY repair_claim_start_day,
                          repair_claim_end_day,
                          day_u16,
@@ -136,12 +138,13 @@ def main() -> int:
         SELECT
             aircraft_number,
             group_by,
+            version_date,
             day_u16,
             repair_claim_line_id,
             repair_claim_start_day,
             repair_claim_end_day,
             max(repair_claim_end_day) OVER (
-                PARTITION BY group_by, repair_claim_line_id
+                PARTITION BY group_by, version_date, repair_claim_line_id
                 ORDER BY repair_claim_start_day,
                          repair_claim_end_day,
                          day_u16,

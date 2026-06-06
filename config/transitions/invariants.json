@@ -111,14 +111,14 @@
     },
     {
       "id": "INV-9",
-      "claim": "limiter=0 обязан приводить к выходу из operations",
-      "expr": "forall agent in state 2: if limiter == 0 then next step agent NOT in state 2",
+      "claim": "Борт не остаётся в ops, если следующий день строго превысил бы ресурс (look-ahead safety)",
+      "expr": "forall agent where status == 2 AND next_status == 2: sne + daily_next_u32 <= ll AND ppr + daily_next_u32 <= oh",
       "scope": "per_agent",
       "severity": "CRITICAL",
       "validator": "code/validation/inv9_limiter_exit.py",
-      "last_validated": "2026-02-14",
-      "last_result": "PASS (0 violations, datasets 20250704 + 20251230)",
-      "notes": "Если limiter=0 и агент в ops, на следующем шаге должен выйти. known_artifact: в БД limiter=0 может быть артефактом порядка экспорта (snapshot после инкремента, до переходов)."
+      "last_validated": "pending revalidation",
+      "last_result": "pending revalidation",
+      "notes": "После look-ahead рефактора limiter=0 является postcondition выхода/границы, а не драйвером ухода из ops. Старый scope limiter=0 AND status_id=2 был вакуумным на экспорте; валидатор проверяет staying-ops строки через daily_next_u32 со строгой границей >."
     },
     {
       "id": "INV-10",
@@ -185,14 +185,14 @@
     },
     {
       "id": "TEMP-5",
-      "claim": "Hybrid precondition: для каждого 4→2 на дне d доступная ремонтная емкость подтверждается по repairline",
-      "expr": "for each (day,group): busy_today >= count_4to2(day,group) AND future_busy_sum[day,day+repair_window) >= count_4to2(day,group) * effective_window, where effective_window = min(repair_window, max_day_group - day + 1), max_day_group = max(day_u16) in repairline for group, and if effective_window <= 0 then required = 0",
+      "claim": "Repair claim/bank integrity: commit-claims валидны, 4→2 сопровождается claim, интервалы линий не пересекаются, bank-claim не короче repair_time",
+      "expr": "invalid_claim_rows == 0 AND transition_claim_mismatch == 0 AND overlap_violations == 0 AND bank_underflow_suspicions == 0",
       "scope": "per_day_per_group",
       "severity": "HIGH",
       "validator": "code/validation/temp5_repair_hybrid_vector.py",
       "last_validated": "2026-02-17",
       "last_result": "PENDING (new validator)",
-      "notes": "Гибридная проверка: master transitions + repairline vectors. Capacity check выполняется по strict future cooldown window [day, day+repair_window) с tail adjustment на конце доступного горизонта repairline."
+      "notes": "Claim соответствует фактическому SQL валидатора temp5_repair_hybrid_vector.py: invalid_claim_rows, transition_claim_mismatch, overlap_violations, bank_underflow_suspicions. Capacity-семантика busy<=quota покрывается INV-3 inv3_repair_capacity.py по sim_repairline_v9; отдельный precondition-capacity validator не добавлялся."
     }
   ],
 

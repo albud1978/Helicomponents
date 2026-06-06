@@ -75,6 +75,7 @@ def main() -> int:
     WITH base1 AS (
         SELECT
             psn,
+            version_date,
             group_by,
             day_u16,
             state,
@@ -86,11 +87,12 @@ def main() -> int:
         WHERE version_date = %(uvd)s
           AND version_id = %(vid)s
           AND group_by IN (3, 4)
-        WINDOW w AS (PARTITION BY psn ORDER BY day_u16)
+        WINDOW w AS (PARTITION BY psn, version_date ORDER BY day_u16)
     ),
     base2 AS (
         SELECT
             psn,
+            version_date,
             group_by,
             day_u16,
             state,
@@ -100,11 +102,12 @@ def main() -> int:
             next_day,
             sum(if(state = 4 AND prev_state != 4, 1, 0)) OVER w AS span_id
         FROM base1
-        WINDOW w AS (PARTITION BY psn ORDER BY day_u16)
+        WINDOW w AS (PARTITION BY psn, version_date ORDER BY day_u16)
     ),
     spans AS (
         SELECT
             psn,
+            version_date,
             group_by,
             span_id,
             min(day_u16) AS enter_day,
@@ -114,7 +117,7 @@ def main() -> int:
             max(if(state = 4 AND next_state != 4 AND next_day > 0, 1, 0)) AS has_exit
         FROM base2
         WHERE state = 4
-        GROUP BY psn, group_by, span_id
+        GROUP BY psn, version_date, group_by, span_id
     )
     SELECT
         countIf(has_exit = 1) AS spans_ended,
@@ -136,6 +139,7 @@ def main() -> int:
         WITH base1 AS (
             SELECT
                 psn,
+                version_date,
                 group_by,
                 day_u16,
                 state,
@@ -147,11 +151,12 @@ def main() -> int:
             WHERE version_date = %(uvd)s
               AND version_id = %(vid)s
               AND group_by IN (3, 4)
-            WINDOW w AS (PARTITION BY psn ORDER BY day_u16)
+            WINDOW w AS (PARTITION BY psn, version_date ORDER BY day_u16)
         ),
         base2 AS (
             SELECT
                 psn,
+                version_date,
                 group_by,
                 day_u16,
                 state,
@@ -161,11 +166,12 @@ def main() -> int:
                 next_day,
                 sum(if(state = 4 AND prev_state != 4, 1, 0)) OVER w AS span_id
             FROM base1
-            WINDOW w AS (PARTITION BY psn ORDER BY day_u16)
+            WINDOW w AS (PARTITION BY psn, version_date ORDER BY day_u16)
         ),
         spans AS (
             SELECT
                 psn,
+                version_date,
                 group_by,
                 span_id,
                 min(day_u16) AS enter_day,
@@ -175,7 +181,7 @@ def main() -> int:
                 max(if(state = 4 AND next_state != 4 AND next_day > 0, 1, 0)) AS has_exit
             FROM base2
             WHERE state = 4
-            GROUP BY psn, group_by, span_id
+            GROUP BY psn, version_date, group_by, span_id
         )
         SELECT
             psn,

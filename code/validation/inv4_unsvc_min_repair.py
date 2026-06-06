@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
 INV-4: возврат из unsvc в ops не раньше repair_time.
+
+DEPRECATED: вакуумный (scope=0), покрывается INV-4 inv4_unsvc_repair_time.py.
 """
 import argparse
 import re

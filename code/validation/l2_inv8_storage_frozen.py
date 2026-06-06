@@ -59,6 +59,7 @@ def main() -> int:
     FROM (
         SELECT
             psn,
+            version_date,
             group_by,
             day_u16,
             state,
@@ -72,7 +73,7 @@ def main() -> int:
         WHERE version_date = %(uvd)s
           AND version_id = %(vid)s
           AND group_by IN (3, 4)
-        WINDOW w AS (PARTITION BY psn ORDER BY day_u16)
+        WINDOW w AS (PARTITION BY psn, version_date ORDER BY day_u16)
     )
     WHERE state = 6
       AND prev_state = 6
@@ -88,6 +89,7 @@ def main() -> int:
         FROM (
             SELECT
                 psn,
+                version_date,
                 group_by,
                 day_u16,
                 state,
@@ -101,7 +103,7 @@ def main() -> int:
             WHERE version_date = %(uvd)s
               AND version_id = %(vid)s
               AND group_by IN (3, 4)
-            WINDOW w AS (PARTITION BY psn ORDER BY day_u16)
+            WINDOW w AS (PARTITION BY psn, version_date ORDER BY day_u16)
         )
         WHERE state = 6
           AND prev_state = 6

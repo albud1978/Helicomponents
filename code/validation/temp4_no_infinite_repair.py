@@ -49,7 +49,7 @@ def main() -> int:
     query = f"""
     WITH repair_spans AS (
         SELECT
-            aircraft_number, group_by,
+            aircraft_number, group_by, version_date,
             min(day_u16) AS enter_day,
             max(day_u16) AS last_day_in_repair,
             max(day_u16) - min(day_u16) AS span,
@@ -58,13 +58,15 @@ def main() -> int:
             SELECT
                    aircraft_number,
                    group_by,
+                   version_date,
                    day_u16,
                    is_repair,
-                   sum(new_span) OVER (PARTITION BY aircraft_number, group_by ORDER BY day_u16) AS span_id
+                   sum(new_span) OVER (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16) AS span_id
             FROM (
                 SELECT
                     aircraft_number,
                     group_by,
+                    version_date,
                     day_u16,
                     is_repair,
                     prev_is_repair,
@@ -73,17 +75,18 @@ def main() -> int:
                     SELECT
                         aircraft_number,
                         group_by,
+                        version_date,
                         day_u16,
                         if(status_id = 4, 1, 0) AS is_repair,
                         lagInFrame(if(status_id = 4, 1, 0), 1, 0) OVER w AS prev_is_repair
                     FROM {table}
                     WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
-                    WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
+                    WINDOW w AS (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16)
                 )
             )
             WHERE is_repair = 1
         )
-        GROUP BY aircraft_number, group_by, span_id
+        GROUP BY aircraft_number, group_by, version_date, span_id
     )
     SELECT count() FROM repair_spans
     WHERE span > {args.max_repair_days}
@@ -98,7 +101,7 @@ def main() -> int:
         sample = client.execute(f"""
         WITH repair_spans AS (
             SELECT
-                aircraft_number, group_by,
+                aircraft_number, group_by, version_date,
                 min(day_u16) AS enter_day,
                 max(day_u16) AS last_day,
                 max(day_u16) - min(day_u16) AS span
@@ -106,13 +109,15 @@ def main() -> int:
                 SELECT
                        aircraft_number,
                        group_by,
+                       version_date,
                        day_u16,
                        is_repair,
-                       sum(new_span) OVER (PARTITION BY aircraft_number, group_by ORDER BY day_u16) AS span_id
+                       sum(new_span) OVER (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16) AS span_id
                 FROM (
                     SELECT
                         aircraft_number,
                         group_by,
+                        version_date,
                         day_u16,
                         is_repair,
                         prev_is_repair,
@@ -121,17 +126,18 @@ def main() -> int:
                         SELECT
                             aircraft_number,
                             group_by,
+                            version_date,
                             day_u16,
                             if(status_id = 4, 1, 0) AS is_repair,
                             lagInFrame(if(status_id = 4, 1, 0), 1, 0) OVER w AS prev_is_repair
                         FROM {table}
                         WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
-                        WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
+                        WINDOW w AS (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16)
                     )
                 )
                 WHERE is_repair = 1
             )
-            GROUP BY aircraft_number, group_by, span_id
+            GROUP BY aircraft_number, group_by, version_date, span_id
         )
         SELECT aircraft_number, enter_day, last_day, span
         FROM repair_spans

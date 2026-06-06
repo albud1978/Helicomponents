@@ -62,10 +62,10 @@ def main() -> int:
     max_query = f"""
     SELECT max(n)
     FROM (
-        SELECT day_u16, countIf({busy_expr}) AS n
+        SELECT version_date, day_u16, countIf({busy_expr}) AS n
         FROM {table}
         WHERE version_id = %(vid)s{vd_filter}
-        GROUP BY day_u16
+        GROUP BY version_date, day_u16
     )
     """
     max_concurrent = client.execute(max_query, params)[0][0]
@@ -75,10 +75,10 @@ def main() -> int:
     violations_query = f"""
     SELECT count()
     FROM (
-        SELECT day_u16, countIf({busy_expr}) AS n
+        SELECT version_date, day_u16, countIf({busy_expr}) AS n
         FROM {table}
         WHERE version_id = %(vid)s{vd_filter}
-        GROUP BY day_u16
+        GROUP BY version_date, day_u16
         HAVING n > %(quota)s
     )
     """
@@ -91,21 +91,21 @@ def main() -> int:
 
     if violations:
         sample_query = f"""
-        SELECT day_u16, n
+        SELECT version_date, day_u16, n
         FROM (
-            SELECT day_u16, countIf({busy_expr}) AS n
+            SELECT version_date, day_u16, countIf({busy_expr}) AS n
             FROM {table}
             WHERE version_id = %(vid)s{vd_filter}
-            GROUP BY day_u16
+            GROUP BY version_date, day_u16
             HAVING n > %(quota)s
         )
-        ORDER BY n DESC, day_u16
+        ORDER BY n DESC, version_date, day_u16
         LIMIT 5
         """
         rows = client.execute(sample_query, params)
-        details.append("top5 days (day, n):")
-        for day_u16, n in rows:
-            details.append(f"  day={day_u16}, n={n}")
+        details.append("top5 days (version_date, day, n):")
+        for version_date, day_u16, n in rows:
+            details.append(f"  version_date={version_date}, day={day_u16}, n={n}")
 
     passed = violations == 0
     print_result("INV-3 repair capacity", passed, details)
