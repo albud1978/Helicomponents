@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-06T09:12:38Z",
+    "updated_at": "2026-06-06T09:56:28Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -1587,8 +1587,8 @@
       "workflow_id": "W_code_rudiments_archive_20260606T070105Z",
       "goal": "Архивировать 7 orphan-рудиментов вне sim/extract/validation: code/utils/analysis/* (6) + root code/program_ac_precheck_runner.py (дубль extract-версии)",
       "phase": "implementation",
-      "owner": "orchestrator",
-      "status": "active",
+      "owner": "human",
+      "status": "closed",
       "caps": {
         "max_steps": 20,
         "max_tokens": 500000,
@@ -1596,13 +1596,13 @@
         "profile": "low"
       },
       "usage": {
-        "cumulative_steps": 3,
+        "cumulative_steps": 5,
         "cumulative_tokens": 62000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-06T09:12:38Z"
+        "last_updated": "2026-06-06T09:34:41Z"
       },
       "created_at": "2026-06-06T07:01:05Z",
-      "updated_at": "2026-06-06T09:12:38Z"
+      "updated_at": "2026-06-06T09:34:41Z"
     },
     {
       "workflow_id": "W_session_20260606T091046Z",
@@ -1624,6 +1624,27 @@
       },
       "created_at": "2026-06-06T09:10:46Z",
       "updated_at": "2026-06-06T09:10:46Z"
+    },
+    {
+      "workflow_id": "W_mark_experimental_20260606T095233Z",
+      "goal": "Пометить units_v1 стек как experimental reference + освежить docstring утилит",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 20,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 18000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-06T09:56:28Z"
+      },
+      "created_at": "2026-06-06T09:52:33Z",
+      "updated_at": "2026-06-06T09:56:28Z"
     }
   ],
   "handoffs": [
@@ -11394,6 +11415,127 @@
         "est_tokens": 12000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_code_rudiments_archive_20260606T070105Z_orchestrator_dab84e0c",
+      "workflow_id": "W_code_rudiments_archive_20260606T070105Z",
+      "agent": "orchestrator",
+      "user_goal": "разбор кодовых файлов вне архива ... рудименты в архив, утилиты проверить",
+      "changes": "16 файлов в архив (7 рудиментов + 9 утилит), glob code/validators/** убран из 25_invariants_contract.mdc, 2 утилиты оставлены живыми (heli_pandas_lease_restricted, export_over_limit_serviceable), commit 947f2360 pushed",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "read-only классификация 47 файлов; smoke 11 утилит (py_compile/--help/import без мутаций); 0 живых импортёров у 16 архивных; compileall live PASS",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "read-only классификация 47 файлов; smoke 11 утилит (py_compile/--help/import без мутаций); 0 живых импортёров у 16 архивных; compileall live PASS",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "415b3f9f9f9e4fe3c4b19333437f3f8f0ec6ae22b05dde7f3929417880e10675",
+      "created_at": "2026-06-06T09:34:31Z",
+      "modules": [
+        "extract_dwh",
+        "validation",
+        "infra"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_code_rudiments_archive_20260606T070105Z_orchestrator_c00218c5",
+      "workflow_id": "W_code_rudiments_archive_20260606T070105Z",
+      "agent": "orchestrator",
+      "user_goal": "разбор кодовых файлов вне архива ... рудименты в архив, утилиты проверить",
+      "changes": "16 файлов в архив (7 рудиментов + 9 утилит), glob code/validators/** убран, 2 утилиты оставлены живыми, commit 947f2360",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "read-only классификация 47 файлов; smoke 11 утилит без мутаций; 0 живых импортёров у 16; compileall live PASS",
+      "drift_check": "UserGoal vs Changes scope match: yes — только не-sim/extract/validation рудименты+утилиты; sim_v2/extract/validation логика не тронута; SSoT не тронут",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P2",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "read-only классификация 47 файлов; smoke 11 утилит без мутаций; 0 живых импортёров у 16; compileall live PASS",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "01fe309d687f7d7ac6b8151ae9d36a7f16830d894ecbb4b30aa0e554be76055f",
+      "created_at": "2026-06-06T09:34:41Z",
+      "modules": [
+        "extract_dwh",
+        "validation",
+        "infra"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_mark_experimental_20260606T095233Z_coder-general_d109d63a",
+      "workflow_id": "W_mark_experimental_20260606T095233Z",
+      "agent": "coder-general",
+      "user_goal": "Low-risk: только пометки в шапках/docstring, БЕЗ изменения логики. Workflow: W_mark_experimental_20260606T095233Z. Файлы остаются на месте (НЕ перемещать).",
+      "changes": "Marked 11 units_v1 messaging files as EXPERIMENTAL / REFERENCE; updated docstrings in analyze_step_reasons.py, compare_v8_baseline.py, create_messaging_tables.py; no files moved.",
+      "facts": "grep/rg over code/sim_v2/units, orchestrator_full.py, orchestrator_limiter_v8.py found no references to the 11 units_v1 files; compileall PASS; lints clean; messaging diff contains only # comments and module docstring text.",
+      "assumptions": "Runtime validation not run because task is comment/docstring-only; Risks if false: none expected for Python semantics because compileall passed.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_mark_experimental_20260606T095233Z:2026-06-06T09:52:33Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "comment/docstring-only markings; no runtime logic changes",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "script: python3 -m compileall -q -x '^code/archive/' code/sim_v2/messaging; manual-check: git diff for code/sim_v2/messaging contains only comments/docstrings",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "comment/docstring-only low-risk housekeeping",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-06T09:56:28Z",
+      "modules": [
+        "agent_setup",
+        "state_transitions",
+        "export",
+        "postprocess",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 18000,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -12890,6 +13032,24 @@
       "agent": "coder-general",
       "created_at": "2026-06-06T07:02:05Z",
       "updated_at": "2026-06-06T09:09:52Z"
+    },
+    {
+      "context_id": "ctx_W_code_rudiments_archive_20260606T070105Z_closure_256a3b1f",
+      "workflow_id": "W_code_rudiments_archive_20260606T070105Z",
+      "context_type": "closure",
+      "content": "Архив 16 рудиментов/утилит + правка glob, commit 947f2360 запушен",
+      "agent": "orchestrator",
+      "created_at": "2026-06-06T09:34:41Z",
+      "updated_at": "2026-06-06T09:34:41Z"
+    },
+    {
+      "context_id": "ctx_W_mark_experimental_20260606T095233Z_phase_start_5d41bcf2",
+      "workflow_id": "W_mark_experimental_20260606T095233Z",
+      "context_type": "phase_start",
+      "content": "coder-general start: low-risk comment/docstring-only markings in code/sim_v2/messaging; SuccessCriteria=compileall PASS + grep no live units_v1 imports + diff comments/docstrings only",
+      "agent": "coder-general",
+      "created_at": "2026-06-06T09:53:56Z",
+      "updated_at": "2026-06-06T09:53:56Z"
     }
   ],
   "meta": {
