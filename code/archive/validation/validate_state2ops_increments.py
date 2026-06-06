@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (P1 cleanup): устарел/дубликат, SSoT-замена: inv5_balance_increments.py
 """
 Валидация ЭТАП 1: state_2_operations
 Метод 2: Проверка инкрементов sne и ppr

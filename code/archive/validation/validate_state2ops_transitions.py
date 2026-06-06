@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (P1 cleanup): устарел/дубликат, SSoT-замена: inv10_turnover_balance.py
 """
 Валидация ЭТАП 1: state_2_operations
 Метод 1: Проверка переходов (intent_state или state для V8)

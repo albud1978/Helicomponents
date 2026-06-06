@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-06-06 — P1 cleanup валидаторов: архив устаревших/дубликатов + temp1 version-leakage fix
+
+**Workflow**: W_validators_p1_cleanup_20260606T021810Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit
+
+**Корень**:
+- Аудит выявил 10 устаревших/дублирующих скриптов (не в `run_all`) + version-leakage в TEMP-1 (`temp1_repair_duration.py`, в наборе).
+- Дубликаты перекрыты SSoT-скриптами; `state2ops`/`ops_exits` рассинхронены с look-ahead RTC v8: v8-таблица, string-state, `>=` вместо `>`, реконструкция из снапшотов ненадёжна.
+
+**Изменено**:
+- `git mv` 10 скриптов в `code/archive/` + `ARCHIVED`-шапки со ссылкой на SSoT-замену: validation (`inv5_sne_balance`, `inv6_dt_outside_ops`, `inv3_repair_limit`, `inv9_limiter_zero_exit`, `temp4_liveness`, `validate_state2ops_transitions`, `validate_state2ops_increments`, `inv4_unsvc_min_repair`) и analysis (`sim_validation_ops_exits`, `repair_gantt_standalone`).
+- `code/validation/temp1_repair_duration.py`: `version_date` добавлен в `SELECT` и ключи словарей (`day0_set`/`day0_remaining`/`exits loop`) — устранено смешивание датасетов при одном `version_id`.
+- `code/validation/inv2_ops_vs_target.py`: логика не менялась; добавлен поясняющий комментарий (`day_u16` 0-based ↔ `day_idx` 0-based, подтверждено по схеме `sim_masterv2_v9 day_date=version_date+day_u16` и RTC). Реального off-by-one нет.
+- `code/validation/README.md`: добавлен раздел `Archived`.
+
+**Приёмка**:
+- `reviewer-flame` APPROVE; `validator-judge` PASS.
+- TEMP-1 на `8001`: сумма per-vdate (`22 day0` / `659 runtime_exits` / `0 violations`) == no-date.
+- fixed-run `8104`: `run_all` 15/15 PASS (целостность набора); `8104` очищен, baseline `8001` сохранён.
+- ClickHouse был временно недоступен (infra), повторная валидация успешна.
+
+**Follow-up**:
+- Governance notes: reviewer handoff не записан в KG; approval не оформлен `ctx_<id>` — дисциплина, не блок.
+- P2 backlog остаётся: class-based `sim_validation_*` дубликаты, L2 vacuum на `8001`.
+
+---
+
 ## 2026-06-05 — Hardening валидаторов: устранение вакуумных PASS, blind-spots и version-leakage (P0)
 
 **Workflow**: W_validators_p0_hardening_20260605T190101Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit | **Governance**: allow_with_notes

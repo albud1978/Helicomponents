@@ -186,6 +186,8 @@ def main() -> int:
     for group_by in (1, 2):
         target_dict = targets[group_by]
         for day in step_days:
+            # day_u16 (0-based) ↔ day_idx (0-based): sim_masterv2_v9.day_date =
+            # version_date + day_u16, а RTC-квоты читают mp4_ops_counter[current_day].
             target = get_target_for_day(target_dict, day)
             ops_count = ops_counts.get((group_by, day), 0)
             diff = ops_count - target

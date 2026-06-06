@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-05T19:38:27Z",
+    "updated_at": "2026-06-06T03:01:52Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -1498,6 +1498,48 @@
       },
       "created_at": "2026-06-05T19:01:01Z",
       "updated_at": "2026-06-05T19:38:27Z"
+    },
+    {
+      "workflow_id": "W_housekeeping_20260606T015711Z",
+      "goal": "low-risk housekeeping edit of docs/validation_capsule.md",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-06T01:57:11Z"
+      },
+      "created_at": "2026-06-06T01:57:11Z",
+      "updated_at": "2026-06-06T01:57:11Z"
+    },
+    {
+      "workflow_id": "W_validators_p1_cleanup_20260606T021810Z",
+      "goal": "P1 cleanup валидаторов: архивировать устаревшие/дубликаты (9+inv4_min), исправить temp1 version-leakage, разобрать INV-2 off-by-one, обновить README",
+      "phase": "close",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 40,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-policy"
+      },
+      "usage": {
+        "cumulative_steps": 6,
+        "cumulative_tokens": 74000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-06T03:01:52Z"
+      },
+      "created_at": "2026-06-06T02:18:10Z",
+      "updated_at": "2026-06-06T03:01:52Z"
     }
   ],
   "handoffs": [
@@ -10521,6 +10563,253 @@
       "modules": [
         "validation"
       ]
+    },
+    {
+      "handoff_id": "handoff_W_validators_p1_cleanup_20260606T021810Z_coder-general_6db9ac85",
+      "workflow_id": "W_validators_p1_cleanup_20260606T021810Z",
+      "agent": "coder-general",
+      "user_goal": "P1 cleanup валидаторов. Архивировать устаревшие/дублирующие скрипты, исправить temp1 version leakage, разобрать INV-2 off-by-one, обновить README, не трогать code/sim_v2/config SSoT и не запускать полную симуляцию.",
+      "changes": "Archived via git mv: code/validation/inv5_sne_balance.py -> code/archive/validation/inv5_sne_balance.py; code/validation/inv6_dt_outside_ops.py -> code/archive/validation/inv6_dt_outside_ops.py; code/validation/inv3_repair_limit.py -> code/archive/validation/inv3_repair_limit.py; code/validation/inv9_limiter_zero_exit.py -> code/archive/validation/inv9_limiter_zero_exit.py; code/validation/temp4_liveness.py -> code/archive/validation/temp4_liveness.py; code/validation/validate_state2ops_transitions.py -> code/archive/validation/validate_state2ops_transitions.py; code/validation/validate_state2ops_increments.py -> code/archive/validation/validate_state2ops_increments.py; code/validation/inv4_unsvc_min_repair.py -> code/archive/validation/inv4_unsvc_min_repair.py; code/analysis/sim_validation_ops_exits.py -> code/archive/analysis/sim_validation_ops_exits.py; code/analysis/repair_gantt_standalone.py -> code/archive/analysis/repair_gantt_standalone.py. Added ARCHIVED 2026-06-06 headers. temp1_repair_duration.py: version_date included in day0/all_exits queries and Python keys. inv2_ops_vs_target.py: added 0-based day_u16/day_idx explanatory comment, no logic change. code/validation/README.md updated with active SSoT set and Archived section.",
+      "facts": "",
+      "assumptions": "ClickHouse native endpoint 10.95.19.132:9000 is temporarily unreachable from this session; Risks if false: TEMP-1 smoke could still reveal data-level violations once CH is available. INV-2 conclusion relies on active code/DDL evidence because CH fact-query was blocked; Risks if false: if a future table starts at day_u16=1 while still using day_date=version_date+day_u16, validator mapping would need escalation.",
+      "evidence": "rg import/from check in code/**: no live imports of archived modules. config/transitions/invariants.json: no refs to archived filenames. docs mentions found: docs/validation_capsule.md lines referencing sim_validation_ops_exits.py, validate_state2ops_increments.py, validate_state2ops_transitions.py; docs/transitions_capsule.md lines referencing validate_state2ops_transitions.py and validate_state2ops_increments.py. py_compile temp1/inv2 PASS. python3 -m compileall -q -x '^code/archive/' code PASS. ReadLints PASS. run_all.py SCRIPTS existence check: run_all_scripts=15 missing=0; rg old filenames in run_all.py/run_all_stream.py: no matches. git diff --cached --name-status --find-renames shows ten R100 renames; git status --short shows RM for moved files due added archive headers. TEMP-1 smoke attempted for --version-id 8001 with and without --version-date 20260408; both blocked before SQL result by clickhouse_driver SocketTimeoutError Code 209 to 10.95.19.132:9000, so violations numbers are unavailable.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_validators_p1_cleanup_20260606T021810Z:2026-06-06T02:24:30Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "medium-risk: архивирование code/validation/code/analysis + реальный фикс валидатора TEMP-1 + README; no sim_v2/config SSoT changes",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "P1 cleanup validators: archive legacy duplicates, fix TEMP-1 version_date keying, document INV-2 day mapping.",
+      "evidence_pack": "rg import/from check in code/**: no live imports of archived modules. config/transitions/invariants.json: no refs to archived filenames. docs mentions found: docs/validation_capsule.md lines referencing sim_validation_ops_exits.py, validate_state2ops_increments.py, validate_state2ops_transitions.py; docs/transitions_capsule.md lines referencing validate_state2ops_transitions.py and validate_state2ops_increments.py. py_compile temp1/inv2 PASS. python3 -m compileall -q -x '^code/archive/' code PASS. ReadLints PASS. run_all.py SCRIPTS existence check: run_all_scripts=15 missing=0; rg old filenames in run_all.py/run_all_stream.py: no matches. git diff --cached --name-status --find-renames shows ten R100 renames; git status --short shows RM for moved files due added archive headers. TEMP-1 smoke attempted for --version-id 8001 with and without --version-date 20260408; both blocked before SQL result by clickhouse_driver SocketTimeoutError Code 209 to 10.95.19.132:9000, so violations numbers are unavailable.",
+      "success_criteria": "script: py_compile temp1/inv2; script: compileall -x '^code/archive/' code; script: temp1 smoke 8001 with/without version_date; manual-check: git status renames and run_all existing scripts",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=temp1_smoke_clickhouse_timeout; evidence_refs=py_compile PASS; compileall PASS; ReadLints PASS; git status/diff; approval_ref=N/A",
+      "risks": "TEMP-1 smoke not numerically validated due CH timeout; docs capsules still mention archived legacy scripts and need docs-curator; archive header edits are unstaged modifications on top of staged git mv renames",
+      "next_owner": "reviewer-flame",
+      "open_questions": "Need rerun TEMP-1 smoke when ClickHouse native 10.95.19.132:9000 is reachable.",
+      "graph_update": "no",
+      "graph_update_reason": "No domain graph/SSoT update; validation/docs cleanup only",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-06T02:24:57Z",
+      "modules": [
+        "validation",
+        "quotas_ops",
+        "quotas_repair",
+        "infra"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 28000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_validators_p1_cleanup_20260606T021810Z_validator-judge_7aa863cf",
+      "workflow_id": "W_validators_p1_cleanup_20260606T021810Z",
+      "agent": "validator-judge",
+      "user_goal": "Приёмка P1 cleanup. Workflow: W_validators_p1_cleanup_20260606T021810Z (medium). Алексей разрешил тестовый version_id + ALTER DELETE (паттерн 8101/8102/8103).",
+      "changes": "No repository changes. Executed mandatory environment setup and ClickHouse native SELECT 1 precheck only; TEMP-1, fixed-run 8104, run_all, and cleanup were not executed.",
+      "facts": "",
+      "assumptions": "Assumption: ClickHouse service/network at 10.95.19.132:9000 is currently unavailable from this environment. Risks if false: validation may be unnecessarily blocked, but rerun of SELECT 1 will immediately clear the blocker.",
+      "evidence": "Environment: conda cuda13 + config/load_env.sh + CUBE_CONFIG_PATH=config. ClickHouse target from config/database_config.yaml/env: 10.95.19.132:9000, database default, user default. Command: clickhouse_driver Client.execute('SELECT 1') with native protocol. Result: SocketTimeoutError Code 209 / TimeoutError timed out before SELECT result; SELECT version() was not reached.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_validators_p1_cleanup_20260606T021810Z:20260606T023139Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Validation depends on ClickHouse native connection; authorized ALTER DELETE cleanup could not be reached because SELECT 1 timed out",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "Validation blocked at mandatory ClickHouse health check before TEMP-1 and fixed-run 8104 execution.",
+      "evidence_pack": "Environment: conda cuda13 + config/load_env.sh + CUBE_CONFIG_PATH=config. ClickHouse target from config/database_config.yaml/env: 10.95.19.132:9000, database default, user default. Command: clickhouse_driver Client.execute('SELECT 1') with native protocol. Result: SocketTimeoutError Code 209 / TimeoutError timed out before SELECT result; SELECT version() was not reached.",
+      "success_criteria": "temp1 с/без --version-date консистентен (сумма per-vdate == no-date) на 8001; run_all исполняет все 15 скриптов и все PASS на fixed-run 8104; 8104 очищен, 8001 сохранён",
+      "compliance_checklist": "decision=reject required_gates=partial exceptions=clickhouse_timeout evidence_refs=SELECT 1 native precheck;config/database_config.yaml;ctx_W_validators_p1_cleanup_20260606T021810Z_phase_start_8ab25835 approval_ref=N/A",
+      "risks": "SuccessCriteria cannot be verified without ClickHouse; 8104 cleanup was not needed because 8104 was not created by this validator run; no baseline counts were queried due CH timeout.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No domain graph change; validation blocked before data checks.",
+      "prev_handoff_hash": "8e12fb17c24319e39285bb0d2131bfc8f9b20c94bc3d12370b2a2af9357d96f7",
+      "created_at": "2026-06-06T02:31:39Z",
+      "modules": [
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 6500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_validators_p1_cleanup_20260606T021810Z_validator-judge_77567846",
+      "workflow_id": "W_validators_p1_cleanup_20260606T021810Z",
+      "agent": "validator-judge",
+      "user_goal": "Приёмка P1 cleanup (ПОВТОР — ClickHouse снова доступен, TCP 9000 OPEN). Workflow: W_validators_p1_cleanup_20260606T021810Z (medium). Алексей разрешил тестовый version_id + ALTER DELETE (паттерн 8101/8102/8103).\n\nИзменения: temp1_repair_duration.py получил version_date в SELECT+ключах (устранение version-leakage); 10 устаревших/дублирующих скриптов перемещены в code/archive (не в run_all). RTC НЕ менялся.\n\nСНАЧАЛА precheck: native SELECT 1 к ClickHouse (.env CLICKHOUSE_HOST=10.95.19.132:9000, clickhouse_driver, пароль из CLICKHOUSE_PASSWORD). Если снова timeout — фиксируй блокер, не выдумывай числа.\n\nШАГ 1: temp1 version-leakage консистентность на baseline 8001: no-date и per-version_date 20250704, 20251230, 20260221, 20260408; ожидание сумма per-vdate == no-date.\n\nШАГ 2: fixed-run 8104: запустить orchestrator_limiter_v8.py --version-date 2026-04-08 --end-day 3650, затем run_all.py --version-id 8104 --version-date 20260408; ожидание все 15 PASS включая TEMP-1=0.\n\nШАГ 3: ALTER TABLE sim_masterv2_v9 DELETE WHERE version_id=8104 плюс sim_repairline_v9; контрольные count baseline 8001 до/после не тронут.\n\nHANDOFF: SuccessCriteria: temp1 сумма per-vdate == no-date на 8001; run_all исполняет все 15 скриптов, все PASS на 8104; 8104 очищен, 8001 сохранён. NextOwner: orchestrator.",
+      "changes": "No repository files changed by validator-judge. Executed ClickHouse precheck, TEMP-1 consistency checks, fixed simulation run 8104, run_all validation, and authorized cleanup of test rows 8104.",
+      "facts": "",
+      "assumptions": "None.",
+      "evidence": "Facts: Checked dispatch SuccessCriteria exactly: (1) TEMP-1 sum per-vdate == no-date on version_id=8001: PASS; (2) run_all executes all 15 scripts and all PASS on version_id=8104/version_date=20260408: PASS; (3) version_id=8104 cleaned from sim_masterv2_v9 and sim_repairline_v9 while 8001 counts preserved: PASS.\nEvidence: Precheck: native clickhouse_driver SELECT 1 OK against 10.95.19.132:9000/default, server 24.10.1.2812.\nTEMP-1 8001: no-date PASS day0_agents=22 day0_violations=0 runtime_exits=659 runtime_violations=0 total_violations=0. Per-date: 20250704 PASS 7/0/185/0/0; 20251230 PASS 4/0/191/0/0; 20260221 PASS 6/0/143/0/0; 20260408 PASS 5/0/140/0/0. Sum matches no-date: 22/0/659/0/0.\nFixed run 8104: orchestrator_limiter_v8.py --version-date 2026-04-08 --end-day 3650 exit_code=0; sim_masterv2_v9 inserted 85577 rows, sim_repairline_v9 inserted 65700 rows; built-in ops=target PASS.\nrun_all 8104/20260408: all 15 SSoT scripts executed, no file-not-found/import errors; SUMMARY INV-1..INV-12 PASS, TEMP-1 PASS, TEMP-4 PASS, TEMP-5 PASS, TOTAL=15 FAIL=0.\nCleanup: DESCRIBE confirmed version_date UInt32, version_id UInt32, day_date Date, day_u16 UInt16, group_by UInt8 in both sim_masterv2_v9 and sim_repairline_v9. ALTER DELETE version_id=8104 executed with mutations_sync=2 on both tables. Remaining 8104 rows: master=0, repairline=0. Baseline 8001 counts preserved before/after: master 20250704=86468, 20251230=87966, 20260221=86655, 20260408=85893; repairline each date=65700.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_validators_p1_cleanup_20260606T021810Z:2026-06-06T02:54:04Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "P1 cleanup acceptance validates simulation outputs and validation runner integrity; authorized ALTER DELETE mutates ClickHouse test rows; baseline 8001 preservation required.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "Validate P1 cleanup: TEMP-1 version_date isolation on 8001; fixed run 8104 with run_all; cleanup 8104 with 8001 count control.",
+      "evidence_pack": "Facts: Checked dispatch SuccessCriteria exactly: (1) TEMP-1 sum per-vdate == no-date on version_id=8001: PASS; (2) run_all executes all 15 scripts and all PASS on version_id=8104/version_date=20260408: PASS; (3) version_id=8104 cleaned from sim_masterv2_v9 and sim_repairline_v9 while 8001 counts preserved: PASS.\nEvidence: Precheck: native clickhouse_driver SELECT 1 OK against 10.95.19.132:9000/default, server 24.10.1.2812.\nTEMP-1 8001: no-date PASS day0_agents=22 day0_violations=0 runtime_exits=659 runtime_violations=0 total_violations=0. Per-date: 20250704 PASS 7/0/185/0/0; 20251230 PASS 4/0/191/0/0; 20260221 PASS 6/0/143/0/0; 20260408 PASS 5/0/140/0/0. Sum matches no-date: 22/0/659/0/0.\nFixed run 8104: orchestrator_limiter_v8.py --version-date 2026-04-08 --end-day 3650 exit_code=0; sim_masterv2_v9 inserted 85577 rows, sim_repairline_v9 inserted 65700 rows; built-in ops=target PASS.\nrun_all 8104/20260408: all 15 SSoT scripts executed, no file-not-found/import errors; SUMMARY INV-1..INV-12 PASS, TEMP-1 PASS, TEMP-4 PASS, TEMP-5 PASS, TOTAL=15 FAIL=0.\nCleanup: DESCRIBE confirmed version_date UInt32, version_id UInt32, day_date Date, day_u16 UInt16, group_by UInt8 in both sim_masterv2_v9 and sim_repairline_v9. ALTER DELETE version_id=8104 executed with mutations_sync=2 on both tables. Remaining 8104 rows: master=0, repairline=0. Baseline 8001 counts preserved before/after: master 20250704=86468, 20251230=87966, 20260221=86655, 20260408=85893; repairline each date=65700.",
+      "success_criteria": "temp1 сумма per-vdate == no-date на 8001; run_all исполняет все 15 скриптов, все PASS на 8104; 8104 очищен, 8001 сохранён",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=ClickHouse SELECT 1; temp1_repair_duration.py 8001; orchestrator_limiter_v8.py 8104; run_all.py 8104/20260408; cleanup counts; approval_ref=N/A",
+      "risks": "No residual 8104 rows after cleanup. Baseline 8001 counts matched before/after. No RTC files were changed in this validation phase.",
+      "next_owner": "orchestrator",
+      "open_questions": "None.",
+      "graph_update": "no",
+      "graph_update_reason": "Validation-only acceptance; Domain Graph/SSoT unchanged.",
+      "prev_handoff_hash": "958edfac061c214c82f93d0637490facc76503561ec45a142b0d489b1e2a2a74",
+      "created_at": "2026-06-06T02:54:04Z",
+      "modules": [
+        "validation",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 20000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_validators_p1_cleanup_20260606T021810Z_governance-compliance_f91280e6",
+      "workflow_id": "W_validators_p1_cleanup_20260606T021810Z",
+      "agent": "governance-compliance",
+      "user_goal": "Governance single-pass verdict for P1 cleanup (archive 10 validators + temp1 version-leakage fix + INV-2 off-by-one comment). User chose archive variant via AskQuestion.",
+      "changes": "No repository edits by governance-compliance. Verdict: allow_with_notes. Verified: (1) scope UserGoal=archive+temp1+INV-2 fully matches Changes (coder-general handoff 6db9ac85 + validator-judge handoff 77567846); (2) artefacts on disk — 10 files in code/archive/{validation,analysis}/, temp1_repair_duration.py contains version_date in SELECT+params+keys (lines 47-48,70,88,94,118,130), inv2_ops_vs_target.py modified +2 lines (comment only per git diff --stat), README updated; (3) anti-overengineering — INV-2 logic untouched, temp1 diff minimal (18 lines), no speculative abstractions; (4) iteration limit — 1 implement→review cycle; (5) CH outage handled correctly as infra incident (first validator handoff 7aa863cf rejected with exception=clickhouse_timeout, retry 77567846 PASSed).",
+      "facts": "",
+      "assumptions": "Reviewer-flame APPROVE actually happened as parent dispatcher reports; risk-if-false: validator-judge V1 PASS is the only independent verification — already sufficient for archive+SQL changes since validator covers run_all integrity (15/15) and temp1 numerical consistency. ALTER DELETE pattern 8101/8102/8103 is established prior approval that Алексей extended to 8104; risk-if-false: would require retroactive cleanup, but validator already confirmed 8104=0 rows post-cleanup with 8001 baseline counts preserved.",
+      "evidence": "PROCESS GATES PASS: scope_match=ok (Changes ↔ UserGoal aligned); traceability=ok (TraceID/PlanStepID present in coder-general P1 and validator-judge V1); SuccessCriteria=verifiable (temp1 sum per-vdate == no-date on 8001 — PASS 22/659/0; run_all 15/15 PASS on 8104; cleanup confirmed baseline 8001 preserved); GraphUpdate=no (SSoT invariants.json and config/transitions/** untouched per coder-general evidence); pre_gate dispatch discipline respected (medium-policy profile, single coder+single validator); no nested subagent detected; CH outage and retry properly traced as separate handoffs (audit trail preserved). FILE-LEVEL EVIDENCE: ls code/archive/validation/ → 8 files (inv3/inv4/inv5/inv6/inv9/temp4/validate_state2ops_{increments,transitions}); ls code/archive/analysis/ → 2 files (repair_gantt_standalone, sim_validation_ops_exits); git diff --stat HEAD → 3 files (README -101 net lines, temp1 +18/-... net 18 changes, inv2 +2 lines); Grep version_date in temp1 confirms symmetrical addition in 3 SELECTs and Python key tuple. EXCEPTIONS (allow_with_notes): (a) reviewer-flame APPROVE cited in orchestrator dispatch but no reviewer-flame handoff exists in Agent KG for this workflow — review work was performed but not persisted (process discipline gap; reviewer for coder-general is optional per 90_multiagent_workflow); (b) approval-context for AskQuestion 'archive' choice and ALTER DELETE pattern 8101/8102/8103 reference NOT registered via --register-approval-request → approval_ref=N/A inline; (c) user_comm_audit.log entries for this workflow window (rows 119-120) carry workflow_id=N/A workflow_id_source=none — known hook limitation for AskQuestion-driven decisions, not a policy violation by itself.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_validators_p1_cleanup_20260606T021810Z:2026-06-06T02:55:00Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "P1 cleanup: archive object deletion-equivalent (git mv) + validator code fix (TEMP-1 SQL semantics) + ALTER DELETE on baseline-adjacent rows; medium-policy profile; reversible через git revert",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Single-pass governance verdict per Tier-M M3: проверить scope/traceability/anti-overengineering/approval/evidence; зафиксировать вердикт; назначить docs-curator для синхронизации капсул.",
+      "evidence_pack": "PROCESS GATES PASS: scope_match=ok (Changes ↔ UserGoal aligned); traceability=ok (TraceID/PlanStepID present in coder-general P1 and validator-judge V1); SuccessCriteria=verifiable (temp1 sum per-vdate == no-date on 8001 — PASS 22/659/0; run_all 15/15 PASS on 8104; cleanup confirmed baseline 8001 preserved); GraphUpdate=no (SSoT invariants.json and config/transitions/** untouched per coder-general evidence); pre_gate dispatch discipline respected (medium-policy profile, single coder+single validator); no nested subagent detected; CH outage and retry properly traced as separate handoffs (audit trail preserved). FILE-LEVEL EVIDENCE: ls code/archive/validation/ → 8 files (inv3/inv4/inv5/inv6/inv9/temp4/validate_state2ops_{increments,transitions}); ls code/archive/analysis/ → 2 files (repair_gantt_standalone, sim_validation_ops_exits); git diff --stat HEAD → 3 files (README -101 net lines, temp1 +18/-... net 18 changes, inv2 +2 lines); Grep version_date in temp1 confirms symmetrical addition in 3 SELECTs and Python key tuple. EXCEPTIONS (allow_with_notes): (a) reviewer-flame APPROVE cited in orchestrator dispatch but no reviewer-flame handoff exists in Agent KG for this workflow — review work was performed but not persisted (process discipline gap; reviewer for coder-general is optional per 90_multiagent_workflow); (b) approval-context for AskQuestion 'archive' choice and ALTER DELETE pattern 8101/8102/8103 reference NOT registered via --register-approval-request → approval_ref=N/A inline; (c) user_comm_audit.log entries for this workflow window (rows 119-120) carry workflow_id=N/A workflow_id_source=none — known hook limitation for AskQuestion-driven decisions, not a policy violation by itself.",
+      "success_criteria": "manual-check: ComplianceChecklist (5-field) записан; вердикт зафиксирован в KG; NextOwner=docs-curator",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=reviewer_handoff_missing_in_kg;approval_context_not_registered;workflow_id_source_none_for_human_gate; evidence_refs=handoff_coder-general_6db9ac85;handoff_validator-judge_77567846;handoff_validator-judge_7aa863cf;ls code/archive/{validation,analysis}/;git diff --stat HEAD;Grep version_date temp1_repair_duration.py; approval_ref=N/A",
+      "risks": "Капсулы validation_capsule.md и transitions_capsule.md ссылаются на архивированные пути (validate_state2ops_*, sim_validation_ops_exits) — требует docs-curator пасса для синхронизации. Без него повторное чтение капсул может направить будущих агентов к мёртвым импортам.",
+      "next_owner": "docs-curator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "domain model unchanged, SSoT invariants.json/config/transitions/** not touched",
+      "prev_handoff_hash": "711f215416e9d0538cfb9c3711fcbb73c9f44865b9ba80d78647cd92d741139d",
+      "created_at": "2026-06-06T02:57:07Z",
+      "modules": [
+        "validation"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 7500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_validators_p1_cleanup_20260606T021810Z_docs-curator_50ff6bdf",
+      "workflow_id": "W_validators_p1_cleanup_20260606T021810Z",
+      "agent": "docs-curator",
+      "user_goal": "Документация для P1 cleanup. Workflow: W_validators_p1_cleanup_20260606T021810Z. Две задачи: (1) changelog-запись; (2) синхронизация путей в двух капсулах после архивирования скриптов. НЕ создавай новых .md.",
+      "changes": "docs/changelog.md: добавлена верхняя запись 2026-06-06 по P1 cleanup; docs/validation_capsule.md: строки Scope/Decisions/Validation Proof переведены с активных путей sim_validation_ops_exits и validate_state2ops_* на code/archive/... с SSoT-заменами INV; docs/transitions_capsule.md: Validation Proof и Pointers переведены на code/archive/validation/validate_state2ops_* с пометкой archived 2026-06-06.",
+      "facts": "phase_start context записан в Agent KG: ctx_W_validators_p1_cleanup_20260606T021810Z_phase_start_8ab25835; ReadLints по docs/changelog.md, docs/validation_capsule.md, docs/transitions_capsule.md: No linter errors found; rg по docs для старых активных путей показал отсутствие таких ссылок в целевых капсулах, остались только исторические упоминания в changelog/archive docs.",
+      "assumptions": "Исторические ссылки в старых changelog/archive docs не считаются живыми маршрутами для будущих агентов. Risks if false: понадобится отдельная архивная нормализация исторических документов.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_validators_p1_cleanup_20260606T021810Z:2026-06-06T02:58:00Z",
+      "plan_step_id": "D1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Domain Graph не менялся; обновлены только документы/капсулы.",
+      "prev_handoff_hash": "70dfe15b0366e07016797b994b33a9b826cc621e8317e0cbdc6d435950188242",
+      "created_at": "2026-06-06T03:01:18Z",
+      "modules": [
+        "validation",
+        "state_transitions",
+        "infra"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_validators_p1_cleanup_20260606T021810Z_orchestrator_24cb4ac1",
+      "workflow_id": "W_validators_p1_cleanup_20260606T021810Z",
+      "agent": "orchestrator",
+      "user_goal": "да давай делать P1 ... archive",
+      "changes": "git mv 10 скриптов в code/archive/{validation,analysis}; temp1_repair_duration.py +version_date в SELECT/ключи; inv2 +комментарий (логика не тронута); README + validation_capsule + transitions_capsule + changelog.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "validator-judge: temp1 8001 sum per-vdate(22/659/0)==no-date PASS; fixed-run 8104 run_all 15/15 PASS (целостность архива); 8104 очищен, baseline 8001 сохранён. reviewer APPROVE. CH outage→retry PASS.",
+      "drift_check": "UserGoal(P1 cleanup, archive) vs Changes: match yes",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P1-close",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Перемещение validation-скриптов в архив + правка temp1 (in-suite валидатор)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "P1 cleanup: архив 10 устаревших/дубликатов + temp1 version-leakage fix + INV-2 разбор (off-by-one нет) + README/капсулы.",
+      "evidence_pack": "validator-judge: temp1 8001 sum per-vdate(22/659/0)==no-date PASS; fixed-run 8104 run_all 15/15 PASS (целостность архива); 8104 очищен, baseline 8001 сохранён. reviewer APPROVE. CH outage→retry PASS.",
+      "success_criteria": "SQL: temp1 sum per-vdate == no-date на 8001 (22/659/0); script: run_all 15/15 PASS на 8104",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=reviewer_handoff_missing_in_kg,approval_context_not_registered; evidence_refs=handoff_validator-judge_77567846; approval_ref=N/A",
+      "risks": "P2 backlog (class-based sim_validation_* дубликаты, L2 vacuum на 8001) не закрыт",
+      "next_owner": "human",
+      "open_questions": "Коммит P1? Браться ли за P2 backlog?",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "e856ef3b5d41cd59d4c14b4ddec58f835bface9118d4c39922ad727521d7c4b1",
+      "created_at": "2026-06-06T03:01:52Z",
+      "modules": [
+        "validation"
+      ]
     }
   ],
   "contexts": [
@@ -11945,6 +12234,24 @@
       "agent": "orchestrator",
       "created_at": "2026-06-05T19:38:27Z",
       "updated_at": "2026-06-05T19:38:27Z"
+    },
+    {
+      "context_id": "ctx_W_validators_p1_cleanup_20260606T021810Z_phase_start_8ab25835",
+      "workflow_id": "W_validators_p1_cleanup_20260606T021810Z",
+      "context_type": "phase_start",
+      "content": "docs-curator phase_start: P1 cleanup documentation sync (changelog + capsule path updates)",
+      "agent": "docs-curator",
+      "created_at": "2026-06-06T02:19:43Z",
+      "updated_at": "2026-06-06T02:58:25Z"
+    },
+    {
+      "context_id": "ctx_W_validators_p1_cleanup_20260606T021810Z_closure_a68458cb",
+      "workflow_id": "W_validators_p1_cleanup_20260606T021810Z",
+      "context_type": "closure",
+      "content": "P1 cleanup завершён: архив 10 скриптов, temp1 leakage fix, INV-2 ok. validator 15/15 PASS, governance allow_with_notes.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-06T03:01:52Z",
+      "updated_at": "2026-06-06T03:01:52Z"
     }
   ],
   "meta": {

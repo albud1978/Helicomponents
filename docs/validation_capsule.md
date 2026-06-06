@@ -6,10 +6,10 @@
 - `code/analysis/sim_validation_runner_msg.py` (оркестратор валидации MESSAGING)
 - `code/analysis/sim_validation_quota.py` (INV-2: ops vs target)
 - `code/analysis/sim_validation_increments.py` (INV-6: dt>0 только в ops)
-- `code/analysis/sim_validation_ops_exits.py` (ops exits: limiter==0, ресурс, маскировка)
+- `code/archive/analysis/sim_validation_ops_exits.py` (archived 2026-06-06; ops exits legacy, SSoT-замена: INV-1/INV-9/INV-12)
 - `code/analysis/sim_validation_transitions.py` (матрица переходов)
-- `code/validation/validate_state2ops_increments.py` (INV-5: баланс наработок)
-- `code/validation/validate_state2ops_transitions.py` (переходы state_2_operations)
+- `code/archive/validation/validate_state2ops_increments.py` (archived 2026-06-06; SSoT-замена: INV-5)
+- `code/archive/validation/validate_state2ops_transitions.py` (archived 2026-06-06; SSoT-замена: INV-9/INV-10)
 - `code/sim_v2/messaging/validate_limiter_flight_hours.py` (INV-7: dt = программа)
 - `code/sim_v2/messaging/validate_limiter_ops_target.py` (INV-2: ops = target на шагах)
 - `code/sim_v2/messaging/validate_limiter_v3.py` (комплексная LIMITER валидация)
@@ -54,7 +54,7 @@ SSoT: `config/transitions/invariants.json`
 3. **Baseline заморожен** — sim_masterv2 baseline не изменяется; сравнение с ним только по запросу.
 4. **Реальные данные only** — синтетика/заглушки запрещены без явного разрешения.
 5. **JIT warnings = дефект** — каждый NVRTC warning исправляется немедленно (GPU-4).
-6. **Ops-exit проверки вынесены в отдельный скрипт** — `sim_validation_ops_exits.py` (4 проверки).
+6. **Ops-exit legacy-проверки заархивированы** — `code/archive/analysis/sim_validation_ops_exits.py`; активные SSoT-проверки идут через INV-1/INV-9/INV-12.
 
 ## Impact Paths
 - `invariants.json` → определяет ЧТО проверять → все скрипты валидации
@@ -63,7 +63,7 @@ SSoT: `config/transitions/invariants.json`
 - Результат валидации → решение о коммите (оркестратор workflow)
 
 ## Validation Proof
-Рекурсивное: капсула описывает саму систему валидации. Верификация — ручной аудит + SQL-запросы к реальным данным + `sim_validation_ops_exits.py` (4 проверки).
+Рекурсивное: капсула описывает саму систему валидации. Верификация — ручной аудит + SQL-запросы к реальным данным + активные SSoT-валидаторы из `code/validation/run_all.py`; legacy `code/archive/analysis/sim_validation_ops_exits.py` оставлен как архивный артефакт.
 
 ## Risks (≤7) + Mitigations
 - PENDING валидаторы: INV-11 (last_validated 2026-03-03), TEMP-5 (last_validated 2026-02-17) — оба new validators, ожидают full sim run для PASS verdict
