@@ -90,7 +90,7 @@
 
 **Минусы**
 
-- **Risk-tier Medium-High в первой итерации**: вторжение в `base_model_messaging.py` + новый StepController + phase machinery; нужен parallel testing (V8 standalone vs E full mode — численная эквивалентность по всем INV-1..11).
+- **Risk-tier Medium-High в первой итерации**: вторжение в `base_model_messaging.py` + новый StepController + phase machinery; нужен parallel testing (V8 standalone vs E full mode — численная эквивалентность по всем INV-1..12).
 - **Размер Environment растёт**: GPU memory budget audit в §10.
 - **`MAX_EXPORT_STEPS = 500`** — раздельные буферы по фазам; планерный MP2 не теряется.
 - **Сложнее отладка mixed-failures**: mitigates через `phase_flag` в логах.
