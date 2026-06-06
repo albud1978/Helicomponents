@@ -2,15 +2,12 @@
 """
 Messaging архитектура для симуляции планеров
 
-Альтернативный подход с использованием нативных сообщений FLAME GPU
-вместо MacroProperty буферов для квотирования.
+Активный V8-стек использует нативные сообщения FLAME GPU для
+квотирования и RepairLine, сохраняя базовые типы модели в этом пакете.
 
-Структура:
-- base_model_messaging.py: Базовая модель с Message типами и QuotaManager агентом
-- rtc_publish_report.py: Публикация PlanerReport сообщений
-- rtc_quota_manager.py: QuotaManager логика (демоут + каскадный промоут)
-- rtc_apply_decisions.py: Применение QuotaDecision планерами
-- orchestrator_messaging.py: Оркестратор для messaging пайплайна
+Актуальная структура:
+- orchestrator_limiter_v8.py: активный оркестратор LIMITER V8
+- base_model_messaging.py: базовая модель с Message типами, QuotaManager и RepairLine агентами
 
 Таблицы СУБД:
 - sim_masterv2_msg: Результаты симуляции (отдельно от основной ветки)

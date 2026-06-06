@@ -277,23 +277,23 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 | Файл | Статус | Описание |
 |------|--------|----------|
 | **`code/sim_v2/messaging/orchestrator_limiter_v8.py`** | ✅ **ОСНОВНОЙ** | RepairLine + adaptive steps (deterministic_dates) |
-| `code/sim_v2/messaging/orchestrator_limiter_v5.py` | ⚡ Резервный | Двухфазная (intent-based), 100% GPU-only |
-| `code/sim_v2/messaging/orchestrator_limiter_v3.py` | 📦 Архивный | `while step()` + HF |
+| `code/archive/sim_v2_messaging/orchestrator_limiter_v5.py` | 📦 Архивный | Двухфазная (intent-based), 100% GPU-only |
+| `code/archive/sim_v2_messaging/orchestrator_limiter_v3.py` | 📦 Архивный | `while step()` + HF |
 | `code/sim_v2/messaging/rtc_quota_v8_base.py` | ✅ Актуальный | Локальные квоты V8 (без зависимости от V7) |
 | `code/sim_v2/messaging/rtc_state_transitions_v7.py` | ✅ Актуальный | Однофазные переходы состояний |
 | `code/sim_v2/messaging/rtc_limiter_optimized.py` | ✅ Актуальный | Бинарный поиск limiter через mp5_cumsum |
-| `code/sim_v2/messaging/rtc_limiter_v5.py` | ✅ Актуальный | GPU-only модули (current_day, adaptive) |
+| `code/archive/sim_v2_messaging/rtc_limiter_v5.py` | 📦 Архивный | Legacy GPU-only модули (current_day, adaptive) |
 | **`docs/architecture/limiter_architecture.md`** | 📄 Документ | **Архитектура LIMITER V8 с таблицей слоёв** |
 
 **Архивные** (не использовать):
 | Файл | Описание |
 |------|----------|
-| `code/sim_v2/messaging/orchestrator_limiter_v7.py` | Legacy V7 (однофазная архитектура) |
-| `orchestrator_limiter.py` | Старая версия без оптимизации limiter |
-| `orchestrator_limiter_v2.py` | Промежуточная версия (ежедневные шаги) |
-| `orchestrator_limiter_v4.py` | Промежуточная GPU-only версия |
-| `orchestrator_adaptive*.py` | Эксперименты с adaptive step |
-| `orchestrator_gpu_only.py` | GPU-only эксперимент |
+| `code/archive/sim_v2_messaging/orchestrator_limiter_v7.py` | Legacy V7 (однофазная архитектура), archived 2026-06-06 |
+| `code/archive/sim_v2_messaging/orchestrator_limiter.py` | Старая версия без оптимизации limiter, archived 2026-06-06 |
+| `code/archive/sim_v2_messaging/orchestrator_limiter_v2.py` | Промежуточная версия (ежедневные шаги), archived 2026-06-06 |
+| `code/archive/sim_v2_messaging/orchestrator_limiter_v4.py` | Промежуточная GPU-only версия, archived 2026-06-06 |
+| `code/archive/sim_v2_messaging/orchestrator_adaptive*.py` | Эксперименты с adaptive step, archived 2026-06-06 |
+| `code/archive/sim_v2_messaging/orchestrator_gpu_only.py` | GPU-only эксперимент, archived 2026-06-06 |
 
 **Результаты LIMITER V7 (legacy baseline; актуальный код — V8 выше):**
 - **219 адаптивных шагов** вместо 3650 ежедневных
