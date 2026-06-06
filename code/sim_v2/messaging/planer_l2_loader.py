@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# EXPERIMENTAL / REFERENCE (2026-06-06): пробный L2-контур (group_by=3/4) в messaging. Не production. Боевой L2 — code/sim_v2/units/orchestrator_units.py. Оставлен как справочный черновик.
 """
 Loader планерных сигналов для L2 engines (group_by=3/4).
 

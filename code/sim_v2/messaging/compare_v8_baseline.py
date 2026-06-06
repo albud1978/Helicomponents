@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Сравнение V8 с baseline (sim_masterv2)
+РАБОЧАЯ ДИАГНОСТИКА V8 (regression vs baseline). Сохраняется намеренно.
 
 Метрики:
 1. ops vs target по дням
