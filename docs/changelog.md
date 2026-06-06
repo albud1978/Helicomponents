@@ -11,7 +11,7 @@
 
 **Приёмка**:
 - `sim` ×4 без `ImportError`; `code/validation/run_all.py` — 15/15 PASS ×4.
-- `ops=target` — PASS ×4 через актуальный `code/validation/inv2_ops_vs_target.py`. Legacy `code/sim_v2/messaging/validate_limiter_ops_target.py` устарел из-за schema mismatch (`state` vs `status_id`) и не является актуальным оракулом.
+- `ops=target` — PASS ×4 через актуальный `code/validation/inv2_ops_vs_target.py`. Legacy `code/archive/sim_v2_messaging/validate_limiter_ops_target.py` (архивирован 2026-06-06; актуальный валидатор ops=target — `code/validation/inv2_ops_vs_target.py`) устарел из-за schema mismatch (`state` vs `status_id`) и не является актуальным оракулом.
 - Актуальный clean baseline `version_id=1` после пересборки 2026-06-06: `sim_masterv2_v9` row counts `85798/87361/88429/84915`, `sim_repairline_v9` = `65700` для каждого из 4 датасетов. Дельта от старых baseline объяснена чистой регенерацией ETL; прежние числа остаются историей старых/накопленных прогонов, но больше не являются актуальным baseline.
 
 ---
@@ -2377,7 +2377,7 @@ INV-2 показывал дефицит ops у Mi-17 (до -35 на финаль
 ### Что сделано
 - Обновлены команды окружения в `README.md` и `docs/validation.md` (учёт conda при отсутствии `.venv`).
 - Добавлены скрипты валидации LIMITER:
-  - `code/sim_v2/messaging/validate_limiter_ops_target.py`
+  - `code/archive/sim_v2_messaging/validate_limiter_ops_target.py` (архивирован 2026-06-06; актуальный валидатор ops=target — `code/validation/inv2_ops_vs_target.py`)
   - `code/sim_v2/messaging/validate_limiter_flight_hours.py`
 - Зафиксированы текущие нарушения по LIMITER V8 в `docs/validation.md`.
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (dead-code cleanup): schema mismatch (state vs status_id в sim_masterv2_v9); актуальная ops=target проверка — code/validation/inv2_ops_vs_target.py.
 """
 Валидация LIMITER: ops == target на каждом адаптивном шаге.
 

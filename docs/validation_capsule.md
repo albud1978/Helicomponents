@@ -11,7 +11,7 @@
 - `code/archive/validation/validate_state2ops_increments.py` (archived 2026-06-06; SSoT-замена: INV-5)
 - `code/archive/validation/validate_state2ops_transitions.py` (archived 2026-06-06; SSoT-замена: INV-9/INV-10)
 - `code/sim_v2/messaging/validate_limiter_flight_hours.py` (INV-7: dt = программа)
-- `code/sim_v2/messaging/validate_limiter_ops_target.py` (legacy; устарел из-за schema mismatch `state` vs `status_id`; актуальный INV-2 оракул — `code/validation/inv2_ops_vs_target.py`)
+- `code/archive/sim_v2_messaging/validate_limiter_ops_target.py` (legacy; архивирован 2026-06-06; устарел из-за schema mismatch `state` vs `status_id`; актуальный INV-2 оракул — `code/validation/inv2_ops_vs_target.py`)
 - `code/sim_v2/messaging/validate_limiter_v3.py` (комплексная LIMITER валидация)
 - `code/sim_v2/components/validation_rules.py` (INV-8: storage frozen)
 - `docs/architecture/validation_rules.md` (методология)
