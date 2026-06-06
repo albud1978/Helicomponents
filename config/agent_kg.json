@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-06T03:01:52Z",
+    "updated_at": "2026-06-06T04:11:28Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -1540,6 +1540,27 @@
       },
       "created_at": "2026-06-06T02:18:10Z",
       "updated_at": "2026-06-06T03:01:52Z"
+    },
+    {
+      "workflow_id": "W_validators_p2_archive_20260606T035804Z",
+      "goal": "P2: архивировать старый class-based фреймворк code/analysis/sim_validation_* (6 файлов), перекрытый каноническим code/validation/",
+      "phase": "close",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 25,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 3,
+        "cumulative_tokens": 24750,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-06T04:10:48Z"
+      },
+      "created_at": "2026-06-06T03:58:04Z",
+      "updated_at": "2026-06-06T04:11:28Z"
     }
   ],
   "handoffs": [
@@ -10810,6 +10831,128 @@
       "modules": [
         "validation"
       ]
+    },
+    {
+      "handoff_id": "handoff_W_validators_p2_archive_20260606T035804Z_coder-general_820ee1e6",
+      "workflow_id": "W_validators_p2_archive_20260606T035804Z",
+      "agent": "coder-general",
+      "user_goal": "P2 archive. Workflow: W_validators_p2_archive_20260606T035804Z (medium-fast: обратимое перемещение кода). Алексей ЯВНО выбрал archive_all. Переместить 6 code/analysis/sim_validation_* в code/archive/analysis, обновить docs/changelog, проверить compileall/ReadLints/git status, не трогать code/validation/run_all.py.",
+      "changes": "Moved with git mv into code/archive/analysis/: sim_validation_runner.py, sim_validation_runner_msg.py, sim_validation_quota.py, sim_validation_transitions.py, sim_validation_increments.py, sim_validation_units.py. Added ARCHIVED 2026-06-06 P2 cleanup header to each moved file without rewriting internal imports. Updated active references in docs/validation_capsule.md, docs/quota_capsule.md, docs/transitions_capsule.md, docs/limiter_v8_capsule.md, .cursor/agents/validator-judge.md. Added top changelog entry in docs/changelog.md.",
+      "facts": "",
+      "assumptions": "No simulation run was required or performed per dispatch. Risks if false: runtime validation behavior would need separate validator-judge run, but this archive-only change excludes code/archive from compileall and does not touch canonical code/validation.",
+      "evidence": "Pre-move rg in code/*.py found only internal references among the old framework; after move, rg import pattern finds only code/archive/analysis/sim_validation_runner.py internal imports. python3 -m compileall -q -x '^code/archive/' code: PASS. git status --short: 6 R renames for the requested files plus docs/KG modifications. ReadLints on changed markdown/agent md: no linter errors. code/analysis glob now returns validate_ops_target_clickhouse.py, validate_heli_pandas.py, export_over_limit_serviceable.py. git status --short -- code/validation/run_all.py: no output (untouched). docs/architecture/validation_rules.md, docs/architecture/rtc_components.md, docs/etl_extract_capsule.md: no matching sim_validation references. docs/archive/** and old docs/changelog history intentionally untouched.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_validators_p2_archive_20260606T035804Z:2026-06-06T04:03:34Z",
+      "plan_step_id": "P2",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "medium-fast: reversible archive movement plus docs sync; canonical validation/runtime/SSoT untouched",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (medium-fast; governance optional)",
+      "human_gate_required": "no",
+      "plan_card": "Archive obsolete class-based sim_validation_* framework after archive_all approval; preserve imports as frozen legacy; sync active docs and changelog.",
+      "evidence_pack": "Pre-move rg in code/*.py found only internal references among the old framework; after move, rg import pattern finds only code/archive/analysis/sim_validation_runner.py internal imports. python3 -m compileall -q -x '^code/archive/' code: PASS. git status --short: 6 R renames for the requested files plus docs/KG modifications. ReadLints on changed markdown/agent md: no linter errors. code/analysis glob now returns validate_ops_target_clickhouse.py, validate_heli_pandas.py, export_over_limit_serviceable.py. git status --short -- code/validation/run_all.py: no output (untouched). docs/architecture/validation_rules.md, docs/architecture/rtc_components.md, docs/etl_extract_capsule.md: no matching sim_validation references. docs/archive/** and old docs/changelog history intentionally untouched.",
+      "success_criteria": "script: python3 -m compileall -q -x '^code/archive/' code == PASS; git status shows 6 R renames; ReadLints changed markdown == clean; code/validation/run_all.py untouched",
+      "compliance_checklist": "decision=allow_with_notes required_gates=pass exceptions=none evidence_refs=rg import-check; compileall; ReadLints; git status; approval_ref=N/A",
+      "risks": "Residual stale references intentionally remain only in docs/archive/** and historical docs/changelog entries; reviewer should confirm no hidden external import outside rg scope.",
+      "next_owner": "reviewer-flame",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Archive/docs cleanup only; no Domain Graph or SSoT semantics change",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-06T04:03:34Z",
+      "modules": [
+        "validation",
+        "quotas_ops",
+        "quotas_repair",
+        "state_transitions",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 24000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_validators_p2_archive_20260606T035804Z_orchestrator_0e918014",
+      "workflow_id": "W_validators_p2_archive_20260606T035804Z",
+      "agent": "orchestrator",
+      "user_goal": "потом p2 ... archive_all",
+      "changes": "git mv 6 файлов (runner/runner_msg/quota/transitions/increments/units) в code/archive/analysis +ARCHIVED-шапки; docs-ссылки (validation/quota/transitions/limiter capsules, validator-judge.md); README Archived раздел; changelog snippet.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "reviewer-flame APPROVE: 0 живых импортов вне archive; compileall -x code/archive EXIT=0; run_all/run_all_stream не затронуты; CI quality.yml уже исключает code/archive (push зелёным); code/analysis остались 3 файла (validate_ops_target_clickhouse, validate_heli_pandas, export_over_limit_serviceable).",
+      "drift_check": "UserGoal(P2 archive_all) vs Changes(6 файлов архив): match yes",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P2-close",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Перемещение code/analysis фреймворка в архив (обратимо, нет внешних импортов)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "orchestrator",
+      "human_gate_required": "no",
+      "plan_card": "P2: архив старого class-based фреймворка sim_validation_* (6 файлов) в code/archive/analysis; docs/README/changelog синхронизированы.",
+      "evidence_pack": "reviewer-flame APPROVE: 0 живых импортов вне archive; compileall -x code/archive EXIT=0; run_all/run_all_stream не затронуты; CI quality.yml уже исключает code/archive (push зелёным); code/analysis остались 3 файла (validate_ops_target_clickhouse, validate_heli_pandas, export_over_limit_serviceable).",
+      "success_criteria": "script: compileall -x code/archive PASS; нет живых импортов 6 модулей вне archive; code/analysis = 3 оставшихся файла",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=handoff_reviewer; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "Коммит/пуш P2?",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "1e3469dea25dd1a31cc3d19ccb7415fd2da840da151a9ca4aa852edc52f92e25",
+      "created_at": "2026-06-06T04:09:10Z",
+      "modules": [
+        "validation"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_validators_p2_archive_20260606T035804Z_governance-compliance_6e70e624",
+      "workflow_id": "W_validators_p2_archive_20260606T035804Z",
+      "agent": "governance-compliance",
+      "user_goal": "потом p2 ... archive_all",
+      "changes": "Verdict: allow. Проверено: (1) policy human-gate (archive_all через AskQuestion явный), (2) scope match UserGoal↔Changes (6 файлов, без логики/SSoT), (3) anti-overengineering (внутренние импорты заморожены, ARCHIVED-шапки добавлены), (4) traceability (TraceID/PlanStepID в обоих handoff'ах), (5) GraphUpdate=no корректно, (6) compileall -x code/archive PASS, (7) нет живых импортов 6 модулей вне code/archive (только внутренние между файлами набора). Commit не делался (ожидаемо).",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: Read: code/analysis (3 файла остались), code/archive/analysis (8 файлов вкл. 6 свежих); KG handoffs orchestrator+coder-general прочитаны; compileall PASS подтверждён; SuccessCriteria 'script: compileall -x code/archive PASS; нет живых импортов вне archive; code/analysis=3 оставшихся файла' — verifiable, все три условия выполнены.\nEvidence: git status: 6 R renames + docs/KG mods; compileall -q -x '^code/archive/' code EXIT=0; Grep '^(from|import).*sim_validation_*' .py: matches только в code/archive/analysis/sim_validation_runner.py (внутренние, frozen); Makefile/.github: 0 matches; ARCHIVED 2026-06-06 шапка присутствует (sample: code/archive/analysis/sim_validation_runner.py:2); reviewer-flame APPROVE handoff присутствует; orchestrator handoff содержит PlanCard/EvidencePack/SuccessCriteria/DriftCheck=match yes.",
+      "drift_check": "UserGoal(archive_all 6 файлов) <-> Changes(6 R renames + docs sync): match yes",
+      "process_insights": "",
+      "trace_id": "wf:W_validators_p2_archive_20260606T035804Z:2026-06-06T04:09:30Z",
+      "plan_step_id": "P2-governance",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Archive of project objects (6 files) под medium-fast профилем; обратимое перемещение без правок логики/SSoT",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Single-pass governance verdict для P2 archive_all: проверка policy/scope/traceability/anti-overengineering перед commit.",
+      "evidence_pack": "Facts: Read: code/analysis (3 файла остались), code/archive/analysis (8 файлов вкл. 6 свежих); KG handoffs orchestrator+coder-general прочитаны; compileall PASS подтверждён; SuccessCriteria 'script: compileall -x code/archive PASS; нет живых импортов вне archive; code/analysis=3 оставшихся файла' — verifiable, все три условия выполнены.\nEvidence: git status: 6 R renames + docs/KG mods; compileall -q -x '^code/archive/' code EXIT=0; Grep '^(from|import).*sim_validation_*' .py: matches только в code/archive/analysis/sim_validation_runner.py (внутренние, frozen); Makefile/.github: 0 matches; ARCHIVED 2026-06-06 шапка присутствует (sample: code/archive/analysis/sim_validation_runner.py:2); reviewer-flame APPROVE handoff присутствует; orchestrator handoff содержит PlanCard/EvidencePack/SuccessCriteria/DriftCheck=match yes.",
+      "success_criteria": "manual-check: governance verdict записан в KG; compact ComplianceChecklist возвращён orchestrator'у",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=handoff_orchestrator_0e918014;handoff_coder-general_820ee1e6;compileall=PASS;grep_imports=archive_only;git_status=6R+docs; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Domain Graph не затронут (архив кода, без правок SSoT/transitions/quota JSON)",
+      "prev_handoff_hash": "549eb09f930c3bf45467d40f9ef0f843b83ac05d666a34016f74788c168a6fc3",
+      "created_at": "2026-06-06T04:10:48Z",
+      "modules": [
+        "validation"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 750,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -12252,6 +12395,24 @@
       "agent": "orchestrator",
       "created_at": "2026-06-06T03:01:52Z",
       "updated_at": "2026-06-06T03:01:52Z"
+    },
+    {
+      "context_id": "ctx_W_validators_p2_archive_20260606T035804Z_phase_start_4cd65a2f",
+      "workflow_id": "W_validators_p2_archive_20260606T035804Z",
+      "context_type": "phase_start",
+      "content": "P2 archive_all: moving old code/analysis/sim_validation_* framework to code/archive/analysis after confirming no live external imports; SuccessCriteria: git mv 6 files, ARCHIVED headers, docs/changelog updates, compileall excluding archive, ReadLints.",
+      "agent": "coder-general",
+      "created_at": "2026-06-06T03:59:10Z",
+      "updated_at": "2026-06-06T03:59:10Z"
+    },
+    {
+      "context_id": "ctx_W_validators_p2_archive_20260606T035804Z_closure_76c0cbb1",
+      "workflow_id": "W_validators_p2_archive_20260606T035804Z",
+      "context_type": "closure",
+      "content": "P2 archive завершён: 6 файлов фреймворка в архив, reviewer APPROVE, governance allow, compileall PASS.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-06T04:11:28Z",
+      "updated_at": "2026-06-06T04:11:28Z"
     }
   ],
   "meta": {

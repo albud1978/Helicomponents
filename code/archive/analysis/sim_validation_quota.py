@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (P2 cleanup): старый class-based фреймворк валидации, перекрыт каноническим code/validation/run_all.py (INV-1..12 + TEMP).
 """
 Валидация соответствия количества планеров в эксплуатации квотам.
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-06-06 — P2 cleanup: архив старого фреймворка code/analysis/sim_validation_*
+
+**Workflow**: W_validators_p2_archive_20260606T035804Z | **Risk**: medium | **Profile**: medium-fast | **Status**: ready-for-review
+
+**Корень**:
+- Старый class-based фреймворк `code/analysis/sim_validation_*` перекрыт каноническим SQL-набором `code/validation/run_all.py` (INV-1..12 + TEMP).
+- Фреймворк не входит в CI/Makefile/`run_all.py`; внешних живых импортов вне самого набора не найдено.
+
+**Изменено**:
+- `git mv` 6 скриптов в `code/archive/analysis/` + `ARCHIVED`-шапки: `sim_validation_runner.py`, `sim_validation_runner_msg.py`, `sim_validation_quota.py`, `sim_validation_transitions.py`, `sim_validation_increments.py`, `sim_validation_units.py`.
+- Docs-пути синхронизированы: активные упоминания указывают на `code/archive/analysis/` или помечены archived 2026-06-06.
+
+**Приёмка**:
+- `python3 -m compileall -q -x '^code/archive/' code` — PASS.
+- Нет живых импортов вне архивируемого набора; reviewer подтвердит.
+
+---
+
 ## 2026-06-06 — P1 cleanup валидаторов: архив устаревших/дубликатов + temp1 version-leakage fix
 
 **Workflow**: W_validators_p1_cleanup_20260606T021810Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit

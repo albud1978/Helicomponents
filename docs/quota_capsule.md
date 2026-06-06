@@ -44,7 +44,7 @@ SSoT: `config/transitions/invariants.json`
 - `rtc_spawn_dynamic_v7.py → deficit/need` → динамическое создание агентов → закрытие дефицита
 
 ## Validation Proof
-- INV-2 (ops vs target): `code/analysis/sim_validation_quota.py`, `code/sim_v2/messaging/validate_limiter_ops_target.py`
+- INV-2 (ops vs target): `code/archive/analysis/sim_validation_quota.py` (archived 2026-06-06; legacy), `code/sim_v2/messaging/validate_limiter_ops_target.py`, `code/validation/inv2_ops_vs_target.py`
 - INV-3 (repair capacity): SQL готов в `invariants.json`, validator: `code/validation/inv3_repair_capacity.py` — PASS (D1 max 10, D2 max 14, quota=18)
 - TEMP-5: hybrid precondition validator — temp5_repair_hybrid_vector.py — PENDING
 
@@ -66,6 +66,6 @@ SSoT: `config/transitions/invariants.json`
 - `code/sim_v2/messaging/rtc_repair_lines_v8.py`
 - `code/sim_v2/messaging/rtc_spawn_dynamic_v7.py`
 - `code/sim_v2/messaging/base_model_messaging.py`
-- `code/analysis/sim_validation_quota.py`
+- `code/archive/analysis/sim_validation_quota.py` (archived 2026-06-06)
 - `code/sim_v2/messaging/validate_limiter_ops_target.py`
 - `docs/architecture/limiter_architecture.md`

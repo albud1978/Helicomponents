@@ -60,7 +60,7 @@
 
 ## Validation Proof
 - Формализованные инварианты: `config/transitions/invariants.json` (INV-1..INV-12, TEMP-1/TEMP-4/TEMP-5, GPU-1..GPU-6) — SSoT
-- Скрипты валидации: `code/analysis/sim_validation_runner_msg.py`, `code/analysis/sim_validation_quota.py`, `code/validation/validate_state2ops_*.py`
+- Скрипты валидации: активный канон `code/validation/run_all.py`; legacy class-based `code/archive/analysis/sim_validation_runner_msg.py` и `code/archive/analysis/sim_validation_quota.py` archived 2026-06-06; `code/validation/validate_state2ops_*.py` archived 2026-06-06.
 - `python code/analysis/validate_heli_pandas.py --analyze/--update/--all` — базовая валидация `heli_pandas` — `docs/architecture/validation_rules.md`
 - Resource no-exceed acceptance: workflow `W_sim_v8_resource_no_exceed_20260605T165249Z`, baseline dataset `version_date=2026-04-08`, test `version_id=8101` — `count(ppr > oh OR sne > ll)=0`, `entry-edge=0`, `check_2=0`, group counts match baseline; test version очищен
 - Проверка отсутствия NVRTC warning'ов (log clean) — `docs/architecture/validation_rules.md`
