@@ -61,13 +61,13 @@ def main() -> int:
 
     base_subquery = f"""
         SELECT
-            aircraft_number, day_u16, status_id, pre_status_id,
+            aircraft_number, version_date, day_u16, status_id, pre_status_id,
             sne, daily_today_u32 AS dt,
             lagInFrame(sne, 1, 0) OVER w AS prev_sne,
             lagInFrame(day_u16, 1, 0) OVER w AS prev_day
         FROM {table}
         WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
-        WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
+        WINDOW w AS (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16)
     """
 
     # Реальные нарушения (не артефакт transition-out)

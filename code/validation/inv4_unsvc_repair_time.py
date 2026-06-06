@@ -55,7 +55,7 @@ def main() -> int:
     query = f"""
     WITH transitions AS (
         SELECT
-            aircraft_number, group_by, day_u16,
+            aircraft_number, group_by, version_date, day_u16,
             pre_status_id, status_id, repair_time
         FROM {table}
         WHERE version_id = %(vid)s{vd_filter}
@@ -65,15 +65,15 @@ def main() -> int:
     ),
     -- Переходы 2->7 (exit ops to unsvc)
     exits AS (
-        SELECT aircraft_number, group_by, day_u16 AS exit_day,
-               row_number() OVER (PARTITION BY aircraft_number, group_by ORDER BY day_u16) AS rn
+        SELECT aircraft_number, group_by, version_date, day_u16 AS exit_day,
+               row_number() OVER (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16) AS rn
         FROM transitions
         WHERE pre_status_id = 2 AND status_id = 7
     ),
     -- Переходы в ops через ремонт (7->2, 4->2)
     returns AS (
-        SELECT aircraft_number, group_by, day_u16 AS return_day, repair_time AS rt,
-               row_number() OVER (PARTITION BY aircraft_number, group_by ORDER BY day_u16) AS rn
+        SELECT aircraft_number, group_by, version_date, day_u16 AS return_day, repair_time AS rt,
+               row_number() OVER (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16) AS rn
         FROM transitions
         WHERE status_id = 2 AND pre_status_id IN (4, 7)
     )
@@ -82,6 +82,7 @@ def main() -> int:
     INNER JOIN returns r
         ON e.aircraft_number = r.aircraft_number
         AND e.group_by = r.group_by
+        AND e.version_date = r.version_date
         AND e.rn = r.rn
     WHERE r.return_day - e.exit_day < r.rt
       AND r.return_day > e.exit_day
@@ -94,6 +95,7 @@ def main() -> int:
         WITH transitions AS (
             SELECT
                 aircraft_number, group_by, day_u16,
+                version_date,
                 pre_status_id, status_id, repair_time
             FROM {table}
             WHERE version_id = %(vid)s{vd_filter}
@@ -102,14 +104,14 @@ def main() -> int:
               AND pre_status_id > 0
         ),
         exits AS (
-            SELECT aircraft_number, group_by, day_u16 AS exit_day,
-                   row_number() OVER (PARTITION BY aircraft_number, group_by ORDER BY day_u16) AS rn
+            SELECT aircraft_number, group_by, version_date, day_u16 AS exit_day,
+                   row_number() OVER (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16) AS rn
             FROM transitions
             WHERE pre_status_id = 2 AND status_id = 7
         ),
         returns AS (
-            SELECT aircraft_number, group_by, day_u16 AS return_day, repair_time AS rt,
-                   row_number() OVER (PARTITION BY aircraft_number, group_by ORDER BY day_u16) AS rn
+            SELECT aircraft_number, group_by, version_date, day_u16 AS return_day, repair_time AS rt,
+                   row_number() OVER (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16) AS rn
             FROM transitions
             WHERE status_id = 2 AND pre_status_id IN (4, 7)
         )
@@ -119,6 +121,7 @@ def main() -> int:
         INNER JOIN returns r
             ON e.aircraft_number = r.aircraft_number
             AND e.group_by = r.group_by
+            AND e.version_date = r.version_date
             AND e.rn = r.rn
         WHERE r.return_day - e.exit_day < r.rt
           AND r.return_day > e.exit_day

@@ -52,14 +52,14 @@ def main() -> int:
     SELECT count()
     FROM (
         SELECT
-            aircraft_number, day_u16, status_id, sne, ppr,
+            aircraft_number, version_date, day_u16, status_id, sne, ppr,
             lagInFrame(sne) OVER w AS prev_sne,
             lagInFrame(ppr) OVER w AS prev_ppr,
             lagInFrame(status_id) OVER w AS prev_st,
             lagInFrame(day_u16, 1, 0) OVER w AS prev_day
         FROM {table}
         WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
-        WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
+        WINDOW w AS (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16)
     )
     WHERE status_id = 6
       AND prev_st = 6
@@ -74,14 +74,14 @@ def main() -> int:
         SELECT aircraft_number, day_u16, sne, prev_sne, ppr, prev_ppr
         FROM (
             SELECT
-                aircraft_number, day_u16, status_id, sne, ppr,
+                aircraft_number, version_date, day_u16, status_id, sne, ppr,
                 lagInFrame(sne) OVER w AS prev_sne,
                 lagInFrame(ppr) OVER w AS prev_ppr,
                 lagInFrame(status_id) OVER w AS prev_st,
                 lagInFrame(day_u16, 1, 0) OVER w AS prev_day
             FROM {table}
             WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
-            WINDOW w AS (PARTITION BY aircraft_number, group_by ORDER BY day_u16)
+            WINDOW w AS (PARTITION BY aircraft_number, group_by, version_date ORDER BY day_u16)
         )
         WHERE status_id = 6
           AND prev_st = 6

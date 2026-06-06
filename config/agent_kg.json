@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-05T18:38:43Z",
+    "updated_at": "2026-06-05T19:38:27Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -1477,6 +1477,27 @@
       },
       "created_at": "2026-06-05T17:52:53Z",
       "updated_at": "2026-06-05T18:38:43Z"
+    },
+    {
+      "workflow_id": "W_validators_p0_hardening_20260605T190101Z",
+      "goal": "Исправить P0 дефекты валидаторов: вакуумные PASS (INV-9, inv4_min), blind-spot L2 INV-1 (state=2), TEMP-5 claim≠SQL, version-leakage в окнах",
+      "phase": "docs",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "high-strict"
+      },
+      "usage": {
+        "cumulative_steps": 5,
+        "cumulative_tokens": 80500,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-05T19:38:27Z"
+      },
+      "created_at": "2026-06-05T19:01:01Z",
+      "updated_at": "2026-06-05T19:38:27Z"
     }
   ],
   "handoffs": [
@@ -10299,6 +10320,207 @@
       "modules": [
         "validation"
       ]
+    },
+    {
+      "handoff_id": "handoff_W_validators_p0_hardening_20260605T190101Z_coder-general_d204897d",
+      "workflow_id": "W_validators_p0_hardening_20260605T190101Z",
+      "agent": "coder-general",
+      "user_goal": "Исправить P0-дефекты валидаторов симуляции. Workflow: W_validators_p0_hardening_20260605T190101Z (high-risk: правка SSoT `config/transitions/invariants.json` + ~12 validation-скриптов, ЯВНО согласовано Алексеем). Зона: validation + config (НЕ RTC). НЕ запускать полную симуляцию (это validator-judge). После правок: JSON-валидность + `py_compile` + ReadLints + read-only smoke на baseline.",
+      "changes": "P0-1: config/transitions/invariants.json INV-9 claim/expr reframed to ops look-ahead safety; code/validation/inv9_limiter_exit.py now checks status_id=2 AND next_st=2 with PARTITION BY idx, group_by, version_date and strict sne/ppr + daily_next_u32 > limits. P0-2: code/validation/l2_inv1_sne_le_ll.py removed u.state=2 filter; lifecycle-wide engines group_by IN (3,4); no L2 registry entry found in invariants.json. P0-3: code/validation/inv4_unsvc_min_repair.py marked DEPRECATED; not registered in run_all.py/run_all_stream.py; INV-4 SSoT already points to inv4_unsvc_repair_time.py. P0-4: TEMP-5 claim/expr now matches temp5_repair_hybrid_vector.py claim/bank checks; notes point capacity to INV-3. P0-5: added version_date to relevant windows/aggregates in inv3/inv4/inv5/inv7/inv8/inv10/inv11/temp4, L2 inv7/inv8/temp1/temp4, plus temp5 overlap window discovered in touched validator.",
+      "facts": "",
+      "assumptions": "No full simulation run by instruction; effectiveness/verdict on fresh simulation remains validator-judge scope. L2 sim_units_v2 scope for version_id=8001 is effectively empty in smoke (0 skipped, 0 violations); Risks if false: L2 lifecycle change should be rechecked when sim_units_v2 for 8001 is populated. TEMP-5 capacity precondition was not implemented as new validator per anti-overengineering; capacity coverage relies on existing INV-3 busy<=quota semantics.",
+      "evidence": "Facts: Read capsules: validation, transitions, quota, limiter_v8. Confirmed capacity semantics covered by INV-3 (busy repair lines <= quota in sim_repairline_v9). SSoT JSON valid. py_compile passed for all changed Python validators. ReadLints: no diagnostics. git diff --check: clean. Smoke baseline: INV-9 --version-id 8001 --version-date 20260408 => PASS violations=0; INV-8 old partition without version_date => old_partition_violations=4010; fixed INV-8 --version-id 8001 => PASS violations=0; L2 INV-1 --version-id 8001 --units-version-date-int 20260408 => PASS count_skipped_no_norm=0 violations=0.\nEvidence: Commands: python3 -c \"import json; json.load(open('config/transitions/invariants.json'))\"; python3 -m py_compile changed validators; ReadLints changed files; git diff --check changed files. Read-only smoke from code/validation after conda cuda13 + config/load_env.sh: inv9_limiter_exit.py --version-id 8001 --version-date 20260408 -> violations=0 rc=0; old INV-8 SQL with PARTITION BY aircraft_number,group_by -> 4010; inv8_storage_frozen.py --version-id 8001 -> violations=0 rc=0; l2_inv1_sne_le_ll.py --version-id 8001 --units-version-date-int 20260408 -> count_skipped_no_norm=0 violations=0 rc=0. No full simulation run.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_validators_p0_hardening_20260605T190101Z:20260605T191006Z",
+      "plan_step_id": "P0-hardening",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "SSoT invariants.json changed; validation gate SQL semantics changed; baseline version_id contains multiple version_date datasets",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "yes",
+      "plan_card": "Harden P0 validation blind spots: remove vacuum PASS scopes, align SSoT claims, isolate version_date in windows/aggregates.",
+      "evidence_pack": "Facts: Read capsules: validation, transitions, quota, limiter_v8. Confirmed capacity semantics covered by INV-3 (busy repair lines <= quota in sim_repairline_v9). SSoT JSON valid. py_compile passed for all changed Python validators. ReadLints: no diagnostics. git diff --check: clean. Smoke baseline: INV-9 --version-id 8001 --version-date 20260408 => PASS violations=0; INV-8 old partition without version_date => old_partition_violations=4010; fixed INV-8 --version-id 8001 => PASS violations=0; L2 INV-1 --version-id 8001 --units-version-date-int 20260408 => PASS count_skipped_no_norm=0 violations=0.\nEvidence: Commands: python3 -c \"import json; json.load(open('config/transitions/invariants.json'))\"; python3 -m py_compile changed validators; ReadLints changed files; git diff --check changed files. Read-only smoke from code/validation after conda cuda13 + config/load_env.sh: inv9_limiter_exit.py --version-id 8001 --version-date 20260408 -> violations=0 rc=0; old INV-8 SQL with PARTITION BY aircraft_number,group_by -> 4010; inv8_storage_frozen.py --version-id 8001 -> violations=0 rc=0; l2_inv1_sne_le_ll.py --version-id 8001 --units-version-date-int 20260408 -> count_skipped_no_norm=0 violations=0 rc=0. No full simulation run.",
+      "success_criteria": "script: json.load invariants OK; script: py_compile changed validators OK; ReadLints clean; read-only smoke baseline INV-9/INV-8/L2 INV-1 recorded",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=reviewer_flame_pending,governance_review_pending; evidence_refs=config/transitions/invariants.json; code/validation/*.py; smoke baseline 8001; approval_ref=N/A",
+      "risks": "SQL semantics changed for high-risk validators; validator-judge must confirm on full validation suite/fresh sim; TEMP-5 capacity precondition remains represented by INV-3 rather than a new validator",
+      "next_owner": "reviewer-flame",
+      "open_questions": "",
+      "graph_update": "yes",
+      "graph_update_reason": "invariants.json SSoT INV-9/TEMP-5 semantics changed",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-05T19:10:42Z",
+      "modules": [
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 55000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_validators_p0_hardening_20260605T190101Z_validator-judge_5f96f132",
+      "workflow_id": "W_validators_p0_hardening_20260605T190101Z",
+      "agent": "validator-judge",
+      "user_goal": "Приёмка P0-фиксов валидаторов. Workflow: W_validators_p0_hardening_20260605T190101Z (high-risk).",
+      "changes": "No code changed by validator-judge. Executed V8 fixed-run with V8_RUN_ID=8103/version_date=20260408/end_day=3650; ran requested validators; executed authorized cleanup ALTER DELETE for version_id=8103 in sim_masterv2_v9 and sim_repairline_v9.",
+      "facts": "",
+      "assumptions": "Baseline preservation is evidenced for version_id=8001/version_date=20260408, matching the dispatched baseline scope. Risks if false: unrelated 8001 version_date partitions were not before/after compared, but cleanup predicate was version_id=8103 only.",
+      "evidence": "Fixed-run: orchestrator_limiter_v8.py completed without exceptions; sim_masterv2_v9 inserted 85577 rows; sim_repairline_v9 inserted 65700 rows.\n8103 validators: INV-9 PASS violations=0; INV-5 PASS real_violations=0 with/without version_date; INV-8 PASS violations=0 with/without version_date; INV-3 PASS max_concurrent_repair=18 violations=0 with/without version_date; TEMP-5 PASS invalid_claim_rows=0 transition_claim_mismatch=0 overlap_violations=0 bank_underflow_suspicions=0; L2 INV-1 PASS count_skipped_no_norm=0 violations=0 with units scope rows=0; INV-1 PASS violations=0; INV-12 PASS violations=0; INV-2 PASS post_warmup_violations=0; INV-4 PASS violations=0; INV-6 PASS violations=0; INV-7 PASS violations=0; INV-10 PASS illegal_transitions=0 and all balances OK; INV-11 PASS violating_datasets=0 post_deficit_days=0 max_post_deficit=0; TEMP-4 PASS violations=0 max_repair_days=210.\nINV-9 non-vacuum evidence: SELECT count() FROM sim_masterv2_v9 WHERE version_id=8103 AND version_date=20260408 AND status_id=2 AND group_by IN (1,2) = 38649. Baseline 8001 optional detection sanity: INV-9 PASS violations=0; baseline scope status_id=2/group_by IN(1,2)=38803.\nCleanup evidence: before master_8103=85577 repair_8103=65700; after authorized ALTER DELETE master_8103=0 repair_8103=0; pending_8103_mutations=[]; baseline 8001 preserved master 85893 before/after and repair 65700 before/after for version_date=20260408.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_validators_p0_hardening_20260605T190101Z:20260605T192411Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "high-risk validation workflow; sim_v2 fixed-run export; authorized ALTER DELETE cleanup in ClickHouse",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Validate fixed V8 run 8103 on baseline dataset, prove INV-9 non-vacuum scope, verify leakage consistency, then clean up test version_id.",
+      "evidence_pack": "Fixed-run: orchestrator_limiter_v8.py completed without exceptions; sim_masterv2_v9 inserted 85577 rows; sim_repairline_v9 inserted 65700 rows.\n8103 validators: INV-9 PASS violations=0; INV-5 PASS real_violations=0 with/without version_date; INV-8 PASS violations=0 with/without version_date; INV-3 PASS max_concurrent_repair=18 violations=0 with/without version_date; TEMP-5 PASS invalid_claim_rows=0 transition_claim_mismatch=0 overlap_violations=0 bank_underflow_suspicions=0; L2 INV-1 PASS count_skipped_no_norm=0 violations=0 with units scope rows=0; INV-1 PASS violations=0; INV-12 PASS violations=0; INV-2 PASS post_warmup_violations=0; INV-4 PASS violations=0; INV-6 PASS violations=0; INV-7 PASS violations=0; INV-10 PASS illegal_transitions=0 and all balances OK; INV-11 PASS violating_datasets=0 post_deficit_days=0 max_post_deficit=0; TEMP-4 PASS violations=0 max_repair_days=210.\nINV-9 non-vacuum evidence: SELECT count() FROM sim_masterv2_v9 WHERE version_id=8103 AND version_date=20260408 AND status_id=2 AND group_by IN (1,2) = 38649. Baseline 8001 optional detection sanity: INV-9 PASS violations=0; baseline scope status_id=2/group_by IN(1,2)=38803.\nCleanup evidence: before master_8103=85577 repair_8103=65700; after authorized ALTER DELETE master_8103=0 repair_8103=0; pending_8103_mutations=[]; baseline 8001 preserved master 85893 before/after and repair 65700 before/after for version_date=20260408.",
+      "success_criteria": "все валидаторы PASS на fixed-run 8103; INV-9 scope непустой; leakage-числа идентичны с/без --version-date",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=fixed-run command; code/validation scripts; ClickHouse SELECT scope/leakage/cleanup; approval_ref=N/A explicit current-chat authorization",
+      "risks": "INV-9 baseline 8001 detection sanity produced 0 violations, so positive violation sample was not observed; non-vacuum scope was confirmed by count=38649 on 8103 and count=38803 on 8001.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "validation-only acceptance; no Domain Graph/SSoT update by validator",
+      "prev_handoff_hash": "e244abc23cac55277687f60bb8217150f60dfe24208ed7c9289312e8aff2d141",
+      "created_at": "2026-06-05T19:24:11Z",
+      "modules": [
+        "validation",
+        "step_logic",
+        "state_transitions",
+        "quotas_repair",
+        "quotas_ops",
+        "export"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 16000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_validators_p0_hardening_20260605T190101Z_governance-compliance_54d51684",
+      "workflow_id": "W_validators_p0_hardening_20260605T190101Z",
+      "agent": "governance-compliance",
+      "user_goal": "Governance single-pass verdict для high-strict workflow по фиксам P0-дефектов валидаторов (INV-9 reframe, L2 INV-1 unblind, inv4_min deprecate, TEMP-5 claim align, version-leakage). UserGoal Алексея: «давай все валидаторы проверим на корректность логики и эффективность» → выбор «p0_all».",
+      "changes": "Governance verdict=allow_with_notes (Tier-S S3 compact 5-field). Проверено по 13 чек-пунктам:\n(1) scope_match=yes — UserGoal «p0_all» строго соответствует Changes (5 P0): INV-9 reframe, L2 INV-1 unblind, inv4_min deprecate, TEMP-5 claim align, version_date в 13 файлах. P1 backlog (temp1 mainline leakage, устаревшие state2ops/дубликаты) намеренно вне scope p0_all.\n(2) traceability=pass — TraceID/PlanStepID в coder-general (P0-hardening), validator-judge (V1); этот governance handoff несёт TraceID G1.\n(3) facts_quality=pass — validator-judge fixed-run 8103 verifiable: 13 валидаторов PASS (INV-9 violations=0 при scope=38649 строк, TEMP-5 4 счётчика=0, INV-3 max_concurrent=18, leakage с/без --version-date идентичны для inv5/inv8/inv3, baseline 8001 сохранён).\n(4) human_gate=ok — Алексей явно выбрал «p0_all» в чате; approval inline, orchestrator обязан заполнить ApprovalGate с workflow_id_source=prompt в close-handoff.\n(5) policy=pass — SSoT invariants.json правлен по rule 25_invariants_contract.mdc. Anti-overengineering: TEMP-5 capacity covered INV-3, inv4_min DEPRECATED а не удалён.\n(6) no_self_coding=pass — orchestrator делегировал coder-general и validator-judge.\n(7) graph_policy=allow_with_note — INV-9/TEMP-5 семантика изменена → Domain Graph derived view stale; make sync-domain-graph НЕ выполнен (human-gated). exception=domain_graph_sync_deferred.\n(8) drift_check=pass — coder-general drift_check пуст, scope явно совпадает с UserGoal; orchestrator заполнит DriftCheck в close-handoff.\n(9) artifact_discipline=pass — PlanCard/EvidencePack/ComplianceChecklist заполнены в обоих upstream handoffs.\n(10) gate_discipline=pass — pre_gate выполнен на dispatch; pre_close ожидает orchestrator. HumanGateRequired=yes согласован.\n(11) BI_boundary=N/A.\n(12) BI_handoff_completeness=N/A.\n(13) success_criteria_verifiable=yes — «все валидаторы PASS на 8103 + INV-9 scope!=0 + leakage идентичен с/без --version-date» полностью verifiable; evidence подтвердил.\nДоп. наблюдения: reviewer-flame handoff в KG для этого workflow ОТСУТСТВУЕТ — корректно, реализация coder-general (validation Python + JSON SSoT, не RTC); reviewer-flame loop по 90_multiagent_workflow.mdc обязателен только для coder-flame medium/high. Reviewer-flame APPROVE по INV-9 vs RTC_OPS_INCREMENT_V8 — informal cross-check. Iteration limit: 1 implement→review цикл. Commit НЕ выполнялся.",
+      "facts": "",
+      "assumptions": "Reviewer-flame APPROVE — informal cross-check (RTC_OPS_INCREMENT_V8 vs INV-9 daily_next_u32 semantics), не KG-handoff. Risks if false: формальная валидация INV-9 vs GPU runtime опирается на сводку оркестратора; mitigation — capsule read limiter_v8 + validator-judge fixed-run на реальном RTC-export 8103.",
+      "evidence": "Facts: Verified:\n- invariants.json INV-9 expr: 'forall agent where status==2 AND next_status==2: sne+daily_next_u32<=ll AND ppr+daily_next_u32<=oh' — non-vacuum (8103 scope=38649).\n- invariants.json TEMP-5 expr точно совпадает с SQL counters в temp5_repair_hybrid_vector.py.\n- coder-general handoff drift_check пуст (orchestrator close заполнит).\n- validator-judge ComplianceChecklist compact 5-field.\n- Hooks: pre_gate сработал; pre_close ожидает.\n- Capsules: validation, transitions, quota, limiter_v8.\n- KG check: 2 handoff (coder-general+validator-judge), 1 phase_start (validator-judge), 0 approval_request — open item для orchestrator close.\nEvidence: Sources verified:\n- config/transitions/invariants.json v16 (lines 113-122 INV-9, 187-196 TEMP-5).\n- code/validation/inv9_limiter_exit.py: status_id=2 AND next_st=2 look-ahead, PARTITION BY idx,group_by,version_date.\n- code/validation/inv4_unsvc_min_repair.py: header DEPRECATED.\n- code/validation/temp5_repair_hybrid_vector.py: claim/bank checks.\n- code/validation/l2_inv1_sne_le_ll.py: state=2 фильтр снят.\n- git status M-list: 13 модифицированных validation файлов + invariants.json.\n- KG handoffs: coder-general d204897d (P0-hardening, py_compile+ReadLints+JSON valid+smoke baseline 8001); validator-judge 5f96f132 (V1 fixed-run 8103: orchestrator_limiter_v8.py OK, master +85577 rows, repair +65700 rows; INV-9 PASS scope=38649 vs baseline 38803; TEMP-5 4 счётчика=0; leakage идентичен; cleanup ALTER DELETE master_8103=0 repair_8103=0 pending=[]; baseline 8001 master=85893 repair=65700 сохранён).\n- KG state: profile=high-strict; caps used 2/50 steps, 71k/500k tokens.\n- Approval: user «p0_all» в чате; inline, не зарегистрирован отдельным approval_request context.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_validators_p0_hardening_20260605T190101Z:20260605T192501Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "N/A",
+      "approval_status": "pending",
+      "approval_source": "user_chat_message_p0_all",
+      "risk_tier": "high",
+      "risk_reasons": "high-risk: SSoT config/transitions/invariants.json (INV-9, TEMP-5) семантика изменена; high-strict profile",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Single-pass governance verdict для high-strict P0-hardening: проверка scope_match, traceability, facts quality (validator-judge fixed-run 8103), human gate (approval «p0_all»), SSoT policy, no-self-coding, GraphUpdate accounting (Neo4j derived stale), iteration limit (1 цикл), success_criteria verifiability.",
+      "evidence_pack": "Facts: Verified:\n- invariants.json INV-9 expr: 'forall agent where status==2 AND next_status==2: sne+daily_next_u32<=ll AND ppr+daily_next_u32<=oh' — non-vacuum (8103 scope=38649).\n- invariants.json TEMP-5 expr точно совпадает с SQL counters в temp5_repair_hybrid_vector.py.\n- coder-general handoff drift_check пуст (orchestrator close заполнит).\n- validator-judge ComplianceChecklist compact 5-field.\n- Hooks: pre_gate сработал; pre_close ожидает.\n- Capsules: validation, transitions, quota, limiter_v8.\n- KG check: 2 handoff (coder-general+validator-judge), 1 phase_start (validator-judge), 0 approval_request — open item для orchestrator close.\nEvidence: Sources verified:\n- config/transitions/invariants.json v16 (lines 113-122 INV-9, 187-196 TEMP-5).\n- code/validation/inv9_limiter_exit.py: status_id=2 AND next_st=2 look-ahead, PARTITION BY idx,group_by,version_date.\n- code/validation/inv4_unsvc_min_repair.py: header DEPRECATED.\n- code/validation/temp5_repair_hybrid_vector.py: claim/bank checks.\n- code/validation/l2_inv1_sne_le_ll.py: state=2 фильтр снят.\n- git status M-list: 13 модифицированных validation файлов + invariants.json.\n- KG handoffs: coder-general d204897d (P0-hardening, py_compile+ReadLints+JSON valid+smoke baseline 8001); validator-judge 5f96f132 (V1 fixed-run 8103: orchestrator_limiter_v8.py OK, master +85577 rows, repair +65700 rows; INV-9 PASS scope=38649 vs baseline 38803; TEMP-5 4 счётчика=0; leakage идентичен; cleanup ALTER DELETE master_8103=0 repair_8103=0 pending=[]; baseline 8001 master=85893 repair=65700 сохранён).\n- KG state: profile=high-strict; caps used 2/50 steps, 71k/500k tokens.\n- Approval: user «p0_all» в чате; inline, не зарегистрирован отдельным approval_request context.",
+      "success_criteria": "manual-check: governance verdict зафиксирован в KG (compact 5-field); все 13 governance чеков пройдены либо вынесены в exceptions; evidence_refs указывают на handoff_id, файлы и fixed-run 8103",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=domain_graph_sync_deferred;approval_ref_pending_in_orchestrator_close;p1_backlog_acknowledged_out_of_scope; evidence_refs=handoff_W_validators_p0_hardening_20260605T190101Z_coder-general_d204897d;handoff_W_validators_p0_hardening_20260605T190101Z_validator-judge_5f96f132;config/transitions/invariants.json#INV-9;config/transitions/invariants.json#TEMP-5;code/validation/inv9_limiter_exit.py;code/validation/temp5_repair_hybrid_vector.py;code/validation/l2_inv1_sne_le_ll.py;code/validation/inv4_unsvc_min_repair.py;fixed_run=8103/version_date=20260408_INV9_scope=38649; approval_ref=N/A",
+      "risks": "(1) Domain Graph stale до make sync-domain-graph; mitigation: SSoT=JSON, sync — human command. (2) approval_ref=N/A — orchestrator заполнит ApprovalGate в close-handoff. (3) reviewer-flame APPROVE вербальный — ослабляет audit trail SSoT правки high-risk.",
+      "next_owner": "docs-curator",
+      "open_questions": "(1) Когда запустится make sync-domain-graph для invariants.json v16? (2) P1 backlog отдельным workflow или ждать следующий аудит?",
+      "graph_update": "yes",
+      "graph_update_reason": "INV-9/TEMP-5 семантика изменена; Domain Graph derived stale; make sync-domain-graph человеком — отдельный high-risk gate.",
+      "prev_handoff_hash": "f42bc55e135bb534f6fecaa3a9d7b530687463bf97c0dfb518efc3dc4e0037a8",
+      "created_at": "2026-06-05T19:33:12Z",
+      "modules": [
+        "validation",
+        "state_transitions"
+      ],
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 9500,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_validators_p0_hardening_20260605T190101Z_orchestrator_c0216972",
+      "workflow_id": "W_validators_p0_hardening_20260605T190101Z",
+      "agent": "orchestrator",
+      "user_goal": "давай все валидаторы проверим на корректность логики и эффективность (p0_all)",
+      "changes": "invariants.json(v16): INV-9 look-ahead safety, TEMP-5 claim align. inv9_limiter_exit/l2_inv1/inv4_min + version_date в PARTITION/GROUP BY: inv3,4,5,7,8,10,11,temp4,l2_inv7,l2_inv8,l2_temp1,l2_temp4,temp5.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "fixed-run 8103: INV-9=0 scope=38649(было 0); leakage inv3/5/8 идентичны с/без date(=0,inv3 max=18); TEMP-5 0/0/0/0; L2 INV-1 vacuum PASS; регрессия inv1/12/2/4/6/7/10/11/temp4 PASS. reviewer APPROVE. 8103 очищен, 8001 сохранён.",
+      "drift_check": "UserGoal vs Changes(5 P0): match yes",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P0-close",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "Правка SSoT invariants.json (семантика INV-9/TEMP-5)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "P0 hardening валидаторов (5 фиксов): INV-9 reframe, L2 INV-1 lifecycle, inv4_min deprecate, TEMP-5 align, version-leakage.",
+      "evidence_pack": "fixed-run 8103: INV-9=0 scope=38649(было 0); leakage inv3/5/8 идентичны с/без date(=0,inv3 max=18); TEMP-5 0/0/0/0; L2 INV-1 vacuum PASS; регрессия inv1/12/2/4/6/7/10/11/temp4 PASS. reviewer APPROVE. 8103 очищен, 8001 сохранён.",
+      "success_criteria": "SQL: fixed-run 8103 все валидаторы PASS; INV-9 scope>0 (38649); leakage идентичен с/без --version-date",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=domain_graph_sync_deferred,p1_backlog_out_of_scope; evidence_refs=handoff_validator-judge_5f96f132; approval_ref=N/A",
+      "risks": "Neo4j derived отстаёт до sync; P1 backlog вне scope",
+      "next_owner": "human",
+      "open_questions": "Чинить ли P1 backlog отдельным workflow? Коммит P0-изменений?",
+      "graph_update": "yes",
+      "graph_update_reason": "INV-9/TEMP-5 SSoT семантика изменена; make sync-domain-graph human-gated",
+      "prev_handoff_hash": "c3f0caa47878894b050fd7af35aaf388fbd40c5c3da33cb9b8cebe269b2cc155",
+      "created_at": "2026-06-05T19:38:16Z",
+      "modules": [
+        "validation"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_validators_p0_hardening_20260605T190101Z_docs-curator_5a732cc4",
+      "workflow_id": "W_validators_p0_hardening_20260605T190101Z",
+      "agent": "docs-curator",
+      "user_goal": "Добавить changelog-запись для P0 hardening валидаторов",
+      "changes": "docs/changelog.md: новая верхняя запись (Корень/Изменено/Приёмка/Follow-up) про INV-9 reframe, L2 INV-1, inv4_min deprecate, TEMP-5 align, version-leakage.",
+      "facts": "ReadLints по changelog.md чисто; стиль соответствует предыдущим записям.",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P0-docs",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "a0b6dd9669806b0b60b72795848f878fe252cc1950ee52d6a22eb9be82a94d70",
+      "created_at": "2026-06-05T19:38:27Z",
+      "modules": [
+        "validation"
+      ]
     }
   ],
   "contexts": [
@@ -11705,6 +11927,24 @@
       "agent": "orchestrator",
       "created_at": "2026-06-05T18:38:43Z",
       "updated_at": "2026-06-05T18:38:43Z"
+    },
+    {
+      "context_id": "ctx_W_validators_p0_hardening_20260605T190101Z_phase_start_4040bec6",
+      "workflow_id": "W_validators_p0_hardening_20260605T190101Z",
+      "context_type": "phase_start",
+      "content": "governance-compliance single-pass verdict phase started: проверка 13 пунктов чеклиста для high-strict workflow (P0 фиксы валидаторов: INV-9 reframe, L2 INV-1 unblind, inv4_min deprecate, TEMP-5 claim align, version-leakage в 13 файлах). Источники: handoff coder-general d204897d, handoff validator-judge 5f96f132 (fixed-run 8103, все PASS), invariants.json v16.",
+      "agent": "governance-compliance",
+      "created_at": "2026-06-05T19:02:40Z",
+      "updated_at": "2026-06-05T19:29:29Z"
+    },
+    {
+      "context_id": "ctx_W_validators_p0_hardening_20260605T190101Z_closure_fdf97ec1",
+      "workflow_id": "W_validators_p0_hardening_20260605T190101Z",
+      "context_type": "closure",
+      "content": "P0 hardening завершён, fixed-run 8103 PASS, governance allow_with_notes",
+      "agent": "orchestrator",
+      "created_at": "2026-06-05T19:38:27Z",
+      "updated_at": "2026-06-05T19:38:27Z"
     }
   ],
   "meta": {

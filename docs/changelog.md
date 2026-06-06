@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-06-05 — Hardening валидаторов: устранение вакуумных PASS, blind-spots и version-leakage (P0)
+
+**Workflow**: W_validators_p0_hardening_20260605T190101Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit | **Governance**: allow_with_notes
+
+**Корень** (по итогам аудита):
+- INV-9 (`limiter=0 AND status_id=2`) имел `scope=0` в экспорте и давал вакуумный PASS, зеркально старому INV-1; после look-ahead рефактора `limiter=0` стал postcondition.
+- L2 INV-1 (engines) повторял blind-spot фильтр `state=2`, ранее найденный в INV-1.
+- `inv4_unsvc_min_repair` имел `scope=0`, был вакуумным и дублировал INV-4.
+- TEMP-5: claim в SSoT (`capacity`) не совпадал с фактическим SQL (`claim/bank integrity`).
+- Version-leakage: оконные/агрегатные валидаторы без `version_date` в `PARTITION BY` / `GROUP BY` сшивали датасеты при одном `version_id` (`run_id` поверх 4 `version_date`); эмпирически INV-5 `184640 vs 0`, INV-8 `4003 vs 0`, INV-3 max `71 vs 18`.
+
+**Изменено**:
+- `config/transitions/invariants.json` (v16): INV-9 reframe → look-ahead safety (`status==2 AND next_status==2: sne+daily_next_u32<=ll AND ppr+daily_next_u32<=oh`); TEMP-5 claim/expr приведён к фактическому SQL (`claim/bank integrity`), `capacity=INV-3` оставлен в notes.
+- `code/validation/inv9_limiter_exit.py`: новый look-ahead SQL с partition по `idx, group_by, version_date`.
+- `code/validation/l2_inv1_sne_le_ll.py`: снят фильтр `state=2`, engines проверяются lifecycle-wide (`group_by` 3,4).
+- `code/validation/inv4_unsvc_min_repair.py`: помечен `DEPRECATED` (не удалён), не входит в `run_all`.
+- `version_date` добавлен в `PARTITION BY` / `GROUP BY`: inv3, inv4, inv5, inv7, inv8, inv10, inv11, temp4, l2_inv7, l2_inv8, l2_temp1, l2_temp4, temp5.
+
+**Приёмка** (fixed-run `8103`, `version_date=2026-04-08`):
+- INV-9: PASS (`violations=0`), scope теперь НЕ вакуумный = 38649 строк (был 0).
+- Version-leakage: inv3/5/8 числа идентичны с/без `--version-date` (=0; inv3 `max_concurrent=18`).
+- TEMP-5: 4 счётчика = 0; L2 INV-1: vacuum PASS (`sim_units_v2` пуст для run); регрессия inv1/12/2/4/6/7/10/11/temp4 — все PASS.
+- `reviewer-flame` APPROVE; governance `allow_with_notes`. `8103` очищен, baseline `8001` сохранён.
+
+**Follow-up** (осознанно вне scope, P1/P2):
+- GraphUpdate=yes: INV-9/TEMP-5 семантика SSoT изменена → `make sync-domain-graph` (human-gated) не выполнен, Neo4j derived отстаёт.
+- `temp1_repair_duration.py` (mainline) не включён в version-leakage fix.
+- Устаревшие/дубликаты под рассинхрон с look-ahead RTC v8: `validate_state2ops_transitions`/`increments`, `sim_validation_ops_exits`, `inv9_limiter_zero_exit`, `inv5_sne_balance`, `inv6_dt_outside_ops`, `inv3_repair_limit`, `temp4_liveness` — кандидаты на обновление/архив.
+
+---
+
 ## 2026-06-05 — validation: ресурсные инварианты ловят перелёт V8
 
 **Workflow**: W_sim_validation_resource_coverage_20260605T175234Z | **Risk**: high | **Profile**: high-strict | **Status**: ready-to-commit | **Governance**: allow_with_notes / required_gates=partial

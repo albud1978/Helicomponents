@@ -69,121 +69,157 @@ def main() -> int:
     client = get_client()
 
     vd_filter = ""
+    vd_filter_m = ""
     params = {"vid": args.version_id}
     if args.version_date is not None:
         vd_filter = " AND version_date = %(vdate)s"
+        vd_filter_m = " AND m.version_date = %(vdate)s"
         params["vdate"] = args.version_date
 
     minmax_query = f"""
-    SELECT min(day_u16) AS min_day, max(day_u16) AS max_day
+    SELECT version_date, min(day_u16) AS min_day, max(day_u16) AS max_day
     FROM {table}
     WHERE version_id = %(vid)s{vd_filter}
       AND group_by IN (1, 2)
+    GROUP BY version_date
+    ORDER BY version_date
     """
     minmax_rows = client.execute(minmax_query, params)
-    min_day, max_day = minmax_rows[0] if minmax_rows else (None, None)
-    has_data = min_day is not None and max_day is not None
+    day_ranges = [
+        (int(version_date), int(min_day), int(max_day))
+        for version_date, min_day, max_day in minmax_rows
+        if min_day is not None and max_day is not None
+    ]
+    has_data = bool(day_ranges)
 
     # Считаем входы и выходы для каждого статуса
     # Вход: pre_status_id != status_id (т.е. переход произошёл)
     entries_query = f"""
-    SELECT status_id AS s, count() AS entries
+    SELECT version_date, status_id AS s, count() AS entries
     FROM {table}
     WHERE version_id = %(vid)s{vd_filter}
       AND group_by IN (1, 2)
       AND pre_status_id != status_id
       AND pre_status_id > 0
-    GROUP BY status_id
-    ORDER BY status_id
+    GROUP BY version_date, status_id
+    ORDER BY version_date, status_id
     """
     entries_rows = client.execute(entries_query, params) if has_data else []
-    entries = {int(r[0]): int(r[1]) for r in entries_rows}
+    entries = {(int(r[0]), int(r[1])): int(r[2]) for r in entries_rows}
 
     spawn_query = f"""
-    SELECT status_id AS s, count() AS spawn_entries
+    SELECT version_date, status_id AS s, count() AS spawn_entries
     FROM {table}
     WHERE version_id = %(vid)s{vd_filter}
       AND group_by IN (1, 2)
       AND pre_status_id = 0
-    GROUP BY status_id
-    ORDER BY status_id
+    GROUP BY version_date, status_id
+    ORDER BY version_date, status_id
     """
     spawn_rows = client.execute(spawn_query, params) if has_data else []
-    spawn_entries = {int(r[0]): int(r[1]) for r in spawn_rows}
+    spawn_entries = {(int(r[0]), int(r[1])): int(r[2]) for r in spawn_rows}
 
     # Выходы: pre_status_id = s, status_id != s
     exits_query = f"""
-    SELECT pre_status_id AS s, count() AS exits
+    SELECT version_date, pre_status_id AS s, count() AS exits
     FROM {table}
     WHERE version_id = %(vid)s{vd_filter}
       AND group_by IN (1, 2)
       AND pre_status_id != status_id
       AND pre_status_id > 0
-    GROUP BY pre_status_id
-    ORDER BY pre_status_id
+    GROUP BY version_date, pre_status_id
+    ORDER BY version_date, pre_status_id
     """
     exits_rows = client.execute(exits_query, params) if has_data else []
-    exits = {int(r[0]): int(r[1]) for r in exits_rows}
+    exits = {(int(r[0]), int(r[1])): int(r[2]) for r in exits_rows}
 
     # Начальные и финальные статусы (по первому/последнему дню)
     initial_counts = {}
     final_counts = {}
     if has_data:
         initial_query = f"""
-        SELECT pre_status_id AS s, count() AS cnt
-        FROM {table}
-        WHERE version_id = %(vid)s{vd_filter}
-          AND group_by IN (1, 2)
-          AND day_u16 = %(min_day)s
-          AND pre_status_id > 0
-        GROUP BY pre_status_id
-        ORDER BY pre_status_id
-        """
-        initial_rows = client.execute(
-            initial_query, {**params, "min_day": int(min_day)}
+        WITH minmax AS (
+            SELECT version_date, min(day_u16) AS min_day
+            FROM {table}
+            WHERE version_id = %(vid)s{vd_filter}
+              AND group_by IN (1, 2)
+            GROUP BY version_date
         )
-        initial_counts = {int(r[0]): int(r[1]) for r in initial_rows}
+        SELECT m.version_date, m.pre_status_id AS s, count() AS cnt
+        FROM {table} m
+        INNER JOIN minmax mm
+            ON m.version_date = mm.version_date
+           AND m.day_u16 = mm.min_day
+        WHERE m.version_id = %(vid)s{vd_filter_m}
+          AND m.group_by IN (1, 2)
+          AND m.pre_status_id > 0
+        GROUP BY m.version_date, m.pre_status_id
+        ORDER BY m.version_date, m.pre_status_id
+        """
+        initial_rows = client.execute(initial_query, params)
+        initial_counts = {(int(r[0]), int(r[1])): int(r[2]) for r in initial_rows}
 
         final_query = f"""
-        SELECT status_id AS s, count() AS cnt
-        FROM {table}
-        WHERE version_id = %(vid)s{vd_filter}
-          AND group_by IN (1, 2)
-          AND day_u16 = %(max_day)s
-        GROUP BY status_id
-        ORDER BY status_id
+        WITH minmax AS (
+            SELECT version_date, max(day_u16) AS max_day
+            FROM {table}
+            WHERE version_id = %(vid)s{vd_filter}
+              AND group_by IN (1, 2)
+            GROUP BY version_date
+        )
+        SELECT m.version_date, m.status_id AS s, count() AS cnt
+        FROM {table} m
+        INNER JOIN minmax mm
+            ON m.version_date = mm.version_date
+           AND m.day_u16 = mm.max_day
+        WHERE m.version_id = %(vid)s{vd_filter_m}
+          AND m.group_by IN (1, 2)
+        GROUP BY m.version_date, m.status_id
+        ORDER BY m.version_date, m.status_id
         """
-        final_rows = client.execute(final_query, {**params, "max_day": int(max_day)})
-        final_counts = {int(r[0]): int(r[1]) for r in final_rows}
+        final_rows = client.execute(final_query, params)
+        final_counts = {(int(r[0]), int(r[1])): int(r[2]) for r in final_rows}
 
     # Баланс для каждого статуса
     check_states = [1, 2, 3, 4, 6, 7]
     violations = 0
     balance_rows = []
 
-    for s in check_states:
-        initial = initial_counts.get(s, 0)
-        ent = entries.get(s, 0)
-        spawn = spawn_entries.get(s, 0)
-        ext = exits.get(s, 0)
-        final = final_counts.get(s, 0)
-        balance = (initial + ent + spawn) - (ext + final)
-        ok = balance == 0
-        balance_rows.append(
-            [s, initial, ent, spawn, ext, final, balance, "OK" if ok else "FAIL"]
-        )
-        if not ok:
-            violations += 1
+    for version_date, _min_day, _max_day in day_ranges:
+        for s in check_states:
+            key = (version_date, s)
+            initial = initial_counts.get(key, 0)
+            ent = entries.get(key, 0)
+            spawn = spawn_entries.get(key, 0)
+            ext = exits.get(key, 0)
+            final = final_counts.get(key, 0)
+            balance = (initial + ent + spawn) - (ext + final)
+            ok = balance == 0
+            balance_rows.append(
+                [
+                    version_date,
+                    s,
+                    initial,
+                    ent,
+                    spawn,
+                    ext,
+                    final,
+                    balance,
+                    "OK" if ok else "FAIL",
+                ]
+            )
+            if not ok:
+                violations += 1
 
     # Таблица переходов с LEGAL/ILLEGAL
     transitions_query = f"""
-    SELECT pre_status_id AS pre, status_id AS st, count() AS cnt
+    SELECT version_date, pre_status_id AS pre, status_id AS st, count() AS cnt
     FROM {table}
     WHERE version_id = %(vid)s{vd_filter}
       AND group_by IN (1, 2)
       AND pre_status_id != status_id
-    GROUP BY pre_status_id, status_id
-    ORDER BY pre_status_id, status_id
+    GROUP BY version_date, pre_status_id, status_id
+    ORDER BY version_date, pre_status_id, status_id
     """
     transition_rows = client.execute(transitions_query, params) if has_data else []
     allowed = {
@@ -202,7 +238,7 @@ def main() -> int:
     }
     illegal = 0
     transitions_rows = []
-    for pre, st, cnt in transition_rows:
+    for version_date, pre, st, cnt in transition_rows:
         pre_i = int(pre)
         st_i = int(st)
         cnt_i = int(cnt)
@@ -210,7 +246,7 @@ def main() -> int:
         if not legal:
             illegal += 1
         transitions_rows.append(
-            [pre_i, st_i, cnt_i, "LEGAL" if legal else "ILLEGAL"]
+            [int(version_date), pre_i, st_i, cnt_i, "LEGAL" if legal else "ILLEGAL"]
         )
 
     details = []
@@ -219,19 +255,35 @@ def main() -> int:
             "no rows for filters: version_id=%s, version_date=%s, group_by IN (1,2)"
             % (args.version_id, args.version_date if args.version_date else "ANY")
         )
-    details.append(
-        "day range: min_day=%s, max_day=%s" % (min_day, max_day)
-    )
+    details.append("day ranges:")
+    if day_ranges:
+        for version_date, min_day, max_day in day_ranges:
+            details.append(
+                "  version_date=%s, min_day=%s, max_day=%s"
+                % (version_date, min_day, max_day)
+            )
+    else:
+        details.append("  none")
     details.append("balance table:")
     details.extend(
         format_table(
-            ["status", "initial", "entries", "spawn", "exits", "final", "balance", "ok"],
+            [
+                "version_date",
+                "status",
+                "initial",
+                "entries",
+                "spawn",
+                "exits",
+                "final",
+                "balance",
+                "ok",
+            ],
             balance_rows,
         )
     )
     details.append("transitions table:")
     details.extend(
-        format_table(["pre", "status", "count", "legal"], transitions_rows)
+        format_table(["version_date", "pre", "status", "count", "legal"], transitions_rows)
     )
     details.append(f"illegal_transitions={illegal}")
 

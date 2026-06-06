@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-L2 INV-1: sne <= ll_expected для engines в operations.
+L2 INV-1: sne <= ll_expected для engines по всему жизненному циклу.
 """
 import argparse
 import re
@@ -37,7 +37,9 @@ def print_result(name: str, passed: bool, details) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="L2 INV-1: sne <= ll_expected")
+    parser = argparse.ArgumentParser(
+        description="L2 INV-1: sne <= ll_expected lifecycle"
+    )
     parser.add_argument("--planner-version-date", type=int, default=None)
     parser.add_argument("--units-version-date-int", required=True, type=int)
     parser.add_argument("--version-id", required=True, type=int)
@@ -52,7 +54,7 @@ def main() -> int:
     ensure_columns(
         client,
         table_units,
-        ["version_date", "version_id", "state", "group_by", "sne", "partseqno_i"],
+        ["version_date", "version_id", "group_by", "sne", "partseqno_i"],
     )
     ensure_columns(
         client,
@@ -75,7 +77,6 @@ def main() -> int:
         WHERE u.version_date = %(uvd)s
           AND u.version_id = %(vid)s
           AND u.group_by IN (3, 4)
-          AND u.state = 2
     )
     SELECT
         countIf(ll_expected IS NULL OR ll_expected <= 0) AS skipped_no_norm,
@@ -104,7 +105,6 @@ def main() -> int:
             WHERE u.version_date = %(uvd)s
               AND u.version_id = %(vid)s
               AND u.group_by IN (3, 4)
-              AND u.state = 2
         )
         SELECT
             psn, group_by, sne, ll_expected,
@@ -122,7 +122,7 @@ def main() -> int:
             )
 
     passed = violations == 0
-    print_result("L2 INV-1 sne<=ll_expected", passed, details)
+    print_result("L2 INV-1 sne<=ll_expected lifecycle", passed, details)
     return 0 if passed else 1
 
 

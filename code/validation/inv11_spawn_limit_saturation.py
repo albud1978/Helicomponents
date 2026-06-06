@@ -111,114 +111,133 @@ def main() -> int:
     table = validate_table_name(args.table)
     client = get_client()
 
-    vd_filter = ""
     params = {"vid": args.version_id}
     if args.version_date is not None:
+        version_dates = [args.version_date]
+    else:
+        version_dates_query = f"""
+        SELECT version_date
+        FROM {table}
+        WHERE version_id = %(vid)s
+          AND group_by IN (1, 2)
+        GROUP BY version_date
+        ORDER BY version_date
+        """
+        version_dates = [
+            int(row[0]) for row in client.execute(version_dates_query, params)
+        ]
+    if not version_dates:
+        raise SystemExit("Не удалось определить version_date из данных симуляции")
+
+    details = [f"version_id={args.version_id}, table={table}"]
+    violating_datasets = 0
+
+    for version_date_int in version_dates:
+        scoped_params = {"vid": args.version_id, "vdate": version_date_int}
         vd_filter = " AND version_date = %(vdate)s"
-        params["vdate"] = args.version_date
 
-    if args.version_date is not None:
-        version_date_int = args.version_date
-    else:
-        row = client.execute(
-            f"SELECT min(version_date) FROM {table} WHERE version_id = %(vid)s",
-            params,
+        vdate_date = to_date(version_date_int)
+        env_data = prepare_env_arrays(client, vdate_date)
+        deterministic_spawn_mi17 = int(env_data.get("deterministic_spawn_mi17", 0))
+        dynamic_reserve_mi17 = int(env_data.get("dynamic_reserve_mi17", 0))
+
+        spawn_query = f"""
+        SELECT version_date, countDistinct(idx)
+        FROM {table}
+        WHERE version_id = %(vid)s{vd_filter}
+          AND group_by = 2
+          AND pre_status_id = 0
+        GROUP BY version_date
+        """
+        spawn_rows = client.execute(spawn_query, scoped_params)
+        total_spawned_mi17 = int(spawn_rows[0][1]) if spawn_rows else 0
+        dynamic_spawned_mi17 = max(0, total_spawned_mi17 - deterministic_spawn_mi17)
+        saturated = False
+        if dynamic_reserve_mi17 > 0:
+            saturated = dynamic_spawned_mi17 >= dynamic_reserve_mi17
+
+        warmup_query = f"""
+        SELECT max(repair_time)
+        FROM {table}
+        WHERE version_id = %(vid)s{vd_filter}
+          AND group_by IN (1, 2)
+        """
+        warmup_value = client.execute(warmup_query, scoped_params)[0][0]
+        warmup_days = int(warmup_value) if warmup_value is not None else 0
+
+        _, targets_mi17, _ = load_mp4_targets(client, version_date_int)
+
+        step_days_query = f"""
+        SELECT DISTINCT day_u16
+        FROM {table}
+        WHERE version_id = %(vid)s{vd_filter}
+          AND group_by IN (1, 2)
+        ORDER BY day_u16
+        """
+        step_days = sorted(
+            [int(row[0]) for row in client.execute(step_days_query, scoped_params)]
         )
-        version_date_int = int(row[0][0]) if row and row[0][0] else None
-        if version_date_int is None:
-            raise SystemExit("Не удалось определить version_date из данных симуляции")
-
-    vdate_date = to_date(version_date_int)
-    env_data = prepare_env_arrays(client, vdate_date)
-    deterministic_spawn_mi17 = int(env_data.get("deterministic_spawn_mi17", 0))
-    dynamic_reserve_mi17 = int(env_data.get("dynamic_reserve_mi17", 0))
-
-    spawn_query = f"""
-    SELECT countDistinct(idx)
-    FROM {table}
-    WHERE version_id = %(vid)s{vd_filter}
-      AND group_by = 2
-      AND pre_status_id = 0
-    """
-    total_spawned_mi17 = client.execute(spawn_query, params)[0][0] or 0
-    total_spawned_mi17 = int(total_spawned_mi17)
-    dynamic_spawned_mi17 = max(0, total_spawned_mi17 - deterministic_spawn_mi17)
-    saturated = False
-    if dynamic_reserve_mi17 > 0:
-        saturated = dynamic_spawned_mi17 >= dynamic_reserve_mi17
-
-    warmup_query = f"""
-    SELECT max(repair_time)
-    FROM {table}
-    WHERE version_id = %(vid)s{vd_filter}
-      AND group_by IN (1, 2)
-    """
-    warmup_value = client.execute(warmup_query, params)[0][0]
-    warmup_days = int(warmup_value) if warmup_value is not None else 0
-
-    _, targets_mi17, _ = load_mp4_targets(client, version_date_int)
-
-    step_days_query = f"""
-    SELECT DISTINCT day_u16
-    FROM {table}
-    WHERE version_id = %(vid)s{vd_filter}
-      AND group_by IN (1, 2)
-    ORDER BY day_u16
-    """
-    step_days = sorted(
-        [int(row[0]) for row in client.execute(step_days_query, params)]
-    )
-    if not step_days:
-        raise SystemExit("В таблице нет day_u16 для выбранных фильтров")
-
-    ops_query = f"""
-    SELECT day_u16, count() AS ops_count
-    FROM {table}
-    WHERE version_id = %(vid)s{vd_filter}
-      AND status_id = 2
-      AND group_by = 2
-    GROUP BY day_u16
-    """
-    ops_counts = {}
-    for day_u16, ops_count in client.execute(ops_query, params):
-        ops_counts[int(day_u16)] = int(ops_count)
-
-    post_deficits = []
-    for day in step_days:
-        if day <= warmup_days:
-            continue
-        target = get_target_for_day(targets_mi17, day)
-        ops_count = ops_counts.get(day, 0)
-        if ops_count < target:
-            deficit = int(target - ops_count)
-            post_deficits.append((day, ops_count, target, deficit))
-
-    post_deficit_days = len(post_deficits)
-    max_post_deficit = max((d[3] for d in post_deficits), default=0)
-
-    passed = not (saturated and post_deficit_days > 0)
-    details = [
-        f"version_id={args.version_id}, version_date={version_date_int}, table={table}",
-        f"deterministic_spawn_mi17={deterministic_spawn_mi17}",
-        f"dynamic_reserve_mi17={dynamic_reserve_mi17}",
-        f"total_spawned_mi17={total_spawned_mi17}",
-        f"dynamic_spawned_mi17={dynamic_spawned_mi17}",
-        f"saturated={'true' if saturated else 'false'}",
-        f"warmup_days={warmup_days}",
-        f"post_deficit_days={post_deficit_days}",
-        f"max_post_deficit={max_post_deficit}",
-    ]
-    if post_deficits:
-        details.append("post_deficit_sample (day, ops, target, deficit):")
-        for day, ops, target, deficit in post_deficits[:5]:
-            details.append(
-                f"  day={day}: ops={ops}, target={target}, deficit={deficit}"
+        if not step_days:
+            raise SystemExit(
+                f"В таблице нет day_u16 для version_date={version_date_int}"
             )
-        if len(post_deficits) > 5:
-            details.append(f"  ... and {len(post_deficits) - 5} more")
-    else:
-        details.append("post_deficit_sample: none")
 
+        ops_query = f"""
+        SELECT version_date, day_u16, count() AS ops_count
+        FROM {table}
+        WHERE version_id = %(vid)s{vd_filter}
+          AND status_id = 2
+          AND group_by = 2
+        GROUP BY version_date, day_u16
+        """
+        ops_counts = {}
+        for _version_date, day_u16, ops_count in client.execute(
+            ops_query, scoped_params
+        ):
+            ops_counts[int(day_u16)] = int(ops_count)
+
+        post_deficits = []
+        for day in step_days:
+            if day <= warmup_days:
+                continue
+            target = get_target_for_day(targets_mi17, day)
+            ops_count = ops_counts.get(day, 0)
+            if ops_count < target:
+                deficit = int(target - ops_count)
+                post_deficits.append((day, ops_count, target, deficit))
+
+        post_deficit_days = len(post_deficits)
+        max_post_deficit = max((d[3] for d in post_deficits), default=0)
+        dataset_fails = saturated and post_deficit_days > 0
+        if dataset_fails:
+            violating_datasets += 1
+
+        details.extend(
+            [
+                f"version_date={version_date_int}",
+                f"  deterministic_spawn_mi17={deterministic_spawn_mi17}",
+                f"  dynamic_reserve_mi17={dynamic_reserve_mi17}",
+                f"  total_spawned_mi17={total_spawned_mi17}",
+                f"  dynamic_spawned_mi17={dynamic_spawned_mi17}",
+                f"  saturated={'true' if saturated else 'false'}",
+                f"  warmup_days={warmup_days}",
+                f"  post_deficit_days={post_deficit_days}",
+                f"  max_post_deficit={max_post_deficit}",
+            ]
+        )
+        if post_deficits:
+            details.append("  post_deficit_sample (day, ops, target, deficit):")
+            for day, ops, target, deficit in post_deficits[:5]:
+                details.append(
+                    f"    day={day}: ops={ops}, target={target}, deficit={deficit}"
+                )
+            if len(post_deficits) > 5:
+                details.append(f"    ... and {len(post_deficits) - 5} more")
+        else:
+            details.append("  post_deficit_sample: none")
+
+    details.append(f"violating_datasets={violating_datasets}")
+    passed = violating_datasets == 0
     print_result("INV-11 spawn limit saturation", passed, details)
     return 0 if passed else 1
 
