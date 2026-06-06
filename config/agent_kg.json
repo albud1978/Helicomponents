@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-06T11:23:15Z",
+    "updated_at": "2026-06-06T19:48:58Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -1651,7 +1651,7 @@
       "goal": "Канонизировать config_loader (удалить code/config_loader.py, оставить code/utils/) + полный дроп + прогон 4 датасетов через extract и симуляцию как приёмка",
       "phase": "governance",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 60,
         "max_tokens": 500000,
@@ -1659,13 +1659,34 @@
         "profile": "high-strict"
       },
       "usage": {
-        "cumulative_steps": 4,
+        "cumulative_steps": 6,
         "cumulative_tokens": 124000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-06T11:23:15Z"
+        "last_updated": "2026-06-06T11:24:34Z"
       },
       "created_at": "2026-06-06T10:15:18Z",
-      "updated_at": "2026-06-06T11:23:15Z"
+      "updated_at": "2026-06-06T11:24:34Z"
+    },
+    {
+      "workflow_id": "W_close_tails_20260606T194504Z",
+      "goal": "Архив 2 хвостов: 3 хардкодных скрипта группы D + сломанный validate_limiter_ops_target (superseded inv2)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 20,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 22000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-06T19:48:58Z"
+      },
+      "created_at": "2026-06-06T19:45:04Z",
+      "updated_at": "2026-06-06T19:48:58Z"
     }
   ],
   "handoffs": [
@@ -11766,6 +11787,123 @@
         "est_tokens": 12000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_config_loader_canon_fullrun_20260606T101518Z_orchestrator_924dede2",
+      "workflow_id": "W_config_loader_canon_fullrun_20260606T101518Z",
+      "agent": "orchestrator",
+      "user_goal": "после одного канона сделать полный дроп и прогон всех четырех датасетов через экстракт и симуляцию",
+      "changes": "удалён code/config_loader.py; полная пересборка ETL+sim 4 датасетов version_id=1; docs changelog+2 capsule",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "config_loader.py удалён (md5 был идентичен); смоук orchestrator_limiter_v8+extract_master+compileall PASS; ETL 4 даты version_id=1 (10965/11390/11442/11480); sim×4 без ImportError; run_all 15/15 ×4; ops=target ×4 (inv2); новый baseline v1 85798/87361/88429/84915, repairline 65700×4; commit 5f53f63a",
+      "drift_check": "UserGoal vs Changes: yes — канон + полный дроп + прогон 4 датасетов; SSoT не тронут; дельта counts = чистый ETL, не регресс",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "Удаление файла в code/** + деструктивный --drop-table реальных sim-данных (включая baseline 8001-8020)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "high-strict: research(канон=utils, 0 поломок) → coder-general(rm dup) → coder-general(drop+extract×4) → validator-judge(sim×4+приёмка) → governance allow_with_notes → docs → commit/push/close",
+      "evidence_pack": "config_loader.py удалён (md5 был идентичен); смоук orchestrator_limiter_v8+extract_master+compileall PASS; ETL 4 даты version_id=1 (10965/11390/11442/11480); sim×4 без ImportError; run_all 15/15 ×4; ops=target ×4 (inv2); новый baseline v1 85798/87361/88429/84915, repairline 65700×4; commit 5f53f63a",
+      "success_criteria": "numeric: sim×4 no ImportError AND run_all 15/15 ×4 AND ops=target ×4 PASS AND sim_masterv2_v9 only version_id=1 on 4 dates",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=approval_context_partial_coverage; evidence_refs=handoff_7db13a9a;handoff_651b6ec1;handoff_df699a95;handoff_cd025110;commit_5f53f63a; approval_ref=ctx_W_config_loader_canon_fullrun_20260606T101518Z_approval_d906c593",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "9f1c3b658bee34b12f9dc1bcf12758962517054c9f7719bca1342034ae94d74a",
+      "created_at": "2026-06-06T11:24:22Z",
+      "modules": [
+        "infra",
+        "extract_dwh",
+        "step_logic",
+        "validation"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_config_loader_canon_fullrun_20260606T101518Z_docs-curator_ed912ce6",
+      "workflow_id": "W_config_loader_canon_fullrun_20260606T101518Z",
+      "agent": "docs-curator",
+      "user_goal": "Документировать канонизацию config_loader + новый baseline v1",
+      "changes": "docs/changelog.md: запись 2026-06-06 (канон config_loader, clean rebuild ETL+sim 4 датасета, новый baseline v1 85798/87361/88429/84915, run_all 15/15 ×4, ops=target ×4); quota_capsule + validation_capsule: validate_limiter_ops_target помечен legacy, актуальный inv2_ops_vs_target",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "ReadLints по изменённым md чисто",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "D1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "ReadLints по изменённым md чисто",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "a6241eb101976f68ec03bc81f30a545c4b1b89b67756b335e7dd1d016132d112",
+      "created_at": "2026-06-06T11:24:34Z",
+      "modules": [
+        "validation"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_close_tails_20260606T194504Z_coder-general_c5aa18a1",
+      "workflow_id": "W_close_tails_20260606T194504Z",
+      "agent": "coder-general",
+      "user_goal": "Low-risk финальная уборка: архивировать 4 мёртвых файла + поправить 3 docs. Workflow: W_close_tails_20260606T194504Z. Все 4 подтверждены 0 живых импортёров. Только перемещение + ARCHIVED-шапки + правка ссылок в docs. НЕ менять логику.",
+      "changes": "git mv: code/sim_v2/check_agent_data.py -> code/archive/sim_v2_diag/check_agent_data.py; code/sim_v2/analyze_baseline_details.py -> code/archive/sim_v2_diag/analyze_baseline_details.py; code/sim_v2/check_baseline_repair.py -> code/archive/sim_v2_diag/check_baseline_repair.py; code/sim_v2/messaging/validate_limiter_ops_target.py -> code/archive/sim_v2_messaging/validate_limiter_ops_target.py. Added requested ARCHIVED headers. Updated docs/changelog.md, docs/quota_capsule.md, docs/validation_capsule.md links/notes to archived validator and active code/validation/inv2_ops_vs_target.py.",
+      "facts": "SuccessCriteria PASS: rg live code excluding archive for check_agent_data|analyze_baseline_details|check_baseline_repair|validate_limiter_ops_target => No matches; rg code/sim_v2 => No matches. Import-smoke live orchestrator passed with conda cuda13 python: import orchestrator_limiter_v8. python3 -m compileall -q -x '^code/archive/' code passed. ReadLints for docs/changelog.md, docs/quota_capsule.md, docs/validation_capsule.md: No linter errors found. No logic changes.",
+      "assumptions": "Tests beyond requested smoke/compileall not run; Risks if false: none expected because only archive moves and docs link notes changed.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-06T19:48:58Z",
+      "modules": [
+        "quotas_ops",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 22000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -13307,6 +13445,24 @@
       "agent": "coder-general",
       "created_at": "2026-06-06T10:18:25Z",
       "updated_at": "2026-06-06T10:18:25Z"
+    },
+    {
+      "context_id": "ctx_W_config_loader_canon_fullrun_20260606T101518Z_closure_debb09ac",
+      "workflow_id": "W_config_loader_canon_fullrun_20260606T101518Z",
+      "context_type": "closure",
+      "content": "Канонизация config_loader + чистая пересборка ETL/sim 4 датасетов: 15/15 ×4, ops=target ×4, commit 5f53f63a запушен",
+      "agent": "orchestrator",
+      "created_at": "2026-06-06T11:24:34Z",
+      "updated_at": "2026-06-06T11:24:34Z"
+    },
+    {
+      "context_id": "ctx_W_close_tails_20260606T194504Z_phase_start_86488a2c",
+      "workflow_id": "W_close_tails_20260606T194504Z",
+      "context_type": "phase_start",
+      "content": "Low-risk cleanup start: archive four confirmed dead-code diagnostics, add ARCHIVED headers, update docs links, no logic changes.",
+      "agent": "coder-general",
+      "created_at": "2026-06-06T19:45:47Z",
+      "updated_at": "2026-06-06T19:45:47Z"
     }
   ],
   "meta": {

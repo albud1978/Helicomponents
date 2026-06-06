@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ARCHIVED 2026-06-06 (dead-code cleanup): сломан (хардкод пути чужой машины /home/budnik_an), 0 импортёров.
 """
 Проверка baseline симуляции БЕЗ quota_repair
 Дата: 19-11-2025
