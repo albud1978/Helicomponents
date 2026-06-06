@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-06-06 — config_loader canon + clean ETL/sim baseline v1
+
+**Workflow**: W_config_loader_canon_fullrun_20260606T101518Z | **Risk**: high | **Profile**: high-strict | **Status**: docs-sync
+
+**Изменено**:
+- Канонизирован дубль `config_loader`: root-дубль `code/config_loader.py` удалён; канон — `code/utils/config_loader.py`. MD5 копий были идентичны; 34 импортёра резолвят utils-копию; smoke-import `orchestrator_limiter_v8` + `extract_master` — PASS.
+- Выполнена чистая пересборка ETL: полный drop + регенерация 4 датасетов через `extract_master`; `heli_pandas` = 4 даты, все `version_id=1`, counts `10965/11390/11442/11480`.
+- Выполнен полный `--drop-table` sim + прогон 4 датасетов через `orchestrator_limiter_v8`, `version_id=1`. Старые baseline `8001-8020` и грязный накопленный `version_id=1` удалены по согласованию Алексея.
+
+**Приёмка**:
+- `sim` ×4 без `ImportError`; `code/validation/run_all.py` — 15/15 PASS ×4.
+- `ops=target` — PASS ×4 через актуальный `code/validation/inv2_ops_vs_target.py`. Legacy `code/sim_v2/messaging/validate_limiter_ops_target.py` устарел из-за schema mismatch (`state` vs `status_id`) и не является актуальным оракулом.
+- Актуальный clean baseline `version_id=1` после пересборки 2026-06-06: `sim_masterv2_v9` row counts `85798/87361/88429/84915`, `sim_repairline_v9` = `65700` для каждого из 4 датасетов. Дельта от старых baseline объяснена чистой регенерацией ETL; прежние числа остаются историей старых/накопленных прогонов, но больше не являются актуальным baseline.
+
+---
+
 ## 2026-06-06 — sim_v2/messaging: архив legacy dead code вокруг активного V8
 
 **Workflow**: W_sim_v2_dead_code_archive_20260606T050934Z | **Risk**: high | **Profile**: high-strict | **Status**: docs-sync
@@ -17,6 +33,8 @@
 - V8 run `8105` стартует без `ImportError`; поведение bit-identical к baseline `8104`.
 - Контрольные строки совпали: `sim_masterv2_v9` = 85577, `sim_repairline_v9` = 65700.
 - `code/validation/run_all.py` — 15/15 PASS; review и validation завершены до docs-sync.
+
+**Baseline note**: это историческая проверка до clean rebuild 2026-06-06. Актуальный baseline теперь `version_id=1`: master `85798/87361/88429/84915`, repairline `65700×4`; старые baseline `8001-8020` удалены через `--drop-table`.
 
 ---
 
