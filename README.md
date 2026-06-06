@@ -248,7 +248,7 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 ### Контракты и инварианты (SSoT)
 | Файл | Описание |
 |------|----------|
-| **`config/transitions/invariants.json`** | Формализованные инварианты (INV-1..11), temporal-контракты (TEMP-1, TEMP-4, TEMP-5; TEMP-2/3 deprecated), GPU-ограничения (GPU-1..6) |
+| **`config/transitions/invariants.json`** | Формализованные инварианты (INV-1..12), temporal-контракты (TEMP-1, TEMP-4, TEMP-5; TEMP-2/3 deprecated), GPU-ограничения (GPU-1..6) |
 | `config/transitions/transitions_rules.json` | Матрица переходов state→state, condition precedent/subsequent, порядок RTC (51 слой) |
 | `config/transitions/quota_rules.json` | Логика квотирования, RepairLine, spawn |
 

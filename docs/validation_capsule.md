@@ -2,7 +2,7 @@
 
 ## Scope
 Трогаем:
-- `config/transitions/invariants.json` (SSoT инвариантов — 11 глобальных (INV-1..INV-11), 3 временных (TEMP-1, TEMP-4, TEMP-5), 6 GPU (GPU-1..GPU-6) — invariants.json v15)
+- `config/transitions/invariants.json` (SSoT инвариантов — 12 глобальных (INV-1..INV-12), 3 временных (TEMP-1, TEMP-4, TEMP-5), 6 GPU (GPU-1..GPU-6) — invariants.json v16)
 - `code/analysis/sim_validation_runner_msg.py` (оркестратор валидации MESSAGING)
 - `code/analysis/sim_validation_quota.py` (INV-2: ops vs target)
 - `code/analysis/sim_validation_increments.py` (INV-6: dt>0 только в ops)
