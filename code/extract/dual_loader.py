@@ -838,29 +838,6 @@ def main(version_date=None, version_id=None):
             print(f"🔧 Этап 2: Статусы эксплуатации...")
             from extract.program_ac_status_processor import process_program_ac_status_field
             pandas_df = process_program_ac_status_field(pandas_df, client)
-            # ЭТАП 2b: Precheck D1 для записей со статусом 2 (исключить овершут на первый день)
-            print(f"🔧 Этап 2b: Пред‑проверка D1 (LL/OH/BR) для status_id=2...")
-            try:
-                from extract.program_ac_precheck_next_day import process_program_ac_precheck_d1
-                print(
-                    "⚠️ [SKIP] D1 precheck для status_id=2 временно отключен по решению "
-                    "(runtime status routing в симуляции)."
-                )
-            except Exception as e:
-                print(f"⚠️ Ошибка импорта precheck D1: {e}")
-
-            # ЭТАП 2c: D1 precheck для status_id=0 → terminal(6)
-            print(f"🔧 Этап 2c: D1 precheck для status_id=0 → terminal(6)...")
-            try:
-                from extract.program_ac_precheck_status0_terminal import (
-                    process_program_ac_precheck_status0_terminal_d1,
-                )
-                print(
-                    "⚠️ [SKIP] D1 precheck status_id=0 → terminal(6) временно отключен "
-                    "по решению (runtime status routing в симуляции)."
-                )
-            except Exception as e:
-                print(f"⚠️ Ошибка импорта precheck D1 status_id=0: {e}")
             
             # ЭТАП 3: Обработка статусов неактивности планеров (МИ-8Т, МИ-8П и т.д.)
             print(f"🔧 Этап 3: Статусы неактивности планеров...")

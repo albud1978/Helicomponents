@@ -3,7 +3,8 @@
 Precheck D1 для записей с status_id == 2 на этапе обогащения heli_pandas
 
 Логика (перед первым днём симуляции):
-- Для group_by ∈ {1,2} и status_id == 2 берём dt = daily_hours(D1)
+- Для group_by ∈ {1,2} и status_id == 2 берём dt = налёт за первый
+  полётный день программы: daily_hours(version_date) = mp5[0]
 - Считаем rem_ll0 = ll - sne, rem_oh0 = oh - ppr (вечер D0)
 - Если rem_ll0 < dt → status_id = 6 (хранение)
 - Иначе если rem_oh0 < dt:
@@ -11,28 +12,48 @@ Precheck D1 для записей с status_id == 2 на этапе обогащ
     * иначе → status_id = 7 (ремонтопригодный)
 
 Примечания:
+- Проверка зеркалит первый инкремент симуляции: cumsum[1] - cumsum[0] = mp5[0].
+- Историческое имя helper-а содержит D1, но загружается именно D0/version_date.
 - BR выбирается по маске типов (из ac_typ → ac_type_mask): Ми‑8 → br_mi8, Ми‑17 → br_mi17 (ед.: минуты)
 """
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date
 from typing import Dict, List
 
 
-def _load_daily_map_for_d1(client) -> Dict[int, int]:
-    d0 = client.execute("SELECT min(dates) FROM flight_program_fl")[0][0]
-    d1 = d0 + timedelta(days=1)
+def _load_daily_map_for_d1(client, version_date: date) -> Dict[int, int]:
+    d0 = client.execute(
+        """
+        SELECT min(dates)
+        FROM flight_program_fl
+        WHERE version_date = %(vd)s
+        """,
+        {"vd": version_date},
+    )[0][0]
+    if d0 is None:
+        raise ValueError(f"flight_program_fl пуст для version_date={version_date}")
+
     rows = client.execute(
-        "SELECT aircraft_number, daily_hours FROM flight_program_fl WHERE dates = %(d)s",
-        {"d": d1},
+        """
+        SELECT aircraft_number, daily_hours
+        FROM flight_program_fl
+        WHERE dates = %(d)s AND version_date = %(vd)s
+        """,
+        {"d": d0, "vd": version_date},
     )
     return {int(ac): int(h or 0) for ac, h in rows if ac is not None}
 
 
-def _load_br_map(client) -> Dict[int, tuple]:
+def _load_br_map(client, version_date: date) -> Dict[int, tuple]:
     rows = client.execute(
-        "SELECT partno_comp, br_mi8, br_mi17 FROM md_components"
+        """
+        SELECT partseqno_i, br_mi8, br_mi17
+        FROM md_components
+        WHERE version_date = %(vd)s
+        """,
+        {"vd": version_date},
     )
     return {
         int(p): (int(b8 or 0), int(b17 or 0))
@@ -54,7 +75,7 @@ def _mask_from_ac_typ(ac_typ: str) -> int:
     return AC_TYPE_MASKS.get(str(ac_typ).strip(), 0)
 
 
-def process_program_ac_precheck_d1(pandas_df, client):
+def process_program_ac_precheck_d1(pandas_df, client, version_date: date):
     """Модифицирует pandas_df на месте: корректирует status_id для D1 precheck.
 
     Меняет только строки с status_id == 2 и group_by ∈ {1,2}.
@@ -67,8 +88,8 @@ def process_program_ac_precheck_d1(pandas_df, client):
         if col not in pandas_df.columns:
             pandas_df[col] = 0 if col != 'ac_typ' else ''
 
-    daily_map = _load_daily_map_for_d1(client)
-    br_map = _load_br_map(client)
+    daily_map = _load_daily_map_for_d1(client, version_date)
+    br_map = _load_br_map(client, version_date)
 
     # Фильтр кандидатов (status_id == 2)
     mask_candidates = (

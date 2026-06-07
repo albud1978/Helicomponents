@@ -215,7 +215,7 @@ class ExtractMaster:
         },
         {
             'script': 'heli_pandas_group_by_enricher.py',
-            'description': 'Обогащение heli_pandas.group_by из md_components.partno_comp (идемпотентно)',
+            'description': 'Обогащение heli_pandas.group_by из md_components.partseqno_i (идемпотентно)',
             'dependencies': ['md_components', 'heli_pandas'],
             'result_table': 'heli_pandas',
             'critical': False,
@@ -226,9 +226,7 @@ class ExtractMaster:
             'description': 'Program AC Precheck D1 - корректировка status_id для D1',
             'dependencies': ['heli_pandas', 'md_components', 'flight_program_fl'],
             'result_table': 'heli_pandas',
-            'critical': False,
-            'skip': True,
-            'skip_reason': 'D1 precheck runner временно отключен по решению (runtime status routing в симуляции).'
+            'critical': False
         },
         {
             'script': 'heli_pandas_component_status.py',

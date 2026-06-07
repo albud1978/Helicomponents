@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-06-07 — extract D1 precheck включён (version-safe) + фикс day-0 перелёта OH
+
+**Risk**: medium (extract status routing, влияет на приёмку симуляции) | **Status**: docs-sync
+
+**Корень**:
+- Планер `22490` (`group_by=2`, датасет 2025-07-04) входил в симуляцию в OPS (`status_id=2`) с остатком ресурса OH=44 при налёте первого дня 153 → на первом полётном шаге `ppr` 269956→270109 > `oh`=270000 (перелёт OH, нарушение INV-12).
+- Причина: extract-проверка `program_ac_precheck_runner.py` (D1 precheck), которая уводит такие планеры из OPS, была выключена (`skip:True`) с переносом логики в runtime симуляции; но look-ahead симуляции не покрывает первый полётный день (нет «вечера дня −1»). Между extract и sim образовалась щель в один день.
+
+**Изменено** (4 файла, только rename/scope/flag, без новой функциональности):
+- `code/extract/extract_master.py`: снят `skip:True`/`skip_reason` — шаг `program_ac_precheck_runner.py` включён (порядок 12, после FL и `group_by`).
+- `code/extract/program_ac_precheck_runner.py`: version-safe — обязательные `--version-date/--version-id`; `SELECT` heli_pandas и `ALTER ... UPDATE` заскоуплены по `version_date`+`version_id` (`WHERE serialno AND version_date AND version_id`); отсутствие таблиц → fail-fast (не тихий пропуск).
+- `code/extract/program_ac_precheck_next_day.py`: off-by-one fix — налёт берётся за `min(dates)`=`version_date`=`mp5[0]` (первый инкремент sim), а не `min(dates)+1`; `flight_program_fl` и `md_components` фильтруются по `version_date`.
+- `code/extract/dual_loader.py`: удалены мёртвые inline-заглушки D1 precheck (ЭТАП 2b/2c) с вводящими в заблуждение `[SKIP]`-сообщениями; этапы статусов 1→2→3 идут подряд.
+
+**Конвенция дней (зафиксирована)**: день 0 = день загрузки (снимок на конец полётного дня, в sim не пишется); первый записанный день `day_u16=1` (дата `version_date+1`), но первый инкремент = `daily_hours(version_date)`=`mp5[0]`. Precheck зеркалит этот первый инкремент. Подробнее: `docs/architecture/extract.md` → раздел `program_ac_precheck_runner.py`.
+
+**Приёмка** (лёгкая, датасет 2025-07-04, PROD extract + scoped sim, без `--drop-table`):
+- `heli_pandas` 22490 (2025-07-04) → `status_id=7` (был 2); версии 2025-12-30/2026-02-21/2026-04-08 → 4/2/2 **не изменились** (version-safety PASS).
+- `sim_masterv2_v9` INV-12 (`ppr>oh`, gb 1,2) по 20250704 = **0** (было 27); 22490 стартует в статусе 7, без перелёта; `ops=target` PASS.
+- Count-сдвиг master 2025-07-04 (baseline 85798 → 88498) объяснён уходом 22490 из OPS в repair-ветку (другой жизненный цикл), не регрессия.
+
+---
+
 ## 2026-06-06 — config_loader canon + clean ETL/sim baseline v1
 
 **Workflow**: W_config_loader_canon_fullrun_20260606T101518Z | **Risk**: high | **Profile**: high-strict | **Status**: docs-sync

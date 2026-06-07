@@ -1192,23 +1192,32 @@ repair_days = repair_time - (sched_end_date - version_date)
 |-------------------|--------------|
 | **Порядок** | 12 (после FL и group_by) |
 | **Таблица в СУБД** | ❌ Не создает (обновляет `heli_pandas.status_id`) |
-| **DataFrame** | ✅ Загружает `heli_pandas` в память |
+| **DataFrame** | ✅ Загружает `heli_pandas` в память (скоуп `version_date`+`version_id`) |
 | **Зависимости** | `heli_pandas`, `md_components`, `flight_program_fl` |
-| **Назначение** | Безопасный D1 precheck для записей `status_id=2` |
+| **Назначение** | Pre-flight gate для `status_id=2`: не пускать планер в OPS, если первого полётного дня не хватает по ресурсу |
+| **Аргументы** | `--version-date`, `--version-id` (обязательны; передаёт `extract_master`) |
+| **Статус** | ✅ Активен (включён 2026-06-07; ранее был `skip:True`) |
 
 #### Логика
 
-- Читает D1 `daily_hours` из `flight_program_fl` по `aircraft_number`.
-- Для `group_by∈{1,2}` и `status_id=2` рассчитывает остатки `ll/oh` на вечер D0.
-- Если остаток < D1, корректирует `status_id` на 6 (хранение) или 4 (ремонт) с учетом BR (`br_mi8/br_mi17`).
-- При отсутствии зависимостей шаг пропускается, обеспечивая устойчивость первичной загрузки.
+- Берёт налёт **первого полётного дня** = `daily_hours(min(dates))` = `daily_hours(version_date)` из `flight_program_fl` (скоуп по `version_date`). Это ровно `mp5[0]` — первый инкремент симуляции (`cumsum[1] − cumsum[0]`).
+- Для `group_by∈{1,2}` и `status_id=2` считает остатки на снимок: `rem_ll0 = ll − sne`, `rem_oh0 = oh − ppr`.
+- Если `rem_ll0 < dt` → `status_id=6` (хранение).
+- Иначе если `rem_oh0 < dt` → по BR (`br_mi8/br_mi17` по маске типа): `BR==0` или `sne+dt ≥ BR` → `status_id=6`, иначе → `status_id=7` (ремонтопригодный).
+- При отсутствии таблиц-зависимостей — fail-fast (возврат ненулевого кода), без тихого пропуска.
+
+#### Конвенция дней (важно)
+
+- День 0 = **день загрузки**: снимок данных (`heli_pandas.ppr/sne` = состояние на конец полётного дня / «вечер»), полёта нет, в `sim_masterv2_v9` он **не пишется** (цикл стартует с `current_day=1`).
+- Первый записанный день — `day_u16=1` (дата `version_date+1`), но первый инкремент `ppr/sne` на нём = `mp5[0] = daily_hours(version_date)`.
+- Поэтому precheck сверяется именно с `daily_hours(version_date)` — он **зеркалит первый инкремент симуляции**. Симуляция своей look-ahead защитой («вечером дня N смотрим день N+1») закрывает дни 1..N, но не может закрыть первый полётный день (нет «вечера дня −1») — этот стык и закрывает extract-precheck.
 
 #### Результат
 
-- Точечные `ALTER ... UPDATE` по `serialno` в `heli_pandas`.
-- Разрывает цикл ожидания FL на ранних этапах: precheck выполняется после формирования FL.
- 
-**Путь:** `code/extract/program_ac_precheck_runner.py`
+- Точечные `ALTER TABLE heli_pandas UPDATE status_id ... WHERE serialno AND version_date AND version_id` — version-safe (не задевает другие срезы версий).
+- Выполняется после формирования FL и `group_by` (иначе фильтр `group_by∈{1,2}` и `status_id` ещё не готовы).
+
+**Путь:** `code/extract/program_ac_precheck_runner.py`, `code/extract/program_ac_precheck_next_day.py`
 
 ### СКРИПТ 12: `digital_values_dictionary_creator.py` (исправлено 28-07-2025)
 

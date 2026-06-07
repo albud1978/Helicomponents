@@ -3,16 +3,35 @@
 Program AC Precheck Runner
 
 Минимально-инвазивный микросервис: запускает D1 precheck после формирования тензора FL,
-используя уже существующую функцию process_program_ac_precheck_d1(). Если flight_program_fl
-отсутствует, шаг тихо пропускается.
+используя уже существующую функцию process_program_ac_precheck_d1(). Работает только в явно
+переданном скоупе version_date/version_id.
 """
 
+import argparse
 import sys
+from datetime import date
 from pathlib import Path
+
+
+def _parse_version_date(raw: str) -> date:
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("--version-date должен быть в формате YYYY-MM-DD") from exc
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Program AC D1 precheck для одной версии heli_pandas."
+    )
+    parser.add_argument("--version-date", required=True, type=_parse_version_date)
+    parser.add_argument("--version-id", required=True, type=int)
+    return parser.parse_args()
 
 
 def main() -> int:
     print("🚀 === PROGRAM AC PRECHECK RUNNER ===")
+    args = parse_args()
     try:
         # Подключение к ClickHouse
         code_root = Path(__file__).resolve().parents[1]
@@ -28,13 +47,9 @@ def main() -> int:
             'flight_program_fl': "EXISTS TABLE flight_program_fl",
         }
         for name, sql in checks.items():
-            try:
-                if client.execute(sql)[0][0] == 0:
-                    print(f"ℹ️ Таблица {name} отсутствует — precheck пропускаем")
-                    return 0
-            except Exception:
-                print(f"ℹ️ Проверка таблицы {name} завершилась ошибкой — precheck пропускаем")
-                return 0
+            if client.execute(sql)[0][0] == 0:
+                print(f"❌ Таблица {name} отсутствует — precheck невозможен")
+                return 1
 
         # Импортируем функцию precheck
         from extract.program_ac_precheck_next_day import process_program_ac_precheck_d1
@@ -51,7 +66,9 @@ def main() -> int:
                 version_date, version_id, partseqno_i, psn, address_i, ac_type_i,
                 status_id, repair_days, aircraft_number, ac_type_mask, group_by
             FROM heli_pandas
-            """
+            WHERE version_date = %(vd)s AND version_id = %(vid)s
+            """,
+            {"vd": args.version_date, "vid": args.version_id},
         )
         cols = [
             'partno','serialno','ac_typ','location',
@@ -68,12 +85,13 @@ def main() -> int:
             print("ℹ️ heli_pandas пуст — precheck не требуется")
             return 0
 
+        old = df['status_id'].to_numpy(copy=True)
+
         # Выполняем precheck
-        updated_df = process_program_ac_precheck_d1(df, client)
+        updated_df = process_program_ac_precheck_d1(df, client, args.version_date)
 
         # Применяем изменения статуса
         import numpy as np
-        old = df['status_id'].to_numpy()
         new = updated_df['status_id'].to_numpy()
         changed_idx = np.where(old != new)[0]
         changed = int(changed_idx.size)
@@ -87,8 +105,15 @@ def main() -> int:
                 ALTER TABLE heli_pandas
                 UPDATE status_id = %(s)s
                 WHERE serialno = %(serialno)s
+                  AND version_date = %(vd)s
+                  AND version_id = %(vid)s
                 """,
-                {"s": status_id, "serialno": serialno},
+                {
+                    "s": status_id,
+                    "serialno": serialno,
+                    "vd": args.version_date,
+                    "vid": args.version_id,
+                },
             )
 
         print("✅ Precheck применён")
