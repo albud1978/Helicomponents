@@ -130,20 +130,20 @@ class RepairDaysCalculator:
             # НЕ фильтруем по version_date/version_id
             placeholders = ','.join(['%s'] * len(partseqno_list))
             query = f"""
-            SELECT partno_comp, repair_time
+            SELECT partseqno_i, repair_time
             FROM md_components 
-            WHERE partno_comp IN ({placeholders})
+            WHERE partseqno_i IN ({placeholders})
             """
             result = self.client.query(query, partseqno_list)
             
             repair_times = {}
             for row in result.result_rows:
-                partno_comp, repair_time = row
-                repair_times[partno_comp] = repair_time
+                partseqno_i, repair_time = row
+                repair_times[partseqno_i] = repair_time
             
             self.logger.info(f"✅ Получено repair_time для {len(repair_times)} компонентов")
-            for partno_comp, repair_time in list(repair_times.items())[:3]:
-                self.logger.info(f"   partno_comp {partno_comp}: repair_time={repair_time}")
+            for partseqno_i, repair_time in list(repair_times.items())[:3]:
+                self.logger.info(f"   partseqno_i {partseqno_i}: repair_time={repair_time}")
             
             return repair_times
             

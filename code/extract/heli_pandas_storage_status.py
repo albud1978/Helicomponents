@@ -19,7 +19,7 @@
 - status_id = 0 (ещё не обработан)
 
 Связь таблиц:
-- heli_pandas.partseqno_i = md_components.partno_comp
+- heli_pandas.partseqno_i = md_components.partseqno_i
 
 BR (Beyond Repair) выбирается по типу ВС:
 - ac_type_mask & 32 → br_mi8
@@ -109,13 +109,13 @@ SELECT
         ELSE least(ifNull(md.br_mi8, 999999999), ifNull(md.br_mi17, 999999999))
     END as br_effective
 FROM heli_pandas hp
-LEFT JOIN md_components md ON hp.partseqno_i = md.partno_comp
+LEFT JOIN md_components md ON hp.partseqno_i = md.partseqno_i
 WHERE hp.version_date = %(version_date)s
   AND hp.version_id = %(version_id)s
   AND toUInt32(ifNull(hp.group_by, 0)) > 2
   AND upperUTF8(replaceRegexpAll(ifNull(hp.condition, ''), '^\\s+|\\s+$', '')) != 'ИСПРАВНЫЙ'
   AND toUInt8(ifNull(hp.status_id, 0)) = 0
-  AND md.partno_comp IS NOT NULL
+  AND md.partseqno_i IS NOT NULL
 """
 
 # SQL для подсчёта кандидатов с фильтром sne >= br
@@ -135,13 +135,13 @@ FROM (
             ELSE least(ifNull(md.br_mi8, 999999999), ifNull(md.br_mi17, 999999999))
         END as br_effective
     FROM heli_pandas hp
-    LEFT JOIN md_components md ON hp.partseqno_i = md.partno_comp
+    LEFT JOIN md_components md ON hp.partseqno_i = md.partseqno_i
     WHERE hp.version_date = %(version_date)s
       AND hp.version_id = %(version_id)s
       AND toUInt32(ifNull(hp.group_by, 0)) > 2
       AND upperUTF8(replaceRegexpAll(ifNull(hp.condition, ''), '^\\s+|\\s+$', '')) != 'ИСПРАВНЫЙ'
       AND toUInt8(ifNull(hp.status_id, 0)) = 0
-      AND md.partno_comp IS NOT NULL
+      AND md.partseqno_i IS NOT NULL
 ) sub
 WHERE sub.sne >= sub.br_effective
 """
@@ -158,13 +158,13 @@ WHERE version_date = %(version_date)s
   AND serialno IN (
       SELECT hp.serialno
       FROM heli_pandas hp
-      LEFT JOIN md_components md ON hp.partseqno_i = md.partno_comp
+      LEFT JOIN md_components md ON hp.partseqno_i = md.partseqno_i
       WHERE hp.version_date = %(version_date)s
         AND hp.version_id = %(version_id)s
         AND toUInt32(ifNull(hp.group_by, 0)) > 2
         AND upperUTF8(replaceRegexpAll(ifNull(hp.condition, ''), '^\\s+|\\s+$', '')) != 'ИСПРАВНЫЙ'
         AND toUInt8(ifNull(hp.status_id, 0)) = 0
-        AND md.partno_comp IS NOT NULL
+        AND md.partseqno_i IS NOT NULL
         AND hp.sne >= (
             CASE 
                 WHEN bitAnd(toUInt8(ifNull(hp.ac_type_mask, 0)), 32) > 0 AND bitAnd(toUInt8(ifNull(hp.ac_type_mask, 0)), 64) > 0 

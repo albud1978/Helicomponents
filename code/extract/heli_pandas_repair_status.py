@@ -8,7 +8,7 @@
    Приоритет: condition='ИСПРАВНЫЙ' — агрегаты не переводим в status_id=4 в этом модуле.
 
 Формула repair_days: repair_time - (target_date - version_date)
-- repair_time берётся из md_components через связь partseqno_i = partno_comp
+- repair_time берётся из md_components через связь partseqno_i = partseqno_i
 
 Условия:
 - group_by >= 1 (планеры и агрегаты)
@@ -216,7 +216,7 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
       AND hp.serialno IN (
           SELECT hp2.serialno
           FROM heli_pandas hp2
-          INNER JOIN md_components md ON hp2.partseqno_i = md.partno_comp
+          INNER JOIN md_components md ON hp2.partseqno_i = md.partseqno_i
           WHERE hp2.version_date = %(version_date)s
             AND hp2.version_id = %(version_id)s
             AND toUInt32(ifNull(hp2.group_by, 0)) >= 1
@@ -230,7 +230,7 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
     select_query = """
     SELECT hp.serialno, hp.target_date, md.repair_time
     FROM heli_pandas hp
-    LEFT JOIN md_components md ON hp.partseqno_i = md.partno_comp
+    LEFT JOIN md_components md ON hp.partseqno_i = md.partseqno_i
     WHERE hp.version_date = %(version_date)s
       AND hp.version_id = %(version_id)s
       AND toUInt32(ifNull(hp.group_by, 0)) >= 1

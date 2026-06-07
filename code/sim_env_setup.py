@@ -139,9 +139,9 @@ def fetch_versions(client, target_version_date: date = None) -> Tuple[date, int]
 
 
 def fetch_mp1_all(client) -> Mp1Maps:
-    """Возвращает все MP1-карты из md_components одним SELECT по partno_comp."""
+    """Возвращает все MP1-карты из md_components одним SELECT по partseqno_i."""
     rows = client.execute("""
-SELECT toUInt32OrZero(toString(partno_comp)) AS partseq,
+SELECT toUInt32OrZero(toString(partseqno_i)) AS partseq,
   toUInt32OrZero(toString(br_mi8)) AS br_mi8,
   toUInt32OrZero(toString(br_mi17)) AS br_mi17,
   toUInt32OrZero(toString(ifNull(br2_mi17,0))) AS br2_mi17,
@@ -487,18 +487,7 @@ def build_mp3_arrays(mp3_rows, mp3_fields: List[str]) -> Dict[str, List[int]]:
     epoch = _date(1970,1,1)
     for r in mp3_rows:
         arr['mp3_psn'].append(to_u32(r[idx['psn']]))
-        # partseqno_i может называться по-разному в источнике, подберём корректную колонку
-        try:
-            if 'partseqno_i' in idx:
-                arr['mp3_partseqno_i'].append(to_u32(r[idx['partseqno_i']]))
-            elif 'partno_comp' in idx:
-                arr['mp3_partseqno_i'].append(to_u32(r[idx['partno_comp']]))
-            elif '`partno.comp`' in idx:
-                arr['mp3_partseqno_i'].append(to_u32(r[idx['`partno.comp`']]))
-            else:
-                arr['mp3_partseqno_i'].append(0)
-        except Exception:
-            arr['mp3_partseqno_i'].append(0)
+        arr['mp3_partseqno_i'].append(to_u32(r[idx['partseqno_i']]))
         arr['mp3_aircraft_number'].append(to_u32(r[idx['aircraft_number']]))
         arr['mp3_ac_type_mask'].append(to_u16(r[idx['ac_type_mask']]))
         arr['mp3_group_by'].append(to_u16(r[idx.get('group_by', -1)] if 'group_by' in idx else 0))

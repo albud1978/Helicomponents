@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """
-Обогатитель справочника md_components полем partno_comp
+Обогатитель справочника md_components полем partseqno_i
 
 Функционал:
-1. Добавляет цифровое поле partno_comp в md_components 
+1. Добавляет цифровое поле partseqno_i в md_components 
 2. Обогащает его через dict_partno_flat с реальными ID из AMOS (partseqno_i)
 3. Валидирует соответствие партномеров между справочником и словарем
 4. Предоставляет статистику покрытия и несовпадений
 
 АРХИТЕКТУРА v3.0 (словари с реальными ID):
-- md_components.partno → dict_partno_flat → partno_comp (partseqno_i из AMOS)
-- Разные названия полей для разных тензоров в Flame GPU macro property:
-  * heli_pandas.partseqno_i → один тензор
-  * md_components.partno_comp → другой тензор (аналогичные значения)
+- md_components.partno → dict_partno_flat.partseqno_i (AMOS ID компонента)
+- md_components.partseqno_i — штатное единое поле AMOS ID компонента; отдельного искусственного тензора больше нет
 
 Место в ETL Pipeline:
 - ПОСЛЕ: dictionary_creator.py (использует созданные словари)
-- ПЕРЕД: calculate_beyond_repair.py (чтобы br и partno_comp в одном этапе)
+- ПЕРЕД: calculate_beyond_repair.py (чтобы br и partseqno_i в одном этапе)
 """
 
 import sys
@@ -33,7 +31,7 @@ from config_loader import load_clickhouse_config
 import clickhouse_connect
 
 class MDComponentsEnricher:
-    """Обогатитель md_components полем partno_comp через словарь с реальными ID"""
+    """Обогатитель md_components полем partseqno_i через словарь с реальными ID"""
     
     def __init__(self):
         """Инициализация обогатителя"""
@@ -127,26 +125,26 @@ class MDComponentsEnricher:
             self.logger.error(f"❌ Ошибка проверки предварительных условий: {e}")
             return False
     
-    def add_partno_comp_column(self) -> bool:
-        """Добавление колонки partno_comp в md_components"""
-        self.logger.info("🔧 Добавление колонки partno_comp в md_components...")
+    def add_partseqno_i_column(self) -> bool:
+        """Добавление колонки partseqno_i в md_components"""
+        self.logger.info("🔧 Добавление колонки partseqno_i в md_components...")
         
         try:
             # Проверяем существование колонки
             structure_result = self.client.query("DESCRIBE md_components")
             columns = [row[0] for row in structure_result.result_rows]
             
-            if 'partno_comp' in columns:
-                self.logger.info("ℹ️ Колонка partno_comp уже существует")
+            if 'partseqno_i' in columns:
+                self.logger.info("ℹ️ Колонка partseqno_i уже существует")
             else:
-                alter_query = "ALTER TABLE md_components ADD COLUMN partno_comp Nullable(UInt32) DEFAULT NULL"
+                alter_query = "ALTER TABLE md_components ADD COLUMN partseqno_i Nullable(UInt32) DEFAULT NULL"
                 self.client.command(alter_query)
-                self.logger.info("✅ Колонка partno_comp (UInt32) добавлена в md_components")
+                self.logger.info("✅ Колонка partseqno_i (UInt32) добавлена в md_components")
             
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Ошибка добавления колонки partno_comp: {e}")
+            self.logger.error(f"❌ Ошибка добавления колонки partseqno_i: {e}")
             return False
     
     def load_partno_dictionary(self) -> Dict[str, int]:
@@ -224,18 +222,18 @@ class MDComponentsEnricher:
             self.logger.error(f"❌ Ошибка анализа покрытия: {e}")
             return 0, 0, 0.0
     
-    def update_partno_comp_field(self, partno_dict: Dict[str, int]) -> bool:
-        """Обновление поля partno_comp в md_components"""
-        self.logger.info("💾 Обновление поля partno_comp...")
+    def update_partseqno_i_field(self, partno_dict: Dict[str, int]) -> bool:
+        """Обновление поля partseqno_i в md_components"""
+        self.logger.info("💾 Обновление поля partseqno_i...")
         
         try:
             if not partno_dict:
-                self.logger.warning("⚠️ Нет данных для обновления partno_comp")
+                self.logger.warning("⚠️ Нет данных для обновления partseqno_i")
                 return False
             
             # Очищаем поле
-            self.client.command("ALTER TABLE md_components UPDATE partno_comp = NULL WHERE 1=1")
-            self.logger.info("🧹 Поле partno_comp очищено")
+            self.client.command("ALTER TABLE md_components UPDATE partseqno_i = NULL WHERE 1=1")
+            self.logger.info("🧹 Поле partseqno_i очищено")
             
             # Создаем CASE WHEN выражение для обновления
             partno_cases = []
@@ -247,17 +245,17 @@ class MDComponentsEnricher:
                 partno_case_expr = " ".join(partno_cases)
                 update_query = f"""
                 ALTER TABLE md_components 
-                UPDATE partno_comp = CASE {partno_case_expr} ELSE NULL END
+                UPDATE partseqno_i = CASE {partno_case_expr} ELSE NULL END
                 WHERE partno IS NOT NULL AND partno != ''
                 """
                 
                 self.client.command(update_query)
-                self.logger.info(f"✅ partno_comp обновлено для {len(partno_dict)} партномеров")
+                self.logger.info(f"✅ partseqno_i обновлено для {len(partno_dict)} партномеров")
             
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Ошибка обновления partno_comp: {e}")
+            self.logger.error(f"❌ Ошибка обновления partseqno_i: {e}")
             return False
     
     def validate_enrichment(self) -> bool:
@@ -269,44 +267,44 @@ class MDComponentsEnricher:
             total_result = self.client.query("SELECT COUNT(*) FROM md_components")
             total_count = total_result.result_rows[0][0]
             
-            # Статистика заполнения partno_comp
-            filled_result = self.client.query("SELECT COUNT(*) FROM md_components WHERE partno_comp IS NOT NULL")
+            # Статистика заполнения partseqno_i
+            filled_result = self.client.query("SELECT COUNT(*) FROM md_components WHERE partseqno_i IS NOT NULL")
             filled_count = filled_result.result_rows[0][0]
             
             coverage = (filled_count / total_count) * 100 if total_count > 0 else 0
             
             self.logger.info(f"📊 Результаты обогащения (всего записей: {total_count}):")
-            self.logger.info(f"  partno_comp заполнено: {filled_count} ({coverage:.1f}%)")
-            self.logger.info(f"  partno_comp пустое: {total_count - filled_count} ({100-coverage:.1f}%)")
+            self.logger.info(f"  partseqno_i заполнено: {filled_count} ({coverage:.1f}%)")
+            self.logger.info(f"  partseqno_i пустое: {total_count - filled_count} ({100-coverage:.1f}%)")
             
             # Статистика диапазонов значений
             if filled_count > 0:
                 range_result = self.client.query("""
                     SELECT 
-                        MIN(partno_comp) as min_id,
-                        MAX(partno_comp) as max_id,
-                        COUNT(DISTINCT partno_comp) as unique_ids
+                        MIN(partseqno_i) as min_id,
+                        MAX(partseqno_i) as max_id,
+                        COUNT(DISTINCT partseqno_i) as unique_ids
                     FROM md_components 
-                    WHERE partno_comp IS NOT NULL
+                    WHERE partseqno_i IS NOT NULL
                 """)
                 
                 min_id, max_id, unique_ids = range_result.result_rows[0]
-                self.logger.info(f"📈 Диапазон partno_comp: {min_id} - {max_id} ({unique_ids} уникальных ID)")
+                self.logger.info(f"📈 Диапазон partseqno_i: {min_id} - {max_id} ({unique_ids} уникальных ID)")
             
             # Примеры обогащенных записей
             examples_result = self.client.query("""
-                SELECT partno, partno_comp
+                SELECT partno, partseqno_i
                 FROM md_components 
-                WHERE partno_comp IS NOT NULL
-                ORDER BY partno_comp
+                WHERE partseqno_i IS NOT NULL
+                ORDER BY partseqno_i
                 LIMIT 5
             """)
             
             if examples_result.result_rows:
                 self.logger.info("📋 Примеры обогащенных записей:")
                 for row in examples_result.result_rows:
-                    partno, partno_comp = row
-                    self.logger.info(f"  '{partno}' → partno_comp: {partno_comp}")
+                    partno, partseqno_i = row
+                    self.logger.info(f"  '{partno}' → partseqno_i: {partseqno_i}")
             
             # Считаем обогащение успешным если покрытие > 80%
             success_threshold = 80.0
@@ -323,9 +321,9 @@ class MDComponentsEnricher:
     
     def run_enrichment(self) -> bool:
         """Запуск полного процесса обогащения"""
-        self.logger.info("🚀 Запуск обогащения md_components полем partno_comp")
+        self.logger.info("🚀 Запуск обогащения md_components полем partseqno_i")
         self.logger.info("📚 Используем словарь dict_partno_flat с реальными ID из AMOS")
-        self.logger.info("🎯 Цель: разные тензоры в Flame GPU (partseqno_i vs partno_comp)")
+        self.logger.info("🎯 Цель: единое штатное поле partseqno_i (AMOS ID компонента)")
         
         try:
             # 1. Подключение
@@ -336,8 +334,8 @@ class MDComponentsEnricher:
             if not self.check_prerequisites():
                 return False
             
-            # 3. Добавление колонки partno_comp
-            if not self.add_partno_comp_column():
+            # 3. Добавление колонки partseqno_i
+            if not self.add_partseqno_i_column():
                 return False
             
             # 4. Загрузка словаря партномеров
@@ -349,8 +347,8 @@ class MDComponentsEnricher:
             # 5. Анализ покрытия
             found_count, missing_count, coverage = self.analyze_partno_coverage(partno_dict)
             
-            # 6. Обновление поля partno_comp
-            if not self.update_partno_comp_field(partno_dict):
+            # 6. Обновление поля partseqno_i
+            if not self.update_partseqno_i_field(partno_dict):
                 return False
             
             # 7. Валидация результатов
@@ -358,9 +356,9 @@ class MDComponentsEnricher:
                 self.logger.warning("⚠️ Валидация показала проблемы, но обогащение выполнено")
             
             self.logger.info("🎯 ОБОГАЩЕНИЕ MD_COMPONENTS ЗАВЕРШЕНО!")
-            self.logger.info(f"✅ Добавлено поле partno_comp с реальными ID из AMOS")
+            self.logger.info(f"✅ Добавлено поле partseqno_i с реальными ID из AMOS")
             self.logger.info(f"📊 Покрытие: {found_count} партномеров ({coverage:.1f}%)")
-            self.logger.info("🚀 Готово для разных тензоров в Flame GPU")
+            self.logger.info("🚀 Готово со штатным partseqno_i для md_components")
             
             return True
             
@@ -371,8 +369,8 @@ class MDComponentsEnricher:
 def main():
     """Основная функция"""
     print("🚀 === ОБОГАТИТЕЛЬ MD_COMPONENTS v3.0 ===")
-    print("📚 Добавляем partno_comp через словарь с реальными ID из AMOS")
-    print("🎯 Цель: разные тензоры в Flame GPU (partseqno_i vs partno_comp)")
+    print("📚 Добавляем partseqno_i через словарь с реальными ID из AMOS")
+    print("🎯 Цель: единое штатное поле partseqno_i (AMOS ID компонента)")
     
     try:
         enricher = MDComponentsEnricher()
@@ -380,9 +378,9 @@ def main():
         
         if success:
             print(f"\n🎯 === ОБОГАЩЕНИЕ ЗАВЕРШЕНО ===")
-            print(f"✅ Поле partno_comp добавлено в md_components")
+            print(f"✅ Поле partseqno_i добавлено в md_components")
             print(f"📚 Использованы реальные ID из dict_partno_flat")
-            print(f"🚀 Готово для разных тензоров в Flame GPU!")
+            print(f"🚀 Готово со штатным partseqno_i для md_components!")
             return 0
         else:
             print(f"\n❌ === ОШИБКА ОБОГАЩЕНИЯ ===")

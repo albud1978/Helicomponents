@@ -207,9 +207,9 @@ def prepare_md_data(df, version_date, version_id=1):
             df['br2_mi17'] = None
             print("➕ Добавлено поле br2_mi17 = None")
 
-        if 'partno_comp' not in df.columns:
-            df['partno_comp'] = None  # Компонентные ID будут добавлены позже
-            print("➕ Добавлено поле partno_comp = None (будет вычислено позже)")
+        if 'partseqno_i' not in df.columns:
+            df['partseqno_i'] = None  # Компонентные ID будут добавлены позже
+            print("➕ Добавлено поле partseqno_i = None (будет вычислено позже)")
 
         # Добавляем поле restrictions_mask (битовая маска ограничений)
         if 'restrictions_mask' not in df.columns:
@@ -240,7 +240,7 @@ def prepare_md_data(df, version_date, version_id=1):
             'sne_new', 'ppr_new',
             'version_date', 'version_id',
             'br_mi8', 'br_mi17', 'br2_mi17',
-            'partno_comp', 'restrictions_mask'
+            'partseqno_i', 'restrictions_mask'
         ]
 
         # Гарантируем наличие всех колонок
@@ -323,7 +323,7 @@ def create_md_table(client):
             `br_mi8` Nullable(UInt32) DEFAULT NULL,     -- Beyond Repair для МИ-8 (sne/ll breakeven)
             `br_mi17` Nullable(UInt32) DEFAULT NULL,    -- Beyond Repair для МИ-17 (sne/ll breakeven)
             `br2_mi17` Nullable(UInt32) DEFAULT NULL,   -- Порог межремонтного для МИ-17 (ppr/oh breakeven, 3500ч)
-            `partno_comp` Nullable(UInt32) DEFAULT NULL,  -- Component ID (md_components_enricher.py)
+            `partseqno_i` Nullable(UInt32) DEFAULT NULL,  -- Component ID (md_components_enricher.py)
             `restrictions_mask` UInt8 DEFAULT 0     -- Битовая маска всех ограничений (multihot[u8])
             
         ) ENGINE = MergeTree()
@@ -427,7 +427,7 @@ def insert_md_data(client, df):
             for i, val in enumerate(row):
                 col_name = df.columns[i]
                 # Для Nullable полей используем None, для остальных - значения как есть
-                if val is None and col_name in ['sne_new', 'ppr_new', 'br_mi8', 'br_mi17', 'br2_mi17', 'partno_comp', 'repair_number']:
+                if val is None and col_name in ['sne_new', 'ppr_new', 'br_mi8', 'br_mi17', 'br2_mi17', 'partseqno_i', 'repair_number']:
                     prepared_row.append(None)
                 else:
                     prepared_row.append(val)

@@ -23,7 +23,7 @@ def _load_daily_map_for_d1(client) -> Dict[int, int]:
 
 def _load_br_map(client) -> Dict[int, tuple]:
     rows = client.execute(
-        "SELECT partno_comp, br_mi8, br_mi17 FROM md_components"
+        "SELECT partseqno_i, br_mi8, br_mi17 FROM md_components"
     )
     return {
         int(p): (int(b8 or 0), int(b17 or 0))

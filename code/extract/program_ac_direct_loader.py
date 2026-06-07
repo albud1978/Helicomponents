@@ -796,7 +796,7 @@ class ProgramACDirectLoader:
             SELECT COUNT(*) as component_count
             FROM heli_pandas hp
             WHERE hp.partseqno_i IN (
-                SELECT partno_comp 
+                SELECT partseqno_i 
                 FROM md_components 
                 WHERE group_by = 1
             )
@@ -836,7 +836,7 @@ class ProgramACDirectLoader:
             SELECT COUNT(*) as component_count
             FROM heli_pandas hp
             WHERE hp.partseqno_i IN (
-                SELECT partno_comp 
+                SELECT partseqno_i 
                 FROM md_components 
                 WHERE group_by = 2
             )

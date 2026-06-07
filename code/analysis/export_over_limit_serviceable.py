@@ -81,7 +81,7 @@ def export_over_limit_serviceable(version_date_str: str) -> str:
         h.owner as owner,
         h.mfg_date as mfg_date
     FROM heli_pandas h
-    LEFT JOIN md_components m ON h.partseqno_i = m.partno_comp
+    LEFT JOIN md_components m ON h.partseqno_i = m.partseqno_i
     WHERE h.version_date = toDate({version_date})
       AND h.group_by > 2  -- только агрегаты
       AND h.condition = 'ИСПРАВНЫЙ'  -- только исправные!

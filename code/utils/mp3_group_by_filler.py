@@ -2,7 +2,7 @@
 """
 MP3 GroupBy Filler
 Добавляет колонку group_by в heli_pandas и заполняет её из md_components.group_by
-по связи: heli_pandas.partseqno_i = md_components.partno_comp.
+по связи: heli_pandas.partseqno_i = md_components.partseqno_i.
 
 Особенности:
 - Безопасно добавляет колонку (IF NOT EXISTS)
@@ -32,7 +32,7 @@ UPDATE group_by = m.group_by
 WHERE group_by = 0
   AND partseqno_i IS NOT NULL
   AND partseqno_i IN (
-      SELECT partno_comp FROM md_components WHERE partno_comp IS NOT NULL AND group_by IS NOT NULL
+      SELECT partseqno_i FROM md_components WHERE partseqno_i IS NOT NULL AND group_by IS NOT NULL
   )
 SETTINGS allow_experimental_alter_update = 1
 """.strip()
@@ -41,7 +41,7 @@ SETTINGS allow_experimental_alter_update = 1
 FILL_GROUP_BY_JOIN_SQL = """
 ALTER TABLE heli_pandas 
 UPDATE group_by = (
-    SELECT any(group_by) FROM md_components m WHERE m.partno_comp = heli_pandas.partseqno_i
+    SELECT any(group_by) FROM md_components m WHERE m.partseqno_i = heli_pandas.partseqno_i
 )
 WHERE group_by = 0 AND partseqno_i IS NOT NULL
 SETTINGS allow_experimental_alter_update = 1
@@ -56,7 +56,7 @@ def print_plan(sqls: List[str]):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Заполнение MP3.group_by из MP1 (partseqno_i = partno_comp)')
+    parser = argparse.ArgumentParser(description='Заполнение MP3.group_by из MP1 (partseqno_i = partseqno_i)')
     parser.add_argument('--apply', action='store_true', help='Выполнить SQL (по умолчанию только печать)')
     parser.add_argument('--use-join', action='store_true', help='Использовать вариант с подзапросом JOIN вместо IN')
     args = parser.parse_args()

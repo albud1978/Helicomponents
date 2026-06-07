@@ -4,7 +4,7 @@ HeliPandas GroupBy Enricher
 
 Добавляет и заполняет колонку group_by в таблице heli_pandas на основе
 md_components.group_by через ключевое соответствие:
-  heli_pandas.partseqno_i = md_components.partno_comp
+  heli_pandas.partseqno_i = md_components.partseqno_i
 
 Особенности:
 - Безопасное добавление колонки (IF NOT EXISTS)
@@ -44,7 +44,7 @@ def build_update_sqls(client) -> List[str]:
                toUInt8(any(m.group_by)) AS gb
         FROM heli_pandas hp
         INNER JOIN md_components m
-            ON m.partno_comp = hp.partseqno_i
+            ON m.partseqno_i = hp.partseqno_i
         WHERE hp.group_by = 0
           AND hp.partseqno_i IS NOT NULL
           AND m.group_by IS NOT NULL
@@ -66,7 +66,7 @@ def print_plan(sqls: List[str]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description='Обогащение heli_pandas.group_by из md_components.partno_comp')
+    parser = argparse.ArgumentParser(description='Обогащение heli_pandas.group_by из md_components.partseqno_i')
     parser.add_argument('--apply', action='store_true', help='Выполнить SQL (по умолчанию DRY-RUN)')
     # Параметры версионирования для совместимости с Extract Master (не используются напрямую)
     parser.add_argument('--version-date', type=str, default=None, help='Дата версии данных (совместимость)')

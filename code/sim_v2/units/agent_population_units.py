@@ -114,13 +114,13 @@ class AgentPopulationUnitsBuilder:
         """Загружает нормативы из md_components"""
         sql = """
         SELECT 
-            partno_comp,
+            partseqno_i,
             ll_mi8, ll_mi17,
             oh_mi8, oh_mi17,
             br_mi8, br_mi17,
             repair_time
         FROM md_components
-        WHERE partno_comp IS NOT NULL AND partno_comp > 0
+        WHERE partseqno_i IS NOT NULL AND partseqno_i > 0
         """
         
         rows = self.client.execute(sql)

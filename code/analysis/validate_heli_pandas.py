@@ -86,7 +86,7 @@ def update_resources(client):
         md.br_mi17 AS br_mi17,
         toUInt8(0) AS error_flags
     FROM heli_pandas hp
-    LEFT JOIN md_components md ON hp.partseqno_i = md.partno_comp
+    LEFT JOIN md_components md ON hp.partseqno_i = md.partseqno_i
     """)
     print("  ✓ Временная таблица создана")
     
