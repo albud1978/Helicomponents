@@ -77,13 +77,13 @@ def fetch_inventory_rows(client, version: VersionInfo) -> List[InventoryRow]:
     query = """
         WITH requirements AS (
             SELECT
-                partno_comp AS partseqno_i,
+                partseqno_i,
                 max(comp_number) AS required_count,
                 any(group_by) AS group_by
             FROM md_components
             WHERE version_date = %(version_date)s
               AND version_id = %(version_id)s
-            GROUP BY partno_comp
+            GROUP BY partseqno_i
         )
         SELECT
             hp.aircraft_number,

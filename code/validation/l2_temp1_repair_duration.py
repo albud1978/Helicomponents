@@ -67,7 +67,7 @@ def main() -> int:
     ensure_columns(
         client,
         table_md,
-        ["partno_comp", "repair_time"],
+        ["partseqno_i", "repair_time"],
     )
 
     params = {"uvd": args.units_version_date_int, "vid": args.version_id}
@@ -124,7 +124,7 @@ def main() -> int:
         countIf(has_exit = 1 AND (m.repair_time IS NULL OR m.repair_time <= 0)) AS skipped_no_norm,
         countIf(has_exit = 1 AND m.repair_time > 0 AND span < m.repair_time) AS violations
     FROM spans s
-    LEFT JOIN {table_md} m ON s.partseqno_i = m.partno_comp
+    LEFT JOIN {table_md} m ON s.partseqno_i = m.partseqno_i
     """
     spans_ended, skipped_no_norm, violations = client.execute(query, params)[0]
 
@@ -191,7 +191,7 @@ def main() -> int:
             span,
             m.repair_time
         FROM spans s
-        LEFT JOIN {table_md} m ON s.partseqno_i = m.partno_comp
+        LEFT JOIN {table_md} m ON s.partseqno_i = m.partseqno_i
         WHERE has_exit = 1 AND m.repair_time > 0 AND span < m.repair_time
         ORDER BY (m.repair_time - span) DESC
         LIMIT 5

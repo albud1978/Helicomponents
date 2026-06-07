@@ -59,7 +59,7 @@ def main() -> int:
     ensure_columns(
         client,
         table_md,
-        ["partno_comp", "ll_mi8", "ll_mi17"],
+        ["partseqno_i", "ll_mi8", "ll_mi17"],
     )
 
     params = {"uvd": args.units_version_date_int, "vid": args.version_id}
@@ -73,7 +73,7 @@ def main() -> int:
             if(u.group_by = 3, m.ll_mi8, m.ll_mi17) AS ll_expected
         FROM {table_units} u
         LEFT JOIN {table_md} m
-            ON u.partseqno_i = m.partno_comp
+            ON u.partseqno_i = m.partseqno_i
         WHERE u.version_date = %(uvd)s
           AND u.version_id = %(vid)s
           AND u.group_by IN (3, 4)
@@ -101,7 +101,7 @@ def main() -> int:
                 if(u.group_by = 3, m.ll_mi8, m.ll_mi17) AS ll_expected
             FROM {table_units} u
             LEFT JOIN {table_md} m
-                ON u.partseqno_i = m.partno_comp
+                ON u.partseqno_i = m.partseqno_i
             WHERE u.version_date = %(uvd)s
               AND u.version_id = %(vid)s
               AND u.group_by IN (3, 4)

@@ -89,7 +89,7 @@ class DigitalValuesDictionaryCreator:
             'version_id': ('UInt8', 'ID версии данных'),
             'br_mi8': ('Nullable(UInt32)', 'Beyond Repair для МИ-8'),
             'br_mi17': ('Nullable(UInt32)', 'Beyond Repair для МИ-17'),
-            'partno_comp': ('Nullable(UInt32)', 'Component ID'),
+            'partseqno_i': ('Nullable(UInt32)', 'Component ID'),
             'restrictions_mask': ('UInt8', 'Битовая маска ограничений')
         },
         'flight_program_ac': {

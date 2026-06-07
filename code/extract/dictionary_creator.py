@@ -692,7 +692,7 @@ class DictionaryCreator:
                 h.aircraft_number,
                 any(h.ac_type_mask) as ac_type_mask
             FROM heli_pandas h
-            JOIN md_components m ON h.partseqno_i = m.partno_comp
+            JOIN md_components m ON h.partseqno_i = m.partseqno_i
             WHERE h.aircraft_number IS NOT NULL AND h.aircraft_number > 0
                 AND h.ac_type_mask IS NOT NULL AND h.ac_type_mask > 0
                 AND m.group_by IN (1, 2)

@@ -100,7 +100,7 @@ BASE_CONDITION = """
 COUNT_SQL = f"""
 SELECT count()
 FROM heli_pandas hp
-LEFT JOIN md_components md ON hp.partseqno_i = md.partno_comp
+LEFT JOIN md_components md ON hp.partseqno_i = md.partseqno_i
 WHERE {BASE_CONDITION}
   AND {BR_EFFECTIVE} > 0
   AND {SNE_VALUE} >= {BR_EFFECTIVE}
@@ -118,7 +118,7 @@ SELECT
     md.br_mi17,
     {BR_EFFECTIVE} AS br_effective
 FROM heli_pandas hp
-LEFT JOIN md_components md ON hp.partseqno_i = md.partno_comp
+LEFT JOIN md_components md ON hp.partseqno_i = md.partseqno_i
 WHERE {BASE_CONDITION}
   AND {BR_EFFECTIVE} > 0
   AND {SNE_VALUE} >= {BR_EFFECTIVE}
@@ -135,7 +135,7 @@ WHERE version_date = %(version_date)s
   AND (serialno, partseqno_i, group_by) IN (
       SELECT hp.serialno, hp.partseqno_i, hp.group_by
       FROM heli_pandas hp
-      LEFT JOIN md_components md ON hp.partseqno_i = md.partno_comp
+      LEFT JOIN md_components md ON hp.partseqno_i = md.partseqno_i
       WHERE {BASE_CONDITION}
         AND {BR_EFFECTIVE} > 0
         AND {SNE_VALUE} >= {BR_EFFECTIVE}
