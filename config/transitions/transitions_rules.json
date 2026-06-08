@@ -154,7 +154,7 @@
       "id": "ops_to_storage_v8",
       "from": 2,
       "to": 6,
-      "pre": { "expr": "sne + dt_next > ll OR (ppr + dt_next > oh AND br > 0 AND sne + dt_next > br)" },
+      "pre": { "expr": "sne + dt_next > ll OR (ppr + dt_next > oh AND br > 0 AND sne > br)" },
       "post": {
         "all": [
           { "expr": "state == 6" },
@@ -162,13 +162,13 @@
         ]
       },
       "owner_module": "rtc_state_transitions_v8",
-      "notes": "Уход из ops по прогнозу следующего дня: storage срабатывает, если следующий день строго превысил бы предел; == допустимо. Приоритет storage над unsvc."
+      "notes": "Уход из ops по прогнозу следующего дня: storage срабатывает, если следующий день строго превысил бы LL/OH предел; == допустимо. Приоритет storage над unsvc. BR (beyond-repair) считается по фактическому sne, а не по sne + dt_next: выходящий борт завтра не летит, поэтому look-ahead применяется только к моменту выхода (LL/OH), не к решению ремонтопригоден/списать."
     },
     {
       "id": "ops_to_unsvc_v8",
       "from": 2,
       "to": 7,
-      "pre": { "expr": "NOT (sne + dt_next > ll) AND NOT (br > 0 AND sne + dt_next > br) AND (ppr + dt_next > oh)" },
+      "pre": { "expr": "NOT (sne + dt_next > ll) AND NOT (br > 0 AND sne > br) AND (ppr + dt_next > oh)" },
       "post": {
         "all": [
           { "expr": "state == 7" },
@@ -178,7 +178,7 @@
         ]
       },
       "owner_module": "rtc_state_transitions_v8",
-      "notes": "Уход из ops по прогнозу следующего дня: unsvc срабатывает, если storage не сработал и следующий день строго превысил бы overhaul-предел; == допустимо. Приоритет storage над unsvc."
+      "notes": "Уход из ops по прогнозу следующего дня: unsvc срабатывает, если storage не сработал и следующий день строго превысил бы overhaul-предел; == допустимо. Приоритет storage над unsvc. BR (beyond-repair) считается по фактическому sne, а не по sne + dt_next: выходящий борт завтра не летит, поэтому look-ahead применяется только к моменту выхода (LL/OH), не к решению ремонтопригоден/списать."
     },
     {
       "id": "ops_to_svc_demote_v7",
