@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06-08 — V8 BR beyond-repair: решение без look-ahead
+
+**Workflow**: W_session_20260608T144409Z | **Risk**: high | **Profile**: high-strict | **Status**: docs-sync | **Governance**: allow_with_notes (`handoff_W_session_20260608T144409Z_governance-compliance_fe78ed05`)
+
+**Корень**:
+- При выходе борта из OPS по OH решение `storage 6` vs `unsvc 7` должно сравнивать BR с фактическим `sne`, а не с `sne_next`: борт, выходящий сегодня, завтра уже не летит. Look-ahead (`dt_next`) остаётся только для определения момента выхода по LL/OH.
+- До фикса look-ahead по BR преждевременно уводил пограничные борта в терминальный storage вместо ремонта, что проявлялось как дефицит OPS и регрессия INV-2 на датасете 2025-07-04.
+
+**Изменено**:
+- `code/sim_v2/messaging/rtc_state_transitions_v8.py`: в `COND_OPS_TO_STORAGE_V8` и `COND_OPS_TO_UNSVC_V8` условие BR изменено с `sne_next > br` на `sne > br`.
+- `config/transitions/transitions_rules.json`: `pre.expr` для `ops_to_storage_v8` и `ops_to_unsvc_v8` зеркально синхронизированы с RTC; notes уточняют границу применения look-ahead.
+
+**Приёмка**:
+- Полный чистый rebuild `extract -> sim` для 4 датасетов (`20250704`, `20251230`, `20260221`, `20260408`, `version_id=1`) завершился `exit 0`; clean spawn подтверждён, прежний `IndexError` устранён дропом словарей.
+- `run_all_stream.py` по 4 датасетам: **60/60 PASS**; INV-2 `post_warmup_violations=0` (`warmup=180`, `ops==target` для Mi-8/Mi-17 раздельно, `tol=0`), INV-1=0, INV-12=0.
+- `reviewer-flame`: allow_with_notes.
+
+---
+
 ## 2026-06-07 — extract D1 precheck включён (version-safe) + фикс day-0 перелёта OH
 
 **Risk**: medium (extract status routing, влияет на приёмку симуляции) | **Status**: docs-sync

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-07T18:42:42Z",
+    "updated_at": "2026-06-08T15:56:51Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -1770,6 +1770,68 @@
       },
       "created_at": "2026-06-07T12:33:30Z",
       "updated_at": "2026-06-07T13:10:26Z"
+    },
+    {
+      "workflow_id": "W_full_rebuild_4ds_20260607T1850Z",
+      "goal": "Полный переэкстракт+симуляция 4 датасетов (07-04,12-30,02-21,04-08) на коде rename+D1 для консистентной baseline v1; DROP sim-таблиц, extract(PROD+ПЕРЕЗАПИСАТЬ)→sim interleaved",
+      "phase": "analysis",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-07T19:11:49Z"
+      },
+      "created_at": "2026-06-07T18:53:36Z",
+      "updated_at": "2026-06-07T19:11:58Z"
+    },
+    {
+      "workflow_id": "W_session_20260608T023237Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/extract/extract_master.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-08T02:32:37Z"
+      },
+      "created_at": "2026-06-08T02:32:37Z",
+      "updated_at": "2026-06-08T15:56:51Z"
+    },
+    {
+      "workflow_id": "W_session_20260608T144409Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/sim_v2/messaging/rtc_state_transitions_v8.py)",
+      "phase": "validation",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 4,
+        "cumulative_tokens": 50500,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-08T15:56:20Z"
+      },
+      "created_at": "2026-06-08T14:44:09Z",
+      "updated_at": "2026-06-08T15:56:51Z"
     }
   ],
   "handoffs": [
@@ -12551,6 +12613,207 @@
       "graph_update_reason": "",
       "prev_handoff_hash": "GENESIS",
       "created_at": "2026-06-07T18:42:36Z"
+    },
+    {
+      "handoff_id": "handoff_W_full_rebuild_4ds_20260607T1850Z_orchestrator_01c01901",
+      "workflow_id": "W_full_rebuild_4ds_20260607T1850Z",
+      "agent": "orchestrator",
+      "user_goal": "Полный переэкстракт+симуляция оставшихся датасетов для консистентной baseline",
+      "changes": "ClickHouse data only (no code): heli_pandas 4 версии переэкстрачены на коде rename+D1; md_components per-version reload; sim_masterv2_v9 пересоздан (--drop-table) + 4 версии (88180/88586/89772/86536); sim_repairline_v9 4x65700.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "extract 19/19 на всех 4. sim ops=target PASS final все 4 (Mi-8/Mi-17). run_all: 12-30/02-21/04-08 = 15/15 PASS; 07-04 = 14/15 (INV-2 fail). INV-2 07-04: 1 post-warmup violation day=2889 Mi-8 ops=45 target=47; fleet-state day2889 group_by=1: serviceable(3)=0 -> легитимная нехватка флота, не баг квот. INV-1(sne>ll)=0 и INV-12(ppr>oh)=0 по всем 4 версиям.",
+      "drift_check": "UserGoal (переэкстракт+симуляция оставшихся датасетов) <-> Changes (все 4 версии rebuilt, приёмка пройдена) scope match: yes",
+      "process_insights": "",
+      "trace_id": "wf:W_full_rebuild_4ds_20260607T1850Z:2026-06-08T00:15:00Z",
+      "plan_step_id": "P-close",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "полная мутация heli_pandas/md_components + sim-таблиц (DROP+reload) для 4 версий",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Variant A: DROP sim + extract(PROD/ПЕРЕЗАПИСАТЬ)->sim interleaved по 4 версиям (07-04,12-30,02-21,04-08)",
+      "evidence_pack": "extract 19/19 на всех 4. sim ops=target PASS final все 4 (Mi-8/Mi-17). run_all: 12-30/02-21/04-08 = 15/15 PASS; 07-04 = 14/15 (INV-2 fail). INV-2 07-04: 1 post-warmup violation day=2889 Mi-8 ops=45 target=47; fleet-state day2889 group_by=1: serviceable(3)=0 -> легитимная нехватка флота, не баг квот. INV-1(sne>ll)=0 и INV-12(ppr>oh)=0 по всем 4 версиям.",
+      "success_criteria": "numeric: INV-12 rows==0 all versions (PASS); numeric: INV-1 rows==0 all versions (PASS); manual-check: ops=target final PASS all 4 (PASS); run_all PASS 3/4, 07-04 INV-2 explained as supply-shortage (serviceable=0)",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=INV-2-07-04-supply-shortage(serviceable=0,not-a-bug); evidence_refs=run_all-per-version;fleet-state-day2889-serviceable=0; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "INV-2 tolerance=0 не отличает supply-shortage от underfill; возможна доработка валидатора (отдельный workflow, по согласованию).",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-07T19:11:49Z",
+      "modules": [
+        "extract_dwh",
+        "step_logic",
+        "validation"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_session_20260608T144409Z_coder-flame_fdb34a68",
+      "workflow_id": "W_session_20260608T144409Z",
+      "agent": "coder-flame",
+      "user_goal": "Контекст (high-risk, согласовано с Алексеем в текущем чате): заменить в BR-члене sne_next/sne + dt_next на sne (фактический) в RTC + зеркало в SSoT + докстринги; не трогать LL/OH look-ahead; проверить JSON и Python-import RTC; не запускать симуляцию.",
+      "changes": "- code/sim_v2/messaging/rtc_state_transitions_v8.py: docstring priority rules updated from SNE + dt_next BR semantics to factual SNE BR semantics; storage condition comment updated; cond_ops_to_storage_v8 now returns (ppr_next > oh && br > 0u && sne > br); cond_ops_to_unsvc_v8 now excludes storage path with if (br > 0u && sne > br) return false; LL check remains sne_next > ll and OH check remains ppr_next > oh.\n- config/transitions/transitions_rules.json: ops_to_storage_v8 pre.expr changed to sne + dt_next > ll OR (ppr + dt_next > oh AND br > 0 AND sne > br); ops_to_unsvc_v8 pre.expr changed to NOT (sne + dt_next > ll) AND NOT (br > 0 AND sne > br) AND (ppr + dt_next > oh); notes for both transitions explain BR is factual sne, not sne + dt_next.",
+      "facts": "",
+      "assumptions": "No full simulation run by instruction. Risks if false: behavior-level routing counts still require orchestrator acceptance run/validator after reviewer-flame.",
+      "evidence": "Facts: - Read config/capsules_manifest.json and capsules limiter_v8/transitions/flame_gpu; read config/transitions/invariants.json and confirmed invariants file was not edited.\n- JSON syntax check: python3 -c \"import json; json.load(open('config/transitions/transitions_rules.json')); print('JSON_OK')\" -> JSON_OK.\n- User-specified import command with PYTHONPATH=code/sim_v2/messaging reached ModuleNotFoundError: model_build because model_build.py is in code/; retry with PYTHONPATH=code:code/sim_v2/messaging reached ModuleNotFoundError: pyflamegpu under system python3.\n- Working FLAME runtime import: CUDA_PATH=$HOME/miniconda3/targets/x86_64-linux LD_LIBRARY_PATH=$HOME/miniconda3/lib:$LD_LIBRARY_PATH PYTHONPATH=code:code/sim_v2/messaging /home/albud/miniconda3/envs/cuda13/bin/python3 -c \"import rtc_state_transitions_v8\" -> PASS.\n- ReadLints on changed files: no linter errors.\n- rg/readback confirmed no remaining sne_next > br in rtc_state_transitions_v8.py or transitions_rules.json for the edited BR criteria; sne_next remains used for LL, ppr_next remains used for OH.\n- Simulation intentionally not run per user instruction.\nEvidence: commands:\n1) python3 -c \"import json; json.load(open('config/transitions/transitions_rules.json')); print('JSON_OK')\" -> JSON_OK\n2) PYTHONPATH=code/sim_v2/messaging python3 -c \"import rtc_state_transitions_v8\" -> FAIL before RTC check: ModuleNotFoundError: model_build\n3) PYTHONPATH=code:code/sim_v2/messaging python3 -c \"import rtc_state_transitions_v8\" -> FAIL due system python missing pyflamegpu\n4) CUDA_PATH=$HOME/miniconda3/targets/x86_64-linux LD_LIBRARY_PATH=$HOME/miniconda3/lib:$LD_LIBRARY_PATH PYTHONPATH=code:code/sim_v2/messaging /home/albud/miniconda3/envs/cuda13/bin/python3 -c \"import rtc_state_transitions_v8\" -> PASS\nfiles: code/sim_v2/messaging/rtc_state_transitions_v8.py; config/transitions/transitions_rules.json",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_session_20260608T144409Z:20260608T1450Z",
+      "plan_step_id": "I1",
+      "approval_gate_id": "ctx_W_session_20260608T144409Z_approval_request_2fe0ae95",
+      "approval_status": "approved",
+      "approval_source": "explicit user task: high-risk agreed with Алексей in current chat",
+      "risk_tier": "high",
+      "risk_reasons": "code/sim_v2/messaging RTC transition semantics; config/transitions/transitions_rules.json SSoT mirror; affects ops→storage/ops→unsvc BR routing",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (reviewer-flame pending)",
+      "human_gate_required": "yes",
+      "plan_card": "P1: change only BR criterion to factual sne in V8 RTC and SSoT mirror; keep LL/OH look-ahead; syntax/import checks only, no simulation.",
+      "evidence_pack": "Facts: - Read config/capsules_manifest.json and capsules limiter_v8/transitions/flame_gpu; read config/transitions/invariants.json and confirmed invariants file was not edited.\n- JSON syntax check: python3 -c \"import json; json.load(open('config/transitions/transitions_rules.json')); print('JSON_OK')\" -> JSON_OK.\n- User-specified import command with PYTHONPATH=code/sim_v2/messaging reached ModuleNotFoundError: model_build because model_build.py is in code/; retry with PYTHONPATH=code:code/sim_v2/messaging reached ModuleNotFoundError: pyflamegpu under system python3.\n- Working FLAME runtime import: CUDA_PATH=$HOME/miniconda3/targets/x86_64-linux LD_LIBRARY_PATH=$HOME/miniconda3/lib:$LD_LIBRARY_PATH PYTHONPATH=code:code/sim_v2/messaging /home/albud/miniconda3/envs/cuda13/bin/python3 -c \"import rtc_state_transitions_v8\" -> PASS.\n- ReadLints on changed files: no linter errors.\n- rg/readback confirmed no remaining sne_next > br in rtc_state_transitions_v8.py or transitions_rules.json for the edited BR criteria; sne_next remains used for LL, ppr_next remains used for OH.\n- Simulation intentionally not run per user instruction.\nEvidence: commands:\n1) python3 -c \"import json; json.load(open('config/transitions/transitions_rules.json')); print('JSON_OK')\" -> JSON_OK\n2) PYTHONPATH=code/sim_v2/messaging python3 -c \"import rtc_state_transitions_v8\" -> FAIL before RTC check: ModuleNotFoundError: model_build\n3) PYTHONPATH=code:code/sim_v2/messaging python3 -c \"import rtc_state_transitions_v8\" -> FAIL due system python missing pyflamegpu\n4) CUDA_PATH=$HOME/miniconda3/targets/x86_64-linux LD_LIBRARY_PATH=$HOME/miniconda3/lib:$LD_LIBRARY_PATH PYTHONPATH=code:code/sim_v2/messaging /home/albud/miniconda3/envs/cuda13/bin/python3 -c \"import rtc_state_transitions_v8\" -> PASS\nfiles: code/sim_v2/messaging/rtc_state_transitions_v8.py; config/transitions/transitions_rules.json",
+      "success_criteria": "script: python3 -c 'import json; json.load(open(\"config/transitions/transitions_rules.json\"))'; script: PYTHONPATH=code/sim_v2/messaging python3 -c 'import rtc_state_transitions_v8' or equivalent working FLAME import; manual-check: LL/OH still use look-ahead and BR uses factual sne.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=reviewer_flame_pending; evidence_refs=code/sim_v2/messaging/rtc_state_transitions_v8.py;config/transitions/transitions_rules.json;json_import_checks; approval_ref=ctx_W_session_20260608T144409Z_approval_request_2fe0ae95",
+      "risks": "1) high-risk transition semantics require reviewer-flame before close; 2) auto-bootstrap workflow profile is low while actual task is high-risk, so orchestrator should reconcile KG workflow metadata; 3) runtime acceptance still depends on orchestrator simulation/validation run.",
+      "next_owner": "reviewer-flame",
+      "open_questions": "Orchestrator should run acceptance simulation/validation after reviewer-flame; no code blockers found.",
+      "graph_update": "no",
+      "graph_update_reason": "SSoT JSON changed but make sync-domain-graph was not requested and must not be run by coder-flame; orchestrator decides graph sync.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-08T14:47:17Z",
+      "modules": [
+        "state_transitions",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 32000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_session_20260608T144409Z_orchestrator_5e96901a",
+      "workflow_id": "W_session_20260608T144409Z",
+      "agent": "orchestrator",
+      "user_goal": "BR-фикс: при выходе из ops по OH сравнивать BR с фактическим sne, а не sne_next (выходящий борт завтра не летит); затем полный чистый ребилд 4 датасетов и приёмка; коммит и пуш по всем правилам",
+      "changes": "rtc_state_transitions_v8.py: в двух BR-условиях sne_next>br -> sne>br + docstring/комментарии; transitions_rules.json: pre.expr ops_to_storage_v8 и ops_to_unsvc_v8 + notes; config/agent_kg.json: workflow-state",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "run_all_stream.py по 4 датасетам -> TOTAL=60 PASSED=60 FAILED=0 (/tmp/validate_4ds.log); INV-2 post_warmup_violations=0 (warmup=180), INV-1/INV-12=0. Чистый ребилд extract->sim 4 датасетов exit 0 (/tmp/rebuild_4ds.log): спавн чистый, IndexError устранён. reviewer-flame=allow_with_notes",
+      "drift_check": "UserGoal <-> Changes scope match: yes — правки строго в BR-логике RTC+SSoT, приёмка подтверждает ops=target",
+      "process_insights": "",
+      "trace_id": "wf:W_session_20260608T144409Z:2026-06-08T15:00Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "Правка RTC rtc_state_transitions_v8.py + SSoT transitions_rules.json (логика beyond-repair при выходе из ops)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "reviewer-flame",
+      "human_gate_required": "yes",
+      "plan_card": "BR-scrap: sne_next>br -> sne>br в COND_OPS_TO_STORAGE_V8 и COND_OPS_TO_UNSVC_V8; зеркально в transitions_rules.json; look-ahead остаётся только на LL/OH",
+      "evidence_pack": "run_all_stream.py по 4 датасетам -> TOTAL=60 PASSED=60 FAILED=0 (/tmp/validate_4ds.log); INV-2 post_warmup_violations=0 (warmup=180), INV-1/INV-12=0. Чистый ребилд extract->sim 4 датасетов exit 0 (/tmp/rebuild_4ds.log): спавн чистый, IndexError устранён. reviewer-flame=allow_with_notes",
+      "success_criteria": "SQL: INV-2 post_warmup_violations=0 (ops==target Mi-8/Mi-17 раздельно, tol=0, после 180д) AND INV-1=0 AND INV-12=0 по 4 версиям (20250704/20251230/20260221/20260408 vid=1)",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=/tmp/validate_4ds.log;/tmp/rebuild_4ds.log; approval_ref=N/A",
+      "risks": "Mi-8 спавн неактивен (резерв inactive заморожен); при росте target Mi-8 после warmup вернётся дефицит — отложенная задача",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "53ac12cc16cfcd5f38855560f4444975eeb1571d188f695f3edd20b15125bd50",
+      "created_at": "2026-06-08T15:50:09Z",
+      "modules": [
+        "state_transitions",
+        "validation"
+      ]
+    },
+    {
+      "handoff_id": "handoff_W_session_20260608T144409Z_governance-compliance_fe78ed05",
+      "workflow_id": "W_session_20260608T144409Z",
+      "agent": "governance-compliance",
+      "user_goal": "BR-фикс при выходе из ops по OH: сравнивать BR с фактическим sne (не sne_next), потому что борт, выходящий сегодня, завтра не летит — look-ahead применяется только к моменту выхода LL/OH, но не к решению ремонтопригоден/списать; далее чистый ребилд 4 датасетов и приёмка; коммит и пуш по правилам",
+      "changes": "Verdict=allow_with_notes. Проверено: (1) scope match UserGoal<->Changes — ok (только BR-условия в RTC+SSoT, мирроринг точный); (2) traceability — TraceID/PlanStepID/Modules в orchestrator handoff заполнены; (3) SSoT discipline — правка transitions_rules.json согласована человеком явно (approval ctx ...2fe0ae95) и зеркалирует RTC; (4) reviewer-flame=allow_with_notes — присутствует в evidence; (5) приёмка verifiable PASS (run_all_stream 60/60, INV-2 post_warmup=0, INV-1=0, INV-12=0); (6) human gate — yes/approved/explicit user command; (7) DriftCheck в orchestrator handoff не пустой; (8) compact 5-field ComplianceChecklist у orchestrator корректен; (9) no self-coding by orchestrator — реализация делегирована coder-flame; (10) Domain Graph sync не выполнялся (GraphUpdate=no корректно).",
+      "facts": "",
+      "assumptions": "Reviewer-flame verdict allow_with_notes не записан как отдельный handoff в KG (известен только по orchestrator EvidencePack). Risks if false: формально reviewer trail неполный в KG, но фактический review проведён и зафиксирован orchestrator-ом — не блокирует closure для high-risk при наличии human-approval и PASS приёмки.",
+      "evidence": "Facts: Проверка PlanCard/EvidencePack/ComplianceChecklist orchestrator handoff — все заполнены, ComplianceChecklist в compact 5-field формате (decision=allow; required_gates=pass; exceptions=none; evidence_refs=...; approval_ref=...). Проверка RiskTier/RiskReasons/HumanGateRequired — все заполнены и согласованы (high, yes). Проверка DriftCheck orchestrator — не пуст, scope match yes. Approval-context ctx_..._2fe0ae95 присутствует с status=approved и явной формулировкой allowed paths == фактический Changes (rtc_state_transitions_v8.py + transitions_rules.json + servicemeta agent_kg.json).\nEvidence: files: handoff_W_session_20260608T144409Z_orchestrator_5e96901a (Full Handoff, PlanCard/EvidencePack/ComplianceChecklist/SuccessCriteria/DriftCheck заполнены); handoff_W_session_20260608T144409Z_coder-flame_fdb34a68 (implementation handoff с ApprovalGate=approved). validation: /tmp/validate_4ds.log TOTAL=60 PASSED=60 FAILED=0 на 4 датасетах (20250704/20251230/20260221/20260408 version_id=1); INV-2 post_warmup_violations=0 (warmup=180, tol=0, ops==target Mi-8/Mi-17 раздельно); INV-1=0; INV-12=0. rebuild: /tmp/rebuild_4ds.log extract->sim exit 0, спавн чистый. reviewer-flame verdict allow_with_notes (упомянут в orchestrator EvidencePack). approval: ctx_W_session_20260608T144409Z_approval_request_2fe0ae95 content='approved: high-risk scope agreed with Алексей; allowed changes limited to rtc_state_transitions_v8.py + transitions_rules.json'. SSoT JSON validity: 'python3 -c json.load(...transitions_rules.json)' -> JSON_OK (по coder-flame evidence). git status pre-commit: M rtc_state_transitions_v8.py, M transitions_rules.json, M agent_kg.json.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_session_20260608T144409Z:2026-06-08T15:55Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "ctx_W_session_20260608T144409Z_approval_request_2fe0ae95",
+      "approval_status": "approved",
+      "approval_source": "explicit user command in current chat: 'так правильно и делает алгоритм новый... sne надо сравнивать с br, а не sne_next' + 'Реализуй' + 'комит и пуш по всем правилам'",
+      "risk_tier": "high",
+      "risk_reasons": "Контрольная плоскость проверяет high-risk handoff: правка SSoT logic (transitions_rules.json) и RTC (rtc_state_transitions_v8.py) — формально требует human-gate + reviewer-flame",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "G1: governance single pass для closure high-risk workflow BR-фикса. Проверка scope/traceability/SSoT/reviewer/приёмки; verdict + рекомендация по docs-curator перед коммитом.",
+      "evidence_pack": "Facts: Проверка PlanCard/EvidencePack/ComplianceChecklist orchestrator handoff — все заполнены, ComplianceChecklist в compact 5-field формате (decision=allow; required_gates=pass; exceptions=none; evidence_refs=...; approval_ref=...). Проверка RiskTier/RiskReasons/HumanGateRequired — все заполнены и согласованы (high, yes). Проверка DriftCheck orchestrator — не пуст, scope match yes. Approval-context ctx_..._2fe0ae95 присутствует с status=approved и явной формулировкой allowed paths == фактический Changes (rtc_state_transitions_v8.py + transitions_rules.json + servicemeta agent_kg.json).\nEvidence: files: handoff_W_session_20260608T144409Z_orchestrator_5e96901a (Full Handoff, PlanCard/EvidencePack/ComplianceChecklist/SuccessCriteria/DriftCheck заполнены); handoff_W_session_20260608T144409Z_coder-flame_fdb34a68 (implementation handoff с ApprovalGate=approved). validation: /tmp/validate_4ds.log TOTAL=60 PASSED=60 FAILED=0 на 4 датасетах (20250704/20251230/20260221/20260408 version_id=1); INV-2 post_warmup_violations=0 (warmup=180, tol=0, ops==target Mi-8/Mi-17 раздельно); INV-1=0; INV-12=0. rebuild: /tmp/rebuild_4ds.log extract->sim exit 0, спавн чистый. reviewer-flame verdict allow_with_notes (упомянут в orchestrator EvidencePack). approval: ctx_W_session_20260608T144409Z_approval_request_2fe0ae95 content='approved: high-risk scope agreed with Алексей; allowed changes limited to rtc_state_transitions_v8.py + transitions_rules.json'. SSoT JSON validity: 'python3 -c json.load(...transitions_rules.json)' -> JSON_OK (по coder-flame evidence). git status pre-commit: M rtc_state_transitions_v8.py, M transitions_rules.json, M agent_kg.json.",
+      "success_criteria": "manual-check: governance verdict зафиксирован в Agent KG как один handoff на workflow; closure разрешён под условием note по docs-curator/profile mismatch",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=workflow_profile_mismatch;docs_curator_pending;reviewer_flame_handoff_not_in_kg; evidence_refs=handoff_W_session_20260608T144409Z_orchestrator_5e96901a;handoff_W_session_20260608T144409Z_coder-flame_fdb34a68;/tmp/validate_4ds.log;/tmp/rebuild_4ds.log; approval_ref=ctx_W_session_20260608T144409Z_approval_request_2fe0ae95",
+      "risks": "1) workflow.caps.profile='low' не соответствует фактическому RiskTier=high (auto-bootstrap inconsistency) — minor process noise, не влияет на закрытие; 2) docs-curator handoff для high-risk отсутствует (правило S6 рекомендует) — рекомендуется changelog snippet перед окончательным закрытием; 3) reviewer-flame handoff не оформлен отдельной записью в KG (есть только упоминание в orchestrator EvidencePack) — minor trail gap, не блокирует.",
+      "next_owner": "docs-curator",
+      "open_questions": "Перед --close-workflow: добавить changelog snippet (docs-curator/orchestrator) и/или явно зафиксировать reviewer-flame verdict отдельным контекстом для полноты trail?",
+      "graph_update": "no",
+      "graph_update_reason": "Domain Graph (Neo4j) синхронизация не требуется: правка касается алгоритмической семантики переходов, доменные узлы/связи (LL/OH/BR/states) не меняются; structure Domain Graph остаётся валидной.",
+      "prev_handoff_hash": "3075be0a1c90a8ff7cc50e026cec787254584b28c7f02bb68503c1592b9f96f0",
+      "created_at": "2026-06-08T15:52:25Z",
+      "modules": [
+        "state_transitions",
+        "validation"
+      ],
+      "usage": {
+        "model": "claude-opus-4.7",
+        "est_tokens": 9500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_session_20260608T144409Z_docs-curator_9e183f58",
+      "workflow_id": "W_session_20260608T144409Z",
+      "agent": "docs-curator",
+      "user_goal": "Зафиксируй изменение в changelog и запиши docs-curator handoff в Agent KG для закрытия high-risk workflow.",
+      "changes": "docs/changelog.md: added 2026-06-08 BR beyond-repair section with root cause, changed files, governance verdict and acceptance evidence. Agent KG: wrote docs-curator phase_start context ctx_W_session_20260608T144409Z_phase_start_d968b442 before handoff.",
+      "facts": "",
+      "assumptions": "Docs-curator relies on orchestrator/governance validation logs rather than re-running simulation. Risks if false: changelog evidence may need correction, but no production/deploy readiness is asserted.",
+      "evidence": "Sources: docs/changelog.md top section verified after edit; ReadLints docs/changelog.md clean; workflow state read shows governance verdict handoff_W_session_20260608T144409Z_governance-compliance_fe78ed05 allow_with_notes and active owner docs-curator; phase_start context ctx_W_session_20260608T144409Z_phase_start_d968b442 recorded; inherited acceptance evidence from orchestrator/governance: clean rebuild 4 datasets exit 0; run_all_stream 60/60 PASS; INV-2 post_warmup_violations=0; INV-1=0; INV-12=0; reviewer-flame=allow_with_notes.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_session_20260608T144409Z:2026-06-08T15:56Z",
+      "plan_step_id": "D1",
+      "approval_gate_id": "ctx_W_session_20260608T144409Z_approval_request_2fe0ae95",
+      "approval_status": "approved",
+      "approval_source": "explicit high-risk approval captured by governance handoff",
+      "risk_tier": "high",
+      "risk_reasons": "High-risk workflow touched RTC transition semantics and SSoT transitions_rules.json; S6 requires docs-curator before close; validation evidence spans 4 simulation datasets.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "D1: sync docs/changelog.md for accepted BR beyond-repair fix and record docs-curator handoff; do not close workflow.",
+      "evidence_pack": "Sources: docs/changelog.md top section verified after edit; ReadLints docs/changelog.md clean; workflow state read shows governance verdict handoff_W_session_20260608T144409Z_governance-compliance_fe78ed05 allow_with_notes and active owner docs-curator; phase_start context ctx_W_session_20260608T144409Z_phase_start_d968b442 recorded; inherited acceptance evidence from orchestrator/governance: clean rebuild 4 datasets exit 0; run_all_stream 60/60 PASS; INV-2 post_warmup_violations=0; INV-1=0; INV-12=0; reviewer-flame=allow_with_notes.",
+      "success_criteria": "script: rg \"2026-06-08 — V8 BR beyond-repair\" docs/changelog.md && python3 code/utils/agent_kg.py --read-state --workflow-id W_session_20260608T144409Z shows docs-curator handoff",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=docs/changelog.md;ctx_W_session_20260608T144409Z_phase_start_d968b442;handoff_W_session_20260608T144409Z_governance-compliance_fe78ed05; approval_ref=ctx_W_session_20260608T144409Z_approval_request_2fe0ae95",
+      "risks": "Inherited process notes remain: workflow profile mismatch low vs high and reviewer-flame verdict not stored as separate KG handoff; docs-curator did not run simulations.",
+      "next_owner": "human",
+      "open_questions": "none for docs-curator",
+      "graph_update": "no",
+      "graph_update_reason": "No Domain Graph sync performed or required by docs-curator; SSoT JSON change already covered by governance and user did not ask make sync-domain-graph.",
+      "prev_handoff_hash": "5d75273d5923656035431db8e4c044154454bc20f27fe1a0c5b7bdaf24ce6f73",
+      "created_at": "2026-06-08T15:56:20Z",
+      "modules": [
+        "state_transitions",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 9000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -14191,6 +14454,51 @@
       "agent": "orchestrator",
       "created_at": "2026-06-07T18:42:42Z",
       "updated_at": "2026-06-07T18:42:42Z"
+    },
+    {
+      "context_id": "ctx_W_full_rebuild_4ds_20260607T1850Z_closure_094565ca",
+      "workflow_id": "W_full_rebuild_4ds_20260607T1850Z",
+      "context_type": "closure",
+      "content": "ADMIN-CLOSE: rebuild 4 версий завершён. Приёмка: extract 19/19 x4; sim ops=target final PASS x4; run_all 15/15 для 12-30/02-21/04-08, 07-04 14/15 (INV-2 day2889 -2 = легит supply-shortage, serviceable=0, не баг); INV-1=0, INV-12=0 по всем 4. Только данные CH, кода не менялось. Governance/docs пропущены: data-ops без code/SSoT правок.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-07T19:11:58Z",
+      "updated_at": "2026-06-07T19:11:58Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260608T144409Z_phase_start_d968b442",
+      "workflow_id": "W_session_20260608T144409Z",
+      "context_type": "phase_start",
+      "content": "docs-curator phase_start: sync changelog and record handoff for high-risk BR beyond-repair fix; no workflow close.",
+      "agent": "docs-curator",
+      "created_at": "2026-06-08T14:46:03Z",
+      "updated_at": "2026-06-08T15:53:38Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260608T144409Z_approval_request_2fe0ae95",
+      "workflow_id": "W_session_20260608T144409Z",
+      "context_type": "approval_request",
+      "content": "approved: User task states high-risk scope is agreed with Алексей in current chat; allowed changes limited to code/sim_v2/messaging/rtc_state_transitions_v8.py and config/transitions/transitions_rules.json; no simulation run",
+      "agent": "coder-flame",
+      "created_at": "2026-06-08T14:46:13Z",
+      "updated_at": "2026-06-08T14:46:13Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260608T144409Z_closure_e2a0778f",
+      "workflow_id": "W_session_20260608T144409Z",
+      "context_type": "closure",
+      "content": "BR-фикс реализован (coder-flame), reviewer-flame=allow_with_notes, governance=allow_with_notes, docs-curator changelog записан; чистый ребилд 4 датасетов + приёмка INV-2/INV-1/INV-12 PASS (60/60). Прим.: caps.profile=low по auto-bootstrap, фактический risk=high.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-08T15:56:51Z",
+      "updated_at": "2026-06-08T15:56:51Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260608T023237Z_closure_d28d70cf",
+      "workflow_id": "W_session_20260608T023237Z",
+      "context_type": "closure",
+      "content": "Ребилд 4 датасетов завершён, поглощён приёмкой BR-фикса (W_session_20260608T144409Z)",
+      "agent": "orchestrator",
+      "created_at": "2026-06-08T15:56:51Z",
+      "updated_at": "2026-06-08T15:56:51Z"
     }
   ],
   "meta": {

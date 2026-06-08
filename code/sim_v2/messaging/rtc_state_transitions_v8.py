@@ -9,8 +9,8 @@ RTC модуль: State Transitions V8 — Next-day dt проверка
 
 Порядок проверок (приоритет):
 1. SNE + dt_next > LL → storage (назначенный ресурс)
-2. PPR + dt_next > OH AND SNE + dt_next > BR → storage (нерентабельный ремонт)
-3. PPR + dt_next > OH AND SNE + dt_next <= BR → unserviceable (ремонт нужен)
+2. PPR + dt_next > OH AND SNE > BR → storage (нерентабельный ремонт; BR по фактическому sne)
+3. PPR + dt_next > OH AND SNE <= BR → unserviceable (ремонт нужен)
 
 dt_next = налёт на день current_day + 1 (из mp5_cumsum)
 
@@ -127,7 +127,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_decrement_v8, flamegpu::MessageNone, flamegpu:
 # V8: Условия переходов с next-day dt проверкой
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Условие V8: SNE + dt_next > LL ИЛИ (PPR + dt_next > OH AND SNE + dt_next > BR)
+# Условие V8: SNE + dt_next > LL ИЛИ (PPR + dt_next > OH AND SNE > BR)
 COND_OPS_TO_STORAGE_V8 = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage_v8) {
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
@@ -155,11 +155,12 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage_v8) {
     const unsigned int ppr_next = ppr + dt_next;
     
     if (sne_next > ll) return true;
-    return (ppr_next > oh && br > 0u && sne_next > br);
+    // BR считается по фактическому sne: выходящий борт завтра уже не летит.
+    return (ppr_next > oh && br > 0u && sne > br);
 }
 """.replace("__CUMSUM_SIZE__", str(CUMSUM_SIZE))
 
-# Условие V8: PPR + dt_next > OH при сохранении приоритета storage
+# Условие V8: PPR + dt_next > OH при сохранении приоритета storage; BR по фактическому SNE
 COND_OPS_TO_UNSVC_V8 = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
@@ -188,7 +189,8 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
     
     // Storage имеет приоритет над unserviceable.
     if (sne_next > ll) return false;
-    if (br > 0u && sne_next > br) return false;
+    // BR считается по фактическому sne: выходящий борт завтра уже не летит.
+    if (br > 0u && sne > br) return false;
     
     return (ppr_next > oh);
 }
