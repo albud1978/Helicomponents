@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Валидация резервирования psn для симуляционных рождений агрегатов.
+"""Валидация per-номенклатурного резервирования psn для симуляционных рождений.
 
-Проверяет инварианты диапазона, зафиксированного шагом ETL
-md_components_psn_reserve.py, и контракт выдачи идентификаторов, который
-реализует будущий GPU-счётчик L2/L3 spawn:
+Проверяет карту блоков, зафиксированную шагом ETL md_components_psn_reserve.py,
+и контракт выдачи, который реализует будущий GPU-счётчик L2/L3 spawn:
 
-    psn(i) = psn_spawn_base + i,   i = atomicInc() начиная с 0
+    psn = psn_spawn_start(partseqno_i) + counter(partseqno_i),   counter per-номенклатура с 0
+    block   = (psn - PSN_SPAWN_BASE) // PSN_BLOCK_STRIDE
+    counter = (psn - PSN_SPAWN_BASE) %  PSN_BLOCK_STRIDE
 
 Инварианты:
-- глобальная база едина для всех номенклатур;
-- база строго выше реального max(psn) из AMOS (heli_pandas) — зазор есть;
-- выданные за горизонт psn уникальны, не пересекаются с реальными и
-  укладываются в UInt32.
+- блоки начинаются выше реального max(psn) из AMOS, единый страйд, все различны;
+- рождения внутри каждого блока уникальны, не выходят за границы блока;
+- блоки разных номенклатур не пересекаются между собой;
+- ни один выданный psn не совпадает с реальным.
 
-Запуск: python3 code/sim_v2/test_psn_spawn_reservation.py
-        либо через pytest.
+Запуск: python3 code/sim_v2/test_psn_spawn_reservation.py  (или pytest).
 """
 
 import sys
@@ -24,18 +24,21 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from utils.config_loader import get_clickhouse_client
 
 UINT32_MAX = 0xFFFFFFFF
-# Запас рождений за горизонт с многократным запасом: ~46 бортов × 108 агрегатов
-# ≈ 5k за прогон; берём 100k, чтобы покрыть замены при ремонтах и рост сценариев.
-HORIZON_BIRTHS = 100_000
+PSN_SPAWN_BASE = 10_000_000
+PSN_BLOCK_STRIDE = 1_000_000
+# Число рождений на номенклатуру в тесте: сильно выше реалистичного (макс парк ~1100),
+# но внутри блока (страйд 1M).
+BIRTHS_PER_NOM = 5_000
 
 
-def _global_psn_base(client) -> int:
-    distinct, base = client.execute(
-        "SELECT countDistinct(psn_spawn_start), min(psn_spawn_start) FROM md_components"
-    )[0]
-    if distinct != 1:
-        raise AssertionError(f"psn_spawn_start не глобально-единый: distinct={distinct}")
-    return int(base)
+def _block_map(client):
+    return {
+        int(ps): int(start)
+        for ps, start in client.execute(
+            "SELECT partseqno_i, psn_spawn_start FROM md_components "
+            "WHERE partseqno_i IS NOT NULL AND psn_spawn_start > 0"
+        )
+    }
 
 
 def _real_psn(client):
@@ -51,28 +54,52 @@ def _real_psn(client):
     return int(real_max), real_set
 
 
-def test_psn_reservation_contract():
+def test_psn_block_map():
+    """Карта блоков: выше реального max, единый страйд, все различны, в UInt32."""
     client = get_clickhouse_client()
-    base = _global_psn_base(client)
+    blocks = _block_map(client)
+    real_max, _ = _real_psn(client)
+    starts = sorted(blocks.values())
+
+    assert min(starts) > real_max, f"блок ниже real max(psn)={real_max}"
+    assert len(set(starts)) == len(starts), "psn_spawn_start не уникальны"
+    assert min(starts) == PSN_SPAWN_BASE, f"первый блок != {PSN_SPAWN_BASE}"
+    steps = {b - a for a, b in zip(starts, starts[1:])}
+    assert steps == {PSN_BLOCK_STRIDE}, f"страйд неоднороден: {steps}"
+    assert max(starts) + PSN_BLOCK_STRIDE <= UINT32_MAX, "блоки выходят за UInt32"
+    print(f"✅ карта: {len(blocks)} блоков {min(starts):,}…{max(starts):,}, страйд {PSN_BLOCK_STRIDE:,}")
+
+
+def test_psn_births_contract():
+    """Рождения по блокам: уникальны, в границах своего блока, без пересечений и real-коллизий."""
+    client = get_clickhouse_client()
+    blocks = _block_map(client)
     real_max, real_set = _real_psn(client)
 
-    assert base > real_max, f"base={base} не выше real max(psn)={real_max}"
+    assert BIRTHS_PER_NOM < PSN_BLOCK_STRIDE, "рождений в тесте больше ширины блока"
 
-    allocated = [base + i for i in range(HORIZON_BIRTHS)]
-    assert len(set(allocated)) == HORIZON_BIRTHS, "выданные psn не уникальны"
-    assert min(allocated) >= base, "выдан psn ниже базы"
-    assert max(allocated) <= UINT32_MAX, "psn вышел за UInt32"
-    assert max(allocated) < base * 10, "горизонт подозрительно близок к следующему порядку"
-    collisions = set(allocated) & real_set
+    all_psn = set()
+    for ps, start in blocks.items():
+        block_psn = [start + i for i in range(BIRTHS_PER_NOM)]
+        assert all(start <= p < start + PSN_BLOCK_STRIDE for p in block_psn), \
+            f"psn вышел за блок номенклатуры {ps}"
+        assert all((p - PSN_SPAWN_BASE) // PSN_BLOCK_STRIDE == (start - PSN_SPAWN_BASE) // PSN_BLOCK_STRIDE
+                   for p in block_psn), f"psn попал в чужой блок (номенклатура {ps})"
+        before = len(all_psn)
+        all_psn.update(block_psn)
+        assert len(all_psn) - before == BIRTHS_PER_NOM, f"пересечение блоков на номенклатуре {ps}"
+
+    assert min(all_psn) > real_max, "выдан psn не выше real max"
+    assert max(all_psn) <= UINT32_MAX, "psn вышел за UInt32"
+    collisions = all_psn & real_set
     assert not collisions, f"пересечение с реальными psn: {sorted(collisions)[:5]}"
-
     print(
-        f"✅ base={base:,}; real max(psn)={real_max:,}; зазор={base - real_max:,}; "
-        f"выдано {HORIZON_BIRTHS:,} уникальных psn без пересечений с реальными "
-        f"(max={max(allocated):,} < UInt32)"
+        f"✅ {len(blocks)} номенклатур × {BIRTHS_PER_NOM:,} рождений = {len(all_psn):,} psn: "
+        f"уникальны, каждый в своём блоке, без пересечений с реальными"
     )
 
 
 if __name__ == "__main__":
-    test_psn_reservation_contract()
-    print("🎯 Резервирование psn: все инварианты выполнены")
+    test_psn_block_map()
+    test_psn_births_contract()
+    print("🎯 Per-номенклатурное резервирование psn: все инварианты выполнены")
