@@ -3,14 +3,20 @@ logical_id: sim_masterv2_v9_daily
 datasource:
   database_name: clickhouse_default
   schema: default
-  table_name: sim_masterv2_v9
+  table_name: sim_masterv2_v9_daily
 metadata:
   owner_role: coder-general
-  description: "Master daily simulation output for BI."
+  description: "Physical daily forward-filled simulation output for BI. Built from default.sim_masterv2_v9 via Stage 1 materializer (sim_daily_materializer)."
+  superset_uuid: 9425b227-0a3b-441d-a6f9-e93685492c3c
+  superset_id: 9
+  replaces_virtual_uuid: 500f4b0d-760d-40fc-9570-3533d904dce1
   columns_required:
     - day_date
+    - day_d
     - version_date
+    - version_date_ddmmyyyy
     - version_id
     - group_by
+    - group_by_label
     - status_id
     - status_count_ffill

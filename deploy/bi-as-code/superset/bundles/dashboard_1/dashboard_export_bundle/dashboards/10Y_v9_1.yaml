@@ -14,8 +14,8 @@ css: "/* HC_HIDE_PIVOT_STUB_HEADERS */\n[data-test-chart-id=\"245\"] table thead
   .dashboard .dashboard-component-chart-holder * {\n  color: #111820;\n}\n.dashboard\
   \ .dashboard-component-chart-holder {\n  border-color: #D0D3D4;\n}\n"
 slug: null
-certified_by: ''
-certification_details: ''
+certified_by: null
+certification_details: null
 published: false
 uuid: fe92c862-68d7-41e7-b0eb-b55f4609ebec
 position:
@@ -396,27 +396,6 @@ metadata:
     - 55
   color_scheme: supersetColors
   refresh_frequency: 0
-  color_scheme_domain:
-  - '#1FA8C9'
-  - '#454E7C'
-  - '#5AC189'
-  - '#FF7F44'
-  - '#666666'
-  - '#E04355'
-  - '#FCC700'
-  - '#A868B7'
-  - '#3CCCCB'
-  - '#A38F79'
-  - '#8FD3E4'
-  - '#A1A6BD'
-  - '#ACE1C4'
-  - '#FEC0A1'
-  - '#B2B2B2'
-  - '#EFA1AA'
-  - '#FDE380'
-  - '#D3B3DA'
-  - '#9EE5E5'
-  - '#D1C6BC'
   expanded_slices: {}
   label_colors:
     '1': '#003594'
@@ -431,13 +410,6 @@ metadata:
     "\u041C\u0438-17": '#7CA3DC'
     "\u0422\u0438\u043F \u0412\u0421: \u041C\u0438-8": '#003594'
     "\u0422\u0438\u043F \u0412\u0421: \u041C\u0438-17": '#7CA3DC'
-  shared_label_colors:
-  - "\u0418\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435"
-  - "\u041D\u0435\u0438\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435"
-  - "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0438"
-  - "\u0420\u0435\u043C\u043E\u043D\u0442"
-  - "\u0421\u043F\u0438\u0441\u0430\u043D\u0438\u0435"
-  - "\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435"
   timed_refresh_immune_slices: []
   cross_filters_enabled: true
   native_filter_configuration:
@@ -455,7 +427,7 @@ metadata:
     targets:
     - column:
         name: version_date_ddmmyyyy
-      datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
+      datasetUuid: 9425b227-0a3b-441d-a6f9-e93685492c3c
     defaultDataMask:
       extraFormData:
         filters:
@@ -502,7 +474,7 @@ metadata:
       \u044C 1"
     filterType: filter_timegrain
     targets:
-    - datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
+    - datasetUuid: 9425b227-0a3b-441d-a6f9-e93685492c3c
     defaultDataMask:
       extraFormData:
         time_grain_sqla: P1Y
@@ -547,7 +519,7 @@ metadata:
     targets:
     - column:
         name: group_by_label
-      datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
+      datasetUuid: 9425b227-0a3b-441d-a6f9-e93685492c3c
     defaultDataMask:
       extraFormData: {}
       filterState: {}
@@ -600,7 +572,7 @@ metadata:
     targets:
     - column:
         name: version_date_ddmmyyyy
-      datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
+      datasetUuid: 9425b227-0a3b-441d-a6f9-e93685492c3c
     defaultDataMask:
       extraFormData:
         filters:
@@ -651,7 +623,7 @@ metadata:
       \u044C 2"
     filterType: filter_timegrain
     targets:
-    - datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
+    - datasetUuid: 9425b227-0a3b-441d-a6f9-e93685492c3c
     defaultDataMask:
       extraFormData:
         time_grain_sqla: P1Y
@@ -695,7 +667,7 @@ metadata:
     targets:
     - column:
         name: group_by_label
-      datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
+      datasetUuid: 9425b227-0a3b-441d-a6f9-e93685492c3c
     defaultDataMask:
       extraFormData: {}
       filterState: {}
@@ -786,7 +758,7 @@ metadata:
       \u044C \u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0438"
     filterType: filter_timegrain
     targets:
-    - datasetUuid: 500f4b0d-760d-40fc-9570-3533d904dce1
+    - datasetUuid: 9425b227-0a3b-441d-a6f9-e93685492c3c
     defaultDataMask:
       extraFormData:
         time_grain_sqla: P3M
@@ -869,12 +841,35 @@ metadata:
     description: "\u041D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u044B\u0439\
       \ \u0432\u044B\u0431\u043E\u0440 version_date \u0442\u043E\u043B\u044C\u043A\
       \u043E \u0434\u043B\u044F Gantt \u0447\u0430\u0440\u0442\u0430"
-    chartsInScope:
-    - 3
-    - 4
-    tabsInScope: []
-  map_label_colors:
-    "\u041F\u043E\u0441\u0442\u0430\u0432\u043A\u0430": '#1FA8C9'
   default_filters: '{}'
+  shared_label_colors:
+  - "\u0418\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435"
+  - "\u041D\u0435\u0438\u0441\u043F\u0440\u0430\u0432\u043D\u044B\u0435"
+  - "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u0438"
+  - "\u0420\u0435\u043C\u043E\u043D\u0442"
+  - "\u0421\u043F\u0438\u0441\u0430\u043D\u0438\u0435"
+  - "\u0425\u0440\u0430\u043D\u0435\u043D\u0438\u0435"
+  map_label_colors: {}
+  color_scheme_domain:
+  - '#1FA8C9'
+  - '#454E7C'
+  - '#5AC189'
+  - '#FF7F44'
+  - '#666666'
+  - '#E04355'
+  - '#FCC700'
+  - '#A868B7'
+  - '#3CCCCB'
+  - '#A38F79'
+  - '#8FD3E4'
+  - '#A1A6BD'
+  - '#ACE1C4'
+  - '#FEC0A1'
+  - '#B2B2B2'
+  - '#EFA1AA'
+  - '#FDE380'
+  - '#D3B3DA'
+  - '#9EE5E5'
+  - '#D1C6BC'
 theme_uuid: null
 version: 1.0.0

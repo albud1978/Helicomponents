@@ -339,6 +339,7 @@ import rtc_limiter_optimized
 import rtc_limiter_v8            # V8: deterministic_dates!
 import rtc_mp2_export
 import rtc_repairline_export
+import sim_daily_materializer
 from components.agent_population import AgentPopulationBuilder
 from model_build import REPAIR_LINES_MAX
 
@@ -967,6 +968,15 @@ class LimiterV8Orchestrator:
                 self.clickhouse_client, rl_rows,
                 version_date_int, version_id,
                 master_projection=master_projection
+            )
+            daily_rows = sim_daily_materializer.materialize_daily(
+                self.clickhouse_client,
+                version_date_int,
+                version_id,
+            )
+            print(
+                f"📊 Витрина sim_masterv2_v9_daily: {daily_rows} строк "
+                f"({version_date_int}, {version_id})"
             )
         elif rl_data is None:
             print("⚠️ RepairLine Drain не прочитал данные")
