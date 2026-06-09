@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-08T18:26:59Z",
+    "updated_at": "2026-06-09T05:47:08Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -1958,6 +1958,27 @@
       },
       "created_at": "2026-06-08T18:26:59Z",
       "updated_at": "2026-06-08T18:26:59Z"
+    },
+    {
+      "workflow_id": "W_session_20260609T054707Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/extract/md_components_psn_reserve.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-09T05:47:08Z"
+      },
+      "created_at": "2026-06-09T05:47:08Z",
+      "updated_at": "2026-06-09T05:47:08Z"
     }
   ],
   "handoffs": [

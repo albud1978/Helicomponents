@@ -198,6 +198,13 @@ class ExtractMaster:
             'result_table': 'md_components',
             'critical': False
         },
+        {
+            'script': 'md_components_psn_reserve.py',
+            'description': 'Резервирование psn для симуляционных рождений агрегатов',
+            'dependencies': ['md_components', 'heli_pandas'],
+            'result_table': 'md_components',
+            'critical': False
+        },
         # === ТЕНЗОРЫ (в самом конце, когда все данные готовы) ===
         {
             'script': 'program_ac_direct_loader.py',
@@ -535,7 +542,7 @@ class ExtractMaster:
             # Добавляем путь к датасету для скриптов которые его поддерживают
             # md_components_loader НЕ использует датасет (мастер-данные универсальны)
             if self.dataset_path and script_name not in ['md_components_loader.py', 'calculate_beyond_repair.py', 
-                                                         'md_components_enricher.py', 'enrich_heli_pandas.py',
+                                                         'md_components_enricher.py', 'md_components_psn_reserve.py', 'enrich_heli_pandas.py',
                                                          'dictionary_creator.py', 'digital_values_dictionary_creator.py',
                                                          'heli_pandas_group_by_enricher.py', 'program_ac_precheck_runner.py',
                                                          'heli_pandas_component_status.py', 'heli_pandas_serviceable_status.py',
