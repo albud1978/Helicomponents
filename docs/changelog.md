@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-06-08 — BI: forward-fill материализован в ETL, 10Y_v9 переключён на физическую витрину
+
+**Workflow**: W_bi_daily_materialize_20260608T1610Z | **Risk**: high | **Profile**: high-strict | **Status**: docs-sync | **Governance**: allow_with_notes (`handoff_W_bi_daily_materialize_20260608T1610Z_governance-compliance_60173f2a`)
+
+**Суть**:
+- Ускорение BI выполнено по принципу "max готовых данных в ETL, min вычислений в BI": тяжёлый forward-fill посуточных счётчиков статусов больше не считается при каждом рендере Superset virtual-датасета `sim_masterv2_v9_ffill_daily`.
+- Логика 9 CTE (`ARRAY JOIN range` / `arrayLastIndex` / `CROSS JOIN`) перенесена в ETL и материализуется один раз в физическую витрину ClickHouse `default.sim_masterv2_v9_daily`.
+
+**Изменено**:
+- `code/sim_v2/messaging/sim_daily_materializer.py`: новый материализатор `CREATE`/`DROP PARTITION tuple(version_date, version_id)`/`INSERT ... SELECT`, CLI `--all`; витрина `PARTITION BY (version_date, version_id)`, `status_count_ffill UInt16`, готовые `group_by_label` и `version_date_ddmmyyyy`.
+- `code/sim_v2/messaging/orchestrator_limiter_v8.py`: материализация встроена финальным шагом после `repairline` export, витрина авто-обновляется per прогон.
+- BI-as-code/Superset: 4 чарта dashboard `10Y_v9` (`1`, `2`, `52`, `53`: оборот планеров Mi-8/17 и big number старт/конец) переключены на физический dataset id=9 / uuid `9425b227-0a3b-441d-a6f9-e93685492c3c`, `table=sim_masterv2_v9_daily`, `sql=null`; старый virtual dataset id=2 / uuid `500f4b0d` сохранён orphan rollback.
+
+**Приёмка**:
+- Витрина построена на 175200 строках по 4 версиям (`20250704`, `20251230`, `20260221`, `20260408`); SQL-сверка физической витрины со старым forward-fill CTE дала `mismatch_rows=0` по всем 4 версиям.
+- Render smoke-check 4 чартов идентичен baseline: суммы по статусам совпадают, `chart52=279`, `chart53=332`.
+- Точечный запрос ускорен примерно в 25 раз (`174ms -> 7ms`); forward-fill больше не считается при рендере.
+- `reviewer-flame`: allow_with_notes, замечания N1-N3 исправлены; `governance-compliance`: allow_with_notes, обязательное условие перед close — этот docs-curator changelog snippet.
+
+---
+
 ## 2026-06-08 — V8 BR beyond-repair: решение без look-ahead
 
 **Workflow**: W_session_20260608T144409Z | **Risk**: high | **Profile**: high-strict | **Status**: docs-sync | **Governance**: allow_with_notes (`handoff_W_session_20260608T144409Z_governance-compliance_fe78ed05`)
