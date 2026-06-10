@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-06-10 — MD Components SSoT: partseqno_i и psn_spawn_start в Excel (дорешивание W_partno_comp_to_partseqno)
+
+**Workflow**: W_md_partseqno_psn_ssot_20260610T171040Z | **Risk**: high | **Profile**: high-strict | **Status**: docs-sync | **Governance**: allow_with_notes (`handoff_W_md_partseqno_psn_ssot_20260610T171040Z_governance-compliance_b199ce12`)
+
+**Суть**:
+- SSoT мастер-данных компонентов (`data_input/master_data/MD_Сomponents.xlsx`) дополнен двумя штатными колонками: `partseqno_i` (реальный AMOS-ID компонента) и `psn_spawn_start` (старт зарезервированного диапазона серийных номеров для рождения экземпляров в симуляции). Это дорешивание workflow `W_partno_comp_to_partseqno`: ранее искусственное поле `partno_comp` было переименовано в `partseqno_i` только в коде, в SSoT-Excel поле не вносили.
+- Загрузчик `code/extract/md_components_loader.py` теперь читает обе колонки из Excel (обязательны, fail-fast при отсутствии); DDL `md_components` получил `psn_spawn_start UInt32 DEFAULT 0`; удалён прежний форс `partseqno_i=None`.
+- `code/extract/md_components_enricher.py` и `code/extract/md_components_psn_reserve.py` переведены из вычислителей в read-only валидаторы (сверка Excel vs `dict_partno_flat` и контракт PSN-блоков с учётом `group_by`; fail-fast).
+- `md_components` пересобрана; приёмка bit-identical: 77 строк / 30 колонок, 0 расхождений (independent `validator-judge`: PASS).
+
+**Изменено**:
+- `data_input/master_data/MD_Сomponents.xlsx`: лист переименован в «Агрегаты», добавлены и заполнены `partseqno_i` и `psn_spawn_start` из live baseline.
+- `code/extract/md_components_loader.py`: обязательные SSoT-колонки, DDL/insert `psn_spawn_start`, без insert-fallback.
+- `code/extract/md_components_enricher.py`: read-only валидатор vs `dict_partno_flat`.
+- `code/extract/md_components_psn_reserve.py`: read-only валидатор контракта PSN-блоков (`group_by`-aware).
+- `code/extract/extract_master.py`: порядок шагов и критичность валидаторов.
+
+**Приёмка**:
+- `output/psn_reservation/md_components_bit_identical_acceptance.json`: `status=PASS`, `rows=77`, `diff_cells=0`.
+- Independent `validator-judge` (V1): критерии A–E PASS; enricher/reserve exit 0; `test_psn_spawn_reservation.py` exit 0.
+
+**Ограничения**:
+- `data_input` — symlink в Nextcloud; `MD_Сomponents.xlsx` вне git (правки data-SSoT не версионируются). Эталон значений: `output/psn_reservation/md_components_baseline.csv`.
+
+---
+
 ## 2026-06-09 — psn-резервирование: per-номенклатурные блоки (доработка к глобальному порогу)
 
 **Risk**: medium | **Status**: реализовано, тест зелёный

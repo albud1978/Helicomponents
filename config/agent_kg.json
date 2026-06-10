@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-10T11:24:51Z",
+    "updated_at": "2026-06-10T19:43:16Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2063,6 +2063,69 @@
       },
       "created_at": "2026-06-10T11:23:12Z",
       "updated_at": "2026-06-10T11:24:51Z"
+    },
+    {
+      "workflow_id": "W_md_partseqno_psn_ssot_20260610T171040Z",
+      "goal": "Сделать partseqno_i штатной колонкой SSoT-Excel MD_Сomponents.xlsx (реальные AMOS-ID), туда же psn_spawn_start; loader читает оба из Excel; энричер и резерв -> валидаторы; пересборка md_components, приёмка bit-identical",
+      "phase": "planning",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "high-strict"
+      },
+      "usage": {
+        "cumulative_steps": 5,
+        "cumulative_tokens": 124500,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-10T17:38:15Z"
+      },
+      "created_at": "2026-06-10T17:10:52Z",
+      "updated_at": "2026-06-10T17:38:23Z"
+    },
+    {
+      "workflow_id": "W_session_20260610T184910Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/extract/dictionary_creator.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-10T18:49:10Z"
+      },
+      "created_at": "2026-06-10T18:49:10Z",
+      "updated_at": "2026-06-10T18:49:10Z"
+    },
+    {
+      "workflow_id": "W_session_20260610T194316Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/extract/md_components_loader.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-10T19:43:16Z"
+      },
+      "created_at": "2026-06-10T19:43:16Z",
+      "updated_at": "2026-06-10T19:43:16Z"
     }
   ],
   "handoffs": [
@@ -13848,6 +13911,210 @@
         "est_tokens": 22000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_md_partseqno_psn_ssot_20260610T171040Z_coder-general_c8a5a2b6",
+      "workflow_id": "W_md_partseqno_psn_ssot_20260610T171040Z",
+      "agent": "coder-general",
+      "user_goal": "Добавить partseqno_i и psn_spawn_start в Excel SSoT MD_Сomponents.xlsx; loader читает их из Excel; enricher/reserve становятся валидаторами; rebuild md_components должен быть bit-identical baseline.",
+      "changes": "data_input/master_data/MD_Сomponents.xlsx: renamed single Sheet1 to Агрегаты, added/filled partseqno_i and psn_spawn_start from live baseline; code/extract/md_components_loader.py: requires SSoT columns, adds psn_spawn_start DDL/insert/type handling, preserves Nullable(UInt32), removes insert fallback; code/extract/md_components_enricher.py: read-only validator vs dict_partno_flat with CSV report; code/extract/md_components_psn_reserve.py: read-only reserve contract validator with group_by-aware heli_pandas psn checks; code/extract/extract_master.py: validator order/criticality updated.",
+      "facts": "",
+      "assumptions": "Full simulation was not run because SuccessCriteria is bit-identical md_components vs baseline; Risks if false: downstream could still depend on dictionary_creator side effects outside md_components, but PSN contract test and md_components hash passed.",
+      "evidence": "Baseline: output/psn_reservation/md_components_baseline.csv, rows=77, duplicate_clean_partno=0, null_partseqno_i=1 (АГБ-96Р-С 6Ш2.511.018-13). Excel reread: rows=77, partseqno_i_non_null=76, psn_positive=76. Rebuild: DROP TABLE md_components then loader->dictionary_creator->partseqno_i validator->calculate_beyond_repair->psn validator exit 0. Reports: output/psn_reservation/md_components_enricher_validation_report.csv; output/psn_reservation/md_components_psn_reserve_validation_report.csv. Acceptance: output/psn_reservation/md_components_bit_identical_acceptance.json status=PASS diff_cells=0 hash_equal=true. ReadLints: no linter errors. py_compile: exit 0 for changed Python files and code/sim_v2/test_psn_spawn_reservation.py. PSN contract test: exit 0, 76 blocks, 380000 generated psn no collisions. git diff --stat: 5 tracked files changed, 476 insertions, 509 deletions; Excel is modified on disk but not tracked by git.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_md_partseqno_psn_ssot_20260610T171040Z:2026-06-10T17:25:00Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "ctx_W_md_partseqno_psn_ssot_20260610T171040Z_approval_request_dec2299f",
+      "approval_status": "approved",
+      "approval_source": "human",
+      "risk_tier": "high",
+      "risk_reasons": "SSoT master-data Excel + ClickHouse md_components rebuild; ETL pipeline behavior changes; controlled DROP/CREATE md_components performed with human PRE-approval",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Move partseqno_i and psn_spawn_start ownership to Excel SSoT; keep ETL steps as fail-fast validators; rebuild only md_components catalog and prove bit-identical output.",
+      "evidence_pack": "Baseline: output/psn_reservation/md_components_baseline.csv, rows=77, duplicate_clean_partno=0, null_partseqno_i=1 (АГБ-96Р-С 6Ш2.511.018-13). Excel reread: rows=77, partseqno_i_non_null=76, psn_positive=76. Rebuild: DROP TABLE md_components then loader->dictionary_creator->partseqno_i validator->calculate_beyond_repair->psn validator exit 0. Reports: output/psn_reservation/md_components_enricher_validation_report.csv; output/psn_reservation/md_components_psn_reserve_validation_report.csv. Acceptance: output/psn_reservation/md_components_bit_identical_acceptance.json status=PASS diff_cells=0 hash_equal=true. ReadLints: no linter errors. py_compile: exit 0 for changed Python files and code/sim_v2/test_psn_spawn_reservation.py. PSN contract test: exit 0, 76 blocks, 380000 generated psn no collisions. git diff --stat: 5 tracked files changed, 476 insertions, 509 deletions; Excel is modified on disk but not tracked by git.",
+      "success_criteria": "script: output/psn_reservation/md_components_bit_identical_acceptance.json => status=PASS, rows_before=77, rows_after=77, diff_cells=0, hash_before==hash_after=07538b5df4d20c4c58616cff6eeccf51c919e20faaa0558f1ab7b853949e058d",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=output/psn_reservation/md_components_bit_identical_acceptance.json; py_compile changed files; ReadLints; approval_ref=ctx_W_md_partseqno_psn_ssot_20260610T171040Z_approval_request_dec2299f",
+      "risks": "data_input/master_data/MD_Сomponents.xlsx is not tracked by git status in this workspace; dictionary_creator recreated dict_* tables during approved catalog chain; existing calculate_beyond_repair remains mutating as designed.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Domain Graph/transition SSoT not changed",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-10T17:26:24Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 60000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_md_partseqno_psn_ssot_20260610T171040Z_validator-judge_93c5a94d",
+      "workflow_id": "W_md_partseqno_psn_ssot_20260610T171040Z",
+      "agent": "validator-judge",
+      "user_goal": "Добавить partseqno_i и psn_spawn_start в Excel SSoT MD_Сomponents.xlsx; loader читает их из Excel; enricher/reserve становятся валидаторами; rebuild md_components должен быть bit-identical baseline.",
+      "changes": "N/A (validation-only): независимая проверка dispatch SuccessCriteria A-E для md_components после SSoT-миграции.",
+      "facts": "",
+      "assumptions": "Claimed acceptance hash 07538b5d uses undocumented canonicalization not reproduced here; Risks if false: would affect hash audit trail only, not table equality (independently proven 0 semantic diff_cells).",
+      "evidence": "Facts: Dispatch SuccessCriteria verified PASS.\\n1) script loader no force-None: md_components_loader.py has ssot_required_columns fail-fast sys.exit(1); partseqno_i read from Excel via to_nullable_int_series; no df['partseqno_i']=None; DDL psn_spawn_start UInt32 DEFAULT 0 line 350.\\n2) bit-identical md_components: independent CH dump vs output/psn_reservation/md_components_baseline.csv rows_before=77 rows_after=77 diff_rows=0 diff_cells=0 (semantic canon: NULL/<NULL>, numeric int/float .0 normalized). partseqno_i/psn_spawn_start per-partno: 0 diffs. my_hash_baseline=my_hash_current=172da466f6c01eaea9fc2706bd1dfed1cb7d855d6be114a232c37ff240c4a756; claimed_hash=07538b5df4d20c4c58616cff6eeccf51c919e20faaa0558f1ab7b853949e058d NOT reproduced by independent canonicalizer (note only; data identity proven 0 diff_cells). acceptance.json status=PASS diff_cells=0 hash_equal=true.\\n3) validator contracts: enricher exit 0 matched=76 missing_dict_expected_null=1; reserve exit 0 matched=76 non_spawnable_zero=1; SQL partseqno dict mismatches=0; null_partseqno_count=1 (АГБ-96Р-С 6Ш2.511.018-13); spawnable psn>0 unique starts; reserve_not_above_max_psn=0; reserve_real_psn_overlap=0.\\n4) test_psn_spawn_reservation.py exit 0 (76 blocks, 380000 psn).\\nVerdict A-E: A PASS, B PASS, C PASS, D PASS, E PASS. Overall PASS.\nEvidence: SQL+Python read-only on ClickHouse 10.95.19.132:9000; baseline output/psn_reservation/md_components_baseline.csv; acceptance output/psn_reservation/md_components_bit_identical_acceptance.json; validator reports enricher+psn_reserve; commands: independent canon compare script, B/C SQL, md_components_enricher.py exit 0, md_components_psn_reserve.py exit 0, test_psn_spawn_reservation.py exit 0.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_md_partseqno_psn_ssot_20260610T171040Z:2026-06-10T22:30:00Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "SSoT master-data validation after md_components rebuild; independent bit-identical proof required",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "Independent validator-judge replay of coder dispatch SuccessCriteria: bit-identical baseline vs live md_components, contracts B/C/D, PSN test E.",
+      "evidence_pack": "Facts: Dispatch SuccessCriteria verified PASS.\\n1) script loader no force-None: md_components_loader.py has ssot_required_columns fail-fast sys.exit(1); partseqno_i read from Excel via to_nullable_int_series; no df['partseqno_i']=None; DDL psn_spawn_start UInt32 DEFAULT 0 line 350.\\n2) bit-identical md_components: independent CH dump vs output/psn_reservation/md_components_baseline.csv rows_before=77 rows_after=77 diff_rows=0 diff_cells=0 (semantic canon: NULL/<NULL>, numeric int/float .0 normalized). partseqno_i/psn_spawn_start per-partno: 0 diffs. my_hash_baseline=my_hash_current=172da466f6c01eaea9fc2706bd1dfed1cb7d855d6be114a232c37ff240c4a756; claimed_hash=07538b5df4d20c4c58616cff6eeccf51c919e20faaa0558f1ab7b853949e058d NOT reproduced by independent canonicalizer (note only; data identity proven 0 diff_cells). acceptance.json status=PASS diff_cells=0 hash_equal=true.\\n3) validator contracts: enricher exit 0 matched=76 missing_dict_expected_null=1; reserve exit 0 matched=76 non_spawnable_zero=1; SQL partseqno dict mismatches=0; null_partseqno_count=1 (АГБ-96Р-С 6Ш2.511.018-13); spawnable psn>0 unique starts; reserve_not_above_max_psn=0; reserve_real_psn_overlap=0.\\n4) test_psn_spawn_reservation.py exit 0 (76 blocks, 380000 psn).\\nVerdict A-E: A PASS, B PASS, C PASS, D PASS, E PASS. Overall PASS.\nEvidence: SQL+Python read-only on ClickHouse 10.95.19.132:9000; baseline output/psn_reservation/md_components_baseline.csv; acceptance output/psn_reservation/md_components_bit_identical_acceptance.json; validator reports enricher+psn_reserve; commands: independent canon compare script, B/C SQL, md_components_enricher.py exit 0, md_components_psn_reserve.py exit 0, test_psn_spawn_reservation.py exit 0.",
+      "success_criteria": "script: output/psn_reservation/md_components_bit_identical_acceptance.json => status=PASS rows=77 diff_cells=0; plus independent 0 semantic diff_cells; B/C/D/E checks PASS",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=independent validation script; SQL B/C; test_psn_spawn_reservation.py; enricher/reserve exit 0; approval_ref=N/A",
+      "risks": "Claimed hash 07538b5d not independently reproduced; substantive bit-identical criterion satisfied with 0 semantic diff_cells.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "e1b3ba3599073f2ad5e3b3602216e466d444f16d6ad943709eabbeedd14d6643",
+      "created_at": "2026-06-10T17:29:19Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 28000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_md_partseqno_psn_ssot_20260610T171040Z_governance-compliance_b199ce12",
+      "workflow_id": "W_md_partseqno_psn_ssot_20260610T171040Z",
+      "agent": "governance-compliance",
+      "user_goal": "partseqno_i штатной колонкой SSoT-Excel MD_Сomponents.xlsx (реальные AMOS-ID) + psn_spawn_start; loader читает оба из Excel; энричер/резерв -> валидаторы; пересборка md_components с приёмкой bit-identical (дорешивание W_partno_comp_to_partseqno).",
+      "changes": "Governance verdict=allow_with_notes. Проверено: (1) scope-match — git diff затронул только code/extract/{loader,enricher,psn_reserve,extract_master}.py + config/agent_kg.json; Excel (data-SSoT) modified; config/transitions/**, invariants.json, code/sim_v2/** НЕ затронуты (git diff --name-only => NONE_SENSITIVE_TOUCHED). (2) SSoT-дисциплина — домен-SSoT (transitions/*.json, invariants.json) не изменён; изменён data-SSoT (Excel) + схема каталога md_components (psn_spawn_start UInt32 DEFAULT 0) — в рамках UserGoal. (3) no-coding-orchestrator — code/** редактировал implementer (conversation 221a77b2, 2026-06-10T17:17-17:23Z) по code_edit_audit.log, не orchestrator-роль. (4) object-deletion — rename листа Excel + DROP/reload md_components НЕ потеря объекта: таблица пересоздана bit-identical (validator-judge 0 diff_cells/77 строк). (5) traceability — coder(P1)+validator(V1) handoffs несут TraceID/RiskTier=high/SuccessCriteria/EvidencePack; validator явно мапит dispatch SuccessCriteria A-E -> PASS. (6) fail-fast — loader ssot_required_columns sys.exit(1) + удалён insert-fallback try/except; enricher/reserve read-only валидаторы с RuntimeError, group_by-aware.",
+      "facts": "",
+      "assumptions": "Claimed acceptance hash 07538b5d не воспроизведён независимым канонизатором validator-judge; Risks if false: затрагивает только audit-trail хэша, не равенство таблицы (доказано 0 semantic diff_cells независимо).",
+      "evidence": "Facts: git status/diff: 5 tracked files (4 code/extract + config/agent_kg.json), Excel modified-on-disk; git diff --name-only HEAD | grep transitions/invariants/sim_v2 => пусто. code_edit_audit.log: правки целевых файлов 2026-06-10T17:17:32..17:23:29Z одной implementer-сессией (gpt-5.5-extra-high conv 221a77b2); правки code/sim_v2/test_psn_spawn_reservation.py были РАНЬШЕ (2026-06-09, прежний workflow), вне окна текущего workflow. Approval-context ctx_..._approval_request_dec2299f (source human_inline_chat, approved). Handoffs прочитаны: coder-general_c8a5a2b6 (Changes/EvidencePack/ApprovalGate присутствуют), validator-judge_93c5a94d (вердикт PASS A-E, acceptance status=PASS diff_cells=0 hash_equal=true). RiskTier=high/RiskReasons/HumanGateRequired согласованы в обоих handoffs. PlanCard/EvidencePack/ComplianceChecklist заполнены в обоих handoffs.\nEvidence: git diff --name-only (NONE_SENSITIVE_TOUCHED); .cursor/hooks/code_edit_audit.log lines@2026-06-10T17:17-17:23; handoff_W_md_partseqno_psn_ssot_20260610T171040Z_validator-judge_93c5a94d (A-E PASS); output/psn_reservation/md_components_bit_identical_acceptance.json status=PASS diff_cells=0; approval ctx_W_md_partseqno_psn_ssot_20260610T171040Z_approval_request_dec2299f",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_md_partseqno_psn_ssot_20260610T171040Z:2026-06-10T22:35:00Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "Data-SSoT Excel mutation + controlled DROP/CREATE md_components; high-strict profile requires governance pass",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Single governance pass (high-strict): верификация SSoT-миграции partseqno_i/psn_spawn_start в Excel + bit-identical rebuild md_components. Проверены scope-match, SSoT-дисциплина, no-coding-orchestrator, object-deletion, traceability, fail-fast. Verdict=allow_with_notes.",
+      "evidence_pack": "Facts: git status/diff: 5 tracked files (4 code/extract + config/agent_kg.json), Excel modified-on-disk; git diff --name-only HEAD | grep transitions/invariants/sim_v2 => пусто. code_edit_audit.log: правки целевых файлов 2026-06-10T17:17:32..17:23:29Z одной implementer-сессией (gpt-5.5-extra-high conv 221a77b2); правки code/sim_v2/test_psn_spawn_reservation.py были РАНЬШЕ (2026-06-09, прежний workflow), вне окна текущего workflow. Approval-context ctx_..._approval_request_dec2299f (source human_inline_chat, approved). Handoffs прочитаны: coder-general_c8a5a2b6 (Changes/EvidencePack/ApprovalGate присутствуют), validator-judge_93c5a94d (вердикт PASS A-E, acceptance status=PASS diff_cells=0 hash_equal=true). RiskTier=high/RiskReasons/HumanGateRequired согласованы в обоих handoffs. PlanCard/EvidencePack/ComplianceChecklist заполнены в обоих handoffs.\nEvidence: git diff --name-only (NONE_SENSITIVE_TOUCHED); .cursor/hooks/code_edit_audit.log lines@2026-06-10T17:17-17:23; handoff_W_md_partseqno_psn_ssot_20260610T171040Z_validator-judge_93c5a94d (A-E PASS); output/psn_reservation/md_components_bit_identical_acceptance.json status=PASS diff_cells=0; approval ctx_W_md_partseqno_psn_ssot_20260610T171040Z_approval_request_dec2299f",
+      "success_criteria": "script: output/psn_reservation/md_components_bit_identical_acceptance.json => status=PASS, rows=77, diff_cells=0 (verified by validator-judge V1 PASS A-E)",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=git_diff_name_only=NONE_SENSITIVE;code_edit_audit.log@17:17-17:23=coder-general;handoff_..._validator-judge_93c5a94d=PASS_A-E;acceptance.json=diff_cells_0; approval_ref=ctx_W_md_partseqno_psn_ssot_20260610T171040Z_approval_request_dec2299f",
+      "risks": "Excel SSoT (data_input/master_data/MD_Сomponents.xlsx) — symlink на /home/albud/Nextcloud2/...; не версионируется git => изменения data-SSoT не имеют git-истории (note, не блокер). Claimed hash 07538b5d не воспроизведён независимо (идентичность доказана 0 diff_cells).",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "06f6ca9af88a6949538d95a06d87ae0b62b83896e3ad1cdd489a2c7068f04df4",
+      "created_at": "2026-06-10T17:33:32Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 32000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_md_partseqno_psn_ssot_20260610T171040Z_docs-curator_34cb52c9",
+      "workflow_id": "W_md_partseqno_psn_ssot_20260610T171040Z",
+      "agent": "docs-curator",
+      "user_goal": "Добавить компактную запись в docs/changelog.md для high-risk workflow W_md_partseqno_psn_ssot_20260610T171040Z (SSoT partseqno_i/psn_spawn_start); handoff-lite -> orchestrator.",
+      "changes": "docs/changelog.md: новая секция ## 2026-06-10 — MD Components SSoT: partseqno_i и psn_spawn_start в Excel (дорешивание W_partno_comp_to_partseqno) — Суть/Изменено/Приёмка/Ограничения; ссылки на governance handoff и validator-judge PASS.",
+      "facts": "Источники: handoff_W_md_partseqno_psn_ssot_20260610T171040Z_coder-general_c8a5a2b6, validator-judge_93c5a94d (PASS A-E, diff_cells=0), governance-compliance_b199ce12 (allow_with_notes); output/psn_reservation/md_components_bit_identical_acceptance.json status=PASS; phase_start ctx_W_md_partseqno_psn_ssot_20260610T171040Z_phase_start_90a61795 обновлён.",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_md_partseqno_psn_ssot_20260610T171040Z:2026-06-10T23:00:00Z",
+      "plan_step_id": "D1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "5f4aa2b5526b9ec686a957df2b27968d00927a1334d67df0946c8b56489f1645",
+      "created_at": "2026-06-10T17:37:28Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 4500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_md_partseqno_psn_ssot_20260610T171040Z_orchestrator_06db9f6c",
+      "workflow_id": "W_md_partseqno_psn_ssot_20260610T171040Z",
+      "agent": "orchestrator",
+      "user_goal": "Сделать partseqno_i штатной колонкой SSoT-Excel MD_Сomponents.xlsx (реальные AMOS-ID), туда же psn_spawn_start; loader читает оба из Excel; энричер/резерв -> валидаторы; пересборка md_components, приёмка bit-identical. Дорешивание W_partno_comp_to_partseqno.",
+      "changes": "data_input/master_data/MD_Сomponents.xlsx (+partseqno_i,+psn_spawn_start; лист Sheet1->Агрегаты; untracked git); code/extract/md_components_loader.py (SSoT-поля обязательны fail-fast, DDL +psn_spawn_start UInt32 DEFAULT 0, удалён форс partseqno_i=None); code/extract/md_components_enricher.py (read-only валидатор vs dict_partno_flat); code/extract/md_components_psn_reserve.py (read-only валидатор контракта PSN, group_by-aware); code/extract/extract_master.py (валидаторы критичны)",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "coder-general c8a5a2b6: rebuild+acceptance.json PASS. validator-judge 93c5a94d: PASS A-E, 77x30 diff_cells=0, partseqno_i/psn_spawn_start 0 расхождений, контракты psn/partseqno OK, loader fail-fast OK, test exit 0. governance b199ce12: allow_with_notes gates=pass. baseline: output/psn_reservation/md_components_baseline.csv",
+      "drift_check": "UserGoal <-> Changes scope match: yes. Только Excel(data-SSoT)+4 файла code/extract; transitions/invariants/sim_v2 НЕ тронуты; bit-identical => downstream sim не меняется.",
+      "process_insights": "",
+      "trace_id": "wf:W_md_partseqno_psn_ssot_20260610T171040Z:2026-06-10T17:38:15Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "Схема data-SSoT (Excel) + DDL md_components + алгоритм extract + drop/reload каталога",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Excel +partseqno_i +psn_spawn_start; loader из Excel (+DDL psn_spawn_start, fail-fast); enricher/reserve -> read-only валидаторы; drop+reload md_components; приёмка bit-identical",
+      "evidence_pack": "coder-general c8a5a2b6: rebuild+acceptance.json PASS. validator-judge 93c5a94d: PASS A-E, 77x30 diff_cells=0, partseqno_i/psn_spawn_start 0 расхождений, контракты psn/partseqno OK, loader fail-fast OK, test exit 0. governance b199ce12: allow_with_notes gates=pass. baseline: output/psn_reservation/md_components_baseline.csv",
+      "success_criteria": "md_components reload bit-identical baseline (diff_cells=0); partseqno_i/psn_spawn_start == прежним по partno; loader не форсит partseqno_i=None — PASS (validator-judge 93c5a94d)",
+      "compliance_checklist": "decision=allow_with_notes required_gates=pass exceptions=none evidence_refs=handoff_validator-judge_93c5a94d;handoff_governance_b199ce12;acceptance.json approval_ref=ctx_W_md_partseqno_psn_ssot_20260610T171040Z_approval_request_dec2299f",
+      "risks": "data_input symlink в Nextcloud => MD_Сomponents.xlsx вне git; заявленный hash 07538b5d не воспроизведён независимо (идентичность доказана 0 diff_cells)",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "be31123a2da0ac610ded8c797f4ac625e5461d4c60bba935b4788cc76c44ec88",
+      "created_at": "2026-06-10T17:38:15Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ]
     }
   ],
   "contexts": [
@@ -15650,6 +15917,33 @@
       "agent": "orchestrator",
       "created_at": "2026-06-10T11:24:51Z",
       "updated_at": "2026-06-10T11:24:51Z"
+    },
+    {
+      "context_id": "ctx_W_md_partseqno_psn_ssot_20260610T171040Z_approval_request_dec2299f",
+      "workflow_id": "W_md_partseqno_psn_ssot_20260610T171040Z",
+      "context_type": "approval_request",
+      "content": "Human PRE-approval (chat): направление add_col (partseqno_i отдельной колонкой, comp_number остаётся) + обе колонки (partseqno_i, psn_spawn_start) одной правкой в Excel; loader читает из Excel; enricher/reserve -> валидаторы; пересборка md_components с приёмкой bit-identical. Пользователь явно поручил действовать по протоколу без доп.вопросов.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-10T17:11:01Z",
+      "updated_at": "2026-06-10T17:11:01Z"
+    },
+    {
+      "context_id": "ctx_W_md_partseqno_psn_ssot_20260610T171040Z_phase_start_90a61795",
+      "workflow_id": "W_md_partseqno_psn_ssot_20260610T171040Z",
+      "context_type": "phase_start",
+      "content": "docs-sync: компактная запись в docs/changelog.md для SSoT-миграции partseqno_i/psn_spawn_start (high-risk W_md_partseqno_psn_ssot_20260610T171040Z); handoff-lite -> orchestrator.",
+      "agent": "docs-curator",
+      "created_at": "2026-06-10T17:14:41Z",
+      "updated_at": "2026-06-10T17:36:34Z"
+    },
+    {
+      "context_id": "ctx_W_md_partseqno_psn_ssot_20260610T171040Z_closure_bae5de2e",
+      "workflow_id": "W_md_partseqno_psn_ssot_20260610T171040Z",
+      "context_type": "closure",
+      "content": "PASS: partseqno_i и psn_spawn_start внесены в SSoT-Excel; loader читает их из Excel (fail-fast); enricher/reserve -> валидаторы; md_components пересобрана bit-identical (validator-judge PASS A-E, diff_cells=0); governance allow_with_notes. Дорешивание W_partno_comp_to_partseqno.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-10T17:38:23Z",
+      "updated_at": "2026-06-10T17:38:23Z"
     }
   ],
   "meta": {
