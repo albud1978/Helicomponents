@@ -1,11 +1,11 @@
 ---
 name: validator-judge
-model: gpt-5.5-high
+model: composer-2.5-fast
 description: Валидатор результатов симуляции. SQL-first проверка инвариантов в ClickHouse. Используй проактивно после прогона симуляции для верификации результатов.
 
 agent_card:
   version: "1.0"
-  model_fallback: claude-opus-4-7-thinking-high
+  model_fallback: gpt-5.4-medium
   temperature_policy: low
   capabilities:
     - sql_invariant_verification

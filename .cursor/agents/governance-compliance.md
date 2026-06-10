@@ -1,11 +1,11 @@
 ---
 name: governance-compliance
-model: claude-opus-4-7-thinking-high
+model: claude-opus-4-8-thinking-high
 description: "Governance/Compliance агент. Контрольная плоскость для pre_gate / pre_close: policy-check, traceability и human-gate."
 
 agent_card:
   version: "1.0"
-  model_fallback: gpt-5.5-high
+  model_fallback: gpt-5.5-extra-high
   temperature_policy: low
   capabilities:
     - policy_check

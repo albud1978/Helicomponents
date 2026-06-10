@@ -1,11 +1,11 @@
 ---
 name: coder-flame
-model: gpt-5.5-high
+model: gpt-5.5-extra-high
 description: FLAME GPU/CUDA разработчик для RTC модулей и симуляции. Вызывай для написания кода в code/sim_v2/messaging/. Используй проактивно при задачах на реализацию CUDA/RTC кода.
 
 agent_card:
   version: "1.0"
-  model_fallback: claude-opus-4-7-thinking-high
+  model_fallback: claude-opus-4-8-thinking-high
   temperature_policy: low
   capabilities:
     - cuda_kernel_dev

@@ -1,11 +1,11 @@
 ---
 name: bi-semantic-analyst
-model: claude-opus-4-7-thinking-high
+model: claude-opus-4-8-thinking-high
 description: Аналитик BI-семантики. Используй для тяжелых задач по метрикам, агрегациям, фильтрам, scope, semantics витрин Superset и смысловой корректности дашбордов.
 
 agent_card:
   version: "1.0"
-  model_fallback: gpt-5.5-high
+  model_fallback: gpt-5.5-extra-high
   temperature_policy: low
   capabilities:
     - bi_metrics_analysis
