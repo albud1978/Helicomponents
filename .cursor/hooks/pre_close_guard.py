@@ -4,8 +4,10 @@
 Проверка применяется только к Shell-вызовам `code/utils/agent_kg.py --close-workflow`.
 Проверка риск-ориентированная:
 - low-risk: обязателен orchestrator handoff с `graph_update=yes|no` и `drift_check`
-- medium-risk: дополнительно обязателен handoff `governance-compliance`
+- medium-risk: дополнительно обязателен handoff `governance-compliance` + подтверждение
+  `SuccessCriteria` в orchestrator handoff (машинное стоп-условие, Tier-L)
 - high-risk: дополнительно обязательны handoff `governance-compliance` и `docs-curator`
+  + подтверждение `SuccessCriteria`
 """
 
 import json
@@ -379,15 +381,16 @@ def main() -> None:
         )
         return
 
-    if risk_tier == "high":
+    if risk_tier in ("high", "medium"):
         facts_blob = _normalize_text(orch.get("facts"))
         success_blob = _normalize_text(orch.get("success_criteria"))
         combined_blob = f"{facts_blob}\n{success_blob}"
         if not SUCCESS_CRITERIA_EVIDENCE_RE.search(combined_blob):
             _deny(
-                "Закрытие workflow заблокировано: для high-risk workflow в handoff orchestrator "
-                "не зафиксировано подтверждение `SuccessCriteria`. Нужно ссылаться на validation_sql, "
-                "инвариант (INV-N/TEMP-N/GPU-N), acceptance-проверку или `manual-check: ...` в Facts/SuccessCriteria."
+                f"Закрытие workflow заблокировано: для {risk_tier}-risk workflow в handoff orchestrator "
+                "не зафиксировано подтверждение `SuccessCriteria` (машинное стоп-условие, Tier-L). "
+                "Нужно ссылаться на validation_sql, инвариант (INV-N/TEMP-N/GPU-N), acceptance-проверку "
+                "или `manual-check: ...` в Facts/SuccessCriteria."
             )
             return
 

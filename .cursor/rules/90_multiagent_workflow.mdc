@@ -47,6 +47,15 @@ alwaysApply: true
 
 **Profile vs Risk-Tier**: risk-tier остаётся primary classification per `Risk Tier Protocol`. Profile уточняет process intensity внутри tier (особенно для medium, где blast radius широкий: от local tool change до BI corporate impact).
 
+## Loop closure (Tier-L: loop-engineering)
+
+Замыкание цикла для безопасных сценариев — оркестратор как driver, а не только router. Применяется поверх profiles/risk-tier; `high` остаётся human-driven.
+
+- **Auto-drive (low profile)**: для `low` profile workflow оркестратор проходит 10-step цикл без паузы на ручное подтверждение между обратимыми шагами. Стоп-условия: (a) SuccessCriteria выполнен; (b) сработала token-подсветка (см. ниже); (c) обнаружен high-risk scope — эскалация к человеку; (d) явный input человека. `medium`/`high` остаются gated (init PRE-approval + close-gates).
+- **Машинное стоп-условие (SuccessCriteria)**: цикл завершается, когда verifiable SuccessCriteria подтверждён. Для `medium`/`high` `pre_close_guard.py` блокирует `--close-workflow`, пока в orchestrator handoff (Facts/SuccessCriteria) нет ссылки на validation_sql / INV-N / acceptance / `manual-check:`. Фактический PASS/FAIL — за validator-judge (SQL/инвариант), не подменяется произвольной проверкой.
+- **Token-подсветка (soft, не stop)**: порог **150 000 est_tokens/workflow** (≈ p90 фактического расхода). При достижении — non-blocking warning в `agent_kg.py` (usage-update path) и флаг в `tools/token_analytics.py --highlight-threshold`. Ранний сигнал до хард-cap (`caps.max_tokens`, enforced в `pre_gate_guard`). Хард-стоп не добавляется.
+- **Triage-очередь**: отложенные non-blocking follow-ups пишутся в долгоживущий workflow `W_triage_queue` через `--write-context --context-type triage --content "[ID][module][risk] ..."`; читаются `--read-context --workflow-id W_triage_queue`. Очередь не блокирует close текущего workflow.
+
 ## Handoff subagents -> orchestrator
 - Handoff subagent'ов → orchestrator. Docs-curator только high-risk/release/external handoff/multi-section docs impact (Tier-S S6); medium tooling/process → changelog snippet; capsule-builder only domain-context change.
 

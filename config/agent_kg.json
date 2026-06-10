@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-09T18:18:24Z",
+    "updated_at": "2026-06-10T10:14:40Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2000,6 +2000,48 @@
       },
       "created_at": "2026-06-09T18:18:24Z",
       "updated_at": "2026-06-09T18:18:24Z"
+    },
+    {
+      "workflow_id": "W_loop_eng_2026_06_10",
+      "goal": "Loop-engineering harness enhancements: (1) token-spend highlight 150k soft-warn, (2) auto-drive low profile, (3) SuccessCriteria machine stop-condition for medium, (4) triage-queue convention",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 200000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 28000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-10T10:14:34Z"
+      },
+      "created_at": "2026-06-10T09:35:09Z",
+      "updated_at": "2026-06-10T10:14:40Z"
+    },
+    {
+      "workflow_id": "W_triage_queue",
+      "goal": "Долгоживущая triage-очередь: отложенные non-blocking follow-ups между workflow. Items пишутся как --write-context --context-type triage; читаются --read-context --workflow-id W_triage_queue.",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-10T09:35:22Z"
+      },
+      "created_at": "2026-06-10T09:35:22Z",
+      "updated_at": "2026-06-10T09:35:22Z"
     }
   ],
   "handoffs": [
@@ -13702,6 +13744,48 @@
       "modules": [
         "bi"
       ]
+    },
+    {
+      "handoff_id": "handoff_W_loop_eng_2026_06_10_orchestrator_98419228",
+      "workflow_id": "W_loop_eng_2026_06_10",
+      "agent": "orchestrator",
+      "user_goal": "порог 150 ставь, и остальные три пункта рекомендаций тоже реализуй",
+      "changes": ".cursor/rules/90_multiagent_workflow.mdc (Loop closure); .cursor/hooks/pre_close_guard.py (SuccessCriteria-evidence на medium); code/utils/agent_kg.py (TOKEN_HIGHLIGHT_THRESHOLD + _warn_if_token_highlight); tools/token_analytics.py (--highlight-threshold + маркер); KG W_triage_queue + seed R1",
+      "facts": "Прямой тест _warn_if_token_highlight OK; smoke 3 workflow помечены; ReadLints 0 ошибок",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal (4 loop-eng пункта) ↔ Changes scope match: yes",
+      "process_insights": "",
+      "trace_id": "wf:W_loop_eng_2026_06_10:2026-06-10T10:10Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "обратимые .cursor/** (rule+hook) + аддитивный tooling (agent_kg/token_analytics), без влияния на runtime/data/SSoT, одобрено человеком",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "manual-check: подсветка тихо <150k, stderr-warn >=150k (проверено); token_analytics помечает тяжёлые workflow; ReadLints clean",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "harness/process+tooling, нет влияния на Domain Graph",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-10T10:14:34Z",
+      "modules": [
+        "infra",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 28000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -15459,6 +15543,42 @@
       "agent": "orchestrator",
       "created_at": "2026-06-08T18:14:26Z",
       "updated_at": "2026-06-08T18:14:26Z"
+    },
+    {
+      "context_id": "ctx_W_loop_eng_2026_06_10_approval_request_9ba10952",
+      "workflow_id": "W_loop_eng_2026_06_10",
+      "context_type": "approval_request",
+      "content": "approval: Alexey 'порог 150 ставь, и остальные три пункта рекомендаций тоже реализуй' (10-06-2026). Threshold=150000 tokens/workflow soft-highlight. Scope: 4 loop-eng items, medium-fast.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-10T09:35:22Z",
+      "updated_at": "2026-06-10T09:35:22Z"
+    },
+    {
+      "context_id": "ctx_W_triage_queue_triage_db2c7605",
+      "workflow_id": "W_triage_queue",
+      "context_type": "triage",
+      "content": "[R1][bi][low] Почистить stale query_context.datasource (id=1/2) в charts 1_1.yaml/2_2.yaml после миграции на физический датасет id=9. Non-blocking: дашборд рендерится из form_data. Origin: W BI acceleration 2026-06.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-10T09:35:34Z",
+      "updated_at": "2026-06-10T09:35:34Z"
+    },
+    {
+      "context_id": "ctx_W_loop_eng_2026_06_10_implementation_complete_72b661b0",
+      "workflow_id": "W_loop_eng_2026_06_10",
+      "context_type": "implementation_complete",
+      "content": "Все 4 loop-eng пункта реализованы и проверены. Изменения: .cursor/rules/90_multiagent_workflow.mdc (секция Loop closure), .cursor/hooks/pre_close_guard.py (SuccessCriteria-evidence на medium), code/utils/agent_kg.py + tools/token_analytics.py (порог 150k, delegated coder-general), KG W_triage_queue+seed. Verify: прямой тест подсветки (тихо<150k, warn>=150k), token_analytics smoke (3 workflow помечены), ReadLints 0. Workflow OPEN — ждёт решения человека по commit+close (governance pass на close при medium).",
+      "agent": "orchestrator",
+      "created_at": "2026-06-10T09:45:06Z",
+      "updated_at": "2026-06-10T09:45:06Z"
+    },
+    {
+      "context_id": "ctx_W_loop_eng_2026_06_10_closure_91ae5fb8",
+      "workflow_id": "W_loop_eng_2026_06_10",
+      "context_type": "closure",
+      "content": "Все 4 loop-eng пункта реализованы и проверены (подсветка 150k, auto-drive low, SuccessCriteria stop-condition, triage). Verify пройден.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-10T10:14:40Z",
+      "updated_at": "2026-06-10T10:14:40Z"
     }
   ],
   "meta": {

@@ -292,7 +292,9 @@ def _utilization(caps: Any, usage: Any, token_fallback: int = 0) -> Dict[str, Op
     return result
 
 
-def _workflow_rows(kg: Dict[str, Any], top: int) -> List[Dict[str, Any]]:
+def _workflow_rows(
+    kg: Dict[str, Any], top: int, highlight_threshold: int
+) -> List[Dict[str, Any]]:
     workflows_raw = kg.get("workflows", [])
     handoffs_raw = kg.get("handoffs", [])
     workflows = workflows_raw if isinstance(workflows_raw, list) else []
@@ -326,6 +328,7 @@ def _workflow_rows(kg: Dict[str, Any], top: int) -> List[Dict[str, Any]]:
                 "goal": goal[:80],
                 "handoff_count": len(wf_handoffs),
                 "total_tokens": total_tokens,
+                "over_threshold": total_tokens >= highlight_threshold,
                 "caps_max_tokens": caps.get("max_tokens") if caps else None,
                 "utilization_pct": utilization["tokens"],
             }
@@ -409,20 +412,29 @@ def _format_section(title: str, data: Dict[str, Any], with_tokens: bool = True) 
     return "\n".join(lines) + "\n"
 
 
-def _format_by_workflow(rows: List[Dict[str, Any]]) -> str:
+def _format_by_workflow(rows: List[Dict[str, Any]], highlight_threshold: int) -> str:
     lines = ["# Token usage by workflow\n"]
     if not rows:
-        return "# Token usage by workflow\n\n(empty)\n"
+        return (
+            "# Token usage by workflow\n\n(empty)\n\n"
+            f"> 0 workflow(s) >= порог {highlight_threshold} est_tokens.\n"
+        )
+    over_count = 0
     for row in rows:
+        if row["over_threshold"]:
+            over_count += 1
         cap = row["caps_max_tokens"]
         cap_str = f"cap max_tokens={cap:,}" if isinstance(cap, int) else "cap max_tokens=N/A"
         util = row["utilization_pct"]
         util_str = f"{util}%" if util is not None else "N/A"
+        marker = "⚠ " if row["over_threshold"] else ""
         lines.append(
-            f"- **{row['workflow_id']}**: ~{row['total_tokens']:,} tokens, "
+            f"- {marker}**{row['workflow_id']}**: ~{row['total_tokens']:,} tokens, "
             f"{row['handoff_count']} handoffs, {cap_str}, utilization={util_str}; "
             f"goal: {row['goal']}"
         )
+    lines.append("")
+    lines.append(f"> {over_count} workflow(s) >= порог {highlight_threshold} est_tokens.")
     return "\n".join(lines) + "\n"
 
 
@@ -458,6 +470,12 @@ def main() -> int:
     parser.add_argument("--by-workflow", action="store_true", help="Top workflows by token usage")
     parser.add_argument("--workflow-summary", help="Detailed report for one workflow")
     parser.add_argument("--top", type=int, default=20, help="Top-N limit for --by-workflow")
+    parser.add_argument(
+        "--highlight-threshold",
+        type=int,
+        default=150000,
+        help="Tier-L: порог est_tokens/workflow для подсветки (soft)",
+    )
     parser.add_argument("--export-json", action="store_true", help="Print machine-readable JSON")
     parser.add_argument("--show-issues", action="store_true", help="Show Tier-S/Tier-M token hygiene findings")
     parser.add_argument(
@@ -508,11 +526,11 @@ def main() -> int:
         return 1 if args.exit_on_issues and findings else 0
 
     if args.by_workflow:
-        rows = _workflow_rows(kg, args.top)
+        rows = _workflow_rows(kg, args.top, args.highlight_threshold)
         if args.export_json:
             print(json.dumps({"by_workflow": rows}, ensure_ascii=False, indent=2))
         else:
-            print(_format_by_workflow(rows))
+            print(_format_by_workflow(rows, args.highlight_threshold))
         return 0
 
     if args.workflow_summary:
