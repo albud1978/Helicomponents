@@ -175,13 +175,6 @@ class ExtractMaster:
             'critical': False
         },
         {
-            'script': 'calculate_beyond_repair.py',
-            'description': 'Расчет Beyond Repair (br_mi8/br_mi17)',
-            'dependencies': ['md_components'],
-            'result_table': 'md_components', 
-            'critical': False
-        },
-        {
             'script': 'dictionary_creator.py',
             'description': 'Все справочники (статусы, партномера, серийники, владельцы, типы ВС, номера ВС)',
             'dependencies': ['heli_pandas', 'md_components'],
@@ -193,17 +186,24 @@ class ExtractMaster:
         },
         {
             'script': 'md_components_enricher.py',
-            'description': 'Обогащение MD Components',
-            'dependencies': ['md_components', 'heli_pandas'],
+            'description': 'Валидация MD Components partseqno_i (Excel SSoT vs dict_partno_flat)',
+            'dependencies': ['md_components', 'dict_partno_flat'],
+            'result_table': 'md_components',
+            'critical': True
+        },
+        {
+            'script': 'calculate_beyond_repair.py',
+            'description': 'Расчет Beyond Repair (br_mi8/br_mi17)',
+            'dependencies': ['md_components'],
             'result_table': 'md_components',
             'critical': False
         },
         {
             'script': 'md_components_psn_reserve.py',
-            'description': 'Резервирование psn для симуляционных рождений агрегатов',
+            'description': 'Валидация резервирования psn для симуляционных рождений агрегатов',
             'dependencies': ['md_components', 'heli_pandas'],
             'result_table': 'md_components',
-            'critical': False
+            'critical': True
         },
         # === ТЕНЗОРЫ (в самом конце, когда все данные готовы) ===
         {

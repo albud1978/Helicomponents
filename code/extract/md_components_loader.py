@@ -2,11 +2,12 @@
 """
 Загрузчик MD_Components.xlsx в ClickHouse
 
+SSoT: data_input/master_data/MD_Сomponents.xlsx → таблица md_components.
+
 Функционал:
-1. Загружает мастер-данные компонентов в таблицу 'md_components' 
-2. Сохраняет версионность и метаданные Excel
+1. Пустая md_components (после DROP) — полная загрузка всех строк из Excel
+2. Непустая md_components — INSERT новых partno + UPDATE существующих из Excel SSoT
 3. Проверяет качество и целостность данных
-4. Диалоги перезаписи существующих данных
 """
 
 import pandas as pd
@@ -32,6 +33,10 @@ def to_int_or_none(v):
     if isinstance(v, (np.floating,)) and pd.isna(v):
         return None
     return int(v)
+
+def to_nullable_int_series(s):
+    """Возвращает object Series с Python int или None для ClickHouse Nullable(UInt*)"""
+    return pd.Series([to_int_or_none(v) for v in s], index=s.index, dtype='object')
 
 def load_md_components():
     """Загружает MD_Components.xlsx"""
@@ -73,6 +78,15 @@ def prepare_md_data(df, version_date, version_id=1):
         # Добавляем версию данных
         df['version_date'] = version_date
         df['version_id'] = version_id
+
+        ssot_required_columns = ['partseqno_i', 'psn_spawn_start']
+        missing_ssot_columns = [col for col in ssot_required_columns if col not in df.columns]
+        if missing_ssot_columns:
+            print(
+                "❌ SSoT Excel MD_Сomponents.xlsx должен содержать обязательные поля: "
+                f"{missing_ssot_columns}"
+            )
+            sys.exit(1)
         
         # Обработка строковых полей для ClickHouse
         string_columns = ['partno']
@@ -107,7 +121,10 @@ def prepare_md_data(df, version_date, version_id=1):
         uint16_columns = ['repair_time']
         
         # UInt32 поля (0-4294967295)
-        uint32_columns = ['ll_mi8', 'oh_mi8', 'oh_threshold_mi8', 'll_mi17', 'oh_mi17', 'second_ll', 'br2_mi17']
+        uint32_columns = [
+            'll_mi8', 'oh_mi8', 'oh_threshold_mi8', 'll_mi17', 'oh_mi17',
+            'second_ll', 'br2_mi17', 'psn_spawn_start'
+        ]
         
         # Float32 поля (денежные поля оптимизированы для GPU)  
         float32_columns = ['repair_price', 'purchase_price']
@@ -129,8 +146,7 @@ def prepare_md_data(df, version_date, version_id=1):
                 s = pd.to_numeric(df[col], errors='coerce')
                 # Клипуем только непустые значения
                 s = s.clip(lower=0, upper=255)
-                # Применяем функцию преобразования к каждому элементу
-                df[col] = s.map(to_int_or_none).astype('object')
+                df[col] = to_nullable_int_series(s)
                 print(f"   🔧 {col}: UInt8 Nullable (NULL сохранён)")
         
         # Обработка UInt16 полей
@@ -187,9 +203,13 @@ def prepare_md_data(df, version_date, version_id=1):
                 # df[col] уже содержит значения в минутах после конвертации выше
                 # Клипуем только непустые значения
                 s = df[col].clip(lower=0, upper=4294967295)
-                # Применяем функцию преобразования к каждому элементу
-                df[col] = s.map(to_int_or_none).astype('object')
+                df[col] = to_nullable_int_series(s)
                 print(f"   🔧 {col}: UInt32 Nullable (NULL сохранён, значения в минутах)")
+
+        # partseqno_i приходит из Excel SSoT как штатное поле AMOS-ID компонента.
+        s = pd.to_numeric(df['partseqno_i'], errors='coerce').clip(lower=0, upper=4294967295)
+        df['partseqno_i'] = to_nullable_int_series(s)
+        print("   🔧 partseqno_i: UInt32 Nullable (SSoT Excel, NULL сохранён)")
 
         # Добавляем дополнительные поля для совместимости с полной схемой таблицы
         if 'br_mi8' not in df.columns:
@@ -206,10 +226,6 @@ def prepare_md_data(df, version_date, version_id=1):
         if 'br2_mi17' not in df.columns:
             df['br2_mi17'] = None
             print("➕ Добавлено поле br2_mi17 = None")
-
-        if 'partseqno_i' not in df.columns:
-            df['partseqno_i'] = None  # Компонентные ID будут добавлены позже
-            print("➕ Добавлено поле partseqno_i = None (будет вычислено позже)")
 
         # Добавляем поле restrictions_mask (битовая маска ограничений)
         if 'restrictions_mask' not in df.columns:
@@ -240,10 +256,18 @@ def prepare_md_data(df, version_date, version_id=1):
             'sne_new', 'ppr_new',
             'version_date', 'version_id',
             'br_mi8', 'br_mi17', 'br2_mi17',
-            'partseqno_i', 'restrictions_mask'
+            'partseqno_i', 'psn_spawn_start', 'restrictions_mask'
         ]
 
-        # Гарантируем наличие всех колонок
+        missing_ssot_columns = [col for col in ssot_required_columns if col not in df.columns]
+        if missing_ssot_columns:
+            print(
+                "❌ SSoT Excel MD_Сomponents.xlsx потерял обязательные поля при подготовке: "
+                f"{missing_ssot_columns}"
+            )
+            sys.exit(1)
+
+        # Гарантируем наличие производных/служебных колонок, кроме обязательных SSoT-полей
         for col in column_order:
             if col not in df.columns:
                 df[col] = None
@@ -323,7 +347,8 @@ def create_md_table(client):
             `br_mi8` Nullable(UInt32) DEFAULT NULL,     -- Beyond Repair для МИ-8 (sne/ll breakeven)
             `br_mi17` Nullable(UInt32) DEFAULT NULL,    -- Beyond Repair для МИ-17 (sne/ll breakeven)
             `br2_mi17` Nullable(UInt32) DEFAULT NULL,   -- Порог межремонтного для МИ-17 (ppr/oh breakeven, 3500ч)
-            `partseqno_i` Nullable(UInt32) DEFAULT NULL,  -- Component ID (md_components_enricher.py)
+            `partseqno_i` Nullable(UInt32) DEFAULT NULL,  -- Component ID из Excel SSoT
+            `psn_spawn_start` UInt32 DEFAULT 0,      -- Старт PSN-диапазона spawn из Excel SSoT
             `restrictions_mask` UInt8 DEFAULT 0     -- Битовая маска всех ограничений (multihot[u8])
             
         ) ENGINE = MergeTree()
@@ -351,110 +376,131 @@ def check_version_conflicts(client, version_date, version_id):
         unique_partnos = client.execute("SELECT COUNT(DISTINCT partno) FROM md_components")[0][0]
         
         print(f"📚 Справочник md_components: {total_count} записей, {unique_partnos} уникальных partno")
-        print(f"   ℹ️ При загрузке будут добавлены только НОВЫЕ номенклатуры")
+        if total_count == 0:
+            print("   ℹ️ Таблица пуста — будет полная загрузка из Excel SSoT")
+        else:
+            print("   ℹ️ SSoT sync: INSERT новых partno + UPDATE существующих из Excel")
         return True
             
     except Exception as e:
         print(f"❌ Ошибка проверки md_components: {e}")
         return False
 
+NULLABLE_INSERT_COLUMNS = {
+    'sne_new', 'ppr_new', 'br_mi8', 'br_mi17', 'br2_mi17', 'partseqno_i', 'repair_number',
+}
+
+
+def _escape_partno(partno: str) -> str:
+    return str(partno).replace("'", "''")
+
+
+def _format_ch_value(val, col_name: str) -> str:
+    if val is None or (isinstance(val, float) and math.isnan(val)) or pd.isna(val):
+        if col_name in NULLABLE_INSERT_COLUMNS:
+            return "NULL"
+        if col_name == 'restrictions_mask':
+            return "0"
+        if col_name == 'psn_spawn_start':
+            return "0"
+        return "NULL"
+    if col_name == 'version_date':
+        return f"toDate('{val}')"
+    if isinstance(val, (np.integer, int)):
+        return str(int(val))
+    if isinstance(val, (np.floating, float)):
+        return str(float(val))
+    escaped = str(val).replace("'", "''")
+    return f"'{escaped}'"
+
+
+def _prepare_insert_rows(df: pd.DataFrame) -> list[tuple]:
+    data_tuples = []
+    for _, row in df.iterrows():
+        row_list = [None if pd.isna(val) else val for val in row]
+        data_tuples.append(tuple(row_list))
+
+    prepared_data = []
+    for row in data_tuples:
+        prepared_row = []
+        for i, val in enumerate(row):
+            col_name = df.columns[i]
+            if val is None and col_name in NULLABLE_INSERT_COLUMNS:
+                prepared_row.append(None)
+            else:
+                prepared_row.append(val)
+        prepared_data.append(tuple(prepared_row))
+    return prepared_data
+
+
+def _insert_rows(client, df: pd.DataFrame) -> int:
+    if df.empty:
+        return 0
+
+    prepared_data = _prepare_insert_rows(df)
+    columns = list(df.columns)
+    insert_query = f"INSERT INTO md_components ({', '.join(columns)}) VALUES"
+    client.execute(insert_query, prepared_data)
+    return len(prepared_data)
+
+
+def _sync_ssot_rows(client, df: pd.DataFrame) -> int:
+    """UPDATE существующих partno значениями из Excel SSoT (без дублирования строк)."""
+    if df.empty:
+        return 0
+
+    partnos_sql = ", ".join(f"'{_escape_partno(partno)}'" for partno in df['partno'])
+    # version_date/version_id — ключи ORDER BY MergeTree, UPDATE запрещён ClickHouse
+    sync_columns = [
+        col for col in df.columns if col not in {'partno', 'version_date', 'version_id'}
+    ]
+
+    for col in sync_columns:
+        cases = []
+        for _, row in df.iterrows():
+            partno = _escape_partno(row['partno'])
+            value_sql = _format_ch_value(row[col], col)
+            cases.append(f"WHEN partno = '{partno}' THEN {value_sql}")
+        update_sql = (
+            f"ALTER TABLE md_components UPDATE {col} = CASE {' '.join(cases)} ELSE {col} END "
+            f"WHERE partno IN ({partnos_sql})"
+        )
+        client.execute(update_sql, settings={"mutations_sync": 1})
+
+    return len(df)
+
+
 def insert_md_data(client, df):
-    """Загружает данные MD_Components в таблицу (ЕДИНЫЙ СПРАВОЧНИК)
-    
-    md_components — универсальный справочник номенклатур БЕЗ дублирования.
-    
-    Логика:
-    1. Получаем список существующих partno
-    2. Фильтруем df — оставляем только НОВЫЕ partno
-    3. Вставляем только новые записи
-    4. version_date используется как "дата первого добавления" (created_at)
-    
-    При повторных загрузках данные НЕ дублируются!
+    """Синхронизирует md_components с Excel SSoT.
+
+    - Пустая таблица (после DROP): полный INSERT всех строк Excel.
+    - Иначе: INSERT только новых partno + UPDATE существующих из Excel.
     """
     try:
-        print(f"📚 Проверяем md_components на дубли...")
-        
-        # === ПРОВЕРКА СУЩЕСТВУЮЩИХ PARTNO ===
-        existing_partnos = set()
+        print("📚 Синхронизация md_components с Excel SSoT...")
+
         result = client.execute("SELECT DISTINCT partno FROM md_components WHERE partno IS NOT NULL")
         existing_partnos = {row[0] for row in result}
         print(f"   📋 В таблице уже есть {len(existing_partnos)} уникальных partno")
-        
-        # Фильтруем — оставляем только НОВЫЕ partno
-        if 'partno' in df.columns:
-            df_new = df[~df['partno'].isin(existing_partnos)].copy()
-            skipped = len(df) - len(df_new)
-            
-            if skipped > 0:
-                print(f"   ⏭️ Пропускаем {skipped} существующих номенклатур")
-            
-            if len(df_new) == 0:
-                print(f"✅ Все {len(df)} номенклатур уже есть в справочнике, ничего не добавляем")
-                return len(df)  # Возвращаем общее кол-во для валидации
-            
-            df = df_new
-            print(f"🚀 Добавляем {len(df):,} НОВЫХ номенклатур в md_components...")
-        else:
-            print(f"🚀 Загружаем {len(df):,} записей в md_components...")
-        
-        # Диагностика sne_new/ppr_new перед вставкой
-        if 'sne_new' in df.columns:
-            print(f"🔍 sne_new dtype: {df['sne_new'].dtype}")
-            print(f"🔍 sne_new примеры: {df['sne_new'].head(3).tolist()}")
-            print(f"🔍 sne_new null count: {df['sne_new'].isnull().sum()}")
-        
-        # Конвертируем в список кортежей с явной обработкой None/NaN
-        data_tuples = []
-        for _, row in df.iterrows():
-            row_list = []
-            for val in row:
-                # Проверяем на NaN/None для всех типов
-                if pd.isna(val):
-                    row_list.append(None)
-                else:
-                    row_list.append(val)
-            data_tuples.append(tuple(row_list))
-        
-        # Проверим первый кортеж
-        if data_tuples and 'sne_new' in df.columns:
-            sne_idx = list(df.columns).index('sne_new')
-            print(f"🔍 Первый tuple[sne_new]: {data_tuples[0][sne_idx]} (type: {type(data_tuples[0][sne_idx])})")
-        
-        # Подготавливаем данные для вставки, заменяя None на специальный NULL для ClickHouse
-        prepared_data = []
-        for row in data_tuples:
-            prepared_row = []
-            for i, val in enumerate(row):
-                col_name = df.columns[i]
-                # Для Nullable полей используем None, для остальных - значения как есть
-                if val is None and col_name in ['sne_new', 'ppr_new', 'br_mi8', 'br_mi17', 'br2_mi17', 'partseqno_i', 'repair_number']:
-                    prepared_row.append(None)
-                else:
-                    prepared_row.append(val)
-            prepared_data.append(tuple(prepared_row))
-        
-        # Загружаем с явным указанием столбцов
-        columns = list(df.columns)
-        insert_query = f"INSERT INTO md_components ({', '.join(columns)}) VALUES"
-        
-        try:
-            client.execute(insert_query, prepared_data)
-        except Exception as e:
-            # Если ошибка, пробуем альтернативный метод
-            print(f"⚠️ Первая попытка не удалась: {e}")
-            print(f"🔄 Пробуем альтернативный метод вставки...")
-            
-            # Альтернатива: вставка через DataFrame напрямую
-            from clickhouse_driver import Client as CHClient
-            client.insert_dataframe(
-                'INSERT INTO md_components VALUES',
-                df,
-                settings={'use_numpy': True}
-            )
-        
-        print(f"✅ Загружено {len(data_tuples):,} записей в md_components")
-        return len(data_tuples)
-        
+
+        if not existing_partnos:
+            print(f"🚀 md_components пуста — полная загрузка {len(df):,} номенклатур из Excel SSoT")
+            inserted = _insert_rows(client, df)
+            print(f"✅ Загружено {inserted:,} записей в md_components")
+            return inserted
+
+        df_new = df[~df['partno'].isin(existing_partnos)].copy()
+        df_existing = df[df['partno'].isin(existing_partnos)].copy()
+
+        inserted = _insert_rows(client, df_new)
+        synced = _sync_ssot_rows(client, df_existing)
+
+        print(
+            f"✅ SSoT sync завершён: inserted={inserted:,}, updated={synced:,}, "
+            f"excel_total={len(df):,}"
+        )
+        return len(df)
+
     except Exception as e:
         print(f"❌ Ошибка загрузки в md_components: {e}")
         return 0

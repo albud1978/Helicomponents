@@ -202,7 +202,34 @@ class DictionaryCreator:
                 ORDER BY partseqno_i
             """)
             partno_data = [(row[0], row[1]) for row in partno_result.result_rows]
-            self.logger.info(f"📋 Найдено {len(partno_data)} уникальных пар partno → partseqno_i")
+            self.logger.info(f"📋 Найдено {len(partno_data)} уникальных пар partno → partseqno_i из heli_pandas")
+
+            # Дополняем из md_components SSoT: номенклатуры без экземпляров в heli_pandas
+            # (зарезервированы в Excel, могут войти в оборот позже). heli_pandas — приоритет.
+            md_partno_result = self.client.query("""
+                SELECT DISTINCT replaceAll(partno, '\\n', '') AS partno, partseqno_i
+                FROM md_components
+                WHERE partno IS NOT NULL AND partno != '' AND partseqno_i IS NOT NULL
+                ORDER BY partseqno_i
+            """)
+            heli_map = {partno: int(partseqno_i) for partno, partseqno_i in partno_data}
+            supplemented = 0
+            for partno, partseqno_i in md_partno_result.result_rows:
+                psi = int(partseqno_i)
+                if partno not in heli_map:
+                    heli_map[partno] = psi
+                    supplemented += 1
+                elif heli_map[partno] != psi:
+                    raise RuntimeError(
+                        f"partno {partno!r}: heli_pandas partseqno_i={heli_map[partno]} "
+                        f"!= md_components SSoT={psi}"
+                    )
+            partno_data = sorted(heli_map.items(), key=lambda item: item[1])
+            if supplemented:
+                self.logger.info(
+                    f"📋 +{supplemented} пар partno → partseqno_i из md_components SSoT "
+                    f"(итого {len(partno_data)})"
+                )
             
             # Анализ серийных номеров - берем DISTINCT пары (partno, serialno), psn
             serialno_result = self.client.query("""
