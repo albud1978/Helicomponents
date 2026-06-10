@@ -34,6 +34,7 @@ DEFAULT_MODULES_PATH = os.path.join(
 )
 DEFAULT_MAX_STEPS = 50
 DEFAULT_MAX_TOKENS = 500000
+TOKEN_HIGHLIGHT_THRESHOLD = 150000  # Tier-L loop-eng: soft-warn порог est_tokens/workflow (≈p90 факт. расхода)
 RISK_TIER_CHOICES = ("low", "medium", "high")
 PROFILE_CHOICES = ("low", "medium-fast", "medium-policy", "high-strict")
 HUMAN_GATE_CHOICES = ("yes", "no", "conditional")
@@ -408,6 +409,22 @@ def _warn_if_caps_exceeded(workflow: Dict[str, Any]) -> None:
             )
 
 
+def _warn_if_token_highlight(workflow: Dict[str, Any]) -> None:
+    usage = workflow.get("usage")
+    if not isinstance(usage, dict):
+        return
+    cum = usage.get("cumulative_tokens")
+    if not isinstance(cum, int):
+        return
+    if cum >= TOKEN_HIGHLIGHT_THRESHOLD:
+        print(
+            f"[token-highlight] workflow {workflow.get('workflow_id')}: "
+            f"cumulative_tokens={cum} >= порог {TOKEN_HIGHLIGHT_THRESHOLD} "
+            "(Tier-L soft-warn, не блок). Рассмотри сегментацию задачи / закрытие workflow.",
+            file=sys.stderr,
+        )
+
+
 def _find_workflow(
     workflows: List[Dict[str, Any]], workflow_id: str
 ) -> Optional[Dict[str, Any]]:
@@ -755,6 +772,7 @@ def write_handoff(args: argparse.Namespace) -> None:
         if args.usage_cost is not None:
             usage["cumulative_cost"] = float(usage.get("cumulative_cost", 0.0)) + args.usage_cost
         usage["last_updated"] = _now()
+        _warn_if_token_highlight(workflow)
         _warn_if_caps_exceeded(workflow)
     workflow["updated_at"] = _now()
 
