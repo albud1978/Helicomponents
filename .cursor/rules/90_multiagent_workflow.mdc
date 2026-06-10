@@ -9,6 +9,7 @@ alwaysApply: true
 ## Базовый operational принцип
 - Orchestrator routes/state/governance; side effects — **single active worker**.
 - `pre_gate`/`pre_close`: discipline; governance-compliance: risk/policy.
+- Context hygiene: оркестратор держит в окне решения/компактные handoff'ы; сырьё (многофайловое чтение, SQL result-set'ы, логи, длинные diff'ы) уводит в свежий контекст субагента. Порог делегирования — `.cursor/agents/orchestrator.md` → Context hygiene / anti-rot.
 
 ## Роли и контур ответственности
 - **Orchestrator**: план/risk/delegation/synthesis/governance; production/runtime/SSoT напрямую не правит.

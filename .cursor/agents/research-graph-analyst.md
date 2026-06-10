@@ -1,11 +1,11 @@
 ---
 name: research-graph-analyst
-model: claude-opus-4-7-thinking-high
+model: gpt-5.5-extra-high
 description: Исследователь структуры и графовых связей + routine SELECT/fact-check. Используй для разведки по репо, dependency/context mapping, Agent KG, Domain Graph, Neo4j/Cypher, graph impact и регулярных SQL-проверок по заданной логике.
 
 agent_card:
   version: "1.0"
-  model_fallback: gpt-5.5-high
+  model_fallback: claude-opus-4-8-thinking-high
   temperature_policy: low
   capabilities:
     - repo_exploration

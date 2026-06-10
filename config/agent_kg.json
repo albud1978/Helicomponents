@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-10T10:14:40Z",
+    "updated_at": "2026-06-10T11:24:51Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2042,6 +2042,27 @@
       },
       "created_at": "2026-06-10T09:35:22Z",
       "updated_at": "2026-06-10T09:35:22Z"
+    },
+    {
+      "workflow_id": "W_housekeeping_20260610T112312Z",
+      "goal": "low-risk housekeeping edit of .cursor/rules/90_multiagent_workflow.mdc",
+      "phase": "implement",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 22000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-10T11:24:51Z"
+      },
+      "created_at": "2026-06-10T11:23:12Z",
+      "updated_at": "2026-06-10T11:24:51Z"
     }
   ],
   "handoffs": [
@@ -13786,6 +13807,47 @@
         "est_tokens": 28000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_housekeeping_20260610T112312Z_orchestrator_fdd2cd0b",
+      "workflow_id": "W_housekeeping_20260610T112312Z",
+      "agent": "orchestrator",
+      "user_goal": "проверить роли мультиагента, обновить модели агентов (интеллектуальные vs рабочие), context hygiene, комит и пуш",
+      "changes": "10 .cursor/agents/*.md: модели приведены к whitelist + кросс-вендорные fallback (opus-4-8 для judgment/review, gpt-5.5-extra-high для coder/analyst, composer-2.5-fast для validator/docs/capsule); bi-semantic→opus для диверсити BI do→check; orchestrator.md: раздел Context hygiene/anti-rot + фикс устаревших слагов; 90_multiagent_workflow.mdc: ссылка на context hygiene",
+      "facts": "Проверка: model-map консистентна, устаревших слагов opus-4-7/gpt-5.5-high не осталось; все do→check рёбра кросс-вендорные",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal (обновление моделей агентов + anti-rot) ↔ Changes scope match: yes",
+      "process_insights": "",
+      "trace_id": "wf:W_housekeeping_20260610T112312Z:2026-06-10T11:23Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "обратимые правки .cursor/agents/* (model/fallback) и .cursor/rules (anti-rot), без runtime/data/SSoT",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "manual-check: grep по .cursor/agents+rules не находит opus-4-7/gpt-5.5-high; финальная model-map подтверждена",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "harness/process, нет влияния на Domain Graph",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-10T11:24:51Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 22000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -15579,6 +15641,15 @@
       "agent": "orchestrator",
       "created_at": "2026-06-10T10:14:40Z",
       "updated_at": "2026-06-10T10:14:40Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260610T112312Z_closure_4ceb9bc9",
+      "workflow_id": "W_housekeeping_20260610T112312Z",
+      "context_type": "closure",
+      "content": "Модели агентов обновлены + context hygiene внедрён. Verify пройден.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-10T11:24:51Z",
+      "updated_at": "2026-06-10T11:24:51Z"
     }
   ],
   "meta": {

@@ -1,11 +1,11 @@
 ---
 name: reviewer-flame
-model: claude-opus-4-7-thinking-high
+model: claude-opus-4-8-thinking-high
 description: Ревьюер FLAME GPU/CUDA кода. Вызывай для code review RTC модулей и симуляции. Используй проактивно после написания или изменения CUDA/RTC кода.
 
 agent_card:
   version: "1.0"
-  model_fallback: gpt-5.5-high
+  model_fallback: gpt-5.5-extra-high
   temperature_policy: low
   capabilities:
     - cuda_code_review
