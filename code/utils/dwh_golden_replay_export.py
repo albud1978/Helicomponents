@@ -119,8 +119,8 @@ def _ac_typ_case_sql(col: str) -> str:
 )"""
 
 
-def export_status_components(client, out_dir: Path, report_date: str = DEFAULT_REPORT_DATE) -> Path:
-    sql = f"""
+def _status_components_sql(report_date: str) -> str:
+    return f"""
 SELECT
   partno,
   partseqno_i,
@@ -145,20 +145,24 @@ SELECT
 FROM reports.amos_heli_rotables_components_status
 WHERE report_date = toDate('{report_date}')
 """
-    df = client.query_df(sql)
-    df["lease_restricted"] = _lease_col(df["owner"])
-    df["removal_date"] = _fmt_dmY_series(df["removal_date"])
-    df["target_date"] = _fmt_dmY_series(df["target_date"])
-    # oh_at_date: Date/datetime для Excel как у pandas read_excel
-    df["oh_at_date"] = pd.to_datetime(df["oh_at_date"], errors="coerce")
-    path = out_dir / "Status_Components.xlsx"
-    df.to_excel(path, index=False, engine="openpyxl")
-    return path
 
 
-def export_program_ac(client, out_dir: Path, report_date: str = DEFAULT_REPORT_DATE) -> Path:
+def _program_ac_sql(
+    report_date: str,
+    *,
+    strict_status: bool = True,
+    ac_registrs: list[int] | None = None,
+) -> str:
     ae, ast = _as_of_end(report_date), _as_of_start(report_date)
-    sql = f"""
+    status_filter = "  AND a.status = 0\n" if strict_status else ""
+    regs_filter = ""
+    if ac_registrs:
+        in_list = ",".join(str(int(value)) for value in sorted(set(ac_registrs)))
+        regs_filter = (
+            "  AND toInt64OrZero(trimBoth(a.ac_registr)) "
+            f"IN ({in_list})\n"
+        )
+    return f"""
 WITH
 snapshot_addr_raw AS (
   SELECT * FROM (
@@ -206,104 +210,14 @@ LEFT JOIN snapshot_spec sp
   AND upperUTF8(replaceAll(trim(BOTH ' ' FROM coalesce(sp.special, '')), ' ', '')) = 'ДИРЕКЦ'
 WHERE a.ac_typ IN ('МИ8', 'МИ8АМТ', 'МИ8МТВ')
   AND a.manual_owner = 'ЮТ-ВУ'
-  AND a.status = 0
-  AND a.non_managed = 'N'
+{status_filter}{regs_filter}  AND a.non_managed = 'N'
 ORDER BY ac_registr
 """
-    df = client.query_df(sql)
-    path = out_dir / "Program_AC.xlsx"
-    df.to_excel(path, index=False, engine="openpyxl")
-    return path
 
 
-def export_status_overhaul(client, out_dir: Path, report_date: str = DEFAULT_REPORT_DATE) -> Path:
+def _status_overhaul_sql(report_date: str) -> str:
     ae, ast = _as_of_end(report_date), _as_of_start(report_date)
-    sql = f"""
-WITH
-snapshot_air AS (
-  SELECT * FROM (
-    SELECT *, row_number() OVER (PARTITION BY ac_registr ORDER BY valid_from DESC) AS rn
-    FROM source.amos_heli_aircraft
-    WHERE valid_from <= {ae} AND (valid_to IS NULL OR valid_to > {ast})
-  ) WHERE rn = 1
-),
-wp_snap AS (
-  SELECT * FROM (
-    SELECT *, row_number() OVER (
-      PARTITION BY toString(ac_registr), wpno
-      ORDER BY valid_from DESC
-    ) AS rn
-    FROM source.amos_heli_wp_header
-    WHERE valid_from <= {ae} AND (valid_to IS NULL OR valid_to > {ast})
-  ) WHERE rn = 1
-)
-SELECT
-  toInt64OrZero(trimBoth(wp.ac_registr)) AS ac_registr,
-  {_ac_typ_case_sql("wp.ac_typ")} AS ac_typ,
-  wp.wpno AS wpno,
-  coalesce(wp.description, '') AS description,
-  wp.start_date,
-  wp.end_date,
-  wp.act_start_date,
-  wp.act_end_date,
-  wp.wp_status AS status_code,
-  coalesce(a.owner, '') AS owner,
-  coalesce(a.manual_owner, '') AS operator
-FROM wp_snap wp
-INNER JOIN snapshot_air a ON toString(a.ac_registr) = toString(wp.ac_registr)
-WHERE (
-  /* КР: как в исходном WP_heli + golden v_2026-04-08 — точное совпадение после снятия пробелов. Широкие ILIKE '%КАПИТАЛЬНЫЙ%РЕМОНТ%' в CH дают лишние WP; хвост «(доп.работы)» — см. README. */
-  (wp.hidden = 'H' AND upperUTF8(replaceAll(coalesce(wp.description, ''), ' ', '')) = 'КАПИТАЛЬНЫЙРЕМОНТ')
-  OR upperUTF8(replaceAll(coalesce(wp.remarks, ''), ' ', '')) LIKE '%СБОРКАВС%'
-)
-AND wp.start_date > 18993
-AND (wp.act_start_date > 18993 OR wp.act_start_date IS NULL)
-AND a.manual_owner = 'ЮТ-ВУ'
-AND wp.ac_typ IN ('МИ8', 'МИ8АМТ', 'МИ8МТВ')
-ORDER BY ac_registr, wpno
-"""
-    df = client.query_df(sql)
-    stmap = {-1: "Открыто", -2: "Закрыто", -3: "В процессе"}
-
-    def _map_wp_st(x):
-        if pd.isna(x):
-            return ""
-        try:
-            xi = int(x)
-        except (TypeError, ValueError):
-            return str(x)
-        return stmap.get(xi, str(xi))
-
-    df["status"] = df["status_code"].map(_map_wp_st)
-    df = df.drop(columns=["status_code"])
-    df["sched_start_date"] = _amos_int_to_timestamp(df["start_date"])
-    df["sched_end_date"] = _amos_int_to_timestamp(df["end_date"])
-    df["act_start_date"] = _amos_int_to_timestamp(df["act_start_date"])
-    df["act_end_date"] = _amos_int_to_timestamp(df["act_end_date"])
-    df = df.drop(columns=["start_date", "end_date"])
-    cols = [
-        "ac_registr",
-        "ac_typ",
-        "wpno",
-        "description",
-        "sched_start_date",
-        "sched_end_date",
-        "act_start_date",
-        "act_end_date",
-        "status",
-        "owner",
-        "operator",
-    ]
-    df = df[cols]
-    path = out_dir / "Status_Overhaul.xlsx"
-    df.to_excel(path, index=False, engine="openpyxl")
-    return path
-
-
-def _status_overhaul_dataframe(client, report_date: str) -> pd.DataFrame:
-    """Тот же набор колонок, что в Status_Overhaul.xlsx (после преобразований)."""
-    ae, ast = _as_of_end(report_date), _as_of_start(report_date)
-    sql = f"""
+    return f"""
 WITH
 snapshot_air AS (
   SELECT * FROM (
@@ -337,6 +251,7 @@ SELECT
 FROM wp_snap wp
 INNER JOIN snapshot_air a ON toString(a.ac_registr) = toString(wp.ac_registr)
 WHERE (
+  /* КР: как в исходном WP_heli + golden v_2026-04-08 — точное совпадение после снятия пробелов. Широкие ILIKE '%КАПИТАЛЬНЫЙ%РЕМОНТ%' в CH дают лишние WP; хвост «(доп.работы)» — см. README. */
   (wp.hidden = 'H' AND upperUTF8(replaceAll(coalesce(wp.description, ''), ' ', '')) = 'КАПИТАЛЬНЫЙРЕМОНТ')
   OR upperUTF8(replaceAll(coalesce(wp.remarks, ''), ' ', '')) LIKE '%СБОРКАВС%'
 )
@@ -346,26 +261,60 @@ AND a.manual_owner = 'ЮТ-ВУ'
 AND wp.ac_typ IN ('МИ8', 'МИ8АМТ', 'МИ8МТВ')
 ORDER BY ac_registr, wpno
 """
-    df = client.query_df(sql)
+
+
+def _map_wp_status(status_code: object) -> str:
     stmap = {-1: "Открыто", -2: "Закрыто", -3: "В процессе"}
+    if pd.isna(status_code):
+        return ""
+    try:
+        code = int(status_code)
+    except (TypeError, ValueError):
+        return str(status_code)
+    return stmap.get(code, str(code))
 
-    def _map_wp_st(x):
-        if pd.isna(x):
-            return ""
-        try:
-            xi = int(x)
-        except (TypeError, ValueError):
-            return str(x)
-        return stmap.get(xi, str(xi))
 
-    df["status"] = df["status_code"].map(_map_wp_st)
+def status_components_dataframe(
+    client,
+    report_date: str = DEFAULT_REPORT_DATE,
+) -> pd.DataFrame:
+    df = client.query_df(_status_components_sql(report_date))
+    df["lease_restricted"] = _lease_col(df["owner"])
+    df["removal_date"] = _fmt_dmY_series(df["removal_date"])
+    df["target_date"] = _fmt_dmY_series(df["target_date"])
+    df["oh_at_date"] = pd.to_datetime(df["oh_at_date"], errors="coerce")
+    return df
+
+
+def program_ac_dataframe(
+    client,
+    report_date: str = DEFAULT_REPORT_DATE,
+    *,
+    strict_status: bool = True,
+    ac_registrs: list[int] | None = None,
+) -> pd.DataFrame:
+    return client.query_df(
+        _program_ac_sql(
+            report_date,
+            strict_status=strict_status,
+            ac_registrs=ac_registrs,
+        )
+    )
+
+
+def status_overhaul_dataframe(
+    client,
+    report_date: str = DEFAULT_REPORT_DATE,
+) -> pd.DataFrame:
+    df = client.query_df(_status_overhaul_sql(report_date))
+    df["status"] = df["status_code"].map(_map_wp_status)
     df = df.drop(columns=["status_code"])
     df["sched_start_date"] = _amos_int_to_timestamp(df["start_date"])
     df["sched_end_date"] = _amos_int_to_timestamp(df["end_date"])
     df["act_start_date"] = _amos_int_to_timestamp(df["act_start_date"])
     df["act_end_date"] = _amos_int_to_timestamp(df["act_end_date"])
     df = df.drop(columns=["start_date", "end_date"])
-    return df[
+    df = df[
         [
             "ac_registr",
             "ac_typ",
@@ -380,6 +329,28 @@ ORDER BY ac_registr, wpno
             "operator",
         ]
     ]
+    return df
+
+
+def export_status_components(client, out_dir: Path, report_date: str = DEFAULT_REPORT_DATE) -> Path:
+    df = status_components_dataframe(client, report_date=report_date)
+    path = out_dir / "Status_Components.xlsx"
+    df.to_excel(path, index=False, engine="openpyxl")
+    return path
+
+
+def export_program_ac(client, out_dir: Path, report_date: str = DEFAULT_REPORT_DATE) -> Path:
+    df = program_ac_dataframe(client, report_date=report_date)
+    path = out_dir / "Program_AC.xlsx"
+    df.to_excel(path, index=False, engine="openpyxl")
+    return path
+
+
+def export_status_overhaul(client, out_dir: Path, report_date: str = DEFAULT_REPORT_DATE) -> Path:
+    df = status_overhaul_dataframe(client, report_date=report_date)
+    path = out_dir / "Status_Overhaul.xlsx"
+    df.to_excel(path, index=False, engine="openpyxl")
+    return path
 
 
 def export_program_ac_match_golden(
@@ -388,62 +359,13 @@ def export_program_ac_match_golden(
     """Program_AC: только борта из golden; без фильтра status=0 (восстанавливает 22321 и др.). Порядок строк как в golden."""
     gpath = golden_dir / "Program_AC.xlsx"
     df_g = pd.read_excel(gpath, engine="openpyxl")
-    regs = sorted({int(x) for x in df_g["ac_registr"].dropna().unique()})
-    in_list = ",".join(str(x) for x in regs)
-    ae, ast = _as_of_end(report_date), _as_of_start(report_date)
-    sql = f"""
-WITH
-snapshot_addr_raw AS (
-  SELECT * FROM (
-    SELECT *, row_number() OVER (PARTITION BY address_i ORDER BY valid_from DESC) AS rn
-    FROM source.amos_heli_address
-    WHERE valid_from <= {ae} AND (valid_to IS NULL OR valid_to > {ast})
-  ) WHERE rn = 1
-),
-snapshot_addr AS (
-  SELECT vendor, any(address_i) AS address_i, any(name) AS name
-  FROM snapshot_addr_raw
-  GROUP BY vendor
-),
-snapshot_air AS (
-  SELECT * FROM (
-    SELECT *, row_number() OVER (PARTITION BY ac_registr ORDER BY valid_from DESC) AS rn
-    FROM source.amos_heli_aircraft
-    WHERE valid_from <= {ae} AND (valid_to IS NULL OR valid_to > {ast})
-  ) WHERE rn = 1
-),
-snapshot_spec AS (
-  SELECT * FROM (
-    SELECT *, row_number() OVER (
-      PARTITION BY address_i, coalesce(special, '')
-      ORDER BY valid_from DESC
-    ) AS rn
-    FROM source.amos_heli_adr_special
-    WHERE valid_from <= {ae} AND (valid_to IS NULL OR valid_to > {ast})
-  ) WHERE rn = 1
-)
-SELECT
-  toInt64OrZero(trimBoth(a.ac_registr)) AS ac_registr,
-  {_ac_typ_case_sql("a.ac_typ")} AS ac_typ,
-  if(a.object_type = 'H', 'HELICOPTER', coalesce(a.object_type, '')) AS object_type,
-  coalesce(a.description, '') AS description,
-  coalesce(a.owner, '') AS owner,
-  coalesce(a.manual_owner, '') AS operator,
-  coalesce(a.homebase, '') AS homebase,
-  coalesce(ad.name, '') AS homebase_name,
-  coalesce(sp.remarks, '') AS directorate
-FROM snapshot_air a
-LEFT JOIN snapshot_addr ad ON ad.vendor = a.homebase
-LEFT JOIN snapshot_spec sp
-  ON sp.address_i = ad.address_i
-  AND upperUTF8(replaceAll(trim(BOTH ' ' FROM coalesce(sp.special, '')), ' ', '')) = 'ДИРЕКЦ'
-WHERE a.ac_typ IN ('МИ8', 'МИ8АМТ', 'МИ8МТВ')
-  AND a.manual_owner = 'ЮТ-ВУ'
-  AND a.non_managed = 'N'
-  AND toInt64OrZero(trimBoth(a.ac_registr)) IN ({in_list})
-ORDER BY ac_registr
-"""
-    df = client.query_df(sql)
+    regs = [int(x) for x in df_g["ac_registr"].dropna().unique()]
+    df = program_ac_dataframe(
+        client,
+        report_date=report_date,
+        strict_status=False,
+        ac_registrs=regs,
+    )
     kg = df_g[["ac_registr"]].copy()
     kg["_ord"] = np.arange(len(kg), dtype=np.int64)
     out = kg.merge(df, on="ac_registr", how="left").sort_values("_ord").drop(columns=["_ord"])
@@ -462,32 +384,7 @@ def export_status_components_match_golden(
     """Status_Components: строки и порядок как в golden; значения из витрины reports по (psn, partno)."""
     gpath = golden_dir / "Status_Components.xlsx"
     df_g = pd.read_excel(gpath, engine="openpyxl")
-    sql = f"""
-SELECT
-  partno,
-  partseqno_i,
-  serialno,
-  psn,
-  ac_typ,
-  ac_type_i,
-  location,
-  LL AS ll,
-  OH AS oh,
-  OH_threshold AS oh_threshold,
-  sne,
-  ppr,
-  mfg_date,
-  oh_at_date,
-  shop_visit_counter,
-  owner,
-  address_i,
-  condition,
-  removal_date,
-  target_date
-FROM reports.amos_heli_rotables_components_status
-WHERE report_date = toDate('{report_date}')
-"""
-    df_q = client.query_df(sql)
+    df_q = status_components_dataframe(client, report_date=report_date)
     df_q["partno"] = df_q["partno"].astype(str).str.strip()
     df_q = df_q.drop_duplicates(subset=["psn", "partno"], keep="first")
     df_g = df_g.copy()
@@ -516,7 +413,7 @@ def export_status_overhaul_match_golden(
     """Status_Overhaul: порядок строк как в golden; ключи (ac_registr, wpno) к данным DWH."""
     gpath = golden_dir / "Status_Overhaul.xlsx"
     df_g = pd.read_excel(gpath, engine="openpyxl")
-    df_r = _status_overhaul_dataframe(client, report_date)
+    df_r = status_overhaul_dataframe(client, report_date)
     df_r["ac_registr"] = df_r["ac_registr"].astype(np.int64)
     df_r["wpno"] = df_r["wpno"].astype(str).str.strip()
     kg = df_g[["ac_registr", "wpno"]].copy()

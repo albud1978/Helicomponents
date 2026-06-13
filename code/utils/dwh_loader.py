@@ -10,9 +10,25 @@ CODE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(CODE_ROOT)); sys.path.append(str(CODE_ROOT / "utils"))
 
 from config_loader import get_clickhouse_client
-from dwh_golden_replay_export import DEFAULT_REPORT_DATE, _lease_col, dwh_client
+from dwh_golden_replay_export import (
+    DEFAULT_REPORT_DATE,
+    _lease_col,
+    dwh_client,
+    program_ac_dataframe,
+    status_overhaul_dataframe,
+)
 from extract.aircraft_number_processor import process_aircraft_numbers_in_memory
-from extract.dual_loader import create_tables, get_md_partnos, insert_data, prepare_data
+from extract.dual_loader import create_tables, get_md_partnos, prepare_data
+from extract.program_ac_loader import (
+    create_program_ac_table,
+    insert_program_ac_data,
+    prepare_program_ac_data,
+)
+from extract.status_overhaul_loader import (
+    create_status_overhaul_table,
+    insert_status_overhaul_data,
+    prepare_status_overhaul_data,
+)
 
 RAW_COLS = ["partno","serialno","ac_typ","location","mfg_date","removal_date","target_date","condition","owner","lease_restricted","oh","oh_threshold","ll","sne","ppr","version_date","version_id","partseqno_i","psn","address_i","ac_type_i","oh_at_date","shop_visit_counter"]
 PANDAS_COLS = ["partno","serialno","ac_typ","location","mfg_date","removal_date","target_date","condition","owner","lease_restricted","oh","oh_threshold","ll","sne","ppr","version_date","version_id","partseqno_i","psn","address_i","ac_type_i","status_id","repair_days","aircraft_number","ac_type_mask","group_by"]
@@ -22,32 +38,55 @@ def _fail(msg): print(f"ERROR: {msg}", file=sys.stderr); raise SystemExit(1)
 def _parse_date(raw):
     try: dt = datetime.strptime(raw.strip(),"%Y-%m-%d").date()
     except ValueError as e: _fail(f"Bad date {raw!r}: {e}")
-    return dt.isoformat(), dt.isoformat()
+    return dt.isoformat(), dt
 
 
 def _norm_dates(df):
     """Normalize date columns before ClickHouse insert."""
-    date_cols = ["mfg_date","removal_date","target_date","oh_at_date","version_date"]
-    for col in date_cols:
-        if col not in df.columns:
-            continue
-        # Convert strings to datetime
-        if df[col].dtype == object:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
-        # Fill NaT
-        df[col] = df[col].fillna(pd.Timestamp("1971-01-01"))
-    # Ensure version_date is date
-    if "version_date" in df.columns:
-        df["version_date"] = pd.to_datetime(df["version_date"], errors="coerce").fillna(pd.Timestamp("1971-01-01"))
-    return df
+    return _normalize_date_columns(
+        df,
+        ["mfg_date", "removal_date", "target_date", "oh_at_date", "version_date"],
+        fill_missing=True,
+    )
 
 def _align(df, cols):
     m = [c for c in cols if c not in df.columns]
     if m: _fail(f"Missing cols: {m}")
     return df[list(cols)].copy()
 
+
+def _count_rows(ch, table, vd, vi):
+    return int(
+        ch.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE version_date=%(vd)s AND version_id=%(vi)s",
+            {"vd": vd, "vi": vi},
+        )[0][0]
+    )
+
+
+def _normalize_date_columns(df, columns, *, fill_missing=False):
+    for col in columns:
+        if col not in df.columns:
+            continue
+        parsed = pd.to_datetime(df[col], errors="coerce")
+        if fill_missing:
+            parsed = parsed.fillna(pd.Timestamp("1971-01-01"))
+            df[col] = parsed.dt.date
+        else:
+            df[col] = parsed.map(lambda value: value.date() if pd.notna(value) else None)
+    return df
+
 def _ac_mask(s):
-    return s.map(lambda x: 1 if isinstance(x,str) and "17" in x else 0).fillna(0).astype("uint8")
+    def one(x):
+        if pd.isna(x):
+            return 0
+        text = str(x).upper().replace("-", "").replace(" ", "")
+        if "17" in text or "АМТ" in text or "МТВ" in text:
+            return 64
+        if "8" in text:
+            return 32
+        return 0
+    return s.map(one).fillna(0).astype("uint8")
 
 def _gb_map(ch):
     rows = ch.execute("SELECT toUInt32(partseqno_i), toUInt8(max(`group_by`)) FROM md_components WHERE partseqno_i IS NOT NULL AND `group_by` IS NOT NULL GROUP BY partseqno_i HAVING max(`group_by`) != 0")
@@ -85,48 +124,181 @@ def _batch_insert(ch, df, table, desc, batch=50000):
     print(f"  {table}: {total:,} inserted ({desc})")
     return total
 
-def load(ch, raw, pandas, vd, vi, dry=False):
+def load(ch, raw, pandas, vd, vi, dry=False, skip_existing=False):
     s = {"raw": len(raw), "pandas": len(pandas), "ri": 0, "pi": 0}
     if dry: return s
     create_tables(ch)
-    c = ch.execute(f"SELECT COUNT(*) FROM heli_raw WHERE version_date=%(vd)s AND version_id=%(vi)s",{"vd":vd,"vi":vi})[0][0]
-    if c: _fail(f"heli_raw already has {c} rows for {vd}")
-    c = ch.execute(f"SELECT COUNT(*) FROM heli_pandas WHERE version_date=%(vd)s AND version_id=%(vi)s",{"vd":vd,"vi":vi})[0][0]
-    if c: _fail(f"heli_pandas already has {c} rows for {vd}")
+    raw_existing = _count_rows(ch, "heli_raw", vd, vi)
+    pandas_existing = _count_rows(ch, "heli_pandas", vd, vi)
+    if raw_existing or pandas_existing:
+        if skip_existing and raw_existing > 0 and pandas_existing > 0:
+            print(
+                f"  heli_raw: skip existing {raw_existing:,}; "
+                f"heli_pandas: skip existing {pandas_existing:,}"
+            )
+            s["ri"] = 0
+            s["pi"] = 0
+            return s
+        _fail(
+            "heli_* target version already exists "
+            f"(heli_raw={raw_existing}, heli_pandas={pandas_existing})"
+        )
     s["ri"] = _batch_insert(ch, raw, "heli_raw", "DWH raw")
     s["pi"] = _batch_insert(ch, pandas, "heli_pandas", "DWH staging")
     if s["ri"] != len(raw): _fail(f"raw: inserted {s['ri']}, expected {len(raw)}")
     if s["pi"] != len(pandas): _fail(f"pandas: inserted {s['pi']}, expected {len(pandas)}")
     return s
 
+
+def fetch_program_ac_df(dwh, report_date):
+    """Program_AC через общий DWH exporter."""
+    df = program_ac_dataframe(dwh, report_date=report_date)
+    df["ac_registr"] = df["ac_registr"].fillna(0).astype("int64")
+    return df
+
+
+def fetch_status_overhaul_df(dwh, report_date):
+    """Status_Overhaul через общий DWH exporter."""
+    df = status_overhaul_dataframe(dwh, report_date=report_date)
+    df["ac_registr"] = df["ac_registr"].fillna(0).astype("int64")
+    _normalize_date_columns(
+        df,
+        ["sched_start_date", "sched_end_date", "act_start_date", "act_end_date"],
+        fill_missing=False,
+    )
+    return df
+
+
+def load_program_ac(ch, df, vd, vi):
+    """Insert into program_ac for target version."""
+    create_program_ac_table(ch)
+    existing = _count_rows(ch, "program_ac", vd, vi)
+    if existing:
+        _fail(f"program_ac already has {existing} rows for {vd}")
+    prepared = prepare_program_ac_data(df.copy(), vd, vi)
+    if "version_date" in prepared.columns:
+        prepared = _normalize_date_columns(prepared, ["version_date"], fill_missing=True)
+    inserted = insert_program_ac_data(ch, prepared)
+    if inserted != len(prepared):
+        _fail(f"program_ac: inserted {inserted}, expected {len(prepared)}")
+    return inserted
+
+
+def load_status_overhaul(ch, df, vd, vi):
+    """Insert into status_overhaul for target version."""
+    create_status_overhaul_table(ch)
+    existing = _count_rows(ch, "status_overhaul", vd, vi)
+    if existing:
+        _fail(f"status_overhaul already has {existing} rows for {vd}")
+    prepared = prepare_status_overhaul_data(df.copy(), vd, vi)
+    prepared = _normalize_date_columns(
+        prepared,
+        ["sched_start_date", "sched_end_date", "act_start_date", "act_end_date", "version_date"],
+        fill_missing=False,
+    )
+    if "version_date" in prepared.columns:
+        prepared["version_date"] = pd.to_datetime(
+            prepared["version_date"], errors="coerce"
+        ).fillna(pd.Timestamp("1971-01-01")).dt.date
+    inserted = insert_status_overhaul_data(ch, prepared)
+    if inserted != len(prepared):
+        _fail(f"status_overhaul: inserted {inserted}, expected {len(prepared)}")
+    return inserted
+
+
+def _parse_steps(steps):
+    if not steps or "all" in steps:
+        return ["program_ac", "status_overhaul", "status_components"]
+    out = []
+    for step in steps:
+        if step not in out:
+            out.append(step)
+    return out
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--report-date", default=DEFAULT_REPORT_DATE)
+    p.add_argument("--version-id", type=int, default=1)
+    p.add_argument(
+        "--step",
+        action="append",
+        choices=("program_ac", "status_overhaul", "status_components", "all"),
+        default=None,
+    )
+    p.add_argument("--skip-existing", action="store_true")
     p.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
+
     rd, vd = _parse_date(a.report_date)
-    vi = 1
+    vi = a.version_id
+    steps = _parse_steps(a.step)
+
     print(f"Report: {rd}  Version: {vd} v{vi}")
-    print("1/4 DWH...")
+    print(f"Steps: {', '.join(steps)}")
+    if a.skip_existing:
+        print("Mode: skip existing")
+    if a.dry_run:
+        print("Mode: dry-run")
+
     dwh = dwh_client()
-    src = fetch_df(dwh, rd)
-    print(f"   DWH: {len(src):,} rows")
-    print("2/4 md_components...")
     ch = get_clickhouse_client()
-    md = get_md_partnos(ch)
-    print(f"   md_partnos: {len(md)}")
-    print("3/4 Enrich...")
-    raw = prepare_data(src.copy(), vd, version_id=vi, table_name="heli_raw")
-    raw = _align(raw, RAW_COLS)
-    raw = _norm_dates(raw)
-    pandas = enrich(src, vd, vi, ch, md)
-    pandas = _norm_dates(pandas)
-    print(f"   raw: {len(raw):,}  pandas: {len(pandas):,}")
-    print(f"4/4 {'[DRY] ' if a.dry_run else ''}Load...")
-    s = load(ch, raw, pandas, vd, vi, dry=a.dry_run)
-    if not a.dry_run:
-        print(f"   raw inserted: {s['ri']:,}  pandas: {s['pi']:,}")
-    print(f"\nSummary: DWH={len(src):,}  raw={len(raw):,}  pandas={len(pandas):,}  dropped={len(src)-len(pandas):,}")
+    summary = {}
+
+    if "status_components" in steps:
+        print("\n1/3 DWH Status_Components...")
+        src = fetch_df(dwh, rd)
+        print(f"   DWH: {len(src):,} rows")
+        md = get_md_partnos(ch)
+        print(f"   md_partnos: {len(md)}")
+        raw = prepare_data(src.copy(), vd, version_id=vi, table_name="heli_raw")
+        raw = _align(raw, RAW_COLS)
+        raw = _norm_dates(raw)
+        pandas = enrich(src, vd, vi, ch, md)
+        pandas = _norm_dates(pandas)
+        print(f"   raw: {len(raw):,}  pandas: {len(pandas):,}")
+        sc = load(ch, raw, pandas, vd, vi, dry=a.dry_run, skip_existing=a.skip_existing)
+        summary["status_components"] = {
+            "source": len(src),
+            "raw": len(raw),
+            "pandas": len(pandas),
+            "raw_inserted": sc["ri"],
+            "pandas_inserted": sc["pi"],
+        }
+
+    if "program_ac" in steps:
+        print("\n2/3 DWH Program_AC...")
+        pac_df = fetch_program_ac_df(dwh, rd)
+        print(f"   DWH: {len(pac_df):,} rows")
+        if a.skip_existing and _count_rows(ch, "program_ac", vd, vi) > 0:
+            existing = _count_rows(ch, "program_ac", vd, vi)
+            print(f"   skip existing program_ac: {existing:,}")
+            summary["program_ac"] = {"source": len(pac_df), "inserted": 0, "existing": existing}
+        elif not a.dry_run:
+            n = load_program_ac(ch, pac_df, vd, vi)
+            print(f"   program_ac: {n:,} inserted")
+            summary["program_ac"] = {"source": len(pac_df), "inserted": n, "existing": 0}
+        else:
+            print(f"   [DRY] program_ac: {len(pac_df):,} rows")
+            summary["program_ac"] = {"source": len(pac_df), "inserted": 0, "existing": 0}
+
+    if "status_overhaul" in steps:
+        print("\n3/3 DWH Status_Overhaul...")
+        so_df = fetch_status_overhaul_df(dwh, rd)
+        print(f"   DWH: {len(so_df):,} rows")
+        if a.skip_existing and _count_rows(ch, "status_overhaul", vd, vi) > 0:
+            existing = _count_rows(ch, "status_overhaul", vd, vi)
+            print(f"   skip existing status_overhaul: {existing:,}")
+            summary["status_overhaul"] = {"source": len(so_df), "inserted": 0, "existing": existing}
+        elif not a.dry_run:
+            n = load_status_overhaul(ch, so_df, vd, vi)
+            print(f"   status_overhaul: {n:,} inserted")
+            summary["status_overhaul"] = {"source": len(so_df), "inserted": n, "existing": 0}
+        else:
+            print(f"   [DRY] status_overhaul: {len(so_df):,} rows")
+            summary["status_overhaul"] = {"source": len(so_df), "inserted": 0, "existing": 0}
+
+    print(f"\nSummary: {summary}")
 
 if __name__ == "__main__":
     main()
