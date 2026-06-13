@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""Post-load enrichment for heli_pandas after DWH ingest (version-scoped)."""
+from __future__ import annotations
+
+import subprocess
+import sys
+from datetime import date
+from pathlib import Path
+
+import pandas as pd
+
+CODE_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(CODE_ROOT))
+sys.path.append(str(CODE_ROOT / "utils"))
+
+from config_loader import get_clickhouse_client
+from extract.dual_loader import insert_data
+from extract.inactive_planery_processor import process_inactive_planery_status
+from extract.overhaul_status_processor import process_status_field
+from extract.program_ac_status_processor import process_program_ac_status_field
+
+PANDAS_COLS = [
+    "partno", "serialno", "ac_typ", "location", "mfg_date", "removal_date", "target_date",
+    "condition", "owner", "lease_restricted", "oh", "oh_threshold", "ll", "sne", "ppr",
+    "version_date", "version_id", "partseqno_i", "psn", "address_i", "ac_type_i",
+    "status_id", "repair_days", "aircraft_number", "ac_type_mask", "group_by",
+]
+
+POST_SCRIPTS = (
+    "program_ac_precheck_runner.py",
+    "heli_pandas_component_status.py",
+    "heli_pandas_serviceable_status.py",
+    "heli_pandas_storage_status.py",
+    "heli_pandas_terminal_br_gate.py",
+)
+
+
+def _fail(msg: str) -> None:
+    print(f"ERROR: {msg}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def _count_rows(client, table: str, version_date: date, version_id: int) -> int:
+    return int(
+        client.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE version_date=%(vd)s AND version_id=%(vi)s",
+            {"vd": version_date, "vi": version_id},
+        )[0][0]
+    )
+
+
+def _ops_planers(client, version_date: date, version_id: int) -> int:
+    return int(
+        client.execute(
+            """
+            SELECT countDistinct(aircraft_number)
+            FROM heli_pandas
+            WHERE version_date = %(vd)s
+              AND version_id = %(vi)s
+              AND toUInt8(ifNull(status_id, 0)) = 2
+              AND toUInt32(ifNull(group_by, 0)) IN (1, 2)
+              AND toUInt32(ifNull(aircraft_number, 0)) > 0
+            """,
+            {"vd": version_date, "vi": version_id},
+        )[0][0]
+    )
+
+
+def _planner_zero(client, version_date: date, version_id: int) -> int:
+    return int(
+        client.execute(
+            """
+            SELECT count()
+            FROM heli_pandas
+            WHERE version_date = %(vd)s
+              AND version_id = %(vi)s
+              AND toUInt32(ifNull(group_by, 0)) IN (1, 2)
+              AND toUInt8(ifNull(status_id, 0)) = 0
+            """,
+            {"vd": version_date, "vi": version_id},
+        )[0][0]
+    )
+
+
+def _load_heli_pandas_version(client, version_date: date, version_id: int) -> pd.DataFrame:
+    cols = ", ".join(f"`{c}`" for c in PANDAS_COLS)
+    rows = client.execute(
+        f"""
+        SELECT {cols}
+        FROM heli_pandas
+        WHERE version_date = %(vd)s AND version_id = %(vi)s
+        """,
+        {"vd": version_date, "vi": version_id},
+    )
+    if not rows:
+        _fail(f"heli_pandas пуст для {version_date} v{version_id}")
+    return pd.DataFrame(rows, columns=PANDAS_COLS)
+
+
+def _replace_heli_pandas_version(
+    client, df: pd.DataFrame, version_date: date, version_id: int
+) -> int:
+    client.execute(
+        "DELETE FROM heli_pandas WHERE version_date = %(vd)s AND version_id = %(vi)s",
+        {"vd": version_date, "vi": version_id},
+    )
+    return insert_data(client, df, "heli_pandas", "DWH post-enrichment")
+
+
+def _run_planner_cascade(client, df: pd.DataFrame) -> pd.DataFrame:
+    df = process_status_field(df, client)
+    df = process_program_ac_status_field(df, client)
+    df = process_inactive_planery_status(df, client)
+    return df
+
+
+def _run_script(script_name: str, version_date: date, version_id: int, *, dry_run: bool) -> None:
+    script_path = CODE_ROOT / "extract" / script_name
+    if not script_path.exists():
+        _fail(f"Скрипт не найден: {script_path}")
+    cmd = [
+        sys.executable,
+        str(script_path),
+        "--version-date",
+        version_date.isoformat(),
+        "--version-id",
+        str(version_id),
+    ]
+    if dry_run and script_name != "program_ac_precheck_runner.py":
+        cmd.append("--dry-run")
+    print(f"  -> {script_name}")
+    subprocess.run(cmd, check=True)
+
+
+def run_post_enrichment(
+    version_date: date,
+    version_id: int = 1,
+    *,
+    dry_run: bool = False,
+    client=None,
+) -> dict:
+    """Planner cascade + scoped post-steps for one heli_pandas version."""
+    ch = client or get_clickhouse_client()
+
+    if _count_rows(ch, "program_ac", version_date, version_id) == 0:
+        _fail("program_ac не загружен — enrichment невозможен")
+    if _count_rows(ch, "status_overhaul", version_date, version_id) == 0:
+        _fail("status_overhaul не загружен — enrichment невозможен")
+    if _count_rows(ch, "heli_pandas", version_date, version_id) == 0:
+        _fail("heli_pandas не загружен — enrichment невозможен")
+
+    stats = {
+        "ops_before": _ops_planers(ch, version_date, version_id),
+        "planner_zero_before": _planner_zero(ch, version_date, version_id),
+    }
+    print(
+        f"Enrichment {version_date} v{version_id}: "
+        f"OPS={stats['ops_before']}, planner_status_0={stats['planner_zero_before']}"
+    )
+
+    print("Planner cascade (overhaul -> program_ac -> inactive)...")
+    df = _load_heli_pandas_version(ch, version_date, version_id)
+    df = _run_planner_cascade(ch, df)
+
+    if dry_run:
+        ops_after = int(
+            df.loc[
+                (df["group_by"].isin([1, 2]))
+                & (df["status_id"] == 2)
+                & (df["aircraft_number"].fillna(0).astype(int) > 0),
+                "aircraft_number",
+            ].nunique()
+        )
+        stats["ops_after"] = ops_after
+        stats["planner_zero_after"] = int(
+            ((df["group_by"].isin([1, 2])) & (df["status_id"] == 0)).sum()
+        )
+        print(f"[dry-run] OPS after planner cascade: {ops_after}")
+        return stats
+
+    inserted = _replace_heli_pandas_version(ch, df, version_date, version_id)
+    if inserted != len(df):
+        _fail(f"heli_pandas: inserted {inserted}, expected {len(df)}")
+
+    print("Post-steps (component/serviceable/storage/terminal)...")
+    for script in POST_SCRIPTS:
+        _run_script(script, version_date, version_id, dry_run=False)
+
+    stats["ops_after"] = _ops_planers(ch, version_date, version_id)
+    stats["planner_zero_after"] = _planner_zero(ch, version_date, version_id)
+    print(
+        f"Enrichment done: OPS={stats['ops_after']}, "
+        f"planner_status_0={stats['planner_zero_after']}"
+    )
+    return stats
+
+
+def main() -> None:
+    import argparse
+
+    p = argparse.ArgumentParser(description="Post-enrichment heli_pandas after DWH load")
+    p.add_argument("--version-date", required=True, help="YYYY-MM-DD")
+    p.add_argument("--version-id", type=int, default=1)
+    p.add_argument("--dry-run", action="store_true")
+    args = p.parse_args()
+    vd = date.fromisoformat(args.version_date)
+    run_post_enrichment(vd, args.version_id, dry_run=args.dry_run)
+
+
+if __name__ == "__main__":
+    main()

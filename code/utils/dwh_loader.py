@@ -29,6 +29,7 @@ from extract.status_overhaul_loader import (
     insert_status_overhaul_data,
     prepare_status_overhaul_data,
 )
+from dwh_post_enrichment import run_post_enrichment
 
 RAW_COLS = ["partno","serialno","ac_typ","location","mfg_date","removal_date","target_date","condition","owner","lease_restricted","oh","oh_threshold","ll","sne","ppr","version_date","version_id","partseqno_i","psn","address_i","ac_type_i","oh_at_date","shop_visit_counter"]
 PANDAS_COLS = ["partno","serialno","ac_typ","location","mfg_date","removal_date","target_date","condition","owner","lease_restricted","oh","oh_threshold","ll","sne","ppr","version_date","version_id","partseqno_i","psn","address_i","ac_type_i","status_id","repair_days","aircraft_number","ac_type_mask","group_by"]
@@ -208,11 +209,13 @@ def load_status_overhaul(ch, df, vd, vi):
 
 def _parse_steps(steps):
     if not steps or "all" in steps:
-        return ["program_ac", "status_overhaul", "status_components"]
+        return ["program_ac", "status_overhaul", "status_components", "enrich"]
     out = []
     for step in steps:
         if step not in out:
             out.append(step)
+    if "status_components" in out and "enrich" not in out:
+        out.append("enrich")
     return out
 
 
@@ -223,16 +226,23 @@ def main():
     p.add_argument(
         "--step",
         action="append",
-        choices=("program_ac", "status_overhaul", "status_components", "all"),
+        choices=("program_ac", "status_overhaul", "status_components", "enrich", "all"),
         default=None,
     )
     p.add_argument("--skip-existing", action="store_true")
+    p.add_argument(
+        "--no-enrich",
+        action="store_true",
+        help="Не запускать post-enrichment после загрузки status_components",
+    )
     p.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
 
     rd, vd = _parse_date(a.report_date)
     vi = a.version_id
     steps = _parse_steps(a.step)
+    if a.no_enrich and "enrich" in steps:
+        steps = [s for s in steps if s != "enrich"]
 
     print(f"Report: {rd}  Version: {vd} v{vi}")
     print(f"Steps: {', '.join(steps)}")
@@ -245,8 +255,40 @@ def main():
     ch = get_clickhouse_client()
     summary = {}
 
+    if "program_ac" in steps:
+        print("\n[1/4] DWH Program_AC...")
+        pac_df = fetch_program_ac_df(dwh, rd)
+        print(f"   DWH: {len(pac_df):,} rows")
+        if a.skip_existing and _count_rows(ch, "program_ac", vd, vi) > 0:
+            existing = _count_rows(ch, "program_ac", vd, vi)
+            print(f"   skip existing program_ac: {existing:,}")
+            summary["program_ac"] = {"source": len(pac_df), "inserted": 0, "existing": existing}
+        elif not a.dry_run:
+            n = load_program_ac(ch, pac_df, vd, vi)
+            print(f"   program_ac: {n:,} inserted")
+            summary["program_ac"] = {"source": len(pac_df), "inserted": n, "existing": 0}
+        else:
+            print(f"   [DRY] program_ac: {len(pac_df):,} rows")
+            summary["program_ac"] = {"source": len(pac_df), "inserted": 0, "existing": 0}
+
+    if "status_overhaul" in steps:
+        print("\n[2/4] DWH Status_Overhaul...")
+        so_df = fetch_status_overhaul_df(dwh, rd)
+        print(f"   DWH: {len(so_df):,} rows")
+        if a.skip_existing and _count_rows(ch, "status_overhaul", vd, vi) > 0:
+            existing = _count_rows(ch, "status_overhaul", vd, vi)
+            print(f"   skip existing status_overhaul: {existing:,}")
+            summary["status_overhaul"] = {"source": len(so_df), "inserted": 0, "existing": existing}
+        elif not a.dry_run:
+            n = load_status_overhaul(ch, so_df, vd, vi)
+            print(f"   status_overhaul: {n:,} inserted")
+            summary["status_overhaul"] = {"source": len(so_df), "inserted": n, "existing": 0}
+        else:
+            print(f"   [DRY] status_overhaul: {len(so_df):,} rows")
+            summary["status_overhaul"] = {"source": len(so_df), "inserted": 0, "existing": 0}
+
     if "status_components" in steps:
-        print("\n1/3 DWH Status_Components...")
+        print("\n[3/4] DWH Status_Components...")
         src = fetch_df(dwh, rd)
         print(f"   DWH: {len(src):,} rows")
         md = get_md_partnos(ch)
@@ -266,37 +308,14 @@ def main():
             "pandas_inserted": sc["pi"],
         }
 
-    if "program_ac" in steps:
-        print("\n2/3 DWH Program_AC...")
-        pac_df = fetch_program_ac_df(dwh, rd)
-        print(f"   DWH: {len(pac_df):,} rows")
-        if a.skip_existing and _count_rows(ch, "program_ac", vd, vi) > 0:
-            existing = _count_rows(ch, "program_ac", vd, vi)
-            print(f"   skip existing program_ac: {existing:,}")
-            summary["program_ac"] = {"source": len(pac_df), "inserted": 0, "existing": existing}
-        elif not a.dry_run:
-            n = load_program_ac(ch, pac_df, vd, vi)
-            print(f"   program_ac: {n:,} inserted")
-            summary["program_ac"] = {"source": len(pac_df), "inserted": n, "existing": 0}
+    if "enrich" in steps:
+        print("\n[4/4] Post-enrichment (status_id cascade)...")
+        if a.dry_run:
+            est = run_post_enrichment(vd, vi, dry_run=True, client=ch)
+            summary["enrich"] = est
         else:
-            print(f"   [DRY] program_ac: {len(pac_df):,} rows")
-            summary["program_ac"] = {"source": len(pac_df), "inserted": 0, "existing": 0}
-
-    if "status_overhaul" in steps:
-        print("\n3/3 DWH Status_Overhaul...")
-        so_df = fetch_status_overhaul_df(dwh, rd)
-        print(f"   DWH: {len(so_df):,} rows")
-        if a.skip_existing and _count_rows(ch, "status_overhaul", vd, vi) > 0:
-            existing = _count_rows(ch, "status_overhaul", vd, vi)
-            print(f"   skip existing status_overhaul: {existing:,}")
-            summary["status_overhaul"] = {"source": len(so_df), "inserted": 0, "existing": existing}
-        elif not a.dry_run:
-            n = load_status_overhaul(ch, so_df, vd, vi)
-            print(f"   status_overhaul: {n:,} inserted")
-            summary["status_overhaul"] = {"source": len(so_df), "inserted": n, "existing": 0}
-        else:
-            print(f"   [DRY] status_overhaul: {len(so_df):,} rows")
-            summary["status_overhaul"] = {"source": len(so_df), "inserted": 0, "existing": 0}
+            est = run_post_enrichment(vd, vi, dry_run=False, client=ch)
+            summary["enrich"] = est
 
     print(f"\nSummary: {summary}")
 
