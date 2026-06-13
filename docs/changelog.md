@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-06-13 — DWH direct load: 3 AMOS-источника без Excel (W_dwh_analytics_load)
+
+**Workflow**: `W_dwh_analytics_load` | **Risk**: medium | **Profile**: medium-policy | **Branch**: `feature/dwh-bb8`
+
+**Суть**:
+- Прямая загрузка `Status_Components`, `Program_AC`, `Status_Overhaul` из YC DWH в Project ClickHouse на произвольную `report_date` без Excel.
+- `code/utils/dwh_loader.py` — единый entry point; `code/utils/dwh_post_enrichment.py` — planner cascade + post-steps `status_id`.
+- Shared SQL в `dwh_golden_replay_export.py`; replay/golden — `dwh_direct_load.py`.
+- DE-backlog: `docs/de_tasks.md` (5 задач на `analytics.sim_input_*`).
+
+**Приёмка MVP** (`2026-06-12 v1`): `program_ac=174`, `status_overhaul=58`, `heli_pandas=11540`, OPS planers=169 (baseline Excel `2026-04-08`: 170). Completeness check PASS.
+
+**Validation (V1, validator-judge)**: 6/6 PASS — OPS=169, `status_id=0`=0, `group_by` sets идентичны baseline; delta −1 = борт 22485 (status 2→4), не 22321.
+
+**Governance (G1)**: `allow_with_notes` — `extract_master` deferred, `22321` business open, sim INV-* N/A до прогона.
+
+**Status**: workflow `W_dwh_analytics_load` **closed** (2026-06-13).
+
+**Ограничения / follow-up**:
+- `Status_Components` interim из `reports` (не `analytics`) до витрины DE.
+- `extract_master.py` не переключён — standalone path (follow-up workflow).
+- Horizon DWH: `reports` с 2026-03-05.
+- **Human gate**: правило для борта `22321` (`status=111` в DWH → 169 vs 170 OPS).
+
 ## 2026-06-10 — MD Components SSoT: partseqno_i и psn_spawn_start в Excel (дорешивание W_partno_comp_to_partseqno)
 
 **Workflow**: W_md_partseqno_psn_ssot_20260610T171040Z | **Risk**: high | **Profile**: high-strict | **Status**: docs-sync | **Governance**: allow_with_notes (`handoff_W_md_partseqno_psn_ssot_20260610T171040Z_governance-compliance_b199ce12`)

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-10T19:43:16Z",
+    "updated_at": "2026-06-13T17:46:52Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2126,6 +2126,69 @@
       },
       "created_at": "2026-06-10T19:43:16Z",
       "updated_at": "2026-06-10T19:43:16Z"
+    },
+    {
+      "workflow_id": "W_session_20260613T111239Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/dwh_golden_replay_export.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-13T11:12:39Z"
+      },
+      "created_at": "2026-06-13T11:12:39Z",
+      "updated_at": "2026-06-13T11:12:39Z"
+    },
+    {
+      "workflow_id": "W_dwh_analytics_load",
+      "goal": "Миграция DWH analytics load",
+      "phase": "validation",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-policy"
+      },
+      "usage": {
+        "cumulative_steps": 7,
+        "cumulative_tokens": 64000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-13T17:46:04Z"
+      },
+      "created_at": "2026-06-13T11:25:14Z",
+      "updated_at": "2026-06-13T17:46:08Z"
+    },
+    {
+      "workflow_id": "W_session_20260613T173010Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/dwh_post_enrichment.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-13T17:30:10Z"
+      },
+      "created_at": "2026-06-13T17:30:10Z",
+      "updated_at": "2026-06-13T17:30:10Z"
     }
   ],
   "handoffs": [
@@ -14115,6 +14178,301 @@
         "extract_dwh",
         "validation"
       ]
+    },
+    {
+      "handoff_id": "handoff_W_dwh_analytics_load_coder-general_e2c321df",
+      "workflow_id": "W_dwh_analytics_load",
+      "agent": "coder-general",
+      "user_goal": "Run planner completeness check for newly loaded dataset 2026-06-12 v1:\npython3 code/heli_pandas_ops_other_groups.py --version-date 2026-06-12 --version-id 1 --skip-md --skip-pdf\n\nEnvironment: source config/load_env.sh, conda cuda13\n\nReport: PASS/FAIL, count of planes with issues, compare qualitatively to 2026-04-08 baseline if possible.\n\nRead-only except script output files in output/\n\nReturn handoff-lite, NextOwner orchestrator, Modules extract_dwh,validation",
+      "changes": "Прогнан planner completeness check для 2026-06-12 v1 в окружении cuda13 + load_env; дополнительно прогнан тот же скрипт для baseline 2026-04-08 v1 и сняты read-only SQL-факты по обоим срезам heli_pandas для качественного сравнения OPS-планеров и статусов.",
+      "facts": "2026-06-12 v1: скрипт code/heli_pandas_ops_other_groups.py завершился успешно, но показал 0 OPS-планеров и 0 агрегатов других групп. SQL fact-check по heli_pandas для 2026-06-12 v1: total_rows=11540, planer_rows=286, uniq_planers_nonzero=286, uniq_planers_ops=0, status_by_group=[(1,0,163),(2,0,123)] — все планеры остались в status_id=0. Baseline 2026-04-08 v1: скрипт показал 170 OPS-планеров (68 Mi-8, 102 Mi-17), planes_with_shortages=0, mi8_core_alerts=67; SQL fact-check: total_rows=11480, planer_rows=286, uniq_planers_ops=170, status_by_group=[(1,1,69),(1,2,68),(1,6,26),(2,1,16),(2,2,102),(2,4,5)]. Качественно: новый срез не сопоставим с baseline по completeness-check, потому что OPS-скоуп пустой, хотя сами строки heli_pandas и агрегаты загружены.",
+      "assumptions": "В качестве общего verdict трактую пустой OPS-скоуп как FAIL для planner completeness check, даже при 0 planes_with_shortages внутри самого отчёта. Risks if false: если для 2026-06-12 v1 по процессу ожидался нулевой status_id=2 на момент проверки, verdict FAIL может быть слишком строгим.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_analytics_load:20260613T112514Z",
+      "plan_step_id": "P9",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "manual-check: получить verdict PASS/FAIL, count planes with issues и qualitative comparison against 2026-04-08 baseline when available",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-13T11:26:39Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.4",
+        "est_tokens": 8000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_analytics_load_coder-general_d359cf01",
+      "workflow_id": "W_dwh_analytics_load",
+      "agent": "coder-general",
+      "user_goal": "Planner completeness 2026-06-12 v1",
+      "changes": "heli_pandas_ops_other_groups.py run",
+      "facts": "FAIL: 0 OPS planners; all 286 planers status_id=0; baseline 2026-04-08 has 170 OPS",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P9",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "c71318bcdbd4f5a9c5a909c249b8e336d528bade4b26909bd808a3394c4bb036",
+      "created_at": "2026-06-13T11:27:03Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.4-medium",
+        "est_tokens": 8000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_analytics_load_coder-general_268fc057",
+      "workflow_id": "W_dwh_analytics_load",
+      "agent": "coder-general",
+      "user_goal": "Workflow W_dwh_analytics_load, branch feature/dwh-bb8, PlanStep P10: replay applicable enrichment cascade for heli_pandas 2026-06-12 v1 without re-running dual_loader/Excel loaders, rerun heli_pandas_ops_other_groups, target OPS planers > 0 and qualitatively close to 2026-04-08 baseline.",
+      "changes": "1) Replayed existing planner processors in version scope only: status_overhaul -> program_ac -> inactive_planery, applying 286 planner-row updates (statuses plus overhaul dates for active repairs).\n2) Ran scoped post steps as-is: program_ac_precheck_runner (0 changes), heli_pandas_component_status, heli_pandas_serviceable_status, heli_pandas_storage_status, heli_pandas_terminal_br_gate.\n3) Intentionally skipped enrich_heli_pandas.py and heli_pandas_group_by_enricher.py because they mutate all versions; skipped heli_pandas_repair_status.py because its planner branch would overwrite inactive planers with status_id=2 for past target_date on this dataset.",
+      "facts": "",
+      "assumptions": "Skipping global ac_type_mask/group_by enrichment is acceptable for P10 because target metric is planner OPS recovery, not full cross-version normalization. Risks if false: downstream BI/reporting that depends on ac_type_mask typing may still show mixed/unknown buckets until a separately approved scoped/global enrichment pass is run.",
+      "evidence": "Facts: Before: planers status distribution was [(1,0,163),(2,0,123)], OPS planers=0, total status_id=0 rows=11540. After replay: planner distribution became [(1,1,95),(1,2,68),(2,1,15),(2,2,101),(2,4,7)], OPS planers=169, planner status_id=0=0, total status_id=0 rows=0. Final completeness rerun succeeded: code/heli_pandas_ops_other_groups.py reported 169 planers in status_id=2 and 5785 aggregates on OPS planers. Qualitative comparison to 2026-04-08 baseline (170 OPS) is near-equal by OPS count.\nEvidence: Commands: in-memory replay simulation via existing processor functions; scoped execution of code/extract/program_ac_precheck_runner.py, heli_pandas_component_status.py, heli_pandas_serviceable_status.py, heli_pandas_storage_status.py, heli_pandas_terminal_br_gate.py; final rerun of code/heli_pandas_ops_other_groups.py. SQL facts: before OPS=0 / planner_zero=286; after OPS=169 / planner_zero=0 / total_zero=0.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_analytics_load:20260613T112514Z",
+      "plan_step_id": "P10",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Version-scoped ClickHouse mutations on production-like ETL tables; required selective replay because some existing extract steps are unsafe or unscoped for this dataset.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Replay safe planner-status cascade for 2026-06-12 v1 using existing processor logic without dual_loader rerun, then run scoped post-enrichment scripts that do not overwrite recovered planner statuses.",
+      "evidence_pack": "Facts: Before: planers status distribution was [(1,0,163),(2,0,123)], OPS planers=0, total status_id=0 rows=11540. After replay: planner distribution became [(1,1,95),(1,2,68),(2,1,15),(2,2,101),(2,4,7)], OPS planers=169, planner status_id=0=0, total status_id=0 rows=0. Final completeness rerun succeeded: code/heli_pandas_ops_other_groups.py reported 169 planers in status_id=2 and 5785 aggregates on OPS planers. Qualitative comparison to 2026-04-08 baseline (170 OPS) is near-equal by OPS count.\nEvidence: Commands: in-memory replay simulation via existing processor functions; scoped execution of code/extract/program_ac_precheck_runner.py, heli_pandas_component_status.py, heli_pandas_serviceable_status.py, heli_pandas_storage_status.py, heli_pandas_terminal_br_gate.py; final rerun of code/heli_pandas_ops_other_groups.py. SQL facts: before OPS=0 / planner_zero=286; after OPS=169 / planner_zero=0 / total_zero=0.",
+      "success_criteria": "numeric: OPS planers 0 -> 169 (>0) and manual-check: python3 code/heli_pandas_ops_other_groups.py --version-date 2026-06-12 --version-id 1 --skip-md --skip-pdf reports 169 status_id=2 planers; planner status_id=0 count becomes 0.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=governance_not_run,global_enrichment_skipped,repair_status_skipped; evidence_refs=code/extract/program_ac_precheck_runner.py;code/extract/heli_pandas_component_status.py;code/extract/heli_pandas_serviceable_status.py;code/extract/heli_pandas_storage_status.py;code/extract/heli_pandas_terminal_br_gate.py;code/heli_pandas_ops_other_groups.py; approval_ref=N/A",
+      "risks": "1) ac_type_mask coverage remains incomplete, so completeness report buckets OPS planers as mixed/unknown. 2) heli_pandas_repair_status.py remains unsafe to replay blindly on this version because of planner-wide past-target override. 3) Planner replay used existing processor functions via one-off scoped script rather than a dedicated maintained runner.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "527d946bf7b8bfe0c46350fa9ce2082990fc2f2690639613cadb0a82d662ef9b",
+      "created_at": "2026-06-13T11:33:36Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.4-medium",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_analytics_load_orchestrator_cf13b564",
+      "workflow_id": "W_dwh_analytics_load",
+      "agent": "orchestrator",
+      "user_goal": "Миграция загрузки: убрать 3 AMOS-Excel, грузить из DWH analytics на любую дату; DE-backlog; regression-контур",
+      "changes": "code/utils/dwh_loader.py, dwh_post_enrichment.py, dwh_golden_replay_export.py; docs/de_tasks.md, changelog, README",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: 2026-06-12: PA=174 SOH=58 HP=11540 OPS=169 PASS completeness; golden 2026-04-08 regression OK\nEvidence: docs/changelog.md 2026-06-13; docs/de_tasks.md; git e4974b84",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_analytics_load:2026-06-13T18:00:00Z",
+      "plan_step_id": "CLOSE",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "DWH migration MVP delivered; extract_master not switched",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "MVP on feature/dwh-bb8: dwh_loader all steps + post-enrichment; verified 2026-06-12",
+      "evidence_pack": "Facts: 2026-06-12: PA=174 SOH=58 HP=11540 OPS=169 PASS completeness; golden 2026-04-08 regression OK\nEvidence: docs/changelog.md 2026-06-13; docs/de_tasks.md; git e4974b84",
+      "success_criteria": "manual-check: python3 code/utils/dwh_loader.py --report-date 2026-06-12 --step all completes; OPS planers > 0",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=governance_not_run; evidence_refs=docs/changelog.md; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "d7db8a0848cfe0aeb977e344fed421093dc0416af6aef6cb49ec3ba4adb2be98",
+      "created_at": "2026-06-13T17:38:23Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 4000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_analytics_load_validator-judge_59755d83",
+      "workflow_id": "W_dwh_analytics_load",
+      "agent": "validator-judge",
+      "user_goal": "Verify extract dataset 2026-06-12 v1 acceptable vs Excel baseline 2026-04-08 v1",
+      "changes": "Read-only validation only; no code changes",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: All 6 dispatch SuccessCriteria PASS: OPS=169>=169; status_id=0=0; PA=174 SOH=58 HP=11540; group_by sets identical {1..42}; OPS delta -1 is 22485 status 2->4 not 22321\nEvidence: script heli_pandas_ops_other_groups.py PASS 169 planers; SQL counts verified on Project CH 10.95.19.132",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_analytics_load:20260613T180000Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "extract dataset acceptance vs Excel baseline; read-only SQL",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "SQL-first + script smoke; INV-* N/A (no sim run)",
+      "evidence_pack": "Facts: All 6 dispatch SuccessCriteria PASS: OPS=169>=169; status_id=0=0; PA=174 SOH=58 HP=11540; group_by sets identical {1..42}; OPS delta -1 is 22485 status 2->4 not 22321\nEvidence: script heli_pandas_ops_other_groups.py PASS 169 planers; SQL counts verified on Project CH 10.95.19.132",
+      "success_criteria": "script: heli_pandas_ops_other_groups.py 2026-06-12 v1 PASS; numeric: OPS>=169 PASS; SQL: status_id=0=0 PASS; SQL: PA/SOH/HP counts PASS; SQL: group_by sets match PASS; SQL: OPS delta documented PASS",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=heli_pandas_ops_other_groups.py;ClickHouse heli_pandas; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "c7275f184ee95c1cfe5fa9f2819cec8155ef8a33fa04c7ffd3b39eaa931b1b8b",
+      "created_at": "2026-06-13T17:45:52Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_analytics_load_governance-compliance_67015dfd",
+      "workflow_id": "W_dwh_analytics_load",
+      "agent": "governance-compliance",
+      "user_goal": "Миграция загрузки: убрать 3 AMOS-Excel, грузить из DWH analytics на любую dату; DE-backlog; regression-контур",
+      "changes": "Process audit only; no code edits by governance",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: validator-judge V1 all 6 criteria PASS; PRE-approval ctx_W_dwh_analytics_load_approval_2fa88650; MVP standalone dwh_loader delivered on feature/dwh-bb8; extract_master switch deferred documented in changelog; P1-P8 partial KG trace; sim INV-* N/A\nEvidence: handoff_W_dwh_analytics_load_validator-judge_59755d83; docs/changelog.md 2026-06-13; ctx approval; feature/dwh-bb8 commits 8ffff135..e4974b84",
+      "drift_check": "UserGoal MVP scope match: standalone DWH load path delivered; full extract_master Excel removal deferred to follow-up per changelog limitation — not silent drift",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_analytics_load:20260613T180000Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "medium-policy close pass after remediation: validator V1, drift_check, PRE-approval retro",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Single governance pass G1 after V1 validator PASS and process remediation",
+      "evidence_pack": "Facts: validator-judge V1 all 6 criteria PASS; PRE-approval ctx_W_dwh_analytics_load_approval_2fa88650; MVP standalone dwh_loader delivered on feature/dwh-bb8; extract_master switch deferred documented in changelog; P1-P8 partial KG trace; sim INV-* N/A\nEvidence: handoff_W_dwh_analytics_load_validator-judge_59755d83; docs/changelog.md 2026-06-13; ctx approval; feature/dwh-bb8 commits 8ffff135..e4974b84",
+      "success_criteria": "governance verdict allow_with_notes; required_gates pass with documented exceptions",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=extract_master_deferred,P1-P8_kg_partial,22321_business_open; evidence_refs=handoff_W_dwh_analytics_load_validator-judge_59755d83;ctx_W_dwh_analytics_load_approval_2fa88650; approval_ref=ctx_W_dwh_analytics_load_approval_2fa88650",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "c62323390821b18fda995e7d39bc0aa2790c9abb7e000ab39c364bb63a5751ab",
+      "created_at": "2026-06-13T17:45:58Z",
+      "modules": [
+        "extract_dwh",
+        "validation",
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 15000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_analytics_load_orchestrator_a24c3e01",
+      "workflow_id": "W_dwh_analytics_load",
+      "agent": "orchestrator",
+      "user_goal": "Миграция загрузки: убрать 3 AMOS-Excel, грузить из DWH analytics на любую дату; DE-backlog; regression-контур",
+      "changes": "code/utils/dwh_loader.py,dwh_post_enrichment.py,dwh_golden_replay_export.py; docs/de_tasks.md,changelog.md,README.md; KG handoffs V1,G1,CLOSE",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: 2026-06-12 v1: PA=174 SOH=58 HP=11540 OPS=169 PASS completeness; validator V1 6/6 PASS; governance allow_with_notes\nEvidence: handoff_W_dwh_analytics_load_validator-judge_59755d83; handoff_W_dwh_analytics_load_governance-compliance_67015dfd; docs/changelog.md; git feature/dwh-bb8 e4974b84",
+      "drift_check": "UserGoal↔Changes match: MVP standalone DWH load delivered; extract_master not switched — explicit documented deferral in changelog/docs not scope creep; sim INV-* out of scope until sim run",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_analytics_load:20260613T180000Z",
+      "plan_step_id": "CLOSE",
+      "approval_gate_id": "W_dwh_analytics_load_close",
+      "approval_status": "approved",
+      "approval_source": "ctx_W_dwh_analytics_load_approval_2fa88650 user_chat_2026-06-13",
+      "risk_tier": "medium",
+      "risk_reasons": "DWH migration MVP closed; extract_master integration follow-up; open 22321 business rule",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "MVP dwh_loader+post_enrichment on feature/dwh-bb8; V1 validator PASS; G1 governance allow_with_notes; workflow close",
+      "evidence_pack": "Facts: 2026-06-12 v1: PA=174 SOH=58 HP=11540 OPS=169 PASS completeness; validator V1 6/6 PASS; governance allow_with_notes\nEvidence: handoff_W_dwh_analytics_load_validator-judge_59755d83; handoff_W_dwh_analytics_load_governance-compliance_67015dfd; docs/changelog.md; git feature/dwh-bb8 e4974b84",
+      "success_criteria": "script: python3 code/heli_pandas_ops_other_groups.py --version-date 2026-06-12 --version-id 1 --skip-md --skip-pdf reports OPS planers=169; numeric: OPS>=169; SQL: heli_pandas status_id=0=0 — verified PASS in V1",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=extract_master_deferred,22321_business; evidence_refs=handoff_W_dwh_analytics_load_validator-judge_59755d83; approval_ref=ctx_W_dwh_analytics_load_approval_2fa88650",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "b9eafa24c9cd146305d66d3e5e726648cf1339682f126f1a3b4825672655a403",
+      "created_at": "2026-06-13T17:46:04Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 5000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -15944,6 +16302,42 @@
       "agent": "orchestrator",
       "created_at": "2026-06-10T17:38:23Z",
       "updated_at": "2026-06-10T17:38:23Z"
+    },
+    {
+      "context_id": "ctx_W_dwh_analytics_load_phase_start_d6338908",
+      "workflow_id": "W_dwh_analytics_load",
+      "context_type": "phase_start",
+      "content": "V1 validation: MVP DWH direct load 2026-06-12 v1 vs Excel baseline 2026-04-08 v1",
+      "agent": "validator-judge",
+      "created_at": "2026-06-13T11:25:48Z",
+      "updated_at": "2026-06-13T17:43:25Z"
+    },
+    {
+      "context_id": "ctx_W_dwh_analytics_load_summary_6599caf6",
+      "workflow_id": "W_dwh_analytics_load",
+      "context_type": "summary",
+      "content": "MVP complete feature/dwh-bb8 e4974b84: dwh_loader+dwh_post_enrichment; 2026-06-12 OPS=169; DE docs/de_tasks.md; gaps: P1-P8 handoffs partial, dwh_as_is not updated, extract_master not switched",
+      "agent": "unknown",
+      "created_at": "2026-06-13T17:38:23Z",
+      "updated_at": "2026-06-13T17:38:23Z"
+    },
+    {
+      "context_id": "ctx_W_dwh_analytics_load_approval_2fa88650",
+      "workflow_id": "W_dwh_analytics_load",
+      "context_type": "approval",
+      "content": "PRE-approval medium-policy W_dwh_analytics_load close+validation: user_chat 2026-06-13 'Прогоняй по полной, строго по правилам, закрывай хвосты' — explicit proceed/close mandate.",
+      "agent": "human",
+      "created_at": "2026-06-13T17:45:47Z",
+      "updated_at": "2026-06-13T17:45:47Z"
+    },
+    {
+      "context_id": "ctx_W_dwh_analytics_load_closure_f78ff1df",
+      "workflow_id": "W_dwh_analytics_load",
+      "context_type": "closure",
+      "content": "Closed: V1 validator 6/6 PASS; G1 governance allow_with_notes; drift_check filled; PRE-approval ctx_2fa88650; branch feature/dwh-bb8 ready for merge review",
+      "agent": "orchestrator",
+      "created_at": "2026-06-13T17:46:08Z",
+      "updated_at": "2026-06-13T17:46:52Z"
     }
   ],
   "meta": {

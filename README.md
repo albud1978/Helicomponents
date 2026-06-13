@@ -435,7 +435,7 @@ DWH_CLICKHOUSE_CA_CERT=/absolute/path/to/RootCA.pem
 | Локальный / рабочий ClickHouse проекта | `config/database_config.yaml` + ENV `CLICKHOUSE_*` | `config/database_config.yaml`, `.env` |
 | Внешний YC DWH (AMOS) | HTTPS / SSL через `clickhouse-connect` | `.env` (`CLICKHOUSE_*` или `DWH_CLICKHOUSE_*`) |
 | Внутренние ETL/validation скрипты | Обычно читают `CLICKHOUSE_*` | `config/load_env.sh`, `config/database_config.yaml` |
-| Ad-hoc анализ внешнего DWH | Предпочтительно через `DWH_CLICKHOUSE_*` | `.env`; выгрузка в Excel: `python3 code/utils/dwh_direct_load.py --help`. **Совпадение строк/ключей с golden:** `--match-golden` (борта из `Program_AC.xlsx`; `(psn,partno)` для `Status_Components`; порядок как в эталоне). |
+| Ad-hoc анализ внешнего DWH | Предпочтительно через `DWH_CLICKHOUSE_*` | `.env`; replay в Excel: `python3 code/utils/dwh_direct_load.py --help`; **прямая загрузка в Project CH:** `python3 code/utils/dwh_loader.py --report-date YYYY-MM-DD --step all` (см. `docs/de_tasks.md`). **Совпадение с golden:** `--match-golden`. |
 
 #### Форматы доступа по слоям DWH
 

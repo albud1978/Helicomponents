@@ -7,7 +7,22 @@
 
 Сейчас данные идут по цепочке: AMOS → DWH (staging → integrated → reports) → Excel → Project ClickHouse → 9-этапный каскад обогащения → GPU. Хотим убрать Excel и загружаться напрямую из DWH analytics на любую дату.
 
-Подготовлен прототип прямой загрузки: `code/utils/dwh_loader.py` (ветка `feature/dwh-bb8`).
+Подготовлен и проверен прототип прямой загрузки (ветка `feature/dwh-bb8`, коммиты `8ffff135`…`e4974b84`):
+
+| Компонент | Назначение |
+|---|---|
+| `code/utils/dwh_loader.py` | Загрузка 3 AMOS-источников из DWH в Project CH |
+| `code/utils/dwh_post_enrichment.py` | Post-load enrichment: planner cascade + `status_id` |
+| `code/utils/dwh_golden_replay_export.py` | Shared SQL / Excel replay / golden compare |
+| `code/utils/dwh_direct_load.py` | CLI-алиас для replay |
+
+**Порядок загрузки:** `program_ac` → `status_overhaul` → `status_components` → `enrich` (шаг `--no-enrich` для отключения).
+
+**Приёмка MVP (2026-06-12 v1):** `program_ac=174`, `status_overhaul=58`, `heli_pandas=11540`, OPS planers=169 (baseline Excel 2026-04-08: 170). Completeness check PASS.
+
+**Interim-источники:** `Status_Components` — `reports.amos_heli_rotables_components_status`; `Program_AC` / `Status_Overhaul` — analytics/source views (as-of). Целевой слой — `analytics.sim_input_*` (задачи ниже).
+
+**Открытый вопрос для DE/бизнеса:** борт `22321` — в DWH `status=111`, strict filter даёт 169 бортов vs 170 в golden.
 
 ## Задачи
 
@@ -105,5 +120,7 @@ processing_dt DateTime
 ## Контакты
 
 - Проект: Алексей Будник
-- Код прототипа: `Helicomponents/code/utils/dwh_loader.py` (ветка `feature/dwh-bb8`)
-- Анализ AS-IS: `data_input/analytics/DWH/dwh_as_is.md`
+- Код: `code/utils/dwh_loader.py`, `code/utils/dwh_post_enrichment.py` (ветка `feature/dwh-bb8`)
+- Workflow KG: `W_dwh_analytics_load`
+- Анализ AS-IS: `data_input/analytics/DWH/dwh_as_is.md` (требует актуализации по фактам P1–P2)
+- Replay/golden: `python3 code/utils/dwh_direct_load.py --report-date YYYY-MM-DD --match-golden`
