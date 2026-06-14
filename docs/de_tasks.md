@@ -18,11 +18,11 @@
 
 **Порядок загрузки:** `program_ac` → `status_overhaul` → `status_components` → `enrich` (шаг `--no-enrich` для отключения).
 
-**Приёмка MVP (2026-06-12 v1):** `program_ac=174`, `status_overhaul=58`, `heli_pandas=11540`, OPS planers=169 (baseline Excel 2026-04-08: 170). Completeness check PASS.
+**Приёмка MVP (2026-06-12 v1):** extract load + post-enrichment; `heli_pandas` без `status_id=0`. **Полная приёмка — только после sim + INV-1…INV-12 PASS** (см. `docs/changelog.md` 2026-06-13).
 
 **Interim-источники:** `Status_Components` — `reports.amos_heli_rotables_components_status`; `Program_AC` / `Status_Overhaul` — analytics/source views (as-of). Целевой слой — `analytics.sim_input_*` (задачи ниже).
 
-**Открытый вопрос для DE/бизнеса:** борт `22321` — в DWH `status=111`, strict filter даёт 169 бортов vs 170 в golden.
+**Важно (контракт модели, 2026-06-13):** golden **`Status_Components.xlsx`** / **`Program_AC.xlsx`** **не имеют** колонки `status`. **`status_id`** в `heli_pandas` — наше поле (каскад обогащения). AMOS **`aircraft.status`** (`source.amos_heli_aircraft`, record lifecycle) **не читать** для воспроизведения golden: фильтр `AND a.status = 0` в `_program_ac_sql` — ошибочный артефакт прототипа, даёт расхождение roster `program_ac` (169 vs 170) без связи с SC/симуляцией. **Follow-up:** default `program_ac_dataframe(..., strict_status=False)` или убрать фильтр; витрина `sim_input_program_ac` — только колонки golden.
 
 ## Задачи
 
@@ -75,12 +75,13 @@ processing_dt DateTime
 **Приоритет:** средний
 **Что нужно:**
 Витрина на базе `staging.amos_heli_aircraft` + SCD-2 срез на дату:
-- `ac_registr, ac_typ, ac_model, owner, operator, homebase, directorate`
+- Колонки **как в golden** `Program_AC.xlsx`: `ac_registr, ac_typ, object_type, description, owner, operator, homebase, homebase_name, directorate`
 - Партиция по `processing_dt` (аналог reports)
+- **Не включать** AMOS `aircraft.status` (record lifecycle) в контракт витрины и не фильтровать `status = 0` без явного бизнес-правила — golden Excel этого не делает
 
 Сейчас эти данные грузятся из Excel `Program_AC.xlsx` (ручная выгрузка из AMOS).
 
-**Приёмка:** запрос на любую дату возвращает реестр бортов
+**Приёмка:** row/key parity с golden `Program_AC` на ту же дату (не произвольный AMOS status-filter)
 
 ---
 
@@ -117,10 +118,26 @@ processing_dt DateTime
 4. **Партиция:** все витрины — `ORDER BY processing_dt`, `PARTITION BY toYYYYMM(processing_dt)`.
 5. **Версионность:** витрины материализованные (INSERT на каждый новый `processing_dt`), не перезаписываемые.
 
+## Приёмка DWH-среза (обязательный sim-gate)
+
+Extract/load **недостаточен**. После `dwh_loader` + post-enrichment на целевой `version_date`:
+
+1. **Sim:** `code/sim_v2/messaging/orchestrator_limiter_v8.py` — прогон на том же `version_date` / `version_id`.
+2. **Validators:** `code/validation/run_all.py` (или `run_all_stream.py`) — **INV-1…INV-12 PASS** по SSoT `config/transitions/invariants.json`; verdict — `validator-judge`.
+3. Extract smoke (counts, churn, golden keys) — **pre-sim**, не финальный verdict.
+
+Без sim **выводы о пригодности среза для GPU не делаются**.
+
+**Результат `2026-06-12 v1` (2026-06-13):** sim-gate **PASS** — workflow `W_dwh_sim_gate_20260612`, runbook `docs/dwh_sim_gate.md`.
+
+**Batch (5 срезов после 08.04):** `code/utils/dwh_batch_sim_gate.py` — 4/5 PASS; FAIL `2026-05-20` → triage `docs/dwh_inv12_acn24223_triage.md`, workflow `W_inv12_acn24223_20260520`.
+
 ## Контакты
 
 - Проект: Алексей Будник
 - Код: `code/utils/dwh_loader.py`, `code/utils/dwh_post_enrichment.py` (ветка `feature/dwh-bb8`)
-- Workflow KG: `W_dwh_analytics_load`
+- Workflow KG: `W_dwh_analytics_load` (extract), `W_dwh_sim_gate_20260612` (sim-gate PASS)
 - Анализ AS-IS: `data_input/analytics/DWH/dwh_as_is.md` (требует актуализации по фактам P1–P2)
 - Replay/golden: `python3 code/utils/dwh_direct_load.py --report-date YYYY-MM-DD --match-golden`
+- **Regression churn (агрегаты):** `code/utils/dwh_aggregate_churn_export.py` — см. `docs/dwh_aggregate_churn_analytics.md`
+- **Sim-gate (обязательная приёмка):** `docs/dwh_sim_gate.md` — orchestrator + INV-1…INV-12

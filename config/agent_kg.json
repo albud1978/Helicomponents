@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-13T17:46:52Z",
+    "updated_at": "2026-06-14T15:37:35Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2189,6 +2189,111 @@
       },
       "created_at": "2026-06-13T17:30:10Z",
       "updated_at": "2026-06-13T17:30:10Z"
+    },
+    {
+      "workflow_id": "W_session_20260614T032819Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/dwh_aggregate_churn_export.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-14T03:28:19Z"
+      },
+      "created_at": "2026-06-14T03:28:19Z",
+      "updated_at": "2026-06-14T03:28:19Z"
+    },
+    {
+      "workflow_id": "W_housekeeping_20260614T043232Z",
+      "goal": "low-risk housekeeping edit of docs/dwh_sim_gate.md",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-14T04:32:32Z"
+      },
+      "created_at": "2026-06-14T04:32:32Z",
+      "updated_at": "2026-06-14T04:32:32Z"
+    },
+    {
+      "workflow_id": "W_dwh_sim_gate_20260612",
+      "goal": "Sim-gate DWH среза 2026-06-12 v1: orchestrator_limiter_v8 + INV-1..INV-12 PASS",
+      "phase": "validation",
+      "owner": "human",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "high-strict"
+      },
+      "usage": {
+        "cumulative_steps": 4,
+        "cumulative_tokens": 185000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-14T15:37:35Z"
+      },
+      "created_at": "2026-06-14T04:33:00Z",
+      "updated_at": "2026-06-14T15:37:35Z"
+    },
+    {
+      "workflow_id": "W_housekeeping_20260614T153707Z",
+      "goal": "low-risk housekeeping edit of docs/dwh_inv12_acn24223_triage.md",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-14T15:37:07Z"
+      },
+      "created_at": "2026-06-14T15:37:07Z",
+      "updated_at": "2026-06-14T15:37:07Z"
+    },
+    {
+      "workflow_id": "W_inv12_acn24223_20260520",
+      "goal": "INV-12 FAIL acn=24223 на срезе 2026-05-20: root cause limiter/quota, repro+logging",
+      "phase": "analysis",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "high-strict"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-14T15:37:35Z"
+      },
+      "created_at": "2026-06-14T15:37:35Z",
+      "updated_at": "2026-06-14T15:37:35Z"
     }
   ],
   "handoffs": [
@@ -14471,6 +14576,177 @@
       "usage": {
         "model": "composer-2.5-fast",
         "est_tokens": 5000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_sim_gate_20260612_orchestrator_0e67f87c",
+      "workflow_id": "W_dwh_sim_gate_20260612",
+      "agent": "orchestrator",
+      "user_goal": "Sim-gate DWH среза 2026-06-12 v1: orchestrator_limiter_v8 + INV-1..INV-12 PASS",
+      "changes": "flight_program clone 2026-04-08->2026-06-12; orchestrator_limiter_v8 264 steps; sim_masterv2_v9=82350 sim_repairline_v9=65700; docs/dwh_sim_gate.md changelog de_tasks updated",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: INV-1..INV-12 PASS run_all.py exit 1 only TEMP-5 FAIL (5 claim mismatch day180); logs output/sim_gate_2026-06-12_*.log\nEvidence: output/sim_gate_2026-06-12_orchestrator.log; output/sim_gate_2026-06-12_validation.log; CH counts masterv2=82350 repairline=65700",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_sim_gate_20260612:2026-06-13T12:00:00Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "sim_v2 GPU run; post-sim invariant validation",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Sim-gate 2026-06-12 v1: clone flight_program, run LIMITER V8, validate INV-1..12",
+      "evidence_pack": "Facts: INV-1..INV-12 PASS run_all.py exit 1 only TEMP-5 FAIL (5 claim mismatch day180); logs output/sim_gate_2026-06-12_*.log\nEvidence: output/sim_gate_2026-06-12_orchestrator.log; output/sim_gate_2026-06-12_validation.log; CH counts masterv2=82350 repairline=65700",
+      "success_criteria": "invariant: INV-1..INV-12 PASS; script: orchestrator exit 0",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=docs/dwh_sim_gate.md;output/sim_gate_2026-06-12_validation.log; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-14T04:34:31Z",
+      "modules": [
+        "validation",
+        "extract_dwh",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 45000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_sim_gate_20260612_orchestrator_e7e81b6d",
+      "workflow_id": "W_dwh_sim_gate_20260612",
+      "agent": "orchestrator",
+      "user_goal": "Sim-gate DWH среза 2026-06-12 v1: orchestrator_limiter_v8 + INV-1..INV-12 PASS",
+      "changes": "flight_program clone 2026-04-08->2026-06-12; orchestrator_limiter_v8 264 steps; sim_masterv2_v9=82350 sim_repairline_v9=65700; docs/dwh_sim_gate.md changelog de_tasks updated",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: INV-1..INV-12 PASS run_all.py exit 1 only TEMP-5 FAIL (5 claim mismatch day180); logs output/sim_gate_2026-06-12_*.log\nEvidence: output/sim_gate_2026-06-12_orchestrator.log; output/sim_gate_2026-06-12_validation.log; CH counts masterv2=82350 repairline=65700",
+      "drift_check": "UserGoal sim-gate PASS ↔ Changes: sim run + INV validation + docs: yes",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_sim_gate_20260612:2026-06-13T12:00:00Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "sim_v2 GPU run; post-sim invariant validation",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Sim-gate 2026-06-12 v1: clone flight_program, run LIMITER V8, validate INV-1..12",
+      "evidence_pack": "Facts: INV-1..INV-12 PASS run_all.py exit 1 only TEMP-5 FAIL (5 claim mismatch day180); logs output/sim_gate_2026-06-12_*.log\nEvidence: output/sim_gate_2026-06-12_orchestrator.log; output/sim_gate_2026-06-12_validation.log; CH counts masterv2=82350 repairline=65700",
+      "success_criteria": "invariant: INV-1..INV-12 PASS; script: orchestrator exit 0",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=docs/dwh_sim_gate.md;output/sim_gate_2026-06-12_validation.log; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "361466d6e5d32a1c4626c5d216b8d4f9848e655af9530ee59afbfa8ee02b9b6a",
+      "created_at": "2026-06-14T04:34:36Z",
+      "modules": [
+        "validation",
+        "extract_dwh",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 45000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_sim_gate_20260612_governance-compliance_f41e8583",
+      "workflow_id": "W_dwh_sim_gate_20260612",
+      "agent": "governance-compliance",
+      "user_goal": "Sim-gate DWH 2026-06-12 + batch 5 срезов: governance pass",
+      "changes": "docs/dwh_sim_gate.md runbook+batch; docs/dwh_inv12_acn24223_triage.md; docs/changelog/de_tasks; dwh_loader+dual_loader INSERT fix; dwh_batch_sim_gate.py; dwh_aggregate_churn_export.py",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: 2026-06-12 INV-1..12 PASS; batch 4/5 PASS; 2026-05-20 INV-12 FAIL acn=24223 only; no sim_v2 code change; flight_program clone assumption documented\nEvidence: docs/dwh_sim_gate.md; docs/dwh_inv12_acn24223_triage.md; output/dwh_sim_batch/summary.txt (local)",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_sim_gate_20260612:2026-06-14T05:00:00Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "sim-gate high-strict; batch mutates CH slices; 1 INV-12 FAIL deferred to triage workflow",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Governance single pass: sim-gate+batch docs+infra fix; INV-12 acn24223 → separate W_inv12 workflow",
+      "evidence_pack": "Facts: 2026-06-12 INV-1..12 PASS; batch 4/5 PASS; 2026-05-20 INV-12 FAIL acn=24223 only; no sim_v2 code change; flight_program clone assumption documented\nEvidence: docs/dwh_sim_gate.md; docs/dwh_inv12_acn24223_triage.md; output/dwh_sim_batch/summary.txt (local)",
+      "success_criteria": "invariant: INV-1..12 PASS on 2026-06-12; script: batch 5 loads OK; manual-check: governance allow_with_notes for 05-20 FAIL scope",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=docs/dwh_sim_gate.md;docs/dwh_inv12_acn24223_triage.md; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "424ce944824e994114c3f8b99df772310e4ec131cebb5ad9997264741ab20cfe",
+      "created_at": "2026-06-14T15:37:35Z",
+      "modules": [
+        "validation",
+        "extract_dwh",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 55000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_sim_gate_20260612_orchestrator_735626f3",
+      "workflow_id": "W_dwh_sim_gate_20260612",
+      "agent": "orchestrator",
+      "user_goal": "Sim-gate DWH 2026-06-12 + batch 5 срезов: документировано, governance G1",
+      "changes": "same as G1; orchestrator close prep",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: governance G1 allow_with_notes; batch 4/5; triage doc acn24223; user approved commit+push+investigation\nEvidence: docs/dwh_sim_gate.md; governance G1 handoff",
+      "drift_check": "UserGoal sim-gate+batch docs ↔ Changes: yes",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_sim_gate_20260612:2026-06-14T05:00:00Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "high-strict close; INV-12 05-20 deferred not waived",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Close W_dwh_sim_gate after commit; open W_inv12_acn24223 investigation",
+      "evidence_pack": "Facts: governance G1 allow_with_notes; batch 4/5; triage doc acn24223; user approved commit+push+investigation\nEvidence: docs/dwh_sim_gate.md; governance G1 handoff",
+      "success_criteria": "script: git commit+push feature/dwh-bb8; manual-check: governance handoff present",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=handoff governance G1; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "8012f3a8a5cea6dfd7ec02a196b8d552bb9fd5a818c32728f38102c3251f5672",
+      "created_at": "2026-06-14T15:37:35Z",
+      "modules": [
+        "validation",
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 40000,
         "source": "char_estimate"
       }
     }

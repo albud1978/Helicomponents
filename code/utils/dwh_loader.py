@@ -116,11 +116,12 @@ def enrich(df, vd, vi, ch, md):
     return _align(pdf, PANDAS_COLS)
 
 def _batch_insert(ch, df, table, desc, batch=50000):
+    cols = ", ".join(f"`{c}`" for c in df.columns)
     total = 0
     for start in range(0, len(df), batch):
         chunk = df.iloc[start:start+batch]
         data = [tuple(row) for row in chunk.values]
-        ch.execute(f"INSERT INTO {table} VALUES", data)
+        ch.execute(f"INSERT INTO {table} ({cols}) VALUES", data)
         total += len(chunk)
     print(f"  {table}: {total:,} inserted ({desc})")
     return total

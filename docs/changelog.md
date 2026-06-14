@@ -1,5 +1,100 @@
 # Changelog
 
+## 2026-06-13 — Batch sim-gate: 5 DWH-срезов после 08.04
+
+**Скрипт:** `code/utils/dwh_batch_sim_gate.py` | **Evidence:** `output/dwh_sim_batch/`
+
+| Дата | INV-1…12 |
+|---|---|
+| 2026-04-15 | PASS |
+| 2026-05-01 | PASS |
+| 2026-05-20 | **FAIL** (INV-12: acn=24223, 85 day-rows, day≥2293) |
+| 2026-06-05 | PASS |
+| 2026-06-11 | PASS |
+
+**Infra fix:** INSERT в `heli_pandas` с явным списком колонок (`dwh_loader.py`, `dual_loader.py`) — устранён crash «Expected 33 columns, got 26».
+
+**Triage:** `docs/dwh_inv12_acn24223_triage.md` — 1 планер Mi-8Т, post-sim (не t=0), не агрегаты.
+
+**Follow-up:** `W_inv12_acn24223_20260520` — limiter/quota root cause (high, sim_v2).
+
+---
+
+## 2026-06-13 — Sim-gate DWH `2026-06-12 v1`: PASS (INV-1…INV-12)
+
+**Workflow:** `W_dwh_sim_gate_20260612` | **Branch:** `feature/dwh-bb8` | **Risk:** high | **Profile:** high-strict
+
+**Суть:** выполнен обязательный sim-gate для DWH-среза — LIMITER V8 + post-sim validators.
+
+**Шаги:**
+1. Interim-клон `flight_program_fl` / `flight_program_ac` с `2026-04-08` → `2026-06-12` (Program.xlsx вне DWH scope).
+2. `orchestrator_limiter_v8.py --version-date 2026-06-12 --end-day 3650` — exit 0, 264 шага, 82_350 строк `sim_masterv2_v9`, 65_700 `sim_repairline_v9`.
+3. `code/validation/run_all.py --version-date 20260612` — **INV-1…INV-12 PASS** (12/12).
+
+**Evidence:** `output/sim_gate_2026-06-12_orchestrator.log`, `output/sim_gate_2026-06-12_validation.log`, runbook `docs/dwh_sim_gate.md`.
+
+**Follow-up (не блокирует sim-gate):** TEMP-5 FAIL — 5 переходов 4→2 на day=180 без RL claim metadata (в т.ч. acn 22485); отдельный RTC/repairline triage.
+
+**Verdict:** полная приёмка DWH-среза `2026-06-12 v1` для GPU — **PASS** по INV-1…INV-12.
+
+---
+
+## 2026-06-13 — Уточнение: AMOS `aircraft.status` ≠ `status_id` (retract false trail)
+
+**Branch**: `feature/dwh-bb8` | **Workflow**: doc-fix после разбора `W_dwh_analytics_load`
+
+**Суть (исправление ошибочной интерпретации):**
+- Golden **`Status_Components.xlsx`** и **`Program_AC.xlsx`** **не содержат** поля `status`. В `heli_pandas` используется **`status_id`** — наша модель, задаётся каскадом обогащения (`overhaul` → `program_ac` → …), не читается из rotables Excel/DWH reports.
+- Поле **`source.amos_heli_aircraft.status`** (AMOS `aircraft.status`, INT, record lifecycle) **не входит** в контракт golden Excel. Фильтр `AND a.status = 0` в `_program_ac_sql` (`dwh_golden_replay_export.py`) — **артефакт прототипа DWH→program_ac**, не legacy extract.
+- История «22321 / status=111 / human gate» **не относится** к загрузке `Status_Components` и симуляции; влияет только на состав **`program_ac`** при DWH-пути, если оставить этот фильтр.
+- Сравнение **OPS planers между разными `version_date`** (08.04 vs 12.06) **не является** осмысленным regression-критерием (разные срезы флота).
+
+**Follow-up (код, не в этом коммите):** убрать или явно отключить `strict_status`/`a.status = 0` в `program_ac_dataframe` default; `program_ac` собирать по тем же полям, что golden Excel / `--match-golden`.
+
+**Документы:** `docs/de_tasks.md` (задача 3), секция DWH ниже — retract human gate по 22321.
+
+---
+
+## 2026-06-13 — DWH приёмка: sim INV-1…INV-12 обязательны (не N/A)
+
+**Branch**: `feature/dwh-bb8` | **Контекст**: коррекция критериев `W_dwh_analytics_load`
+
+**Позиция (утверждено):**
+- Загрузка extract (`heli_pandas`, `program_ac`, …) **не является** финальной приёмкой DWH-миграции.
+- **Обязательный контур:** прогон симуляции на целевом `version_date` / `version_id` → post-sim validators **`INV-1…INV-12`** (+ TEMP по SSoT) через `code/validation/run_all.py` / `validator-judge`.
+- Формулировка «sim INV-* N/A до прогона» в governance **не означает** «можно закрыть без sim» — означает лишь, что sim **ещё не выполнен**. **Выводы о пригодности среза без sim делать нельзя.**
+
+**Статус `W_dwh_analytics_load`:** закрыт как **extract/MVP infra**; **sim-gate на `2026-06-12 v1` — выполнен PASS** (`W_dwh_sim_gate_20260612`, см. секцию sim-gate ниже).
+
+**SuccessCriteria (sim-gate, черновик):**
+1. `script:` `orchestrator_limiter_v8.py --version-date 2026-06-12 --version-id 1 …` — exit 0, данные в `sim_masterv2_v9` / `sim_repairline_v9`.
+2. `script:` `code/validation/run_all.py` (или stream) на том же `version_id` — **INV-1…INV-12 PASS** (explicit per invariant).
+3. Сравнение с baseline-срезом — только **одинаковый горизонт/профиль**, не смешивать с extract smoke между разными датами.
+
+**Extract-only уже сделано:** load + post-enrichment + churn/regression по составу агрегатов (`docs/dwh_aggregate_churn_analytics.md`).
+
+---
+
+## 2026-06-13 — Aggregate churn: количественная сводка входа/выхода (regression check)
+
+**Суть:** свёрнутая количественная проверка состава агрегатов (md_components scope) между срезами; детальная аналитика перестановок отложена.
+
+**Инструмент:** `code/utils/dwh_aggregate_churn_export.py` (`--source heli_pandas|dwh`).
+
+**Сводка:**
+
+| Период | Exited | Entered | Net | Примечание |
+|---|---:|---:|---:|---|
+| 08.04→12.06 (heli_pandas) | 64 | 108 | +44 | entered median mfg 2025; exited gb=38 (39 шт.) |
+| 05.06→12.06 (DWH) | 3 | 16 | +13 | location_changed=317 |
+| 11.06→12.06 (DWH) | 0 | 0 | 0 | location_changed=13 |
+
+**Документация:** `docs/dwh_aggregate_churn_analytics.md` — таблицы по group_by, mfg-бакетам, артефакты, отложенные срезы (RA-кластеры, TREE→EXTERNAL).
+
+**Excel:** `output/aggregate_churn_2026-04-08_vs_2026-06-12.xlsx`, `…_2026-06-05_vs_2026-06-12.xlsx`, `…_2026-06-11_vs_2026-06-12.xlsx`.
+
+---
+
 ## 2026-06-13 — DWH direct load: 3 AMOS-источника без Excel (W_dwh_analytics_load)
 
 **Workflow**: `W_dwh_analytics_load` | **Risk**: medium | **Profile**: medium-policy | **Branch**: `feature/dwh-bb8`
@@ -10,19 +105,21 @@
 - Shared SQL в `dwh_golden_replay_export.py`; replay/golden — `dwh_direct_load.py`.
 - DE-backlog: `docs/de_tasks.md` (5 задач на `analytics.sim_input_*`).
 
-**Приёмка MVP** (`2026-06-12 v1`): `program_ac=174`, `status_overhaul=58`, `heli_pandas=11540`, OPS planers=169 (baseline Excel `2026-04-08`: 170). Completeness check PASS.
+**Приёмка MVP (extract-only, `2026-06-12 v1`):** load + enrichment OK; `heli_pandas=11540`, `status_id=0`=0 после cascade. **Sim-gate: PASS** — `docs/dwh_sim_gate.md`, INV-1…INV-12 (2026-06-13).
 
-**Validation (V1, validator-judge)**: 6/6 PASS — OPS=169, `status_id=0`=0, `group_by` sets идентичны baseline; delta −1 = борт 22485 (status 2→4), не 22321.
+**Validation (V1, validator-judge):** extract smoke на 2026-06-12; **не заменяет** sim INV-1…INV-12. Часть dispatch-критериев (OPS delta между датами, group_by set compare) **признаны слабыми** — retract 2026-06-13.
 
-**Governance (G1)**: `allow_with_notes` — `extract_master` deferred, `22321` business open, sim INV-* N/A до прогона.
+**Governance (G1):** `allow_with_notes` — extract infra; **sim validation deferred**, не waived.
 
-**Status**: workflow `W_dwh_analytics_load` **closed** (2026-06-13).
+**Status**: workflow `W_dwh_analytics_load` **closed** как extract/MVP (2026-06-13); **полная приёмка DWH-среза — sim PASS** (`W_dwh_sim_gate_20260612`, 2026-06-13).
 
 **Ограничения / follow-up**:
+- ~~**BLOCKER приёмки:** sim на `2026-06-12 v1` + `INV-1…INV-12` PASS~~ — **снят** (2026-06-13).
+- TEMP-5 (claim metadata day=180): follow-up RTC, не блокирует INV-gate.
 - `Status_Components` interim из `reports` (не `analytics`) до витрины DE.
 - `extract_master.py` не переключён — standalone path (follow-up workflow).
 - Horizon DWH: `reports` с 2026-03-05.
-- **Human gate**: правило для борта `22321` (`status=111` в DWH → 169 vs 170 OPS).
+- **Техдолг:** `_program_ac_sql`: не фильтровать `aircraft.status` без согласования — golden Excel этого не делает (retract 2026-06-13).
 
 ## 2026-06-10 — MD Components SSoT: partseqno_i и psn_spawn_start в Excel (дорешивание W_partno_comp_to_partseqno)
 

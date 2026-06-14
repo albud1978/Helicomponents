@@ -613,9 +613,10 @@ def insert_data(client, df, table_name, description):
         
         # Простой рабочий подход - как в успешных загрузчиках
         data_tuples = [tuple(row) for row in df.values]
+        cols = ", ".join(f"`{c}`" for c in df.columns)
         
-        # Загружаем
-        client.execute(f'INSERT INTO {table_name} VALUES', data_tuples)
+        # Загружаем (явный список колонок — таблица может быть шире DataFrame)
+        client.execute(f'INSERT INTO {table_name} ({cols}) VALUES', data_tuples)
         
         print(f"✅ Загружено {len(data_tuples):,} записей в {table_name}")
         return len(data_tuples)
