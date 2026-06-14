@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-14T15:46:32Z",
+    "updated_at": "2026-06-14T15:46:44Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2287,13 +2287,13 @@
         "profile": "high-strict"
       },
       "usage": {
-        "cumulative_steps": 0,
-        "cumulative_tokens": 0,
+        "cumulative_steps": 1,
+        "cumulative_tokens": 62000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-14T15:37:35Z"
+        "last_updated": "2026-06-14T15:46:44Z"
       },
       "created_at": "2026-06-14T15:37:35Z",
-      "updated_at": "2026-06-14T15:37:35Z"
+      "updated_at": "2026-06-14T15:46:44Z"
     }
   ],
   "handoffs": [
@@ -14789,6 +14789,48 @@
       "usage": {
         "model": "composer-2.5-fast",
         "est_tokens": 12000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_inv12_acn24223_20260520_research-graph-analyst_f3a80c66",
+      "workflow_id": "W_inv12_acn24223_20260520",
+      "agent": "research-graph-analyst",
+      "user_goal": "INV-12 FAIL acn=24223: root cause limiter/quota",
+      "changes": "R1 read-only: SQL sim_masterv2_v9 trajectories + code path rtc_quota_v8/limiter/transitions_v8",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: H1 confirmed repromote 3->2 @2288 limiter=0 adaptive 2288->2293 ppr+398; 06-12 direct 2->7 @1318 under oh; docs/dwh_inv12_acn24223_triage.md updated\nEvidence: SQL sim_masterv2_v9 acn24223; rtc_quota_v8.py; rtc_limiter_optimized.py; rtc_state_transitions_v8.py",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_inv12_acn24223_20260520:2026-06-14",
+      "plan_step_id": "R1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "sim_v2 RTC/limiter analysis; fix requires human gate",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Root cause chain for acn24223 INV-12 FAIL on 20260520",
+      "evidence_pack": "Facts: H1 confirmed repromote 3->2 @2288 limiter=0 adaptive 2288->2293 ppr+398; 06-12 direct 2->7 @1318 under oh; docs/dwh_inv12_acn24223_triage.md updated\nEvidence: SQL sim_masterv2_v9 acn24223; rtc_quota_v8.py; rtc_limiter_optimized.py; rtc_state_transitions_v8.py",
+      "success_criteria": "SQL: trajectory 2288-2293 documented; invariant: FAIL vs PASS same acn reproduced; manual-check: root cause hypothesis with code refs",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=docs/dwh_inv12_acn24223_triage.md; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-14T15:46:44Z",
+      "modules": [
+        "step_logic",
+        "validation"
+      ],
+      "usage": {
+        "model": "claude-opus-4.8",
+        "est_tokens": 62000,
         "source": "char_estimate"
       }
     }
