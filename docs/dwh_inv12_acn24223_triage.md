@@ -91,6 +91,30 @@ day=1318  st=7 unsvc ppr=269939  oh=270000  (−61 до порога)
 - `invariant:` воспроизведение INV-12 FAIL на 20260520 и PASS на 20260612 для одного acn
 - `manual-check:` root-cause hypothesis с evidence (sim log или SQL), согласована с человеком до patch
 
+## Root cause (R1, research-graph-analyst + SQL, 2026-06-14)
+
+**Статус:** подтверждена цепочка в sim_v2 (high-risk, fix — только после согласования).
+
+1. **Demote 2→3 @ day=1364** при `ppr=269908` (остаток OH ≈ 92 мин) — планер «заморожен» в serviceable.
+2. **Repromote 3→2 @ day=2288** — P1-квота выбирает кандидата по `rank=idx` **без** проверки `oh-ppr`; inline-limiter → `limiter=0`.
+3. **`limiter=0` skip в reduction** (`rtc_limiter_optimized.py`) — агент не зажимает adaptive-шаг.
+4. **Adaptive jump 2288→2293** — инкремент ~490 мин → `ppr=270398` (+398); **ops→unsvc** проверяется look-ahead **после** инкремента (`rtc_state_transitions_v8.py`).
+
+На **2026-06-12** нет цикла 2→3→2 у порога: прямой выход 2→7 @ day=1318 при `ppr=269939 < oh`, с `limiter=3` за шагом раньше.
+
+**Код (точки):**
+
+| Файл | Суть |
+|---|---|
+| `code/sim_v2/messaging/rtc_quota_v8.py` | P1 promote по idx, без OH-запаса |
+| `code/sim_v2/messaging/rtc_state_transitions_v7.py` | svc→ops + inline limiter |
+| `code/sim_v2/messaging/rtc_compute_limiter_device.py` | `days_to_oh=0` у порога |
+| `code/sim_v2/messaging/rtc_limiter_optimized.py` | skip `limiter==0` в min-reduction |
+| `code/sim_v2/messaging/rtc_state_transitions_v8.py` | ops→unsvc после инкремента |
+| `code/sim_v2/messaging/orchestrator_limiter_v8.py` | порядок фаз: ops → quota → post-quota |
+
+**Кандидаты fix (human gate):** OH-aware promote; guard `limiter=0` → adaptive=1 или немедленный 2→7; пересмотр момента проверки INV-12.
+
 ## Evidence (локально, не в git)
 
 - `output/dwh_sim_batch/sim_gate_2026-05-20.log`

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-14T15:37:35Z",
+    "updated_at": "2026-06-14T15:46:32Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2236,8 +2236,8 @@
       "workflow_id": "W_dwh_sim_gate_20260612",
       "goal": "Sim-gate DWH среза 2026-06-12 v1: orchestrator_limiter_v8 + INV-1..INV-12 PASS",
       "phase": "validation",
-      "owner": "human",
-      "status": "active",
+      "owner": "orchestrator",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2245,13 +2245,13 @@
         "profile": "high-strict"
       },
       "usage": {
-        "cumulative_steps": 4,
-        "cumulative_tokens": 185000,
+        "cumulative_steps": 5,
+        "cumulative_tokens": 197000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-14T15:37:35Z"
+        "last_updated": "2026-06-14T15:46:32Z"
       },
       "created_at": "2026-06-14T04:33:00Z",
-      "updated_at": "2026-06-14T15:37:35Z"
+      "updated_at": "2026-06-14T15:46:32Z"
     },
     {
       "workflow_id": "W_housekeeping_20260614T153707Z",
@@ -14749,6 +14749,48 @@
         "est_tokens": 40000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_sim_gate_20260612_docs-curator_02468311",
+      "workflow_id": "W_dwh_sim_gate_20260612",
+      "agent": "docs-curator",
+      "user_goal": "Sim-gate DWH 2026-06-12 + batch 5 срезов: документировано, governance G1",
+      "changes": "docs/dwh_sim_gate.md; docs/dwh_aggregate_churn_analytics.md; docs/dwh_inv12_acn24223_triage.md; docs/changelog.md; docs/de_tasks.md",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: changelog synced; runbook+batch+triage; commit 24f5097c pushed feature/dwh-bb8\nEvidence: docs/changelog.md; docs/dwh_sim_gate.md; git 24f5097c",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_sim_gate_20260612:2026-06-14T05:00:00Z",
+      "plan_step_id": "D1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "high-strict sim-gate release docs",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Sync changelog+runbook+batch+triage docs for sim-gate close",
+      "evidence_pack": "Facts: changelog synced; runbook+batch+triage; commit 24f5097c pushed feature/dwh-bb8\nEvidence: docs/changelog.md; docs/dwh_sim_gate.md; git 24f5097c",
+      "success_criteria": "manual-check: changelog sections 2026-06-13 present; runbook links valid",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=docs/changelog.md; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "7aedc22201664667cd57557827db7c6ceff0e407b9e93233a8cbf7ca8fb6d024",
+      "created_at": "2026-06-14T15:46:32Z",
+      "modules": [
+        "validation",
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -16614,6 +16656,15 @@
       "agent": "orchestrator",
       "created_at": "2026-06-13T17:46:08Z",
       "updated_at": "2026-06-13T17:46:52Z"
+    },
+    {
+      "context_id": "ctx_W_dwh_sim_gate_20260612_closure_d9cb3a1c",
+      "workflow_id": "W_dwh_sim_gate_20260612",
+      "context_type": "closure",
+      "content": "Documented+committed+pushed; G1+D1; INV-12 → W_inv12",
+      "agent": "orchestrator",
+      "created_at": "2026-06-14T15:46:32Z",
+      "updated_at": "2026-06-14T15:46:32Z"
     }
   ],
   "meta": {
