@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-15T13:09:09Z",
+    "updated_at": "2026-06-15T18:56:40Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2320,7 +2320,7 @@
     {
       "workflow_id": "W_repair_days_dwh_rewire_20260615",
       "goal": "Restore dropped repair_days enrichment steps in DWH pipeline (heli_pandas_repair_status.py + repair_days_calculator.py) to fix repair_days=NULL on status=4 planers and TEMP-5",
-      "phase": "implementation",
+      "phase": "validation",
       "owner": "orchestrator",
       "status": "active",
       "caps": {
@@ -2329,13 +2329,55 @@
         "max_cost": null
       },
       "usage": {
-        "cumulative_steps": 1,
-        "cumulative_tokens": 55000,
+        "cumulative_steps": 3,
+        "cumulative_tokens": 133000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-15T13:06:51Z"
+        "last_updated": "2026-06-15T18:22:29Z"
       },
       "created_at": "2026-06-15T12:56:29Z",
-      "updated_at": "2026-06-15T13:06:51Z"
+      "updated_at": "2026-06-15T18:22:29Z"
+    },
+    {
+      "workflow_id": "W_sentinel_unify_dwh_20260615",
+      "goal": "Унификация sentinel пропущенных дат в dwh_loader (1971-01-01 -> 1970-01-01) под существующие extract-guards; устранить ложный re-flip near-OH планеров в status=2 (INV-12 22619/22983) и закрепить precheck",
+      "phase": "analyze",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "high-strict"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 31000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-15T18:56:40Z"
+      },
+      "created_at": "2026-06-15T17:19:55Z",
+      "updated_at": "2026-06-15T18:56:40Z"
+    },
+    {
+      "workflow_id": "W_day0_storage_screen_20260615",
+      "goal": "Add additive day-0 planner terminal storage screen in heli_pandas_storage_status.py",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-policy"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 22000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-15T18:32:11Z"
+      },
+      "created_at": "2026-06-15T18:29:39Z",
+      "updated_at": "2026-06-15T18:32:11Z"
     }
   ],
   "handoffs": [
@@ -14963,6 +15005,174 @@
         "est_tokens": 55000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_repair_days_dwh_rewire_20260615_coder-general_99797567",
+      "workflow_id": "W_repair_days_dwh_rewire_20260615",
+      "agent": "coder-general",
+      "user_goal": "Проект Helicomponents, корень /media/DATA_BIG/Projects/Heli/Helicomponents. ClickHouse через from config_loader import get_clickhouse_client. RiskTier=high. Задача — чистый reload+enrichment ОДНОГО слайса version_date=2026-05-20, version_id=1, затем diff против baseline. НЕ запускать симуляцию. НЕ трогать другие version_date.",
+      "changes": "Data operations only, no code edits. Precheck counts: program_ac=172, status_overhaul=57, heli_pandas before=11530. Deleted only heli_pandas where version_date=2026-05-20 and version_id=1 with mutations_sync=1; after delete=0. Requested dwh_loader command with status_components+enrich returned rc=1 because heli_raw already existed and heli_pandas was still 0. Narrow reload used dwh_loader functions to fetch DWH Status_Components=202091, prepare heli_pandas=11530 with target_date 1970 sentinel count=11423, insert only heli_pandas=11530, then run_post_enrichment rc=0. Simulation was not run; other version_date not touched intentionally.",
+      "facts": "",
+      "assumptions": "Assumption: using dwh_loader internal functions for narrow heli_pandas-only reload is acceptable because штатный command cannot reload heli_pandas while preserving existing heli_raw; Risks if false: orchestrator may require a code-level loader path before repeating this operation. Assumption: E applies to planers/aircraft only; Risks if false: aggregate status4 bad repair_days=20 needs separate enrichment owner.",
+      "evidence": "A status by class after reload: aggregates total 11244: status2=5845 (target1970=5808, non1970=37), status3=1833, status4=70, status6=1650, status7=1846; aggregate status0=0. Planers total 286: status1=84 (all target1970), status2=173 (target1970=171, non1970=2), status4=3, status6=26. Baseline compare: planers status2 281 -> 173 (expected about 260, unexpected -108); status4 3 -> 3; aggregate status0 remains 0; aggregate distribution differs mainly status2 5808+ -> 5845 and new status4=70 while status3/6/7 match listed baseline counts. B stranding verdict: PASS, aggregates group_by>2 status_id=0 count=0. C near-OH found all 21, target_date=1970-01-01 for all; status6 only 7 acn: 22248,22356,22619,22825,25201,25856,25884; BLOCKER status1 not 6/7 for 14 acn: 22300,22337,22606,22628,22693,22764,22781,22817,22841,22864,22885,22900,22983,24146. D planers target_date=1970 count=281; status2=173, status2_target1970=171, status2_non1970=2, status6_7=26; expected status2 about 260 not met. E repair_days: status4 planers=3 and bad repair_days NULL/0=0 PASS; all status4 rows=73 with bad repair_days=20 but these include non-planer aggregates. Dependencies after reload still program_ac=172, status_overhaul=57. Logs: original dwh_loader status_components+enrich rc=1 due heli_raw=202091/heli_pandas=0 guard; narrow reload+run_post_enrichment rc=0; enrichment summary ops_before=0, planner_zero_before=286, ops_after=173, planner_zero_after=0.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_repair_days_dwh_rewire_20260615:2026-06-15T17:36:30Z",
+      "plan_step_id": "I2",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "DWH mutation DELETE+reload of heli_pandas slice; post-enrichment changes operational statuses; verification found unexpected near-OH/status2 drift",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A coder handoff; governance pending",
+      "human_gate_required": "yes",
+      "plan_card": "Reload only heli_pandas for 2026-05-20 v1 from DWH with new target_date sentinel, run post-enrichment, then SELECT verification A-E; no simulation.",
+      "evidence_pack": "A status by class after reload: aggregates total 11244: status2=5845 (target1970=5808, non1970=37), status3=1833, status4=70, status6=1650, status7=1846; aggregate status0=0. Planers total 286: status1=84 (all target1970), status2=173 (target1970=171, non1970=2), status4=3, status6=26. Baseline compare: planers status2 281 -> 173 (expected about 260, unexpected -108); status4 3 -> 3; aggregate status0 remains 0; aggregate distribution differs mainly status2 5808+ -> 5845 and new status4=70 while status3/6/7 match listed baseline counts. B stranding verdict: PASS, aggregates group_by>2 status_id=0 count=0. C near-OH found all 21, target_date=1970-01-01 for all; status6 only 7 acn: 22248,22356,22619,22825,25201,25856,25884; BLOCKER status1 not 6/7 for 14 acn: 22300,22337,22606,22628,22693,22764,22781,22817,22841,22864,22885,22900,22983,24146. D planers target_date=1970 count=281; status2=173, status2_target1970=171, status2_non1970=2, status6_7=26; expected status2 about 260 not met. E repair_days: status4 planers=3 and bad repair_days NULL/0=0 PASS; all status4 rows=73 with bad repair_days=20 but these include non-planer aggregates. Dependencies after reload still program_ac=172, status_overhaul=57. Logs: original dwh_loader status_components+enrich rc=1 due heli_raw=202091/heli_pandas=0 guard; narrow reload+run_post_enrichment rc=0; enrichment summary ops_before=0, planner_zero_before=286, ops_after=173, planner_zero_after=0.",
+      "success_criteria": "SQL: program_ac/status_overhaul counts exist and unchanged; DELETE only heli_pandas where version_date=2026-05-20 and version_id=1; reload+enrich rc=0; A status distribution compared to baseline; B aggregates group_by>2 status_id=0 must remain 0; C 21 near-OH planers must be status_id IN (6,7); D target_date missing sentinel=1970-01-01 and planer status2 about 260; E status_id=4 planers repair_days not NULL/0.",
+      "compliance_checklist": "decision=reject; required_gates=fail; exceptions=C_near_OH_not_6_7;D_planer_status2_unexpected_shift;requested_dwh_loader_command_rc1; evidence_refs=pre_counts_program_ac_172_status_overhaul_57;delete_after_0;narrow_reload_rc0;verification_select_A_E; approval_ref=N/A",
+      "risks": "BLOCKER: 14/21 near-OH planers remained status_id=1, not 6/7. BLOCKER: planer status2 dropped 281->173 instead of about 260. Non-blocking: aggregate status0 stranding did not occur.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Data reload/verification only; no Domain Graph/SSoT schema update",
+      "prev_handoff_hash": "5bbc2cbf8129ca4a032b9e6e03e9e48b480d9638c293ccd5e72b61c8bcd74a38",
+      "created_at": "2026-06-15T17:36:30Z",
+      "modules": [
+        "infra",
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 42000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_repair_days_dwh_rewire_20260615_coder-general_4841dcb9",
+      "workflow_id": "W_repair_days_dwh_rewire_20260615",
+      "agent": "coder-general",
+      "user_goal": "Проект Helicomponents, корень /media/DATA_BIG/Projects/Heli/Helicomponents. RiskTier=high. Задача — прогнать симуляцию и полную валидацию для version_date=2026-05-20, version_id=1, и вернуть ОБЪЕКТИВНЫЕ числа. НЕ менять код. НЕ перезагружать heli_pandas (слайс уже перезагружен и обогащён с новой sentinel-логикой: ops-планеры=173, агрегатов в status=0 нет).",
+      "changes": "Прогон без правок кода.\n- Использован уже завершённый штатный LIMITER V8 run: orchestrator_limiter_v8.py --version-date 2026-05-20 --end-day 3650 --max-steps 10000, rc=0.\n- Запущена полная SQL-first валидация run_all.py для version_date=20260520/version_id=1.\n- Выполнен read-only SELECT для детализации INV-12.",
+      "facts": "",
+      "assumptions": "No code changed; heli_pandas was not reloaded by this task. Risks if false: external concurrent process may have changed ClickHouse tables outside this run.",
+      "evidence": "Commands:\n1) source ~/miniconda3/etc/profile.d/conda.sh && conda activate cuda13 && source config/load_env.sh && export CUBE_CONFIG_PATH=\"$PWD/config\" && export CUDA_PATH=\"$HOME/miniconda3/targets/x86_64-linux\" && export LD_LIBRARY_PATH=\"$HOME/miniconda3/lib:${LD_LIBRARY_PATH:-}\" && /home/albud/miniconda3/envs/cuda13/bin/python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2026-05-20 --end-day 3650 --max-steps 10000 -> rc=0.\n2) python3 code/validation/run_all.py --version-date 20260520 --version-id 1 --table-main sim_masterv2_v9 --table-repair sim_repairline_v9 -> rc=1 due INV-12 FAIL.\nSimulation outputs: sim_masterv2_v9 inserted=83801; sim_repairline_v9 inserted=65700; sim_masterv2_v9_daily=43800 rows for (20260520,1).\nValidation verdicts: INV-1 PASS 0; INV-2 PASS post_warmup_violations=0; INV-3 PASS violations=0 max_concurrent_repair=18 repair_quota=18; INV-4 PASS 0; INV-5 PASS real_violations=0 transition_out_artifacts=486; INV-6 PASS 0; INV-7 PASS 0; INV-8 PASS 0; INV-9 PASS 0; INV-10 PASS illegal_transitions=0 balance OK; INV-11 PASS violating_datasets=0; INV-12 FAIL violations=536; TEMP-1 PASS total_violations=0; TEMP-4 PASS violations=0; TEMP-5 PASS invalid_claim_rows=0 transition_claim_mismatch=0 overlap_violations=0 bank_underflow_suspicions=0.\nINV-12 detail: 536 rows, 2 aircraft, group_bys=[1], days 1..3650/date 2026-05-21..2036-05-17, max_exceed=51. Offenders: aircraft_number=22619 serialno=22619 group_by=1 planer status=6 ppr=270051 oh=270000 exceed=51 rows=268; aircraft_number=22983 serialno=22983 group_by=1 planer status=7 ppr=270029 oh=270000 exceed=29 rows=268. Aggregates among INV-12 violations: 0.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_repair_days_dwh_rewire_20260615:20260615T182229Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "High-risk simulation/runtime validation over sim_v2 outputs; writes sim result tables via штатный orchestrator; SuccessCriteria includes invariant gate.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Run LIMITER V8 for 2026-05-20/v1, run full SQL-first validation, report objective INV/TEMP numbers; no code edits.",
+      "evidence_pack": "Commands:\n1) source ~/miniconda3/etc/profile.d/conda.sh && conda activate cuda13 && source config/load_env.sh && export CUBE_CONFIG_PATH=\"$PWD/config\" && export CUDA_PATH=\"$HOME/miniconda3/targets/x86_64-linux\" && export LD_LIBRARY_PATH=\"$HOME/miniconda3/lib:${LD_LIBRARY_PATH:-}\" && /home/albud/miniconda3/envs/cuda13/bin/python3 code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2026-05-20 --end-day 3650 --max-steps 10000 -> rc=0.\n2) python3 code/validation/run_all.py --version-date 20260520 --version-id 1 --table-main sim_masterv2_v9 --table-repair sim_repairline_v9 -> rc=1 due INV-12 FAIL.\nSimulation outputs: sim_masterv2_v9 inserted=83801; sim_repairline_v9 inserted=65700; sim_masterv2_v9_daily=43800 rows for (20260520,1).\nValidation verdicts: INV-1 PASS 0; INV-2 PASS post_warmup_violations=0; INV-3 PASS violations=0 max_concurrent_repair=18 repair_quota=18; INV-4 PASS 0; INV-5 PASS real_violations=0 transition_out_artifacts=486; INV-6 PASS 0; INV-7 PASS 0; INV-8 PASS 0; INV-9 PASS 0; INV-10 PASS illegal_transitions=0 balance OK; INV-11 PASS violating_datasets=0; INV-12 FAIL violations=536; TEMP-1 PASS total_violations=0; TEMP-4 PASS violations=0; TEMP-5 PASS invalid_claim_rows=0 transition_claim_mismatch=0 overlap_violations=0 bank_underflow_suspicions=0.\nINV-12 detail: 536 rows, 2 aircraft, group_bys=[1], days 1..3650/date 2026-05-21..2036-05-17, max_exceed=51. Offenders: aircraft_number=22619 serialno=22619 group_by=1 planer status=6 ppr=270051 oh=270000 exceed=51 rows=268; aircraft_number=22983 serialno=22983 group_by=1 planer status=7 ppr=270029 oh=270000 exceed=29 rows=268. Aggregates among INV-12 violations: 0.",
+      "success_criteria": "invariant: INV-12 0 ppr>oh AND TEMP-5 PASS",
+      "compliance_checklist": "decision=reject required_gates=fail exceptions=INV-12_FAIL;validation_rc_1 evidence_refs=orchestrator_limiter_v8.py rc=0;run_all.py rc=1;INV-12 detail SELECT approval_ref=N/A",
+      "risks": "SuccessCriteria failed because INV-12 has 536 ppr>oh rows; validation rc=1 is expected consequence of invariant failure.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No domain graph update; run-only validation evidence.",
+      "prev_handoff_hash": "3510879a11eec9482eda828bb748317d0f36ea71d3af826e2d0ed5162eb878ec",
+      "created_at": "2026-06-15T18:22:29Z",
+      "modules": [
+        "step_logic",
+        "export",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 36000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_day0_storage_screen_20260615_coder-general_782ff901",
+      "workflow_id": "W_day0_storage_screen_20260615",
+      "agent": "coder-general",
+      "user_goal": "Проект Helicomponents, корень /media/DATA_BIG/Projects/Heli/Helicomponents. RiskTier=medium. Задача — добавить ОДИН аддитивный day-0 screen в extract-пайплайн, не меняя существующую логику.",
+      "changes": "code/extract/heli_pandas_storage_status.py: added PLANER_TERMINAL_STORAGE_COUNT_SQL and PLANER_TERMINAL_STORAGE_UPDATE_SQL using the existing md_components join and BR CASE logic; added Block 0 before aggregate blocks to count/update only group_by IN (1,2), status_id=1, sne>=br_effective; dry-run prints without UPDATE; idempotent via status_id=1 predicate. No commit.",
+      "facts": "",
+      "assumptions": "Batch-date check uses all loaded version_id values per date; observed only v1 for each loaded date. Risks if false: a future additional version_id on same date would need separate reporting, but the query is already grouped by version_id.",
+      "evidence": "Facts: Only SELECT/DESCRIBE and dry-run reads were executed against ClickHouse; no mutating UPDATE was run for 2026-05-20 or batch dates. git diff target file shows only additive constants and Block 0; existing aggregate blocks remain textually unchanged below the insertion.\nEvidence: AST/import OK: py_compile + importlib exec_module printed AST/import OK. Dry-run command python3 code/extract/heli_pandas_storage_status.py --version-date 2026-05-20 --version-id 1 --dry-run printed Inactive планеров with sne >= br: 0 and no UPDATE path. ClickHouse SELECT-only: version 24.10.1.2812; DESCRIBE gates OK for heli_pandas(version_date,version_id,group_by,status_id,sne,ac_type_mask,partseqno_i) and md_components(partseqno_i,br_mi8,br_mi17). Batch counts: 2026-04-15 v1=0; 2026-05-01 v1=0; 2026-06-05 v1=0; 2026-06-11 v1=0; 2026-06-12 v1=26. ReadLints: no linter errors.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_day0_storage_screen_20260615:2026-06-15T18:35:00Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Extract status semantics change for planner day-0 classification; ClickHouse-backed validation required; additive code path only.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (governance not run by coder-general)",
+      "human_gate_required": "conditional",
+      "plan_card": "Add one post-cascade planner day-0 screen in heli_pandas_storage_status.py: inactive planners with sne>=br_effective become status_id=6; existing aggregate blocks remain unchanged.",
+      "evidence_pack": "Facts: Only SELECT/DESCRIBE and dry-run reads were executed against ClickHouse; no mutating UPDATE was run for 2026-05-20 or batch dates. git diff target file shows only additive constants and Block 0; existing aggregate blocks remain textually unchanged below the insertion.\nEvidence: AST/import OK: py_compile + importlib exec_module printed AST/import OK. Dry-run command python3 code/extract/heli_pandas_storage_status.py --version-date 2026-05-20 --version-id 1 --dry-run printed Inactive планеров with sne >= br: 0 and no UPDATE path. ClickHouse SELECT-only: version 24.10.1.2812; DESCRIBE gates OK for heli_pandas(version_date,version_id,group_by,status_id,sne,ac_type_mask,partseqno_i) and md_components(partseqno_i,br_mi8,br_mi17). Batch counts: 2026-04-15 v1=0; 2026-05-01 v1=0; 2026-06-05 v1=0; 2026-06-11 v1=0; 2026-06-12 v1=26. ReadLints: no linter errors.",
+      "success_criteria": "script: python3 -m py_compile code/extract/heli_pandas_storage_status.py and import module PASS; numeric: dry-run 2026-05-20 v1 planner candidates == 0; SQL: SELECT-only batch-date counts returned 0,0,0,0,26; invariant: existing aggregate group_by>2 blocks unchanged in diff.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=governance_not_run; evidence_refs=code/extract/heli_pandas_storage_status.py; py_compile/import; dry-run 2026-05-20 v1; SELECT-only batch counts; approval_ref=N/A",
+      "risks": "1) New screen will mutate 26 planners on 2026-06-12 if extract post-script is run non-dry-run for that version. 2) UPDATE SQL parse was not mutation-tested by design; py/import and SELECT count path were verified. 3) config/agent_kg.json had pre-existing dirty state and was additionally updated with workflow context/handoff.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No Domain Graph update: extract code only, SSoT transition JSON unchanged.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-15T18:32:11Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 22000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_sentinel_unify_dwh_20260615_coder-general_ffb6940a",
+      "workflow_id": "W_sentinel_unify_dwh_20260615",
+      "agent": "coder-general",
+      "user_goal": "Clean DWH sim-gate rerun for 2026-05-20 v1: rollback duplicate Block 0 in heli_pandas_storage_status.py, do not edit dwh_loader.py/dwh_batch_sim_gate.py, run full single-date dwh_batch_sim_gate without --skip-sim, report INV-12/TEMP-5/run_all and 22619/22983 facts.",
+      "changes": "code/extract/heli_pandas_storage_status.py reverted to HEAD after git diff showed only Block 0; no edits to code/utils/dwh_loader.py or code/utils/dwh_batch_sim_gate.py; sim output tables cleaned for version_date=20260520/version_id=1 before final rerun.",
+      "facts": "",
+      "assumptions": "dwh_batch_sim_gate.py load step is idempotent and skipped reload because heli_pandas was already enriched; Risks if false: DWH reload semantics may need a separate forced-loader command outside current CLI.",
+      "evidence": "git diff code/extract/heli_pandas_storage_status.py empty after rollback; git status shows code/utils/dwh_loader.py and code/utils/dwh_batch_sim_gate.py still modified. Cleanup: sim_masterv2_v9 before=162311 after=0; sim_repairline_v9 before=131400 after=0; sim_masterv2_v9_daily before=43800 after=0. Final command rc=0: python3 code/utils/dwh_batch_sim_gate.py --dates 2026-05-20 --out-dir output/dwh_sim_batch_20260520_clean2. Log: output/dwh_sim_batch_20260520_clean2/sim_gate_2026-05-20.log. INV-12 PASS violations=0; TEMP-5 PASS overlap_violations=0; SUMMARY TOTAL=15 FAIL=0.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_sentinel_unify_dwh_20260615:2026-06-15T18:56:40Z",
+      "plan_step_id": "DWH_SIM_GATE_CLEAN_RERUN",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Side-effecting ClickHouse/sim-output cleanup and rerun for one personal-data version scope; no simulation logic edits.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "Rollback duplicate ETL block if isolated; clean target sim-output; rerun single-date dwh batch gate; collect validation and target aircraft evidence.",
+      "evidence_pack": "git diff code/extract/heli_pandas_storage_status.py empty after rollback; git status shows code/utils/dwh_loader.py and code/utils/dwh_batch_sim_gate.py still modified. Cleanup: sim_masterv2_v9 before=162311 after=0; sim_repairline_v9 before=131400 after=0; sim_masterv2_v9_daily before=43800 after=0. Final command rc=0: python3 code/utils/dwh_batch_sim_gate.py --dates 2026-05-20 --out-dir output/dwh_sim_batch_20260520_clean2. Log: output/dwh_sim_batch_20260520_clean2/sim_gate_2026-05-20.log. INV-12 PASS violations=0; TEMP-5 PASS overlap_violations=0; SUMMARY TOTAL=15 FAIL=0.",
+      "success_criteria": "script: python3 code/utils/dwh_batch_sim_gate.py --dates 2026-05-20 --out-dir output/dwh_sim_batch_20260520_clean2 returns rc=0; validation run_all TOTAL=15 FAIL=0; SQL: 22619/22983 have no ppr>oh rows and ops_rows=0.",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=git diff/status; output/dwh_sim_batch_20260520_clean2/sim_gate_2026-05-20.log; SQL SELECT evidence; approval_ref=N/A",
+      "risks": "Initial dirty sim-output produced rc=1/FAIL before targeted cleanup; final clean rerun PASS. config/agent_kg.json modified by phase/handoff logging.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No domain graph/model change; operational rerun only.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-15T18:56:40Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 31000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -16860,10 +17070,55 @@
       "context_id": "ctx_W_repair_days_dwh_rewire_20260615_phase_start_ce7176e4",
       "workflow_id": "W_repair_days_dwh_rewire_20260615",
       "context_type": "phase_start",
-      "content": "coder-general start: repair_days DWH post-enrichment fix for 2026-05-20/version_id=1; SuccessCriteria=dry-run repair steps, apply, SELECT, TEMP-5 and run_all validation",
+      "content": "Run simulation validation facts only for version_date=2026-05-20 version_id=1; no code changes; SuccessCriteria: INV-12 0 ppr>oh AND TEMP-5 PASS",
       "agent": "coder-general",
       "created_at": "2026-06-15T12:58:30Z",
-      "updated_at": "2026-06-15T12:58:30Z"
+      "updated_at": "2026-06-15T18:20:09Z"
+    },
+    {
+      "context_id": "ctx_W_sentinel_unify_dwh_20260615_research_finding_fd730919",
+      "workflow_id": "W_sentinel_unify_dwh_20260615",
+      "context_type": "research_finding",
+      "content": "research-graph-analyst GO/NO-GO: GO для target_date->1970-01-01 (root fix), NO-GO для mfg_date (FIFO/ordinal-0 приоритет, есть реальные 1970-даты). oh_at_date/removal_date нейтральны. Baseline 2026-05-20: sentinel(1971) планеры status=2:281, агрегаты 2:5808/3:1833/6:1650/7:1846; non-sentinel планеры 2:2,4:3. Near-OH precheck: 21 планер (group_by=1, все status=2, все target_date=1971, dt=90), из них 9 уже в overshoot на D0 (rem_oh<0). Guard target_date!='1970-01-01' только в heli_pandas_repair_status.py (8 мест); guard на 1971 нет.",
+      "agent": "unknown",
+      "created_at": "2026-06-15T17:25:25Z",
+      "updated_at": "2026-06-15T17:25:25Z"
+    },
+    {
+      "context_id": "ctx_W_sentinel_unify_dwh_20260615_finding_6ff2dd55",
+      "workflow_id": "W_sentinel_unify_dwh_20260615",
+      "context_type": "finding",
+      "content": "Stage 3 reload 2026-05-20: sentinel fix снял маскировку. ops планеры 281->173 (168 в program_ac). 84 inactive (все вне program_ac), 26 storage (вне program_ac). Агрегатов в status=0: 0 (stranding нет). 7 near-OH из программы -> status=6 precheck-ом; 14 near-OH вне программы -> inactive (корректно). Вывод: старый update_past_to_operations через sentinel 1971 затягивал в ops борта вне активной программы, раздувая флот. Прежние sim-результаты (batch 4/5 PASS) на раздутом флоте 281. ТРЕБУЕТСЯ сверка человека по семантике состава флота перед sim.",
+      "agent": "unknown",
+      "created_at": "2026-06-15T17:40:00Z",
+      "updated_at": "2026-06-15T17:40:00Z"
+    },
+    {
+      "context_id": "ctx_W_sentinel_unify_dwh_20260615_validation_result_884ab1c3",
+      "workflow_id": "W_sentinel_unify_dwh_20260615",
+      "context_type": "validation_result",
+      "content": "Stage 4 sim+validation 2026-05-20: sim rc=0. INV-1..11 PASS, TEMP-5 PASS, INV-12 FAIL=536 строк = ровно 2 борта 22619(st6,+51) и 22983(st7,+29). Оба пролетели ровно 1 день (ppr +90) на day0->day1, затем limiter=0 заморозил. Root-cause (verified): оба НЕ в program_ac, но flight_program_fl (клон со снапшота 2026-04-08) даёт им daily_hours=90; sim летит по flight_program_fl, перелёт oh за первый день при rem_oh<90. INV-12 по дизайну не фильтрует status (проверяет терминальные exit-строки). Sentinel-фикс цель достиг (ops=173=program_ac, TEMP-5 PASS, no stranding); INV-12 на этих 2 — отдельный pre-existing flight_program-vs-program_ac mismatch.",
+      "agent": "unknown",
+      "created_at": "2026-06-15T18:26:32Z",
+      "updated_at": "2026-06-15T18:26:32Z"
+    },
+    {
+      "context_id": "ctx_W_day0_storage_screen_20260615_phase_start_461221f0",
+      "workflow_id": "W_day0_storage_screen_20260615",
+      "context_type": "phase_start",
+      "content": "Implementation start: add one additive day-0 planner terminal-storage screen to code/extract/heli_pandas_storage_status.py. SuccessCriteria: AST/import OK; diff shows new block only; SELECT-only dry-run counts for 2026-05-20 v1 and loaded batch dates; no UPDATE on main dataset.",
+      "agent": "coder-general",
+      "created_at": "2026-06-15T18:29:44Z",
+      "updated_at": "2026-06-15T18:29:44Z"
+    },
+    {
+      "context_id": "ctx_W_sentinel_unify_dwh_20260615_phase_start_577bc819",
+      "workflow_id": "W_sentinel_unify_dwh_20260615",
+      "context_type": "phase_start",
+      "content": "Start clean DWH sim-gate rerun for 2026-05-20 v1; SuccessCriteria: rollback duplicate Block 0 only, run dwh_batch_sim_gate full single-date, report INV-12/TEMP-5/run_all and 22619/22983 evidence.",
+      "agent": "coder-general",
+      "created_at": "2026-06-15T18:51:26Z",
+      "updated_at": "2026-06-15T18:51:26Z"
     }
   ],
   "meta": {

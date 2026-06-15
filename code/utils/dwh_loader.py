@@ -44,10 +44,16 @@ def _parse_date(raw):
 
 def _norm_dates(df):
     """Normalize date columns before ClickHouse insert."""
+    _normalize_date_columns(
+        df,
+        ["mfg_date", "removal_date", "oh_at_date", "version_date"],
+        fill_missing=True,
+    )
     return _normalize_date_columns(
         df,
-        ["mfg_date", "removal_date", "target_date", "oh_at_date", "version_date"],
+        ["target_date"],
         fill_missing=True,
+        fill_value=pd.Timestamp("1970-01-01"),
     )
 
 def _align(df, cols):
@@ -65,13 +71,13 @@ def _count_rows(ch, table, vd, vi):
     )
 
 
-def _normalize_date_columns(df, columns, *, fill_missing=False):
+def _normalize_date_columns(df, columns, *, fill_missing=False, fill_value=pd.Timestamp("1971-01-01")):
     for col in columns:
         if col not in df.columns:
             continue
         parsed = pd.to_datetime(df[col], errors="coerce")
         if fill_missing:
-            parsed = parsed.fillna(pd.Timestamp("1971-01-01"))
+            parsed = parsed.fillna(fill_value)
             df[col] = parsed.dt.date
         else:
             df[col] = parsed.map(lambda value: value.date() if pd.notna(value) else None)

@@ -202,10 +202,10 @@ def main() -> int:
         log = out_dir / f"sim_gate_{vd}.log"
         log.write_text(f"batch sim-gate {vd}\n", encoding="utf-8")
 
-        print("  [1] load")
-        ensure_load(vd, 1, log)
-        print("  [2] flight_program")
+        print("  [1] flight_program")
         clone_flight_program(vd)
+        print("  [2] load")
+        ensure_load(vd, 1, log)
         if args.skip_sim:
             results.append((vd, "load-only", "OK"))
             continue
