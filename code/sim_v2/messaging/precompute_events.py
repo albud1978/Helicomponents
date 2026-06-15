@@ -8,6 +8,15 @@
 """
 import numpy as np
 from typing import Dict, List, Tuple, Optional
+from calendar import isleap
+from datetime import date, timedelta
+from pathlib import Path
+
+from openpyxl import load_workbook
+
+
+ECONOMIC_SOURCE_PATH = Path("data_input/source_data/v_2026-04-08/Economic.xlsx")
+INFLATION_LOG_SCALE = np.uint32(1_000_000)
 
 
 def find_program_change_days(mp4_mi8: List[int], mp4_mi17: List[int]) -> List[Tuple[int, int, int]]:
@@ -72,6 +81,72 @@ def compute_mp5_cumsum(mp5_lin: np.ndarray, frames: int, days: int) -> np.ndarra
     
     # Flatten в day-major: [day0_frame0, day0_frame1, ..., day1_frame0, ...]
     return cumsum_2d.flatten()
+
+
+def compute_inflation_log_cumsum(
+    report_date: date,
+    max_days: int,
+    workbook_path: Path = ECONOMIC_SOURCE_PATH,
+) -> np.ndarray:
+    """
+    Дневная log-cumsum инфляции S(d), scaled UInt32: round(ln_multiplier * 1e6).
+
+    Храним в UInt32 MacroProperty, а не Float, чтобы исключить binary precision drift
+    на GPU. В RTC порог переводится в тот же scale через logf (Float32).
+    """
+    if max_days < 0:
+        raise ValueError(f"max_days must be non-negative, got {max_days}")
+    if not workbook_path.exists():
+        raise FileNotFoundError(f"Economic workbook not found: {workbook_path}")
+
+    workbook = load_workbook(workbook_path, read_only=True, data_only=True)
+    if "labour_inflation" not in workbook.sheetnames:
+        raise KeyError(f"Sheet 'labour_inflation' not found in {workbook_path}")
+
+    sheet = workbook["labour_inflation"]
+    header = next(sheet.iter_rows(values_only=True), None)
+    expected_header = ("year", "labour_inflation_annual")
+    if tuple(header or ())[:2] != expected_header:
+        raise ValueError(
+            "Economic.xlsx labour_inflation header must be "
+            "('year', 'labour_inflation_annual')"
+        )
+
+    annual_by_year: Dict[int, np.float32] = {}
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        if row is None or row[0] is None:
+            continue
+        year = int(row[0])
+        annual = np.float32(row[1])
+        if annual <= np.float32(-1.0):
+            raise ValueError(f"Invalid labour inflation for year {year}: {annual}")
+        annual_by_year[year] = annual
+
+    if not annual_by_year:
+        raise ValueError(f"No labour inflation rows found in {workbook_path}")
+
+    years = sorted(annual_by_year)
+    first_year = years[0]
+    last_year = years[-1]
+    daily_log_by_year: Dict[int, np.float32] = {}
+
+    result = np.zeros(max_days + 1, dtype=np.uint32)
+    acc = np.float32(0.0)
+    scale = np.float32(INFLATION_LOG_SCALE)
+
+    for day_offset in range(1, max_days + 1):
+        calendar_day = report_date + timedelta(days=day_offset)
+        year = calendar_day.year
+        effective_year = first_year if year < first_year else (last_year if year > last_year else year)
+        if effective_year not in daily_log_by_year:
+            year_days = np.float32(366 if isleap(effective_year) else 365)
+            daily_log_by_year[effective_year] = np.float32(
+                np.log1p(annual_by_year[effective_year]) / year_days
+            )
+        acc = np.float32(acc + daily_log_by_year[effective_year])
+        result[day_offset] = np.uint32(acc * scale + np.float32(0.5))
+
+    return result
 
 
 def find_next_program_change(program_changes: List[Tuple[int, int, int]], 

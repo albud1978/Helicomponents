@@ -359,6 +359,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_v7, flamegpu::MessageNone, flamegpu::Mess
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     FLAMEGPU->setVariable<unsigned int>("needs_demote", 0u);  // Сброс флага
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
+    FLAMEGPU->setVariable<unsigned int>("demote_day", current_day);
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", 0u);
     return flamegpu::ALIVE;
@@ -388,6 +389,16 @@ FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::Mess
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
+    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+    const unsigned int repair_claim_source = FLAMEGPU->getVariable<unsigned int>("repair_claim_source");
+    unsigned int ppr_after = ppr;
+    if (repair_claim_source != 0u) {
+        ppr_after = 0u;
+        FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
+    }
     if (group_by == 1u) {
         auto p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s3");
         auto c1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p1");
@@ -402,7 +413,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::Mess
     FLAMEGPU->setVariable<unsigned int>("commit_p1", 1u);
     FLAMEGPU->setVariable<unsigned int>("transition_3_to_2", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_id", 2u);
-    FLAMEGPU->setVariable<unsigned short>("limiter", compute_limiter_inline(FLAMEGPU));
+    FLAMEGPU->setVariable<unsigned short>(
+        "limiter",
+        compute_limiter_inline(FLAMEGPU, sne, ppr_after, ll, oh, idx, current_day)
+    );
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);

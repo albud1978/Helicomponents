@@ -30,6 +30,9 @@ from model_build import RTC_MAX_FRAMES, MAX_DAYS
 REPAIR_LINES_MAX = 64
 # Максимум bank-окон на линию
 REPAIR_BANK_MAX = 64
+CUMSUM_SIZE = RTC_MAX_FRAMES * (MAX_DAYS + 1)
+INFLATION_LOG_SIZE = MAX_DAYS + 1
+INFLATION_LOG_SCALE = 1000000
 
 import pyflamegpu as fg
 
@@ -113,16 +116,55 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     
     unsigned int deficit8 = (target_mi8 > ops8) ? (target_mi8 - ops8) : 0u;
     unsigned int deficit17 = (target_mi17 > ops17) ? (target_mi17 - ops17) : 0u;
-    
-    unsigned int p1_8 = (deficit8 < svc8) ? deficit8 : svc8;
-    deficit8 -= p1_8;
-    unsigned int p1_17 = (deficit17 < svc17) ? deficit17 : svc17;
-    deficit17 -= p1_17;
-    
+
+    auto svc8_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count");
+    auto svc17_count = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
+    auto svc8_repairable = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_repairable");
+    auto svc17_repairable = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_repairable");
+    unsigned int svc8_healthy = 0u;
+    unsigned int svc17_healthy = 0u;
+    unsigned int svc8_repairable_total = 0u;
+    unsigned int svc17_repairable_total = 0u;
+    for (unsigned int i = 0u; i < {RTC_MAX_FRAMES}u; ++i) {{
+        if (svc8_count[i] != 0u) {{
+            if (svc8_repairable[i] != 0u) {{
+                ++svc8_repairable_total;
+            }} else {{
+                ++svc8_healthy;
+            }}
+        }}
+        if (svc17_count[i] != 0u) {{
+            if (svc17_repairable[i] != 0u) {{
+                ++svc17_repairable_total;
+            }} else {{
+                ++svc17_healthy;
+            }}
+        }}
+    }}
+
+    // P1 first fills with healthy serviceable; repairable P1 consumes RepairLine slots.
+    unsigned int slots_left = available_slots;
+    unsigned int p1_17_healthy = (deficit17 < svc17_healthy) ? deficit17 : svc17_healthy;
+    deficit17 -= p1_17_healthy;
+    unsigned int p1_8_healthy = (deficit8 < svc8_healthy) ? deficit8 : svc8_healthy;
+    deficit8 -= p1_8_healthy;
+
+    unsigned int p1_17_repair = (deficit17 < svc17_repairable_total) ? deficit17 : svc17_repairable_total;
+    p1_17_repair = (p1_17_repair < slots_left) ? p1_17_repair : slots_left;
+    deficit17 -= p1_17_repair;
+    slots_left -= p1_17_repair;
+
+    unsigned int p1_8_repair = (deficit8 < svc8_repairable_total) ? deficit8 : svc8_repairable_total;
+    p1_8_repair = (p1_8_repair < slots_left) ? p1_8_repair : slots_left;
+    deficit8 -= p1_8_repair;
+    slots_left -= p1_8_repair;
+
+    unsigned int p1_8 = p1_8_healthy + p1_8_repair;
+    unsigned int p1_17 = p1_17_healthy + p1_17_repair;
+
     // P2 И P3 требуют RepairLine slot (free_days обнуляется при занятии)
     // Приоритет: по типу (Mi-17 → Mi-8), внутри типа P2 (unsvc) → P3 (inactive)
-    unsigned int slots_left = available_slots;
-    
+
     // P2: Mi-17 first — ТРЕБУЕТ RepairLine slot
     unsigned int p2_17 = (deficit17 < unsvc17) ? deficit17 : unsvc17;
     p2_17 = (p2_17 < slots_left) ? p2_17 : slots_left;
@@ -237,6 +279,68 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_snapshot_v8, flamegpu::MessageNone, flam
 RTC_REPAIR_LINE_SNAPSHOT_V8_P3 = RTC_REPAIR_LINE_SNAPSHOT_V8.replace(
     "rtc_repair_line_snapshot_v8", "rtc_repair_line_snapshot_v8_p3"
 )
+RTC_REPAIR_LINE_SNAPSHOT_V8_AFTER_P1 = RTC_REPAIR_LINE_SNAPSHOT_V8.replace(
+    "rtc_repair_line_snapshot_v8", "rtc_repair_line_snapshot_v8_after_p1"
+)
+
+
+RTC_CLASSIFY_SVC_REPAIRABLE_V8 = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_classify_svc_repairable_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    if (group_by != 1u && group_by != 2u) return flamegpu::ALIVE;
+
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+    const unsigned int demote_day_raw = FLAMEGPU->getVariable<unsigned int>("demote_day");
+
+    unsigned int dt_next = 0u;
+    if (current_day < end_day) {{
+        auto mp5_cumsum = FLAMEGPU->environment.getMacroProperty<unsigned int, {CUMSUM_SIZE}u>("mp5_cumsum");
+        const unsigned int next_day = current_day + 1u;
+        const unsigned int base_curr = current_day * frames + idx;
+        const unsigned int base_next = next_day * frames + idx;
+        const unsigned int cumsum_curr = mp5_cumsum[base_curr];
+        const unsigned int cumsum_next = mp5_cumsum[base_next];
+        dt_next = (cumsum_next >= cumsum_curr) ? (cumsum_next - cumsum_curr) : 0u;
+    }}
+
+    const unsigned int r = (oh > ppr) ? (oh - ppr) : 0u;
+    const bool feasibility_breach = (r == 0u || oh == 0u || r < dt_next);
+
+    bool economic_breach = false;
+    if (r > 0u && oh > 0u) {{
+        auto inflation = FLAMEGPU->environment.getMacroProperty<unsigned int, {INFLATION_LOG_SIZE}u>("inflation_log_cumsum");
+        const unsigned int current_idx = (current_day <= {MAX_DAYS}u) ? current_day : {MAX_DAYS}u;
+        unsigned int demote_idx = (demote_day_raw <= current_idx) ? demote_day_raw : current_idx;
+        if (demote_idx > {MAX_DAYS}u) demote_idx = {MAX_DAYS}u;
+        const unsigned int s_current = inflation[current_idx];
+        const unsigned int s_demote = inflation[demote_idx];
+        const unsigned int escalation = (s_current >= s_demote) ? (s_current - s_demote) : 0u;
+        const float alpha = 1.0f;
+        const float ratio = (float)r / (alpha * (float)oh);
+        const unsigned int threshold = (unsigned int)(
+            logf(1.0f + ratio) * {INFLATION_LOG_SCALE}.0f + 0.5f
+        );
+        economic_breach = (escalation >= threshold);
+    }}
+
+    if (feasibility_breach || economic_breach) {{
+        if (group_by == 1u) {{
+            auto repairable = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_repairable");
+            repairable[idx].exchange(1u);
+        }} else {{
+            auto repairable = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_repairable");
+            repairable[idx].exchange(1u);
+        }}
+    }}
+
+    return flamegpu::ALIVE;
+}}
+"""
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # V8: Промоуты по MessageBucket (P1/P2/P3)
@@ -247,6 +351,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_bucket_v8, flamegpu::MessageBucket, flam
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     if (group_by != 1u && group_by != 2u) return flamegpu::ALIVE;
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int demote_day = FLAMEGPU->getVariable<unsigned int>("demote_day");
     
     unsigned int promote = 0u;
     for (auto &msg : FLAMEGPU->message_in(0)) {{
@@ -261,16 +367,50 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_bucket_v8, flamegpu::MessageBucket, flam
     auto svc_count = (group_by == 1u)
         ? FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_count")
         : FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_count");
+    auto svc_repairable = (group_by == 1u)
+        ? FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_svc_repairable")
+        : FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_svc_repairable");
     const unsigned int frames = {RTC_MAX_FRAMES}u;
-    
-    unsigned int rank = 0u;
+
+    unsigned int healthy_total = 0u;
+    unsigned int healthy_rank = 0u;
+    unsigned int repairable_rank = 0u;
     for (unsigned int i = 0u; i < frames; ++i) {{
-        if (i <= idx) continue;
-        rank += svc_count[i];
+        if (svc_count[i] == 0u) continue;
+        if (svc_repairable[i] == 0u) {{
+            ++healthy_total;
+            if (i > idx) ++healthy_rank;
+        }} else if (i > idx) {{
+            ++repairable_rank;
+        }}
     }}
-    
-    if (rank < promote) {{
+
+    const bool repairable = (svc_repairable[idx] != 0u);
+    if (!repairable && healthy_rank < promote) {{
         FLAMEGPU->setVariable<unsigned int>("promoted", 1u);
+        FLAMEGPU->setVariable<unsigned int>("debug_promoted", 1u);
+        return flamegpu::ALIVE;
+    }}
+
+    if (repairable && promote > healthy_total) {{
+        const unsigned int repair_promote = promote - healthy_total;
+        if (repairable_rank < repair_promote) {{
+            const unsigned int repair_time = (group_by == 1u)
+                ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
+                : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+            if (current_day >= repair_time) {{
+                const unsigned int claim_start_day = current_day - repair_time;
+                if (demote_day <= claim_start_day) {{
+                    FLAMEGPU->setVariable<unsigned int>("repair_candidate", 1u);
+                    FLAMEGPU->setVariable<unsigned int>("debug_repair_candidate", 1u);
+                    FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+                    auto p1_candidate = (group_by == 1u)
+                        ? FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p1_repair_candidate")
+                        : FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_commit_p1_repair_candidate");
+                    p1_candidate[idx].exchange(1u);
+                }}
+            }}
+        }}
     }}
     return flamegpu::ALIVE;
 }}
@@ -817,6 +957,29 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
 """
 
 
+RTC_PROMOTE_SVC_REPAIR_COMMIT_V8 = (
+    RTC_PROMOTE_UNSVC_COMMIT_V8
+    .replace("rtc_promote_unsvc_commit_v8", "rtc_promote_svc_repair_commit_v8")
+    .replace(
+        'const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");',
+        'const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("demote_day");',
+    )
+    .replace(
+        "const unsigned int claim_start_day = current_day - repair_time;",
+        """if (current_day < repair_time) {
+        FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+        FLAMEGPU->setVariable<unsigned int>("repair_candidate", 0u);
+        return flamegpu::ALIVE;
+    }
+    const unsigned int claim_start_day = current_day - repair_time;""",
+    )
+    .replace("mi8_commit_p2_candidate", "mi8_commit_p1_repair_candidate")
+    .replace("mi17_commit_p2_candidate", "mi17_commit_p1_repair_candidate")
+    .replace('"mi8_approve"', '"mi8_approve_s3"')
+    .replace('"mi17_approve"', '"mi17_approve_s3"')
+)
+
+
 RTC_PROMOTE_INACTIVE_COMMIT_V8 = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int candidate = FLAMEGPU->getVariable<unsigned int>("repair_candidate");
@@ -1188,6 +1351,13 @@ def register_quota_v8_messages(model, agent, quota_agent):
     fn.setInitialState("inactive")
     fn.setEndState("inactive")
     layer_count_inactive.addAgentFunction(fn)
+
+    # Classify serviceable candidates before QM reserves slots for repairable P1.
+    layer_classify_svc = model.newLayer("v8_classify_svc_repairable")
+    fn = agent.newRTCFunction("rtc_classify_svc_repairable_v8", RTC_CLASSIFY_SVC_REPAIRABLE_V8)
+    fn.setInitialState("serviceable")
+    fn.setEndState("serviceable")
+    layer_classify_svc.addAgentFunction(fn)
     
     # QuotaManager → MessageBucket
     layer_qm = model.newLayer("v8_quota_manager_bucket")
@@ -1233,6 +1403,23 @@ def register_quota_v8_messages(model, agent, quota_agent):
     fn.setInitialState("default")
     fn.setEndState("default")
     layer_snapshot.addAgentFunction(fn)
+
+    # P1 repairable serviceable candidates claim RepairLine before lower priorities.
+    layer_p1_repair_commit = model.newLayer("v8_promote_svc_repair_commit")
+    fn = agent.newRTCFunction("rtc_promote_svc_repair_commit_v8", RTC_PROMOTE_SVC_REPAIR_COMMIT_V8)
+    fn.setInitialState("serviceable")
+    fn.setEndState("serviceable")
+    layer_p1_repair_commit.addAgentFunction(fn)
+
+    # Refresh RO snapshot after P1 repair claims, before P2/P3 compete for lines.
+    layer_snapshot_after_p1 = model.newLayer("v8_repair_line_snapshot_after_p1")
+    fn = quota_agent.newRTCFunction(
+        "rtc_repair_line_snapshot_v8_after_p1",
+        RTC_REPAIR_LINE_SNAPSHOT_V8_AFTER_P1,
+    )
+    fn.setInitialState("default")
+    fn.setEndState("default")
+    layer_snapshot_after_p1.addAgentFunction(fn)
     
     # Commit P2/P3
     layer_p2_commit = model.newLayer("v8_promote_unsvc_commit")
