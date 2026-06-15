@@ -30,7 +30,9 @@ POST_SCRIPTS = (
     "program_ac_precheck_runner.py",
     "heli_pandas_component_status.py",
     "heli_pandas_serviceable_status.py",
+    "heli_pandas_repair_status.py",
     "heli_pandas_storage_status.py",
+    "repair_days_calculator.py",
     "heli_pandas_terminal_br_gate.py",
 )
 
