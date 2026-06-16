@@ -444,6 +444,17 @@ def export_repairline_to_ch(
 
     row_count = len(columns_data[0])
     if row_count:
+        if not drop_table:
+            ch_client.execute(
+                "ALTER TABLE sim_repairline_v9 DELETE "
+                "WHERE version_date = %(vd)s AND version_id = %(vi)s",
+                {'vd': version_date_int, 'vi': version_id},
+                settings={'mutations_sync': 2}
+            )
+            print(
+                f"  🧹 Очищен срез sim_repairline_v9 "
+                f"(version_date={version_date_int}, version_id={version_id})"
+            )
         ch_client.execute(
             "INSERT INTO sim_repairline_v9 "
             "(version_date, version_id, day_u16, line_id, free_days, repair_time, aircraft_number, group_by, "

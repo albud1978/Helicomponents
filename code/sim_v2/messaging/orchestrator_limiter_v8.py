@@ -363,11 +363,13 @@ class LimiterV8Orchestrator:
     """
     
     def __init__(self, version_date: str, end_day: int = 3650,
-                 enable_mp2: bool = False, clickhouse_client=None):
+                 enable_mp2: bool = False, clickhouse_client=None,
+                 version_id: int | None = None):
         self.version_date = version_date
         self.end_day = end_day
         self.enable_mp2 = enable_mp2
         self.clickhouse_client = clickhouse_client
+        self.version_id = version_id
         
         self.model = None
         self.simulation = None
@@ -822,7 +824,9 @@ class LimiterV8Orchestrator:
         vd = date.fromisoformat(self.version_date)
         version_date_int = vd.year * 10000 + vd.month * 100 + vd.day
         run_id_env = os.getenv("V8_RUN_ID")
-        if run_id_env is not None and run_id_env.isdigit():
+        if self.version_id is not None:
+            version_id = int(self.version_id)
+        elif run_id_env is not None and run_id_env.isdigit():
             version_id = int(run_id_env)
         else:
             version_id = int(self.env_data.get('version_id_u32', 1))
@@ -963,8 +967,18 @@ class LimiterV8Orchestrator:
         
         # Batch INSERT
         if self.clickhouse_client and row_count:
-            t_insert = time.perf_counter()
+            self.clickhouse_client.execute(
+                "ALTER TABLE sim_masterv2_v9 DELETE "
+                "WHERE version_date = %(vd)s AND version_id = %(vi)s",
+                {'vd': version_date_int, 'vi': version_id},
+                settings={'mutations_sync': 2}
+            )
+            print(
+                f"   🧹 Очищен срез sim_masterv2_v9 "
+                f"(version_date={version_date_int}, version_id={version_id})"
+            )
             col_str = ', '.join(columns)
+            t_insert = time.perf_counter()
             self.clickhouse_client.execute(
                 f"INSERT INTO sim_masterv2_v9 ({col_str}) VALUES",
                 columns_data,
@@ -1696,6 +1710,7 @@ def main():
     parser.add_argument("--version-date", required=True, help="Дата датасета (YYYY-MM-DD)")
     parser.add_argument("--end-day", type=int, default=3650, help="Последний день симуляции")
     parser.add_argument("--max-steps", type=int, default=10000, help="Максимум шагов")
+    parser.add_argument("--version-id", type=int, default=None, help="Номер версии симуляции (1,2,3...); по умолчанию env V8_RUN_ID или 1")
     parser.add_argument("--drop-table", action="store_true", help="Пересоздать таблицу")
     
     args = parser.parse_args()
@@ -1828,7 +1843,8 @@ Run simulation requires Agent KG traceability. Options:
         args.version_date, 
         args.end_day,
         enable_mp2=True,
-        clickhouse_client=client
+        clickhouse_client=client,
+        version_id=args.version_id
     )
     orchestrator.prepare_data()
     orchestrator.build_model()

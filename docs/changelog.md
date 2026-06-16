@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-06-16 — Идемпотентность экспорта симуляции (per-slice replace)
+
+**Workflow:** `W_sim_export_idempotency_20260616` | **Risk:** high | **Profile:** high-strict | **Branch:** `feature/dwh-bb8`
+
+**Проблема:** экспортёры планеров (`sim_masterv2_v9`) и repair-lines (`sim_repairline_v9`) делали голый INSERT без удаления среза → повторный прогон даты с тем же `version_id` копил дубли (units-экспортёр и daily-витрина уже были идемпотентны). Обходилось ручной очисткой.
+
+**Решение (выравнивание под units-паттерн):** перед INSERT добавлен per-slice replace `ALTER TABLE ... DELETE WHERE version_date = :vd AND version_id = :vi` (для мастера — синхронно, `mutations_sync=2`, т.к. daily-материализатор читает мастер сразу после вставки; для repairline — только при `drop_table=False`). `version_id` — порядковый номер версии (1,2,3…), отдельный от даты; replace бьёт точечно по ячейке `(version_date, version_id)`:
+- повтор той же `version_id` → замена среза (без дублей);
+- новый `version_id` → DELETE по пустому срезу = no-op, версия добавляется рядом, прочие `version_id`/даты не трогаются.
+
+Добавлен CLI `--version-id` (приоритет: `--version-id` → env `V8_RUN_ID` → `env_data`=1). `--drop-table` (полная перегрузка таблицы) **не изменён** — только по согласованию.
+
+**Код:** `code/sim_v2/messaging/orchestrator_limiter_v8.py`, `code/sim_v2/messaging/rtc_repairline_export.py`.
+
+**Validation:**
+- Двойной прогон `2026-06-12 / version_id=1`: master 80921 → 80921, repairline 65700 → 65700 (нет удвоения); `run_all` = **15/15 PASS**.
+- Независимая SQL-проверка (validator-judge `V1`): `count == uniqExact((day_u16, idx))` для мастера и `(day_u16, line_id)` для repairline — дублей 0; на дате только `version_id=1`; sanity-даты (20260415/20260605) без исторических дублей.
+
+**Evidence:** handoffs `handoff_W_sim_export_idempotency_20260616_coder-general_43331927`, `handoff_W_sim_export_idempotency_20260616_validator-judge_5ebc3c2c`, `handoff_W_sim_export_idempotency_20260616_governance-compliance_9680afde` (allow_with_notes); approval `ctx_W_sim_export_idempotency_20260616_approval_request_cfd16bf4`.
+
+**Verdict:** high-risk правка **принята** (governance allow_with_notes); идемпотентность среза подтверждена validator-judge V1. Закрывает triage-пункт 1 записи `W_repair_time_perboard_20260616` (idempotency gap экспортёра).
+
+---
+
+## 2026-06-16 — TEMP-4: исключение детерминированных day-0 ремонтов
+
+**Workflow:** `W_temp4_exclude_deterministic_20260616` | **Risk:** medium | **Profile:** medium-policy | **Branch:** `feature/dwh-bb8`
+
+**Решение:** TEMP-4 (no infinite repair, liveness) больше не считает нарушением интервалы детерминированного начального ремонта — борта, стоящие в status=4 на первом дне симуляции (из экстракта). Их длительность data-driven (реальный срок капремонта), выход гарантирован `exit_date` при спавне — это не «зависание» из-за бага. In-sim ремонты (через repair-line, начинаются позже) продолжают проверяться.
+
+**Дискриминатор:** в выводе `sim_masterv2_v9` `day_u16` начинается с 1 и запись разреженная (адаптивные дни), поэтому признак — `enter_day = min(day_u16)` среза (а не `=0`). Реализовано как `AND enter_day > (SELECT min(day_u16) FROM ... тот же срез)` в обоих violation-фильтрах (count + sample). На первом шаге статус борта = классификация из экстракта; in-sim ремонты появляются строго позже (`enter_day > slice_min`).
+
+**Код:** `code/validation/temp4_no_infinite_repair.py`.
+
+**Validation (ре-run по 6 датам, порог 210):** `2026-04-15/05-01/05-20/06-05/06-11/06-12` — **PASS**, violations=0 на каждой. Контроль дискриминатора (`2026-06-12`, порог 100): old=136 → new=132 (исключено 4 начальных интервала); 22485/22517 начальный span=191 теперь не нарушение, а их in-sim эпизод (`enter=2915, span=150`) по-прежнему считается. Закрывает triage-пункт 2 предыдущей записи (порог 210 vs remaining для длинных капремонтов).
+
+---
+
 ## 2026-06-16 — Per-board repair_time для day-0 status=4 (TEMP-5 fix)
 
 **Workflow:** `W_repair_time_perboard_20260616` | **Risk:** high | **Profile:** high-strict | **Branch:** `feature/dwh-bb8`

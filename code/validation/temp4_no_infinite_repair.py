@@ -46,6 +46,8 @@ def main() -> int:
 
     # Нельзя фильтровать status_id=4 до lag: так склеиваются разные repair-отрезки через промежуточные статусы.
     # Находим непрерывные интервалы в repair для каждого агента и проверяем что длительность <= max_repair_days.
+    # Детерминированные начальные ремонты (enter_day = первый день среза, борт в status=4 из экстракта)
+    # исключены: длительность data-driven, не liveness-баг.
     query = f"""
     WITH repair_spans AS (
         SELECT
@@ -90,6 +92,11 @@ def main() -> int:
     )
     SELECT count() FROM repair_spans
     WHERE span > {args.max_repair_days}
+      AND enter_day > (
+          SELECT min(day_u16)
+          FROM {table}
+          WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
+      )
     """
     violations = client.execute(query, params)[0][0]
     details = [
@@ -142,6 +149,11 @@ def main() -> int:
         SELECT aircraft_number, enter_day, last_day, span
         FROM repair_spans
         WHERE span > {args.max_repair_days}
+          AND enter_day > (
+              SELECT min(day_u16)
+              FROM {table}
+              WHERE version_id = %(vid)s{vd_filter} AND group_by IN (1, 2)
+          )
         ORDER BY span DESC
         LIMIT 5
         """, params)
