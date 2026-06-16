@@ -32,7 +32,7 @@ from extract.status_overhaul_loader import (
 from dwh_post_enrichment import run_post_enrichment
 
 RAW_COLS = ["partno","serialno","ac_typ","location","mfg_date","removal_date","target_date","condition","owner","lease_restricted","oh","oh_threshold","ll","sne","ppr","version_date","version_id","partseqno_i","psn","address_i","ac_type_i","oh_at_date","shop_visit_counter"]
-PANDAS_COLS = ["partno","serialno","ac_typ","location","mfg_date","removal_date","target_date","condition","owner","lease_restricted","oh","oh_threshold","ll","sne","ppr","version_date","version_id","partseqno_i","psn","address_i","ac_type_i","status_id","repair_days","aircraft_number","ac_type_mask","group_by"]
+PANDAS_COLS = ["partno","serialno","ac_typ","location","mfg_date","removal_date","target_date","condition","owner","lease_restricted","oh","oh_threshold","ll","sne","ppr","version_date","version_id","partseqno_i","psn","address_i","ac_type_i","status_id","repair_days","repair_time","aircraft_number","ac_type_mask","group_by"]
 
 def _fail(msg): print(f"ERROR: {msg}", file=sys.stderr); raise SystemExit(1)
 
@@ -119,6 +119,11 @@ def enrich(df, vd, vi, ch, md):
     pdf["group_by"] = pdf["partseqno_i"].map(gb).fillna(0).astype("int64")
     if "status_id" not in pdf.columns: pdf["status_id"] = 0
     if "repair_days" not in pdf.columns: pdf["repair_days"] = None
+    if "repair_time" not in pdf.columns: pdf["repair_time"] = 0
+    pdf["repair_days"] = pdf["repair_days"].map(
+        lambda value: None if pd.isna(value) else int(value)
+    ).astype(object)
+    pdf["repair_time"] = pd.to_numeric(pdf["repair_time"], errors="coerce").fillna(0).astype("int64")
     return _align(pdf, PANDAS_COLS)
 
 def _batch_insert(ch, df, table, desc, batch=50000):

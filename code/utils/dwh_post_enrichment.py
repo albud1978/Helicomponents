@@ -23,7 +23,7 @@ PANDAS_COLS = [
     "partno", "serialno", "ac_typ", "location", "mfg_date", "removal_date", "target_date",
     "condition", "owner", "lease_restricted", "oh", "oh_threshold", "ll", "sne", "ppr",
     "version_date", "version_id", "partseqno_i", "psn", "address_i", "ac_type_i",
-    "status_id", "repair_days", "aircraft_number", "ac_type_mask", "group_by",
+    "status_id", "repair_days", "repair_time", "aircraft_number", "ac_type_mask", "group_by",
 ]
 
 POST_SCRIPTS = (
@@ -84,6 +84,10 @@ def _planner_zero(client, version_date: date, version_id: int) -> int:
     )
 
 
+def _ensure_heli_pandas_schema(client) -> None:
+    client.execute("ALTER TABLE heli_pandas ADD COLUMN IF NOT EXISTS repair_time UInt16 DEFAULT 0")
+
+
 def _load_heli_pandas_version(client, version_date: date, version_id: int) -> pd.DataFrame:
     cols = ", ".join(f"`{c}`" for c in PANDAS_COLS)
     rows = client.execute(
@@ -102,6 +106,14 @@ def _load_heli_pandas_version(client, version_date: date, version_id: int) -> pd
 def _replace_heli_pandas_version(
     client, df: pd.DataFrame, version_date: date, version_id: int
 ) -> int:
+    if "repair_days" in df.columns:
+        df = df.copy()
+        df["repair_days"] = df["repair_days"].map(
+            lambda value: None if pd.isna(value) else int(value)
+        ).astype(object)
+    if "repair_time" in df.columns:
+        df = df.copy()
+        df["repair_time"] = pd.to_numeric(df["repair_time"], errors="coerce").fillna(0).astype("int64")
     client.execute(
         "DELETE FROM heli_pandas WHERE version_date = %(vd)s AND version_id = %(vi)s",
         {"vd": version_date, "vi": version_id},
@@ -150,6 +162,7 @@ def run_post_enrichment(
         _fail("status_overhaul не загружен — enrichment невозможен")
     if _count_rows(ch, "heli_pandas", version_date, version_id) == 0:
         _fail("heli_pandas не загружен — enrichment невозможен")
+    _ensure_heli_pandas_schema(ch)
 
     stats = {
         "ops_before": _ops_planers(ch, version_date, version_id),

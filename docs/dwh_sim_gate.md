@@ -78,11 +78,25 @@ python3 code/validation/run_all.py \
 | Клон `flight_program_*` 2026-04-08 → 2026-06-12 | OK | `flight_program_fl=1_392_000`, `flight_program_ac=4_000` |
 | `orchestrator_limiter_v8.py` | **PASS** exit 0 | `output/sim_gate_2026-06-12_orchestrator.log` — 264 шага, 82_350 строк masterv2, 65_700 repairline |
 | `run_all.py` INV-1…INV-12 | **PASS** (12/12) | `output/sim_gate_2026-06-12_validation.log` |
-| TEMP-5 (claim metadata) | **FAIL** (5 mismatch day=180, 4→2 без RL claim) | follow-up RTC/repairline; **не блокирует** sim-gate по INV-1…INV-12 |
+| TEMP-5 (claim metadata) | **FAIL** (5 mismatch day=180, 4→2 без RL claim) | **исправлено** 2026-06-16 — см. секцию ниже (`W_repair_time_perboard_20260616`) |
 
 **Assumption зафиксирована:** flight program клонирован с 2026-04-08 (Program.xlsx вне DWH scope).
 
-**Verdict sim-gate:** **PASS** по обязательным INV-1…INV-12; полная приёмка DWH-среза `2026-06-12 v1` для GPU — **подтверждена**.
+**Verdict sim-gate (2026-06-13, до fix):** **PASS** по обязательным INV-1…INV-12; TEMP-5 — follow-up (закрыт 2026-06-16).
+
+## Post-fix: per-board repair_time (`W_repair_time_perboard_20260616`, 2026-06-16)
+
+**Суть:** day-0 status=4 планеры получают per-board `repair_time` из активного `status_overhaul` (полный цикл); `repair_days` = elapsed. Sim: `exit_date = repair_time − repair_days`. Сброс к стандарту (180) — при переходе 2→7.
+
+**Целевой срез `2026-06-12 v1` (re-run после правки):**
+
+| Шаг | Результат | Evidence |
+|---|---|---|
+| `orchestrator_limiter_v8.py` | **PASS** exit 0 | `output/sim_gate_2026-06-12_orchestrator.log` |
+| `run_all.py` INV-1…INV-12 + TEMP-1/4/5 | **PASS** (15/15) | validator-judge V1; TEMP-5 mismatch=0, TEMP-4 violations=0 |
+| Acceptance SQL (22485/22517) | first exit **day=202** (не 180), `repair_time` 218/224 | handoff `…validator-judge_550688db` |
+
+**Verdict sim-gate (post-fix):** **PASS** по INV-1…INV-12 **и** TEMP-1/4/5; полная приёмка DWH-среза `2026-06-12 v1` для GPU — **подтверждена**.
 
 ## Batch-regression: 5 срезов после 2026-04-08 (2026-06-13)
 
@@ -98,7 +112,7 @@ python3 code/validation/run_all.py \
 | 2026-06-11 | 11 540 | 169 | 82 703 | **PASS** | |
 | 2026-06-12 *(ранее)* | 11 540 | 169 | 82 350 | **PASS** | |
 
-**Итог batch:** 5/5 загрузок OK, **4/5 sim-gate PASS**, 1 дата с INV-12 FAIL → triage **планер 24223** (не load, не агрегаты).
+**Итог batch (2026-06-13, до fix):** 5/5 загрузок OK, **4/5 sim-gate PASS**, 1 дата с INV-12 FAIL → triage **планер 24223** (не load, не агрегаты).
 
 **Follow-up workflow:** `W_inv12_acn24223_20260520` — алгоритм limiter/quota для acn=24223 (`docs/dwh_inv12_acn24223_triage.md`).
 
@@ -106,9 +120,27 @@ python3 code/validation/run_all.py \
 
 **Fix infra (batch):** `dwh_loader._batch_insert` и `dual_loader.insert_data` — явный список колонок при INSERT (таблица 33 col, DataFrame 26 col).
 
+### Batch re-run после per-board repair_time (2026-06-16)
+
+**Workflow:** `W_repair_time_perboard_20260616` | **Скрипт:** `dwh_batch_sim_gate.py` (re-run 5 дат)
+
+| version_date | INV-1…INV-12 | TEMP-1/4/5 | Примечание |
+|---|---|---|---|
+| 2026-04-15 | PASS | PASS (15/15) | |
+| 2026-05-01 | PASS | PASS (15/15) | |
+| 2026-05-20 | PASS | PASS (15/15) | |
+| 2026-06-05 | PASS | PASS (15/15) | TEMP-5 mismatch=0 (был FAIL day=180 до fix) |
+| 2026-06-11 | PASS | PASS (15/15) | TEMP-5 mismatch=0 (был FAIL day=180 до fix) |
+
+**Итог re-run:** **5/5 PASS** по INV-1…INV-12 + TEMP-1/4/5; TEMP-5 mismatch=0, TEMP-4 violations=0 на всех датах.
+
+**Triage (не блокирует sim-gate):**
+- Idempotency gap экспортёра планеров (INSERT без DELETE по version slice) — дубли при повторном прогоне; обход: ручная очистка среза.
+- TEMP-4 порог 210: в батче max remaining=209; при срезе вскоре после `act_start` капремонта remaining может превысить 210 — решение за Алексеем.
+
 ## Связанные документы
 
-- `docs/changelog.md` — секции 2026-06-13 (retract aircraft.status, sim-gate обязателен)
+- `docs/changelog.md` — секция **2026-06-16** (per-board repair_time, TEMP-5 fix); секции 2026-06-13 (retract aircraft.status, sim-gate обязателен)
 - `docs/de_tasks.md` — приёмка DWH-среза
 - `docs/validation_capsule.md` — INV registry
 - `config/transitions/invariants.json` — SSoT инвариантов

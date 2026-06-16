@@ -228,6 +228,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::Me
     FLAMEGPU->setVariable<unsigned int>("status_id", 7u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+    const unsigned int gb = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int std_rt = (gb == 1u)
+        ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
+        : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+    FLAMEGPU->setVariable<unsigned int>("repair_time", std_rt);
     FLAMEGPU->setVariable<unsigned int>("repair_days", FLAMEGPU->getVariable<unsigned int>("repair_time"));
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);

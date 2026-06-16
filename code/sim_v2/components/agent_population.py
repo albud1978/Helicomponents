@@ -125,6 +125,7 @@ class AgentPopulationBuilder:
         sne_list = mp3.get('mp3_sne', [])
         ppr_list = mp3.get('mp3_ppr', [])
         repair_days_list = mp3.get('mp3_repair_days', [])
+        repair_time_list = mp3.get('mp3_repair_time', [])
         gb_list = mp3.get('mp3_group_by', [])
         pseq_list = mp3.get('mp3_partseqno_i', [])
         
@@ -184,6 +185,7 @@ class AgentPopulationBuilder:
                         # PPR из heli_pandas как есть (первый цикл корректируется в heli_pandas позже)
                         'ppr': int(ppr_list[j] or 0) if j < len(ppr_list) else 0,
                         'repair_days': int(repair_days_list[j] or 0) if j < len(repair_days_list) else 0,
+                        'repair_time': int(repair_time_list[j] or 0) if j < len(repair_time_list) else 0,
                         'group_by': gb,
                         'partseqno_i': int(pseq_list[j] or 0) if j < len(pseq_list) else 0,
                         'mfg_date': mfg_val
@@ -321,6 +323,9 @@ class AgentPopulationBuilder:
             
             # V6: Для агентов в repair (status_id=4) устанавливаем exit_date
             if status_id == 4:
+                per_board_repair_time = int(agent_data.get('repair_time', 0) or 0)
+                if per_board_repair_time > 0:
+                    agent.setVariableUInt("repair_time", per_board_repair_time)
                 repair_time = agent.getVariableUInt("repair_time")
                 repair_days = agent.getVariableUInt("repair_days")
                 assembly_time = agent.getVariableUInt("assembly_time")

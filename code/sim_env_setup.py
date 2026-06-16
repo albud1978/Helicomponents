@@ -223,7 +223,7 @@ FROM md_components
 def fetch_mp3(client, vdate: date, vid: int):
     fields = [
         'partseqno_i','psn','aircraft_number','ac_type_mask','group_by','status_id',
-        'll','oh','oh_threshold','sne','ppr','repair_days','mfg_date','version_date'
+        'll','oh','oh_threshold','sne','ppr','repair_days','repair_time','mfg_date','version_date'
     ]
     sql = f"""
     SELECT {', '.join(fields)}
@@ -479,6 +479,7 @@ def build_mp3_arrays(mp3_rows, mp3_fields: List[str]) -> Dict[str, List[int]]:
         'mp3_sne': [],
         'mp3_ppr': [],
         'mp3_repair_days': [],
+        'mp3_repair_time': [],
         'mp3_ll': [],
         'mp3_oh': [],
         'mp3_mfg_date_days': [],
@@ -495,6 +496,7 @@ def build_mp3_arrays(mp3_rows, mp3_fields: List[str]) -> Dict[str, List[int]]:
         arr['mp3_sne'].append(to_u32(r[idx['sne']]))
         arr['mp3_ppr'].append(to_u32(r[idx['ppr']]))
         arr['mp3_repair_days'].append(to_u16(r[idx['repair_days']]))
+        arr['mp3_repair_time'].append(to_u16(r[idx['repair_time']]))
         arr['mp3_ll'].append(to_u32(r[idx['ll']]))
         arr['mp3_oh'].append(to_u32(r[idx['oh']]))
         md = r[idx.get('mfg_date', -1)] if 'mfg_date' in idx else None
@@ -936,7 +938,7 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
     # mp3_arrays длины согласованы
     a = env_data['mp3_arrays']
     n3 = int(env_data['mp3_count'])
-    for k in ('mp3_psn','mp3_aircraft_number','mp3_ac_type_mask','mp3_group_by','mp3_status_id','mp3_sne','mp3_ppr','mp3_repair_days','mp3_ll','mp3_oh','mp3_mfg_date_days'):
+    for k in ('mp3_psn','mp3_aircraft_number','mp3_ac_type_mask','mp3_group_by','mp3_status_id','mp3_sne','mp3_ppr','mp3_repair_days','mp3_repair_time','mp3_ll','mp3_oh','mp3_mfg_date_days'):
         assert len(a.get(k, [])) == n3, f"MP3 SoA поле {k} имеет несогласованную длину"
     return env_data
 

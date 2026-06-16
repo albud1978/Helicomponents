@@ -485,7 +485,8 @@ def create_tables(client):
             
             -- Обогащенные поля (добавляются dual_loader.py и enrich_heli_pandas.py)
             `status_id` UInt8 DEFAULT 0,            -- Статус компонента (через status_processor.py)
-            `repair_days` Nullable(UInt16),         -- Остаток дней до окончания ремонта (было Int16 → uint16, без минусов)
+            `repair_days` Nullable(UInt16),         -- Дней ремонта, уже прошедших на day-0
+            `repair_time` UInt16 DEFAULT 0,         -- Полная длительность ремонта для симуляции
             `aircraft_number` UInt32 DEFAULT 0,     -- Номер ВС из RA-XXXXX (расширен для самолетов)
             `ac_type_mask` UInt8 DEFAULT 0,         -- Битовая маска типа ВС для multihot (через enrich_heli_pandas.py)
             `group_by` UInt8 DEFAULT 0              -- Группировка взаимозаменяемости (из md_components)
@@ -501,6 +502,7 @@ def create_tables(client):
         # Миграция: добавляем колонки для существующих таблиц
         try:
             client.execute("ALTER TABLE heli_pandas ADD COLUMN IF NOT EXISTS group_by UInt8 DEFAULT 0")
+            client.execute("ALTER TABLE heli_pandas ADD COLUMN IF NOT EXISTS repair_time UInt16 DEFAULT 0")
             # heli_raw: новые колонки из Excel
             client.execute("ALTER TABLE heli_raw ADD COLUMN IF NOT EXISTS partseqno_i Nullable(UInt32)")
             client.execute("ALTER TABLE heli_raw ADD COLUMN IF NOT EXISTS psn Nullable(UInt32)")
@@ -796,6 +798,11 @@ def main(version_date=None, version_id=None):
         if 'repair_days' not in pandas_df.columns:
             pandas_df['repair_days'] = None  # Nullable Int16 поле
             print(f"   ➕ Создано поле repair_days: None (заполнится при обработке статусов)")
+
+        # Поле repair_time заполняется финальным repair_days_calculator.py из md_components/status_overhaul
+        if 'repair_time' not in pandas_df.columns:
+            pandas_df['repair_time'] = 0
+            print(f"   ➕ Создано поле repair_time: 0 (заполнится финальным калькулятором)")
         
         # Поле status_id - инициализируем значением по умолчанию
         if 'status_id' not in pandas_df.columns:
@@ -867,7 +874,7 @@ def main(version_date=None, version_id=None):
             'condition', 'owner', 'lease_restricted',
             'oh', 'oh_threshold', 'll', 'sne', 'ppr',
             'version_date', 'version_id', 'partseqno_i', 'psn', 'address_i', 'ac_type_i',
-            'status_id', 'repair_days', 'aircraft_number', 'ac_type_mask', 'group_by'
+            'status_id', 'repair_days', 'repair_time', 'aircraft_number', 'ac_type_mask', 'group_by'
         ]
         
         # Проверяем наличие всех колонок
@@ -884,6 +891,7 @@ def main(version_date=None, version_id=None):
                 'lease_restricted': 0,
                 'group_by': 0,
                 'repair_days': None,
+                'repair_time': 0,
                 'partseqno_i': None,
                 'psn': None,
                 'address_i': None,
@@ -908,6 +916,12 @@ def main(version_date=None, version_id=None):
         # Переупорядочиваем колонки согласно схеме
         available_columns = [col for col in correct_column_order if col in pandas_df.columns]
         pandas_df = pandas_df[available_columns]
+        pandas_df['repair_days'] = pandas_df['repair_days'].map(
+            lambda value: None if pd.isna(value) else int(value)
+        ).astype(object)
+        pandas_df['repair_time'] = pd.to_numeric(
+            pandas_df['repair_time'], errors='coerce'
+        ).fillna(0).astype('int64')
         
         print(f"✅ [ЭТАП 8.3a] Колонки выровнены за {time.time() - column_start:.2f}с: {len(pandas_df.columns)} полей")
         print(f"📋 Колонки: {list(pandas_df.columns)}")

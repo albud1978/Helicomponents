@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-06-16 — Per-board repair_time для day-0 status=4 (TEMP-5 fix)
+
+**Workflow:** `W_repair_time_perboard_20260616` | **Risk:** high | **Profile:** high-strict | **Branch:** `feature/dwh-bb8`
+
+**Проблема:** на срезах с 2026-06-05 TEMP-5 падал (claimless 4→2): day-0 планеры в status=4 с капремонтом длиннее стандартных 180 дней (acn 22485/22517, `target_date=2026-12-31`, remaining=202) — `repair_days` обрезался до 0, борт выходил из ремонта на day=180 вместо реального дня → claimless-переход под фильтром TEMP-5 `day_u16>=repair_time`.
+
+**Решение (архитектура):** `repair_time` стал per-board для day-0 status=4 (`group_by` IN (1,2)). Extract пишет в `heli_pandas`:
+- `repair_time` = полный цикл (`target_date − act_start_date` из активной строки `status_overhaul`);
+- `repair_days` = elapsed (`version_date − act_start_date`).
+
+Симуляция: `exit_date = repair_time − repair_days` → выход в реальный день (22485/22517 = day 202). При входе в следующий ремонт (ops→unserviceable 2→7) `repair_time` сбрасывается к стандарту из env-const (`md_components`, =180 для планеров).
+
+**Код:** `repair_days_calculator.py`, `dual_loader.py`, `dwh_loader.py`, `dwh_post_enrichment.py` (+`heli_pandas.repair_time` UInt16), `sim_env_setup.py` (`mp3_repair_time`), `agent_population.py` (override status=4), `rtc_state_transitions_v8.py` (reset на 2→7).
+
+**Validation (validator-judge V1):**
+- `2026-06-12 v1`: **15/15 PASS** (INV-1…INV-12 + TEMP-1/4/5); TEMP-5 mismatch=0; TEMP-4 violations=0; дублей нет.
+- Batch re-run (`2026-04-15`, `2026-05-01`, `2026-05-20`, `2026-06-05`, `2026-06-11`): **15/15 PASS** на каждой дате; прежние провалы TEMP-5 на 06-05/06-11 закрыты.
+- Acceptance: 22485/22517 first exit day=202, `repair_time` 218/224 (не day=180).
+
+**Evidence:** handoffs `handoff_W_repair_time_perboard_20260616_validator-judge_550688db`, `handoff_W_repair_time_perboard_20260616_coder-flame_ac9d5ef5`; runbook `docs/dwh_sim_gate.md` (секция post-fix).
+
+**Triage (не блокеры):**
+1. Idempotency gap экспортёра планеров — голый INSERT без DELETE по version slice → дубли при повторном прогоне (обход: ручная очистка среза).
+2. Порог TEMP-4=210 — новая логика даёт repair span = remaining; в батче макс 209, но при срезе вскоре после `act_start` капремонта remaining может превысить 210 → решение по порогу за Алексеем (`W_triage_queue`).
+
+**Verdict:** high-risk правка **принята** по INV+TEMP; sim-gate на целевых срезах **PASS**.
+
+---
+
 ## 2026-06-13 — Batch sim-gate: 5 DWH-срезов после 08.04
 
 **Скрипт:** `code/utils/dwh_batch_sim_gate.py` | **Evidence:** `output/dwh_sim_batch/`

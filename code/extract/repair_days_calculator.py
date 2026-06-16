@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-Калькулятор repair_days для ВС в ремонте
-
-Формула: repair_days = repair_time - (sched_end_date - version_date)
+Калькулятор repair_days/repair_time для ВС в ремонте
 
 Логика:
 - Работает с ВС в статусе 4 (Ремонт) в таблице heli_pandas
-- Получает repair_time из md_components (заполненного md_components_enricher.py)
-- Берет sched_end_date из target_date в heli_pandas
-- Рассчитывает сколько дней ремонта уже прошло
+- Сначала заполняет repair_time стандартом из md_components по partseqno_i
+- Для day-0 активных ремонтов планеров group_by IN (1,2) берет активную строку
+  status_overhaul, совпадающую с target_date, и пишет фактическую длительность цикла
+- repair_days для таких планеров = прошедшие дни с act_start_date до version_date
 
 Зависимости:
 - md_components (с заполненным repair_time)
@@ -57,32 +56,117 @@ class RepairDaysCalculator:
         self.client.execute('SELECT 1')
         self.logger.info("✅ Подключение к ClickHouse успешно!")
         return True
+
+    def ensure_repair_time_column(self):
+        """Гарантирует наличие целочисленной колонки repair_time."""
+        self.client.execute(
+            "ALTER TABLE heli_pandas ADD COLUMN IF NOT EXISTS repair_time UInt16 DEFAULT 0"
+        )
+        self.logger.info("✅ Колонка heli_pandas.repair_time готова (UInt16)")
+
+    def validate_version_scope(self):
+        """Калькулятор должен работать в явном version scope."""
+        if self.version_date is None or self.version_id is None:
+            raise ValueError("repair_days_calculator требует --version-date и --version-id")
+
+    def validate_standard_repair_times(self):
+        """Fail-fast если для heli_pandas нет стандартного repair_time в md_components."""
+        query = """
+        SELECT
+            count() AS missing_count,
+            groupArrayDistinct(toUInt32(ifNull(hp.partseqno_i, 0))) AS missing_partseqno
+        FROM heli_pandas AS hp
+        LEFT JOIN
+        (
+            SELECT
+                toUInt32(partseqno_i) AS partseqno_i,
+                any(repair_time) AS repair_time
+            FROM md_components
+            WHERE partseqno_i IS NOT NULL
+            GROUP BY partseqno_i
+        ) AS md
+            ON toUInt32(ifNull(hp.partseqno_i, 0)) = md.partseqno_i
+        WHERE hp.version_date = %(version_date)s
+          AND hp.version_id = %(version_id)s
+          AND md.repair_time IS NULL
+        """
+        missing_count, missing_partseqno = self.client.execute(
+            query,
+            {"version_date": self.version_date, "version_id": self.version_id},
+        )[0]
+        if missing_count:
+            raise ValueError(
+                "md_components.repair_time не найден для heli_pandas "
+                f"({missing_count} rows, partseqno_i={missing_partseqno[:20]})"
+            )
+
+    def populate_standard_repair_times(self):
+        """Заполняет repair_time стандартами из md_components для всего среза."""
+        self.logger.info("📋 Заполнение стандартного repair_time из md_components...")
+        self.validate_standard_repair_times()
+        query = """
+        SELECT
+            toUInt32(hp.partseqno_i) AS partseqno_i,
+            toUInt16(any(md.repair_time)) AS repair_time
+        FROM heli_pandas AS hp
+        INNER JOIN md_components AS md
+            ON toUInt32(hp.partseqno_i) = toUInt32(md.partseqno_i)
+        WHERE hp.version_date = %(version_date)s
+          AND hp.version_id = %(version_id)s
+        GROUP BY hp.partseqno_i
+        ORDER BY hp.partseqno_i
+        """
+        rows = self.client.execute(
+            query,
+            {"version_date": self.version_date, "version_id": self.version_id},
+        )
+        if not rows:
+            raise ValueError(
+                f"Не найдены строки heli_pandas для {self.version_date} v{self.version_id}"
+            )
+
+        if self.dry_run:
+            self.logger.info(
+                f"📝 DRY-RUN: стандартный repair_time был бы заполнен для {len(rows)} partseqno_i"
+            )
+            return
+
+        self.client.execute("SET mutations_sync = 1")
+        for partseqno_i, repair_time in rows:
+            self.client.execute(
+                """
+                ALTER TABLE heli_pandas
+                UPDATE repair_time = %(repair_time)s
+                WHERE version_date = %(version_date)s
+                  AND version_id = %(version_id)s
+                  AND toUInt32(ifNull(partseqno_i, 0)) = %(partseqno_i)s
+                """,
+                {
+                    "repair_time": repair_time,
+                    "version_date": self.version_date,
+                    "version_id": self.version_id,
+                    "partseqno_i": partseqno_i,
+                },
+            )
+        self.logger.info(f"✅ Стандартный repair_time заполнен для {len(rows)} partseqno_i")
     
     def get_repair_aircraft(self):
-        """Получает ВС в ремонте (status_id=4) из heli_pandas"""
-        self.logger.info("🔍 Поиск ВС в ремонте (status_id=4)...")
+        """Получает day-0 планеры в ремонте (status_id=4, group_by IN (1,2))."""
+        self.logger.info("🔍 Поиск планеров в ремонте (status_id=4, group_by IN (1,2))...")
 
-        if self.version_date and self.version_id:
-            query = """
-            SELECT serialno, target_date, version_date, partseqno_i
-            FROM heli_pandas
-            WHERE status_id = 4
-                AND version_date = %(version_date)s
-                AND version_id = %(version_id)s
-            ORDER BY serialno
-            """
-            rows = self.client.execute(
-                query,
-                {"version_date": self.version_date, "version_id": self.version_id},
-            )
-        else:
-            query = """
-            SELECT serialno, target_date, version_date, partseqno_i
-            FROM heli_pandas
-            WHERE status_id = 4
-            ORDER BY serialno
-            """
-            rows = self.client.execute(query)
+        query = """
+        SELECT serialno, target_date, version_date, partseqno_i, group_by
+        FROM heli_pandas
+        WHERE status_id = 4
+            AND toUInt32(ifNull(group_by, 0)) IN (1, 2)
+            AND version_date = %(version_date)s
+            AND version_id = %(version_id)s
+        ORDER BY serialno
+        """
+        rows = self.client.execute(
+            query,
+            {"version_date": self.version_date, "version_id": self.version_id},
+        )
 
         if not rows:
             self.logger.info("ℹ️ Не найдено ВС в ремонте (status_id=4)")
@@ -90,12 +174,13 @@ class RepairDaysCalculator:
 
         repair_aircraft = []
         for row in rows:
-            serialno, target_date, version_date, partseqno_i = row
+            serialno, target_date, version_date, partseqno_i, group_by = row
             repair_aircraft.append({
                 'serialno': serialno,
                 'target_date': target_date,
                 'version_date': version_date,
-                'partseqno_i': partseqno_i
+                'partseqno_i': partseqno_i,
+                'group_by': group_by,
             })
 
         self.logger.info(f"✅ Найдено {len(repair_aircraft)} ВС в ремонте")
@@ -104,36 +189,56 @@ class RepairDaysCalculator:
 
         return repair_aircraft
     
-    def get_repair_times(self, repair_aircraft):
-        """Получает repair_time из md_components для ВС в ремонте"""
-        self.logger.info("📋 Получение repair_time из md_components...")
+    def get_active_overhaul_cycle(self, aircraft):
+        """Возвращает act_start/sched_end из активной строки, совпадающей с target_date."""
+        serialno = aircraft['serialno']
+        target_date = aircraft['target_date']
+        if not target_date:
+            raise ValueError(f"ВС {serialno}: отсутствует target_date для active repair")
+        try:
+            ac_registr = int(serialno)
+        except ValueError as exc:
+            raise ValueError(f"ВС {serialno}: serialno не приводится к ac_registr UInt32") from exc
 
-        if not repair_aircraft:
-            return {}
-
-        # md_components — ЕДИНЫЙ справочник без версионности.
-        partseqno_list = tuple(set([aircraft['partseqno_i'] for aircraft in repair_aircraft]))
         query = """
-        SELECT partseqno_i, repair_time
-        FROM md_components
-        WHERE partseqno_i IN %(partseqno_list)s
+        SELECT act_start_date, sched_end_date, status
+        FROM status_overhaul
+        WHERE version_date = %(version_date)s
+          AND version_id = %(version_id)s
+          AND ac_registr = %(ac_registr)s
+          AND status != 'Закрыто'
+          AND sched_end_date = %(target_date)s
+        ORDER BY act_start_date, sched_end_date
         """
-        rows = self.client.execute(query, {"partseqno_list": partseqno_list})
+        rows = self.client.execute(
+            query,
+            {
+                "version_date": self.version_date,
+                "version_id": self.version_id,
+                "ac_registr": ac_registr,
+                "target_date": target_date,
+            },
+        )
+        if len(rows) != 1:
+            raise ValueError(
+                f"ВС {serialno}: ожидалась 1 активная строка status_overhaul "
+                f"для target_date={target_date}, найдено {len(rows)}"
+            )
 
-        repair_times = {}
-        for row in rows:
-            partseqno_i, repair_time = row
-            repair_times[partseqno_i] = repair_time
-
-        self.logger.info(f"✅ Получено repair_time для {len(repair_times)} компонентов")
-        for partseqno_i, repair_time in list(repair_times.items())[:3]:
-            self.logger.info(f"   partseqno_i {partseqno_i}: repair_time={repair_time}")
-
-        return repair_times
+        act_start_date, sched_end_date, status = rows[0]
+        if act_start_date is None:
+            raise ValueError(f"ВС {serialno}: act_start_date=NULL в активной строке {status}")
+        if sched_end_date is None:
+            raise ValueError(f"ВС {serialno}: sched_end_date=NULL в активной строке {status}")
+        if sched_end_date != target_date:
+            raise ValueError(
+                f"ВС {serialno}: sched_end_date={sched_end_date} не совпадает с target_date={target_date}"
+            )
+        return act_start_date, sched_end_date
     
-    def calculate_repair_days(self, repair_aircraft, repair_times):
-        """Рассчитывает repair_days по новой формуле"""
-        self.logger.info("🔢 Расчет repair_days по формуле: repair_time - (target_date - version_date)")
+    def calculate_repair_days(self, repair_aircraft):
+        """Рассчитывает repair_days и repair_time по активному status_overhaul."""
+        self.logger.info("🔢 Расчет: repair_time=act_start→target_date, repair_days=act_start→version_date")
 
         updates = []
         calculated_count = 0
@@ -143,37 +248,39 @@ class RepairDaysCalculator:
             target_date = aircraft['target_date']
             version_date = aircraft['version_date']
             partseqno_i = aircraft['partseqno_i']
-
-            # Получаем repair_time для этого компонента
-            repair_time = repair_times.get(partseqno_i)
-
-            if repair_time is None:
-                self.logger.warning(f"⚠️ ВС {serialno}: не найден repair_time для partseqno_i={partseqno_i}")
-                continue
+            group_by = aircraft['group_by']
 
             if not target_date or not version_date:
-                self.logger.warning(f"⚠️ ВС {serialno}: отсутствуют даты target_date={target_date}, version_date={version_date}")
-                continue
+                raise ValueError(
+                    f"ВС {serialno}: отсутствуют даты target_date={target_date}, version_date={version_date}"
+                )
 
-            # Формула: repair_days = max(0, repair_time - (target_date - version_date))
-            days_remaining = (target_date - version_date).days
-            repair_days = max(0, repair_time - days_remaining)
+            act_start_date, sched_end_date = self.get_active_overhaul_cycle(aircraft)
+            repair_time = (sched_end_date - act_start_date).days
+            repair_days = max(0, (version_date - act_start_date).days)
 
-            self.logger.info(f"✅ {serialno}: repair_days = {repair_time} - ({target_date} - {version_date}) = {repair_time} - {days_remaining} = {repair_days}")
+            if repair_time < 0:
+                raise ValueError(
+                    f"ВС {serialno}: отрицательная длительность ремонта "
+                    f"act_start={act_start_date}, target_date={sched_end_date}"
+                )
+
+            self.logger.info(
+                f"✅ {serialno}: repair_time={repair_time}, repair_days={repair_days} "
+                f"(act_start={act_start_date}, target_date={target_date}, version_date={version_date})"
+            )
 
             # Подготавливаем UPDATE
-            if self.version_date and self.version_id:
-                updates.append({
-                    'serialno': serialno,
-                    'repair_days': repair_days,
-                    'version_date': self.version_date,
-                    'version_id': self.version_id
-                })
-            else:
-                updates.append({
-                    'serialno': serialno,
-                    'repair_days': repair_days
-                })
+            updates.append({
+                'serialno': serialno,
+                'repair_days': repair_days,
+                'repair_time': repair_time,
+                'partseqno_i': partseqno_i,
+                'group_by': group_by,
+                'target_date': target_date,
+                'version_date': self.version_date,
+                'version_id': self.version_id,
+            })
 
             calculated_count += 1
 
@@ -181,8 +288,8 @@ class RepairDaysCalculator:
         return updates
     
     def update_repair_days(self, updates):
-        """Обновляет repair_days в таблице heli_pandas"""
-        self.logger.info("💾 Обновление repair_days в heli_pandas...")
+        """Обновляет repair_days и agent-level repair_time в таблице heli_pandas."""
+        self.logger.info("💾 Обновление repair_days/repair_time в heli_pandas...")
 
         if not updates:
             self.logger.info("ℹ️ Нет обновлений для применения")
@@ -194,36 +301,38 @@ class RepairDaysCalculator:
         for update in updates:
             serialno = update['serialno']
             repair_days = update['repair_days']
+            repair_time = update['repair_time']
 
-            if self.version_date and self.version_id:
-                query = """
-                ALTER TABLE heli_pandas
-                UPDATE repair_days = %(repair_days)s
-                WHERE serialno = %(serialno)s
-                    AND version_date = %(version_date)s
-                    AND version_id = %(version_id)s
-                """
-                self.client.execute(query, {
-                    "repair_days": repair_days,
-                    "serialno": serialno,
-                    "version_date": self.version_date,
-                    "version_id": self.version_id,
-                })
-            else:
-                query = """
-                ALTER TABLE heli_pandas
-                UPDATE repair_days = %(repair_days)s
-                WHERE serialno = %(serialno)s
-                """
-                self.client.execute(query, {
-                    "repair_days": repair_days,
-                    "serialno": serialno,
-                })
+            query = """
+            ALTER TABLE heli_pandas
+            UPDATE
+                repair_days = %(repair_days)s,
+                repair_time = %(repair_time)s
+            WHERE serialno = %(serialno)s
+                AND version_date = %(version_date)s
+                AND version_id = %(version_id)s
+                AND toUInt32(ifNull(partseqno_i, 0)) = %(partseqno_i)s
+                AND toUInt32(ifNull(group_by, 0)) = %(group_by)s
+                AND status_id = 4
+                AND target_date = %(target_date)s
+            """
+            self.client.execute(query, {
+                "repair_days": repair_days,
+                "repair_time": repair_time,
+                "serialno": serialno,
+                "version_date": update['version_date'],
+                "version_id": update['version_id'],
+                "partseqno_i": update['partseqno_i'],
+                "group_by": update['group_by'],
+                "target_date": update['target_date'],
+            })
 
             updated_count += 1
-            self.logger.info(f"   ✅ ВС {serialno}: repair_days = {repair_days}")
+            self.logger.info(
+                f"   ✅ ВС {serialno}: repair_days={repair_days}, repair_time={repair_time}"
+            )
 
-        self.logger.info(f"✅ Обновлено {updated_count} записей с repair_days")
+        self.logger.info(f"✅ Обновлено {updated_count} записей с repair_days/repair_time")
         return True
     
     def run(self):
@@ -234,20 +343,18 @@ class RepairDaysCalculator:
         if not self.connect_to_database():
             return False
 
+        self.validate_version_scope()
+        self.ensure_repair_time_column()
+        self.populate_standard_repair_times()
+
         # 2. Получение ВС в ремонте
         repair_aircraft = self.get_repair_aircraft()
         if not repair_aircraft:
             self.logger.info("ℹ️ Нет ВС в ремонте для обработки")
             return True
 
-        # 3. Получение repair_time из md_components
-        repair_times = self.get_repair_times(repair_aircraft)
-        if not repair_times:
-            self.logger.error("❌ Не удалось получить repair_time из md_components")
-            return False
-
-        # 4. Расчет repair_days
-        updates = self.calculate_repair_days(repair_aircraft, repair_times)
+        # 3. Расчет repair_days/repair_time
+        updates = self.calculate_repair_days(repair_aircraft)
         if not updates:
             self.logger.warning("⚠️ Нет данных для обновления repair_days")
             return True
