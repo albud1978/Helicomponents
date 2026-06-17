@@ -328,8 +328,8 @@ def collect_quota_manager_state(simulation, quota_desc, day_u16, version_date_in
 from sim_env_setup import get_client, prepare_env_arrays
 from base_model_messaging import V2BaseModelMessaging
 from precompute_events import (
-    INFLATION_LOG_SCALE,
-    compute_inflation_log_cumsum,
+    ECONOMICS_COST_COLUMNS,
+    compute_economics_daily_costs,
     compute_mp5_cumsum,
     find_program_change_days,
 )
@@ -382,7 +382,7 @@ class LimiterV8Orchestrator:
         self.frames = 0
         self.days = 0
         self.mp5_cumsum = None
-        self.inflation_log_cumsum = None
+        self.economics_daily_costs = None
         self.program_change_days = []
         
         # V8: детерминированные даты (один массив)
@@ -416,13 +416,14 @@ class LimiterV8Orchestrator:
         mp5_lin = np.array(self.env_data.get('mp5_daily_hours_linear', []), dtype=np.uint32)
         self.mp5_cumsum = compute_mp5_cumsum(mp5_lin, self.frames, self.days)
         print(f"   mp5_cumsum: shape={self.mp5_cumsum.shape}, time={time.perf_counter()-t0:.2f}s")
-
-        print("\n📊 Вычисление inflation_log_cumsum...")
+        
+        print("\n📊 Вычисление economics daily costs...")
         t0 = time.perf_counter()
-        self.inflation_log_cumsum = compute_inflation_log_cumsum(vd, model_build.MAX_DAYS)
+        self.economics_daily_costs = compute_economics_daily_costs(vd, model_build.MAX_DAYS)
         print(
-            "   inflation_log_cumsum: "
-            f"len={len(self.inflation_log_cumsum)}, scale={int(INFLATION_LOG_SCALE)}, "
+            "   economics_daily_costs: "
+            f"columns={list(self.economics_daily_costs)}, "
+            f"len={len(self.economics_daily_costs['repair_cost_mi8'])}, "
             f"time={time.perf_counter()-t0:.2f}s"
         )
         
@@ -552,9 +553,6 @@ class LimiterV8Orchestrator:
         # ═══════════════════════════════════════════════════════════════
         cumsum_size = model_build.RTC_MAX_FRAMES * (model_build.MAX_DAYS + 1)
         self.base_model.env.newMacroPropertyUInt32("mp5_cumsum", cumsum_size)
-        self.base_model.env.newMacroPropertyUInt32(
-            "inflation_log_cumsum", model_build.MAX_DAYS + 1
-        )
         # mp4_ops_counter_mi8/mi17 уже созданы в base_model как PropertyArray
         
         # MP2 Export: буферы для per-agent per-step экспорта
@@ -567,10 +565,10 @@ class LimiterV8Orchestrator:
         hf_init_cumsum = HF_InitMP5Cumsum(self.mp5_cumsum, self.frames, self.days)
         layer_init = self.model.newLayer("layer_init_mp5_cumsum")
         layer_init.addHostFunction(hf_init_cumsum)
-
-        hf_init_inflation = HF_InitInflationLogCumsum(self.inflation_log_cumsum)
-        layer_init_inflation = self.model.newLayer("layer_init_inflation_log_cumsum")
-        layer_init_inflation.addHostFunction(hf_init_inflation)
+        
+        hf_init_economics = HF_InitEconomicsDailyCosts(self.economics_daily_costs)
+        layer_init_economics = self.model.newLayer("layer_init_economics_daily_costs")
+        layer_init_economics.addHostFunction(hf_init_economics)
         
         # HF для инициализации repair_line_*_mp
         # day0_map заполняется позже в _init_repair_lines_at_build
@@ -1531,7 +1529,6 @@ class HF_DeterministicSpawn(fg.HostFunction):
                 agent.setVariableUInt("computed_adaptive_days", 1)
                 
                 agent.setVariableUInt("status_change_day", current_day)
-                agent.setVariableUInt("demote_day", 0)
                 agent.setVariableUInt("repair_candidate", 0)
                 agent.setVariableUInt("repair_line_id", 0xFFFFFFFF)
                 agent.setVariableUInt("repair_line_day", 0xFFFFFFFF)
@@ -1588,35 +1585,37 @@ class HF_InitMP5Cumsum(fg.HostFunction):
         print(f"  [HF_InitMP5Cumsum] ✅ Загружено")
 
 
-class HF_InitInflationLogCumsum(fg.HostFunction):
-    """HostFunction для инициализации scaled UInt32 inflation_log_cumsum."""
+class HF_InitEconomicsDailyCosts(fg.HostFunction):
+    """HostFunction для инициализации дневных UInt32 стоимостей."""
 
-    def __init__(self, inflation_log_cumsum):
+    def __init__(self, economics_daily_costs):
         super().__init__()
-        self.inflation_log_cumsum = inflation_log_cumsum
+        self.economics_daily_costs = economics_daily_costs
         self.initialized = False
 
     def run(self, FLAMEGPU):
         if self.initialized:
             return
 
-        print(
-            "  [HF_InitInflationLogCumsum] Загрузка inflation_log_cumsum: "
-            f"{len(self.inflation_log_cumsum)}"
-        )
+        if not self.economics_daily_costs:
+            raise RuntimeError("economics_daily_costs is empty")
 
-        mp = FLAMEGPU.environment.getMacroPropertyUInt32("inflation_log_cumsum")
-        if len(self.inflation_log_cumsum) > len(mp):
-            raise RuntimeError(
-                "inflation_log_cumsum length exceeds MacroProperty size: "
-                f"{len(self.inflation_log_cumsum)} > {len(mp)}"
-            )
+        print("  [HF_InitEconomicsDailyCosts] Загрузка дневных стоимостей")
+        for column in ECONOMICS_COST_COLUMNS:
+            values = self.economics_daily_costs.get(column)
+            if values is None:
+                raise RuntimeError(f"economics_daily_costs missing column: {column}")
 
-        for i in range(len(self.inflation_log_cumsum)):
-            mp[i] = int(self.inflation_log_cumsum[i])
+            mp = FLAMEGPU.environment.getMacroPropertyUInt32(column)
+            if len(values) > len(mp):
+                raise RuntimeError(
+                    f"{column} length exceeds MacroProperty size: {len(values)} > {len(mp)}"
+                )
+            for i in range(len(values)):
+                mp[i] = int(values[i])
 
         self.initialized = True
-        print("  [HF_InitInflationLogCumsum] ✅ Загружено")
+        print("  [HF_InitEconomicsDailyCosts] ✅ Загружено")
 
 
 class HF_InitRepairLines(fg.HostFunction):

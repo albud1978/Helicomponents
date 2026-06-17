@@ -35,6 +35,7 @@ from rtc_compute_limiter_device import DEVICE_FN_COMPUTE_LIMITER
 import pyflamegpu as fg
 
 CUMSUM_SIZE = RTC_MAX_FRAMES * (MAX_DAYS + 1)
+DAILY_COST_SIZE = MAX_DAYS + 1
 REPAIR_LINES_MAX = 64
 
 DEVICE_FN_COMPUTE_LIMITER = DEVICE_FN_COMPUTE_LIMITER.replace("__CUMSUM_SIZE__", str(CUMSUM_SIZE))
@@ -306,6 +307,60 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage) {
 }
 """
 
+# Условие: beyond-repair демоут в storage (needs_demote == 1)
+COND_OPS_DEMOTE_TO_STORAGE = """
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_demote_to_storage) {
+    if (FLAMEGPU->getVariable<unsigned int>("needs_demote") != 1u) return false;
+
+    const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
+    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+    return (br > 0u && sne > br);
+}
+"""
+
+# Условие: экономический гейт демоута в unserviceable (needs_demote == 1)
+COND_OPS_DEMOTE_TO_UNSVC = f"""
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_demote_to_unsvc) {{
+    if (FLAMEGPU->getVariable<unsigned int>("needs_demote") != 1u) return false;
+
+    const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
+    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+    if (br > 0u && sne > br) return false;
+
+    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
+    if (oh == 0u) return false;
+
+    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
+    if (ppr >= oh) return true;
+
+    // current_day совпадает с day_offset, которым HF_InitEconomicsDailyCosts заполняет массивы.
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+
+    unsigned int repair_cost = 0u;
+    unsigned int ferry_cost = 0u;
+    if (group_by == 1u) {{
+        auto repair_costs = FLAMEGPU->environment.getMacroProperty<unsigned int, {DAILY_COST_SIZE}u>("repair_cost_mi8");
+        auto ferry_costs = FLAMEGPU->environment.getMacroProperty<unsigned int, {DAILY_COST_SIZE}u>("ferry_cost_mi8");
+        repair_cost = repair_costs[current_day];
+        ferry_cost = ferry_costs[current_day];
+    }} else if (group_by == 2u) {{
+        auto repair_costs = FLAMEGPU->environment.getMacroProperty<unsigned int, {DAILY_COST_SIZE}u>("repair_cost_mi17");
+        auto ferry_costs = FLAMEGPU->environment.getMacroProperty<unsigned int, {DAILY_COST_SIZE}u>("ferry_cost_mi17");
+        repair_cost = repair_costs[current_day];
+        ferry_cost = ferry_costs[current_day];
+    }} else {{
+        return false;
+    }}
+
+    if (repair_cost == 0u) return false;
+
+    const float frac_resource = (float)(oh - ppr) / (float)oh;
+    const float frac_cost = (float)ferry_cost / (float)repair_cost;
+    return frac_resource < frac_cost;
+}}
+"""
+
 # Условие: демоут (needs_demote == 1)
 COND_OPS_DEMOTE = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_demote) {
@@ -350,6 +405,44 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v7, flamegpu::MessageNone, flamegpu::
 }
 """
 
+# Функция: operations → unserviceable (экономический гейт демоута, 2→7)
+RTC_OPS_DEMOTE_TO_UNSVC = """
+FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_to_unsvc_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
+    const unsigned int repair_time = (group_by == 1u)
+        ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
+        : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
+
+    FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
+    FLAMEGPU->setVariable<unsigned int>("status_id", 7u);
+    FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
+    FLAMEGPU->setVariable<unsigned int>("needs_demote", 0u);
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+    FLAMEGPU->setVariable<unsigned int>("daily_next_u32", 0u);
+    FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
+    FLAMEGPU->setVariable<unsigned int>("repair_time", repair_time);
+    FLAMEGPU->setVariable<unsigned int>("repair_days", repair_time);
+    return flamegpu::ALIVE;
+}
+"""
+
+# Функция: operations → storage (beyond-repair демоут, 2→6)
+RTC_OPS_DEMOTE_TO_STORAGE = """
+FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_to_storage_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
+    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    FLAMEGPU->setVariable<unsigned int>("transition_2_to_6", 1u);
+    FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
+    FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
+    FLAMEGPU->setVariable<unsigned int>("needs_demote", 0u);
+    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
+    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
+    FLAMEGPU->setVariable<unsigned int>("daily_next_u32", 0u);
+    return flamegpu::ALIVE;
+}
+"""
+
 # Функция: operations → serviceable (демоут, 2→3)
 RTC_OPS_DEMOTE = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
@@ -359,7 +452,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_v7, flamegpu::MessageNone, flamegpu::Mess
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
     FLAMEGPU->setVariable<unsigned int>("needs_demote", 0u);  // Сброс флага
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
-    FLAMEGPU->setVariable<unsigned int>("demote_day", current_day);
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
     FLAMEGPU->setVariable<unsigned int>("daily_next_u32", 0u);
     return flamegpu::ALIVE;
@@ -389,16 +481,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::Mess
     const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
-    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-    const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
-    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
-    const unsigned int repair_claim_source = FLAMEGPU->getVariable<unsigned int>("repair_claim_source");
-    unsigned int ppr_after = ppr;
-    if (repair_claim_source != 0u) {
-        ppr_after = 0u;
-        FLAMEGPU->setVariable<unsigned int>("ppr", 0u);
-    }
     if (group_by == 1u) {
         auto p1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_approve_s3");
         auto c1 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi8_commit_p1");
@@ -413,10 +495,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::Mess
     FLAMEGPU->setVariable<unsigned int>("commit_p1", 1u);
     FLAMEGPU->setVariable<unsigned int>("transition_3_to_2", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_id", 2u);
-    FLAMEGPU->setVariable<unsigned short>(
-        "limiter",
-        compute_limiter_inline(FLAMEGPU, sne, ppr_after, ll, oh, idx, current_day)
-    );
+    FLAMEGPU->setVariable<unsigned short>("limiter", compute_limiter_inline(FLAMEGPU));
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
     FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
     FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
@@ -644,6 +723,22 @@ def register_phase2_demote(model: fg.ModelDescription, agent: fg.AgentDescriptio
     """Фаза 2: Демоут (после квотирования)"""
     print("  📦 V7 Фаза 2: Демоут...")
     
+    # operations → storage (beyond-repair демоут, 2→6)
+    layer_demote_storage = model.newLayer("v7_ops_demote_to_storage")
+    fn = agent.newRTCFunction("rtc_ops_demote_to_storage_v7", RTC_OPS_DEMOTE_TO_STORAGE)
+    fn.setRTCFunctionCondition(COND_OPS_DEMOTE_TO_STORAGE)
+    fn.setInitialState("operations")
+    fn.setEndState("storage")
+    layer_demote_storage.addAgentFunction(fn)
+
+    # operations → unserviceable (экономический гейт демоута, 2→7)
+    layer_demote_unsvc = model.newLayer("v7_ops_demote_to_unsvc")
+    fn = agent.newRTCFunction("rtc_ops_demote_to_unsvc_v7", RTC_OPS_DEMOTE_TO_UNSVC)
+    fn.setRTCFunctionCondition(COND_OPS_DEMOTE_TO_UNSVC)
+    fn.setInitialState("operations")
+    fn.setEndState("unserviceable")
+    layer_demote_unsvc.addAgentFunction(fn)
+
     # operations → serviceable (демоут, 2→3)
     layer_demote = model.newLayer("v7_ops_demote")
     fn = agent.newRTCFunction("rtc_ops_demote_v7", RTC_OPS_DEMOTE)
@@ -655,7 +750,7 @@ def register_phase2_demote(model: fg.ModelDescription, agent: fg.AgentDescriptio
     # V7: _stay функции удалены — FLAME GPU автоматически оставляет агентов
     # в своём состоянии если FunctionCondition = false
     
-    print("    ✅ Фаза 2 готова (демоут)")
+    print("    ✅ Фаза 2 готова (storage, unsvc, demote)")
 
 
 def register_phase3_promote(model: fg.ModelDescription, agent: fg.AgentDescription):

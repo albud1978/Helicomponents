@@ -190,7 +190,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8, flamegpu::MessageNone, flam
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_time", repair_time);
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_days", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_change_day", day);
-    FLAMEGPU->agent_out.setVariable<unsigned int>("demote_day", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_id", 2u);  // operations
     FLAMEGPU->agent_out.setVariable<unsigned int>("pre_status_id", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p1", 0u);
@@ -374,7 +373,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8_mi8, flamegpu::MessageNone, 
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_time", repair_time);
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_days", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_change_day", day);
-    FLAMEGPU->agent_out.setVariable<unsigned int>("demote_day", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_id", 2u);  // operations
     FLAMEGPU->agent_out.setVariable<unsigned int>("pre_status_id", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("commit_p1", 0u);
@@ -495,7 +493,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v7, flamegpu::MessageNone, flam
     FLAMEGPU->agent_out.setVariable<unsigned int>("limiter_date", 0xFFFFFFFFu);
     FLAMEGPU->agent_out.setVariable<unsigned int>("prev_intent", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("status_change_day", day);
-    FLAMEGPU->agent_out.setVariable<unsigned int>("demote_day", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_candidate", 0u);
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     FLAMEGPU->agent_out.setVariable<unsigned int>("repair_line_day", 0xFFFFFFFFu);

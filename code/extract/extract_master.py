@@ -263,6 +263,13 @@ class ExtractMaster:
             'result_table': 'heli_pandas',
             'critical': True
         },
+        {
+            'script': 'heli_pandas_economics_status.py',
+            'description': 'Day-0 economics screen: планеры status_id=3 → 7 по ferry/repair cost',
+            'dependencies': ['heli_pandas'],
+            'result_table': 'heli_pandas',
+            'critical': True
+        },
         # === МЕТА-СЛОВАРЬ (финальный этап после всех таблиц) ===
         {
             'script': 'digital_values_dictionary_creator.py',
@@ -544,9 +551,11 @@ class ExtractMaster:
             if self.dataset_path and script_name not in ['md_components_loader.py', 'calculate_beyond_repair.py', 
                                                          'md_components_enricher.py', 'md_components_psn_reserve.py', 'enrich_heli_pandas.py',
                                                          'dictionary_creator.py', 'digital_values_dictionary_creator.py',
-                                                         'heli_pandas_group_by_enricher.py', 'program_ac_precheck_runner.py',
+                                                         'heli_pandas_group_by_enricher.py',
+                                                         'program_ac_precheck_runner.py',
                                                          'heli_pandas_component_status.py', 'heli_pandas_serviceable_status.py',
                                                          'heli_pandas_repair_status.py', 'heli_pandas_storage_status.py',
+                                                         'heli_pandas_economics_status.py',
                                                          'repair_days_calculator.py', 'heli_pandas_terminal_br_gate.py']:
                 cmd_with_params.extend(['--dataset-path', self.dataset_path])
             

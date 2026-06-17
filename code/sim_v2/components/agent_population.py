@@ -241,7 +241,6 @@ class AgentPopulationBuilder:
             agent.setVariableUInt("partseqno_i", partseqno)
             agent.setVariableUInt("repair_days", agent_data['repair_days'])
             agent.setVariableUInt("status_change_day", 0)
-            agent.setVariableUInt("demote_day", 0)
             agent.setVariableUInt("repair_candidate", 0)
             agent.setVariableUInt("repair_line_id", 0xFFFFFFFF)
             agent.setVariableUInt("repair_line_day", 0xFFFFFFFF)

@@ -329,6 +329,11 @@ class V2BaseModelMessaging:
         
         # MP5: Суточные часы работы
         self.env.newMacroPropertyUInt32("mp5_lin", model_build.MAX_SIZE)
+        daily_cost_size = model_build.MAX_DAYS + 1
+        self.env.newMacroPropertyUInt32("repair_cost_mi8", daily_cost_size)
+        self.env.newMacroPropertyUInt32("repair_cost_mi17", daily_cost_size)
+        self.env.newMacroPropertyUInt32("ferry_cost_mi8", daily_cost_size)
+        self.env.newMacroPropertyUInt32("ferry_cost_mi17", daily_cost_size)
         
         # ═══════════════════════════════════════════════════════════════════════
         # Quota буферы (для совместимости с rtc_mp2_writer.py)
@@ -369,11 +374,6 @@ class V2BaseModelMessaging:
         self.env.newMacroPropertyUInt32("mi17_commit_p2", max_frames)
         self.env.newMacroPropertyUInt32("mi8_commit_p3", max_frames)
         self.env.newMacroPropertyUInt32("mi17_commit_p3", max_frames)
-        # P1 serviceable candidates that must enter through RepairLine before ops.
-        self.env.newMacroPropertyUInt32("mi8_svc_repairable", max_frames)
-        self.env.newMacroPropertyUInt32("mi17_svc_repairable", max_frames)
-        self.env.newMacroPropertyUInt32("mi8_commit_p1_repair_candidate", max_frames)
-        self.env.newMacroPropertyUInt32("mi17_commit_p1_repair_candidate", max_frames)
         # Per-step commit candidates for deterministic RepairLine capture.
         self.env.newMacroPropertyUInt32("mi8_commit_p2_candidate", max_frames)
         self.env.newMacroPropertyUInt32("mi17_commit_p2_candidate", max_frames)
@@ -548,8 +548,6 @@ class V2BaseModelMessaging:
         
         # Дата последней смены статуса (для аналитики и ремонтов)
         agent.newVariableUInt("status_change_day", 0)
-        # День последнего демоута 2→3; sentinel=0 для never-demoted serviceable.
-        agent.newVariableUInt("demote_day", 0)
         
         # V8: данные для выбора ремонтной линии (двухфазно)
         agent.newVariableUInt("repair_candidate", 0)

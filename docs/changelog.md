@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-06-17 — 3-сторонняя развилка демоута: br → storage (6) перед экономикой (7)
+
+**Workflow:** `W_demote_fork_br_storage_20260617` | **Risk:** high | **Profile:** high-strict | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** развитие экономического гейта демоута (`W_promote_demote_ferry_gate_20260616`). На точке «намерения демоута» (`needs_demote==1`, профицитный вывод из ops) развилка расширена с 2-сторонней до 3-сторонней с приоритетом **br > экономика > serviceable**.
+
+**Архитектура (RTC):** в `rtc_state_transitions_v7.py` зарегистрирован новый слой `v7_ops_demote_to_storage` (2→6 при `br>0 && sne>br`) **перед** экономическим `v7_ops_demote_to_unsvc` (2→7), затем стандартный `v7_ops_demote` (2→3). DO-функция `rtc_ops_demote_to_storage_v7` — по образцу штатного `rtc_ops_to_storage_v8` (+ `needs_demote=0`, без repair-полей). В `cond_ops_demote_to_unsvc` добавлен br-guard (`br>0 && sne>br → false`) до экономического гейта.
+
+**Смысл:** beyond-repair планер (`sne>br`), выводимый по профициту, теперь идёт в **storage (6)** — каннибализация/остановка, а не в ремонт (7), т.к. ремонт бессмыслен. Экономическое обоснование: потеря остаточного ресурса мала, агрегаты выгоднее каннибализировать. Экономический 2→7 и стандартный 2→3 сохранены для остальных случаев.
+
+**Код:** `code/sim_v2/messaging/rtc_state_transitions_v7.py`.
+
+**Validation (validator-judge V1, 6 дат):** `2026-04-08`, `04-15`, `05-01`, `05-20`, `06-05`, `06-11` — **INV-1…12 + TEMP-1/4/5 = 15/15 PASS** на каждой (`version_id=1`, `group_by IN (1,2)`). Регрессия переходов: beyond-repair (`sne>br`) в 2→7 = **0** (было 2–3/дату); путь 2→6 вырос на ~21/дату (до 35–36); экономический 2→7 (186–192/дату) и стандартный 2→3 (316–322/дату) сохранены. `acn=24223` на `2026-05-20` без INV-12 overshoot.
+
+**Evidence:** handoffs `handoff_W_demote_fork_br_storage_20260617_coder-flame_a4c3aeb0` (I1), `handoff_W_demote_fork_br_storage_20260617_reviewer-flame_94796f95` (R1, ACCEPT 5/5), `handoff_W_demote_fork_br_storage_20260617_validator-judge_3d9ba61b` (V1), `handoff_W_demote_fork_br_storage_20260617_governance-compliance_3302cff7` (G1, allow_with_notes); logs `output/dwh_sim_batch_demote_fork/sim_gate_*.log`; approval `ctx_W_demote_fork_br_storage_20260617_approval_69622c7b`.
+
+**Follow-up (требует approval Алексея):** SSoT `config/transitions/transitions_rules.json` → `rtc_execution_order` не отражает добавленные слои (`v7_ops_demote_to_storage` 2→6, `v7_ops_demote_to_unsvc` 2→7, `layer_init_economics_daily_costs`) — нужен approval-gated синк (`make sync-domain-graph`).
+
+**Verdict:** high-risk правка **принята** (reviewer-flame ACCEPT 5/5, governance allow_with_notes); sim-gate на 6 DWH-срезах **PASS** по INV+TEMP; SSoT (`config/transitions/**`) не менялся.
+
+---
+
+## 2026-06-16 — Экономический гейт демоута 2→7 + откат инфляционной логики 3→2
+
+**Workflow:** `W_promote_demote_ferry_gate_20260616` | **Risk:** high | **Profile:** high-strict | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** замена инфляционной экономики промоута 3→2 (коммит `a90e9671`) на гейт «цена перегона vs остаточный ресурс» при демоуте ops→serviceable и на day-0 extract. Стандартный промоут/демоут master восстановлен; сохранены per-board `repair_time` (`4563c87e`) и идемпотентность экспорта/`--version-id` (`98d3d5d2`).
+
+**Откат инфляции (полный след `a90e9671`):** удалены `economic_breach`, дневной log-cumsum инфляции S(d), лист `labour_inflation`, `feasibility_breach`, маршрутизация serviceable→repair. Восстановлены из master: `rtc_quota_v8.py`, `rtc_quota_v8_base.py`, `rtc_state_transitions_v7.py` (базовый слой), `base_model_messaging.py`, `rtc_spawn_dynamic_v7.py`, `precompute_events.py` (inflation helper); из `orchestrator_limiter_v8.py` — inflation imports/MacroProperty/HF/layer; из `agent_population.py` — только `demote_day`.
+
+**Новая экономическая модель:** на демоуте 2→3 (RTC) и на day-0 extract, если `(oh−ppr)/oh < ferry_cost/repair_cost` (по типу борта) **или** `ppr≥oh` → борт направляется в `status=7` (unserviceable) вместо 3. `status=6` по-прежнему регулируется br. Без Float64: RTC — Float32 деление двух дробей; extract — целочисленный cross-multiply (`remaining*repair_cost < ferry_cost*oh`).
+
+**Источник стоимостей:** `data_input/master_data/Economics.xlsx` (схема `date | repair_cost_mi8 | repair_cost_mi17 | ferry_cost_mi8 | ferry_cost_mi17`; repair=15 000 000 оба типа, ferry_mi8=762 800, ferry_mi17=894 000; forward-fill по дням). Развёрнуто в 4 дневные UInt32 MacroProperty через `HF_InitEconomicsDailyCosts`. Старый `source_data/v_2026-04-08/Economic.xlsx` осиротел (не удалялся).
+
+**Архитектура:**
+- **RTC:** отдельный слой `v7_ops_demote_to_unsvc` перед стандартным `v7_ops_demote` (`rtc_state_transitions_v7.py`); economic 2→7 без `exit_date` (RepairLine-managed, parity с `rtc_ops_to_unsvc_v8`).
+- **Extract:** новый шаг `heli_pandas_economics_status.py` после классификаторов serviceable/repair/storage (`extract_master.py`).
+
+**Код:** `rtc_state_transitions_v7.py`, `precompute_events.py`, `base_model_messaging.py`, `orchestrator_limiter_v8.py`, `rtc_quota_v8.py`, `rtc_quota_v8_base.py`, `rtc_spawn_dynamic_v7.py`, `agent_population.py`, `extract_master.py`, `heli_pandas_economics_status.py` (новый), `data_input/master_data/Economics.xlsx`.
+
+**Validation (validator-judge V1, 6 дат):** `2026-04-08`, `04-15`, `05-01`, `05-20`, `06-05`, `06-11` — **INV-1…12 + TEMP-1/4/5 = 15/15 PASS** на каждой. `acn=24223` без INV-12 overshoot (на `2026-05-20` уходит в 7 на day 1364, `ppr=269908/oh=270000`). Экономический гейт активен: 189–195 переходов 2→7 на дату (верификация через `pre_status_id/status_id`).
+
+**Evidence:** handoffs `handoff_W_promote_demote_ferry_gate_20260616_coder-flame_65a31d77` (P1), `handoff_W_promote_demote_ferry_gate_20260616_coder-general_dee55165` (P2), `handoff_W_promote_demote_ferry_gate_20260616_coder-flame_5bab1aa0` (P3), `handoff_W_promote_demote_ferry_gate_20260616_validator-judge_e3331a59` (V1), `handoff_W_promote_demote_ferry_gate_20260616_governance-compliance_55f1eae0` (G1, allow_with_notes); logs `output/dwh_sim_batch/ferry_gate/sim_gate_*.log`.
+
+**Triage (не блокер):** колонка `transition_2_to_7` не экспортируется в `sim_masterv2_v9` — активность гейта верифицируется через `pre_status_id/status_id` (подтверждено V1).
+
+**Verdict:** high-risk правка **принята** (governance allow_with_notes); sim-gate на 6 DWH-срезах **PASS** по INV+TEMP; SSoT (`config/transitions/**`, `invariants.json`) не менялся.
+
+---
+
 ## 2026-06-16 — Идемпотентность экспорта симуляции (per-slice replace)
 
 **Workflow:** `W_sim_export_idempotency_20260616` | **Risk:** high | **Profile:** high-strict | **Branch:** `feature/dwh-bb8`
