@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-06-21 — DWH-загрузка по выбранной дате, sim-gate 2026-06-20, экспорт ремонтов агрегатов
+
+**Workflow:** `W_dwh_sim_gate_20260620` | **Risk:** low | **Profile:** low | **Branch:** `feature/dwh-bb8`
+**Коммиты наработок:** `9b2921ba` (engine repair export), `c4ec4f4e` (session KG).
+
+**Контекст:** запрос — «сделать симуляцию нового датасета за 21-06, замерить тайминг extract+sim; полная валидация датасета, контроль целостности/логичности, документирование». Дополнительно за сессию: навык загрузки статуса ремонта агрегатов и поиск даты исполнения заказа.
+
+### 1. Дата среза: 2026-06-20 (не 21-06)
+Витрина `reports.amos_heli_rotables_components_status` в Heli-DWH имеет **max `report_date`=2026-06-20** (на 2026-06-21 = **0 строк**). Поэтому extract/sim выполнен на **2026-06-20**. Источник `source.amos_heli_od_detail` (engine repair) доступен на 2026-06-21 — это **другой** контур (заказы), не витрина статусов.
+
+### 2. Загрузка DWH по выбранной дате
+`code/utils/dwh_loader.py --report-date 2026-06-20 --version-id 1 --step all` (+`--skip-existing`). Шаги: `program_ac` → `status_overhaul` → `status_components` → `enrich` (planner cascade + 7 post-скриптов). **Обязателен CA-сертификат DWH:** `export DWH_CLICKHOUSE_CA_CERT=config/certs/yandex_cloud_RootCA.pem` (иначе SSL FileNotFoundError на `program_ac`). `flight_program_fl/ac` клонированы `2026-04-08 → 2026-06-20` (Program.xlsx вне DWH scope).
+
+### 3. Полная валидация датасета 2026-06-20 v1 — ГОДЕН
+**Комплектность:** все 8 таблиц заполнены (`program_ac`=174, `status_overhaul`=58, `heli_raw`=202 216, `heli_pandas`=11 480, `flight_program_fl`=1 392 000, `flight_program_ac`=4 000, `sim_masterv2_v9`=78 842, `sim_repairline_v9`=65 700).
+**Целостность:** `status_id=0`=0; нет NULL в `partno/serialno/partseqno_i/ac_typ`; `partseqno_i↔group_by` 1:1; ⚠️ 18 точных дублей AMOS (компоненты, 0.16%, к сведению).
+**Логичность:** планеры `gb(1,2)` ops с превышением ресурса = **0** (вход sim корректен); `status=4` без `target_date` в прошлом; нет отрицательных ресурсов. `ppr>oh`=274 / `sne>ll`=110 — в осн. статусы 6/7 (списанные/хранение) = норма входных AMOS-данных.
+**Инварианты:** INV-1…12 + TEMP-1/4/5 = **15/15 PASS** (`run_all.py`). **Sim:** ops=target (Mi-8 10/10, Mi-17 121/121).
+
+### 4. Тайминг extract+sim (wall-clock, cold run)
+| Этап | Время | Примечание |
+|---|---:|---|
+| DWH pure fetch | 3.3 s | program_ac 0.6 + overhaul 0.5 + components 2.2 (202k rows) |
+| **status_components load** | **56.4 s** | самый долгий шаг extract (fetch+filter+insert 202k raw + 11.5k pandas) |
+| enrich (cascade+post) | 43.4 s | в т.ч. **`repair_days_calculator.py` 14.8 s** — самый долгий post-скрипт |
+| Extract+Load итого | ~107 s | |
+| **Sim V8** | **225.6 s** | GPU `simulate()` только 3.2 s; остальное — RTC compile + MP2 drain + CH export |
+| Validation | 12.1 s | |
+| **Pipeline итого** | **~345 s (~5.8 min)** | |
+
+### 5. Навык: экспорт открытых ремонтов агрегатов из DWH (`code/utils/export_engine_repair_dwh.py`)
+Источник `source.amos_heli_od_detail` (`order_type=R`, `state=O`, SCD as-of на `report_date`); partno — из `MD_Сomponents.xlsx` лист «Агрегаты», `group_by>2`. Режимы: `--gb4-full` (отчёт по двигателям gb=4 с расшифровками vendor/target_date/дубли) и `--all-groups` (40 групп × 2 листа). Выход: `output/dwh_engine_repair_v*/Engine_Repair_*.xlsx`. `od_header` в Heli-DWH **нет**.
+
+### 6. Запрос админам DWH: расширение полей `od_detail`
+`output/dwh_admin_request_amos_heli_od_detail_fields.md` — запрос на `orig_target_date`, `confirmed_date`, `del_date` (+`ext_state`) в `source.amos_heli_od_detail`. SCD-proxy для `orig_target_date` **отклонён** (не эквивалентен полю AMOS). После выкладки полей — обновить `export_engine_repair_dwh.py` (убрать proxy, читать нативные поля).
+
+**Evidence:** `output/dwh_load_sim_20260620/{timing.log, timing_summary.txt, dataset_validation_20260620.txt, validation.log}`; handoff `handoff_W_dwh_sim_gate_20260620_orchestrator_35f2b0c7`.
+
+**KG hygiene:** закрыто 25 пустых auto-bootstrap stub-workflow (session/housekeeping, 0 handoffs) — устранён шум в графе (33 active → 10).
+
+**Verdict:** датасет 2026-06-20 v1 **годен для GPU-симуляции**; sim-gate **PASS** (INV-1…12 + TEMP-1/4/5 = 15/15); код наработок закоммичен; SSoT не затронут.
+
+---
+
 ## 2026-06-17 — 3-сторонняя развилка демоута: br → storage (6) перед экономикой (7)
 
 **Workflow:** `W_demote_fork_br_storage_20260617` | **Risk:** high | **Profile:** high-strict | **Branch:** `feature/dwh-bb8`

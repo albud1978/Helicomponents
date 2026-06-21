@@ -138,9 +138,59 @@ python3 code/validation/run_all.py \
 - Idempotency gap экспортёра планеров (INSERT без DELETE по version slice) — дубли при повторном прогоне; обход: ручная очистка среза.
 - TEMP-4 порог 210: в батче max remaining=209; при срезе вскоре после `act_start` капремонта remaining может превысить 210 — решение за Алексеем.
 
+## Прогон 2026-06-20 (date-based load, `W_dwh_sim_gate_20260620`, 2026-06-21)
+
+**Дата среза = 2026-06-20** (не 21-06): витрина `reports.amos_heli_rotables_components_status` имеет max `report_date=2026-06-20`; на 2026-06-21 строк нет.
+
+### Воспроизведение (по шагам)
+
+```bash
+# 0. ОБЯЗАТЕЛЬНО: CA-сертификат DWH (иначе SSL FileNotFoundError на program_ac)
+export DWH_CLICKHOUSE_CA_CERT=/media/DATA_BIG/Projects/Heli/Helicomponents/config/certs/yandex_cloud_RootCA.pem
+
+# 1. Загрузка из DWH по выбранной дате (all = program_ac+status_overhaul+status_components+enrich)
+.venv/bin/python code/utils/dwh_loader.py --report-date 2026-06-20 --version-id 1 --step all --skip-existing
+
+# 2. Клон flight_program (Program.xlsx вне DWH scope) 2026-04-08 -> 2026-06-20
+#    (через dwh_batch_sim_gate.clone_flight_program или INSERT SELECT)
+
+# 3. Sim V8 (conda cuda13)
+export CUDA_PATH="$HOME/miniconda3/targets/x86_64-linux"
+export LD_LIBRARY_PATH="$HOME/miniconda3/lib:$LD_LIBRARY_PATH"
+/home/albud/miniconda3/envs/cuda13/bin/python3 \
+  code/sim_v2/messaging/orchestrator_limiter_v8.py --version-date 2026-06-20 --end-day 3650 --max-steps 10000
+
+# 4. Инварианты
+.venv/bin/python code/validation/run_all.py --version-id 1 --version-date 20260620 \
+  --table-main sim_masterv2_v9 --table-repair sim_repairline_v9
+```
+
+> ⚠️ Повторный `--step enrich` на уже обработанном `heli_pandas` падает (`repair_days: required argument is not an integer`): post-enrichment читает обогащённый срез, где `repair_days` уже не raw. Чистый перезапуск enrich — только после восстановления `heli_pandas` из `status_components` (`--no-enrich`), затем `--step enrich`.
+
+### Результат
+
+| Шаг | Результат | Evidence |
+|---|---|---|
+| DWH load | OK | heli_pandas=11 480, program_ac=174, status_overhaul=58, heli_raw=202 216 |
+| Клон `flight_program_*` 2026-04-08 → 2026-06-20 | OK | fl=1 392 000, ac=4 000 |
+| `orchestrator_limiter_v8.py` | **PASS** exit 0 | 251 шаг; masterv2=78 842, repairline=65 700; ops=target (Mi-8 10/10, Mi-17 121/121) |
+| `run_all.py` INV-1…12 + TEMP-1/4/5 | **PASS** (15/15) | `output/dwh_load_sim_20260620/validation.log` |
+| Полная валидация датасета | **ГОДЕН** | `output/dwh_load_sim_20260620/dataset_validation_20260620.txt` |
+
+**Валидация датасета (DQ):** `status_id=0`=0; планеры gb(1,2) ops с превышением ресурса=0; `partseqno_i↔group_by` 1:1; 18 точных дублей AMOS (компоненты, 0.16%, к сведению); `ppr>oh`/`sne>ll` в осн. в статусах 6/7 (норма).
+
+### Тайминг (wall-clock, cold run) — `output/dwh_load_sim_20260620/timing_summary.txt`
+
+- **Extract+Load ~107 s**: `status_components` **56.4 s** (самый долгий), `enrich` 43.4 s (в нём `repair_days_calculator.py` **14.8 s**), program_ac/overhaul ~3.5 s каждый. Чистый DWH fetch — 3.3 s.
+- **Sim V8 225.6 s**: GPU `simulate()` 3.2 s; остальное — RTC compile + MP2 drain + CH export.
+- **Validation 12.1 s**. Pipeline итого **~345 s (~5.8 min)**.
+
+**Verdict 2026-06-20:** sim-gate **PASS** (INV-1…12 + TEMP-1/4/5 = 15/15); датасет годен для GPU.
+
 ## Связанные документы
 
-- `docs/changelog.md` — секция **2026-06-16** (per-board repair_time, TEMP-5 fix); секции 2026-06-13 (retract aircraft.status, sim-gate обязателен)
+- `docs/changelog.md` — секция **2026-06-21** (date-based load, sim-gate 06-20, engine repair export); **2026-06-16** (per-board repair_time, TEMP-5 fix); секции 2026-06-13 (retract aircraft.status, sim-gate обязателен)
+- `output/dwh_admin_request_amos_heli_od_detail_fields.md` — запрос админам DWH (поля `od_detail`: orig_target_date/confirmed_date/del_date)
 - `docs/de_tasks.md` — приёмка DWH-среза
 - `docs/validation_capsule.md` — INV registry
 - `config/transitions/invariants.json` — SSoT инвариантов

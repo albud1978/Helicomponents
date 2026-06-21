@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-21T04:54:15Z",
+    "updated_at": "2026-06-21T07:57:48Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -789,7 +789,7 @@
       "goal": "low-risk housekeeping edit of docs/architecture/engines_sim_approaches.md",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -803,14 +803,14 @@
         "last_updated": "2026-05-21T10:19:32Z"
       },
       "created_at": "2026-05-21T10:19:32Z",
-      "updated_at": "2026-05-21T10:19:32Z"
+      "updated_at": "2026-06-21T05:19:58Z"
     },
     {
       "workflow_id": "W_session_20260526T023303Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/sim_v2/tests/__init__.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -824,14 +824,14 @@
         "last_updated": "2026-05-26T02:33:03Z"
       },
       "created_at": "2026-05-26T02:33:03Z",
-      "updated_at": "2026-05-26T02:33:03Z"
+      "updated_at": "2026-06-21T05:19:58Z"
     },
     {
       "workflow_id": "W_housekeeping_20260526T033754Z",
       "goal": "low-risk housekeeping edit of .cursor/rules/15_flame_environment.mdc",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -845,14 +845,14 @@
         "last_updated": "2026-05-26T03:37:54Z"
       },
       "created_at": "2026-05-26T03:37:54Z",
-      "updated_at": "2026-05-26T03:37:54Z"
+      "updated_at": "2026-06-21T05:19:58Z"
     },
     {
       "workflow_id": "W_session_20260526T091552Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/sim_v2/tests/smoke_submodel_lifecycle.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -866,14 +866,14 @@
         "last_updated": "2026-05-26T09:15:52Z"
       },
       "created_at": "2026-05-26T09:15:52Z",
-      "updated_at": "2026-05-26T09:15:52Z"
+      "updated_at": "2026-06-21T05:19:58Z"
     },
     {
       "workflow_id": "W_housekeeping_20260601T171231Z",
       "goal": "low-risk housekeeping edit of .cursor/rules/15_flame_environment.mdc",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -887,14 +887,14 @@
         "last_updated": "2026-06-01T17:12:31Z"
       },
       "created_at": "2026-06-01T17:12:31Z",
-      "updated_at": "2026-06-01T17:12:31Z"
+      "updated_at": "2026-06-21T05:19:58Z"
     },
     {
       "workflow_id": "W_sim_dedup_spawn_recount_20260601T175545Z",
       "goal": "Устранить дублирующий spawn-пересчёт (v8_reset_buffers_spawn+v8_count_agents_spawn) без изменения поведения симуляции",
-      "phase": "implement",
+      "phase": "done",
       "owner": "human",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -908,7 +908,7 @@
         "last_updated": "2026-06-01T19:56:30Z"
       },
       "created_at": "2026-06-01T17:55:54Z",
-      "updated_at": "2026-06-01T19:56:36Z"
+      "updated_at": "2026-06-21T07:57:48Z"
     },
     {
       "workflow_id": "W_sim_remove_d2_noop_20260601T200344Z",
@@ -957,7 +957,7 @@
       "goal": "low-risk housekeeping edit of docs/quota_capsule.md",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -971,7 +971,7 @@
         "last_updated": "2026-06-02T05:02:11Z"
       },
       "created_at": "2026-06-02T05:02:11Z",
-      "updated_at": "2026-06-02T05:02:11Z"
+      "updated_at": "2026-06-21T05:19:58Z"
     },
     {
       "workflow_id": "W_sim_deterministic_line_capture",
@@ -1042,7 +1042,7 @@
       "goal": "low-risk housekeeping edit of .cursor/rules/91_handoff_template.mdc",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -1056,7 +1056,7 @@
         "last_updated": "2026-06-03T14:46:43Z"
       },
       "created_at": "2026-06-03T14:46:43Z",
-      "updated_at": "2026-06-03T14:46:43Z"
+      "updated_at": "2026-06-21T05:19:58Z"
     },
     {
       "workflow_id": "W_sim_reset_parallel_selfclear",
@@ -1378,7 +1378,7 @@
       "goal": "low-risk housekeeping edit of docs/architecture/sim_core_audit_2026-06-05.md",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -1392,7 +1392,7 @@
         "last_updated": "2026-06-05T14:43:27Z"
       },
       "created_at": "2026-06-05T14:43:27Z",
-      "updated_at": "2026-06-05T14:43:27Z"
+      "updated_at": "2026-06-21T05:19:58Z"
     },
     {
       "workflow_id": "W_sim_v8_deadcode_phase1_20260605T145610Z",
@@ -1504,7 +1504,7 @@
       "goal": "low-risk housekeeping edit of docs/validation_capsule.md",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -1518,7 +1518,7 @@
         "last_updated": "2026-06-06T01:57:11Z"
       },
       "created_at": "2026-06-06T01:57:11Z",
-      "updated_at": "2026-06-06T01:57:11Z"
+      "updated_at": "2026-06-21T05:19:58Z"
     },
     {
       "workflow_id": "W_validators_p1_cleanup_20260606T021810Z",
@@ -1943,7 +1943,7 @@
       "goal": "implicit session workflow (auto-bootstrap on edit of code/sim_v2/messaging/sim_daily_materializer.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -1957,14 +1957,14 @@
         "last_updated": "2026-06-08T18:26:59Z"
       },
       "created_at": "2026-06-08T18:26:59Z",
-      "updated_at": "2026-06-08T18:26:59Z"
+      "updated_at": "2026-06-21T05:19:58Z"
     },
     {
       "workflow_id": "W_session_20260609T054707Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/extract/md_components_psn_reserve.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -1978,14 +1978,14 @@
         "last_updated": "2026-06-09T05:47:08Z"
       },
       "created_at": "2026-06-09T05:47:08Z",
-      "updated_at": "2026-06-09T05:47:08Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_session_20260609T181824Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/extract/md_components_psn_reserve.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -1999,7 +1999,7 @@
         "last_updated": "2026-06-09T18:18:24Z"
       },
       "created_at": "2026-06-09T18:18:24Z",
-      "updated_at": "2026-06-09T18:18:24Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_loop_eng_2026_06_10",
@@ -2090,7 +2090,7 @@
       "goal": "implicit session workflow (auto-bootstrap on edit of code/extract/dictionary_creator.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2104,14 +2104,14 @@
         "last_updated": "2026-06-10T18:49:10Z"
       },
       "created_at": "2026-06-10T18:49:10Z",
-      "updated_at": "2026-06-10T18:49:10Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_session_20260610T194316Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/extract/md_components_loader.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2125,14 +2125,14 @@
         "last_updated": "2026-06-10T19:43:16Z"
       },
       "created_at": "2026-06-10T19:43:16Z",
-      "updated_at": "2026-06-10T19:43:16Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_session_20260613T111239Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/dwh_golden_replay_export.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2146,7 +2146,7 @@
         "last_updated": "2026-06-13T11:12:39Z"
       },
       "created_at": "2026-06-13T11:12:39Z",
-      "updated_at": "2026-06-13T11:12:39Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_dwh_analytics_load",
@@ -2174,7 +2174,7 @@
       "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/dwh_post_enrichment.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2188,14 +2188,14 @@
         "last_updated": "2026-06-13T17:30:10Z"
       },
       "created_at": "2026-06-13T17:30:10Z",
-      "updated_at": "2026-06-13T17:30:10Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_session_20260614T032819Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/dwh_aggregate_churn_export.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2209,14 +2209,14 @@
         "last_updated": "2026-06-14T03:28:19Z"
       },
       "created_at": "2026-06-14T03:28:19Z",
-      "updated_at": "2026-06-14T03:28:19Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_housekeeping_20260614T043232Z",
       "goal": "low-risk housekeeping edit of docs/dwh_sim_gate.md",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2230,7 +2230,7 @@
         "last_updated": "2026-06-14T04:32:32Z"
       },
       "created_at": "2026-06-14T04:32:32Z",
-      "updated_at": "2026-06-14T04:32:32Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_dwh_sim_gate_20260612",
@@ -2258,7 +2258,7 @@
       "goal": "low-risk housekeeping edit of docs/dwh_inv12_acn24223_triage.md",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2272,14 +2272,14 @@
         "last_updated": "2026-06-14T15:37:07Z"
       },
       "created_at": "2026-06-14T15:37:07Z",
-      "updated_at": "2026-06-14T15:37:07Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_inv12_acn24223_20260520",
       "goal": "INV-12 FAIL acn=24223 на срезе 2026-05-20: root cause limiter/quota, repro+logging",
-      "phase": "analysis",
+      "phase": "done",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2293,14 +2293,14 @@
         "last_updated": "2026-06-14T15:46:44Z"
       },
       "created_at": "2026-06-14T15:37:35Z",
-      "updated_at": "2026-06-14T15:46:44Z"
+      "updated_at": "2026-06-21T07:57:48Z"
     },
     {
       "workflow_id": "W_econ_promote_repair_20260615",
       "goal": "Implement economic promote-screen 3->2 with labour-inflation cumsum + feasibility; fix INV-12 overshoot via repair-window routing",
-      "phase": "implement",
+      "phase": "superseded",
       "owner": "reviewer-flame",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2314,15 +2314,15 @@
         "last_updated": "2026-06-15T03:24:50Z"
       },
       "created_at": "2026-06-15T03:07:00Z",
-      "updated_at": "2026-06-15T03:24:50Z",
+      "updated_at": "2026-06-21T07:57:48Z",
       "parent_workflow": "W_inv12_acn24223_20260520"
     },
     {
       "workflow_id": "W_repair_days_dwh_rewire_20260615",
       "goal": "Restore dropped repair_days enrichment steps in DWH pipeline (heli_pandas_repair_status.py + repair_days_calculator.py) to fix repair_days=NULL on status=4 planers and TEMP-5",
-      "phase": "validation",
+      "phase": "done",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2335,14 +2335,14 @@
         "last_updated": "2026-06-15T19:16:52Z"
       },
       "created_at": "2026-06-15T12:56:29Z",
-      "updated_at": "2026-06-15T19:16:52Z"
+      "updated_at": "2026-06-21T07:57:48Z"
     },
     {
       "workflow_id": "W_sentinel_unify_dwh_20260615",
       "goal": "Унификация sentinel пропущенных дат в dwh_loader (1971-01-01 -> 1970-01-01) под существующие extract-guards; устранить ложный re-flip near-OH планеров в status=2 (INV-12 22619/22983) и закрепить precheck",
-      "phase": "analyze",
+      "phase": "done",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2356,14 +2356,14 @@
         "last_updated": "2026-06-15T18:56:40Z"
       },
       "created_at": "2026-06-15T17:19:55Z",
-      "updated_at": "2026-06-15T18:56:40Z"
+      "updated_at": "2026-06-21T07:57:48Z"
     },
     {
       "workflow_id": "W_day0_storage_screen_20260615",
       "goal": "Add additive day-0 planner terminal storage screen in heli_pandas_storage_status.py",
-      "phase": "implementation",
+      "phase": "superseded",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2377,7 +2377,7 @@
         "last_updated": "2026-06-15T18:32:11Z"
       },
       "created_at": "2026-06-15T18:29:39Z",
-      "updated_at": "2026-06-15T18:32:11Z"
+      "updated_at": "2026-06-21T07:57:48Z"
     },
     {
       "workflow_id": "W_repair_time_perboard_20260616",
@@ -2489,7 +2489,7 @@
       "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/export_engine_repair_dwh.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2503,14 +2503,14 @@
         "last_updated": "2026-06-19T05:23:20Z"
       },
       "created_at": "2026-06-19T05:23:20Z",
-      "updated_at": "2026-06-19T05:23:20Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_session_20260620T032906Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/export_engine_repair_dwh.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2524,14 +2524,14 @@
         "last_updated": "2026-06-20T03:29:06Z"
       },
       "created_at": "2026-06-20T03:29:06Z",
-      "updated_at": "2026-06-20T03:29:06Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_session_20260620T091545Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/export_engine_repair_dwh.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2545,14 +2545,14 @@
         "last_updated": "2026-06-20T09:15:45Z"
       },
       "created_at": "2026-06-20T09:15:45Z",
-      "updated_at": "2026-06-20T09:15:45Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_session_20260621T031624Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/export_engine_repair_dwh.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2566,14 +2566,14 @@
         "last_updated": "2026-06-21T03:16:24Z"
       },
       "created_at": "2026-06-21T03:16:24Z",
-      "updated_at": "2026-06-21T03:16:24Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_session_20260621T040332Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/export_engine_repair_dwh.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2587,14 +2587,14 @@
         "last_updated": "2026-06-21T04:03:32Z"
       },
       "created_at": "2026-06-21T04:03:32Z",
-      "updated_at": "2026-06-21T04:03:32Z"
+      "updated_at": "2026-06-21T05:19:59Z"
     },
     {
       "workflow_id": "W_session_20260621T045415Z",
       "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/export_engine_repair_dwh.py)",
       "phase": "implement",
       "owner": "orchestrator",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -2608,7 +2608,28 @@
         "last_updated": "2026-06-21T04:54:15Z"
       },
       "created_at": "2026-06-21T04:54:15Z",
-      "updated_at": "2026-06-21T04:54:15Z"
+      "updated_at": "2026-06-21T05:23:11Z"
+    },
+    {
+      "workflow_id": "W_dwh_sim_gate_20260620",
+      "goal": "Загрузка DWH-среза по выбранной дате (2026-06-20), sim-gate + полная валидация датасета, замер тайминга extract+sim; наработки: экспорт открытых ремонтов агрегатов из od_detail и запрос админам на расширение полей",
+      "phase": "done",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 3,
+        "cumulative_tokens": 125000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-21T05:23:00Z"
+      },
+      "created_at": "2026-06-21T05:19:08Z",
+      "updated_at": "2026-06-21T05:23:00Z"
     }
   ],
   "handoffs": [
@@ -16871,6 +16892,133 @@
         "est_tokens": 30000,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_sim_gate_20260620_orchestrator_35f2b0c7",
+      "workflow_id": "W_dwh_sim_gate_20260620",
+      "agent": "orchestrator",
+      "user_goal": "сделать симуляцию нового датасета за 21-06; интересует тайминг extract и sim, включая общий extract из хранилища и самые длительные скрипты; полная валидация датасета 20-06, контроль целостности/логичности, документирование наработок",
+      "changes": "Нет правок кода (код закоммичен ранее). Артефакты: output/dwh_load_sim_20260620/{timing.log,timing_summary.txt,dataset_validation_20260620.txt,validation.log}; output/dwh_admin_request_amos_heli_od_detail_fields.md (запрос админам od_detail). Docs: changelog + dwh_sim_gate (отдельный docs-handoff).",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: Витрина reports.amos_heli_rotables_components_status в DWH: max report_date=2026-06-20 (на 2026-06-21 = 0 строк) -> extract/sim выполнен на 2026-06-20. od_detail (engine repair) доступен на 2026-06-21 (отдельный источник). CA cert DWH обязателен: DWH_CLICKHOUSE_CA_CERT=config/certs/yandex_cloud_RootCA.pem.\nEvidence: ЗАГРУЗКА: program_ac=174, status_overhaul=58, heli_raw=202216, heli_pandas=11480; flight_program_fl/ac клон 2026-04-08->2026-06-20. ВАЛИДАЦИЯ: INV-1..12+TEMP-1/4/5=15/15 PASS; status_id=0=0; планеры ops с превышением ресурса=0; 18 точных дублей AMOS (компоненты, 0.16%, к сведению); ppr>oh=274/sne>ll=110 в осн. статусы 6/7 (норма). SIM: 251 шаг, sim_masterv2_v9=78842, sim_repairline_v9=65700, ops=target (Mi-8 10/10, Mi-17 121/121). ТАЙМИНГ: extract+load ~107s (status_components 56s самый долгий; enrich 43s, в нём repair_days_calculator 14.8s); DWH pure fetch 3.3s; sim 225.6s (GPU simulate 3.2s); validation 12.1s; pipeline ~345s.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_sim_gate_20260620:2026-06-21T05Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "read-only валидация + docs + KG; код уже закоммичен (9b2921ba, c4ec4f4e); SSoT не затронут",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "Date-based DWH load (--report-date 2026-06-20) -> sim-gate V8 -> run_all.py INV -> dataset DQ-проверки -> timing -> docs+KG",
+      "evidence_pack": "Facts: Витрина reports.amos_heli_rotables_components_status в DWH: max report_date=2026-06-20 (на 2026-06-21 = 0 строк) -> extract/sim выполнен на 2026-06-20. od_detail (engine repair) доступен на 2026-06-21 (отдельный источник). CA cert DWH обязателен: DWH_CLICKHOUSE_CA_CERT=config/certs/yandex_cloud_RootCA.pem.\nEvidence: ЗАГРУЗКА: program_ac=174, status_overhaul=58, heli_raw=202216, heli_pandas=11480; flight_program_fl/ac клон 2026-04-08->2026-06-20. ВАЛИДАЦИЯ: INV-1..12+TEMP-1/4/5=15/15 PASS; status_id=0=0; планеры ops с превышением ресурса=0; 18 точных дублей AMOS (компоненты, 0.16%, к сведению); ppr>oh=274/sne>ll=110 в осн. статусы 6/7 (норма). SIM: 251 шаг, sim_masterv2_v9=78842, sim_repairline_v9=65700, ops=target (Mi-8 10/10, Mi-17 121/121). ТАЙМИНГ: extract+load ~107s (status_components 56s самый долгий; enrich 43s, в нём repair_days_calculator 14.8s); DWH pure fetch 3.3s; sim 225.6s (GPU simulate 3.2s); validation 12.1s; pipeline ~345s.",
+      "success_criteria": "invariant: INV-1..12 + TEMP-1/4/5 = 15/15 PASS на version_date=2026-06-20 v1; script: orchestrator_limiter_v8 exit 0 + sim_masterv2_v9/sim_repairline_v9 непусты; manual-check: планеры gb(1,2) status=2 с ppr>oh|sne>ll = 0",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "docs-curator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-21T05:19:33Z",
+      "modules": [
+        "extract_dwh",
+        "validation",
+        "export"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 95000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_sim_gate_20260620_docs-curator_1b4d0bb9",
+      "workflow_id": "W_dwh_sim_gate_20260620",
+      "agent": "docs-curator",
+      "user_goal": "документирование наработок, чтобы любой агент моментально разобрался как это работает",
+      "changes": "docs/changelog.md: новая секция 2026-06-21 (date-based DWH load, sim-gate 06-20, валидация, тайминг, engine-repair export, запрос админам). docs/dwh_sim_gate.md: секция 'Прогон 2026-06-20' с пошаговым воспроизведением (CA cert, dwh_loader --report-date, клон flight_program, sim, run_all), таблицей результатов, таймингом и предупреждением о повторном enrich.",
+      "facts": "Формат секций соответствует существующим (06-12/06-16); ссылки на output/dwh_load_sim_20260620/* и admin-request проверены.",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_sim_gate_20260620:2026-06-21T05Z",
+      "plan_step_id": "D1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "7066a4864487b1d33879a9f5b5658ee94e53afaabfec3d7d15651a5f43648829",
+      "created_at": "2026-06-21T05:22:40Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 18000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_sim_gate_20260620_orchestrator_706796e6",
+      "workflow_id": "W_dwh_sim_gate_20260620",
+      "agent": "orchestrator",
+      "user_goal": "проверка соответствия правилам, корректное заполнение KG и документов, полная валидация датасета 20-06",
+      "changes": "Финализация: валидация датасета (ГОДЕН), KG hygiene (25 stub закрыто), docs (changelog+dwh_sim_gate).",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "INV 15/15 PASS; dataset_validation_20260620.txt вердикт ГОДЕН; active workflows 33->10.",
+      "drift_check": "UserGoal <-> Changes scope match: yes — запрошены валидация 20-06 + KG + docs + тайминг; выполнено ровно это, правок кода нет (закоммичено ранее), SSoT не затронут.",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_sim_gate_20260620:2026-06-21T05Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "INV 15/15 PASS; dataset_validation_20260620.txt вердикт ГОДЕН; active workflows 33->10.",
+      "success_criteria": "invariant: INV-1..12+TEMP-1/4/5=15/15 PASS на 2026-06-20 v1; manual-check: планеры gb(1,2) ops с превышением ресурса=0",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "5de4096735e2aaedbf1ad2aafab3ba1707d89fb9dee9d0e3318a5be7171cda80",
+      "created_at": "2026-06-21T05:23:00Z",
+      "modules": [
+        "extract_dwh",
+        "validation",
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -18952,6 +19100,294 @@
       "agent": "orchestrator",
       "created_at": "2026-06-17T03:49:34Z",
       "updated_at": "2026-06-17T03:49:34Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260521T101932Z_closure_972a359a",
+      "workflow_id": "W_housekeeping_20260521T101932Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:58Z",
+      "updated_at": "2026-06-21T05:19:58Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260526T023303Z_closure_ee3106b2",
+      "workflow_id": "W_session_20260526T023303Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:58Z",
+      "updated_at": "2026-06-21T05:19:58Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260526T033754Z_closure_7a7777e0",
+      "workflow_id": "W_housekeeping_20260526T033754Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:58Z",
+      "updated_at": "2026-06-21T05:19:58Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260526T091552Z_closure_54afe3a7",
+      "workflow_id": "W_session_20260526T091552Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:58Z",
+      "updated_at": "2026-06-21T05:19:58Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260601T171231Z_closure_fdf2aa82",
+      "workflow_id": "W_housekeeping_20260601T171231Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:58Z",
+      "updated_at": "2026-06-21T05:19:58Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260602T050211Z_closure_b29bc8be",
+      "workflow_id": "W_housekeeping_20260602T050211Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:58Z",
+      "updated_at": "2026-06-21T05:19:58Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260603T144643Z_closure_ae72c385",
+      "workflow_id": "W_housekeeping_20260603T144643Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:58Z",
+      "updated_at": "2026-06-21T05:19:58Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260605T144327Z_closure_3fa54c4d",
+      "workflow_id": "W_housekeeping_20260605T144327Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:58Z",
+      "updated_at": "2026-06-21T05:19:58Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260606T015711Z_closure_765ca660",
+      "workflow_id": "W_housekeeping_20260606T015711Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:58Z",
+      "updated_at": "2026-06-21T05:19:58Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260608T182659Z_closure_29fe6471",
+      "workflow_id": "W_session_20260608T182659Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:58Z",
+      "updated_at": "2026-06-21T05:19:58Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260609T054707Z_closure_9e544616",
+      "workflow_id": "W_session_20260609T054707Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260609T181824Z_closure_b2c78306",
+      "workflow_id": "W_session_20260609T181824Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260610T184910Z_closure_5fdb7e01",
+      "workflow_id": "W_session_20260610T184910Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260610T194316Z_closure_45a5c88e",
+      "workflow_id": "W_session_20260610T194316Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260613T111239Z_closure_cce41c09",
+      "workflow_id": "W_session_20260613T111239Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260613T173010Z_closure_2c512509",
+      "workflow_id": "W_session_20260613T173010Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260614T032819Z_closure_f5329f2a",
+      "workflow_id": "W_session_20260614T032819Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260614T043232Z_closure_8b59cbe8",
+      "workflow_id": "W_housekeeping_20260614T043232Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_housekeeping_20260614T153707Z_closure_bc196fd9",
+      "workflow_id": "W_housekeeping_20260614T153707Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260619T052320Z_closure_a79ed514",
+      "workflow_id": "W_session_20260619T052320Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260620T032906Z_closure_5c7c1dc2",
+      "workflow_id": "W_session_20260620T032906Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260620T091545Z_closure_2046523f",
+      "workflow_id": "W_session_20260620T091545Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260621T031624Z_closure_2239c249",
+      "workflow_id": "W_session_20260621T031624Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260621T040332Z_closure_a301fe28",
+      "workflow_id": "W_session_20260621T040332Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub (0 handoffs), закрыт оркестратором для устранения шума в графе",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:19:59Z",
+      "updated_at": "2026-06-21T05:19:59Z"
+    },
+    {
+      "context_id": "ctx_W_dwh_sim_gate_20260620_closure_4771f107",
+      "workflow_id": "W_dwh_sim_gate_20260620",
+      "context_type": "closure",
+      "content": "Sim-gate 2026-06-20 PASS (INV 15/15); датасет ГОДЕН; тайминг замерен; наработки задокументированы; KG hygiene выполнен.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:23:00Z",
+      "updated_at": "2026-06-21T05:23:00Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260621T045415Z_closure_a6baea38",
+      "workflow_id": "W_session_20260621T045415Z",
+      "context_type": "closure",
+      "content": "KG hygiene 2026-06-21: пустой auto-bootstrap stub, закрыт оркестратором",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T05:23:11Z",
+      "updated_at": "2026-06-21T05:23:11Z"
+    },
+    {
+      "context_id": "ctx_W_repair_days_dwh_rewire_20260615_closure_37cfddd1",
+      "workflow_id": "W_repair_days_dwh_rewire_20260615",
+      "context_type": "closure",
+      "content": "DONE: восстановление repair_days landed в коммите 71f85693 (heli_pandas_repair_status.py + repair_days_calculator.py); проверено наличие в коде; TEMP-5 закрыт. Закрытие housekeeping 2026-06-21.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T07:57:48Z",
+      "updated_at": "2026-06-21T07:57:48Z"
+    },
+    {
+      "context_id": "ctx_W_sentinel_unify_dwh_20260615_closure_59501ec0",
+      "workflow_id": "W_sentinel_unify_dwh_20260615",
+      "context_type": "closure",
+      "content": "DONE: унификация sentinel 1971-01-01->1970-01-01 landed в коммите 7213626d; подтверждено в dwh_loader.py. Закрытие housekeeping 2026-06-21.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T07:57:48Z",
+      "updated_at": "2026-06-21T07:57:48Z"
+    },
+    {
+      "context_id": "ctx_W_sim_dedup_spawn_recount_20260601T175545Z_closure_da537fc5",
+      "workflow_id": "W_sim_dedup_spawn_recount_20260601T175545Z",
+      "context_type": "closure",
+      "content": "DONE: дублирующий spawn-пересчёт удалён (handoff S1 + changelog 2026-06-01). Закрытие housekeeping 2026-06-21.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T07:57:48Z",
+      "updated_at": "2026-06-21T07:57:48Z"
+    },
+    {
+      "context_id": "ctx_W_econ_promote_repair_20260615_closure_df443fd0",
+      "workflow_id": "W_econ_promote_repair_20260615",
+      "context_type": "closure",
+      "content": "SUPERSEDED: инфляционный econ-screen промоута 3->2 (a90e9671) полностью откатан в W_promote_demote_ferry_gate_20260616 (9304bb99); compute_inflation_log_cumsum в коде отсутствует. Закрытие 2026-06-21.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T07:57:48Z",
+      "updated_at": "2026-06-21T07:57:48Z"
+    },
+    {
+      "context_id": "ctx_W_day0_storage_screen_20260615_closure_447e776a",
+      "workflow_id": "W_day0_storage_screen_20260615",
+      "context_type": "closure",
+      "content": "SUPERSEDED/REVERTED: PLANER_TERMINAL_STORAGE screen в heli_pandas_storage_status.py отсутствует в коде (reverted to HEAD); подход не landed. Закрытие 2026-06-21.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T07:57:48Z",
+      "updated_at": "2026-06-21T07:57:48Z"
+    },
+    {
+      "context_id": "ctx_W_inv12_acn24223_20260520_closure_41b51701",
+      "workflow_id": "W_inv12_acn24223_20260520",
+      "context_type": "closure",
+      "content": "RESOLVED: INV-12 overshoot acn=24223 на срезе 2026-05-20 = 0 (проверено SQL sim_masterv2_v9 2026-06-21: ppr>oh|sne>ll в ops = 0; все планеры 0); устранено развилкой демоута 9304bb99 + per-board repair_time 4563c87e. Закрытие 2026-06-21.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-21T07:57:48Z",
+      "updated_at": "2026-06-21T07:57:48Z"
     }
   ],
   "meta": {
