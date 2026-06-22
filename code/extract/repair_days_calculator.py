@@ -24,6 +24,8 @@ from pathlib import Path
 from datetime import datetime, date
 import argparse
 
+import pandas as pd
+
 # Добавляем пути к utils и общему коду
 code_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(code_root / 'utils'))
@@ -409,6 +411,126 @@ class RepairDaysCalculator:
         return True
 
 
+def _as_u32(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(series, errors="raise").fillna(0).astype("int64")
+
+
+def _load_standard_repair_time_map(client) -> dict[int, int]:
+    rows = client.execute(
+        """
+        SELECT
+            toUInt32(partseqno_i) AS partseqno_i,
+            toUInt16(any(repair_time)) AS repair_time
+        FROM md_components
+        WHERE partseqno_i IS NOT NULL
+        GROUP BY partseqno_i
+        ORDER BY partseqno_i
+        """
+    )
+    return {int(partseqno_i): int(repair_time) for partseqno_i, repair_time in rows}
+
+
+def _active_overhaul_cycle(client, serialno: str, target_date: date, version_date: date, version_id: int):
+    if not target_date:
+        raise ValueError(f"ВС {serialno}: отсутствует target_date для active repair")
+    try:
+        ac_registr = int(serialno)
+    except ValueError as exc:
+        raise ValueError(f"ВС {serialno}: serialno не приводится к ac_registr UInt32") from exc
+
+    rows = client.execute(
+        """
+        SELECT act_start_date, sched_end_date, status
+        FROM status_overhaul
+        WHERE version_date = %(version_date)s
+          AND version_id = %(version_id)s
+          AND ac_registr = %(ac_registr)s
+          AND status != 'Закрыто'
+          AND sched_end_date = %(target_date)s
+        ORDER BY act_start_date, sched_end_date
+        """,
+        {
+            "version_date": version_date,
+            "version_id": version_id,
+            "ac_registr": ac_registr,
+            "target_date": target_date,
+        },
+    )
+    if len(rows) != 1:
+        raise ValueError(
+            f"ВС {serialno}: ожидалась 1 активная строка status_overhaul "
+            f"для target_date={target_date}, найдено {len(rows)}"
+        )
+    act_start_date, sched_end_date, status = rows[0]
+    if act_start_date is None:
+        raise ValueError(f"ВС {serialno}: act_start_date=NULL в активной строке {status}")
+    if sched_end_date is None:
+        raise ValueError(f"ВС {serialno}: sched_end_date=NULL в активной строке {status}")
+    if sched_end_date != target_date:
+        raise ValueError(
+            f"ВС {serialno}: sched_end_date={sched_end_date} не совпадает с target_date={target_date}"
+        )
+    return act_start_date, sched_end_date
+
+
+def apply_repair_days(
+    df: pd.DataFrame, client, version_date: date, version_id: int
+) -> pd.DataFrame:
+    """Заполняет repair_time и day-0 repair_days в DataFrame без ALTER UPDATE."""
+    updated = df.copy()
+    required = {"partseqno_i", "status_id", "group_by", "serialno", "target_date", "repair_days", "repair_time"}
+    missing = required - set(updated.columns)
+    if missing:
+        raise ValueError(f"heli_pandas DataFrame missing columns: {sorted(missing)}")
+
+    repair_time_map = _load_standard_repair_time_map(client)
+    partseqno = _as_u32(updated["partseqno_i"])
+    missing_partseqno = sorted({int(value) for value in partseqno if int(value) not in repair_time_map})
+    if missing_partseqno:
+        raise ValueError(
+            "md_components.repair_time не найден для heli_pandas "
+            f"({len(missing_partseqno)} partseqno_i={missing_partseqno[:20]})"
+        )
+
+    updated["repair_time"] = partseqno.map(lambda value: repair_time_map[int(value)]).astype("int64")
+
+    status_id = _as_u32(updated["status_id"])
+    group_by = _as_u32(updated["group_by"])
+    repair_aircraft = updated.loc[
+        (status_id == 4) & (group_by.isin([1, 2]))
+    ].sort_values("serialno")
+    print(f"✅ repair_days in-memory: repair planers={len(repair_aircraft)}")
+
+    for idx, row in repair_aircraft.iterrows():
+        serialno = str(row["serialno"])
+        target_date = row["target_date"]
+        if pd.isna(target_date):
+            raise ValueError(f"ВС {serialno}: отсутствует target_date для active repair")
+        act_start_date, sched_end_date = _active_overhaul_cycle(
+            client, serialno, target_date, version_date, version_id
+        )
+        repair_time = (sched_end_date - act_start_date).days
+        repair_days = max(0, (version_date - act_start_date).days)
+        if repair_time < 0:
+            raise ValueError(
+                f"ВС {serialno}: отрицательная длительность ремонта "
+                f"act_start={act_start_date}, target_date={sched_end_date}"
+            )
+        exact_mask = (
+            (updated["serialno"] == row["serialno"])
+            & (_as_u32(updated["partseqno_i"]) == int(row["partseqno_i"]))
+            & (_as_u32(updated["group_by"]) == int(row["group_by"]))
+            & (updated["target_date"] == target_date)
+            & (_as_u32(updated["status_id"]) == 4)
+        )
+        updated.loc[exact_mask, ["repair_days", "repair_time"]] = [repair_days, repair_time]
+        print(
+            f"   ✅ ВС {serialno}: repair_days={repair_days}, repair_time={repair_time}"
+        )
+
+    return updated
+
+
 def main():
     """Основная функция"""
     parser = argparse.ArgumentParser(description='Расчет repair_days для ВС в ремонте')
@@ -423,18 +545,24 @@ def main():
     if args.version_date:
         version_date = datetime.strptime(args.version_date, '%Y-%m-%d').date()
     
-    calculator = RepairDaysCalculator(
-        version_date=version_date,
-        version_id=args.version_id,
-        dry_run=args.dry_run,
+    client = get_clickhouse_client()
+    client.execute("ALTER TABLE heli_pandas ADD COLUMN IF NOT EXISTS repair_time UInt16 DEFAULT 0")
+    from utils.dwh_post_enrichment import (
+        _load_heli_pandas_version,
+        _replace_heli_pandas_version,
     )
-    
-    if calculator.run():
-        print("🎯 Успешно!")
-        return True
+
+    if version_date is None or args.version_id is None:
+        raise ValueError("repair_days_calculator требует --version-date и --version-id")
+
+    df = _load_heli_pandas_version(client, version_date, args.version_id)
+    updated_df = apply_repair_days(df, client, version_date, args.version_id)
+    if args.dry_run:
+        print("📝 DRY-RUN: обновление repair_days не выполнялось")
     else:
-        print("❌ Ошибка!")
-        return False
+        _replace_heli_pandas_version(client, updated_df, version_date, args.version_id)
+    print("🎯 Успешно!")
+    return True
 
 
 if __name__ == "__main__":

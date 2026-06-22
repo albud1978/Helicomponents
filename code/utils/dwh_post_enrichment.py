@@ -2,7 +2,6 @@
 """Post-load enrichment for heli_pandas after DWH ingest (version-scoped)."""
 from __future__ import annotations
 
-import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -17,7 +16,14 @@ from config_loader import get_clickhouse_client
 from extract.dual_loader import insert_data
 from extract.inactive_planery_processor import process_inactive_planery_status
 from extract.overhaul_status_processor import process_status_field
+from extract.program_ac_precheck_runner import apply_program_ac_precheck
 from extract.program_ac_status_processor import process_program_ac_status_field
+from extract.heli_pandas_component_status import apply_component_status
+from extract.heli_pandas_serviceable_status import apply_serviceable_status
+from extract.heli_pandas_repair_status import apply_repair_status
+from extract.heli_pandas_storage_status import apply_storage_status
+from extract.repair_days_calculator import apply_repair_days
+from extract.heli_pandas_terminal_br_gate import apply_terminal_br_gate
 
 PANDAS_COLS = [
     "partno", "serialno", "ac_typ", "location", "mfg_date", "removal_date", "target_date",
@@ -27,13 +33,13 @@ PANDAS_COLS = [
 ]
 
 POST_SCRIPTS = (
-    "program_ac_precheck_runner.py",
-    "heli_pandas_component_status.py",
-    "heli_pandas_serviceable_status.py",
-    "heli_pandas_repair_status.py",
-    "heli_pandas_storage_status.py",
-    "repair_days_calculator.py",
-    "heli_pandas_terminal_br_gate.py",
+    ("program_ac_precheck_runner.py", apply_program_ac_precheck),
+    ("heli_pandas_component_status.py", apply_component_status),
+    ("heli_pandas_serviceable_status.py", apply_serviceable_status),
+    ("heli_pandas_repair_status.py", apply_repair_status),
+    ("heli_pandas_storage_status.py", apply_storage_status),
+    ("repair_days_calculator.py", apply_repair_days),
+    ("heli_pandas_terminal_br_gate.py", apply_terminal_br_gate),
 )
 
 
@@ -108,12 +114,18 @@ def _replace_heli_pandas_version(
 ) -> int:
     if "repair_days" in df.columns:
         df = df.copy()
-        df["repair_days"] = df["repair_days"].map(
-            lambda value: None if pd.isna(value) else int(value)
-        ).astype(object)
+        df["repair_days"] = pd.Series(
+            [None if pd.isna(value) else int(value) for value in df["repair_days"]],
+            index=df.index,
+            dtype=object,
+        )
     if "repair_time" in df.columns:
         df = df.copy()
-        df["repair_time"] = pd.to_numeric(df["repair_time"], errors="coerce").fillna(0).astype("int64")
+        df["repair_time"] = pd.Series(
+            [0 if pd.isna(value) else int(value) for value in df["repair_time"]],
+            index=df.index,
+            dtype=object,
+        )
     client.execute(
         "DELETE FROM heli_pandas WHERE version_date = %(vd)s AND version_id = %(vi)s",
         {"vd": version_date, "vi": version_id},
@@ -128,22 +140,13 @@ def _run_planner_cascade(client, df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _run_script(script_name: str, version_date: date, version_id: int, *, dry_run: bool) -> None:
-    script_path = CODE_ROOT / "extract" / script_name
-    if not script_path.exists():
-        _fail(f"Скрипт не найден: {script_path}")
-    cmd = [
-        sys.executable,
-        str(script_path),
-        "--version-date",
-        version_date.isoformat(),
-        "--version-id",
-        str(version_id),
-    ]
-    if dry_run and script_name != "program_ac_precheck_runner.py":
-        cmd.append("--dry-run")
-    print(f"  -> {script_name}")
-    subprocess.run(cmd, check=True)
+def _run_post_cascade(
+    client, df: pd.DataFrame, version_date: date, version_id: int
+) -> pd.DataFrame:
+    for script_name, apply_func in POST_SCRIPTS:
+        print(f"  -> {script_name}")
+        df = apply_func(df, client, version_date, version_id)
+    return df
 
 
 def run_post_enrichment(
@@ -193,13 +196,12 @@ def run_post_enrichment(
         print(f"[dry-run] OPS after planner cascade: {ops_after}")
         return stats
 
+    print("Post-steps in-memory (component/serviceable/storage/terminal)...")
+    df = _run_post_cascade(ch, df, version_date, version_id)
+
     inserted = _replace_heli_pandas_version(ch, df, version_date, version_id)
     if inserted != len(df):
         _fail(f"heli_pandas: inserted {inserted}, expected {len(df)}")
-
-    print("Post-steps (component/serviceable/storage/terminal)...")
-    for script in POST_SCRIPTS:
-        _run_script(script, version_date, version_id, dry_run=False)
 
     stats["ops_after"] = _ops_planers(ch, version_date, version_id)
     stats["planner_zero_after"] = _planner_zero(ch, version_date, version_id)

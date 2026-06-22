@@ -98,8 +98,17 @@ def _gb_map(ch):
     rows = ch.execute("SELECT toUInt32(partseqno_i), toUInt8(max(`group_by`)) FROM md_components WHERE partseqno_i IS NOT NULL AND `group_by` IS NOT NULL GROUP BY partseqno_i HAVING max(`group_by`) != 0")
     return {int(r[0]): int(r[1]) for r in rows}
 
-def fetch_df(dwh, report_date):
-    df = dwh.query_df(f"""SELECT partno,partseqno_i,serialno,psn,ac_typ,ac_type_i,location,LL AS ll,OH AS oh,OH_threshold AS oh_threshold,sne,ppr,mfg_date,oh_at_date,shop_visit_counter,owner,address_i,condition,removal_date,target_date FROM reports.amos_heli_rotables_components_status WHERE report_date=toDate('{report_date}')""")
+def fetch_df(dwh, report_date, partnos):
+    partnos = list(partnos)
+    if not partnos:
+        _fail("No md_components partnos for DWH Status_Components filter")
+    df = dwh.query_df(
+        """SELECT partno,partseqno_i,serialno,psn,ac_typ,ac_type_i,location,LL AS ll,OH AS oh,OH_threshold AS oh_threshold,sne,ppr,mfg_date,oh_at_date,shop_visit_counter,owner,address_i,condition,removal_date,target_date FROM reports.amos_heli_rotables_components_status WHERE report_date={report_date:Date} AND partno IN {partnos:Array(String)}""",
+        parameters={
+            "report_date": pd.Timestamp(report_date).date(),
+            "partnos": partnos,
+        },
+    )
     df["lease_restricted"] = _lease_col(df["owner"])
     df["mfg_date"] = pd.to_datetime(df["mfg_date"], errors="coerce").fillna(pd.Timestamp("1971-01-01"))
     df["oh_at_date"] = pd.to_datetime(df["oh_at_date"], errors="coerce").fillna(pd.Timestamp("1971-01-01"))
@@ -313,10 +322,10 @@ def main():
 
     if "status_components" in steps:
         print("\n[3/4] DWH Status_Components...")
-        src = fetch_df(dwh, rd)
-        print(f"   DWH: {len(src):,} rows")
         md = get_md_partnos(ch)
         print(f"   md_partnos: {len(md)}")
+        src = fetch_df(dwh, rd, md)
+        print(f"   DWH: {len(src):,} rows")
         pandas = enrich(src, vd, vi, ch, md)
         pandas = _norm_dates(pandas)
         print(f"   source: {len(src):,}  pandas: {len(pandas):,}  (heli_raw not written)")

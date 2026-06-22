@@ -20,6 +20,8 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, Tuple
 
+import pandas as pd
+
 code_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(code_root / 'utils'))
 sys.path.append(str(code_root))
@@ -107,6 +109,35 @@ def run_update(client, version_date: date, version_id: int) -> None:
     client.execute(UPDATE_SQL, params)
 
 
+def _as_u32(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(series, errors="raise").fillna(0).astype("int64")
+
+
+def _normalized_text(series: pd.Series) -> pd.Series:
+    return series.fillna("").astype(str).str.strip().str.upper()
+
+
+def apply_serviceable_status(
+    df: pd.DataFrame, client, version_date: date, version_id: int
+) -> pd.DataFrame:
+    """Помечает оставшиеся исправные агрегаты status_id=3 в памяти."""
+    del client, version_date, version_id
+    updated = df.copy()
+    required = {"group_by", "condition", "status_id"}
+    missing = required - set(updated.columns)
+    if missing:
+        raise ValueError(f"heli_pandas DataFrame missing columns: {sorted(missing)}")
+
+    mask = (
+        (_as_u32(updated["group_by"]) > 2)
+        & (_normalized_text(updated["condition"]) == "ИСПРАВНЫЙ")
+        & (_as_u32(updated["status_id"]) == 0)
+    )
+    updated.loc[mask, "status_id"] = 3
+    print(f"✅ serviceable_status in-memory: updated={int(mask.sum())}")
+    return updated
+
+
 def main() -> int:
     args = parse_args()
     client = get_clickhouse_client()
@@ -130,7 +161,14 @@ def main() -> int:
         print("📝 DRY-RUN завершён без изменений")
         return 0
 
-    run_update(client, version_date, version_id)
+    from utils.dwh_post_enrichment import (
+        _load_heli_pandas_version,
+        _replace_heli_pandas_version,
+    )
+
+    df = _load_heli_pandas_version(client, version_date, version_id)
+    updated_df = apply_serviceable_status(df, client, version_date, version_id)
+    _replace_heli_pandas_version(client, updated_df, version_date, version_id)
     remaining = fetch_stats(client, version_date, version_id)
     updated = candidates - remaining
     print(f"✅ Обновлено: {updated} агрегатов → status_id=3 (Исправен)")

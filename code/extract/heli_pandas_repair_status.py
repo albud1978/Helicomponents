@@ -25,6 +25,8 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, Tuple
 
+import pandas as pd
+
 code_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(code_root / 'utils'))
 sys.path.append(str(code_root))
@@ -306,6 +308,101 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
     return candidate_count
 
 
+def _as_u32(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(series, errors="raise").fillna(0).astype("int64")
+
+
+def _valid_target_date(series: pd.Series) -> pd.Series:
+    sentinel = date(1970, 1, 1)
+    return series.notna() & (series != sentinel)
+
+
+def _load_repair_time_map(client, candidate_partseqno: set[int]) -> dict[int, int]:
+    if not candidate_partseqno:
+        return {}
+    rows = client.execute(
+        """
+        SELECT
+            toUInt32(ifNull(partseqno_i, 0)) AS partseqno_i,
+            groupArrayDistinct(toUInt16(ifNull(repair_time, 0))) AS repair_times
+        FROM md_components
+        WHERE toUInt32(ifNull(partseqno_i, 0)) IN %(partseqno)s
+        GROUP BY partseqno_i
+        ORDER BY partseqno_i
+        """,
+        {"partseqno": tuple(sorted(candidate_partseqno))},
+    )
+    mapping: dict[int, int] = {}
+    ambiguous = []
+    for partseqno_i, repair_times in rows:
+        distinct = sorted({int(value) for value in repair_times})
+        if len(distinct) > 1:
+            ambiguous.append((int(partseqno_i), distinct))
+        mapping[int(partseqno_i)] = min(distinct) if distinct else 0
+    if ambiguous:
+        raise ValueError(
+            "md_components.repair_time неоднозначен для partseqno_i "
+            f"в future repair candidates: {ambiguous[:10]}"
+        )
+    return mapping
+
+
+def apply_repair_status(
+    df: pd.DataFrame, client, version_date: date, version_id: int
+) -> pd.DataFrame:
+    """Применяет repair-status этап к DataFrame без ALTER UPDATE."""
+    del version_id
+    updated = df.copy()
+    required = {"group_by", "status_id", "target_date", "condition", "partseqno_i"}
+    missing = required - set(updated.columns)
+    if missing:
+        raise ValueError(f"heli_pandas DataFrame missing columns: {sorted(missing)}")
+
+    group_by = _as_u32(updated["group_by"])
+    status_id = _as_u32(updated["status_id"])
+    target_valid = _valid_target_date(updated["target_date"])
+    target_past = target_valid & (updated["target_date"] < version_date)
+    target_future = target_valid & (updated["target_date"] >= version_date)
+
+    past_aggregates = (group_by > 2) & (status_id == 0) & target_past
+    updated.loc[past_aggregates, "status_id"] = 2
+
+    past_planers = group_by.isin([1, 2]) & target_past
+    updated.loc[past_planers, "status_id"] = 2
+
+    group_by = _as_u32(updated["group_by"])
+    status_id = _as_u32(updated["status_id"])
+    future_condition = (group_by <= 2) | (updated["condition"].fillna("") != "ИСПРАВНЫЙ")
+    future_to_repair = (
+        (group_by >= 1) & (status_id == 0) & target_future & future_condition
+    )
+    updated.loc[future_to_repair, "status_id"] = 4
+
+    status_id = _as_u32(updated["status_id"])
+    repair_candidates = (
+        (group_by >= 1) & (status_id == 4) & target_future & future_condition
+    )
+    partseqno = _as_u32(updated["partseqno_i"])
+    candidate_partseqno = {int(value) for value in partseqno.loc[repair_candidates]}
+    repair_time_map = _load_repair_time_map(client, candidate_partseqno)
+    repair_times = partseqno.map(lambda value: repair_time_map.get(int(value), 0))
+    repair_days = [
+        max(0, int(repair_time) - (target_date - version_date).days)
+        for repair_time, target_date in zip(
+            repair_times.loc[repair_candidates],
+            updated.loc[repair_candidates, "target_date"],
+        )
+    ]
+    updated.loc[repair_candidates, "repair_days"] = repair_days
+    print(
+        "✅ repair_status in-memory: "
+        f"past_to_ops={int(past_aggregates.sum() + past_planers.sum())}, "
+        f"future_to_repair={int(future_to_repair.sum())}, "
+        f"repair_days={int(repair_candidates.sum())}"
+    )
+    return updated
+
+
 def main() -> int:
     args = parse_args()
     client = get_clickhouse_client()
@@ -339,14 +436,18 @@ def main() -> int:
         return 0
 
     # Обновление
-    if past_count > 0:
-        remaining = update_past_to_operations(client, version_date, version_id)
-        updated = past_count - remaining
-        print(f"✅ Обновлено: {updated} агрегатов → status_id=2 (ремонт завершён)")
-    
-    if future_count > 0:
-        updated = update_future_to_repair(client, version_date, version_id)
-        print(f"✅ Обновлено: {updated} агрегатов → status_id=4 + repair_days")
+    from utils.dwh_post_enrichment import (
+        _load_heli_pandas_version,
+        _replace_heli_pandas_version,
+    )
+
+    df = _load_heli_pandas_version(client, version_date, version_id)
+    updated_df = apply_repair_status(df, client, version_date, version_id)
+    _replace_heli_pandas_version(client, updated_df, version_date, version_id)
+    print(
+        f"✅ Обновлено: past={past_count} → status_id=2, "
+        f"future={future_count} → status_id=4 + repair_days"
+    )
 
     return 0
 

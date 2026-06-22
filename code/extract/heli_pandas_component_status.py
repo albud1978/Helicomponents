@@ -17,6 +17,8 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, Tuple
 
+import pandas as pd
+
 code_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(code_root / 'utils'))
 sys.path.append(str(code_root))
@@ -137,6 +139,49 @@ def run_update(client, version_date: date, version_id: int) -> None:
     client.execute(UPDATE_SQL, params)
 
 
+def _as_u32(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(series, errors="raise").fillna(0).astype("int64")
+
+
+def _normalized_text(series: pd.Series) -> pd.Series:
+    return series.fillna("").astype(str).str.strip().str.upper()
+
+
+def apply_component_status(
+    df: pd.DataFrame, client, version_date: date, version_id: int
+) -> pd.DataFrame:
+    """Помечает исправные агрегаты на OPS-планерах статусом 2 в памяти."""
+    del client, version_date, version_id
+    updated = df.copy()
+    required = {"group_by", "aircraft_number", "status_id", "condition"}
+    missing = required - set(updated.columns)
+    if missing:
+        raise ValueError(f"heli_pandas DataFrame missing columns: {sorted(missing)}")
+
+    group_by = _as_u32(updated["group_by"])
+    aircraft_number = _as_u32(updated["aircraft_number"])
+    status_id = _as_u32(updated["status_id"])
+    ops_aircraft = set(
+        aircraft_number[
+            (group_by.isin([1, 2])) & (status_id == 2) & (aircraft_number > 0)
+        ].tolist()
+    )
+    condition_ok = _normalized_text(updated["condition"]) == "ИСПРАВНЫЙ"
+    mask = (
+        (group_by > 2)
+        & (aircraft_number > 0)
+        & (aircraft_number.isin(ops_aircraft))
+        & condition_ok
+        & (status_id != 2)
+    )
+    updated.loc[mask, "status_id"] = 2
+    print(
+        "✅ component_status in-memory: "
+        f"updated={int(mask.sum())}, ops_aircraft={len(ops_aircraft)}"
+    )
+    return updated
+
+
 def main() -> int:
     args = parse_args()
     client = get_clickhouse_client()
@@ -167,7 +212,14 @@ def main() -> int:
         print("📝 DRY-RUN завершён без изменений")
         return 0
 
-    run_update(client, version_date, version_id)
+    from utils.dwh_post_enrichment import (
+        _load_heli_pandas_version,
+        _replace_heli_pandas_version,
+    )
+
+    df = _load_heli_pandas_version(client, version_date, version_id)
+    updated_df = apply_component_status(df, client, version_date, version_id)
+    _replace_heli_pandas_version(client, updated_df, version_date, version_id)
     _, already_after, need_after = fetch_stats(client, version_date, version_id)
     print(
         f"✅ Обновление завершено. Теперь status=2: {already_after}, осталось не обновлённых: {need_after}"

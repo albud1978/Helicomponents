@@ -16,6 +16,8 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict
 
+import pandas as pd
+
 code_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(code_root / 'utils'))
 sys.path.append(str(code_root))
@@ -189,6 +191,82 @@ def run_update(client, version_date: date, version_id: int) -> None:
     client.execute(UPDATE_SQL, params)
 
 
+def _as_u32(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(series, errors="raise").fillna(0).astype("int64")
+
+
+def _load_br_rows(client) -> dict[int, list[tuple[int, int]]]:
+    rows = client.execute("SELECT partseqno_i, br_mi8, br_mi17 FROM md_components")
+    result: dict[int, list[tuple[int, int]]] = {}
+    for partseqno_i, br_mi8, br_mi17 in rows:
+        if partseqno_i is None:
+            continue
+        result.setdefault(int(partseqno_i), []).append((int(br_mi8 or 0), int(br_mi17 or 0)))
+    return result
+
+
+def _terminal_br_effective(ac_type_mask: int, br_mi8: int, br_mi17: int) -> int:
+    if br_mi8 > 0 and br_mi17 > 0:
+        pick_available = min(br_mi8, br_mi17)
+    elif br_mi8 > 0:
+        pick_available = br_mi8
+    elif br_mi17 > 0:
+        pick_available = br_mi17
+    else:
+        pick_available = 0
+    if ac_type_mask & 32 and ac_type_mask & 64:
+        return pick_available
+    if ac_type_mask & 32:
+        return br_mi8
+    if ac_type_mask & 64:
+        return br_mi17
+    return pick_available
+
+
+def _matches_terminal_br(
+    partseqno_i: int,
+    sne,
+    ac_type_mask: int,
+    br_rows: dict[int, list[tuple[int, int]]],
+) -> bool:
+    if pd.isna(sne):
+        return False
+    sne_value = int(sne)
+    return any(
+        (br := _terminal_br_effective(ac_type_mask, br_mi8, br_mi17)) > 0
+        and sne_value >= br
+        for br_mi8, br_mi17 in br_rows.get(partseqno_i, [])
+    )
+
+
+def apply_terminal_br_gate(
+    df: pd.DataFrame, client, version_date: date, version_id: int
+) -> pd.DataFrame:
+    """Применяет финальный BR-gate к DataFrame без ALTER UPDATE."""
+    del version_date, version_id
+    updated = df.copy()
+    required = {"status_id", "partseqno_i", "group_by", "sne", "ac_type_mask", "repair_days"}
+    missing = required - set(updated.columns)
+    if missing:
+        raise ValueError(f"heli_pandas DataFrame missing columns: {sorted(missing)}")
+
+    br_rows = _load_br_rows(client)
+    status_id = _as_u32(updated["status_id"])
+    partseqno = _as_u32(updated["partseqno_i"])
+    ac_type_mask = _as_u32(updated["ac_type_mask"])
+    br_matches = pd.Series(
+        [
+            _matches_terminal_br(int(part), sne, int(mask_value), br_rows)
+            for part, sne, mask_value in zip(partseqno, updated["sne"], ac_type_mask)
+        ],
+        index=updated.index,
+    )
+    mask = status_id.isin([1, 7]) & br_matches
+    updated.loc[mask, ["status_id", "repair_days"]] = [6, 0]
+    print(f"✅ terminal_br_gate in-memory: updated={int(pd.Series(mask).sum())}")
+    return updated
+
+
 def main() -> int:
     args = parse_args()
     client = get_clickhouse_client()
@@ -218,7 +296,14 @@ def main() -> int:
         print("\n📝 DRY-RUN завершён без изменений")
         return 0
 
-    run_update(client, version_date, version_id)
+    from utils.dwh_post_enrichment import (
+        _load_heli_pandas_version,
+        _replace_heli_pandas_version,
+    )
+
+    df = _load_heli_pandas_version(client, version_date, version_id)
+    updated_df = apply_terminal_br_gate(df, client, version_date, version_id)
+    _replace_heli_pandas_version(client, updated_df, version_date, version_id)
 
     remaining = fetch_candidates_count(client, version_date, version_id)
     updated = candidates - remaining

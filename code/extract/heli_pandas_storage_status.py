@@ -36,6 +36,8 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, Tuple
 
+import pandas as pd
+
 code_root = Path(__file__).resolve().parents[1]
 sys.path.append(str(code_root / 'utils'))
 sys.path.append(str(code_root))
@@ -219,6 +221,124 @@ def run_update(client, version_date: date, version_id: int) -> None:
     client.execute(UPDATE_SQL, params)
 
 
+def _as_u32(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(series, errors="raise").fillna(0).astype("int64")
+
+
+def _normalized_text(series: pd.Series) -> pd.Series:
+    return series.fillna("").astype(str).str.strip().str.upper()
+
+
+def _load_br_rows(client) -> dict[int, list[tuple[Optional[int], Optional[int]]]]:
+    rows = client.execute("SELECT partseqno_i, br_mi8, br_mi17 FROM md_components")
+    result: dict[int, list[tuple[Optional[int], Optional[int]]]] = {}
+    for partseqno_i, br_mi8, br_mi17 in rows:
+        if partseqno_i is None:
+            continue
+        result.setdefault(int(partseqno_i), []).append(
+            (
+                None if br_mi8 is None else int(br_mi8),
+                None if br_mi17 is None else int(br_mi17),
+            )
+        )
+    return result
+
+
+def _storage_br_effective(ac_type_mask: int, br_mi8: Optional[int], br_mi17: Optional[int]) -> int:
+    sentinel = 999_999_999
+    b8 = sentinel if br_mi8 is None else int(br_mi8)
+    b17 = sentinel if br_mi17 is None else int(br_mi17)
+    if ac_type_mask & 32 and ac_type_mask & 64:
+        return min(b8, b17)
+    if ac_type_mask & 32:
+        return b8
+    if ac_type_mask & 64:
+        return b17
+    return min(b8, b17)
+
+
+def _matches_storage_br(
+    partseqno_i: int,
+    sne,
+    ac_type_mask: int,
+    br_rows: dict[int, list[tuple[Optional[int], Optional[int]]]],
+) -> bool:
+    if pd.isna(sne) or partseqno_i not in br_rows:
+        return False
+    sne_value = int(sne)
+    return any(
+        sne_value >= _storage_br_effective(ac_type_mask, br_mi8, br_mi17)
+        for br_mi8, br_mi17 in br_rows[partseqno_i]
+    )
+
+
+def apply_storage_status(
+    df: pd.DataFrame, client, version_date: date, version_id: int
+) -> pd.DataFrame:
+    """Применяет storage/unserviceable этап к DataFrame без ALTER UPDATE."""
+    del version_date, version_id
+    updated = df.copy()
+    required = {"group_by", "status_id", "condition", "partseqno_i", "sne", "ac_type_mask", "repair_days"}
+    missing = required - set(updated.columns)
+    if missing:
+        raise ValueError(f"heli_pandas DataFrame missing columns: {sorted(missing)}")
+
+    br_rows = _load_br_rows(client)
+    group_by = _as_u32(updated["group_by"])
+    status_id = _as_u32(updated["status_id"])
+    condition_norm = _normalized_text(updated["condition"])
+    partseqno = _as_u32(updated["partseqno_i"])
+    ac_type_mask = _as_u32(updated["ac_type_mask"])
+
+    br_matches = pd.Series(
+        [
+            _matches_storage_br(int(part), sne, int(mask), br_rows)
+            for part, sne, mask in zip(partseqno, updated["sne"], ac_type_mask)
+        ],
+        index=updated.index,
+    )
+    br_mask = (
+        (group_by > 2)
+        & (condition_norm != "ИСПРАВНЫЙ")
+        & (status_id == 0)
+        & br_matches
+    )
+    updated.loc[br_mask, "status_id"] = 6
+
+    group_by = _as_u32(updated["group_by"])
+    status_id = _as_u32(updated["status_id"])
+    condition_norm = _normalized_text(updated["condition"])
+    donor_mask = (group_by > 2) & (status_id == 0) & (condition_norm == "ДОНОР")
+    updated.loc[donor_mask, "status_id"] = 6
+
+    status_id = _as_u32(updated["status_id"])
+    extension_mask = (
+        (group_by > 2)
+        & (status_id == 0)
+        & (condition_norm == "ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР")
+    )
+    updated.loc[extension_mask, "status_id"] = 6
+
+    status_id = _as_u32(updated["status_id"])
+    unserviceable_mask = (
+        (group_by > 2) & (status_id == 0) & (condition_norm == "НЕИСПРАВНЫЙ")
+    )
+    updated.loc[unserviceable_mask, ["status_id", "repair_days"]] = [7, 0]
+
+    status_id = _as_u32(updated["status_id"])
+    fallback_mask = (group_by > 2) & (status_id == 0)
+    updated.loc[fallback_mask, ["status_id", "repair_days"]] = [7, 0]
+
+    print(
+        "✅ storage_status in-memory: "
+        f"br={int(pd.Series(br_mask).sum())}, donor={int(donor_mask.sum())}, "
+        f"extension={int(extension_mask.sum())}, "
+        f"unserviceable={int(unserviceable_mask.sum())}, "
+        f"fallback={int(fallback_mask.sum())}"
+    )
+    return updated
+
+
 def main() -> int:
     args = parse_args()
     client = get_clickhouse_client()
@@ -245,13 +365,6 @@ def main() -> int:
         for d in details:
             print(f"   {d['serialno']} ({d['partno']}): sne={d['sne']:,} > br={d['br']:,}")
         print("📝 DRY-RUN: блок BR без записи в БД")
-    else:
-        run_update(client, version_date, version_id)
-        remaining = fetch_stats(client, version_date, version_id)
-        updated = candidates_count - remaining
-        print(
-            f"✅ Обновлено: {updated} агрегатов (sne >= br) → status_id=6 (Хранение)"
-        )
 
     # --- Блок 2: ДОНОР → Хранение ---
     donor_count_sql = """
@@ -268,18 +381,6 @@ def main() -> int:
     if donor_count > 0:
         print(f"📊 ДОНОР агрегатов со status_id=0: {donor_count}")
         
-        if not args.dry_run:
-            donor_update_sql = """
-            ALTER TABLE heli_pandas
-            UPDATE status_id = 6
-            WHERE group_by > 2 
-              AND status_id = 0 
-              AND upperUTF8(replaceRegexpAll(ifNull(condition, ''), '^\\s+|\\s+$', '')) = 'ДОНОР'
-              AND version_date = %(version_date)s
-              AND version_id = %(version_id)s
-            """
-            client.execute(donor_update_sql, params)
-            print(f"✅ Обновлено: {donor_count} ДОНОР → status_id=6 (Хранение)")
     else:
         print("ℹ️ Нет ДОНОР агрегатов со status_id=0")
     
@@ -298,18 +399,6 @@ def main() -> int:
     if prodlenie_count > 0:
         print(f"📊 ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР агрегатов со status_id=0: {prodlenie_count}")
         
-        if not args.dry_run:
-            prodlenie_update_sql = """
-            ALTER TABLE heli_pandas
-            UPDATE status_id = 6
-            WHERE group_by > 2 
-              AND status_id = 0 
-              AND upperUTF8(replaceRegexpAll(ifNull(condition, ''), '^\\s+|\\s+$', '')) = 'ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР'
-              AND version_date = %(version_date)s
-              AND version_id = %(version_id)s
-            """
-            client.execute(prodlenie_update_sql, params)
-            print(f"✅ Обновлено: {prodlenie_count} ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР → status_id=6 (Хранение)")
     else:
         print("ℹ️ Нет ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР агрегатов со status_id=0")
     
@@ -330,23 +419,6 @@ def main() -> int:
     if remaining_count > 0:
         print(f"📊 Оставшихся НЕИСПРАВНЫХ агрегатов со status_id=0: {remaining_count}")
         
-        if not args.dry_run:
-            # FIX: без target_date нет реального ремонта → unserviceable (7), не repair (4)
-            # Устанавливаем status_id=7 (unserviceable/ремонтопригодный) и repair_days=0 (нет обратного отсчёта)
-            remaining_update_sql = """
-            ALTER TABLE heli_pandas
-            UPDATE status_id = 7, repair_days = 0
-            WHERE group_by > 2 
-              AND status_id = 0 
-              AND upperUTF8(replaceRegexpAll(ifNull(condition, ''), '^\\s+|\\s+$', '')) = 'НЕИСПРАВНЫЙ'
-              AND version_date = %(version_date)s
-              AND version_id = %(version_id)s
-            """
-            client.execute(remaining_update_sql, params)
-            print(
-                f"✅ Обновлено: {remaining_count} НЕИСПРАВНЫЙ → "
-                f"status_id=7 (unserviceable/ремонтопригодный), repair_days=0"
-            )
     else:
         print("ℹ️ Нет оставшихся НЕИСПРАВНЫХ агрегатов со status_id=0")
 
@@ -366,24 +438,22 @@ def main() -> int:
         print(
             f"📊 Агрегатов со status_id=0 (fallback, любой condition): {fallback_count}"
         )
-        if not args.dry_run:
-            fallback_update_sql = """
-            ALTER TABLE heli_pandas
-            UPDATE status_id = 7, repair_days = 0
-            WHERE toUInt32(ifNull(group_by, 0)) > 2
-              AND toUInt8(ifNull(status_id, 0)) = 0
-              AND version_date = %(version_date)s
-              AND version_id = %(version_id)s
-            """
-            client.execute("SET mutations_sync = 1")
-            client.execute(fallback_update_sql, params)
-            print(
-                f"✅ Fallback: обновлено {fallback_count} агрегатов → "
-                f"status_id=7 (как неисправный/unserviceable), repair_days=0"
-            )
     else:
         print("ℹ️ Нет агрегатов для fallback (status_id=0)")
 
+    if args.dry_run:
+        print("📝 DRY-RUN завершён без изменений")
+        return 0
+
+    from utils.dwh_post_enrichment import (
+        _load_heli_pandas_version,
+        _replace_heli_pandas_version,
+    )
+
+    df = _load_heli_pandas_version(client, version_date, version_id)
+    updated_df = apply_storage_status(df, client, version_date, version_id)
+    _replace_heli_pandas_version(client, updated_df, version_date, version_id)
+    print("✅ storage_status применён через in-memory replace-slice")
     return 0
 
 
