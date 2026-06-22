@@ -98,40 +98,26 @@ def get_target_for_day(targets_dict, day_u16):
     return targets_dict[first]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="INV-2: ops count = target (±tolerance) после warmup. "
-                    "Таргеты из flight_program_ac (MP4)."
-    )
-    parser.add_argument("--version-id", required=True, type=int, help="version_id")
-    parser.add_argument("--version-date", type=int, default=None,
-                        help="version_date (YYYYMMDD) для фильтрации")
-    parser.add_argument(
-        "--table",
-        default="sim_masterv2_v9",
-        help="Таблица ClickHouse (по умолчанию: sim_masterv2_v9)",
-    )
-    parser.add_argument(
-        "--tolerance",
-        type=int,
-        default=0,
-        help="Допуск по ops (по умолчанию: 0)",
-    )
-    args = parser.parse_args()
-    table = validate_table_name(args.table)
-    client = get_client()
+def run(
+    client,
+    version_id: int,
+    version_date=None,
+    table: str = "sim_masterv2_v9",
+    tolerance: int = 0,
+) -> bool:
+    table = validate_table_name(table)
 
     # Базовый фильтр
     vd_filter = ""
-    params = {"vid": args.version_id}
-    if args.version_date is not None:
+    params = {"vid": version_id}
+    if version_date is not None:
         vd_filter = " AND version_date = %(vdate)s"
-        params["vdate"] = args.version_date
+        params["vdate"] = version_date
 
     # Загружаем динамические таргеты из MP4
     # version_date для MP4 = start_date симуляции
-    if args.version_date is not None:
-        mp4_vd = args.version_date
+    if version_date is not None:
+        mp4_vd = version_date
     else:
         # Пытаемся определить из данных симуляции
         row = client.execute(
@@ -193,10 +179,10 @@ def main() -> int:
             diff = ops_count - target
             entry = (group_by, day, ops_count, target, diff)
             if day <= warmup_days:
-                if abs(diff) > args.tolerance:
+                if abs(diff) > tolerance:
                     warmup_violations.append(entry)
             else:
-                if abs(diff) > args.tolerance:
+                if abs(diff) > tolerance:
                     post_violations.append(entry)
 
     # --- Warmup report (информационный, не влияет на PASS/FAIL) ---
@@ -223,7 +209,7 @@ def main() -> int:
     passed = not post_violations
     details = [
         f"warmup_days={warmup_days}",
-        f"tolerance={args.tolerance}",
+        f"tolerance={tolerance}",
         f"post_warmup_steps={post_steps}",
         f"Mi-8 target range: {min(targets_mi8.values())}..{max(targets_mi8.values())}",
         f"Mi-17 target range: {min(targets_mi17.values())}..{max(targets_mi17.values())}",
@@ -246,6 +232,37 @@ def main() -> int:
                     details.append(f"    day={day}: ops={ops}, target={tgt}, diff={sign}{diff}")
 
     print_result("INV-2 ops vs target (dynamic MP4)", passed, details)
+    return passed
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="INV-2: ops count = target (±tolerance) после warmup. "
+                    "Таргеты из flight_program_ac (MP4)."
+    )
+    parser.add_argument("--version-id", required=True, type=int, help="version_id")
+    parser.add_argument("--version-date", type=int, default=None,
+                        help="version_date (YYYYMMDD) для фильтрации")
+    parser.add_argument(
+        "--table",
+        default="sim_masterv2_v9",
+        help="Таблица ClickHouse (по умолчанию: sim_masterv2_v9)",
+    )
+    parser.add_argument(
+        "--tolerance",
+        type=int,
+        default=0,
+        help="Допуск по ops (по умолчанию: 0)",
+    )
+    args = parser.parse_args()
+    client = get_client()
+    passed = run(
+        client,
+        args.version_id,
+        args.version_date,
+        args.table,
+        args.tolerance,
+    )
     return 0 if passed else 1
 
 

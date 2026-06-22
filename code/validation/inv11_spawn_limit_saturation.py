@@ -91,29 +91,12 @@ def get_target_for_day(targets_dict, day_u16):
     return targets_dict[first]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="INV-11: spawn limit saturation + post-warmup ops deficit"
-    )
-    parser.add_argument("--version-id", required=True, type=int, help="version_id")
-    parser.add_argument(
-        "--version-date",
-        type=int,
-        default=None,
-        help="version_date (YYYYMMDD) для фильтрации",
-    )
-    parser.add_argument(
-        "--table",
-        default="sim_masterv2_v9",
-        help="Таблица ClickHouse (по умолчанию: sim_masterv2_v9)",
-    )
-    args = parser.parse_args()
-    table = validate_table_name(args.table)
-    client = get_client()
+def run(client, version_id: int, version_date=None, table: str = "sim_masterv2_v9") -> bool:
+    table = validate_table_name(table)
 
-    params = {"vid": args.version_id}
-    if args.version_date is not None:
-        version_dates = [args.version_date]
+    params = {"vid": version_id}
+    if version_date is not None:
+        version_dates = [version_date]
     else:
         version_dates_query = f"""
         SELECT version_date
@@ -129,11 +112,11 @@ def main() -> int:
     if not version_dates:
         raise SystemExit("Не удалось определить version_date из данных симуляции")
 
-    details = [f"version_id={args.version_id}, table={table}"]
+    details = [f"version_id={version_id}, table={table}"]
     violating_datasets = 0
 
     for version_date_int in version_dates:
-        scoped_params = {"vid": args.version_id, "vdate": version_date_int}
+        scoped_params = {"vid": version_id, "vdate": version_date_int}
         vd_filter = " AND version_date = %(vdate)s"
 
         vdate_date = to_date(version_date_int)
@@ -239,6 +222,28 @@ def main() -> int:
     details.append(f"violating_datasets={violating_datasets}")
     passed = violating_datasets == 0
     print_result("INV-11 spawn limit saturation", passed, details)
+    return passed
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="INV-11: spawn limit saturation + post-warmup ops deficit"
+    )
+    parser.add_argument("--version-id", required=True, type=int, help="version_id")
+    parser.add_argument(
+        "--version-date",
+        type=int,
+        default=None,
+        help="version_date (YYYYMMDD) для фильтрации",
+    )
+    parser.add_argument(
+        "--table",
+        default="sim_masterv2_v9",
+        help="Таблица ClickHouse (по умолчанию: sim_masterv2_v9)",
+    )
+    args = parser.parse_args()
+    client = get_client()
+    passed = run(client, args.version_id, args.version_date, args.table)
     return 0 if passed else 1
 
 

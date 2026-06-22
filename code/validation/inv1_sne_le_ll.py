@@ -27,31 +27,14 @@ def print_result(name: str, passed: bool, details) -> None:
     print("=" * 80)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="INV-1: sne <= ll по всему жизненному циклу планеров"
-    )
-    parser.add_argument("--version-id", required=True, type=int, help="version_id")
-    parser.add_argument(
-        "--version-date",
-        type=int,
-        default=None,
-        help="version_date (YYYYMMDD) для фильтрации",
-    )
-    parser.add_argument(
-        "--table",
-        default="sim_masterv2_v9",
-        help="Таблица ClickHouse (по умолчанию: sim_masterv2_v9)",
-    )
-    args = parser.parse_args()
-    table = validate_table_name(args.table)
-    client = get_client()
+def run(client, version_id: int, version_date=None, table: str = "sim_masterv2_v9") -> bool:
+    table = validate_table_name(table)
 
     vd_filter = ""
-    params = {"vid": args.version_id}
-    if args.version_date is not None:
+    params = {"vid": version_id}
+    if version_date is not None:
         vd_filter = " AND version_date = %(vdate)s"
-        params["vdate"] = args.version_date
+        params["vdate"] = version_date
 
     count_query = f"""
     SELECT count()
@@ -91,6 +74,28 @@ def main() -> int:
 
     passed = violations == 0
     print_result("INV-1 sne<=ll lifecycle", passed, details)
+    return passed
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="INV-1: sne <= ll по всему жизненному циклу планеров"
+    )
+    parser.add_argument("--version-id", required=True, type=int, help="version_id")
+    parser.add_argument(
+        "--version-date",
+        type=int,
+        default=None,
+        help="version_date (YYYYMMDD) для фильтрации",
+    )
+    parser.add_argument(
+        "--table",
+        default="sim_masterv2_v9",
+        help="Таблица ClickHouse (по умолчанию: sim_masterv2_v9)",
+    )
+    args = parser.parse_args()
+    client = get_client()
+    passed = run(client, args.version_id, args.version_date, args.table)
     return 0 if passed else 1
 
 

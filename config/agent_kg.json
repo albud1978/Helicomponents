@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-22T17:48:24Z",
+    "updated_at": "2026-06-22T19:21:23Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2672,6 +2672,69 @@
       },
       "created_at": "2026-06-22T17:44:07Z",
       "updated_at": "2026-06-22T17:44:07Z"
+    },
+    {
+      "workflow_id": "W_dwh_loader_partno_filter_20260622",
+      "goal": "ускорение DWH extract: server-side partno filter",
+      "phase": "analysis",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 8,
+        "max_tokens": 80000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 42000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-22T18:18:06Z"
+      },
+      "created_at": "2026-06-22T18:14:37Z",
+      "updated_at": "2026-06-22T18:18:06Z"
+    },
+    {
+      "workflow_id": "W_dwh_post_enrichment_in_memory_20260622",
+      "goal": "ускорение DWH extract — вливание 7 post-enrichment скриптов в in-memory pandas cascade с единственным replace-slice",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "high-strict"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 65000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-22T18:47:28Z"
+      },
+      "created_at": "2026-06-22T18:39:06Z",
+      "updated_at": "2026-06-22T18:47:28Z"
+    },
+    {
+      "workflow_id": "W_validation_suite_shared_client_20260623",
+      "goal": "ускорить validation-suite: один процесс и один shared ClickHouse client для code/validation/run_all.py без изменения SQL инвариантов",
+      "phase": "analysis",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 52000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-22T19:21:23Z"
+      },
+      "created_at": "2026-06-22T19:12:26Z",
+      "updated_at": "2026-06-22T19:21:23Z"
     }
   ],
   "handoffs": [
@@ -17102,6 +17165,129 @@
         "est_tokens": 54000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_loader_partno_filter_20260622_coder-general_8186331f",
+      "workflow_id": "W_dwh_loader_partno_filter_20260622",
+      "agent": "coder-general",
+      "user_goal": "ускорение DWH extract",
+      "changes": "code/utils/dwh_loader.py: fetch_df(dwh, report_date, partnos) uses report_date={report_date:Date} and partno IN {partnos:Array(String)} with parameters; main loads md before fetch and passes it to fetch_df.",
+      "facts": "",
+      "assumptions": "DWH SQL equality semantics for partno are identical to local pandas isin for the 77 md_components values. Risks if false: validation would show checksum/distribution drift; observed PASS.",
+      "evidence": "py_compile PASS; ReadLints PASS; DWH fetch benchmark before_rows=202216 before_fetch_sec=2.333 after_rows=13677 after_fetch_sec=0.516; full run PASS: DWH 13,677 rows, source 13,677, pandas 11,480, Enrichment done OPS=173 planner_status_0=0, real 25.21s; SQL checksums=(11480,40742,1092327,5957,1923,291); planner distribution 1=84,2=173,4=3,6=26; aggregate distribution 2=5796,3=1838,4=72,6=1666,7=1822; baseline file output/enrich_baseline_20260620.txt matches.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_loader_partno_filter_20260622:2026-06-22T18:20:00Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "ETL runtime change for heli_pandas load; local ClickHouse slice replaced during validation",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "Move md_components partno filter into DWH SQL using clickhouse_connect typed parameters; keep local enrich filter as double-check.",
+      "evidence_pack": "py_compile PASS; ReadLints PASS; DWH fetch benchmark before_rows=202216 before_fetch_sec=2.333 after_rows=13677 after_fetch_sec=0.516; full run PASS: DWH 13,677 rows, source 13,677, pandas 11,480, Enrichment done OPS=173 planner_status_0=0, real 25.21s; SQL checksums=(11480,40742,1092327,5957,1923,291); planner distribution 1=84,2=173,4=3,6=26; aggregate distribution 2=5796,3=1838,4=72,6=1666,7=1822; baseline file output/enrich_baseline_20260620.txt matches.",
+      "success_criteria": "PASS: 2026-06-20 v1 heli_pandas bit-identical checksums/status distributions match output/enrich_baseline_20260620.txt and DWH rows reduced to 13,677.",
+      "compliance_checklist": "decision=allow_with_notes required_gates=pass exceptions=none evidence_refs=code/utils/dwh_loader.py; output/enrich_baseline_20260620.txt; py_compile; full dwh_loader run; SQL validation approval_ref=N/A",
+      "risks": "DWH client CA env can be overwritten by local config_loader after get_clickhouse_client(); current script creates dwh_client before local ch so validated command passes with absolute DWH_CLICKHOUSE_CA_CERT.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No domain graph/SSoT update; runtime ETL optimization only.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-22T18:18:06Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 42000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_dwh_post_enrichment_in_memory_20260622_coder-general_cb2a8c13",
+      "workflow_id": "W_dwh_post_enrichment_in_memory_20260622",
+      "agent": "coder-general",
+      "user_goal": "ускорение DWH extract — вливание 7 post-enrichment скриптов в in-memory pandas cascade с ЕДИНСТВЕННЫМ replace-slice",
+      "changes": "code/utils/dwh_post_enrichment.py: заменил POST_SCRIPTS subprocess cascade на POST_SCRIPTS apply-функции; checkpoint A прошёл через shared client + intermediate replace, финальное состояние B выполняет planner cascade + 7 apply_* в одном DataFrame и один _replace_heli_pandas_version в конце; усилил normalizer repair_days/repair_time перед insert.\ncode/extract/program_ac_precheck_runner.py: выделен apply_program_ac_precheck(df, client, version_date, version_id), CLI сохранён через load/apply/replace.\ncode/extract/heli_pandas_component_status.py: выделен apply_component_status с той же OPS-planer/component mask.\ncode/extract/heli_pandas_serviceable_status.py: выделен apply_serviceable_status для remaining исправных агрегатов status_id=0 -> 3.\ncode/extract/heli_pandas_repair_status.py: выделен apply_repair_status с past target_date -> 2, future target_date -> 4 + repair_days; candidate mapping repair_time scoped to repair candidates.\ncode/extract/heli_pandas_storage_status.py: выделен apply_storage_status с прежними 5 блоками BR/DONOR/extension/unserviceable/fallback.\ncode/extract/repair_days_calculator.py: выделен apply_repair_days с standard repair_time и active overhaul planers repair_time/repair_days.\ncode/extract/heli_pandas_terminal_br_gate.py: выделен apply_terminal_br_gate с terminal BR logic status_id IN (1,7) -> 6 repair_days=0.",
+      "facts": "",
+      "assumptions": "No hidden semantic fallback was added; old processor try/except behavior outside the new apply_* functions remains where it already existed. Risks if false: legacy swallowed exceptions in the first 3 planner processors may still mask upstream data issues, but this task did not alter those processors.\nStandalone program_ac_precheck_runner has no historical --dry-run option, so smoke used compile plus full cascade execution rather than standalone no-op run. Risks if false: direct standalone invocation still mutates via one replace-slice, but the same path was exercised through checkpoint A.",
+      "evidence": "Facts: Checkpoint A PASS; Checkpoint B PASS; final state is B single replace-slice.\nEvidence: Baseline before changes: full dwh_loader status_components+enrich real=23.36s, final Enrichment done: OPS=173, planner_status_0=0.\nCheckpoint A: full run after in-process shared-client intermediate replace passed; real=24.41s; SQL checks=(11480,40742,1092327,5957,1923,291) PASS; status distribution PASS; OPS/planner_zero=(173,0) PASS; 75 repair boards match output/enrich_baseline_20260620.txt PASS.\nCheckpoint B: full run after single final replace passed; real=12.02s; final Enrichment done: OPS=173, planner_status_0=0; SQL checks=(11480,40742,1092327,5957,1923,291) PASS; status distribution aggregate 2=5796,3=1838,4=72,6=1666,7=1822 and planer 1=84,2=173,4=3,6=26 PASS; repair_count=75 and repairs_match PASS vs output/enrich_baseline_20260620.txt.\nStandalone CLI smoke: --dry-run PASS for component/serviceable/repair_status/storage/repair_days/terminal scripts. Static checks: py_compile PASS for all 8 touched files; ReadLints: no linter errors.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_dwh_post_enrichment_in_memory_20260622:20260622T184728Z",
+      "plan_step_id": "B2",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "status semantics high-risk; DWH mutation path; bit-identical required",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (governance pending)",
+      "human_gate_required": "yes",
+      "plan_card": "Refactor 7 post-enrichment ALTER/subprocess scripts into reusable in-memory apply_* functions; verify A intermediate replace and B single final replace are bit-identical.",
+      "evidence_pack": "Facts: Checkpoint A PASS; Checkpoint B PASS; final state is B single replace-slice.\nEvidence: Baseline before changes: full dwh_loader status_components+enrich real=23.36s, final Enrichment done: OPS=173, planner_status_0=0.\nCheckpoint A: full run after in-process shared-client intermediate replace passed; real=24.41s; SQL checks=(11480,40742,1092327,5957,1923,291) PASS; status distribution PASS; OPS/planner_zero=(173,0) PASS; 75 repair boards match output/enrich_baseline_20260620.txt PASS.\nCheckpoint B: full run after single final replace passed; real=12.02s; final Enrichment done: OPS=173, planner_status_0=0; SQL checks=(11480,40742,1092327,5957,1923,291) PASS; status distribution aggregate 2=5796,3=1838,4=72,6=1666,7=1822 and planer 1=84,2=173,4=3,6=26 PASS; repair_count=75 and repairs_match PASS vs output/enrich_baseline_20260620.txt.\nStandalone CLI smoke: --dry-run PASS for component/serviceable/repair_status/storage/repair_days/terminal scripts. Static checks: py_compile PASS for all 8 touched files; ReadLints: no linter errors.",
+      "success_criteria": "SQL: checksums exactly (11480,40742,1092327,5957,1923,291), status distributions exactly match baseline, OPS=173 and planner_status_0=0, and 75 status=4 repair boards match output/enrich_baseline_20260620.txt post-row by serialno after checkpoint B.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=governance_not_run,reviewer_not_run; evidence_refs=checkpoint_A_full_run;checkpoint_B_full_run;SQL_validation;py_compile;ReadLints; approval_ref=N/A",
+      "risks": "1) Diff is intentionally larger than preferred because all 7 scripts needed reusable core functions; semantic risk mitigated by A and B bit-identical checks.\n2) Existing dwh_loader.py, docs/changelog.md were dirty before this task and were not modified intentionally here.\n3) Governance/reviewer pass not run by coder-general; next owner should close high-risk governance.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No Domain Graph/SSoT change; code-only DWH enrichment implementation",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-22T18:47:28Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 65000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_validation_suite_shared_client_20260623_coder-general_36a5a534",
+      "workflow_id": "W_validation_suite_shared_client_20260623",
+      "agent": "coder-general",
+      "user_goal": "ускорить validation-suite — сейчас code/validation/run_all.py запускает 15 проверок инвариантов каждую отдельным subprocess'ом. Перевести в один процесс с одним shared ClickHouse-клиентом; логику/SQL инвариантов не менять; standalone запуск каждого скрипта сохранить.",
+      "changes": "code/validation/run_all.py: imports 15 run functions, creates one get_client() client, preserves RUN/SUMMARY/TOTAL output and table routing for inv3/temp5. code/validation/inv1..inv12,temp1,temp4,temp5: extracted run(client, version_id, version_date, table/table_main/table_repair, existing optional params) returning bool; standalone main() remains argparse + own get_client(); SQL bodies and verdict conditions preserved.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: Baseline before: subprocess run_all exit=0, SUMMARY 15/15 PASS, real=10.82s. After: py_compile all touched validation files PASS; run_all exit=0; machine comparison summary_matches_baseline=True vs output/validation_baseline_20260621.txt; timed after runs real=10.04s and elapsed=8.97s; standalone smoke inv3/temp5/inv1 exit=0 PASS; ReadLints no linter errors. Scope check: git status shows only code/validation changes by this task plus config/agent_kg.json from logging; pre-existing extract/utils/docs changes left untouched.\nEvidence: Commands: .venv/bin/python -m py_compile code/validation/run_all.py code/validation/inv*.py code/validation/temp*.py (targeted active files) -> exit 0; /usr/bin/time -p .venv/bin/python code/validation/run_all.py --version-id 1 --version-date 20260621 --table-main sim_masterv2_v9 --table-repair sim_repairline_v9 -> exit 0, real 10.04, SUMMARY TOTAL=15 FAIL=0; Python comparator against output/validation_baseline_20260621.txt -> exit_code=0 elapsed_seconds=8.97 summary_matches_baseline=True; standalone smokes: inv3_repair_capacity.py --table sim_repairline_v9 PASS, temp5_repair_hybrid_vector.py --table-main sim_masterv2_v9 --table-repair sim_repairline_v9 PASS, inv1_sne_le_ll.py --table sim_masterv2_v9 PASS; lints: No linter errors found.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_validation_suite_shared_client_20260623:20260622T192123Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Structural refactor of validation harness touching 15 active invariant validators; sensitive validation surface, but no SQL/threshold/SSoT changes intended.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (medium-fast structural refactor; validation evidence collected by coder-general)",
+      "human_gate_required": "conditional",
+      "plan_card": "Refactor code/validation harness from subprocess-per-validator to imported run(...) functions sharing one ClickHouse client. Keep CLI entrypoints and output contract intact.",
+      "evidence_pack": "Facts: Baseline before: subprocess run_all exit=0, SUMMARY 15/15 PASS, real=10.82s. After: py_compile all touched validation files PASS; run_all exit=0; machine comparison summary_matches_baseline=True vs output/validation_baseline_20260621.txt; timed after runs real=10.04s and elapsed=8.97s; standalone smoke inv3/temp5/inv1 exit=0 PASS; ReadLints no linter errors. Scope check: git status shows only code/validation changes by this task plus config/agent_kg.json from logging; pre-existing extract/utils/docs changes left untouched.\nEvidence: Commands: .venv/bin/python -m py_compile code/validation/run_all.py code/validation/inv*.py code/validation/temp*.py (targeted active files) -> exit 0; /usr/bin/time -p .venv/bin/python code/validation/run_all.py --version-id 1 --version-date 20260621 --table-main sim_masterv2_v9 --table-repair sim_repairline_v9 -> exit 0, real 10.04, SUMMARY TOTAL=15 FAIL=0; Python comparator against output/validation_baseline_20260621.txt -> exit_code=0 elapsed_seconds=8.97 summary_matches_baseline=True; standalone smokes: inv3_repair_capacity.py --table sim_repairline_v9 PASS, temp5_repair_hybrid_vector.py --table-main sim_masterv2_v9 --table-repair sim_repairline_v9 PASS, inv1_sne_le_ll.py --table sim_masterv2_v9 PASS; lints: No linter errors found.",
+      "success_criteria": "script: run_all.py on version_id=1 version_date=20260621 returns exit 0 and SUMMARY identical to output/validation_baseline_20260621.txt (PASS); script: standalone smoke inv3/temp5/inv1 returns PASS (PASS); numeric: before real 10.82s, after real 10.04s / comparator elapsed 8.97s (PASS structurally; performance gain modest).",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=py_compile; run_all timing; baseline comparator; standalone smokes; ReadLints; approval_ref=N/A",
+      "risks": "1) Speedup is modest because runtime is dominated by ClickHouse/SQL work, not Python startup. 2) Diff is broad by file count but localized to harness extraction; future validator option additions must be mirrored in run(...) signature if needed. 3) Existing output ordering changed to RUN banner before validator output (the intended parser-critical SUMMARY/RUN strings are preserved).",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No Domain Graph update: validation harness only; SSoT invariants/transition JSON untouched.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-22T19:21:23Z",
+      "modules": [
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 52000,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -19480,6 +19666,33 @@
       "agent": "coder-general",
       "created_at": "2026-06-22T17:42:32Z",
       "updated_at": "2026-06-22T17:42:32Z"
+    },
+    {
+      "context_id": "ctx_W_dwh_loader_partno_filter_20260622_phase_start_4240e601",
+      "workflow_id": "W_dwh_loader_partno_filter_20260622",
+      "context_type": "phase_start",
+      "content": "Implemented server-side DWH partno filter in code/utils/dwh_loader.py and validated 2026-06-20 v1 status_components replace-slice.",
+      "agent": "coder-general",
+      "created_at": "2026-06-22T18:17:56Z",
+      "updated_at": "2026-06-22T18:17:56Z"
+    },
+    {
+      "context_id": "ctx_W_dwh_post_enrichment_in_memory_20260622_phase_start_bee0f6ca",
+      "workflow_id": "W_dwh_post_enrichment_in_memory_20260622",
+      "context_type": "phase_start",
+      "content": "phase_start: implement high-risk approved; SuccessCriteria=bit-identical 2026-06-20 v1 checksums/status distribution/75 repair boards; scope=code/utils/dwh_post_enrichment.py + 7 code/extract post scripts",
+      "agent": "coder-general",
+      "created_at": "2026-06-22T18:39:06Z",
+      "updated_at": "2026-06-22T18:39:06Z"
+    },
+    {
+      "context_id": "ctx_W_validation_suite_shared_client_20260623_phase_start_f6c82eb4",
+      "workflow_id": "W_validation_suite_shared_client_20260623",
+      "context_type": "phase_start",
+      "content": "Start coder-general implementation. UserGoal: ускорить validation-suite; SuccessCriteria: SUMMARY identical to output/validation_baseline_20260621.txt, standalone smoke for inv3/temp5/one regular validator, before/after timing. Scope: code/validation/run_all.py + 15 INV/TEMP scripts only.",
+      "agent": "coder-general",
+      "created_at": "2026-06-22T19:12:26Z",
+      "updated_at": "2026-06-22T19:12:26Z"
     }
   ],
   "meta": {

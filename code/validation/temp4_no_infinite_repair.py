@@ -27,22 +27,20 @@ def print_result(name: str, passed: bool, details) -> None:
     print("=" * 80)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="TEMP-4: no infinite repair")
-    parser.add_argument("--version-id", required=True, type=int)
-    parser.add_argument("--version-date", type=int, default=None)
-    parser.add_argument("--table", default="sim_masterv2_v9")
-    parser.add_argument("--max-repair-days", type=int, default=210,
-                        help="Макс допустимая длительность ремонта (repair_time + tolerance, default=210)")
-    args = parser.parse_args()
-    table = validate_table_name(args.table)
-    client = get_client()
+def run(
+    client,
+    version_id: int,
+    version_date=None,
+    table: str = "sim_masterv2_v9",
+    max_repair_days: int = 210,
+) -> bool:
+    table = validate_table_name(table)
 
     vd_filter = ""
-    params = {"vid": args.version_id}
-    if args.version_date is not None:
+    params = {"vid": version_id}
+    if version_date is not None:
         vd_filter = " AND version_date = %(vdate)s"
-        params["vdate"] = args.version_date
+        params["vdate"] = version_date
 
     # Нельзя фильтровать status_id=4 до lag: так склеиваются разные repair-отрезки через промежуточные статусы.
     # Находим непрерывные интервалы в repair для каждого агента и проверяем что длительность <= max_repair_days.
@@ -91,7 +89,7 @@ def main() -> int:
         GROUP BY aircraft_number, group_by, version_date, span_id
     )
     SELECT count() FROM repair_spans
-    WHERE span > {args.max_repair_days}
+    WHERE span > {max_repair_days}
       AND enter_day > (
           SELECT min(day_u16)
           FROM {table}
@@ -100,7 +98,7 @@ def main() -> int:
     """
     violations = client.execute(query, params)[0][0]
     details = [
-        f"max_repair_days={args.max_repair_days}",
+        f"max_repair_days={max_repair_days}",
         f"violations={violations}",
     ]
 
@@ -148,7 +146,7 @@ def main() -> int:
         )
         SELECT aircraft_number, enter_day, last_day, span
         FROM repair_spans
-        WHERE span > {args.max_repair_days}
+        WHERE span > {max_repair_days}
           AND enter_day > (
               SELECT min(day_u16)
               FROM {table}
@@ -163,6 +161,25 @@ def main() -> int:
 
     passed = violations == 0
     print_result("TEMP-4 no infinite repair", passed, details)
+    return passed
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="TEMP-4: no infinite repair")
+    parser.add_argument("--version-id", required=True, type=int)
+    parser.add_argument("--version-date", type=int, default=None)
+    parser.add_argument("--table", default="sim_masterv2_v9")
+    parser.add_argument("--max-repair-days", type=int, default=210,
+                        help="Макс допустимая длительность ремонта (repair_time + tolerance, default=210)")
+    args = parser.parse_args()
+    client = get_client()
+    passed = run(
+        client,
+        args.version_id,
+        args.version_date,
+        args.table,
+        args.max_repair_days,
+    )
     return 0 if passed else 1
 
 

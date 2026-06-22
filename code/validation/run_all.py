@@ -3,27 +3,42 @@
 Мастер-скрипт: запуск всех проверок инвариантов.
 """
 import argparse
-import os
-import subprocess
 import sys
+
+from ch_client import get_client
+from inv1_sne_le_ll import run as run_inv1
+from inv2_ops_vs_target import run as run_inv2
+from inv3_repair_capacity import run as run_inv3
+from inv4_unsvc_repair_time import run as run_inv4
+from inv5_balance_increments import run as run_inv5
+from inv6_dt_only_ops import run as run_inv6
+from inv7_dt_eq_mp5 import run as run_inv7
+from inv8_storage_frozen import run as run_inv8
+from inv9_limiter_exit import run as run_inv9
+from inv10_turnover_balance import run as run_inv10
+from inv11_spawn_limit_saturation import run as run_inv11
+from inv12_ppr_le_oh import run as run_inv12
+from temp1_repair_duration import run as run_temp1
+from temp4_no_infinite_repair import run as run_temp4
+from temp5_repair_hybrid_vector import run as run_temp5
 
 
 SCRIPTS = [
-    ("INV-1", "inv1_sne_le_ll.py"),
-    ("INV-2", "inv2_ops_vs_target.py"),
-    ("INV-3", "inv3_repair_capacity.py"),
-    ("INV-4", "inv4_unsvc_repair_time.py"),
-    ("INV-5", "inv5_balance_increments.py"),
-    ("INV-6", "inv6_dt_only_ops.py"),
-    ("INV-7", "inv7_dt_eq_mp5.py"),
-    ("INV-8", "inv8_storage_frozen.py"),
-    ("INV-9", "inv9_limiter_exit.py"),
-    ("INV-10", "inv10_turnover_balance.py"),
-    ("INV-11", "inv11_spawn_limit_saturation.py"),
-    ("INV-12", "inv12_ppr_le_oh.py"),
-    ("TEMP-1", "temp1_repair_duration.py"),
-    ("TEMP-4", "temp4_no_infinite_repair.py"),
-    ("TEMP-5", "temp5_repair_hybrid_vector.py"),
+    ("INV-1", "inv1_sne_le_ll.py", run_inv1),
+    ("INV-2", "inv2_ops_vs_target.py", run_inv2),
+    ("INV-3", "inv3_repair_capacity.py", run_inv3),
+    ("INV-4", "inv4_unsvc_repair_time.py", run_inv4),
+    ("INV-5", "inv5_balance_increments.py", run_inv5),
+    ("INV-6", "inv6_dt_only_ops.py", run_inv6),
+    ("INV-7", "inv7_dt_eq_mp5.py", run_inv7),
+    ("INV-8", "inv8_storage_frozen.py", run_inv8),
+    ("INV-9", "inv9_limiter_exit.py", run_inv9),
+    ("INV-10", "inv10_turnover_balance.py", run_inv10),
+    ("INV-11", "inv11_spawn_limit_saturation.py", run_inv11),
+    ("INV-12", "inv12_ppr_le_oh.py", run_inv12),
+    ("TEMP-1", "temp1_repair_duration.py", run_temp1),
+    ("TEMP-4", "temp4_no_infinite_repair.py", run_temp4),
+    ("TEMP-5", "temp5_repair_hybrid_vector.py", run_temp5),
 ]
 
 
@@ -48,33 +63,38 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    client = get_client()
     total = 0
     failed = 0
     results = []
 
-    for name, script in SCRIPTS:
+    for name, script, runner in SCRIPTS:
         total += 1
-        script_path = os.path.join(base_dir, script)
         print("\n" + "=" * 80)
         print(f"RUN {name} -> {script}")
         print("=" * 80)
-        cmd = [
-            sys.executable,
-            script_path,
-            "--version-id",
-            str(args.version_id),
-        ]
-        if args.version_date is not None:
-            cmd.extend(["--version-date", str(args.version_date)])
         if script == "inv3_repair_capacity.py":
-            cmd.extend(["--table", args.table_repair])
+            ok = runner(
+                client,
+                args.version_id,
+                args.version_date,
+                args.table_repair,
+            )
         elif script == "temp5_repair_hybrid_vector.py":
-            cmd.extend(["--table-main", args.table_main, "--table-repair", args.table_repair])
+            ok = runner(
+                client,
+                args.version_id,
+                args.version_date,
+                args.table_main,
+                args.table_repair,
+            )
         else:
-            cmd.extend(["--table", args.table_main])
-        result = subprocess.run(cmd, check=False)
-        ok = result.returncode == 0
+            ok = runner(
+                client,
+                args.version_id,
+                args.version_date,
+                args.table_main,
+            )
         results.append((name, ok))
         if not ok:
             failed += 1

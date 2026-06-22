@@ -30,42 +30,29 @@ def print_result(name: str, passed: bool, details) -> None:
     print("=" * 80)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=(
-            "TEMP-5: claim metadata consistency "
-            "(bank+claim semantics, sim_masterv2_v9)"
-        )
-    )
-    parser.add_argument("--version-id", required=True, type=int, help="version_id")
-    parser.add_argument(
-        "--version-date",
-        type=int,
-        default=None,
-        help="version_date (YYYYMMDD) для фильтрации",
-    )
-    parser.add_argument("--table-main", default="sim_masterv2_v9")
-    parser.add_argument("--table-repair", default="sim_repairline_v9")
-    parser.add_argument("--repair-window", type=int, default=180)
-    args = parser.parse_args()
-
-    table_main = validate_table_name(args.table_main)
-    table_repair = validate_table_name(args.table_repair)
-    repair_window = int(args.repair_window)
+def run(
+    client,
+    version_id: int,
+    version_date=None,
+    table_main: str = "sim_masterv2_v9",
+    table_repair: str = "sim_repairline_v9",
+    repair_window: int = 180,
+) -> bool:
+    table_main = validate_table_name(table_main)
+    table_repair = validate_table_name(table_repair)
+    repair_window = int(repair_window)
     if repair_window <= 0:
         raise SystemExit("--repair-window должен быть > 0")
     _ = table_repair
     _ = repair_window
 
-    client = get_client()
-
     vd_filter = ""
     params = {
-        "vid": args.version_id,
+        "vid": version_id,
     }
-    if args.version_date is not None:
+    if version_date is not None:
         vd_filter = " AND version_date = %(vdate)s"
-        params["vdate"] = args.version_date
+        params["vdate"] = version_date
     valid_claim_expr = (
         "repair_claim_source IN (1, 2)"
         " AND repair_claim_line_id != 65535"
@@ -393,6 +380,36 @@ def main() -> int:
         and bank_underflow_suspicions == 0
     )
     print_result("TEMP-5 claim metadata", passed, details)
+    return passed
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "TEMP-5: claim metadata consistency "
+            "(bank+claim semantics, sim_masterv2_v9)"
+        )
+    )
+    parser.add_argument("--version-id", required=True, type=int, help="version_id")
+    parser.add_argument(
+        "--version-date",
+        type=int,
+        default=None,
+        help="version_date (YYYYMMDD) для фильтрации",
+    )
+    parser.add_argument("--table-main", default="sim_masterv2_v9")
+    parser.add_argument("--table-repair", default="sim_repairline_v9")
+    parser.add_argument("--repair-window", type=int, default=180)
+    args = parser.parse_args()
+    client = get_client()
+    passed = run(
+        client,
+        args.version_id,
+        args.version_date,
+        args.table_main,
+        args.table_repair,
+        args.repair_window,
+    )
     return 0 if passed else 1
 
 

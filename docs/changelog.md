@@ -21,7 +21,52 @@
 - `OPS=173, planner_status_0=0`; 75 бортов status=4 совпали построчно.
 - Итоговый wall-clock полного extract+enrich: **23.68s** (было ~107s).
 
-**Файлы:** `code/utils/dwh_loader.py`, `code/utils/dwh_batch_sim_gate.py`, `code/extract/repair_days_calculator.py`, `code/extract/heli_pandas_repair_status.py`. Не закоммичено (commit по явной команде).
+**Файлы:** `code/utils/dwh_loader.py`, `code/utils/dwh_batch_sim_gate.py`, `code/extract/repair_days_calculator.py`, `code/extract/heli_pandas_repair_status.py`. Коммит `4dac335b`.
+
+### 4. Серверный partno-фильтр в DWH SQL (fetch 202k → 13.7k)
+`fetch_df` тянул все 202 216 строк витрины за дату, локально фильтруя по 77 partno из `md_components` до 13 677. Фильтр перенесён в DWH SQL (`partno IN {partnos:Array(String)}` через typed parameters `clickhouse_connect`, без конкатенации строк). `get_md_partnos(ch)` теперь вызывается до `fetch_df`. Локальный `enrich(filter_partnos=md)` оставлен как double-check.
+- DWH fetch: 202 216 строк / 2.33s → 13 677 строк / 0.52s
+- Фаза status_components: ~8.5s → 6.77s; полный extract+load: ~22.7s
+- Bit-identical эталону (checksums `(11480,40742,1092327,5957,1923,291)`, OPS=173) — независимо подтверждено.
+
+**Профайлинг остатка (enrich, пофазно):** load_slice 0.96s + planner_cascade 0.76s + replace_slice 1.16s + 7 post-скриптов 12.14s. Следующий резерв — subprocess-overhead 7 post-скриптов (каждый заново стартует Python + импортирует pandas + переподключается к CH; `precheck_runner` = 0 изменений, но 2.16s). Кандидат #2a: in-process вызов вместо subprocess.
+
+**Файл §4:** `code/utils/dwh_loader.py`. Коммит `4dac335b` + последующий.
+
+### 5. Вливание 7 post-enrichment скриптов в in-memory cascade (enrich ~15s → ~3s)
+**Risk: high (согласовано явно).** 7 post-скриптов выполнялись как отдельные subprocess'ы (~12.1s), где основной вес — overhead каждого старта Python + импорт pandas + переподключение к CH + чтение среза (`precheck_runner`: 0 изменений, но 2.16s). Рефакторинг (SOLID):
+- Для каждого скрипта выделена чистая функция `apply_<name>(df, client, vd, vi) -> df` (логика над DataFrame в памяти; вспомогательные SELECT из `status_overhaul`/`program_ac`/`md_components` через shared client).
+- Standalone CLI каждого скрипта сохранён (Excel-путь): `load slice → apply → replace slice`, `--dry-run` сохранён.
+- `dwh_post_enrichment` продолжает planner-cascade цепочкой `apply_*` по всем 7 в том же порядке БЕЗ промежуточных записей и делает ОДИН `replace_slice` в конце.
+- Порядок применения сохранён (status_id-переходы последовательны, «skip if already set»).
+
+**Верификация (две контрольные точки + независимая сверка orchestrator):**
+- Checkpoint A (in-process, промежуточные записи): bit-identical PASS.
+- Checkpoint B (один финальный replace): bit-identical PASS.
+- Независимо: checksums `(11480,40742,1092327,5957,1923,291)` PASS; распределение status_id PASS; 75 бортов status=4 построчно по serialno (repair_time/repair_days/target_date) PASS; `OPS=173, planner_status_0=0`.
+- Инварианты `run_all.py` валидируют sim-выход; вход sim (`heli_pandas`) доказанно идентичен → детерминированный sim не меняется, пересборка не требовалась.
+- Полный extract+load: **~22.7s → ~13s**.
+
+**Файлы §5:** `code/utils/dwh_post_enrichment.py` + 7 скриптов `code/extract/{program_ac_precheck_runner, heli_pandas_component_status, heli_pandas_serviceable_status, heli_pandas_repair_status, heli_pandas_storage_status, repair_days_calculator, heli_pandas_terminal_br_gate}.py`.
+
+**Сводный итог extract+load:** ~107s → ~13s (8× ускорение): −heli_raw (~51s) → −mutation-loops (~24s) → −DWH partno-фильтр (~22.7s) → −вливание post-скриптов (~13s). Не закоммичено §4-§5 (commit по явной команде).
+
+### 6. E2E-приёмка оптимизации на последней дате DWH (2026-06-21)
+DWH-витрина теперь содержит daily-снимки (max report_date=2026-06-21, 202 216 строк). Полная программа через `dwh_batch_sim_gate.py --dates 2026-06-21`: flight_program clone → extract → sim → invariants. Результат **PASS** за **42.13s** (тёплый RTC-кэш):
+- Extract (`--step all`, оптимизированный путь): program_ac=174, status_overhaul=58, DWH 13 677 (серверный partno-фильтр) → heli_pandas 11 480, enrich in-memory, `OPS=173, planner_status_0=0`.
+- Sim (`orchestrator_limiter_v8`): `simulate()` 3.63s, витрина `sim_masterv2_v9_daily`=43 800; `ops=target` Mi-8 10/10, Mi-17 121/121.
+- Invariants `run_all.py`: **15/15 PASS** (INV-1..12 + TEMP-1/4/5).
+
+**Разбивка E2E 42.13s (точные замеры):** extract `--step all` ~17.4s + sim-обёртка 13.74s (из них GPU-ядро 3.63s; ~4.6s старт процесса + ~3.5s построение FLAME-модели + ~1.8s CH-export) + validation 11s.
+
+**Env-фикс (runtime):** `.env` ждёт CA-сертификат DWH по `/tmp/yc_root_ca.pem`; после перезагрузки `/tmp` очищается → восстановлен `cp config/certs/yandex_cloud_RootCA.pem /tmp/yc_root_ca.pem`. Кода/`.env` не трогали; при следующей перезагрузке повторить.
+
+### 7. Validation single-process (11s → 8.1s)
+`code/validation/run_all.py` запускал 15 проверок (12 INV + 3 TEMP) каждую отдельным subprocess'ом. Рефактор (чисто структурный): вынесены чистые `run(client, ...) -> bool`, standalone CLI каждого скрипта сохранён; `run_all.py` создаёт один CH-клиент и вызывает 15 функций in-process. Формат вывода (SUMMARY/PASS/TOTAL) сохранён дословно (парсится batch'ем).
+- Вердикты bit-identical эталону `output/validation_baseline_20260621.txt`: **15/15 PASS** (независимо подтверждено diff'ом).
+- Тайминг: 11s → **8.11s** (~3s). Остаток ~8s — исполнение SQL инвариантов в ClickHouse (не overhead процессов); дальнейшее ускорение = правка SQL инвариантов (sensitive, требует согласования).
+
+**Файлы §7:** `code/validation/run_all.py` + 15 скриптов `code/validation/{inv1..inv12, temp1, temp4, temp5}_*.py`. Не закоммичено.
 
 ## 2026-06-21 — DWH-загрузка по выбранной дате, sim-gate 2026-06-20, экспорт ремонтов агрегатов
 

@@ -59,22 +59,16 @@ def format_table(headers, rows):
     return [header_line, sep_line] + body_lines
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="INV-10: turnover balance")
-    parser.add_argument("--version-id", required=True, type=int)
-    parser.add_argument("--version-date", type=int, default=None)
-    parser.add_argument("--table", default="sim_masterv2_v9")
-    args = parser.parse_args()
-    table = validate_table_name(args.table)
-    client = get_client()
+def run(client, version_id: int, version_date=None, table: str = "sim_masterv2_v9") -> bool:
+    table = validate_table_name(table)
 
     vd_filter = ""
     vd_filter_m = ""
-    params = {"vid": args.version_id}
-    if args.version_date is not None:
+    params = {"vid": version_id}
+    if version_date is not None:
         vd_filter = " AND version_date = %(vdate)s"
         vd_filter_m = " AND m.version_date = %(vdate)s"
-        params["vdate"] = args.version_date
+        params["vdate"] = version_date
 
     minmax_query = f"""
     SELECT version_date, min(day_u16) AS min_day, max(day_u16) AS max_day
@@ -253,7 +247,7 @@ def main() -> int:
     if not has_data:
         details.append(
             "no rows for filters: version_id=%s, version_date=%s, group_by IN (1,2)"
-            % (args.version_id, args.version_date if args.version_date else "ANY")
+            % (version_id, version_date if version_date else "ANY")
         )
     details.append("day ranges:")
     if day_ranges:
@@ -289,6 +283,17 @@ def main() -> int:
 
     passed = violations == 0 and illegal == 0
     print_result("INV-10 turnover balance", passed, details)
+    return passed
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="INV-10: turnover balance")
+    parser.add_argument("--version-id", required=True, type=int)
+    parser.add_argument("--version-date", type=int, default=None)
+    parser.add_argument("--table", default="sim_masterv2_v9")
+    args = parser.parse_args()
+    client = get_client()
+    passed = run(client, args.version_id, args.version_date, args.table)
     return 0 if passed else 1
 
 

@@ -31,22 +31,20 @@ def print_result(name: str, passed: bool, details) -> None:
     print("=" * 80)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="TEMP-1: repair duration")
-    parser.add_argument("--version-id", required=True, type=int)
-    parser.add_argument("--version-date", type=int, default=None)
-    parser.add_argument("--table", default="sim_masterv2_v9")
-    parser.add_argument("--tolerance", type=int, default=15,
-                        help="Допуск в днях для adaptive steps (default=15)")
-    args = parser.parse_args()
-    table = validate_table_name(args.table)
-    client = get_client()
+def run(
+    client,
+    version_id: int,
+    version_date=None,
+    table: str = "sim_masterv2_v9",
+    tolerance: int = 15,
+) -> bool:
+    table = validate_table_name(table)
 
     vd_filter = ""
-    params = {"vid": args.version_id}
-    if args.version_date is not None:
+    params = {"vid": version_id}
+    if version_date is not None:
         vd_filter = " AND version_date = %(vdate)s"
-        params["vdate"] = args.version_date
+        params["vdate"] = version_date
 
     # 1) min_day
     min_day_query = f"""
@@ -58,11 +56,11 @@ def main() -> int:
     min_day = client.execute(min_day_query, params)[0][0]
     if min_day is None:
         details = [
-            f"tolerance={args.tolerance} days",
+            f"tolerance={tolerance} days",
             "no_data=1 (min_day is NULL)",
         ]
         print_result("TEMP-1 repair duration", True, details)
-        return 0
+        return True
 
     # 2) Day0 repair agents: ещё в ремонте на min_day (pre_status=4 AND status=4)
     #    Агенты с pre_status=4, status!=4 уже вышли на day 0 — пропускаем
@@ -96,7 +94,7 @@ def main() -> int:
     all_exits = client.execute(all_exits_query, params)
 
     # 4) Классификация выходов
-    tolerance = int(args.tolerance)
+    tolerance = int(tolerance)
     day0_agents = len(day0_remaining)
     day0_exits = 0
     day0_violations = 0
@@ -149,6 +147,25 @@ def main() -> int:
 
     passed = violations == 0
     print_result("TEMP-1 repair duration", passed, details)
+    return passed
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="TEMP-1: repair duration")
+    parser.add_argument("--version-id", required=True, type=int)
+    parser.add_argument("--version-date", type=int, default=None)
+    parser.add_argument("--table", default="sim_masterv2_v9")
+    parser.add_argument("--tolerance", type=int, default=15,
+                        help="Допуск в днях для adaptive steps (default=15)")
+    args = parser.parse_args()
+    client = get_client()
+    passed = run(
+        client,
+        args.version_id,
+        args.version_date,
+        args.table,
+        args.tolerance,
+    )
     return 0 if passed else 1
 
 

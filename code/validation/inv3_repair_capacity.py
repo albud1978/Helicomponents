@@ -24,37 +24,20 @@ def print_result(name: str, passed: bool, details) -> None:
     print("=" * 80)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="INV-3: одновременно в ремонте <= repair_quota"
-    )
-    parser.add_argument("--version-id", required=True, type=int, help="version_id")
-    parser.add_argument(
-        "--version-date",
-        type=int,
-        default=None,
-        help="version_date (YYYYMMDD) для фильтрации",
-    )
-    parser.add_argument(
-        "--table",
-        default="sim_repairline_v9",
-        help="Таблица ClickHouse (по умолчанию: sim_repairline_v9)",
-    )
-    parser.add_argument(
-        "--repair-quota",
-        type=int,
-        default=18,
-        help="Лимит ремонтов (по умолчанию: 18)",
-    )
-    args = parser.parse_args()
-    table = validate_table_name(args.table)
-    client = get_client()
+def run(
+    client,
+    version_id: int,
+    version_date=None,
+    table: str = "sim_repairline_v9",
+    repair_quota: int = 18,
+) -> bool:
+    table = validate_table_name(table)
 
     vd_filter = ""
-    params = {"vid": args.version_id, "quota": args.repair_quota}
-    if args.version_date is not None:
+    params = {"vid": version_id, "quota": repair_quota}
+    if version_date is not None:
         vd_filter = " AND version_date = %(vdate)s"
-        params["vdate"] = args.version_date
+        params["vdate"] = version_date
 
     # aircraft_number в lookback-only экспорте не является признаком занятости линии
     busy_expr = "repair_time > 0 AND free_days < repair_time"
@@ -84,7 +67,7 @@ def main() -> int:
     """
     violations = client.execute(violations_query, params)[0][0]
     details = [
-        f"repair_quota={args.repair_quota}",
+        f"repair_quota={repair_quota}",
         f"max_concurrent_repair={max_concurrent}",
         f"violations={violations}",
     ]
@@ -109,6 +92,40 @@ def main() -> int:
 
     passed = violations == 0
     print_result("INV-3 repair capacity", passed, details)
+    return passed
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="INV-3: одновременно в ремонте <= repair_quota"
+    )
+    parser.add_argument("--version-id", required=True, type=int, help="version_id")
+    parser.add_argument(
+        "--version-date",
+        type=int,
+        default=None,
+        help="version_date (YYYYMMDD) для фильтрации",
+    )
+    parser.add_argument(
+        "--table",
+        default="sim_repairline_v9",
+        help="Таблица ClickHouse (по умолчанию: sim_repairline_v9)",
+    )
+    parser.add_argument(
+        "--repair-quota",
+        type=int,
+        default=18,
+        help="Лимит ремонтов (по умолчанию: 18)",
+    )
+    args = parser.parse_args()
+    client = get_client()
+    passed = run(
+        client,
+        args.version_id,
+        args.version_date,
+        args.table,
+        args.repair_quota,
+    )
     return 0 if passed else 1
 
 
