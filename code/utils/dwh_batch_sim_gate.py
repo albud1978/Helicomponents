@@ -73,17 +73,9 @@ def ensure_load(vd: str, vi: int, log: Path) -> None:
         return
 
     hp = _count(client, "heli_pandas", vd, vi)
-    hr = _count(client, "heli_raw", vd, vi)
     pac = _count(client, "program_ac", vd, vi)
 
     loader = [sys.executable, "code/utils/dwh_loader.py", "--report-date", vd, "--version-id", str(vi)]
-
-    if hp == 0 and hr > 0:
-        client.execute(
-            "DELETE FROM heli_raw WHERE version_date=toDate(%(vd)s) AND version_id=%(vi)s",
-            {"vd": vd, "vi": vi},
-        )
-        print(f"  cleaned orphan heli_raw for {vd}")
 
     if pac == 0:
         steps = ["--step", "all"]

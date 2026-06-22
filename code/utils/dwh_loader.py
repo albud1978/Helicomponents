@@ -31,7 +31,6 @@ from extract.status_overhaul_loader import (
 )
 from dwh_post_enrichment import run_post_enrichment
 
-RAW_COLS = ["partno","serialno","ac_typ","location","mfg_date","removal_date","target_date","condition","owner","lease_restricted","oh","oh_threshold","ll","sne","ppr","version_date","version_id","partseqno_i","psn","address_i","ac_type_i","oh_at_date","shop_visit_counter"]
 PANDAS_COLS = ["partno","serialno","ac_typ","location","mfg_date","removal_date","target_date","condition","owner","lease_restricted","oh","oh_threshold","ll","sne","ppr","version_date","version_id","partseqno_i","psn","address_i","ac_type_i","status_id","repair_days","repair_time","aircraft_number","ac_type_mask","group_by"]
 
 def _fail(msg): print(f"ERROR: {msg}", file=sys.stderr); raise SystemExit(1)
@@ -137,29 +136,35 @@ def _batch_insert(ch, df, table, desc, batch=50000):
     print(f"  {table}: {total:,} inserted ({desc})")
     return total
 
-def load(ch, raw, pandas, vd, vi, dry=False, skip_existing=False):
-    s = {"raw": len(raw), "pandas": len(pandas), "ri": 0, "pi": 0}
-    if dry: return s
+def _delete_heli_pandas_slice(ch, vd, vi):
+    ch.execute(
+        "DELETE FROM heli_pandas WHERE version_date = %(vd)s AND version_id = %(vi)s",
+        {"vd": vd, "vi": vi},
+    )
+
+
+def load(ch, pandas, vd, vi, dry=False, skip_existing=False, replace_slice=False):
+    """Insert filtered heli_pandas staging slice (DWH path does not write heli_raw)."""
+    s = {"pandas": len(pandas), "pandas_inserted": 0}
+    if dry:
+        return s
     create_tables(ch)
-    raw_existing = _count_rows(ch, "heli_raw", vd, vi)
     pandas_existing = _count_rows(ch, "heli_pandas", vd, vi)
-    if raw_existing or pandas_existing:
-        if skip_existing and raw_existing > 0 and pandas_existing > 0:
-            print(
-                f"  heli_raw: skip existing {raw_existing:,}; "
-                f"heli_pandas: skip existing {pandas_existing:,}"
-            )
-            s["ri"] = 0
-            s["pi"] = 0
+    if replace_slice and pandas_existing > 0:
+        print(f"  heli_pandas: replace slice ({pandas_existing:,} rows deleted)")
+        _delete_heli_pandas_slice(ch, vd, vi)
+        pandas_existing = 0
+    if pandas_existing:
+        if skip_existing:
+            print(f"  heli_pandas: skip existing {pandas_existing:,}")
             return s
         _fail(
-            "heli_* target version already exists "
-            f"(heli_raw={raw_existing}, heli_pandas={pandas_existing})"
+            "heli_pandas target version already exists "
+            f"({pandas_existing:,} rows). Use --replace-slice to reload."
         )
-    s["ri"] = _batch_insert(ch, raw, "heli_raw", "DWH raw")
-    s["pi"] = _batch_insert(ch, pandas, "heli_pandas", "DWH staging")
-    if s["ri"] != len(raw): _fail(f"raw: inserted {s['ri']}, expected {len(raw)}")
-    if s["pi"] != len(pandas): _fail(f"pandas: inserted {s['pi']}, expected {len(pandas)}")
+    s["pandas_inserted"] = _batch_insert(ch, pandas, "heli_pandas", "DWH staging")
+    if s["pandas_inserted"] != len(pandas):
+        _fail(f"heli_pandas: inserted {s['pandas_inserted']}, expected {len(pandas)}")
     return s
 
 
@@ -243,6 +248,11 @@ def main():
     )
     p.add_argument("--skip-existing", action="store_true")
     p.add_argument(
+        "--replace-slice",
+        action="store_true",
+        help="DELETE heli_pandas for version_date/version_id before status_components insert",
+    )
+    p.add_argument(
         "--no-enrich",
         action="store_true",
         help="Не запускать post-enrichment после загрузки status_components",
@@ -260,6 +270,8 @@ def main():
     print(f"Steps: {', '.join(steps)}")
     if a.skip_existing:
         print("Mode: skip existing")
+    if a.replace_slice:
+        print("Mode: replace heli_pandas slice")
     if a.dry_run:
         print("Mode: dry-run")
 
@@ -305,19 +317,22 @@ def main():
         print(f"   DWH: {len(src):,} rows")
         md = get_md_partnos(ch)
         print(f"   md_partnos: {len(md)}")
-        raw = prepare_data(src.copy(), vd, version_id=vi, table_name="heli_raw")
-        raw = _align(raw, RAW_COLS)
-        raw = _norm_dates(raw)
         pandas = enrich(src, vd, vi, ch, md)
         pandas = _norm_dates(pandas)
-        print(f"   raw: {len(raw):,}  pandas: {len(pandas):,}")
-        sc = load(ch, raw, pandas, vd, vi, dry=a.dry_run, skip_existing=a.skip_existing)
+        print(f"   source: {len(src):,}  pandas: {len(pandas):,}  (heli_raw not written)")
+        sc = load(
+            ch,
+            pandas,
+            vd,
+            vi,
+            dry=a.dry_run,
+            skip_existing=a.skip_existing,
+            replace_slice=a.replace_slice,
+        )
         summary["status_components"] = {
             "source": len(src),
-            "raw": len(raw),
             "pandas": len(pandas),
-            "raw_inserted": sc["ri"],
-            "pandas_inserted": sc["pi"],
+            "pandas_inserted": sc["pandas_inserted"],
         }
 
     if "enrich" in steps:

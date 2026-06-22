@@ -131,24 +131,38 @@ class RepairDaysCalculator:
             )
             return
 
-        self.client.execute("SET mutations_sync = 1")
-        for partseqno_i, repair_time in rows:
-            self.client.execute(
-                """
-                ALTER TABLE heli_pandas
-                UPDATE repair_time = %(repair_time)s
-                WHERE version_date = %(version_date)s
-                  AND version_id = %(version_id)s
-                  AND toUInt32(ifNull(partseqno_i, 0)) = %(partseqno_i)s
-                """,
-                {
-                    "repair_time": repair_time,
-                    "version_date": self.version_date,
-                    "version_id": self.version_id,
-                    "partseqno_i": partseqno_i,
-                },
+        params = {"version_date": self.version_date, "version_id": self.version_id}
+        cases = []
+        partseqno_params = []
+        for idx, (partseqno_i, repair_time) in enumerate(rows):
+            part_key = f"partseqno_i_{idx}"
+            repair_time_key = f"repair_time_{idx}"
+            params[part_key] = int(partseqno_i)
+            params[repair_time_key] = int(repair_time)
+            cases.append(
+                f"toUInt32(ifNull(partseqno_i, 0)) = %({part_key})s, "
+                f"toUInt16(%({repair_time_key})s)"
             )
-        self.logger.info(f"✅ Стандартный repair_time заполнен для {len(rows)} partseqno_i")
+            partseqno_params.append(f"%({part_key})s")
+
+        repair_time_expr = "multiIf(\n                    "
+        repair_time_expr += ",\n                    ".join(cases)
+        repair_time_expr += ",\n                    repair_time\n                )"
+
+        self.client.execute("SET mutations_sync = 1")
+        self.client.execute(
+            f"""
+            ALTER TABLE heli_pandas
+            UPDATE repair_time = {repair_time_expr}
+            WHERE version_date = %(version_date)s
+              AND version_id = %(version_id)s
+              AND toUInt32(ifNull(partseqno_i, 0)) IN ({", ".join(partseqno_params)})
+            """,
+            params,
+        )
+        self.logger.info(
+            f"✅ Стандартный repair_time заполнен для {len(rows)} partseqno_i одной мутацией"
+        )
     
     def get_repair_aircraft(self):
         """Получает day-0 планеры в ремонте (status_id=4, group_by IN (1,2))."""
@@ -295,44 +309,69 @@ class RepairDaysCalculator:
             self.logger.info("ℹ️ Нет обновлений для применения")
             return True
 
-        updated_count = 0
-        self.client.execute("SET mutations_sync = 1")
+        params = {"version_date": self.version_date, "version_id": self.version_id}
+        repair_days_cases = []
+        repair_time_cases = []
+        where_conditions = []
 
-        for update in updates:
-            serialno = update['serialno']
-            repair_days = update['repair_days']
-            repair_time = update['repair_time']
+        for idx, update in enumerate(updates):
+            serialno_key = f"serialno_{idx}"
+            repair_days_key = f"repair_days_{idx}"
+            repair_time_key = f"repair_time_{idx}"
+            partseqno_key = f"partseqno_i_{idx}"
+            group_by_key = f"group_by_{idx}"
+            target_date_key = f"target_date_{idx}"
 
-            query = """
-            ALTER TABLE heli_pandas
-            UPDATE
-                repair_days = %(repair_days)s,
-                repair_time = %(repair_time)s
-            WHERE serialno = %(serialno)s
-                AND version_date = %(version_date)s
-                AND version_id = %(version_id)s
-                AND toUInt32(ifNull(partseqno_i, 0)) = %(partseqno_i)s
-                AND toUInt32(ifNull(group_by, 0)) = %(group_by)s
-                AND status_id = 4
-                AND target_date = %(target_date)s
-            """
-            self.client.execute(query, {
-                "repair_days": repair_days,
-                "repair_time": repair_time,
-                "serialno": serialno,
-                "version_date": update['version_date'],
-                "version_id": update['version_id'],
-                "partseqno_i": update['partseqno_i'],
-                "group_by": update['group_by'],
-                "target_date": update['target_date'],
-            })
+            params[serialno_key] = update["serialno"]
+            params[repair_days_key] = int(update["repair_days"])
+            params[repair_time_key] = int(update["repair_time"])
+            params[partseqno_key] = int(update["partseqno_i"])
+            params[group_by_key] = int(update["group_by"])
+            params[target_date_key] = update["target_date"]
 
-            updated_count += 1
+            condition = (
+                f"serialno = %({serialno_key})s "
+                f"AND toUInt32(ifNull(partseqno_i, 0)) = %({partseqno_key})s "
+                f"AND toUInt32(ifNull(group_by, 0)) = %({group_by_key})s "
+                f"AND target_date = %({target_date_key})s"
+            )
+            repair_days_cases.append(
+                f"{condition}, toUInt16(%({repair_days_key})s)"
+            )
+            repair_time_cases.append(
+                f"{condition}, toUInt16(%({repair_time_key})s)"
+            )
+            where_conditions.append(f"({condition})")
             self.logger.info(
-                f"   ✅ ВС {serialno}: repair_days={repair_days}, repair_time={repair_time}"
+                f"   ✅ ВС {update['serialno']}: "
+                f"repair_days={update['repair_days']}, repair_time={update['repair_time']}"
             )
 
-        self.logger.info(f"✅ Обновлено {updated_count} записей с repair_days/repair_time")
+        repair_days_expr = "multiIf(\n                    "
+        repair_days_expr += ",\n                    ".join(repair_days_cases)
+        repair_days_expr += ",\n                    repair_days\n                )"
+        repair_time_expr = "multiIf(\n                    "
+        repair_time_expr += ",\n                    ".join(repair_time_cases)
+        repair_time_expr += ",\n                    repair_time\n                )"
+
+        self.client.execute("SET mutations_sync = 1")
+        self.client.execute(
+            f"""
+            ALTER TABLE heli_pandas
+            UPDATE
+                repair_days = {repair_days_expr},
+                repair_time = {repair_time_expr}
+            WHERE version_date = %(version_date)s
+              AND version_id = %(version_id)s
+              AND toUInt8(ifNull(status_id, 0)) = 4
+              AND ({" OR ".join(where_conditions)})
+            """,
+            params,
+        )
+
+        self.logger.info(
+            f"✅ Обновлено {len(updates)} записей с repair_days/repair_time одной мутацией"
+        )
         return True
     
     def run(self):

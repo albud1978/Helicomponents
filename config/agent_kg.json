@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-21T07:57:48Z",
+    "updated_at": "2026-06-22T17:48:24Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2630,6 +2630,48 @@
       },
       "created_at": "2026-06-21T05:19:08Z",
       "updated_at": "2026-06-21T05:23:00Z"
+    },
+    {
+      "workflow_id": "W_session_20260622T162330Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/utils/dwh_loader.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 54000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-22T17:48:24Z"
+      },
+      "created_at": "2026-06-22T16:23:30Z",
+      "updated_at": "2026-06-22T17:48:24Z"
+    },
+    {
+      "workflow_id": "W_session_20260622T174407Z",
+      "goal": "implicit session workflow (auto-bootstrap on edit of code/extract/repair_days_calculator.py)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-22T17:44:07Z"
+      },
+      "created_at": "2026-06-22T17:44:07Z",
+      "updated_at": "2026-06-22T17:44:07Z"
     }
   ],
   "handoffs": [
@@ -17019,6 +17061,47 @@
         "est_tokens": 12000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_session_20260622T162330Z_coder-general_206235f1",
+      "workflow_id": "W_session_20260622T162330Z",
+      "agent": "coder-general",
+      "user_goal": "оптимизация скорости DWH extract: заменить mutation-loop на bulk-механизм в repair_days_calculator.py и heli_pandas_repair_status.py с bit-identical проверкой 2026-06-20 v1",
+      "changes": "code/extract/repair_days_calculator.py: заменены циклы ALTER UPDATE по partseqno_i и day-0 planers на параметризованные bulk ALTER UPDATE с multiIf; сохранены CLI, формулы, group_by-фильтр planers IN (1,2), изменяемые колонки repair_time/repair_days. code/extract/heli_pandas_repair_status.py: future repair_days больше не обновляется циклом по serialno; JOIN md_components вынесен в mapping partseqno_i->repair_time с fail-fast на неоднозначный repair_time и одним bulk ALTER UPDATE; past-target status mutations оставлены без изменения.",
+      "facts": "",
+      "assumptions": "Assumption: user-provided before timings (~13.90s and ~13.95s) are accepted as baseline before values. Risks if false: before timing would need reproduction from pre-change revision in a separate worktree, not done to avoid reverting local edits. Assumption: preserving existing heli_pandas_repair_status None repair_time -> 0 semantics is required by 'semantics НЕ меняется'. Risks if false: a separate approved semantic hardening would be needed.",
+      "evidence": "Facts: Read SuccessCriteria before coding; read clickhouse-v9-guard skill, config/capsules_manifest.json, docs/etl_extract_capsule.md, target scripts, dwh_post_enrichment.py, baseline output/enrich_baseline_20260620.txt. Agent KG phase_start written: ctx_W_session_20260622T162330Z_phase_start_b79c641c. py_compile PASS for both changed scripts. ReadLints: no linter errors. Full run PASS: source config/load_env.sh; export DWH_CLICKHOUSE_CA_CERT=config/certs/yandex_cloud_RootCA.pem; /usr/bin/time -v .venv/bin/python code/utils/dwh_loader.py --report-date 2026-06-20 --version-id 1 --step status_components --replace-slice exit 0; final line Enrichment done: OPS=173, planner_status_0=0; full wall 24.23s. After timing in correct post-order: heli_pandas_repair_status.py 2.55s wall vs baseline provided by user ~13.90s; repair_days_calculator.py 2.12s wall vs baseline provided by user ~13.95s. SQL validation PASS against output/enrich_baseline_20260620.txt: ClickHouse 24.10.1.2812; required schema columns present with types version_date Date, version_id UInt8, group_by UInt8, status_id UInt8, repair_time UInt16, repair_days Nullable(UInt16), aircraft_number UInt32, serialno Nullable(String), target_date Nullable(Date); status_distribution match; checksums match (11480, 40742, 1092327, 5957, 1923, 291); OPS/planner_zero match (173,0); 75 status=4 repair-board rows match post-line by serialno.\nEvidence: Full run exit 0, wall 24.23s; isolated after timings: heli_pandas_repair_status.py 2.55s, repair_days_calculator.py 2.12s, combined 4.67s vs before ~27.85s; validation output: VALIDATION_PASS bit_identical_to_enrich_baseline_20260620 with checks all True.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_session_20260622T162330Z:20260622T174824Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Medium: runtime DWH/extract logic changed in code/extract with ClickHouse mutations and user-visible dataset correctness/performance impact; no SSoT/config transitions/invariants touched.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "Replace high-cardinality synchronous mutation loops in two heli_pandas enrichment scripts with version-scoped bulk ALTER UPDATE while preserving formulas and CLI; verify 2026-06-20 v1 bit-identical to baseline.",
+      "evidence_pack": "Facts: Read SuccessCriteria before coding; read clickhouse-v9-guard skill, config/capsules_manifest.json, docs/etl_extract_capsule.md, target scripts, dwh_post_enrichment.py, baseline output/enrich_baseline_20260620.txt. Agent KG phase_start written: ctx_W_session_20260622T162330Z_phase_start_b79c641c. py_compile PASS for both changed scripts. ReadLints: no linter errors. Full run PASS: source config/load_env.sh; export DWH_CLICKHOUSE_CA_CERT=config/certs/yandex_cloud_RootCA.pem; /usr/bin/time -v .venv/bin/python code/utils/dwh_loader.py --report-date 2026-06-20 --version-id 1 --step status_components --replace-slice exit 0; final line Enrichment done: OPS=173, planner_status_0=0; full wall 24.23s. After timing in correct post-order: heli_pandas_repair_status.py 2.55s wall vs baseline provided by user ~13.90s; repair_days_calculator.py 2.12s wall vs baseline provided by user ~13.95s. SQL validation PASS against output/enrich_baseline_20260620.txt: ClickHouse 24.10.1.2812; required schema columns present with types version_date Date, version_id UInt8, group_by UInt8, status_id UInt8, repair_time UInt16, repair_days Nullable(UInt16), aircraft_number UInt32, serialno Nullable(String), target_date Nullable(Date); status_distribution match; checksums match (11480, 40742, 1092327, 5957, 1923, 291); OPS/planner_zero match (173,0); 75 status=4 repair-board rows match post-line by serialno.\nEvidence: Full run exit 0, wall 24.23s; isolated after timings: heli_pandas_repair_status.py 2.55s, repair_days_calculator.py 2.12s, combined 4.67s vs before ~27.85s; validation output: VALIDATION_PASS bit_identical_to_enrich_baseline_20260620 with checks all True.",
+      "success_criteria": "script: .venv/bin/python code/utils/dwh_loader.py --report-date 2026-06-20 --version-id 1 --step status_components --replace-slice exits 0 and prints Enrichment done: OPS=173, planner_status_0=0; SQL: status distribution/checksums/75 repair-board rows equal output/enrich_baseline_20260620.txt; numeric: two changed scripts wall-clock materially below ~28s combined.",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=py_compile; ReadLints; dwh_loader full run; SQL validation; timing run; approval_ref=N/A",
+      "risks": "1) multiIf query length scales with distinct partseqno_i and active planers; current 2026-06-20 v1 mapping is small (76 partseqno_i, 3 planers), but extremely larger future slices could need replace-slice strategy. 2) Existing behavior of treating missing md repair_time as 0 in heli_pandas_repair_status is preserved, not hardened. 3) Before timing was taken from user-provided baseline, not re-measured from pre-change code.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No domain graph/SSoT model change; only DWH extract write mechanism optimized.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-22T17:48:24Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.5-high",
+        "est_tokens": 54000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -19388,6 +19471,15 @@
       "agent": "orchestrator",
       "created_at": "2026-06-21T07:57:48Z",
       "updated_at": "2026-06-21T07:57:48Z"
+    },
+    {
+      "context_id": "ctx_W_session_20260622T162330Z_phase_start_b79c641c",
+      "workflow_id": "W_session_20260622T162330Z",
+      "context_type": "phase_start",
+      "content": "Start medium-risk DWH extract optimization. UserGoal: replace mutation loops in code/extract/repair_days_calculator.py and code/extract/heli_pandas_repair_status.py with bulk write mechanism; SuccessCriteria: 2026-06-20 v1 status_components replace-slice bit-identical to output/enrich_baseline_20260620.txt and reduced wall-clock.",
+      "agent": "coder-general",
+      "created_at": "2026-06-22T17:42:32Z",
+      "updated_at": "2026-06-22T17:42:32Z"
     }
   ],
   "meta": {

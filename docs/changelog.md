@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-06-22 — Оптимизация скорости DWH extract+load (107s → ~24s)
+
+**Risk:** medium | **Profile:** medium-fast | **Datapoint:** 2026-06-20 v1 | **NextOwner:** orchestrator
+
+**Контекст:** запрос — изучить и ускорить DWH extract (по замерам 105-107s). Профилирование выявило два класса bottleneck'ов.
+
+### 1. Удаление `heli_raw` из DWH-пути (107s → ~51s)
+`heli_raw` — артефакт Excel-пайплайна (полный архив `Status_Components.xlsx`). В DWH-пути это избыточная копия источника (данные уже в Heli-DWH). Убрана запись `heli_raw` из `dwh_loader.py` и связанная orphan-логика из `dwh_batch_sim_gate.py`. Шаг `status_components` сократился ~56s → ~8s. Добавлен `--replace-slice` (атомарная замена среза `(version_date, version_id)`: DELETE+INSERT) — защита от дублей при повторных прогонах.
+
+### 2. Bulk вместо mutation-loop в post-enrichment (~51s → ~24s)
+`repair_days_calculator.py` (~14s) и `heli_pandas_repair_status.py` (~14s) выполняли множество отдельных синхронных `ALTER UPDATE` (`mutations_sync=1`) в циклах (ClickHouse `ALTER UPDATE` не поддерживает JOIN/FROM). Заменено на bulk `ALTER UPDATE ... multiIf(...)` / mapping `partseqno_i → repair_time` + один update. Семантика не менялась.
+- `repair_days_calculator.py`: ~13.95s → 2.12s
+- `heli_pandas_repair_status.py`: ~13.90s → 2.55s
+
+### 3. Верификация bit-identical (orchestrator, независимо)
+Эталон: `output/enrich_baseline_20260620.txt`. После правок полный прогон `dwh_loader.py --step status_components --replace-slice` даёт строго те же значения:
+- Контрольные суммы среза: `count=11480, sum(status_id)=40742, sum(repair_time)=1092327, sum(repair_days)=5957, nonnull_repair_days=1923, distinct_acn=291` — **PASS**
+- Распределение status_id (планеры 1=84/2=173/4=3/6=26; агрегаты 2=5796/3=1838/4=72/6=1666/7=1822) — **PASS**
+- `OPS=173, planner_status_0=0`; 75 бортов status=4 совпали построчно.
+- Итоговый wall-clock полного extract+enrich: **23.68s** (было ~107s).
+
+**Файлы:** `code/utils/dwh_loader.py`, `code/utils/dwh_batch_sim_gate.py`, `code/extract/repair_days_calculator.py`, `code/extract/heli_pandas_repair_status.py`. Не закоммичено (commit по явной команде).
+
 ## 2026-06-21 — DWH-загрузка по выбранной дате, sim-gate 2026-06-20, экспорт ремонтов агрегатов
 
 **Workflow:** `W_dwh_sim_gate_20260620` | **Risk:** low | **Profile:** low | **Branch:** `feature/dwh-bb8`

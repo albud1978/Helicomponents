@@ -196,45 +196,13 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
     client.execute("SET mutations_sync = 1")
     client.execute(query_status, {"version_date": version_date, "version_id": version_id})
     
-    # Теперь рассчитываем repair_days
-    # repair_days = repair_time - days_remaining
-    # days_remaining = target_date - version_date
-    query_repair_days = """
-    ALTER TABLE heli_pandas
-    UPDATE repair_days = toUInt16(
-        greatest(0, 
-            toInt32(ifNull(md.repair_time, 0)) - toInt32(dateDiff('day', %(version_date)s, hp.target_date))
-        )
-    )
+    # ClickHouse ALTER UPDATE не поддерживает JOIN, поэтому переносим JOIN
+    # в compact mapping partseqno_i -> repair_time и применяем его одним UPDATE.
+    candidate_where = """
     WHERE hp.version_date = %(version_date)s
       AND hp.version_id = %(version_id)s
       AND toUInt32(ifNull(hp.group_by, 0)) >= 1
-      AND hp.status_id = 4
-      AND hp.target_date IS NOT NULL
-      AND hp.target_date != toDate('1970-01-01')
-      AND hp.target_date >= %(version_date)s
-      AND hp.serialno IN (
-          SELECT hp2.serialno
-          FROM heli_pandas hp2
-          INNER JOIN md_components md ON hp2.partseqno_i = md.partseqno_i
-          WHERE hp2.version_date = %(version_date)s
-            AND hp2.version_id = %(version_id)s
-            AND toUInt32(ifNull(hp2.group_by, 0)) >= 1
-            AND hp2.status_id = 4
-      )
-    """
-    # К сожалению, ClickHouse не поддерживает JOIN в ALTER UPDATE
-    # Используем другой подход: выбираем данные и обновляем построчно
-    
-    # Получаем список агрегатов для обновления repair_days
-    select_query = """
-    SELECT hp.serialno, hp.target_date, md.repair_time
-    FROM heli_pandas hp
-    LEFT JOIN md_components md ON hp.partseqno_i = md.partseqno_i
-    WHERE hp.version_date = %(version_date)s
-      AND hp.version_id = %(version_id)s
-      AND toUInt32(ifNull(hp.group_by, 0)) >= 1
-      AND hp.status_id = 4
+      AND toUInt8(ifNull(hp.status_id, 0)) = 4
       AND hp.target_date IS NOT NULL
       AND hp.target_date != toDate('1970-01-01')
       AND hp.target_date >= %(version_date)s
@@ -243,35 +211,99 @@ def update_future_to_repair(client, version_date: date, version_id: int) -> int:
           OR ifNull(hp.condition, '') != 'ИСПРАВНЫЙ'
       )
     """
-    result = client.execute(select_query, {"version_date": version_date, "version_id": version_id})
-    
-    updated_count = 0
-    for row in result:
-        serialno, target_date, repair_time = row
-        if repair_time is None:
-            repair_time = 0
-        
-        # days_remaining = target_date - version_date
-        days_remaining = (target_date - version_date).days
-        repair_days = max(0, repair_time - days_remaining)
-        
-        update_query = """
-        ALTER TABLE heli_pandas
-        UPDATE repair_days = %(repair_days)s
-        WHERE version_date = %(version_date)s
-          AND version_id = %(version_id)s
-          AND serialno = %(serialno)s
-          AND status_id = 4
-        """
-        client.execute(update_query, {
-            "version_date": version_date,
-            "version_id": version_id,
-            "serialno": serialno,
-            "repair_days": repair_days
-        })
-        updated_count += 1
-    
-    return updated_count
+
+    params = {"version_date": version_date, "version_id": version_id}
+    candidate_count = int(
+        client.execute(
+            f"""
+            SELECT count()
+            FROM heli_pandas AS hp
+            {candidate_where}
+            """,
+            params,
+        )[0][0]
+    )
+    if candidate_count == 0:
+        return 0
+
+    ambiguous_rows = client.execute(
+        f"""
+        SELECT
+            toUInt32(ifNull(hp.partseqno_i, 0)) AS partseqno_i,
+            groupArrayDistinct(toUInt16(ifNull(md.repair_time, 0))) AS repair_times
+        FROM heli_pandas AS hp
+        LEFT JOIN md_components AS md
+            ON hp.partseqno_i = md.partseqno_i
+        {candidate_where}
+        GROUP BY partseqno_i
+        HAVING length(repair_times) > 1
+        ORDER BY partseqno_i
+        LIMIT 10
+        """,
+        params,
+    )
+    if ambiguous_rows:
+        raise ValueError(
+            "md_components.repair_time неоднозначен для partseqno_i "
+            f"в future repair candidates: {ambiguous_rows}"
+        )
+
+    mapping_rows = client.execute(
+        f"""
+        SELECT
+            toUInt32(ifNull(hp.partseqno_i, 0)) AS partseqno_i,
+            toUInt16(min(ifNull(md.repair_time, 0))) AS repair_time
+        FROM heli_pandas AS hp
+        LEFT JOIN md_components AS md
+            ON hp.partseqno_i = md.partseqno_i
+        {candidate_where}
+        GROUP BY partseqno_i
+        ORDER BY partseqno_i
+        """,
+        params,
+    )
+    if not mapping_rows:
+        raise ValueError("Не найден mapping partseqno_i -> repair_time для future repair candidates")
+
+    cases = []
+    for idx, (partseqno_i, repair_time) in enumerate(mapping_rows):
+        part_key = f"partseqno_i_{idx}"
+        repair_time_key = f"repair_time_{idx}"
+        params[part_key] = int(partseqno_i)
+        params[repair_time_key] = int(repair_time)
+        cases.append(
+            f"toUInt32(ifNull(partseqno_i, 0)) = %({part_key})s, "
+            f"toUInt16(%({repair_time_key})s)"
+        )
+
+    repair_time_expr = "multiIf(\n            "
+    repair_time_expr += ",\n            ".join(cases)
+    repair_time_expr += ",\n            toUInt16(0)\n        )"
+
+    update_query = f"""
+    ALTER TABLE heli_pandas
+    UPDATE repair_days = toUInt16(
+        greatest(
+            0,
+            toInt32({repair_time_expr}) - toInt32(dateDiff('day', toDate(%(version_date)s), target_date))
+        )
+    )
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND toUInt32(ifNull(group_by, 0)) >= 1
+      AND toUInt8(ifNull(status_id, 0)) = 4
+      AND target_date IS NOT NULL
+      AND target_date != toDate('1970-01-01')
+      AND target_date >= %(version_date)s
+      AND (
+          toUInt32(ifNull(group_by, 0)) <= 2
+          OR ifNull(condition, '') != 'ИСПРАВНЫЙ'
+      )
+    """
+    client.execute("SET mutations_sync = 1")
+    client.execute(update_query, params)
+
+    return candidate_count
 
 
 def main() -> int:
