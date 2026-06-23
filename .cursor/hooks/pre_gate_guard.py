@@ -32,6 +32,35 @@ SUCCESS_CRITERIA_VERIFIABLE_RE = re.compile(
     r"acceptance\s*:|manual-check\s*:)",
     re.IGNORECASE,
 )
+RISK_EXCEPTION_RE = re.compile(r"\brisk[_\s-]?exception\s*[:=]\s*\S+", re.IGNORECASE)
+NEGATION_CONTEXT_RE = re.compile(
+    r"(?:\bне\s+(?:трогать|менять|править|затрагивать|выполнять|запускать|использовать)\b|"
+    r"\bзапрещено\s+(?:трогать|менять|править|затрагивать|выполнять|запускать)\b|"
+    r"\b(?:do\s+not|don't|dont)\s+(?:touch|change|modify|run|execute)\b)",
+    re.IGNORECASE,
+)
+HIGH_RISK_MARKERS = (
+    ("code/sim_v2/", re.compile(r"code/sim_v2(?:/|\b)", re.IGNORECASE)),
+    ("config/transitions/", re.compile(r"config/transitions(?:/|\b)", re.IGNORECASE)),
+    ("invariants.json", re.compile(r"\binvariants\.json\b", re.IGNORECASE)),
+    ("make sync-domain-graph", re.compile(r"\bmake\s+sync-domain-graph\b", re.IGNORECASE)),
+    (
+        "production/corporate BI apply",
+        re.compile(
+            r"\b(?:production|corporate)\b.{0,40}\bBI\b.{0,40}\b(?:apply|deploy|clone)\b|"
+            r"\bBI\b.{0,40}\b(?:production|corporate)\b.{0,40}\b(?:apply|deploy|clone)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "удаление объектов проекта",
+        re.compile(
+            r"\bудален(?:ие|ия|ии|ию)?\b.{0,50}\bобъект\w*\s+проекта\b|"
+            r"\bdelete\b.{0,50}\bproject\s+objects?\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
 HANDOFF_ARG_KEYS = ("handoff_to", "handoffTo", "next_owner", "nextOwner")
 ORCHESTRATOR_TARGETS = {"orchestrator", "оркестратор"}
 
@@ -185,6 +214,19 @@ def _verifiable_success_criteria(text: str, tool_input: Dict[str, Any], risk_tie
     return True, ""
 
 
+def _high_risk_escalation_marker(text: str) -> str:
+    """Возвращает high-risk marker, если он не является явным negative-scope упоминанием."""
+    if RISK_EXCEPTION_RE.search(text):
+        return ""
+    for marker, pattern in HIGH_RISK_MARKERS:
+        for match in pattern.finditer(text):
+            context = text[max(0, match.start() - 80) : match.end() + 80]
+            if NEGATION_CONTEXT_RE.search(context):
+                continue
+            return marker
+    return ""
+
+
 def main() -> None:
     raw = sys.stdin.read()
     try:
@@ -237,6 +279,15 @@ def main() -> None:
         return
 
     risk_tier = _extract_risk_tier(combined, tool_input)
+    high_risk_marker = _high_risk_escalation_marker(combined)
+    if high_risk_marker and risk_tier != "high":
+        _deny(
+            "Pre-gate: dispatch subagent заблокирован. "
+            f"Найден high-risk marker `{high_risk_marker}` при risk-tier `{risk_tier or 'missing'}`. "
+            "Укажите `risk-tier: high` либо добавьте явное `risk-exception: <reason>` для осознанного исключения."
+        )
+        return
+
     if risk_tier in {"medium", "high"}:
         ok, reason = _verifiable_success_criteria(combined, tool_input, risk_tier)
         if not ok:

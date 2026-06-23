@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-23T02:42:28Z",
+    "updated_at": "2026-06-23T03:02:51Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -2735,6 +2735,27 @@
       },
       "created_at": "2026-06-22T19:12:26Z",
       "updated_at": "2026-06-23T02:42:28Z"
+    },
+    {
+      "workflow_id": "W_governance_hardening_20260623",
+      "goal": "Governance hardening: auto-bootstrap triage flag (A), pre_gate escalation-guard (B), rules lesson (C), process-insight (D)",
+      "phase": "done",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 40,
+        "max_tokens": 200000,
+        "max_cost": null,
+        "profile": "medium-policy"
+      },
+      "usage": {
+        "cumulative_steps": 3,
+        "cumulative_tokens": 48000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-23T03:02:43Z"
+      },
+      "created_at": "2026-06-23T02:52:42Z",
+      "updated_at": "2026-06-23T03:02:51Z"
     }
   ],
   "handoffs": [
@@ -17657,6 +17678,129 @@
         "est_tokens": 15000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_governance_hardening_20260623_coder-general_aa2a0d5c",
+      "workflow_id": "W_governance_hardening_20260623",
+      "agent": "coder-general",
+      "user_goal": "исправить системные причины пропуска governance-гейтов в мультиагентном workflow. Три правки A+B+C. Минимальный дифф, с тест-кейсами.",
+      "changes": ".cursor/hooks/audit_code_edit.py: auto-bootstrap workflow теперь создаётся как phase=triage, goal содержит [NEEDS_TRIAGE], profile=low сохранён; KG_AUTO_BOOTSTRAP=0/CLI unavailable поведение не менялось.\n.cursor/hooks/pre_gate_guard.py: добавлен escalation-guard для high-risk маркеров после извлечения risk_tier; medium/low deny, high allow; добавлен risk-exception escape hatch и negation-context эвристика.\n.cursor/rules/00_global_always.mdc: в Clarify-before-dispatch добавлен короткий пункт process-first при high-risk escalation.",
+      "facts": "",
+      "assumptions": "Workflow W_governance_hardening_20260623 remains active for smoke payloads. Risks if false: pre_gate smoke would fail before escalation check, but actual run passed.",
+      "evidence": "B-smoke stdin payloads через .cursor/hooks/pre_gate_guard.py:\nb1 high marker code/sim_v2/ + risk-tier medium -> deny PASS; reason includes marker code/sim_v2/ and requires risk-tier high or risk-exception.\nb2 same marker + risk-tier high -> allow PASS.\nb3 config/transitions/** не трогать + medium -> allow PASS (negation context prevents false deny).\nb4 normal medium dispatch without high zones -> allow PASS (regression check).\nb5 high zone mention + risk-exception reason + medium -> allow PASS.\nA-smoke imported audit_code_edit.py with subprocess.run monkeypatch: _bootstrap_session_workflow generated --phase triage and goal containing [NEEDS_TRIAGE] PASS; no real KG pollution.\npy_compile PASS: .cursor/hooks/audit_code_edit.py, .cursor/hooks/pre_gate_guard.py.\nReadLints PASS: no linter errors for .cursor/hooks/audit_code_edit.py, .cursor/hooks/pre_gate_guard.py, .cursor/rules/00_global_always.mdc.\nDiff scope checked: only the 3 requested files changed in this task diff.\nB heuristic choice: marker scan + +/-80 char negation context + explicit risk-exception. This minimizes false positives on real prompts that say 'не трогать config/transitions/**' while still denying unnegated high-risk zones unless risk-tier high or exception is explicit.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_governance_hardening_20260623:2026-06-23T02:57:55Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "governance hook/process semantics; medium-policy profile; modifies Cursor workflow enforcement but not production/runtime SSoT",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Implement A+B+C minimal governance hardening in the three approved files; verify with hook smoke tests, py_compile, ReadLints.",
+      "evidence_pack": "B-smoke stdin payloads через .cursor/hooks/pre_gate_guard.py:\nb1 high marker code/sim_v2/ + risk-tier medium -> deny PASS; reason includes marker code/sim_v2/ and requires risk-tier high or risk-exception.\nb2 same marker + risk-tier high -> allow PASS.\nb3 config/transitions/** не трогать + medium -> allow PASS (negation context prevents false deny).\nb4 normal medium dispatch without high zones -> allow PASS (regression check).\nb5 high zone mention + risk-exception reason + medium -> allow PASS.\nA-smoke imported audit_code_edit.py with subprocess.run monkeypatch: _bootstrap_session_workflow generated --phase triage and goal containing [NEEDS_TRIAGE] PASS; no real KG pollution.\npy_compile PASS: .cursor/hooks/audit_code_edit.py, .cursor/hooks/pre_gate_guard.py.\nReadLints PASS: no linter errors for .cursor/hooks/audit_code_edit.py, .cursor/hooks/pre_gate_guard.py, .cursor/rules/00_global_always.mdc.\nDiff scope checked: only the 3 requested files changed in this task diff.\nB heuristic choice: marker scan + +/-80 char negation context + explicit risk-exception. This minimizes false positives on real prompts that say 'не трогать config/transitions/**' while still denying unnegated high-risk zones unless risk-tier high or exception is explicit.",
+      "success_criteria": "script: B-smoke b1..b5 decisions == deny/allow/allow/allow/allow PASS.\nscript: A-smoke phase=triage and [NEEDS_TRIAGE] marker PASS.\nmanual-check: 00_global_always.mdc contains process-first пункт in existing Clarify-before-dispatch section PASS.\nregression: b4 existing normal medium dispatch allow PASS.\nscript: py_compile two hooks PASS; ReadLints clean PASS.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=governance-compliance pending; evidence_refs=pre_gate B-smoke b1..b5; audit_code_edit A-smoke; py_compile; ReadLints; approval_ref=N/A",
+      "risks": "1) Negation heuristic may miss uncommon phrasing outside current RU/EN patterns; mitigation: risk-exception remains explicit. 2) Existing pre_gate behavior for missing risk_tier outside high-risk markers was intentionally not changed to keep scope minimal.",
+      "next_owner": "orchestrator",
+      "open_questions": "None for coder-general; governance-compliance verdict remains orchestrator step.",
+      "graph_update": "no",
+      "graph_update_reason": "No Domain Graph/SSoT change; only infra hooks and rule text.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-23T02:57:55Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 21000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_governance_hardening_20260623_governance-compliance_154efc0d",
+      "workflow_id": "W_governance_hardening_20260623",
+      "agent": "governance-compliance",
+      "user_goal": "исправить системные причины пропуска governance-гейтов в мультиагентном workflow (governance hardening A+B+C+D)",
+      "changes": "Governance audit verdict: allow_with_notes for A+B+C+D governance hardening. Verified read-only: (A) audit_code_edit.py auto-bootstrap -> phase=triage + [NEEDS_TRIAGE] goal marker, fail-safe preserved (KG_AUTO_BOOTSTRAP gate + None on CLI failure); (B) pre_gate_guard.py escalation-guard denies high-risk markers (code/sim_v2/, config/transitions/, invariants.json, make sync-domain-graph, prod/corp BI, project-object deletion) when risk-tier!=high, with explicit risk-exception: escape hatch + +/-80char negation heuristic; (C) 00_global_always.mdc process-first rule appended to Clarify-before-dispatch (1 line); (D) process_insight context recorded. Scope match OK, no drift, no over-engineering.",
+      "facts": "",
+      "assumptions": "Escape-hatch risk-exception: is prompt-level self-declaration (not KG-anchored human approval). Risks if false: an actor could self-grant exception; mitigated because escalation-guard is defense-in-depth, while 00_global_always rule #3 + ssot_approval_guard still require human approval for actual high-risk apply.",
+      "evidence": "git diff --stat: exactly 3 enforcement files (audit_code_edit.py +6/-4, pre_gate_guard.py +51, 00_global_always.mdc +1) + config/agent_kg.json (governance tracking). SSoT config/transitions/** and invariants.json NOT touched (confirmed git status + Read of pre_gate_guard.py: high-risk paths appear only as regex string markers, not edits). coder-general handoff aa2a0d5c: B-smoke b1 deny / b2 allow / b3 allow / b4 allow / b5 allow PASS; A-smoke phase=triage+[NEEDS_TRIAGE] PASS; py_compile PASS; ReadLints clean. Orchestrator independent pre_gate re-run: b1 deny, b3/b4/b5 allow PASS. Fail-safe integrity verified via Read: escalation block at lines 281-289 is fail-secure (deny when high marker + tier<high); KG-unreadable path keeps prior deny behaviour. Human approval: ctx_W_governance_hardening_20260623_approval_request_47a88125 (AskQuestion option abcd).",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_governance_hardening_20260623:2026-06-23T03:05:00Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "self-applicable meta-change to Cursor governance enforcement (hooks audit_code_edit/pre_gate_guard + global rule); medium-policy blast radius; reversible; no production/runtime SSoT touched",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Single governance pass: read-only verify A+B+C+D vs UserGoal; confirm minimal diff + SSoT untouched + fail-safe integrity + SuccessCriteria verifiability + escape-hatch self-applicability; emit one verdict.",
+      "evidence_pack": "git diff --stat: exactly 3 enforcement files (audit_code_edit.py +6/-4, pre_gate_guard.py +51, 00_global_always.mdc +1) + config/agent_kg.json (governance tracking). SSoT config/transitions/** and invariants.json NOT touched (confirmed git status + Read of pre_gate_guard.py: high-risk paths appear only as regex string markers, not edits). coder-general handoff aa2a0d5c: B-smoke b1 deny / b2 allow / b3 allow / b4 allow / b5 allow PASS; A-smoke phase=triage+[NEEDS_TRIAGE] PASS; py_compile PASS; ReadLints clean. Orchestrator independent pre_gate re-run: b1 deny, b3/b4/b5 allow PASS. Fail-safe integrity verified via Read: escalation block at lines 281-289 is fail-secure (deny when high marker + tier<high); KG-unreadable path keeps prior deny behaviour. Human approval: ctx_W_governance_hardening_20260623_approval_request_47a88125 (AskQuestion option abcd).",
+      "success_criteria": "governance: verdict=allow_with_notes; minimal-diff (3 enforcement files, SSoT untouched) + B-smoke/A-smoke PASS + human approval -> workflow may close",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=git_diff_stat;handoff_W_governance_hardening_20260623_coder-general_aa2a0d5c;pre_gate_guard.py:281-289;audit_code_edit.py:123-154;ctx_W_governance_hardening_20260623_process_insight_c222380b; approval_ref=ctx_W_governance_hardening_20260623_approval_request_47a88125",
+      "risks": "1) risk-exception escape hatch is self-declarable at prompt level (defense-in-depth only, not sole gate). 2) negation heuristic (+/-80char) may miss uncommon phrasing outside RU/EN patterns; risk-exception remains explicit fallback. 3) escalation-guard intentionally does not change behaviour for missing risk_tier outside high-risk markers (scope-minimal).",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "c3a9a974c24cf5d0e291d9b9b2442bf520aea2ec05601be12e96c6fc1cf36b33",
+      "created_at": "2026-06-23T03:01:59Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 18000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_governance_hardening_20260623_orchestrator_2e51eac2",
+      "workflow_id": "W_governance_hardening_20260623",
+      "agent": "orchestrator",
+      "user_goal": "в чем причина массовых отклонений от правил; правки A+B+C+D против повторения",
+      "changes": ".cursor/hooks/audit_code_edit.py (A: phase=triage); .cursor/hooks/pre_gate_guard.py (B: escalation-guard + risk-exception escape + negation эвристика); .cursor/rules/00_global_always.mdc (C: process-first пункт); KG process_insight (D)",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: B-smoke b1 deny, b2..b5 allow PASS; A-smoke phase=triage+[NEEDS_TRIAGE] PASS; py_compile+ReadLints clean; orchestrator independent recheck b1 deny/b3/b4/b5 allow PASS; governance allow_with_notes required_gates=pass\nEvidence: manual-check: 3 файла изменены (git diff --stat), SSoT не тронут; script: pre_gate b1..b5 smoke; governance handoff_154efc0d allow_with_notes",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — A+B+C+D напрямую закрывают корневые причины из process_insight, без over-engineering",
+      "process_insights": "Self-applied governance: эту мета-задачу провели по полному протоколу (init+approval+risk-tier+dispatch coder-general+governance+close) как образец корректного цикла",
+      "trace_id": "wf:W_governance_hardening_20260623:2026-06-23T03:05:00Z",
+      "plan_step_id": "O1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "enforcement-hook changes (pre_gate, audit_code_edit) + rules; self-applied governance; blast radius на весь multiagent workflow",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "A: audit_code_edit auto-bootstrap -> triage+[NEEDS_TRIAGE]; B: pre_gate escalation-guard high-risk зоны; C: 00_global_always process-first пункт; D: process_insight в KG",
+      "evidence_pack": "Facts: B-smoke b1 deny, b2..b5 allow PASS; A-smoke phase=triage+[NEEDS_TRIAGE] PASS; py_compile+ReadLints clean; orchestrator independent recheck b1 deny/b3/b4/b5 allow PASS; governance allow_with_notes required_gates=pass\nEvidence: manual-check: 3 файла изменены (git diff --stat), SSoT не тронут; script: pre_gate b1..b5 smoke; governance handoff_154efc0d allow_with_notes",
+      "success_criteria": "script: pre_gate_guard b1=deny b3/b4/b5=allow (independent orchestrator verify PASS); manual-check: 00_global_always process-first пункт добавлен",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=handoff_W_governance_hardening_20260623_governance-compliance_154efc0d;ctx_W_governance_hardening_20260623_approval_request_47a88125; approval_ref=ctx_W_governance_hardening_20260623_approval_request_47a88125",
+      "risks": "risk-exception escape-hatch — prompt-level самодекларация (defense-in-depth, не единственный гейт); negation-эвристика ±80 символов может пропустить редкие формулировки",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "3593641d83510ef03d31d4043bc63d00e2c0c4c14a9ea9eb4c4940a418a20f64",
+      "created_at": "2026-06-23T03:02:43Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 9000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -20098,6 +20242,42 @@
       "agent": "orchestrator",
       "created_at": "2026-06-23T02:42:28Z",
       "updated_at": "2026-06-23T02:42:28Z"
+    },
+    {
+      "context_id": "ctx_W_governance_hardening_20260623_approval_request_47a88125",
+      "workflow_id": "W_governance_hardening_20260623",
+      "context_type": "approval_request",
+      "content": "Human approved scope A+B+C+D via AskQuestion (option abcd) 2026-06-23. A: audit_code_edit auto-bootstrap -> triage flag/no silent low-profile. B: pre_gate_guard escalation-guard for high-risk zones. C: 00_global_always.mdc result-first!=process-first lesson. D: process-insight в KG. RiskTier=medium (enforcement-hook changes), profile=medium-policy.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-23T02:52:42Z",
+      "updated_at": "2026-06-23T02:52:42Z"
+    },
+    {
+      "context_id": "ctx_W_governance_hardening_20260623_phase_start_dc7af188",
+      "workflow_id": "W_governance_hardening_20260623",
+      "context_type": "phase_start",
+      "content": "governance-compliance single-pass start: verify A+B+C+D governance hardening (audit_code_edit triage-flag, pre_gate escalation-guard, 00_global_always process-first rule, KG process_insight). Checks: scope_match, minimal-diff, fail-safe integrity, SuccessCriteria verifiability, anti-overengineering, self-applicability of escape-hatch.",
+      "agent": "governance-compliance",
+      "created_at": "2026-06-23T02:55:08Z",
+      "updated_at": "2026-06-23T03:01:05Z"
+    },
+    {
+      "context_id": "ctx_W_governance_hardening_20260623_process_insight_c222380b",
+      "workflow_id": "W_governance_hardening_20260623",
+      "context_type": "process_insight",
+      "content": "LESSON (DWH extract opt session): result-first вытеснил process-first. Корневые причины: (1) инженерная цель доминировала над процессной; (2) auto-bootstrap создавал low-profile болванку -> ложное ощущение трекинга [fixed: A=triage-flag]; (3) risk-tier не пересобирался при эскалации medium->high (#2b) [fixed: B=pre_gate escalation-guard]; (4) orchestrator сам правил code в начале; (5) диалоговый темп вытеснял pre_gate; (6) pre_close_guard срабатывает только на выходе, mid-session не контролировался [fixed: B переносит контроль на вход]. Норматив: C=00_global_always.mdc process-first пункт. Паттерн системный, не разовый.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-23T02:59:12Z",
+      "updated_at": "2026-06-23T02:59:12Z"
+    },
+    {
+      "context_id": "ctx_W_governance_hardening_20260623_closure_ee9f80eb",
+      "workflow_id": "W_governance_hardening_20260623",
+      "context_type": "closure",
+      "content": "Governance hardening A+B+C+D done: pre_gate escalation-guard + auto-bootstrap triage + rules process-first + KG insight; smoke b1..b5 PASS; governance allow_with_notes required_gates=pass",
+      "agent": "orchestrator",
+      "created_at": "2026-06-23T03:02:51Z",
+      "updated_at": "2026-06-23T03:02:51Z"
     }
   ],
   "meta": {

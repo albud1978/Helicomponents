@@ -3,7 +3,7 @@
 
 Дополнительно (W_kg_enforcement_pack, 2026-05-21): если на момент edit'а
 в Agent KG нет ни одного active workflow (updated_at < BOOTSTRAP_WINDOW_SEC),
-автоматически создаём implicit `W_session_<UTC>` (profile=low, owner=orchestrator).
+автоматически создаём implicit `W_session_<UTC>` (profile=low, phase=triage, owner=orchestrator).
 Цель — гарантировать, что любая мутация имеет workflow-привязку даже если
 оркестратор пропустил init-фазу. Отключается env `KG_AUTO_BOOTSTRAP=0`.
 """
@@ -128,7 +128,7 @@ def _bootstrap_session_workflow(file_path: str, conv_id: str) -> str | None:
         return None
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     wf_id = f"W_session_{ts}"
-    goal = f"implicit session workflow (auto-bootstrap on edit of {file_path})"
+    goal = f"[NEEDS_TRIAGE] implicit session workflow (auto-bootstrap on edit of {file_path})"
     user_goal = f"auto-bootstrap via audit_code_edit hook (conv_id={conv_id})"
     try:
         subprocess.run(
@@ -140,7 +140,7 @@ def _bootstrap_session_workflow(file_path: str, conv_id: str) -> str | None:
                 "--user-goal", user_goal,
                 "--goal", goal,
                 "--owner", "orchestrator",
-                "--phase", "implement",
+                "--phase", "triage",
                 "--profile", "low",
             ],
             cwd=str(REPO_ROOT),
