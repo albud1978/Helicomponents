@@ -2,7 +2,7 @@
 
 ## 2026-06-22 — Оптимизация скорости DWH extract+load (107s → ~24s)
 
-**Risk:** medium | **Profile:** medium-fast | **Datapoint:** 2026-06-20 v1 | **NextOwner:** orchestrator
+**Risk:** medium (§1–4,§7) / **high §5** | **Profile:** medium-fast + high-strict (§5) | **Datapoint:** 2026-06-20 v1 (bit-identical), E2E 2026-06-21 | **Branch:** `feature/dwh-bb8`
 
 **Контекст:** запрос — изучить и ускорить DWH extract (по замерам 105-107s). Профилирование выявило два класса bottleneck'ов.
 
@@ -31,7 +31,7 @@
 
 **Профайлинг остатка (enrich, пофазно):** load_slice 0.96s + planner_cascade 0.76s + replace_slice 1.16s + 7 post-скриптов 12.14s. Следующий резерв — subprocess-overhead 7 post-скриптов (каждый заново стартует Python + импортирует pandas + переподключается к CH; `precheck_runner` = 0 изменений, но 2.16s). Кандидат #2a: in-process вызов вместо subprocess.
 
-**Файл §4:** `code/utils/dwh_loader.py`. Коммит `4dac335b` + последующий.
+**Файл §4:** `code/utils/dwh_loader.py`. Коммит `3a93018b` (вместе с §5).
 
 ### 5. Вливание 7 post-enrichment скриптов в in-memory cascade (enrich ~15s → ~3s)
 **Risk: high (согласовано явно).** 7 post-скриптов выполнялись как отдельные subprocess'ы (~12.1s), где основной вес — overhead каждого старта Python + импорт pandas + переподключение к CH + чтение среза (`precheck_runner`: 0 изменений, но 2.16s). Рефакторинг (SOLID):
@@ -49,7 +49,7 @@
 
 **Файлы §5:** `code/utils/dwh_post_enrichment.py` + 7 скриптов `code/extract/{program_ac_precheck_runner, heli_pandas_component_status, heli_pandas_serviceable_status, heli_pandas_repair_status, heli_pandas_storage_status, repair_days_calculator, heli_pandas_terminal_br_gate}.py`.
 
-**Сводный итог extract+load:** ~107s → ~13s (8× ускорение): −heli_raw (~51s) → −mutation-loops (~24s) → −DWH partno-фильтр (~22.7s) → −вливание post-скриптов (~13s). Не закоммичено §4-§5 (commit по явной команде).
+**Сводный итог extract+load:** ~107s → ~13s (8× ускорение): −heli_raw (~51s) → −mutation-loops (~24s) → −DWH partno-фильтр (~22.7s) → −вливание post-скриптов (~13s). Коммит `3a93018b`.
 
 ### 6. E2E-приёмка оптимизации на последней дате DWH (2026-06-21)
 DWH-витрина теперь содержит daily-снимки (max report_date=2026-06-21, 202 216 строк). Полная программа через `dwh_batch_sim_gate.py --dates 2026-06-21`: flight_program clone → extract → sim → invariants. Результат **PASS** за **42.13s** (тёплый RTC-кэш):
@@ -57,7 +57,7 @@ DWH-витрина теперь содержит daily-снимки (max report_
 - Sim (`orchestrator_limiter_v8`): `simulate()` 3.63s, витрина `sim_masterv2_v9_daily`=43 800; `ops=target` Mi-8 10/10, Mi-17 121/121.
 - Invariants `run_all.py`: **15/15 PASS** (INV-1..12 + TEMP-1/4/5).
 
-**Разбивка E2E 42.13s (точные замеры):** extract `--step all` ~17.4s + sim-обёртка 13.74s (из них GPU-ядро 3.63s; ~4.6s старт процесса + ~3.5s построение FLAME-модели + ~1.8s CH-export) + validation 11s.
+**Разбивка E2E 42.13s (замер до §7):** extract `--step all` ~17.4s + sim-обёртка 13.74s (из них GPU-ядро 3.63s; ~4.6s старт процесса + ~3.5s построение FLAME-модели + ~1.8s CH-export) + validation ~11s (subprocess harness). Финальный прогон после `5ccb1527` (`output/dwh_sim_batch_final_20260621/`): sim+validation **15/15 PASS** (GPU ~3.15s в логе); суммарный wall E2E после §7 не перемерен.
 
 **Env-фикс (runtime):** `.env` ждёт CA-сертификат DWH по `/tmp/yc_root_ca.pem`; после перезагрузки `/tmp` очищается → восстановлен `cp config/certs/yandex_cloud_RootCA.pem /tmp/yc_root_ca.pem`. Кода/`.env` не трогали; при следующей перезагрузке повторить.
 
@@ -66,7 +66,12 @@ DWH-витрина теперь содержит daily-снимки (max report_
 - Вердикты bit-identical эталону `output/validation_baseline_20260621.txt`: **15/15 PASS** (независимо подтверждено diff'ом).
 - Тайминг: 11s → **8.11s** (~3s). Остаток ~8s — исполнение SQL инвариантов в ClickHouse (не overhead процессов); дальнейшее ускорение = правка SQL инвариантов (sensitive, требует согласования).
 
-**Файлы §7:** `code/validation/run_all.py` + 15 скриптов `code/validation/{inv1..inv12, temp1, temp4, temp5}_*.py`. Не закоммичено.
+**Файлы §7:** `code/validation/run_all.py` + 15 скриптов `code/validation/{inv1..inv12, temp1, temp4, temp5}_*.py`. Коммит `5ccb1527`.
+
+**Workflows:** `W_session_20260622T162330Z` (§1–3), `W_dwh_loader_partno_filter_20260622` (§4), `W_dwh_post_enrichment_in_memory_20260622` (§5, high), `W_validation_suite_shared_client_20260623` (§7).
+**Коммиты:** `4dac335b` (§1–3), `3a93018b` (§4–5), `5ccb1527` (§7).
+**Evidence:** `output/enrich_baseline_20260620.txt`, `output/dwh_sim_batch_final_20260621/`, `output/validation_baseline_20260621.txt`; handoffs `handoff_W_dwh_post_enrichment_in_memory_20260622_coder-general_cb2a8c13`, `handoff_W_dwh_post_enrichment_in_memory_20260622_orchestrator_8770f199`.
+**Governance:** verdict `governance-compliance` для high-risk §5 **отложен** (orchestrator posthoc, partial gates); human approval зафиксирован в чате (`HumanGateRequired=yes`).
 
 ## 2026-06-21 — DWH-загрузка по выбранной дате, sim-gate 2026-06-20, экспорт ремонтов агрегатов
 
