@@ -235,57 +235,79 @@ def fetch_mp3(client, vdate: date, vid: int):
     return rows, fields
 
 
-def preload_mp4_by_day(client, version_date: date = None) -> Dict[date, Dict[str,int]]:
+def preload_mp4_by_day(client, version_date: date = None, version_id: int = None) -> Dict[date, Dict[str,int]]:
     """
     Загружает данные программы (quota target) из flight_program_ac.
     
     Args:
         client: ClickHouse client
         version_date: Дата версии данных для фильтрации. Если None — берёт последнюю.
+        version_id: Идентификатор версии. Если None — берёт max(version_id) для version_date
+                    (консистентно с heli_pandas/fetch_versions для мультиверсионных дат).
     """
     # Определяем version_date если не передан
     if version_date is None:
         result = client.execute("SELECT MAX(version_date) FROM flight_program_ac")
         version_date = result[0][0] if result and result[0][0] else date.today()
+    # version_id-aware чтение: для мультиверсионных дат (например 2026-06-22 с v1+v2)
+    # фильтр только по version_date вернул бы обе версии → неоднозначный прогон.
+    if version_id is None:
+        r = client.execute(
+            f"SELECT MAX(version_id) FROM flight_program_ac WHERE version_date = '{version_date}'"
+        )
+        version_id = int(r[0][0]) if r and r[0][0] is not None else 1
     
     rows = client.execute(
         f"""
-        SELECT dates, ops_counter_mi8, ops_counter_mi17, trigger_program_mi8, trigger_program_mi17, new_counter_mi17
+        SELECT dates, ops_counter_mi8, ops_counter_mi17, trigger_program_mi8, trigger_program_mi17, new_counter_mi17, spawn_limit, spawn_limit_active
         FROM flight_program_ac
-        WHERE version_date = '{version_date}'
+        WHERE version_date = '{version_date}' AND version_id = {version_id}
         ORDER BY dates
         """
     )
     result: Dict[date, Dict[str,int]] = {}
-    for d, mi8, mi17, t8, t17, n17 in rows:
+    for d, mi8, mi17, t8, t17, n17, spawn_limit, spawn_limit_active in rows:
         result[d] = {
             "ops_counter_mi8": int(mi8 or 0),
             "ops_counter_mi17": int(mi17 or 0),
             "trigger_program_mi8": int(t8 or 0),
             "trigger_program_mi17": int(t17 or 0),
             "new_counter_mi17": int(n17 or 0),
+            "spawn_limit": int(spawn_limit or 0),
+            # PRESENCE-based флаг (одинаков для всех строк версии): 1 если строка spawn_limit
+            # присутствовала в Program_heli.xlsx (даже при нулях), 0 — backward-compat.
+            "spawn_limit_active": int(spawn_limit_active or 0),
         }
     return result
 
 
-def preload_mp5_maps(client, version_date: date = None) -> Dict[date, Dict[int,int]]:
+def preload_mp5_maps(client, version_date: date = None, version_id: int = None) -> Dict[date, Dict[int,int]]:
     """
     Загружает данные программы полётов из flight_program_fl.
     
     Args:
         client: ClickHouse client
         version_date: Дата версии данных для фильтрации. Если None — берёт последнюю.
+        version_id: Идентификатор версии. Если None — берёт max(version_id) для version_date
+                    (консистентно с heli_pandas/fetch_versions для мультиверсионных дат).
     """
     # Определяем version_date если не передан
     if version_date is None:
         result = client.execute("SELECT MAX(version_date) FROM flight_program_fl")
         version_date = result[0][0] if result and result[0][0] else date.today()
+    # version_id-aware чтение (см. preload_mp4_by_day): иначе мультиверсионная дата
+    # вернёт несколько версий программы полётов.
+    if version_id is None:
+        r = client.execute(
+            f"SELECT MAX(version_id) FROM flight_program_fl WHERE version_date = '{version_date}'"
+        )
+        version_id = int(r[0][0]) if r and r[0][0] is not None else 1
     
     dates_col, ac_col, hours_col = client.execute(
         f"""
         SELECT dates, aircraft_number, daily_hours
         FROM flight_program_fl
-        WHERE version_date = '{version_date}'
+        WHERE version_date = '{version_date}' AND version_id = {version_id}
         ORDER BY dates, aircraft_number
         """,
         columnar=True,
@@ -588,8 +610,8 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         mp1_sne_ppr_map,
         mp1_repair_number_map,
     ) = fetch_mp1_all(client)
-    mp4_by_day = preload_mp4_by_day(client, vdate)
-    mp5_by_day = preload_mp5_maps(client, vdate)
+    mp4_by_day = preload_mp4_by_day(client, vdate, vid)
+    mp5_by_day = preload_mp5_maps(client, vdate, vid)
 
     days_sorted = get_days_sorted_union(mp4_by_day, mp5_by_day)
     # Индексация кадров: объединение MP3 ∪ MP5 (MP3 сначала, затем будущие из MP5 по возрастанию)
@@ -614,6 +636,25 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         if v < 0:
             v = 0
         mp4_new_counter_mi17_seed.append(v)
+
+    mp4_spawn_limit_seed: List[int] = []
+    spawn_limit_cumulative: List[int] = []
+    spawn_limit_running_total = 0
+    for D in days_sorted:
+        md = mp4_by_day.get(D, {})
+        v = int(md.get('spawn_limit', 0))
+        if v < 0:
+            v = 0
+        mp4_spawn_limit_seed.append(v)
+        spawn_limit_running_total += v
+        spawn_limit_cumulative.append(spawn_limit_running_total)
+    # PRESENCE-based активация: источник — колонка flight_program_ac.spawn_limit_active
+    # (одинакова для всех строк версии), а НЕ sum(seed)>0. Это позволяет включить лимит
+    # при строке нулей: spawn_limit_active=1 + cumulative=0 → allowed=0 → dynamic Mi-17 spawn заблокирован.
+    spawn_limit_active = max(
+        (int(md.get('spawn_limit_active', 0)) for md in mp4_by_day.values()),
+        default=0,
+    )
     # FRAMES-upfront: отключено. Будущий спавн не расширяет FRAMES на этапе Env.
     future_spawn_total = 0
     frames_buffer = 0
@@ -644,7 +685,7 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         avg_query = f"""
         SELECT AVG(daily_hours) as avg_minutes
         FROM flight_program_fl
-        WHERE version_date = '{vdate}'
+        WHERE version_date = '{vdate}' AND version_id = {vid}
           AND ac_type_mask = 64  -- Mi-17
           AND daily_hours > 0
         """
@@ -872,6 +913,9 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
         'mp4_ops_counter_mi8': mp4_ops8,
         'mp4_ops_counter_mi17': mp4_ops17,
         'mp4_new_counter_mi17_seed': mp4_new_counter_mi17_seed,
+        'mp4_spawn_limit_seed': mp4_spawn_limit_seed,
+        'spawn_limit_cumulative': spawn_limit_cumulative,
+        'spawn_limit_active': int(spawn_limit_active),
         'mp5_daily_hours_linear': mp5_linear,
         'month_first_u32': month_first_u32,
         'mp1_map': mp1_map,  # Добавляем mp1_map для прямого доступа (как в sim_master.py)
@@ -933,6 +977,8 @@ def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
     assert len(env_data['mp4_ops_counter_mi8']) == dt, "MP4_mi8 размер не равен days_total"
     assert len(env_data['mp4_ops_counter_mi17']) == dt, "MP4_mi17 размер не равен days_total"
     assert len(env_data['mp4_new_counter_mi17_seed']) == dt, "MP4 new_counter_mi17 seed размер не равен days_total"
+    assert len(env_data['mp4_spawn_limit_seed']) == dt, "MP4 spawn_limit seed размер не равен days_total"
+    assert len(env_data['spawn_limit_cumulative']) == dt, "spawn_limit_cumulative размер не равен days_total"
     assert len(env_data['mp5_daily_hours_linear']) == (dt + 1) * ft, "MP5_linear размер != (days_total+1)*frames_total"
     assert len(env_data['month_first_u32']) == dt, "month_first_u32 размер не равен days_total"
     # mp3_arrays длины согласованы

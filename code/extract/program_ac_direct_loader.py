@@ -10,10 +10,12 @@ Program AC Direct Loader - Прямое создание тензора прог
 - Строка с "Год": годы по месяцам (1=2025, 2=2025, ...)
 - Строки с ops_counter_*: операции ВС (распределить равномерно по дням месяца)
 - Строки с new_counter_*: новые поставки (только в последний день месяца)
+- Опциональная строка spawn_limit: помесячный потолок новых ВС Ми-17
 
 ЛОГИКА РАСПРЕДЕЛЕНИЯ:
 - ops_counter_*: равномерно по всем дням месяца
 - new_counter_*: полное значение в середину месяца (15-е число), остальные дни = 0
+- spawn_limit: помесячное значение в первый день месяца, остальные дни = 0
 - Период: 4000 дней от базовой даты
 - Группировка: по ac_type_mask (типы ВС)
 
@@ -85,13 +87,18 @@ class ProgramHeliAnalyzer:
                 'year_mapping': self.extract_year_mapping(df_filtered),
                 'ops_data': self.parse_ops_data(df_filtered),
                 'new_data': self.parse_new_data(df_filtered),
+                'spawn_limit_data': self.parse_spawn_limit_data(df_filtered),
                 'data_columns': data_columns,
                 'raw_df': df_filtered
             }
             
             ops_count = len(result['ops_data'])
             new_count = len(result['new_data'])
-            self.logger.info(f"✅ Структура проанализирована: {ops_count} ops_counter, {new_count} new_counter")
+            spawn_count = len(result['spawn_limit_data'])
+            self.logger.info(
+                f"✅ Структура проанализирована: {ops_count} ops_counter, "
+                f"{new_count} new_counter, {spawn_count} spawn_limit"
+            )
             return result
             
         except Exception as e:
@@ -215,6 +222,31 @@ class ProgramHeliAnalyzer:
         except Exception as e:
             self.logger.error(f"❌ Ошибка парсинга new_data: {e}")
             return []
+
+    def parse_spawn_limit_data(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Парсит опциональную строку spawn_limit для размещения на 1-е число месяца"""
+        spawn_rows = df[(df['Месяц'] == 'spawn_limit') & (df['ac_type_mask'] == 64)]
+        if spawn_rows.empty:
+            self.logger.info("📊 spawn_limit: строка не найдена, лимит отключён (0)")
+            return []
+
+        if len(spawn_rows) > 1:
+            self.logger.warning("⚠️ spawn_limit: найдено несколько строк, используется первая")
+
+        row = spawn_rows.iloc[0]
+        column_data = {}
+        for col in df.columns:
+            if col not in ['ac_type_mask', 'Месяц'] and pd.notna(row[col]) and row[col] != 0:
+                column_data[col] = float(row[col])
+
+        record = {
+            'ac_type_mask': 64,
+            'field_name': 'spawn_limit',
+            'column_data': column_data,
+            'distribution_type': 'first_day_only'
+        }
+        self.logger.info(f"📊 spawn_limit: 1 запись ({len(column_data)} колонок)")
+        return [record]
 
 
 class ACTensorEngine:
@@ -364,6 +396,7 @@ class ACTensorEngine:
         distribution_type:
         - 'daily_equal': ops_counter - размножаем на все 4000 дней используя последнее известное значение
         - 'last_day_only': new_counter - только для конкретного года/месяца в последний день
+        - 'first_day_only': spawn_limit - только для конкретного года/месяца в первый день
         
         year_mapping: соответствие колонка → (месяц, год)
         """
@@ -383,6 +416,13 @@ class ACTensorEngine:
                 if monthly_value == 0.0:
                     return 0.0
                 return monthly_value if target_date.day == 15 else 0.0
+
+            elif distribution_type == 'first_day_only':
+                # spawn_limit: помесячный потолок, downstream кумулирует дневной ряд
+                monthly_value = self.find_exact_column_value(target_month, target_year, column_data, year_mapping)
+                if monthly_value == 0.0:
+                    return 0.0
+                return monthly_value if target_date.day == 1 else 0.0
             
             else:
                 self.logger.error(f"❌ Неизвестный тип распределения: {distribution_type}")
@@ -459,6 +499,8 @@ class ProgramACDirectLoader:
                 ops_counter_mi17 UInt16,           -- счетчики операций: 0-65535 достаточно
                 ops_counter_total UInt16,          -- вычисляемое поле: сумма двух UInt16
                 new_counter_mi17 UInt8,            -- новые поставки: 0-255 достаточно
+                spawn_limit UInt16,                -- помесячные приращения лимита; активность задаёт spawn_limit_active
+                spawn_limit_active UInt8,          -- presence-флаг: 1 если строка spawn_limit была в xlsx, иначе 0
                 trigger_program_mi8 Int8,          -- триггеры: -128 до 127 достаточно
                 trigger_program_mi17 Int8,         -- триггеры: -128 до 127 достаточно
                 trigger_program Int8,              -- триггеры: -128 до 127 достаточно
@@ -470,6 +512,14 @@ class ProgramACDirectLoader:
             """
             
             self.client.execute(create_table_sql)
+            self.client.execute(
+                "ALTER TABLE flight_program_ac "
+                "ADD COLUMN IF NOT EXISTS spawn_limit UInt16 AFTER new_counter_mi17"
+            )
+            self.client.execute(
+                "ALTER TABLE flight_program_ac "
+                "ADD COLUMN IF NOT EXISTS spawn_limit_active UInt8 AFTER spawn_limit"
+            )
             
             # Удаляем только записи с текущим version_date (rewrite policy)
             delete_sql = f"ALTER TABLE flight_program_ac DELETE WHERE version_date = '{version_date}'"
@@ -483,7 +533,8 @@ class ProgramACDirectLoader:
             self.logger.error(f"❌ Ошибка создания таблицы: {e}")
             return False
     
-    def generate_tensor_data(self, ops_data: List[Dict], new_data: List[Dict], 
+    def generate_tensor_data(self, ops_data: List[Dict], new_data: List[Dict],
+                           spawn_limit_data: List[Dict],
                            tensor_engine: ACTensorEngine, calendar: List[Tuple],
                            year_mapping: Dict[str, Tuple[int, int]], 
                            base_date: date, version_id: int = 1) -> List[List]:
@@ -494,6 +545,7 @@ class ProgramACDirectLoader:
             # Создаем индексы данных по полям для быстрого доступа
             ops_data_by_field = {}
             new_data_by_field = {}
+            spawn_limit_by_field = {}
             
             for record in ops_data:
                 field_name = record['field_name']
@@ -502,7 +554,15 @@ class ProgramACDirectLoader:
             for record in new_data:
                 field_name = record['field_name'] 
                 new_data_by_field[field_name] = record
-            
+
+            for record in spawn_limit_data:
+                field_name = record['field_name']
+                spawn_limit_by_field[field_name] = record
+
+            # presence-based активация: строка spawn_limit присутствует в xlsx => лимит активен
+            # (даже все нули = cap 0), отсутствует => лимит неактивен (backward-compat).
+            spawn_limit_active = 1 if spawn_limit_data else 0
+
             insert_data = []
             
             self.logger.info(f"📊 Генерация flat-структуры: {len(calendar):,} дат")
@@ -514,6 +574,7 @@ class ProgramACDirectLoader:
                 ops_mi8 = 0
                 ops_mi17 = 0
                 new_mi17 = 0
+                spawn_limit = 0
                 
                 # ops_counter_mi8 (приводим к UInt16)
                 if 'ops_counter_mi8' in ops_data_by_field:
@@ -538,6 +599,14 @@ class ProgramACDirectLoader:
                         flight_date, month_number, year_number, record['column_data'],
                         record['distribution_type'], year_mapping
                     ))
+
+                # spawn_limit (помесячный потолок Mi-17, приводим к UInt16)
+                if 'spawn_limit' in spawn_limit_by_field:
+                    record = spawn_limit_by_field['spawn_limit']
+                    spawn_limit = round_half_up_nonneg(tensor_engine.distribute_column_value(
+                        flight_date, month_number, year_number, record['column_data'],
+                        record['distribution_type'], year_mapping
+                    ))
                     
                 # Вычисляемые поля (рассчитываются позже в add_calculated_fields)
                 ops_total = 0  # будет рассчитано позже (UInt16)
@@ -552,6 +621,8 @@ class ProgramACDirectLoader:
                     ops_mi17,       # ops_counter_mi17
                     ops_total,      # ops_counter_total (рассчитается позже)
                     new_mi17,       # new_counter_mi17
+                    spawn_limit,    # spawn_limit (помесячное приращение лимита)
+                    spawn_limit_active,  # spawn_limit_active (presence-флаг версии)
                     trigger_mi8,    # trigger_program_mi8 (рассчитается позже)
                     trigger_mi17,   # trigger_program_mi17 (рассчитается позже)
                     trigger_total,  # trigger_program (рассчитается позже)
@@ -574,15 +645,16 @@ class ProgramACDirectLoader:
             # Новая структура колонок (flat)
             column_names = [
                 'dates', 'ops_counter_mi8', 'ops_counter_mi17', 'ops_counter_total',
-                'new_counter_mi17', 'trigger_program_mi8', 'trigger_program_mi17', 
-                'trigger_program', 'version_date', 'version_id'
+                'new_counter_mi17', 'spawn_limit', 'spawn_limit_active', 'trigger_program_mi8',
+                'trigger_program_mi17', 'trigger_program', 'version_date', 'version_id'
             ]
             
             # Вставляем батчами
             batch_size = 100000
             for i in range(0, len(insert_data), batch_size):
                 batch = insert_data[i:i + batch_size]
-                self.client.execute('INSERT INTO flight_program_ac VALUES', batch)
+                insert_sql = f"INSERT INTO flight_program_ac ({', '.join(column_names)}) VALUES"
+                self.client.execute(insert_sql, batch)
                 self.logger.info(f"📦 Вставлено {i + len(batch):,} / {len(insert_data):,} записей")
             
             self.logger.info("✅ Оптимизированные данные успешно загружены в flight_program_ac")
@@ -704,6 +776,8 @@ class ProgramACDirectLoader:
                 ops_counter_mi17 UInt16,
                 ops_counter_total UInt16,
                 new_counter_mi17 UInt8,
+                spawn_limit UInt16,
+                spawn_limit_active UInt8,
                 trigger_program_mi8 Int8,
                 trigger_program_mi17 Int8,
                 trigger_program Int8,
@@ -718,6 +792,8 @@ class ProgramACDirectLoader:
                 ops_counter_mi17, 
                 ops_counter_total,
                 new_counter_mi17,
+                spawn_limit,
+                spawn_limit_active,
                 toInt8(ops_counter_mi8 - lagInFrame(ops_counter_mi8, 1, 0) 
                     OVER (PARTITION BY version_date ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi8,
                 toInt8(ops_counter_mi17 - lagInFrame(ops_counter_mi17, 1, 0)
@@ -744,7 +820,18 @@ class ProgramACDirectLoader:
             self.logger.info("📊 Замена данных в основной таблице...")
             self.client.execute(f"ALTER TABLE flight_program_ac DELETE WHERE version_date = '{version_date}'")
             self.client.execute("OPTIMIZE TABLE flight_program_ac FINAL")
-            self.client.execute("INSERT INTO flight_program_ac SELECT * FROM flight_program_ac_temp")
+            self.client.execute("""
+                INSERT INTO flight_program_ac (
+                    dates, ops_counter_mi8, ops_counter_mi17, ops_counter_total,
+                    new_counter_mi17, spawn_limit, spawn_limit_active, trigger_program_mi8,
+                    trigger_program_mi17, trigger_program, version_date, version_id
+                )
+                SELECT
+                    dates, ops_counter_mi8, ops_counter_mi17, ops_counter_total,
+                    new_counter_mi17, spawn_limit, spawn_limit_active, trigger_program_mi8,
+                    trigger_program_mi17, trigger_program, version_date, version_id
+                FROM flight_program_ac_temp
+            """)
             self.client.execute("DROP TABLE flight_program_ac_temp")
             
             # Проверяем результаты расчётов
@@ -936,7 +1023,7 @@ class ProgramACDirectLoader:
             
             # 5. Генерация данных тензора
             insert_data = self.generate_tensor_data(
-                excel_data['ops_data'], excel_data['new_data'],
+                excel_data['ops_data'], excel_data['new_data'], excel_data['spawn_limit_data'],
                 tensor_engine, calendar, excel_data['year_mapping'], 
                 version_date, version_id
             )

@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-06-24 — spawn_limit: накопительный лимит динамического спавна Mi-17 + дефицит в BI
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_spawn_limit_deficit_20260623` | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** алгоритмический помесячный накопительный лимит динамического спавна Mi-17 с управляемым дефицитом, выгружаемым в BI. SSoT `invariants.json` v16→v17 (одобрено Алексеем).
+
+### Семантика (presence-based)
+Строка `spawn_limit` в `Program_heli.xlsx` **присутствует** → `flight_program_ac.spawn_limit_active=1` → лимит активен. Помесячные значения — **накопительные приращения cap** (first-day increment в загрузчике). Все нули → cap=0 → блок всего динамического спавна Mi-17 → управляемый дефицит. Детерминированный `new_counter_mi17` лимитом **не** ограничивается.
+
+### Слои реализации
+1. **Extract:** `program_ac_direct_loader.py` — колонки `spawn_limit` (UInt16), `spawn_limit_active` (UInt8); first-day-only distribution.
+2. **Env-seeding:** `sim_env_setup.py` — `spawn_limit_cumulative` (prefix sum), `spawn_limit_active`.
+3. **RTC-клампинг:** `rtc_spawn_dynamic_v7.py`, `orchestrator_limiter_v8.py` — clamp dynamic Mi-17 по `max(0, cumulative_cap − cumulative_dynamic_spawn_mi17)` при `spawn_limit_active==1`; MacroProperty-счётчик `cumulative_dynamic_spawn_mi17`.
+4. **BI-выгрузка дефицита:** `sim_daily_materializer.py` → `sim_deficit_v9_daily` (target/ops_count/deficit); датасет Superset `deploy/bi-as-code/superset/datasets/sim_deficit_v9_daily.yaml`.
+
+### Инварианты (SSoT v17)
+- **INV-2** — conditional: post-warmup дефицит допустим **только** для Mi-17 при насыщении spawn_limit (`cumulative_dynamic ≥ cumulative_spawn_limit`, `spawn_limit_active=1`); Mi-8 и необъяснённый дефицит — по-прежнему violation.
+- **INV-13 CRITICAL** (новый): кумулятивный dynamic spawn Mi-17 (0→2, `group_by=2`) ≤ кумулятивный spawn_limit; при `spawn_limit_active=0` — PASS by definition.
+- Валидаторы переведены на presence-based активацию + `version_id` scope (`inv2_ops_vs_target.py`, `inv13_spawn_limit_cumulative.py`).
+
+### Тех. урок: MacroProperty vs PropertyArray
+Day-indexed данные в Environment (`spawn_limit_cumulative`, ~4000 дней) должны быть **MacroProperty** (global memory), **не** PropertyArray (constant memory ~64 KB) — иначе NVJITLINK `PTX-compile fail` при перекомпиляции RTC. Device-тип MacroProperty должен совпадать с host (`UInt32` ↔ `unsigned int`), иначе runtime `Indexing error`. Гипотеза «регрессия GPU-драйвера 580.159.03» **опровергнута** (baseline на том же драйвере собрался успешно, `output/p10b_baseline.log`).
+
+### Верификация
+- Полный E2E: `version_date=2026-06-22`, `version_id=2` (active limit), sim exit_code=0 (`output/p13_fix_v2.log`).
+- `run_all.py`: **TOTAL=16 FAIL=0** для v2 (active) и v1 (baseline inactive) — `output/p14_run_all_v2.log`, `output/p14_run_all_v1_baseline.log`.
+- Дефицит Mi-17=**11** зафиксирован в `sim_deficit_v9_daily` (ops=128, target=139).
+- Reviewer-flame: APPROVE (R1/R2). Governance: `allow_with_notes` (`handoff_...governance-compliance_a7f778c0`).
+
+**Файлы:** `code/extract/program_ac_direct_loader.py`, `code/sim_env_setup.py`, `code/sim_v2/messaging/{orchestrator_limiter_v8,rtc_spawn_dynamic_v7,sim_daily_materializer}.py`, `code/validation/{inv2_ops_vs_target,inv13_spawn_limit_cumulative,run_all}.py`, `config/transitions/invariants.json`, `deploy/bi-as-code/superset/datasets/sim_deficit_v9_daily.yaml`.
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
 ## 2026-06-22 — Оптимизация скорости DWH extract+load (107s → ~24s)
 
 **Risk:** medium (§1–4,§7) / **high §5** | **Profile:** medium-fast + high-strict (§5) | **Datapoint:** 2026-06-20 v1 (bit-identical), E2E 2026-06-21 | **Branch:** `feature/dwh-bb8`

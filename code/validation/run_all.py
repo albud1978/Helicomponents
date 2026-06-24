@@ -18,6 +18,7 @@ from inv9_limiter_exit import run as run_inv9
 from inv10_turnover_balance import run as run_inv10
 from inv11_spawn_limit_saturation import run as run_inv11
 from inv12_ppr_le_oh import run as run_inv12
+from inv13_spawn_limit_cumulative import run as run_inv13
 from temp1_repair_duration import run as run_temp1
 from temp4_no_infinite_repair import run as run_temp4
 from temp5_repair_hybrid_vector import run as run_temp5
@@ -36,6 +37,7 @@ SCRIPTS = [
     ("INV-10", "inv10_turnover_balance.py", run_inv10),
     ("INV-11", "inv11_spawn_limit_saturation.py", run_inv11),
     ("INV-12", "inv12_ppr_le_oh.py", run_inv12),
+    ("INV-13", "inv13_spawn_limit_cumulative.py", run_inv13),
     ("TEMP-1", "temp1_repair_duration.py", run_temp1),
     ("TEMP-4", "temp4_no_infinite_repair.py", run_temp4),
     ("TEMP-5", "temp5_repair_hybrid_vector.py", run_temp5),

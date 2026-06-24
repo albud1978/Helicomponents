@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Materialize daily forward-filled BI view for sim_masterv2_v9."""
+"""Materialize daily BI views for sim_masterv2_v9."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from sim_env_setup import get_client
 
 
 TABLE_NAME = "default.sim_masterv2_v9_daily"
+DEFICIT_TABLE_NAME = "default.sim_deficit_v9_daily"
 SOURCE_TABLE = "default.sim_masterv2_v9"
 
 
@@ -30,6 +31,21 @@ CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
 ) ENGINE = MergeTree()
 PARTITION BY (version_date, version_id)
 ORDER BY (version_date, version_id, group_by, status_id, day_date)
+"""
+
+
+DDL_DEFICIT = f"""
+CREATE TABLE IF NOT EXISTS {DEFICIT_TABLE_NAME} (
+    version_date UInt32,
+    version_id UInt32,
+    day_date Date,
+    group_by UInt8,
+    target UInt32,
+    ops_count UInt32,
+    deficit Int32
+) ENGINE = MergeTree()
+PARTITION BY (version_date, version_id)
+ORDER BY (version_date, version_id, group_by, day_date)
 """
 
 
@@ -175,6 +191,168 @@ LEFT JOIN daily_status_counts c
 """
 
 
+INSERT_DEFICIT = f"""
+INSERT INTO {DEFICIT_TABLE_NAME}
+(
+    version_date,
+    version_id,
+    day_date,
+    group_by,
+    target,
+    ops_count,
+    deficit
+)
+WITH events_daily AS (
+    SELECT
+        version_date AS version_date,
+        version_id AS version_id,
+        group_by AS group_by,
+        aircraft_number AS aircraft_number,
+        day_date AS day_date,
+        argMax(status_id, idx) AS status_id
+    FROM {SOURCE_TABLE}
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND group_by IN (1, 2)
+    GROUP BY version_date, version_id, group_by, aircraft_number, day_date
+),
+version_bounds AS (
+    SELECT
+        version_date AS version_date,
+        version_id AS version_id,
+        max(day_date) AS version_max_day
+    FROM events_daily
+    GROUP BY version_date, version_id
+),
+aircraft_span AS (
+    SELECT
+        e.version_date AS version_date,
+        e.version_id AS version_id,
+        e.group_by AS group_by,
+        e.aircraft_number AS aircraft_number,
+        min(e.day_date) AS aircraft_min_day,
+        vb.version_max_day AS aircraft_max_day
+    FROM events_daily e
+    INNER JOIN version_bounds vb
+      ON vb.version_date = e.version_date
+     AND vb.version_id = e.version_id
+    GROUP BY e.version_date, e.version_id, e.group_by, e.aircraft_number, vb.version_max_day
+),
+events_packed AS (
+    SELECT
+        version_date AS version_date,
+        version_id AS version_id,
+        group_by AS group_by,
+        aircraft_number AS aircraft_number,
+        arraySort(x -> x.1, groupArray((day_date, status_id))) AS day_status_pairs
+    FROM events_daily
+    GROUP BY version_date, version_id, group_by, aircraft_number
+),
+expanded_days AS (
+    SELECT
+        a.version_date AS version_date,
+        a.version_id AS version_id,
+        a.group_by AS group_by,
+        a.aircraft_number AS aircraft_number,
+        addDays(a.aircraft_min_day, n) AS day_date
+    FROM aircraft_span a
+    ARRAY JOIN range(dateDiff('day', a.aircraft_min_day, a.aircraft_max_day) + 1) AS n
+),
+daily_aircraft_status AS (
+    SELECT
+        d.version_date AS version_date,
+        d.version_id AS version_id,
+        d.group_by AS group_by,
+        d.aircraft_number AS aircraft_number,
+        d.day_date AS day_date,
+        if(
+            arrayLastIndex(x -> x <= d.day_date, arrayMap(p -> p.1, p.day_status_pairs)) = 0,
+            0,
+            arrayMap(p -> p.2, p.day_status_pairs)[arrayLastIndex(x -> x <= d.day_date, arrayMap(p -> p.1, p.day_status_pairs))]
+        ) AS status_id
+    FROM expanded_days d
+    INNER JOIN events_packed p
+      ON p.version_date = d.version_date
+     AND p.version_id = d.version_id
+     AND p.group_by = d.group_by
+     AND p.aircraft_number = d.aircraft_number
+),
+daily_grid AS (
+    SELECT DISTINCT
+        version_date AS version_date,
+        version_id AS version_id,
+        group_by AS group_by,
+        day_date AS day_date
+    FROM daily_aircraft_status
+),
+ops_counts AS (
+    SELECT
+        version_date AS version_date,
+        version_id AS version_id,
+        group_by AS group_by,
+        day_date AS day_date,
+        countIf(status_id = 2) AS ops_count
+    FROM daily_aircraft_status
+    GROUP BY version_date, version_id, group_by, day_date
+),
+program_targets AS (
+    SELECT
+        toUInt32(formatDateTime(version_date, '%%Y%%m%%d')) AS version_date_int,
+        arraySort(
+            x -> x.1,
+            groupArray((dates, toUInt32(ops_counter_mi8), toUInt32(ops_counter_mi17)))
+        ) AS day_targets
+    FROM flight_program_ac
+    WHERE version_date = toDate(parseDateTimeBestEffort(toString(%(version_date)s)))
+    GROUP BY version_date
+),
+target_indexes AS (
+    SELECT
+        g.version_date AS version_date,
+        g.version_id AS version_id,
+        g.group_by AS group_by,
+        g.day_date AS day_date,
+        p.day_targets AS day_targets,
+        arrayLastIndex(x -> x <= g.day_date, arrayMap(item -> item.1, p.day_targets)) AS target_idx
+    FROM daily_grid g
+    INNER JOIN program_targets p
+      ON p.version_date_int = g.version_date
+),
+targets AS (
+    SELECT
+        version_date AS version_date,
+        version_id AS version_id,
+        group_by AS group_by,
+        day_date AS day_date,
+        if(
+            group_by = 1,
+            arrayMap(item -> item.2, day_targets)[greatest(target_idx, 1)],
+            arrayMap(item -> item.3, day_targets)[greatest(target_idx, 1)]
+        ) AS target
+    FROM target_indexes
+)
+SELECT
+    g.version_date AS version_date,
+    g.version_id AS version_id,
+    g.day_date AS day_date,
+    g.group_by AS group_by,
+    toUInt32(t.target) AS target,
+    toUInt32(ifNull(o.ops_count, 0)) AS ops_count,
+    toInt32(t.target) - toInt32(ifNull(o.ops_count, 0)) AS deficit
+FROM daily_grid g
+INNER JOIN targets t
+  ON t.version_date = g.version_date
+ AND t.version_id = g.version_id
+ AND t.group_by = g.group_by
+ AND t.day_date = g.day_date
+LEFT JOIN ops_counts o
+  ON o.version_date = g.version_date
+ AND o.version_id = g.version_id
+ AND o.group_by = g.group_by
+ AND o.day_date = g.day_date
+"""
+
+
 def _as_uint32(value: int, name: str) -> int:
     value_int = int(value)
     if value_int < 0 or value_int > 0xFFFFFFFF:
@@ -182,20 +360,12 @@ def _as_uint32(value: int, name: str) -> int:
     return value_int
 
 
-def materialize_daily(client, version_date_int: int, version_id: int) -> int:
-    """Rebuild one version partition of default.sim_masterv2_v9_daily."""
-    version_date_int = _as_uint32(version_date_int, "version_date_int")
-    version_id = _as_uint32(version_id, "version_id")
-    params = {"version_date": version_date_int, "version_id": version_id}
-
-    client.execute(DDL_DAILY)
-    client.execute(f"ALTER TABLE {TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
-    client.execute(INSERT_DAILY, params)
+def _count_partition(client, table_name: str, params: dict[str, int]) -> int:
     return int(
         client.execute(
             f"""
             SELECT count()
-            FROM {TABLE_NAME}
+            FROM {table_name}
             WHERE version_date = %(version_date)s
               AND version_id = %(version_id)s
             """,
@@ -204,10 +374,35 @@ def materialize_daily(client, version_date_int: int, version_id: int) -> int:
     )
 
 
-def recreate_daily_table(client) -> None:
-    """Recreate the daily table when its partition expression changes."""
-    client.execute(f"DROP TABLE IF EXISTS {TABLE_NAME}")
+def materialize_daily(client, version_date_int: int, version_id: int) -> int:
+    """Rebuild one version partition of daily BI views."""
+    version_date_int = _as_uint32(version_date_int, "version_date_int")
+    version_id = _as_uint32(version_id, "version_id")
+    params = {"version_date": version_date_int, "version_id": version_id}
+
     client.execute(DDL_DAILY)
+    client.execute(DDL_DEFICIT)
+    client.execute(f"ALTER TABLE {TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
+    client.execute(f"ALTER TABLE {DEFICIT_TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
+    client.execute(INSERT_DAILY, params)
+    client.execute(INSERT_DEFICIT, params)
+    return _count_partition(client, TABLE_NAME, params)
+
+
+def count_deficit_rows(client, version_date_int: int, version_id: int) -> int:
+    params = {
+        "version_date": _as_uint32(version_date_int, "version_date_int"),
+        "version_id": _as_uint32(version_id, "version_id"),
+    }
+    return _count_partition(client, DEFICIT_TABLE_NAME, params)
+
+
+def recreate_daily_table(client) -> None:
+    """Recreate daily tables when their partition expression changes."""
+    client.execute(f"DROP TABLE IF EXISTS {TABLE_NAME}")
+    client.execute(f"DROP TABLE IF EXISTS {DEFICIT_TABLE_NAME}")
+    client.execute(DDL_DAILY)
+    client.execute(DDL_DEFICIT)
 
 
 def _list_versions(client) -> list[tuple[int, int]]:
@@ -243,19 +438,27 @@ def main() -> None:
         versions = [(args.version_date, args.version_id)]
 
     total_rows = 0
+    total_deficit_rows = 0
     started = time.perf_counter()
     for version_date_int, version_id in versions:
         version_started = time.perf_counter()
         row_count = materialize_daily(client, version_date_int, version_id)
+        deficit_row_count = count_deficit_rows(client, version_date_int, version_id)
         elapsed = time.perf_counter() - version_started
         total_rows += row_count
+        total_deficit_rows += deficit_row_count
         print(
             "📊 sim_masterv2_v9_daily: "
             f"{row_count} строк (version_date={version_date_int}, version_id={version_id}, {elapsed:.2f}с)"
         )
+        print(
+            "📊 sim_deficit_v9_daily: "
+            f"{deficit_row_count} строк (version_date={version_date_int}, version_id={version_id}, {elapsed:.2f}с)"
+        )
 
     elapsed_total = time.perf_counter() - started
     print(f"✅ sim_masterv2_v9_daily: всего {total_rows} строк ({elapsed_total:.2f}с)")
+    print(f"✅ sim_deficit_v9_daily: всего {total_deficit_rows} строк ({elapsed_total:.2f}с)")
 
 
 if __name__ == "__main__":

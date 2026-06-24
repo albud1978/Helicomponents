@@ -482,6 +482,12 @@ class LimiterV8Orchestrator:
         for day, count in enumerate(spawn_seed):
             if count > 0 and day <= self.end_day:
                 dates.add(day)
+
+        # Даты пополнения лимита dynamic Mi-17 spawn (месячный потолок лежит на day==1)
+        spawn_limit_seed = self.env_data.get('mp4_spawn_limit_seed', [])
+        for day, limit in enumerate(spawn_limit_seed):
+            if limit > 0 and day <= self.end_day:
+                dates.add(day)
         
         self.deterministic_dates = sorted(dates)
         print(f"   V8 deterministic_dates: {len(self.deterministic_dates)} дат")
@@ -545,6 +551,11 @@ class LimiterV8Orchestrator:
         self.base_model.env.newPropertyUInt("end_day", self.end_day)
         self.base_model.env.newPropertyUInt("prev_day", 0)
         self.base_model.env.newPropertyUInt("adaptive_days", 1)
+        spawn_limit_cumulative = list(self.env_data.get('spawn_limit_cumulative', []))
+        if not spawn_limit_cumulative:
+            spawn_limit_cumulative = [0] * max(1, self.days)
+        self.base_model.env.newMacroPropertyUInt("spawn_limit_cumulative", model_build.MAX_DAYS)
+        self.base_model.env.newPropertyUInt8("spawn_limit_active", int(self.env_data.get('spawn_limit_active', 0)))
         
         heli_agent = self.base_model.agent
         
@@ -565,6 +576,10 @@ class LimiterV8Orchestrator:
         hf_init_cumsum = HF_InitMP5Cumsum(self.mp5_cumsum, self.frames, self.days)
         layer_init = self.model.newLayer("layer_init_mp5_cumsum")
         layer_init.addHostFunction(hf_init_cumsum)
+
+        hf_init_spawn_limit = HF_InitSpawnLimitCumulative(spawn_limit_cumulative)
+        layer_init_spawn_limit = self.model.newLayer("layer_init_spawn_limit_cumulative")
+        layer_init_spawn_limit.addHostFunction(hf_init_spawn_limit)
         
         hf_init_economics = HF_InitEconomicsDailyCosts(self.economics_daily_costs)
         layer_init_economics = self.model.newLayer("layer_init_economics_daily_costs")
@@ -1583,6 +1598,34 @@ class HF_InitMP5Cumsum(fg.HostFunction):
         
         self.initialized = True
         print(f"  [HF_InitMP5Cumsum] ✅ Загружено")
+
+
+class HF_InitSpawnLimitCumulative(fg.HostFunction):
+    """HostFunction для инициализации cumulative spawn_limit MacroProperty."""
+
+    def __init__(self, spawn_limit_cumulative):
+        super().__init__()
+        self.spawn_limit_cumulative = spawn_limit_cumulative
+        self.initialized = False
+
+    def run(self, FLAMEGPU):
+        if self.initialized:
+            return
+
+        mp = FLAMEGPU.environment.getMacroPropertyUInt("spawn_limit_cumulative")
+        values = self.spawn_limit_cumulative
+        if len(values) > len(mp):
+            raise RuntimeError(
+                "spawn_limit_cumulative length exceeds MacroProperty size: "
+                f"{len(values)} > {len(mp)}"
+            )
+
+        print(f"  [HF_InitSpawnLimitCumulative] Загрузка spawn_limit_cumulative: {len(values)}")
+        for i, value in enumerate(values):
+            mp[i] = int(value)
+
+        self.initialized = True
+        print("  [HF_InitSpawnLimitCumulative] ✅ Загружено")
 
 
 class HF_InitEconomicsDailyCosts(fg.HostFunction):

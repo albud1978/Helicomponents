@@ -8,7 +8,7 @@ INV-2: ops count = target (±tolerance) после warmup.
 import argparse
 import re
 import sys
-from datetime import date as _date, timedelta
+from datetime import date as _date
 
 from ch_client import get_client
 
@@ -28,10 +28,20 @@ def print_result(name: str, passed: bool, details) -> None:
     print("=" * 80)
 
 
-def load_mp4_targets(client, version_date_int: int):
+def require_columns(client, table: str, columns: set[str]) -> None:
+    existing = {row[0] for row in client.execute(f"DESCRIBE TABLE {table}")}
+    missing = sorted(columns - existing)
+    if missing:
+        raise SystemExit(
+            f"{table} missing required columns: {', '.join(missing)}. "
+            "Run the Layer 1 Program_AC loader/migration before spawn_limit validation."
+        )
+
+
+def load_mp4_targets(client, version_date_int: int, version_id: int):
     """Загружает per-day таргеты из flight_program_ac.
 
-    Возвращает два словаря: {day_index: target} для Mi-8 и Mi-17,
+    Возвращает словари {day_index: value} для Mi-8/Mi-17 target и spawn_limit,
     где day_index — порядковый номер дня от start_date (0-based).
     """
     # version_date_int = YYYYMMDD, преобразуем в date
@@ -39,24 +49,37 @@ def load_mp4_targets(client, version_date_int: int):
     m = (version_date_int % 10000) // 100
     d = version_date_int % 100
     vdate = _date(y, m, d)
+    require_columns(
+        client,
+        "flight_program_ac",
+        {
+            "dates",
+            "ops_counter_mi8",
+            "ops_counter_mi17",
+            "spawn_limit",
+            "spawn_limit_active",
+        },
+    )
 
     rows = client.execute(
-        "SELECT dates, ops_counter_mi8, ops_counter_mi17 "
+        "SELECT dates, ops_counter_mi8, ops_counter_mi17, spawn_limit, spawn_limit_active "
         "FROM flight_program_ac "
-        "WHERE version_date = %(vd)s "
+        "WHERE version_date = %(vd)s AND version_id = %(vid)s "
         "ORDER BY dates",
-        {"vd": vdate},
+        {"vd": vdate, "vid": version_id},
     )
     if not rows:
         raise SystemExit(
-            f"flight_program_ac пуст для version_date={vdate}. "
+            f"flight_program_ac пуст для version_date={vdate}, version_id={version_id}. "
             "Невозможно получить таргеты MP4."
         )
 
     # Строим маппинг date → (mi8_target, mi17_target)
     date_targets = {}
-    for dt, mi8, mi17 in rows:
-        date_targets[dt] = (int(mi8 or 0), int(mi17 or 0))
+    spawn_limit_active = 0
+    for dt, mi8, mi17, spawn_limit, active in rows:
+        date_targets[dt] = (int(mi8 or 0), int(mi17 or 0), int(spawn_limit or 0))
+        spawn_limit_active = max(spawn_limit_active, int(active or 0))
 
     # Симуляция использует days_sorted = sorted(union(mp4_dates, mp5_dates)).
     # Здесь используем только MP4 даты (порядок совпадает при union с MP5,
@@ -67,13 +90,15 @@ def load_mp4_targets(client, version_date_int: int):
 
     targets_mi8 = {}  # day_u16 → target
     targets_mi17 = {}
+    spawn_limits = {}
     for dt in sorted_dates:
         day_idx = (dt - start_date).days
-        t8, t17 = date_targets[dt]
+        t8, t17, spawn_limit = date_targets[dt]
         targets_mi8[day_idx] = t8
         targets_mi17[day_idx] = t17
+        spawn_limits[day_idx] = spawn_limit
 
-    return targets_mi8, targets_mi17, start_date
+    return targets_mi8, targets_mi17, spawn_limits, spawn_limit_active, start_date
 
 
 def get_target_for_day(targets_dict, day_u16):
@@ -96,6 +121,15 @@ def get_target_for_day(targets_dict, day_u16):
     # Если день раньше первого — вернуть первый
     first = min(targets_dict.keys())
     return targets_dict[first]
+
+
+def build_cumulative_by_day(values_by_day):
+    cumulative = {}
+    running_total = 0
+    for day in sorted(values_by_day.keys()):
+        running_total += int(values_by_day[day])
+        cumulative[day] = running_total
+    return cumulative, running_total
 
 
 def run(
@@ -128,11 +162,20 @@ def run(
         if mp4_vd is None:
             raise SystemExit("Не удалось определить version_date из данных симуляции")
 
-    targets_mi8, targets_mi17, start_date = load_mp4_targets(client, mp4_vd)
+    targets_mi8, targets_mi17, spawn_limits, spawn_limit_active, start_date = load_mp4_targets(
+        client,
+        mp4_vd,
+        version_id,
+    )
     targets = {1: targets_mi8, 2: targets_mi17}
+    cumulative_spawn_limit, total_spawn_limit = build_cumulative_by_day(spawn_limits)
 
     print(f"MP4 targets loaded: Mi-8 unique={len(set(targets_mi8.values()))}, "
           f"Mi-17 unique={len(set(targets_mi17.values()))}")
+    print(
+        "spawn_limit: "
+        f"active={'true' if spawn_limit_active else 'false'}, total={total_spawn_limit}"
+    )
 
     # Warmup = max(repair_time) из данных
     warmup_query = f"""
@@ -165,8 +208,28 @@ def run(
     for day_u16, group_by, ops_count in client.execute(ops_query, params):
         ops_counts[(int(group_by), int(day_u16))] = int(ops_count)
 
+    dynamic_spawn_query = f"""
+    SELECT day_u16, countDistinct(idx) AS dynamic_spawn_count
+    FROM {table}
+    WHERE version_id = %(vid)s{vd_filter}
+      AND group_by = 2
+      AND pre_status_id = 0
+      AND status_id = 2
+    GROUP BY day_u16
+    """
+    dynamic_spawn_by_day = {
+        int(day_u16): int(spawn_count)
+        for day_u16, spawn_count in client.execute(dynamic_spawn_query, params)
+    }
+    cumulative_dynamic_spawn = {}
+    running_dynamic_spawn = 0
+    for day in step_days:
+        running_dynamic_spawn += dynamic_spawn_by_day.get(day, 0)
+        cumulative_dynamic_spawn[day] = running_dynamic_spawn
+
     warmup_violations = []
     post_violations = []
+    conditional_limit_exceptions = []
     group_names = {1: "Mi-8", 2: "Mi-17"}
 
     for group_by in (1, 2):
@@ -183,7 +246,26 @@ def run(
                     warmup_violations.append(entry)
             else:
                 if abs(diff) > tolerance:
-                    post_violations.append(entry)
+                    if (
+                        group_by == 2
+                        and spawn_limit_active
+                        and diff < -tolerance
+                        and cumulative_dynamic_spawn.get(day, 0)
+                        >= get_target_for_day(cumulative_spawn_limit, day)
+                    ):
+                        conditional_limit_exceptions.append(
+                            (
+                                group_by,
+                                day,
+                                ops_count,
+                                target,
+                                diff,
+                                cumulative_dynamic_spawn.get(day, 0),
+                                get_target_for_day(cumulative_spawn_limit, day),
+                            )
+                        )
+                    else:
+                        post_violations.append(entry)
 
     # --- Warmup report (информационный, не влияет на PASS/FAIL) ---
     warmup_steps = sum(1 for d in step_days if d <= warmup_days)
@@ -214,8 +296,23 @@ def run(
         f"Mi-8 target range: {min(targets_mi8.values())}..{max(targets_mi8.values())}",
         f"Mi-17 target range: {min(targets_mi17.values())}..{max(targets_mi17.values())}",
         f"warmup_deviations={len(warmup_violations)} (info only)",
+        f"spawn_limit_active={'true' if spawn_limit_active else 'false'}",
+        f"spawn_limit_total={total_spawn_limit}",
+        f"dynamic_spawn_mi17_total={running_dynamic_spawn}",
+        f"conditional_limit_exceptions={len(conditional_limit_exceptions)}",
     ]
     details.append(f"post_warmup_violations={len(post_violations)}")
+
+    if conditional_limit_exceptions:
+        details.append(
+            "  Mi-17 conditional limit sample "
+            "(day, ops, target, diff, cumulative_dynamic, cumulative_limit):"
+        )
+        for _, day, ops, tgt, diff, dyn_cum, limit_cum in conditional_limit_exceptions[:5]:
+            details.append(
+                f"    day={day}: ops={ops}, target={tgt}, diff={diff}, "
+                f"dynamic={dyn_cum}, limit={limit_cum}"
+            )
 
     if post_violations:
         v_mi8 = [v for v in post_violations if v[0] == 1]

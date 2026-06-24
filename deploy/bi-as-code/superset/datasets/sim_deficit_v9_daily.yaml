@@ -1,0 +1,17 @@
+kind: dataset
+logical_id: sim_deficit_v9_daily
+datasource:
+  database_name: clickhouse_default
+  schema: default
+  table_name: sim_deficit_v9_daily
+metadata:
+  owner_role: coder-general
+  description: "Physical daily operations target/actual deficit output for BI. Built from default.sim_masterv2_v9 and flight_program_ac via sim_daily_materializer."
+  columns_required:
+    - version_date
+    - version_id
+    - day_date
+    - group_by
+    - target
+    - ops_count
+    - deficit

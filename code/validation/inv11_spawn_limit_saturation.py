@@ -43,19 +43,19 @@ def to_date(version_date_int: int) -> _date:
         raise SystemExit(f"Некорректный version_date: {version_date_int}") from exc
 
 
-def load_mp4_targets(client, version_date_int: int):
+def load_mp4_targets(client, version_date_int: int, version_id: int):
     """Возвращает targets_mi8, targets_mi17, start_date (как в INV-2)."""
     vdate = to_date(version_date_int)
     rows = client.execute(
         "SELECT dates, ops_counter_mi8, ops_counter_mi17 "
         "FROM flight_program_ac "
-        "WHERE version_date = %(vd)s "
+        "WHERE version_date = %(vd)s AND version_id = %(vid)s "
         "ORDER BY dates",
-        {"vd": vdate},
+        {"vd": vdate, "vid": version_id},
     )
     if not rows:
         raise SystemExit(
-            f"flight_program_ac пуст для version_date={vdate}. "
+            f"flight_program_ac пуст для version_date={vdate}, version_id={version_id}. "
             "Невозможно получить таргеты MP4."
         )
 
@@ -148,7 +148,11 @@ def run(client, version_id: int, version_date=None, table: str = "sim_masterv2_v
         warmup_value = client.execute(warmup_query, scoped_params)[0][0]
         warmup_days = int(warmup_value) if warmup_value is not None else 0
 
-        _, targets_mi17, _ = load_mp4_targets(client, version_date_int)
+        _, targets_mi17, _ = load_mp4_targets(
+            client,
+            version_date_int,
+            version_id,
+        )
 
         step_days_query = f"""
         SELECT DISTINCT day_u16

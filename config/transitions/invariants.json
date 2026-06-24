@@ -1,10 +1,10 @@
 {
-  "version": 16,
+  "version": 17,
   "meta": {
     "description": "Глобальные инварианты, temporal-контракты и GPU-ограничения модели V11. Все инварианты обеспечены валидационными скриптами в code/validation/.",
     "ssot": true,
     "created": "2026-02-10",
-    "updated": "2026-06-05",
+    "updated": "2026-06-23",
     "related": ["transitions_rules.json", "quota_rules.json"]
   },
 
@@ -29,17 +29,17 @@
     },
     {
       "id": "INV-2",
-      "claim": "Количество в операциях соответствует программе (динамический таргет MP4)",
-      "expr": "abs(ops_count - mp4_target[day]) <= tolerance",
+      "claim": "Количество в операциях соответствует программе (динамический таргет MP4), кроме объяснённого насыщением spawn_limit дефицита Mi-17",
+      "expr": "abs(ops_count - mp4_target[day]) <= tolerance OR (spawn_limit_active AND group_by == 2 AND ops_count < mp4_target[day] AND cumulative_dynamic_spawn_mi17[day] >= cumulative_spawn_limit[day])",
       "scope": "per_day_per_type",
       "severity": "CRITICAL",
       "tolerance": 0,
       "target_source": "flight_program_ac.ops_counter_mi8 / ops_counter_mi17 (per-day, step-function)",
-      "exception": "Допустимо отклонение в минус на период [0, repair_time) от начала симуляции (разогрев): P2/P3 требуют RepairLine slot (free_days >= repair_time), до дня repair_time слоты ещё не набрали достаточно free_days",
+      "exception": "Допустимо отклонение в минус на период [0, repair_time) от начала симуляции (разогрев). При активном spawn_limit допустим post-warmup дефицит только для Mi-17 и только если cumulative dynamic spawn 0→2 достиг cumulative spawn_limit на этот день; при неактивном spawn_limit INV-2 не ослабляется.",
       "validator": "code/validation/inv2_ops_vs_target.py",
-      "last_validated": "2026-02-14",
-      "last_result": "PASS (0 violations post-warmup, datasets 20250704 + 20251230)",
-      "notes": "Таргеты ДИНАМИЧЕСКИЕ из flight_program_ac (MP4), меняются по дням. Mi-8: 42..68, Mi-17: 88..129. Warmup-отклонения (-1..-6) — ожидаемы и не считаются нарушениями."
+      "last_validated": "pending revalidation",
+      "last_result": "pending revalidation",
+      "notes": "Таргеты ДИНАМИЧЕСКИЕ из flight_program_ac (MP4), меняются по дням. Mi-8 берёт ops_counter_mi8, Mi-17 берёт ops_counter_mi17. Operations status_id=2. Conditional-исключение привязано к данным sim_masterv2_v9 (group_by=2, pre_status_id=0, status_id=2) и flight_program_ac.spawn_limit, а не к отключению проверки."
     },
     {
       "id": "INV-3",
@@ -154,6 +154,18 @@
       "last_validated": "pending revalidation",
       "last_result": "pending revalidation",
       "notes": "ppr всегда <= oh по всему жизненному циклу планеров group_by IN (1,2); равенство ppr == oh допустимо. Зеркало INV-1 для ppr/oh: исторически перелёт по ремонтному ресурсу не ловился из-за отсутствия отдельной проверки."
+    },
+    {
+      "id": "INV-13",
+      "claim": "Кумулятивный dynamic spawn Mi-17 не превышает кумулятивный spawn_limit",
+      "expr": "if spawn_limit_active then forall day: cumulative_count(group_by=2 AND pre_status_id=0 AND status_id=2) <= cumulative_spawn_limit[day]",
+      "scope": "per_day_per_type",
+      "severity": "CRITICAL",
+      "data_source": "sim_masterv2_v9 dynamic spawn events + flight_program_ac.spawn_limit",
+      "validator": "code/validation/inv13_spawn_limit_cumulative.py",
+      "last_validated": "pending revalidation",
+      "last_result": "pending revalidation",
+      "notes": "Активность лимита определяется presence-based колонкой flight_program_ac.spawn_limit_active в scope version_date + version_id: если строка spawn_limit присутствует в Program_heli.xlsx, active=1, даже если все значения spawn_limit равны 0. При spawn_limit_active == 0 инвариант PASS by definition. Детерминированный spawn Mi-17 (0→3, new_counter_mi17) не входит в dynamic spawn и не ограничивается INV-13."
     }
   ],
 
