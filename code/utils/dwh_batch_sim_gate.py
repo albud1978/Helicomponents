@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Batch: DWH load + flight_program clone + sim + INV validation for multiple dates."""
+"""Batch: DWH load + flight_program (Excel из датасета) + sim + INV validation for multiple dates."""
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 
 CODE_ROOT = Path(__file__).resolve().parents[1]
@@ -20,8 +21,11 @@ DATES_DEFAULT = [
     "2026-06-05",
     "2026-06-11",
 ]
-FP_SRC = "2026-04-08"
-CUDA_PYTHON = "/home/albud/miniconda3/envs/cuda13/bin/python3"
+# Интерпретатор для симуляции: на этой машине FLAME GPU работает на системном python3
+# (CUDA/окружение задаются через config/load_env.sh, наследуются текущим процессом).
+CUDA_PYTHON = sys.executable
+SOURCE_DATA_DIR = "data_input/source_data"
+_DATASET_RE = re.compile(r"^v_(\d{4}-\d{2}-\d{2})$")
 
 
 def _count(client, table: str, vd: str, vi: int = 1) -> int:
@@ -89,41 +93,66 @@ def ensure_load(vd: str, vi: int, log: Path) -> None:
         raise SystemExit(f"load failed {vd} rc={rc}")
 
 
-def clone_flight_program(vd: str, vi: int = 1) -> None:
-    client = get_clickhouse_client()
-    for t, cols in (
-        (
-            "flight_program_fl",
-            "aircraft_number, dates, daily_hours, ac_type_mask, version_date, version_id",
-        ),
-        (
-            "flight_program_ac",
-            "dates, ops_counter_mi8, ops_counter_mi17, trigger_program_mi8, trigger_program_mi17, new_counter_mi17, version_date, version_id",
-        ),
-    ):
-        n = _count(client, t, vd, vi)
-        if n:
-            print(f"  {t} {vd}: already {n} rows")
+def find_nearest_dataset(vd: str) -> Path:
+    """Возвращает папку датасета v_YYYY-MM-DD, ближайшую к дате vd.
+
+    Берём строго именованные папки (v_YYYY-MM-DD без суффиксов asof/policy),
+    выбираем минимальную |date - vd|; при равенстве — более позднюю дату.
+    Требуем наличие Program_heli.xlsx и Program.xlsx в выбранной папке.
+    """
+    target = datetime.strptime(vd, "%Y-%m-%d").date()
+    root = REPO / SOURCE_DATA_DIR
+    candidates: list[tuple[int, date, Path]] = []
+    for p in root.glob("v_*"):
+        if not p.is_dir():
             continue
-        sel_cols = cols.replace(", version_date, version_id", "")
-        client.execute(
-            f"""
-            INSERT INTO {t} ({cols})
-            SELECT {sel_cols}, toDate(%(dst)s), version_id
-            FROM {t}
-            WHERE version_date=toDate(%(src)s) AND version_id=%(vi)s
-            """,
-            {"dst": vd, "src": FP_SRC, "vi": vi},
-        )
-        print(f"  {t} cloned {FP_SRC} -> {vd}: {_count(client, t, vd, vi)} rows")
+        m = _DATASET_RE.match(p.name)
+        if not m:
+            continue
+        d = datetime.strptime(m.group(1), "%Y-%m-%d").date()
+        if not (p / "Program_heli.xlsx").exists() or not (p / "Program.xlsx").exists():
+            continue
+        candidates.append((abs((d - target).days), d, p))
+    if not candidates:
+        raise SystemExit(f"find_nearest_dataset: нет подходящих датасетов в {root} для {vd}")
+    # min по расстоянию, при равенстве — большая дата (свежее)
+    candidates.sort(key=lambda x: (x[0], -x[1].toordinal()))
+    chosen = candidates[0]
+    print(f"  nearest dataset for {vd}: {chosen[2].name} (Δ={chosen[0]} дн.)")
+    return chosen[2]
+
+
+def load_flight_program(vd: str, vi: int, log: Path) -> None:
+    """Генерирует flight_program_ac (Program_heli.xlsx) и flight_program_fl (Program.xlsx)
+    из ближайшего датасета напрямую, с день_0 = vd. Загрузчики идемпотентны (rewrite по version_date).
+    Порядок важен: сначала AC (fl читает new_counter_mi17 из последней версии AC)."""
+    dataset = find_nearest_dataset(vd)
+    for script in ("code/extract/program_ac_direct_loader.py", "code/extract/program_fl_direct_loader.py"):
+        cmd = [
+            sys.executable,
+            script,
+            "--version-date",
+            vd,
+            "--version-id",
+            str(vi),
+            "--dataset-path",
+            str(dataset),
+        ]
+        rc = _run(cmd, log=log)
+        if rc != 0:
+            raise SystemExit(f"flight_program load failed ({script}) {vd} rc={rc}")
+    client = get_clickhouse_client()
+    print(
+        f"  flight_program {vd}: ac={_count(client, 'flight_program_ac', vd, vi)} "
+        f"fl={_count(client, 'flight_program_fl', vd, vi)} rows (из {dataset.name})"
+    )
 
 
 def run_sim(vd: str, log: Path) -> int:
     import os
 
+    # Наследуем окружение текущего процесса (CUDA/LD_LIBRARY_PATH из config/load_env.sh).
     env = os.environ.copy()
-    env["CUDA_PATH"] = os.path.expanduser("~/miniconda3/targets/x86_64-linux")
-    env["LD_LIBRARY_PATH"] = os.path.expanduser("~/miniconda3/lib") + ":" + env.get("LD_LIBRARY_PATH", "")
     cmd = [
         CUDA_PYTHON,
         "code/sim_v2/messaging/orchestrator_limiter_v8.py",
@@ -194,10 +223,10 @@ def main() -> int:
         log = out_dir / f"sim_gate_{vd}.log"
         log.write_text(f"batch sim-gate {vd}\n", encoding="utf-8")
 
-        print("  [1] flight_program")
-        clone_flight_program(vd)
-        print("  [2] load")
+        print("  [1] load (DWH heli_pandas/program_ac/status)")
         ensure_load(vd, 1, log)
+        print("  [2] flight_program (Excel из ближайшего датасета)")
+        load_flight_program(vd, 1, log)
         if args.skip_sim:
             results.append((vd, "load-only", "OK"))
             continue

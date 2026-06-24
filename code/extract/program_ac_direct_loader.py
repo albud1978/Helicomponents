@@ -864,22 +864,30 @@ class ProgramACDirectLoader:
             self.logger.error(f"❌ Ошибка постпроцессинга: {e}")
             return False
     
-    def correct_first_trigger_values(self) -> bool:
-        """Корректирует первые значения trigger полей ПОСЛЕ загрузки heli_pandas"""
+    def correct_first_trigger_values(self, version_date: date, version_id: int = 1) -> bool:
+        """Корректирует первые значения trigger полей ПОСЛЕ загрузки heli_pandas.
+
+        Все запросы строго ограничены целевой версией (version_date/version_id):
+        и день_0 тензора, и счёт компонентов в heli_pandas. Без этого при наличии
+        нескольких версий в таблицах коррекция считается по чужим версиям.
+        """
         try:
             self.logger.info("🔄 === КОРРЕКТИРОВКА ПЕРВЫХ ЗНАЧЕНИЙ TRIGGER ПОЛЕЙ ===")
-            
-            # Получаем первую дату из новой структуры
-            first_date_query = "SELECT MIN(dates) FROM flight_program_ac"
+
+            # Первая дата тензора строго для целевой версии
+            first_date_query = f"""
+            SELECT MIN(dates) FROM flight_program_ac
+            WHERE version_date = '{version_date}' AND version_id = {int(version_id)}
+            """
             first_date_result = self.client.execute(first_date_query)
             first_date = first_date_result[0][0]
-            self.logger.info(f"📅 Первая дата в календаре: {first_date}")
+            self.logger.info(f"📅 Первая дата в календаре (version_date={version_date}): {first_date}")
             
             # 1. Корректировка trigger_program_mi8 (group_by=1)
             self.logger.info("🔧 Корректировка trigger_program_mi8 (МИ-8, group_by=1)...")
             
-            # Подсчитываем компоненты МИ-8 в статусе 2
-            mi8_count_query = """
+            # Подсчитываем компоненты МИ-8 в статусе 2 (строго целевая версия)
+            mi8_count_query = f"""
             SELECT COUNT(*) as component_count
             FROM heli_pandas hp
             WHERE hp.partseqno_i IN (
@@ -888,6 +896,7 @@ class ProgramACDirectLoader:
                 WHERE group_by = 1
             )
             AND hp.status_id = 2
+            AND hp.version_date = '{version_date}' AND hp.version_id = {int(version_id)}
             """
             mi8_count_result = self.client.execute(mi8_count_query)
             mi8_component_count = mi8_count_result[0][0]
@@ -897,7 +906,7 @@ class ProgramACDirectLoader:
             mi8_first_ops_query = f"""
             SELECT ops_counter_mi8 
             FROM flight_program_ac 
-            WHERE dates = '{first_date}'
+            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
             """
             mi8_first_result = self.client.execute(mi8_first_ops_query)
             mi8_first_ops = mi8_first_result[0][0] if mi8_first_result else 0
@@ -911,15 +920,15 @@ class ProgramACDirectLoader:
             mi8_update_query = f"""
             ALTER TABLE flight_program_ac 
             UPDATE trigger_program_mi8 = {mi8_correction}
-            WHERE dates = '{first_date}'
+            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
             """
             self.client.execute(mi8_update_query)
             
             # 2. Корректировка trigger_program_mi17 (group_by=2)
             self.logger.info("🔧 Корректировка trigger_program_mi17 (МИ-17, group_by=2)...")
             
-            # Подсчитываем компоненты МИ-17 в статусе 2
-            mi17_count_query = """
+            # Подсчитываем компоненты МИ-17 в статусе 2 (строго целевая версия)
+            mi17_count_query = f"""
             SELECT COUNT(*) as component_count
             FROM heli_pandas hp
             WHERE hp.partseqno_i IN (
@@ -928,6 +937,7 @@ class ProgramACDirectLoader:
                 WHERE group_by = 2
             )
             AND hp.status_id = 2
+            AND hp.version_date = '{version_date}' AND hp.version_id = {int(version_id)}
             """
             mi17_count_result = self.client.execute(mi17_count_query)
             mi17_component_count = mi17_count_result[0][0]
@@ -937,7 +947,7 @@ class ProgramACDirectLoader:
             mi17_first_ops_query = f"""
             SELECT ops_counter_mi17 
             FROM flight_program_ac 
-            WHERE dates = '{first_date}'
+            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
             """
             mi17_first_result = self.client.execute(mi17_first_ops_query)
             mi17_first_ops = mi17_first_result[0][0] if mi17_first_result else 0
@@ -951,7 +961,7 @@ class ProgramACDirectLoader:
             mi17_update_query = f"""
             ALTER TABLE flight_program_ac 
             UPDATE trigger_program_mi17 = {mi17_correction}
-            WHERE dates = '{first_date}'
+            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
             """
             self.client.execute(mi17_update_query)
             
@@ -960,7 +970,7 @@ class ProgramACDirectLoader:
             trigger_total_update_query = f"""
             ALTER TABLE flight_program_ac 
             UPDATE trigger_program = trigger_program_mi8 + trigger_program_mi17
-            WHERE dates = '{first_date}'
+            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
             """
             self.client.execute(trigger_total_update_query)
             
@@ -971,7 +981,7 @@ class ProgramACDirectLoader:
                 trigger_program_mi17,
                 trigger_program
             FROM flight_program_ac 
-            WHERE dates = '{first_date}'
+            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
             """
             verification_result = self.client.execute(verification_query)
             
@@ -1037,7 +1047,7 @@ class ProgramACDirectLoader:
                 self.logger.warning("⚠️ Ошибка постпроцессинга, но основные данные загружены")
             
             # 8. Корректировка первых значений trigger полей (ПОСЛЕ загрузки heli_pandas)
-            if not self.correct_first_trigger_values():
+            if not self.correct_first_trigger_values(version_date, version_id):
                 self.logger.warning("⚠️ Ошибка корректировки trigger полей, но основные данные загружены")
             
             # 9. Валидация
