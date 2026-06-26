@@ -120,12 +120,6 @@ data_input
 data_input/
 output
 output/
-!output/
-output/*
-!output/multiagent_template/
-!output/multiagent_template/**
-output/multiagent_template/.cursor/hooks/__pycache__/
-output/multiagent_template/.cursor/hooks/**/*.pyc
 
 
 
