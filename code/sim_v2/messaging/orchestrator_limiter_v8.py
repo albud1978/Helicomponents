@@ -364,12 +364,14 @@ class LimiterV8Orchestrator:
     
     def __init__(self, version_date: str, end_day: int = 3650,
                  enable_mp2: bool = False, clickhouse_client=None,
-                 version_id: int | None = None):
+                 version_id: int | None = None,
+                 input_version_id: int | None = None):
         self.version_date = version_date
         self.end_day = end_day
         self.enable_mp2 = enable_mp2
         self.clickhouse_client = clickhouse_client
         self.version_id = version_id
+        self.input_version_id = input_version_id
         
         self.model = None
         self.simulation = None
@@ -399,7 +401,8 @@ class LimiterV8Orchestrator:
         client = get_client()
         self._client = client
         vd = date.fromisoformat(self.version_date)
-        self.env_data = prepare_env_arrays(client, vd)
+        src_vid = self.input_version_id if self.input_version_id is not None else self.version_id
+        self.env_data = prepare_env_arrays(client, vd, src_vid)
         self.frames = int(self.env_data['frames_total_u16'])
         self.days = min(int(self.env_data['days_total_u16']), self.end_day + 1)
         
@@ -533,6 +536,7 @@ class LimiterV8Orchestrator:
             raise RuntimeError(f"repair_quota={self.repair_quota} > REPAIR_LINES_MAX={REPAIR_LINES_MAX}")
         self.base_model.env.newPropertyUInt("repair_quota", self.repair_quota)
         self.base_model.env.newMacroPropertyUInt("repair_line_free_days_mp", REPAIR_LINES_MAX)
+        self.base_model.env.newMacroPropertyUInt("repair_line_busy_days_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_acn_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_gb_mp", REPAIR_LINES_MAX)
         self.base_model.env.newMacroPropertyUInt("repair_line_rt_mp", REPAIR_LINES_MAX)
@@ -587,8 +591,12 @@ class LimiterV8Orchestrator:
         
         # HF для инициализации repair_line_*_mp
         # day0_map заполняется позже в _init_repair_lines_at_build
-        mi8_rt = int(self.env_data.get('mi8_repair_time_const', 180))
-        mi17_rt = int(self.env_data.get('mi17_repair_time_const', 180))
+        if 'mi8_repair_time_const' not in self.env_data or 'mi17_repair_time_const' not in self.env_data:
+            raise RuntimeError("repair_time_const properties are required for RepairLine availability semantics")
+        mi8_rt = int(self.env_data['mi8_repair_time_const'])
+        mi17_rt = int(self.env_data['mi17_repair_time_const'])
+        if mi8_rt <= 0 or mi17_rt <= 0:
+            raise RuntimeError(f"repair_time_const must be positive: mi8={mi8_rt}, mi17={mi17_rt}")
         self._hf_init_lines = HF_InitRepairLines(
             self.repair_quota, day0_map={}, mi8_rt=mi8_rt, mi17_rt=mi17_rt
         )
@@ -624,7 +632,7 @@ class LimiterV8Orchestrator:
                 'll': int(self.env_data.get('mi17_ll_const', 270000)),
                 'oh': int(self.env_data.get('mi17_oh_const', 270000)),
                 'br': int(self.env_data.get('mi17_br_const', 210000)),
-                'repair_time': int(self.env_data.get('mi17_repair_time_const', 180)),
+                'repair_time': mi17_rt,
                 'assembly_time': int(self.env_data.get('mi17_assembly_time_const', 30)),
                 'partout_time': int(self.env_data.get('mi17_partout_time_const', 20)),
                 'second_ll_sentinel': int(self.env_data.get('second_ll_sentinel', 0xFFFFFFFF)),
@@ -643,7 +651,7 @@ class LimiterV8Orchestrator:
         # V8: RepairAgent ОТКЛЮЧЁН — используем V8 квотирование через RepairLine
         # ═══════════════════════════════════════════════════════════════
         # repair_quota = int(self.env_data.get('mi17_repair_quota', 8))
-        # repair_time = int(self.env_data.get('mi17_repair_time_const', 180))
+        # repair_time берётся из mi*_repair_time_const и валидируется fail-fast выше
         self.repair_agent = None  # Отключено для baseline совместимости
         
         # count_repair: подсчитывается динамически или через MacroProperty
@@ -1113,7 +1121,8 @@ class LimiterV8Orchestrator:
         rl_pop = fg.AgentVector(self.base_model.repair_line_agent, self.repair_quota)
         for i in range(self.repair_quota):
             rl_pop[i].setVariableUInt("line_id", i)
-            rl_pop[i].setVariableUInt("free_days", 1)
+            rl_pop[i].setVariableUInt("free_days", 0)
+            rl_pop[i].setVariableUInt("busy_days", 0)
             rl_pop[i].setVariableUInt("aircraft_number", 0)
             rl_pop[i].setVariableUInt("last_acn", 0)
             rl_pop[i].setVariableUInt("last_day", 0)
@@ -1129,8 +1138,14 @@ class LimiterV8Orchestrator:
             gb = agent.getVariableUInt("group_by")
             repair_time = agent.getVariableUInt("repair_time")
             exit_date = agent.getVariableUInt("exit_date")
+            remaining_days = int(exit_date) if int(exit_date) > 0 else 0
+            rt_eff = int(repair_time)
+            if remaining_days > rt_eff:
+                rt_eff = remaining_days
+            initial_busy_days = rt_eff - remaining_days
             rl_pop[i].setVariableUInt("aircraft_number", acn)
             rl_pop[i].setVariableUInt("free_days", 0)
+            rl_pop[i].setVariableUInt("busy_days", initial_busy_days)
             rl_pop[i].setVariableUInt("last_acn", acn)
             rl_pop[i].setVariableUInt("last_day", 0)
             day0_map[i] = (acn, int(gb), int(repair_time), int(exit_date))
@@ -1665,17 +1680,19 @@ class HF_InitRepairLines(fg.HostFunction):
     """HostFunction для инициализации RepairLine MacroProperty.
     
     day0_map: {line_id: (acn, group_by, repair_time, exit_date)} — линии, занятые day-0 repair агентами.
-    Для таких линий вычисляем стартовые free_days и mp_rt так, чтобы автоосвобождение
-    (rt > 0 && free_days >= rt) совпадало с индивидуальным exit_date.
+    Для таких линий free_days остаётся окном доступности (=0), а busy_days хранит
+    elapsed-прогресс ремонта, чтобы release совпадал с индивидуальным exit_date.
     """
     
     def __init__(self, repair_quota: int, day0_map: dict = None,
-                 mi8_rt: int = 180, mi17_rt: int = 180):
+                 mi8_rt: int = 0, mi17_rt: int = 0):
         super().__init__()
         self.repair_quota = int(repair_quota)
         self.day0_map = day0_map or {}
         self.mi8_rt = int(mi8_rt)
         self.mi17_rt = int(mi17_rt)
+        if self.mi8_rt <= 0 or self.mi17_rt <= 0:
+            raise RuntimeError(f"HF_InitRepairLines requires positive repair_time_const: mi8={self.mi8_rt}, mi17={self.mi17_rt}")
         self.initialized = False
     
     def run(self, FLAMEGPU):
@@ -1683,6 +1700,7 @@ class HF_InitRepairLines(fg.HostFunction):
             return
         
         mp_days = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_free_days_mp")
+        mp_busy = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_busy_days_mp")
         mp_acn = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_acn_mp")
         mp_gb = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_gb_mp")
         mp_rt = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_rt_mp")
@@ -1703,6 +1721,7 @@ class HF_InitRepairLines(fg.HostFunction):
                 mp_bank_end[base + j] = 0xFFFFFFFF
             if i >= self.repair_quota:
                 mp_days[i] = 0xFFFFFFFF  # не используется
+                mp_busy[i] = 0
                 mp_acn[i] = 0
                 mp_gb[i] = 0
                 mp_rt[i] = 0
@@ -1718,13 +1737,17 @@ class HF_InitRepairLines(fg.HostFunction):
                     rt_agent = 0
                     exit_date = 0
                 gb = int(gb)
+                if gb not in (1, 2):
+                    raise RuntimeError(f"Day-0 RepairLine assignment requires group_by in (1,2), got {gb} for acn={acn}")
                 rt = int(rt_agent) if int(rt_agent) > 0 else (self.mi8_rt if gb == 1 else self.mi17_rt)
+                if rt <= 0:
+                    raise RuntimeError(f"Day-0 RepairLine assignment requires positive repair_time for acn={acn}, group_by={gb}")
                 remaining_days = int(exit_date) if int(exit_date) > 0 else 0
                 rt_eff = remaining_days if remaining_days > rt else rt
-                initial_free_days = rt_eff - remaining_days
-                # При таком старте free_days + remaining_days == rt_eff, значит release (free_days>=rt_eff)
-                # срабатывает именно в exit_date для каждого борта.
-                mp_days[i] = int(initial_free_days)
+                initial_busy_days = rt_eff - remaining_days
+                # free_days — только окно доступности; тайминг release ведёт busy_days.
+                mp_days[i] = 0
+                mp_busy[i] = int(initial_busy_days)
                 mp_acn[i] = acn
                 mp_gb[i] = gb
                 mp_rt[i] = int(rt_eff)
@@ -1732,7 +1755,8 @@ class HF_InitRepairLines(fg.HostFunction):
                 mp_last_day[i] = 0
                 occupied_count += 1
             else:
-                mp_days[i] = 1       # свободна с 1
+                mp_days[i] = 0       # свободное окно накапливается с day-0
+                mp_busy[i] = 0
                 mp_acn[i] = 0        # свободна
                 mp_gb[i] = 0
                 min_rt = min(self.mi8_rt, self.mi17_rt)
@@ -1753,6 +1777,7 @@ def main():
     parser.add_argument("--end-day", type=int, default=3650, help="Последний день симуляции")
     parser.add_argument("--max-steps", type=int, default=10000, help="Максимум шагов")
     parser.add_argument("--version-id", type=int, default=None, help="Номер версии симуляции (1,2,3...); по умолчанию env V8_RUN_ID или 1")
+    parser.add_argument("--input-version-id", type=int, default=None, help="version_id источника входных данных; по умолчанию = --version-id")
     parser.add_argument("--drop-table", action="store_true", help="Пересоздать таблицу")
     
     args = parser.parse_args()
@@ -1886,7 +1911,8 @@ Run simulation requires Agent KG traceability. Options:
         args.end_day,
         enable_mp2=True,
         clickhouse_client=client,
-        version_id=args.version_id
+        version_id=args.version_id,
+        input_version_id=args.input_version_id
     )
     orchestrator.prepare_data()
     orchestrator.build_model()

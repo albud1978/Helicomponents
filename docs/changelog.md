@@ -1,5 +1,86 @@
 # Changelog
 
+## 2026-06-26 — input/output version_id decouple (cap-curve без копирования входа)
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_input_version_decouple_2026-06-26` | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** cap-curve сценарии (0..61) ранее требовали копирования входных таблиц (`flight_program_fl` и др.) в каждый `version_id=100+cap`. Развязка input/output `version_id`: вход читается из общего источника (vid3), результат симуляции пишется в отдельный выходной vid.
+
+### Orchestrator: опциональный `input_version_id`
+`LimiterV8Orchestrator(input_version_id: int|None=None)` + CLI `--input-version-id`. Назначение: читать **входные** данные (`heli_pandas` / `flight_program_fl` / `flight_program_ac` через `prepare_env_arrays`) из одной версии-источника, а **результат** симуляции писать в другую (`self.version_id`). Default `None` → `src_vid=version_id` → поведение полностью backward-compatible (существующие вызовы vid1–9 / dwh-gate не меняются).
+
+### Cap-curve: общий вход vid3, выход vid(100+cap)
+- `spawn_cap_curve.py`: удалены `setup_cap_input_versions` / `--setup` и путь копирования входных таблиц (ALTER/INSERT).
+- `run_one_cap`: вход из общего vid3 (`input_version_id=3`), выход в `vid(100+cap)`.
+- `collect_curve`: `flight_program_fl` (Mi-17 налёт) — из vid3; births/deficit — из выходной `vid(100+cap)`.
+- `spawn_cap_curve_launcher`: проброс `--src-vid 3`.
+
+**Мотивация:** cap-curve не требует 61× копий ~92 млн строк `flight_program_fl` — вход общий vid3; в БД пишутся только выходные sim-таблицы. Дисковая экономия минорна (данные сжимаются ~34×, ~40 МБ); основной выигрыш — меньше операций и чище версионирование.
+
+**Создано без запуска** (no sim/GPU/DB writes).
+
+**Review/governance:** reviewer-flame APPROVE_WITH_NOTES (`handoff_W_input_version_decouple_2026-06-26_reviewer-flame_66299369`); human approval `ctx_W_input_version_decouple_2026-06-26_approval_590326b7`; governance `allow_with_notes` (`handoff_W_input_version_decouple_2026-06-26_governance-compliance_490cb365`).
+
+**Файлы:** `code/sim_v2/messaging/orchestrator_limiter_v8.py`, `code/utils/spawn_cap_curve.py`, `code/utils/spawn_cap_curve_launcher.py`.
+
+**Коммит:** не выполнен (по политике — только по явной команде). **Commit-isolation:** не коммитить вместе с `W_repairline_freedays_fix` (busy_days).
+
+---
+
+## 2026-06-26 — spawn_limit RTC: MacroProperty read+atomic crash + sensitivity cap 55..60
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_spawn_sensitivity_55_60_2026-06-22` | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** при `spawn_limit_active==1` и положительном cap динамического спавна Mi-17 симуляция падала на FLAME GPU runtime. Ранее не проявлялось: v1/v3 `active=0`; v2 `active=1`, но cap=0 → `need_17=0`.
+
+### Баг (FLAME GPU read+atomic на одном MacroProperty)
+В `rtc_spawn_dynamic_mgr_v8` (`code/sim_v2/messaging/rtc_spawn_dynamic_v7.py`) MacroProperty `cumulative_dynamic_spawn_mi17` одновременно читался (implicit cast) и atomic-писался (`.exchange`) в одной agent-функции → FLAME GPU запрещает mixing read+atomic на одном DeviceMacroProperty → crash.
+
+### Фикс (agent var RMW)
+MacroProperty заменён на персистентную agent-переменную `SpawnDynamicMgr.cumulative_dynamic_spawn` (init 0); RMW по тому же паттерну, что `total_spawned_mi17`. SSoT/инварианты не менялись (GPU-1 RMW допустим, семантика INV-2/INV-13 неизменна).
+
+**Review/governance:** reviewer-flame APPROVE (`handoff_W_spawn_sensitivity_55_60_2026-06-22_reviewer-flame_1ca67518`); human approval `ctx_W_spawn_sensitivity_55_60_2026-06-22_approval_b5ad6bd5`; governance `allow_with_notes` (`handoff_W_spawn_sensitivity_55_60_2026-06-22_governance-compliance_744c198a`).
+
+### Sensitivity-прогон (`version_date=2026-06-22`, без планового)
+Впервые работает активный spawn_limit с положительным cap. Прогнаны 6 сценариев vid4..9 (cap 55..60), сравнение дефицита вертолето-дней и невыполненного налёта:
+- Чувствительность ~92→111 вертолето-дней и ~220→265 ч налёта (post-180) на каждый недопущенный борт при снижении cap.
+- 61-й борт (baseline vid3) закрывает долгосрочный дефицит до 0.
+
+**Файлы:** `code/sim_v2/messaging/rtc_spawn_dynamic_v7.py`.
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
+## 2026-06-26 — RepairLine free_days: split availability vs repair progress (v3 occupancy fix)
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_repairline_freedays_fix` | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** в симуляции (`code/sim_v2/**`) счётчик `free_days` совмещал две роли — прогресс ремонта и окно доступности линии. Он рос даже у занятой линии и не сбрасывался при release. Недетерминированный source1/P3 ремонт мог выдать backdated claim (`claim_start=current_day−repair_time`) в линию, ещё занятую day-0 claimless ремонтом → переподписка ремонтной линии → occupancy conflict в `rtc_repairline_export` (сценарий полностью динамического спавна v3 падал: day=164 line0 acn 25485 vs 22517).
+
+### Фикс (split counters)
+- **`free_days`** — окно доступности: 0 пока линия занята; сброс в 0 при release; рост 0..`repair_time` только когда свободна.
+- **`busy_days`** — прогресс ремонта: ведёт тайминг release по `busy_days>=repair_time`; day-0 init=`elapsed` для сохранения тайминга.
+- P2/P3 commit сбрасывает `busy_days` при захвате линии.
+
+**Файлы RTC/Env:** `base_model_messaging.py`, `orchestrator_limiter_v8.py`, `rtc_repair_lines_v8.py`, `rtc_quota_v8.py`.
+
+### SSoT INV-3 (занятость линии)
+Занятость линии переопределена: **`aircraft_number!=0`** (раньше `repair_time>0 AND free_days<repair_time`). Обновлены `config/transitions/invariants.json` (claim/expr/notes) и `code/validation/inv3_repair_capacity.py`.
+
+### Верификация (`version_date=2026-06-22`, vid 1/2/3)
+- **Single-occupancy:** 0 нарушений всех vid (occupancy conflict устранён, v3 полностью материализован).
+- **INV-3 PASS:** max 18, quota 18, 0 violations (`inv3_repair_capacity.py`).
+- **INV-2 PASS:** v2 81 conditional при `spawn_limit_active=1`, cap=0.
+- **3 компоненты Mi-17 (`group_by=2`):** v1 28/27/100; v2 28/0/12596 (post180 12496); v3 0/61/100.
+- Рост дефицита v2 (7098→12596) — корректное следствие честного ограничения ёмкости ремонта, не регрессия фикса.
+
+**Review/validation/governance:** reviewer-flame APPROVE (6/7, esc INV-3 alignment → P1); validator-judge PASS (`handoff_...98c29784`); governance `allow_with_notes` (`handoff_...3d85f477`).
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
 ## 2026-06-24 — spawn_limit: накопительный лимит динамического спавна Mi-17 + дефицит в BI
 
 **Risk:** high | **Profile:** high-strict | **Workflow:** `W_spawn_limit_deficit_20260623` | **Branch:** `feature/dwh-bb8`
@@ -12,7 +93,7 @@
 ### Слои реализации
 1. **Extract:** `program_ac_direct_loader.py` — колонки `spawn_limit` (UInt16), `spawn_limit_active` (UInt8); first-day-only distribution.
 2. **Env-seeding:** `sim_env_setup.py` — `spawn_limit_cumulative` (prefix sum), `spawn_limit_active`.
-3. **RTC-клампинг:** `rtc_spawn_dynamic_v7.py`, `orchestrator_limiter_v8.py` — clamp dynamic Mi-17 по `max(0, cumulative_cap − cumulative_dynamic_spawn_mi17)` при `spawn_limit_active==1`; MacroProperty-счётчик `cumulative_dynamic_spawn_mi17`.
+3. **RTC-клампинг:** `rtc_spawn_dynamic_v7.py`, `orchestrator_limiter_v8.py` — clamp dynamic Mi-17 по `max(0, cumulative_cap − cumulative_dynamic_spawn)` при `spawn_limit_active==1`; накопитель динамического спавна Mi-17 — персистентная agent-переменная `SpawnDynamicMgr.cumulative_dynamic_spawn` (не MacroProperty; фикс 2026-06-26 `W_spawn_sensitivity_55_60_2026-06-22`).
 4. **BI-выгрузка дефицита:** `sim_daily_materializer.py` → `sim_deficit_v9_daily` (target/ops_count/deficit); датасет Superset `deploy/bi-as-code/superset/datasets/sim_deficit_v9_daily.yaml`.
 
 ### Инварианты (SSoT v17)

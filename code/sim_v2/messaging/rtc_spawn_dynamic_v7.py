@@ -286,11 +286,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v8, flamegpu::MessageNone, flamegp
     unsigned int available_17 = (total_spawned_17 < dynamic_reserve_17) ? (dynamic_reserve_17 - total_spawned_17) : 0u;
     unsigned int need_17 = (deficit_mi17 < available_17) ? deficit_mi17 : available_17;
     const unsigned char spawn_limit_active = FLAMEGPU->environment.getProperty<unsigned char>("spawn_limit_active");
-    // INVARIANT: read-modify-write на scalar cumulative_dynamic_spawn_mi17 корректен, т.к. этот mgr-слой
-    // исполняет единственный агент SpawnDynamicMgr (см. init_spawn_dynamic_population_v8) — конкурентной
-    // записи нет, поэтому неатомарный read + .exchange() безопасен.
-    auto cumulative_dynamic_spawn_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 1u>("cumulative_dynamic_spawn_mi17");
-    unsigned int cumulative_dynamic_spawned = cumulative_dynamic_spawn_mp;
+    unsigned int cumulative_dynamic_spawned = FLAMEGPU->getVariable<unsigned int>("cumulative_dynamic_spawn");
     if (spawn_limit_active == 1u) {
         auto spawn_limit_cumulative_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("spawn_limit_cumulative");
         const unsigned int cumulative_limit = spawn_limit_cumulative_mp[target_day];
@@ -311,7 +307,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v8, flamegpu::MessageNone, flamegp
         FLAMEGPU->setVariable<unsigned int>("next_acn_mi17", next_acn_17 + need_17);
         FLAMEGPU->setVariable<unsigned int>("total_spawned_mi17", total_spawned_17 + need_17);
         if (spawn_limit_active == 1u) {
-            cumulative_dynamic_spawn_mp.exchange(cumulative_dynamic_spawned + need_17);
+            FLAMEGPU->setVariable<unsigned int>("cumulative_dynamic_spawn", cumulative_dynamic_spawned + need_17);
         }
     }
     
@@ -612,7 +608,6 @@ def register_spawn_dynamic_v8(model: fg.ModelDescription, heli_agent: fg.AgentDe
     env.newMacroPropertyUInt("spawn_dynamic_need", MAX_DAYS)
     env.newMacroPropertyUInt("spawn_dynamic_base_idx", MAX_DAYS)
     env.newMacroPropertyUInt("spawn_dynamic_base_acn", MAX_DAYS)
-    env.newMacroPropertyUInt32("cumulative_dynamic_spawn_mi17", 1)
     env.newMacroPropertyUInt("spawn_dynamic_need_mi8", MAX_DAYS)
     env.newMacroPropertyUInt("spawn_dynamic_base_idx_mi8", MAX_DAYS)
     env.newMacroPropertyUInt("spawn_dynamic_base_acn_mi8", MAX_DAYS)
@@ -622,6 +617,7 @@ def register_spawn_dynamic_v8(model: fg.ModelDescription, heli_agent: fg.AgentDe
     spawn_mgr.newVariableUInt("next_idx_mi17", first_dynamic_idx_mi17)
     spawn_mgr.newVariableUInt("next_acn_mi17", base_acn_spawn_mi17)
     spawn_mgr.newVariableUInt("total_spawned_mi17", 0)
+    spawn_mgr.newVariableUInt("cumulative_dynamic_spawn", 0)
     spawn_mgr.newVariableUInt("next_idx_mi8", first_dynamic_idx_mi8)
     spawn_mgr.newVariableUInt("next_acn_mi8", base_acn_spawn_mi8)
     spawn_mgr.newVariableUInt("total_spawned_mi8", 0)
@@ -709,6 +705,7 @@ def init_spawn_dynamic_population_v8(simulation: fg.CUDASimulation, model: fg.Mo
     mgr_pop[0].setVariableUInt("next_idx_mi17", first_dynamic_idx_mi17)
     mgr_pop[0].setVariableUInt("next_acn_mi17", base_acn_mi17)
     mgr_pop[0].setVariableUInt("total_spawned_mi17", 0)
+    mgr_pop[0].setVariableUInt("cumulative_dynamic_spawn", 0)
     mgr_pop[0].setVariableUInt("next_idx_mi8", first_dynamic_idx_mi8)
     mgr_pop[0].setVariableUInt("next_acn_mi8", base_acn_mi8)
     mgr_pop[0].setVariableUInt("total_spawned_mi8", 0)

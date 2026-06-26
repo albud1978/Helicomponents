@@ -50,24 +50,32 @@ FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_increment_v8, flamegpu::MessageNone, fla
     
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("line_id");
     auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto mp_busy = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_busy_days_mp");
     auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
     unsigned int free_days = mp_days[line_id];
-    free_days += adaptive_days;
-    FLAMEGPU->setVariable<unsigned int>("free_days", free_days);
-    
+    unsigned int busy_days = mp_busy[line_id];
     const unsigned int acn = mp_acn[line_id];
-    FLAMEGPU->setVariable<unsigned int>("aircraft_number", acn);
     
-    // Если линия отработала свой repair_time — освобождаем aircraft_number
     if (acn != 0u) {{
+        free_days = 0u;
+        busy_days += adaptive_days;
         auto mp_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
         const unsigned int rt = mp_rt[line_id];
-        if (rt > 0u && free_days >= rt) {{
+        if (rt > 0u && busy_days >= rt) {{
             FLAMEGPU->setVariable<unsigned int>("aircraft_number", 0u);
+            busy_days = 0u;
             auto mp_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");
             mp_gb[line_id].exchange(0u);
+        }} else {{
+            FLAMEGPU->setVariable<unsigned int>("aircraft_number", acn);
         }}
+    }} else {{
+        free_days += adaptive_days;
+        busy_days = 0u;
+        FLAMEGPU->setVariable<unsigned int>("aircraft_number", 0u);
     }}
+    FLAMEGPU->setVariable<unsigned int>("free_days", free_days);
+    FLAMEGPU->setVariable<unsigned int>("busy_days", busy_days);
     
     return flamegpu::ALIVE;
 }}
@@ -77,10 +85,13 @@ RTC_REPAIR_LINE_WRITE = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_write_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("line_id");
     const unsigned int free_days = FLAMEGPU->getVariable<unsigned int>("free_days");
+    const unsigned int busy_days = FLAMEGPU->getVariable<unsigned int>("busy_days");
     const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     auto mp_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto mp_busy = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_busy_days_mp");
     auto mp_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
     mp_days[line_id].exchange(free_days);
+    mp_busy[line_id].exchange(busy_days);
     mp_acn[line_id].exchange(acn);
     return flamegpu::ALIVE;
 }}

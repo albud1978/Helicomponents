@@ -223,10 +223,11 @@ class V2BaseModelMessaging:
         repair_line = self.model.newAgent("RepairLine")
         repair_line.newVariableUInt("line_id")
         repair_line.newVariableUInt("free_days")
+        repair_line.newVariableUInt("busy_days")
         repair_line.newVariableUInt("aircraft_number")
         repair_line.newVariableUInt("last_acn")
         repair_line.newVariableUInt("last_day")
-        print("  ✅ Agent RepairLine: переменные line_id, free_days, aircraft_number")
+        print("  ✅ Agent RepairLine: переменные line_id, free_days, busy_days, aircraft_number")
         return repair_line
     
     def _setup_scalar_properties(self, env_data: Dict[str, object]):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Program AC Direct Loader - Прямое создание тензора программы полетов ВС
-======================================================================
+----------------------------------------------------------------------
 
 Загружает данные из Program_heli.xlsx напрямую в таблицу flight_program_ac,
 создавая тензор на 4000 дней для операций и новых поставок по типам ВС.
@@ -224,7 +224,7 @@ class ProgramHeliAnalyzer:
             return []
 
     def parse_spawn_limit_data(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Парсит опциональную строку spawn_limit для размещения на 1-е число месяца"""
+        """Парсит spawn_limit: пустая строка = безлимит, любое число активирует лимит"""
         spawn_rows = df[(df['Месяц'] == 'spawn_limit') & (df['ac_type_mask'] == 64)]
         if spawn_rows.empty:
             self.logger.info("📊 spawn_limit: строка не найдена, лимит отключён (0)")
@@ -234,9 +234,15 @@ class ProgramHeliAnalyzer:
             self.logger.warning("⚠️ spawn_limit: найдено несколько строк, используется первая")
 
         row = spawn_rows.iloc[0]
+        month_columns = [col for col in df.columns if col not in ['ac_type_mask', 'Месяц']]
+        has_numeric = any(pd.notna(row[col]) for col in month_columns)
+        if not has_numeric:
+            self.logger.info("📊 spawn_limit: строка есть, но все ячейки пусты → лимит отключён (безлимит)")
+            return []
+
         column_data = {}
-        for col in df.columns:
-            if col not in ['ac_type_mask', 'Месяц'] and pd.notna(row[col]) and row[col] != 0:
+        for col in month_columns:
+            if pd.notna(row[col]) and row[col] != 0:
                 column_data[col] = float(row[col])
 
         record = {
@@ -488,8 +494,8 @@ class ProgramACDirectLoader:
             self.logger.error(f"❌ Ошибка получения типов ВС: {e}")
             return []
     
-    def create_flight_program_ac_table(self, version_date: date) -> bool:
-        """Создание таблицы flight_program_ac (если не существует) и очистка данных для version_date"""
+    def create_flight_program_ac_table(self, version_date: date, version_id: int) -> bool:
+        """Создание таблицы flight_program_ac и очистка данных для конкретной версии."""
         try:
             # Создаем таблицу если не существует (не удаляем!)
             create_table_sql = """
@@ -500,7 +506,7 @@ class ProgramACDirectLoader:
                 ops_counter_total UInt16,          -- вычисляемое поле: сумма двух UInt16
                 new_counter_mi17 UInt8,            -- новые поставки: 0-255 достаточно
                 spawn_limit UInt16,                -- помесячные приращения лимита; активность задаёт spawn_limit_active
-                spawn_limit_active UInt8,          -- presence-флаг: 1 если строка spawn_limit была в xlsx, иначе 0
+                spawn_limit_active UInt8,          -- content-флаг: 1 если в строке spawn_limit есть любое число, иначе 0
                 trigger_program_mi8 Int8,          -- триггеры: -128 до 127 достаточно
                 trigger_program_mi17 Int8,         -- триггеры: -128 до 127 достаточно
                 trigger_program Int8,              -- триггеры: -128 до 127 достаточно
@@ -521,12 +527,18 @@ class ProgramACDirectLoader:
                 "ADD COLUMN IF NOT EXISTS spawn_limit_active UInt8 AFTER spawn_limit"
             )
             
-            # Удаляем только записи с текущим version_date (rewrite policy)
-            delete_sql = f"ALTER TABLE flight_program_ac DELETE WHERE version_date = '{version_date}'"
+            # Удаляем только записи текущей версии; соседние сценарии за ту же дату сохраняются.
+            delete_sql = (
+                "ALTER TABLE flight_program_ac "
+                f"DELETE WHERE version_date = '{version_date}' AND version_id = {version_id}"
+            )
             self.client.execute(delete_sql)
             # Ждём завершения мутации
             self.client.execute("OPTIMIZE TABLE flight_program_ac FINAL")
-            self.logger.info(f"✅ Таблица flight_program_ac: удалены записи для version_date={version_date}")
+            self.logger.info(
+                "✅ Таблица flight_program_ac: удалены записи для "
+                f"version_date={version_date}, version_id={version_id}"
+            )
             return True
             
         except Exception as e:
@@ -559,8 +571,8 @@ class ProgramACDirectLoader:
                 field_name = record['field_name']
                 spawn_limit_by_field[field_name] = record
 
-            # presence-based активация: строка spawn_limit присутствует в xlsx => лимит активен
-            # (даже все нули = cap 0), отсутствует => лимит неактивен (backward-compat).
+            # content-based активация: любое число в spawn_limit, включая 0, включает лимит.
+            # Отсутствующая или полностью пустая строка означает безлимит.
             spawn_limit_active = 1 if spawn_limit_data else 0
 
             insert_data = []
@@ -622,7 +634,7 @@ class ProgramACDirectLoader:
                     ops_total,      # ops_counter_total (рассчитается позже)
                     new_mi17,       # new_counter_mi17
                     spawn_limit,    # spawn_limit (помесячное приращение лимита)
-                    spawn_limit_active,  # spawn_limit_active (presence-флаг версии)
+                    spawn_limit_active,  # spawn_limit_active (content-флаг версии)
                     trigger_mi8,    # trigger_program_mi8 (рассчитается позже)
                     trigger_mi17,   # trigger_program_mi17 (рассчитается позже)
                     trigger_total,  # trigger_program (рассчитается позже)
@@ -664,13 +676,13 @@ class ProgramACDirectLoader:
             self.logger.error(f"❌ Ошибка вставки данных: {e}")
             return False
     
-    def validate_tensor(self) -> bool:
-        """Валидация оптимизированного тензора flight_program_ac"""
+    def validate_tensor(self, version_date: date, version_id: int) -> bool:
+        """Валидация оптимизированного тензора flight_program_ac в рамках версии."""
         try:
             self.logger.info("🔍 === ВАЛИДАЦИЯ ОПТИМИЗИРОВАННОГО ТЕНЗОРА ===")
             
             # 1. Общая статистика
-            stats_query = """
+            stats_query = f"""
             SELECT 
                 COUNT(*) as total_records,
                 COUNT(DISTINCT dates) as unique_dates,
@@ -679,6 +691,7 @@ class ProgramACDirectLoader:
                 SUM(ops_counter_mi8 + ops_counter_mi17 + new_counter_mi17) as total_sum,
                 COUNT(CASE WHEN ops_counter_total > 0 THEN 1 END) as non_zero_records
             FROM flight_program_ac
+            WHERE version_date = '{version_date}' AND version_id = {version_id}
             """
             stats_result = self.client.execute(stats_query)
             row = stats_result[0]
@@ -691,30 +704,34 @@ class ProgramACDirectLoader:
             self.logger.info(f"   Записей с ops_counter_total > 0: {row[5]:,}")
             
             # 2. Проверка полей
-            field_stats = self.client.execute("""
+            field_stats = self.client.execute(f"""
             SELECT 
                 'ops_counter_mi8' as field_name,
                 toInt64(SUM(ops_counter_mi8)) as total_sum,
                 toInt64(COUNT(CASE WHEN ops_counter_mi8 > 0 THEN 1 END)) as non_zero
             FROM flight_program_ac
+            WHERE version_date = '{version_date}' AND version_id = {version_id}
             UNION ALL
             SELECT 
                 'ops_counter_mi17' as field_name,
                 toInt64(SUM(ops_counter_mi17)) as total_sum,
                 toInt64(COUNT(CASE WHEN ops_counter_mi17 > 0 THEN 1 END)) as non_zero
             FROM flight_program_ac
+            WHERE version_date = '{version_date}' AND version_id = {version_id}
             UNION ALL
             SELECT 
                 'ops_counter_total' as field_name,
                 toInt64(SUM(ops_counter_total)) as total_sum,
                 toInt64(COUNT(CASE WHEN ops_counter_total > 0 THEN 1 END)) as non_zero
             FROM flight_program_ac
+            WHERE version_date = '{version_date}' AND version_id = {version_id}
             UNION ALL
             SELECT 
                 'trigger_program' as field_name,
                 toInt64(SUM(trigger_program)) as total_sum,
                 toInt64(COUNT(CASE WHEN trigger_program != 0 THEN 1 END)) as non_zero
             FROM flight_program_ac
+            WHERE version_date = '{version_date}' AND version_id = {version_id}
             """)
             
             self.logger.info(f"📋 Статистика по полям:")
@@ -748,8 +765,8 @@ class ProgramACDirectLoader:
             self.logger.error(f"❌ Ошибка валидации: {e}")
             return False
     
-    def add_calculated_fields(self, version_date: date) -> bool:
-        """Обновляет вычисляемые поля для конкретного version_date в flight_program_ac"""
+    def add_calculated_fields(self, version_date: date, version_id: int) -> bool:
+        """Обновляет вычисляемые поля для конкретной версии в flight_program_ac."""
         try:
             self.logger.info(f"🔄 === ПОСТПРОЦЕССИНГ для version_date={version_date} ===")
             
@@ -758,7 +775,7 @@ class ProgramACDirectLoader:
             total_update = f"""
             ALTER TABLE flight_program_ac
             UPDATE ops_counter_total = ops_counter_mi8 + ops_counter_mi17
-            WHERE version_date = '{version_date}'
+            WHERE version_date = '{version_date}' AND version_id = {version_id}
             """
             self.client.execute(total_update)
             
@@ -795,14 +812,14 @@ class ProgramACDirectLoader:
                 spawn_limit,
                 spawn_limit_active,
                 toInt8(ops_counter_mi8 - lagInFrame(ops_counter_mi8, 1, 0) 
-                    OVER (PARTITION BY version_date ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi8,
+                    OVER (PARTITION BY version_date, version_id ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi8,
                 toInt8(ops_counter_mi17 - lagInFrame(ops_counter_mi17, 1, 0)
-                    OVER (PARTITION BY version_date ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi17,
+                    OVER (PARTITION BY version_date, version_id ORDER BY dates ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) as trigger_program_mi17,
                 toInt8(0) as trigger_program,
                 version_date,
                 version_id
             FROM flight_program_ac
-            WHERE version_date = '{version_date}'
+            WHERE version_date = '{version_date}' AND version_id = {version_id}
             ORDER BY dates
             """
             self.client.execute(temp_calc_sql)
@@ -818,7 +835,10 @@ class ProgramACDirectLoader:
             
             # Удаляем данные текущего version_date из основной таблицы и вставляем обновленные
             self.logger.info("📊 Замена данных в основной таблице...")
-            self.client.execute(f"ALTER TABLE flight_program_ac DELETE WHERE version_date = '{version_date}'")
+            self.client.execute(
+                "ALTER TABLE flight_program_ac "
+                f"DELETE WHERE version_date = '{version_date}' AND version_id = {version_id}"
+            )
             self.client.execute("OPTIMIZE TABLE flight_program_ac FINAL")
             self.client.execute("""
                 INSERT INTO flight_program_ac (
@@ -844,7 +864,7 @@ class ProgramACDirectLoader:
                 COUNT(CASE WHEN ops_counter_total > 0 THEN 1 END) as non_zero_total,
                 COUNT(CASE WHEN trigger_program != 0 THEN 1 END) as non_zero_trigger
             FROM flight_program_ac 
-            WHERE version_date = '{version_date}'
+            WHERE version_date = '{version_date}' AND version_id = {version_id}
             """
             
             stats_result = self.client.execute(stats_query)
@@ -864,7 +884,7 @@ class ProgramACDirectLoader:
             self.logger.error(f"❌ Ошибка постпроцессинга: {e}")
             return False
     
-    def correct_first_trigger_values(self, version_date: date, version_id: int = 1) -> bool:
+    def correct_first_trigger_values(self, version_date: date, version_id: int) -> bool:
         """Корректирует первые значения trigger полей ПОСЛЕ загрузки heli_pandas.
 
         Все запросы строго ограничены целевой версией (version_date/version_id):
@@ -877,7 +897,7 @@ class ProgramACDirectLoader:
             # Первая дата тензора строго для целевой версии
             first_date_query = f"""
             SELECT MIN(dates) FROM flight_program_ac
-            WHERE version_date = '{version_date}' AND version_id = {int(version_id)}
+            WHERE version_date = '{version_date}' AND version_id = {version_id}
             """
             first_date_result = self.client.execute(first_date_query)
             first_date = first_date_result[0][0]
@@ -896,7 +916,8 @@ class ProgramACDirectLoader:
                 WHERE group_by = 1
             )
             AND hp.status_id = 2
-            AND hp.version_date = '{version_date}' AND hp.version_id = {int(version_id)}
+            AND hp.version_date = '{version_date}'
+            AND hp.version_id = {version_id}
             """
             mi8_count_result = self.client.execute(mi8_count_query)
             mi8_component_count = mi8_count_result[0][0]
@@ -906,7 +927,9 @@ class ProgramACDirectLoader:
             mi8_first_ops_query = f"""
             SELECT ops_counter_mi8 
             FROM flight_program_ac 
-            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
+            WHERE dates = '{first_date}'
+              AND version_date = '{version_date}'
+              AND version_id = {version_id}
             """
             mi8_first_result = self.client.execute(mi8_first_ops_query)
             mi8_first_ops = mi8_first_result[0][0] if mi8_first_result else 0
@@ -920,7 +943,9 @@ class ProgramACDirectLoader:
             mi8_update_query = f"""
             ALTER TABLE flight_program_ac 
             UPDATE trigger_program_mi8 = {mi8_correction}
-            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
+            WHERE dates = '{first_date}'
+              AND version_date = '{version_date}'
+              AND version_id = {version_id}
             """
             self.client.execute(mi8_update_query)
             
@@ -937,7 +962,8 @@ class ProgramACDirectLoader:
                 WHERE group_by = 2
             )
             AND hp.status_id = 2
-            AND hp.version_date = '{version_date}' AND hp.version_id = {int(version_id)}
+            AND hp.version_date = '{version_date}'
+            AND hp.version_id = {version_id}
             """
             mi17_count_result = self.client.execute(mi17_count_query)
             mi17_component_count = mi17_count_result[0][0]
@@ -947,7 +973,9 @@ class ProgramACDirectLoader:
             mi17_first_ops_query = f"""
             SELECT ops_counter_mi17 
             FROM flight_program_ac 
-            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
+            WHERE dates = '{first_date}'
+              AND version_date = '{version_date}'
+              AND version_id = {version_id}
             """
             mi17_first_result = self.client.execute(mi17_first_ops_query)
             mi17_first_ops = mi17_first_result[0][0] if mi17_first_result else 0
@@ -961,7 +989,9 @@ class ProgramACDirectLoader:
             mi17_update_query = f"""
             ALTER TABLE flight_program_ac 
             UPDATE trigger_program_mi17 = {mi17_correction}
-            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
+            WHERE dates = '{first_date}'
+              AND version_date = '{version_date}'
+              AND version_id = {version_id}
             """
             self.client.execute(mi17_update_query)
             
@@ -970,7 +1000,9 @@ class ProgramACDirectLoader:
             trigger_total_update_query = f"""
             ALTER TABLE flight_program_ac 
             UPDATE trigger_program = trigger_program_mi8 + trigger_program_mi17
-            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
+            WHERE dates = '{first_date}'
+              AND version_date = '{version_date}'
+              AND version_id = {version_id}
             """
             self.client.execute(trigger_total_update_query)
             
@@ -981,7 +1013,9 @@ class ProgramACDirectLoader:
                 trigger_program_mi17,
                 trigger_program
             FROM flight_program_ac 
-            WHERE dates = '{first_date}' AND version_date = '{version_date}' AND version_id = {int(version_id)}
+            WHERE dates = '{first_date}'
+              AND version_date = '{version_date}'
+              AND version_id = {version_id}
             """
             verification_result = self.client.execute(verification_query)
             
@@ -1028,7 +1062,7 @@ class ProgramACDirectLoader:
             calendar = tensor_engine.generate_4000_day_calendar(version_date)
             
             # 4. Создание таблицы (и очистка данных для текущей version_date)
-            if not self.create_flight_program_ac_table(version_date):
+            if not self.create_flight_program_ac_table(version_date, version_id):
                 return False
             
             # 5. Генерация данных тензора
@@ -1043,7 +1077,7 @@ class ProgramACDirectLoader:
                 return False
             
             # 7. Постпроцессинг - добавление вычисляемых полей
-            if not self.add_calculated_fields(version_date):
+            if not self.add_calculated_fields(version_date, version_id):
                 self.logger.warning("⚠️ Ошибка постпроцессинга, но основные данные загружены")
             
             # 8. Корректировка первых значений trigger полей (ПОСЛЕ загрузки heli_pandas)
@@ -1051,7 +1085,7 @@ class ProgramACDirectLoader:
                 self.logger.warning("⚠️ Ошибка корректировки trigger полей, но основные данные загружены")
             
             # 9. Валидация
-            validation_success = self.validate_tensor()
+            validation_success = self.validate_tensor(version_date, version_id)
             
             if validation_success:
                 self.logger.info("🎉 === ТЕНЗОР FLIGHT_PROGRAM_AC ГОТОВ ===")

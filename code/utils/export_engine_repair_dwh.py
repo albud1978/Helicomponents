@@ -178,6 +178,10 @@ SELECT
     od.serialno AS serialno,
     coalesce(od.vendor, '') AS vendor,
     od.target_date AS target_date,
+    od.orig_target_date AS orig_target_date,
+    od.confirmed_date AS confirmed_date,
+    od.del_date AS del_date,
+    od.ext_state AS detail_ext_state,
     od.order_type AS order_type,
     '' AS header_state,
     '' AS header_ext_state,
@@ -244,6 +248,10 @@ SELECT
     od.serialno AS serialno,
     coalesce(oh.vendor, od.vendor, '') AS vendor,
     od.target_date AS target_date,
+    od.orig_target_date AS orig_target_date,
+    od.confirmed_date AS confirmed_date,
+    od.del_date AS del_date,
+    od.ext_state AS detail_ext_state,
     oh.order_type AS order_type,
     oh.state AS header_state,
     oh.ext_state AS header_ext_state,
@@ -296,6 +304,10 @@ SELECT
     od.serialno AS serialno,
     coalesce(od.vendor, '') AS vendor,
     od.target_date AS target_date,
+    od.orig_target_date AS orig_target_date,
+    od.confirmed_date AS confirmed_date,
+    od.del_date AS del_date,
+    od.ext_state AS detail_ext_state,
     od.order_type AS order_type,
     '' AS header_state,
     '' AS header_ext_state,
@@ -332,6 +344,10 @@ SELECT
     od.serialno AS serialno,
     coalesce(od.vendor, '') AS vendor,
     od.target_date AS target_date,
+    od.orig_target_date AS orig_target_date,
+    od.confirmed_date AS confirmed_date,
+    od.del_date AS del_date,
+    od.ext_state AS detail_ext_state,
     od.order_type AS order_type,
     '' AS header_state,
     '' AS header_ext_state,
@@ -385,6 +401,10 @@ SELECT
     od.serialno AS serialno,
     coalesce(oh.vendor, od.vendor, '') AS vendor,
     od.target_date AS target_date,
+    od.orig_target_date AS orig_target_date,
+    od.confirmed_date AS confirmed_date,
+    od.del_date AS del_date,
+    od.ext_state AS detail_ext_state,
     oh.order_type AS order_type,
     oh.state AS header_state,
     oh.ext_state AS header_ext_state,
@@ -422,6 +442,10 @@ SELECT
     od.serialno AS serialno,
     coalesce(od.vendor, '') AS vendor,
     od.target_date AS target_date,
+    od.orig_target_date AS orig_target_date,
+    od.confirmed_date AS confirmed_date,
+    od.del_date AS del_date,
+    od.ext_state AS detail_ext_state,
     od.order_type AS order_type,
     '' AS header_state,
     '' AS header_ext_state,
@@ -489,6 +513,23 @@ def _target_date_vs_report_label(series: pd.Series, report_date: str) -> pd.Seri
     return pd.Series(labels, index=series.index)
 
 
+def _nullable_date_present_mask(series: pd.Series) -> pd.Series:
+    """Новые поля Nullable(Date32): заполнено = не NULL и не sentinel 1971-12-31."""
+    d = pd.to_datetime(series, errors="coerce").dt.normalize()
+    return d.notna() & (d != AMOS_EMPTY_DATE)
+
+
+def _target_moved_label(orig: pd.Series, target: pd.Series) -> pd.Series:
+    """Перенос плановой даты: orig_target_date задана и отличается от target_date."""
+    o = pd.to_datetime(orig, errors="coerce").dt.normalize()
+    t = pd.to_datetime(target, errors="coerce").dt.normalize()
+    orig_set = o.notna() & (o != AMOS_EMPTY_DATE)
+    target_set = t.notna() & (t != AMOS_EMPTY_DATE)
+    moved = orig_set & target_set & (o != t)
+    labels = np.where(~orig_set, "Нет данных (orig пуст)", np.where(moved, "Да", "Нет"))
+    return pd.Series(labels, index=orig.index)
+
+
 def _enrich_gb4_repair(df: pd.DataFrame, report_date: str) -> pd.DataFrame:
     out = df.copy()
     vf = _vendor_filled_mask(out["vendor"])
@@ -503,6 +544,12 @@ def _enrich_gb4_repair(df: pd.DataFrame, report_date: str) -> pd.DataFrame:
     )
     out["target_date_vs_report"] = _target_date_vs_report_label(out["target_date"], report_date)
     out["vendor_and_past_target_date"] = (vf & past).map({True: "Да", False: "Нет"})
+    if "orig_target_date" in out.columns:
+        out["target_moved"] = _target_moved_label(out["orig_target_date"], out["target_date"])
+    if "confirmed_date" in out.columns:
+        out["confirmed"] = _nullable_date_present_mask(out["confirmed_date"]).map({True: "Да", False: "Нет"})
+    if "del_date" in out.columns:
+        out["delivered"] = _nullable_date_present_mask(out["del_date"]).map({True: "Да", False: "Нет"})
     orders_per_serial = out.groupby(["partno", "serialno"], dropna=False)["orderno"].transform("count")
     out["orders_for_serial"] = orders_per_serial.astype(int)
     out["serial_duplicate_orders"] = orders_per_serial.gt(1).map({True: "Да", False: "Нет"})
@@ -564,7 +611,11 @@ def _readme_sheet(report_date: str, mode: str, has_header: bool) -> pd.DataFrame
             ("mode", f"{mode} — SCD-срез DWH на дату датасета"),
             ("Фильтр partno", "Только partno из MD_Components с group_by=4 (исключены планеры 1 и 2)"),
             ("Фильтр заказа", "amos_heli_od_detail: order_type=R (Repair), state=O (Open)"),
-            ("od_header", "Нет в DWH — фильтры oh.state/ext_state не применяются"),
+            (
+                "od_header",
+                "Есть в DWH (amos_heli_od_header). В as-of режиме применяется эталонный фильтр "
+                "AMOS: oh.state=O AND oh.ext_state IN (O,BO,PB,PR); header_state/header_ext_state заполнены",
+            ),
             (
                 "SCD / detailno_i",
                 "Одна позиция заказа может иметь несколько версий в DWH; берётся одна актуальная "
@@ -592,9 +643,24 @@ def _readme_sheet(report_date: str, mode: str, has_header: bool) -> pd.DataFrame
                 "Одновременно: vendor заполнен И target_date в прошлом относительно report_date",
             ),
             (
-                "orig_target_date / confirmed_date / del_date",
-                "Пока отсутствуют в amos_heli_od_detail; запрос админам DWH: "
-                "output/dwh_admin_request_amos_heli_od_detail_fields.md",
+                "orig_target_date",
+                "Исходная плановая дата (до переносов). Пусто = 1971-12-31 (sentinel AMOS) или NULL. "
+                "Заполняется с момента доработки DWH (бэкфилла нет) — в текущем срезе в основном пусто",
+            ),
+            (
+                "confirmed_date / del_date",
+                "Подтверждённая поставщиком и фактическая дата поставки. Пусто = 1971-12-31 (sentinel AMOS) "
+                "или NULL; заполняются с момента доработки DWH",
+            ),
+            (
+                "target_moved",
+                "Да — orig_target_date задана и отличается от target_date (срок переносили); "
+                "Нет данных (orig пуст) — для строк без исходной даты",
+            ),
+            ("confirmed / delivered", "Да/Нет — есть ли confirmed_date / del_date"),
+            (
+                "detail_ext_state / header_ext_state",
+                "Расширенный статус строки заказа (od) и заголовка (oh)",
             ),
             ("Лист repair_gb4", "Все строки с расшифровочными колонками"),
             ("Лист duplicate_serials_detail", "Только serialno с 2+ открытыми заказами — разрез по orderno"),
@@ -646,14 +712,23 @@ def _repair_list_columns(df: pd.DataFrame) -> list[str]:
         "orderno_i",
         "vendor",
         "vendor_filled",
+        "orig_target_date",
         "target_date",
         "target_date_note",
         "target_date_vs_report",
+        "target_moved",
+        "confirmed_date",
+        "confirmed",
+        "del_date",
+        "delivered",
         "vendor_and_past_target_date",
         "orders_for_serial",
         "serial_duplicate_orders",
         "order_type",
         "detail_state",
+        "detail_ext_state",
+        "header_state",
+        "header_ext_state",
         "condition",
         "ac_registr",
     ]
@@ -767,9 +842,19 @@ def _all_groups_readme(report_date: str, mode: str) -> pd.DataFrame:
             ("mode", mode),
             ("Листы", "На каждый group_by два листа: gNN_svod (свод) и gNN_list (список строк)"),
             ("Фильтр partno", "MD_Components, group_by > 2 (без планеров 1 и 2)"),
-            ("Фильтр заказа", "order_type=R, state=O"),
+            (
+                "Фильтр заказа",
+                "order_type=R, state=O. В as-of режиме при наличии od_header добавляется "
+                "эталонный фильтр AMOS: oh.state=O AND oh.ext_state IN (O,BO,PB,PR)",
+            ),
+            (
+                "Новые поля дат",
+                "orig_target_date (исходная плановая, до переносов), confirmed_date, del_date. "
+                "Пусто = 1971-12-31 (sentinel AMOS) или NULL; заполняются с момента доработки DWH (бэкфилла нет)",
+            ),
+            ("target_moved", "Да — срок переносили (orig_target_date ≠ target_date)"),
             ("gNN_svod", "KPI группы + таблица partno + дубли serialno"),
-            ("gNN_list", "Все строки ремонта группы с расшифровками"),
+            ("gNN_list", "Все строки ремонта группы с расшифровками (вкл. новые даты и ext_state)"),
         ],
         columns=["Поле", "Пояснение"],
     )
@@ -799,6 +884,9 @@ def export_all_groups_excel(
             {"key": "groups_count", "value": len(groups)},
             {"key": "md_partno_count", "value": len(md_all)},
             {"key": "repair_rows_total", "value": len(df)},
+            {"key": "target_moved_rows", "value": int((df["target_moved"] == "Да").sum()) if "target_moved" in df.columns else 0},
+            {"key": "confirmed_rows", "value": int((df["confirmed"] == "Да").sum()) if "confirmed" in df.columns else 0},
+            {"key": "delivered_rows", "value": int((df["delivered"] == "Да").sum()) if "delivered" in df.columns else 0},
             {"key": "od_header_used", "value": has_header},
             {"key": "note", "value": mode_note},
         ]
@@ -974,14 +1062,21 @@ def export_gb4_full_excel(
         "orderno_i",
         "vendor",
         "vendor_filled",
+        "orig_target_date",
         "target_date",
         "target_date_note",
         "target_date_vs_report",
+        "target_moved",
+        "confirmed_date",
+        "confirmed",
+        "del_date",
+        "delivered",
         "vendor_and_past_target_date",
         "orders_for_serial",
         "serial_duplicate_orders",
         "order_type",
         "detail_state",
+        "detail_ext_state",
         "condition",
         "ac_registr",
         "header_state",

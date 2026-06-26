@@ -105,7 +105,11 @@ def select_version_interactive(client) -> Tuple[date, int]:
             raise
 
 
-def fetch_versions(client, target_version_date: date = None) -> Tuple[date, int]:
+def fetch_versions(
+    client,
+    target_version_date: date = None,
+    target_version_id: int = None,
+) -> Tuple[date, int]:
     """
     Получает версию данных.
     
@@ -113,11 +117,23 @@ def fetch_versions(client, target_version_date: date = None) -> Tuple[date, int]
         client: ClickHouse client
         target_version_date: Конкретная дата версии (опционально). 
                              Если None — берёт самую последнюю.
+        target_version_id: Конкретный version_id для target_version_date (опционально).
     
     Returns:
         (version_date, version_id)
     """
-    if target_version_date is not None:
+    if target_version_date is not None and target_version_id is not None:
+        # Явный version_id должен читать ровно заданную пару, без fallback на MAX(version_id).
+        rows = client.execute(f"""
+            SELECT version_date, version_id
+            FROM heli_pandas
+            WHERE version_date = '{target_version_date}'
+              AND version_id = {target_version_id}
+            LIMIT 1
+        """)
+        if not rows:
+            raise ValueError(f"❌ Версия {target_version_date} v{target_version_id} не найдена в heli_pandas!")
+    elif target_version_date is not None:
         # Ищем конкретную версию
         rows = client.execute(f"""
             SELECT version_date, version_id 
@@ -591,15 +607,20 @@ def calculate_dynamic_spawn_reserve_mi17(
     return reserve_slots
 
 
-def prepare_env_arrays(client, version_date: date = None) -> Dict[str, object]:
+def prepare_env_arrays(
+    client,
+    version_date: date = None,
+    version_id: int = None,
+) -> Dict[str, object]:
     """
     Формирует все Env массивы/скаляры для full‑GPU окружения (без применения к модели).
     
     Args:
         client: ClickHouse client
         version_date: Конкретная дата версии (опционально). Если None — берёт последнюю.
+        version_id: Конкретный version_id для version_date (опционально).
     """
-    vdate, vid = fetch_versions(client, version_date)
+    vdate, vid = fetch_versions(client, version_date, version_id)
     mp3_rows, mp3_fields = fetch_mp3(client, vdate, vid)
     (
         mp1_map,

@@ -39,8 +39,8 @@ def run(
         vd_filter = " AND version_date = %(vdate)s"
         params["vdate"] = version_date
 
-    # aircraft_number в lookback-only экспорте не является признаком занятости линии
-    busy_expr = "repair_time > 0 AND free_days < repair_time"
+    # Занятость линии = есть назначенный борт; free_days теперь окно доступности, не прогресс ремонта.
+    busy_expr = "aircraft_number != 0"
 
     max_query = f"""
     SELECT max(n)

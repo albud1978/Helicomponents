@@ -4,6 +4,7 @@ RTC модуль V8: Квотирование через RepairLine
 
 АРХИТЕКТУРА V8 (отличия от V7):
 1. P2/P3 используют слоты RepairLine (free_days >= repair_time, при занятии free_days обнуляется)
+   free_days — окно доступности; длительность занятого ремонта ведёт repair_line_busy_days_mp.
 2. Условия:
    - current_day >= repair_time (глобальный барьер)
    - есть свободная линия в списке слотов
@@ -513,6 +514,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     // P2: unsvc→ops ЧЕРЕЗ RepairLine slot (free_days обнуляется)
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
     auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto line_busy = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_busy_days_mp");
     auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
     auto line_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");
     auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
@@ -790,6 +792,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     
     if (claimed) {{
         line_rt[chosen_line].exchange(repair_time);
+        line_busy[chosen_line].exchange(0u);
         line_last_acn[chosen_line].exchange(acn);
         line_last_day[chosen_line].exchange(current_day);
         line_gb[chosen_line].exchange(group_by);
@@ -826,6 +829,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
     auto line_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_free_days_mp");
+    auto line_busy = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_busy_days_mp");
     auto line_acn = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_acn_mp");
     auto line_gb = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_gb_mp");
     auto line_rt = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_rt_mp");
@@ -1097,6 +1101,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     
     if (claimed) {{
         line_rt[chosen_line].exchange(repair_time);
+        line_busy[chosen_line].exchange(0u);
         line_last_acn[chosen_line].exchange(acn);
         line_last_day[chosen_line].exchange(current_day);
         line_gb[chosen_line].exchange(group_by);

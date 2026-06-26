@@ -43,15 +43,15 @@
     },
     {
       "id": "INV-3",
-      "claim": "Одновременно занятые линии ремонта (busy lines: repair_time > 0 и free_days < repair_time) <= repair_quota",
-      "expr": "countIf(repair_time > 0 AND free_days < repair_time) per day <= repair_quota",
+      "claim": "Одновременно занятые линии ремонта (busy lines: aircraft_number != 0) <= repair_quota",
+      "expr": "countIf(aircraft_number != 0) per day <= repair_quota",
       "scope": "per_day_global",
       "severity": "CRITICAL",
       "data_source": "sim_repairline_v9 (ежедневная интерполяция из GPU RepairLine буферов)",
       "validator": "code/validation/inv3_repair_capacity.py",
-      "last_validated": "2026-02-15",
-      "last_result": "PASS (D1: max 10, D2: max 14, quota=18, 0 violations, datasets 20250704 + 20251230)",
-      "notes": "Lookback-only семантика: занятость линии определяется по repair_time > 0 и free_days < repair_time; aircraft_number не используется. Источник — GPU-экспорт MacroProperty repair_line_acn_mp через sim_repairline_v9 с ежедневной интерполяцией."
+      "last_validated": "2026-06-26",
+      "last_result": "PASS (20260622 v1/v2/v3: single-occupancy 0 violations, max_concurrent=18, quota=18, 0 violations)",
+      "notes": "Занятость линии определяется по aircraft_number != 0; free_days в новой семантике = окно доступности (0 во время ремонта, рост 0..repair_time после release), для занятости НЕ используется. Источник — GPU-экспорт repair_line_acn_mp через sim_repairline_v9."
     },
     {
       "id": "INV-4",
