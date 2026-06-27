@@ -81,10 +81,10 @@ class HF_InitV8(fg.HostFunction):
         # Храним ссылку: список может быть дополнен до старта симуляции
         self.deterministic_dates = deterministic_dates
         self.end_day = end_day
-        self.initialized = False
     
     def run(self, FLAMEGPU):
-        if self.initialized:
+        env = FLAMEGPU.environment
+        if int(env.getPropertyUInt("v8_inited")) != 0:
             return
         
         dates = sorted(set(self.deterministic_dates))
@@ -94,12 +94,12 @@ class HF_InitV8(fg.HostFunction):
         print(f"  [HF_InitV8] Загрузка deterministic_dates: {min(total_dates, MAX_DETERMINISTIC_DATES)} дат")
         
         # Инициализация current_day_mp
-        mp_day = FLAMEGPU.environment.getMacroPropertyUInt("current_day_mp")
+        mp_day = env.getMacroPropertyUInt("current_day_mp")
         mp_day[0] = 0  # current_day = 0
         mp_day[1] = 0  # prev_day = 0
         
         # Инициализация deterministic_dates_mp
-        mp_dates = FLAMEGPU.environment.getMacroPropertyUInt("deterministic_dates_mp")
+        mp_dates = env.getMacroPropertyUInt("deterministic_dates_mp")
         for i, day in enumerate(dates[:MAX_DETERMINISTIC_DATES]):
             mp_dates[i] = int(day)
         
@@ -109,17 +109,17 @@ class HF_InitV8(fg.HostFunction):
             mp_dates[i] = self.end_day
         
         # Синхронизируем num_deterministic_dates (используется в RTC)
-        FLAMEGPU.environment.setPropertyUInt("num_deterministic_dates", effective_len)
+        env.setPropertyUInt("num_deterministic_dates", effective_len)
         
         # Инициализация adaptive_result_mp
-        mp_result = FLAMEGPU.environment.getMacroPropertyUInt("adaptive_result_mp")
+        mp_result = env.getMacroPropertyUInt("adaptive_result_mp")
         mp_result[0] = 1  # adaptive_days = 1 по умолчанию
         
         # Инициализация mp_min_limiter (совместимость с V7)
-        mp_min_lim = FLAMEGPU.environment.getMacroPropertyUInt("mp_min_limiter")
+        mp_min_lim = env.getMacroPropertyUInt("mp_min_limiter")
         mp_min_lim[0] = 0xFFFFFFFF
         
-        self.initialized = True
+        env.setPropertyUInt("v8_inited", 1)
         print(f"  [HF_InitV8] ✅ Загружено, первые 5 дат: {dates[:5]}")
 
 

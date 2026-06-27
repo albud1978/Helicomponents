@@ -46,6 +46,9 @@ class HF_RepairLineDrain(fg.HostFunction):
     def run(self, FLAMEGPU):
         env = FLAMEGPU.environment
         import numpy as np
+        if int(env.getPropertyUInt("ensemble_mode")) != 0:
+            print("  [RL Drain] ensemble_mode=1: skip shared Python drain")
+            return
 
         # Количество шагов (из mp2_num_steps)
         mp_num = env.getMacroPropertyUInt("mp2_num_steps")

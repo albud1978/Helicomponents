@@ -70,6 +70,12 @@ MP2_STATIC_FIELDS = [
 
 MP2_FIELDS = MP2_DYNAMIC_FIELDS + MP2_STATIC_FIELDS
 
+SPIKEA_MAX_STEPS = 512
+SPIKEA_FIELDS = ("spikeA_status_id", "spikeA_sne")
+SPIKEA_BUF_SIZE = SPIKEA_MAX_STEPS * MAX_FRAMES
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+SPIKEA_EXPORT_DIR = os.path.join(PROJECT_ROOT, "output", "ensemble_b1")
+
 # Status ID mapping (FLAME GPU state name -> numeric ID)
 STATUS_MAP = {
     "inactive": 1,
@@ -98,14 +104,18 @@ def setup_mp2_buffers(env):
     
     # Total number of steps counter (размер 2 чтобы избежать проблемы с индексацией scalar в pyflamegpu)
     env.newMacroPropertyUInt("mp2_num_steps", 2)
+    for name in SPIKEA_FIELDS:
+        env.newMacroPropertyUInt32(name, SPIKEA_BUF_SIZE)
     
     mem_mb = (
         len(MP2_DYNAMIC_FIELDS) * MP2_BUF_SIZE
         + len(MP2_STATIC_FIELDS) * MAX_FRAMES
+        + len(SPIKEA_FIELDS) * SPIKEA_BUF_SIZE
     ) * 4 / (1024 * 1024)
     print(
         f"  ✅ MP2 Export: {len(MP2_DYNAMIC_FIELDS)} dynamic × {MP2_BUF_SIZE} "
-        f"+ {len(MP2_STATIC_FIELDS)} static × {MAX_FRAMES} = {mem_mb:.1f} МБ GPU"
+        f"+ {len(MP2_STATIC_FIELDS)} static × {MAX_FRAMES} "
+        f"+ SpikeA {len(SPIKEA_FIELDS)} × {SPIKEA_BUF_SIZE} = {mem_mb:.1f} МБ GPU"
     )
 
 
@@ -116,13 +126,24 @@ def setup_mp2_buffers(env):
 RTC_MP2_WRITE_TEMPLATE = """
 FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_{state}, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int step = FLAMEGPU->getStepCounter();
-    if (step >= {MAX_EXPORT_STEPS}u) return flamegpu::ALIVE;
-    
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     if (idx >= {MAX_FRAMES}u) return flamegpu::ALIVE;
     
-    const unsigned int offset = step * {MAX_FRAMES}u + idx;
     const unsigned int status = FLAMEGPU->getVariable<unsigned int>("status_id");
+    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
+
+    if (step < {SPIKEA_MAX_STEPS}u) {{
+        const unsigned int spikeA_offset = step * {MAX_FRAMES}u + idx;
+        auto spikeA_status = FLAMEGPU->environment.getMacroProperty<unsigned int, {SPIKEA_BUF_SIZE}u>("spikeA_status_id");
+        spikeA_status[spikeA_offset].exchange(status);
+
+        auto spikeA_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {SPIKEA_BUF_SIZE}u>("spikeA_sne");
+        spikeA_sne[spikeA_offset].exchange(sne);
+    }}
+
+    if (step >= {MAX_EXPORT_STEPS}u) return flamegpu::ALIVE;
+    
+    const unsigned int offset = step * {MAX_FRAMES}u + idx;
     
     auto buf_status = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_status_id");
     buf_status[offset].exchange(status);
@@ -134,7 +155,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_mp2_write_{state}, flamegpu::MessageNone, flamegpu::
     buf_status_change_day[offset].exchange(FLAMEGPU->getVariable<unsigned int>("status_change_day"));
     
     auto buf_sne = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_sne");
-    buf_sne[offset].exchange(FLAMEGPU->getVariable<unsigned int>("sne"));
+    buf_sne[offset].exchange(sne);
     
     auto buf_ppr = FLAMEGPU->environment.getMacroProperty<unsigned int, {BUF_SIZE}u>("mp2_ppr");
     buf_ppr[offset].exchange(FLAMEGPU->getVariable<unsigned int>("ppr"));
@@ -218,8 +239,10 @@ def register_mp2_write_layer(model, heli_agent):
             state=state_name,
             STATUS_ID=status_id,
             MAX_EXPORT_STEPS=MAX_EXPORT_STEPS,
+            SPIKEA_MAX_STEPS=SPIKEA_MAX_STEPS,
             MAX_FRAMES=MAX_FRAMES,
             BUF_SIZE=MP2_BUF_SIZE,
+            SPIKEA_BUF_SIZE=SPIKEA_BUF_SIZE,
             STATIC_BUF_SIZE=MAX_FRAMES,
         )
         
@@ -252,6 +275,9 @@ class HF_MP2_Drain(fg.HostFunction):
     def run(self, FLAMEGPU):
         env = FLAMEGPU.environment
         import numpy as np
+        if int(env.getPropertyUInt("ensemble_mode")) != 0:
+            print("  [MP2 Drain] ensemble_mode=1: skip shared Python drain")
+            return
         
         # Read step count
         mp_num = env.getMacroPropertyUInt("mp2_num_steps")
@@ -299,9 +325,26 @@ class HF_MP2_Drain(fg.HostFunction):
         print(f"  [MP2 Drain] ✅ Прочитано {total_values:,} значений")
 
 
+class HF_SpikeA_Export(fg.HostFunction):
+    """Stateless exit export for Spike A raw MacroProperty buffers."""
+
+    def run(self, FLAMEGPU):
+        env = FLAMEGPU.environment
+        version_id = int(env.getPropertyUInt("version_id"))
+        os.makedirs(SPIKEA_EXPORT_DIR, exist_ok=True)
+        for field_name in SPIKEA_FIELDS:
+            path = os.path.join(SPIKEA_EXPORT_DIR, f"run_{version_id}_{field_name}.bin")
+            if os.path.exists(path):
+                os.remove(path)
+            env.exportMacroProperty(field_name, path, False)
+            print(f"  [SpikeA] exportMacroProperty {field_name} → {path}")
+
+
 def register_mp2_drain(model, end_day: int, num_agents: int):
     """Register HF_MP2_Drain as an exit host function."""
     drain = HF_MP2_Drain(end_day, num_agents)
     model.addExitFunction(drain)
     print(f"  ✅ MP2 Drain зарегистрирован (ExitFunction)")
+    model.addExitFunction(HF_SpikeA_Export())
+    print("  ✅ SpikeA MacroProperty export зарегистрирован (ExitFunction)")
     return drain

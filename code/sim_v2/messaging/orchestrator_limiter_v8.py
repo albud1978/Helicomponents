@@ -27,6 +27,7 @@ import os
 import sys
 import time
 import argparse
+import hashlib
 
 # Пути
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -351,6 +352,127 @@ from model_build import REPAIR_LINES_MAX
 # Максимум bank-окон на линию (должно совпадать с rtc_quota_v8.py)
 REPAIR_BANK_MAX = 64
 
+HELI_UINT_VARS = (
+    "idx", "aircraft_number", "partseqno_i", "group_by", "status_id", "pre_status_id",
+    "intent_state", "prev_intent", "bi_counter", "s6_started",
+    "transition_0_to_2", "transition_2_to_3", "transition_2_to_6", "transition_2_to_7",
+    "transition_3_to_2", "transition_7_to_2", "transition_1_to_2", "transition_4_to_3",
+    "exit_date", "sne", "ppr", "cso", "daily_today_u32", "daily_next_u32",
+    "ll", "second_ll", "oh", "br", "repair_time", "assembly_time", "partout_time",
+    "repair_days", "assembly_trigger", "active_trigger", "partout_trigger",
+    "mfg_date", "s4_days", "limiter_date", "computed_adaptive_days",
+    "status_change_day", "repair_candidate", "repair_line_id", "repair_line_day",
+    "repair_claim_start_day", "repair_claim_end_day", "repair_claim_source",
+    "promoted", "needs_demote", "commit_p1", "commit_p2", "commit_p3",
+    "decision_p2", "decision_p3", "debug_promoted", "debug_needs_demote",
+    "debug_repair_candidate", "debug_repair_line_id", "debug_repair_line_day",
+    "debug_bucket_seen",
+)
+
+
+def _copy_heli_agent_from_row(agent, row: dict):
+    for name in HELI_UINT_VARS:
+        agent.setVariableUInt(name, int(row.get(name, 0)))
+    agent.setVariableUInt16("limiter", int(row.get("limiter", 0)))
+
+
+class PopulationSnapshot:
+    """Captures initial HELI population without attaching it to a simulation."""
+
+    def __init__(self):
+        self.heli_by_state = {}
+
+    def setPopulationData(self, population, state_name="default"):
+        rows = []
+        for i in range(population.size()):
+            src = population.at(i)
+            row = {name: int(src.getVariableUInt(name)) for name in HELI_UINT_VARS}
+            row["limiter"] = int(src.getVariableUInt16("limiter"))
+            if state_name == "inactive":
+                row["repair_days"] = 0
+            rows.append(row)
+        self.heli_by_state[state_name] = rows
+
+
+class HF_EnsemblePopulate(fg.HostFunction):
+    """Per-run population init for CUDAEnsemble, isolated by an env flag."""
+
+    def __init__(self, snapshot: PopulationSnapshot, repair_quota: int,
+                 day0_map: dict, spawn_data: dict | None):
+        super().__init__()
+        self.snapshot = snapshot
+        self.repair_quota = int(repair_quota)
+        self.day0_map = day0_map or {}
+        self.spawn_data = spawn_data or {}
+
+    def run(self, FLAMEGPU):
+        env = FLAMEGPU.environment
+        if int(env.getPropertyUInt("ensemble_mode")) == 0:
+            return
+        if int(env.getPropertyUInt("ensemble_pop_inited")) != 0:
+            return
+
+        total_heli = 0
+        for state_name, rows in self.snapshot.heli_by_state.items():
+            api = FLAMEGPU.agent("HELI", state_name)
+            for row in rows:
+                agent = api.newAgent()
+                _copy_heli_agent_from_row(agent, row)
+            total_heli += len(rows)
+
+        qm_api = FLAMEGPU.agent("QuotaManager")
+        qm_mi8 = qm_api.newAgent()
+        qm_mi8.setVariableUInt8("group_by", 1)
+        qm_mi17 = qm_api.newAgent()
+        qm_mi17.setVariableUInt8("group_by", 2)
+
+        if self.repair_quota > 0:
+            rl_api = FLAMEGPU.agent("RepairLine")
+            for i in range(self.repair_quota):
+                agent = rl_api.newAgent()
+                agent.setVariableUInt("line_id", i)
+                agent.setVariableUInt("free_days", 0)
+                agent.setVariableUInt("busy_days", 0)
+                agent.setVariableUInt("aircraft_number", 0)
+                agent.setVariableUInt("last_acn", 0)
+                agent.setVariableUInt("last_day", 0)
+                if i in self.day0_map:
+                    acn, _gb, repair_time, exit_date = self.day0_map[i]
+                    remaining_days = int(exit_date) if int(exit_date) > 0 else 0
+                    rt_eff = int(repair_time)
+                    if remaining_days > rt_eff:
+                        rt_eff = remaining_days
+                    agent.setVariableUInt("aircraft_number", int(acn))
+                    agent.setVariableUInt("busy_days", int(rt_eff - remaining_days))
+                    agent.setVariableUInt("last_acn", int(acn))
+
+        if self.spawn_data:
+            mgr_api = FLAMEGPU.agent("SpawnDynamicMgr")
+            mgr = mgr_api.newAgent()
+            mgr.setVariableUInt("next_idx_mi17", int(self.spawn_data["first_dynamic_idx_mi17"]))
+            mgr.setVariableUInt("next_acn_mi17", int(self.spawn_data["base_acn_mi17"]))
+            mgr.setVariableUInt("total_spawned_mi17", 0)
+            mgr.setVariableUInt("cumulative_dynamic_spawn", 0)
+            mgr.setVariableUInt("next_idx_mi8", int(self.spawn_data["first_dynamic_idx_mi8"]))
+            mgr.setVariableUInt("next_acn_mi8", int(self.spawn_data["base_acn_mi8"]))
+            mgr.setVariableUInt("total_spawned_mi8", 0)
+
+            ticket_api = FLAMEGPU.agent("SpawnDynamicTicket")
+            for i in range(int(self.spawn_data["dynamic_reserve_mi17"])):
+                ticket = ticket_api.newAgent()
+                ticket.setVariableUInt("ticket", i)
+
+            ticket_mi8_api = FLAMEGPU.agent("SpawnDynamicTicketMi8")
+            for i in range(int(self.spawn_data["dynamic_reserve_mi8"])):
+                ticket = ticket_mi8_api.newAgent()
+                ticket.setVariableUInt("ticket", i)
+
+        env.setPropertyUInt("ensemble_pop_inited", 1)
+        print(
+            f"  [HF_EnsemblePopulate] ✅ HELI={total_heli}, "
+            f"RepairLine={self.repair_quota}, spawn={bool(self.spawn_data)}"
+        )
+
 
 class LimiterV8Orchestrator:
     """
@@ -555,6 +677,15 @@ class LimiterV8Orchestrator:
         self.base_model.env.newPropertyUInt("end_day", self.end_day)
         self.base_model.env.newPropertyUInt("prev_day", 0)
         self.base_model.env.newPropertyUInt("adaptive_days", 1)
+        self.base_model.env.newPropertyUInt("mp5_inited", 0)
+        self.base_model.env.newPropertyUInt("spawnlim_inited", 0)
+        self.base_model.env.newPropertyUInt("econ_inited", 0)
+        self.base_model.env.newPropertyUInt("lines_inited", 0)
+        self.base_model.env.newPropertyUInt("v8_inited", 0)
+        self.base_model.env.newPropertyUInt("ensemble_mode", 0)
+        self.base_model.env.newPropertyUInt("ensemble_pop_inited", 0)
+        self.base_model.env.newPropertyUInt("det_spawn_total_spawned", 0)
+        self.base_model.env.newMacroPropertyUInt("det_spawn_done_days", model_build.MAX_DAYS)
         spawn_limit_cumulative = list(self.env_data.get('spawn_limit_cumulative', []))
         if not spawn_limit_cumulative:
             spawn_limit_cumulative = [0] * max(1, self.days)
@@ -576,6 +707,21 @@ class LimiterV8Orchestrator:
         # RepairLine Export: буферы для per-line per-step экспорта
         rtc_repair_lines_v8.setup_rl_export_buffers(self.base_model.env)
         
+        self.population_snapshot = PopulationSnapshot()
+        self.population_builder.populate_agents(self.population_snapshot, heli_agent)
+        self._day0_repair_line_map = self._compute_day0_repair_line_map(self.population_snapshot)
+        self._add_repair_exits_from_snapshot(self.population_snapshot)
+
+        # Ensemble-only population init. Single-run still uses _populate_agents().
+        self._hf_ensemble_populate = HF_EnsemblePopulate(
+            self.population_snapshot,
+            self.repair_quota,
+            self._day0_repair_line_map,
+            None,
+        )
+        layer_ensemble_pop = self.model.newLayer("layer_ensemble_populate")
+        layer_ensemble_pop.addHostFunction(self._hf_ensemble_populate)
+
         # HF для инициализации mp5_cumsum
         hf_init_cumsum = HF_InitMP5Cumsum(self.mp5_cumsum, self.frames, self.days)
         layer_init = self.model.newLayer("layer_init_mp5_cumsum")
@@ -598,7 +744,7 @@ class LimiterV8Orchestrator:
         if mi8_rt <= 0 or mi17_rt <= 0:
             raise RuntimeError(f"repair_time_const must be positive: mi8={mi8_rt}, mi17={mi17_rt}")
         self._hf_init_lines = HF_InitRepairLines(
-            self.repair_quota, day0_map={}, mi8_rt=mi8_rt, mi17_rt=mi17_rt
+            self.repair_quota, day0_map=self._day0_repair_line_map, mi8_rt=mi8_rt, mi17_rt=mi17_rt
         )
         layer_lines = self.model.newLayer("layer_init_repair_lines")
         layer_lines.addHostFunction(self._hf_init_lines)
@@ -745,6 +891,7 @@ class LimiterV8Orchestrator:
         self.spawn_data = rtc_spawn_dynamic_v7.register_spawn_dynamic_v8(
             self.model, heli_agent, spawn_env_data
         )
+        self._hf_ensemble_populate.spawn_data = self.spawn_data
 
         # ═══════════════════════════════════════════════════════════════
         # ФАЗА 4: Limiter (бинарный поиск)
@@ -824,10 +971,21 @@ class LimiterV8Orchestrator:
         print("=" * 60)
         
         t_start = time.perf_counter()
+
+        vd = date.fromisoformat(self.version_date)
+        version_date_int = vd.year * 10000 + vd.month * 100 + vd.day
+        run_id_env = os.getenv("V8_RUN_ID")
+        if self.version_id is not None:
+            version_id = int(self.version_id)
+        elif run_id_env is not None and run_id_env.isdigit():
+            version_id = int(run_id_env)
+        else:
+            version_id = int(self.env_data.get('version_id_u32', 1))
         
         # Создание симуляции
         self.simulation = fg.CUDASimulation(self.model)
         self.simulation.SimulationConfig().steps = max_steps
+        self.simulation.setEnvironmentPropertyUInt("version_id", version_id)
         
         # Инициализация агентов
         self._populate_agents()
@@ -842,16 +1000,6 @@ class LimiterV8Orchestrator:
         print(f"   ✅ simulate() завершён: {final_steps} шагов за {gpu_time:.2f}с")
         
         # Чтение MP2 данных
-        vd = date.fromisoformat(self.version_date)
-        version_date_int = vd.year * 10000 + vd.month * 100 + vd.day
-        run_id_env = os.getenv("V8_RUN_ID")
-        if self.version_id is not None:
-            version_id = int(self.version_id)
-        elif run_id_env is not None and run_id_env.isdigit():
-            version_id = int(run_id_env)
-        else:
-            version_id = int(self.env_data.get('version_id_u32', 1))
-        
         mp2_data = self.hf_mp2_drain.data
         if mp2_data is None:
             print("⚠️ MP2 Drain не прочитал данные (возможно end_day не достигнут)")
@@ -985,6 +1133,12 @@ class LimiterV8Orchestrator:
         build_time = time.perf_counter() - t_build
         row_count = len(columns_data[0])
         print(f"   Строк: {row_count} ({build_time:.2f}с)")
+        master_hash = hashlib.sha256()
+        for row_idx in range(row_count):
+            row = [str(column_data[row_idx]) for column_data in columns_data]
+            master_hash.update(("|".join(row) + "\n").encode("ascii"))
+        self.last_master_sha256 = master_hash.hexdigest()
+        print(f"   master_rows_sha256: {self.last_master_sha256}")
         
         # Batch INSERT
         if self.clickhouse_client and row_count:
@@ -1112,6 +1266,33 @@ class LimiterV8Orchestrator:
             )
         
         print(f"   ✅ Агенты загружены: Mi-8 ops={mi8_ops}, Mi-17 ops={mi17_ops}, spawn={spawn_count}")
+
+    def _compute_day0_repair_line_map(self, snapshot: PopulationSnapshot) -> dict:
+        """Build day-0 RepairLine assignment from the initial repair population."""
+        day0_map = {}
+        repair_rows = snapshot.heli_by_state.get("repair", [])
+        assign_count = min(len(repair_rows), self.repair_quota)
+        for i in range(assign_count):
+            row = repair_rows[i]
+            day0_map[i] = (
+                int(row["aircraft_number"]),
+                int(row["group_by"]),
+                int(row["repair_time"]),
+                int(row["exit_date"]),
+            )
+        return day0_map
+
+    def _add_repair_exits_from_snapshot(self, snapshot: PopulationSnapshot):
+        """Add day-0 repair exit dates before ensemble runs start."""
+        added = 0
+        for row in snapshot.heli_by_state.get("repair", []):
+            exit_date = int(row.get("exit_date", 0))
+            if 0 < exit_date <= self.end_day:
+                self.deterministic_dates.append(exit_date)
+                added += 1
+        if added:
+            self.deterministic_dates = sorted(set(self.deterministic_dates))
+            print(f"   V8: Добавлено repair_exits из snapshot: {added} дат")
 
     def _init_repair_lines_at_build(self):
         """V8: Инициализация RepairLine агентов (day-0 repair -> line)."""
@@ -1478,8 +1659,6 @@ class HF_DeterministicSpawn(fg.HostFunction):
         self.base_idx = int(base_idx)
         self.base_acn = int(base_acn)
         self.env_consts = env_consts or {}
-        self.spawned_days = set()
-        self.total_spawned = 0
     
     def run(self, FLAMEGPU):
         if not self.spawn_schedule:
@@ -1487,16 +1666,20 @@ class HF_DeterministicSpawn(fg.HostFunction):
         
         env = FLAMEGPU.environment
         current_day = int(env.getPropertyUInt("current_day"))
+        done_days = env.getMacroPropertyUInt("det_spawn_done_days")
+        total_spawned = int(env.getPropertyUInt("det_spawn_total_spawned"))
         svc_api = None
         
         for spawn_day, count in self.spawn_schedule:
             spawn_day_i = int(spawn_day)
-            if spawn_day_i in self.spawned_days:
+            if spawn_day_i < 0 or spawn_day_i >= len(done_days):
+                raise RuntimeError(f"deterministic spawn_day out of range: {spawn_day_i}")
+            if int(done_days[spawn_day_i]) != 0:
                 continue
             if current_day < spawn_day_i:
                 continue
             
-            self.spawned_days.add(spawn_day_i)
+            done_days[spawn_day_i] = 1
             count_i = int(count)
             if count_i <= 0:
                 continue
@@ -1504,10 +1687,10 @@ class HF_DeterministicSpawn(fg.HostFunction):
             if svc_api is None:
                 svc_api = FLAMEGPU.agent("HELI", "serviceable")
             
-            start_acn = self.base_acn + self.total_spawned
+            start_acn = self.base_acn + total_spawned
             for _ in range(count_i):
-                idx = self.base_idx + self.total_spawned
-                acn = self.base_acn + self.total_spawned
+                idx = self.base_idx + total_spawned
+                acn = self.base_acn + total_spawned
                 
                 agent = svc_api.newAgent()
                 agent.setVariableUInt("idx", idx)
@@ -1578,9 +1761,10 @@ class HF_DeterministicSpawn(fg.HostFunction):
                 agent.setVariableUInt("debug_repair_line_day", 0xFFFFFFFF)
                 agent.setVariableUInt("debug_bucket_seen", 0)
                 
-                self.total_spawned += 1
+                total_spawned += 1
             
-            end_acn = self.base_acn + self.total_spawned - 1
+            env.setPropertyUInt("det_spawn_total_spawned", total_spawned)
+            end_acn = self.base_acn + total_spawned - 1
             print(
                 f"   📦 Det spawn: {count_i} агентов в serviceable "
                 f"(day={current_day}, acn={start_acn}..{end_acn})"
@@ -1595,23 +1779,23 @@ class HF_InitMP5Cumsum(fg.HostFunction):
         self.mp5_cumsum = mp5_cumsum
         self.frames = frames
         self.days = days
-        self.initialized = False
     
     def run(self, FLAMEGPU):
-        if self.initialized:
+        env = FLAMEGPU.environment
+        if int(env.getPropertyUInt("mp5_inited")) != 0:
             return
         
         print(f"  [HF_InitMP5Cumsum] Загрузка mp5_cumsum: {self.mp5_cumsum.shape}")
         
-        mp = FLAMEGPU.environment.getMacroPropertyUInt32("mp5_cumsum")
+        mp = env.getMacroPropertyUInt32("mp5_cumsum")
         
         for i in range(min(len(self.mp5_cumsum), len(mp))):
             mp[i] = int(self.mp5_cumsum[i])
         
-        mp_min = FLAMEGPU.environment.getMacroPropertyUInt32("mp_min_limiter")
+        mp_min = env.getMacroPropertyUInt32("mp_min_limiter")
         mp_min[0] = 0xFFFFFFFF
         
-        self.initialized = True
+        env.setPropertyUInt("mp5_inited", 1)
         print(f"  [HF_InitMP5Cumsum] ✅ Загружено")
 
 
@@ -1621,13 +1805,13 @@ class HF_InitSpawnLimitCumulative(fg.HostFunction):
     def __init__(self, spawn_limit_cumulative):
         super().__init__()
         self.spawn_limit_cumulative = spawn_limit_cumulative
-        self.initialized = False
 
     def run(self, FLAMEGPU):
-        if self.initialized:
+        env = FLAMEGPU.environment
+        if int(env.getPropertyUInt("spawnlim_inited")) != 0:
             return
 
-        mp = FLAMEGPU.environment.getMacroPropertyUInt("spawn_limit_cumulative")
+        mp = env.getMacroPropertyUInt("spawn_limit_cumulative")
         values = self.spawn_limit_cumulative
         if len(values) > len(mp):
             raise RuntimeError(
@@ -1639,7 +1823,7 @@ class HF_InitSpawnLimitCumulative(fg.HostFunction):
         for i, value in enumerate(values):
             mp[i] = int(value)
 
-        self.initialized = True
+        env.setPropertyUInt("spawnlim_inited", 1)
         print("  [HF_InitSpawnLimitCumulative] ✅ Загружено")
 
 
@@ -1649,10 +1833,10 @@ class HF_InitEconomicsDailyCosts(fg.HostFunction):
     def __init__(self, economics_daily_costs):
         super().__init__()
         self.economics_daily_costs = economics_daily_costs
-        self.initialized = False
 
     def run(self, FLAMEGPU):
-        if self.initialized:
+        env = FLAMEGPU.environment
+        if int(env.getPropertyUInt("econ_inited")) != 0:
             return
 
         if not self.economics_daily_costs:
@@ -1664,7 +1848,7 @@ class HF_InitEconomicsDailyCosts(fg.HostFunction):
             if values is None:
                 raise RuntimeError(f"economics_daily_costs missing column: {column}")
 
-            mp = FLAMEGPU.environment.getMacroPropertyUInt32(column)
+            mp = env.getMacroPropertyUInt32(column)
             if len(values) > len(mp):
                 raise RuntimeError(
                     f"{column} length exceeds MacroProperty size: {len(values)} > {len(mp)}"
@@ -1672,7 +1856,7 @@ class HF_InitEconomicsDailyCosts(fg.HostFunction):
             for i in range(len(values)):
                 mp[i] = int(values[i])
 
-        self.initialized = True
+        env.setPropertyUInt("econ_inited", 1)
         print("  [HF_InitEconomicsDailyCosts] ✅ Загружено")
 
 
@@ -1693,23 +1877,23 @@ class HF_InitRepairLines(fg.HostFunction):
         self.mi17_rt = int(mi17_rt)
         if self.mi8_rt <= 0 or self.mi17_rt <= 0:
             raise RuntimeError(f"HF_InitRepairLines requires positive repair_time_const: mi8={self.mi8_rt}, mi17={self.mi17_rt}")
-        self.initialized = False
     
     def run(self, FLAMEGPU):
-        if self.initialized:
+        env = FLAMEGPU.environment
+        if int(env.getPropertyUInt("lines_inited")) != 0:
             return
         
-        mp_days = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_free_days_mp")
-        mp_busy = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_busy_days_mp")
-        mp_acn = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_acn_mp")
-        mp_gb = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_gb_mp")
-        mp_rt = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_rt_mp")
-        mp_last_acn = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_last_acn_mp")
-        mp_last_day = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_last_day_mp")
-        mp_bank_count = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_bank_count_mp")
-        mp_bank_lock = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_bank_lock_mp")
-        mp_bank_start = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_bank_start_mp")
-        mp_bank_end = FLAMEGPU.environment.getMacroPropertyUInt("repair_line_bank_end_mp")
+        mp_days = env.getMacroPropertyUInt("repair_line_free_days_mp")
+        mp_busy = env.getMacroPropertyUInt("repair_line_busy_days_mp")
+        mp_acn = env.getMacroPropertyUInt("repair_line_acn_mp")
+        mp_gb = env.getMacroPropertyUInt("repair_line_gb_mp")
+        mp_rt = env.getMacroPropertyUInt("repair_line_rt_mp")
+        mp_last_acn = env.getMacroPropertyUInt("repair_line_last_acn_mp")
+        mp_last_day = env.getMacroPropertyUInt("repair_line_last_day_mp")
+        mp_bank_count = env.getMacroPropertyUInt("repair_line_bank_count_mp")
+        mp_bank_lock = env.getMacroPropertyUInt("repair_line_bank_lock_mp")
+        mp_bank_start = env.getMacroPropertyUInt("repair_line_bank_start_mp")
+        mp_bank_end = env.getMacroPropertyUInt("repair_line_bank_end_mp")
         
         occupied_count = 0
         for i in range(len(mp_days)):
@@ -1766,7 +1950,7 @@ class HF_InitRepairLines(fg.HostFunction):
                 mp_last_acn[i] = 0
                 mp_last_day[i] = 0
         
-        self.initialized = True
+        env.setPropertyUInt("lines_inited", 1)
         print(f"  [HF_InitRepairLines] ✅ quota={self.repair_quota}, "
               f"day0_occupied={occupied_count}, free={self.repair_quota - occupied_count}")
 
