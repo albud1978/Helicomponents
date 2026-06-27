@@ -27,6 +27,19 @@ except ImportError as e:
     raise RuntimeError(f"pyflamegpu not installed: {e}")
 
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+RL_EXPORT_DIR = os.path.join(PROJECT_ROOT, "output", "ensemble_b2")
+RL_EXPORT_FIELDS = [
+    "rl_buf_free_days",
+    "rl_buf_acn",
+    "rl_buf_rt",
+    "rl_buf_gb",
+    "rl_buf_bank_count",
+    "rl_buf_bank_head_start",
+    "rl_buf_bank_head_end",
+]
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # HF_RepairLineDrain: читает RL буферы на финальном шаге
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -108,11 +121,31 @@ class HF_RepairLineDrain(fg.HostFunction):
         print(f"  [RL Drain] ✅ Прочитано {total:,} значений")
 
 
+class HF_RepairLineBinExport(fg.HostFunction):
+    """Stateless ensemble-only export of raw RepairLine MacroProperty buffers."""
+
+    def run(self, FLAMEGPU):
+        env = FLAMEGPU.environment
+        if int(env.getPropertyUInt("ensemble_mode")) == 0:
+            return
+
+        version_id = int(env.getPropertyUInt("version_id"))
+        os.makedirs(RL_EXPORT_DIR, exist_ok=True)
+        for field_name in RL_EXPORT_FIELDS:
+            path = os.path.join(RL_EXPORT_DIR, f"run_{version_id}_{field_name}.bin")
+            if os.path.exists(path):
+                os.remove(path)
+            env.exportMacroProperty(field_name, path, False)
+            print(f"  [RL Bin] exportMacroProperty {field_name} -> {path}")
+
+
 def register_repairline_drain(model, end_day: int, repair_quota: int):
     """Регистрирует HF_RepairLineDrain как exit host function."""
     drain = HF_RepairLineDrain(end_day, repair_quota)
     model.addExitFunction(drain)
     print(f"  ✅ RepairLine Drain зарегистрирован (ExitFunction, repair_quota={repair_quota})")
+    model.addExitFunction(HF_RepairLineBinExport())
+    print("  ✅ RepairLine .bin export зарегистрирован (ensemble-only ExitFunction)")
     return drain
 
 

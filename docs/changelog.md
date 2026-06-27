@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-06-27 — CUDAEnsemble export pipeline: Spike A → B1 → B2a/B2b (bit-identical)
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_ensemble_spike_2026-06-27`, `W_ensemble_b2_2026-06-27` | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** поэтапная миграция экспортного контура `sim_v2` на CUDAEnsemble для параллельных прогонов cap-curve (spawn_limit 0–60). Все изменения **аддитивны** и gated `ensemble_mode`; single-run путь (`ensemble_mode=0`, per-step Python-drain) **не изменён**.
+
+### Spike A — on-device накопление + `.bin` export
+MacroProperty `[step][idx]` для per-agent истории на device → один `exportMacroProperty(.bin)` на exit вместо per-step Python-drain. Bit-identical экспорт: sne **0/75192** расхождений vs device-drain (validator PASS, vid800).
+
+### B1 — измерительный CUDAEnsemble ×2
+- CUDAEnsemble на 2 прогона; per-run env init-флаги вместо `self.initialized` (ensemble-safe идемпотентность).
+- Ensemble-only population HostFunction (on-device build); per-run `.bin` изолированы (0 diffs).
+- Масштабирование: `concurrent_runs=2` wall **4.72с** vs sequential **5.24с** (ratio **0.901**) — GIL не сериализует 2×.
+
+### B2a — полный конвейер мастер-таблицы
+`exportMacroProperty(.bin)` всех **25** MP2-полей → векторный loader (`code/utils/ensemble_mp2_loader.py`) → post-pass → INSERT. Bit-identical `sim_masterv2_v9`: **vid860==vid3** (EXCEPT=0 обе стороны, **75213** строк). Экспериментальный SpikeA **удалён** (superseded). **228с** одного прогона — одноразовая cold NVRTC-перекомпиляция (model hash сменился после удаления spikeA MP); export `.bin` ~15 МБ <<1с; B1 warm ≈5с.
+
+### B2b — repairline под ensemble
+`.bin` export **7** `rl_buf_*` → loader переиспользует `interpolate_repairline_daily` / `export_repairline_to_ch`. Bit-identical `sim_repairline_v9`: **vid860==vid3** (EXCEPT=0, **65700** строк, **18** линий). `--repair-quota` стал **обязательным** (из sim-SSoT `max(mp1_repair_number)`, не из countDistinct baseline).
+
+**Назначение:** подготовка к **B3** — генерация кривой чувствительности `spawn_limit` 0–60 параллельными GPU-прогонами с компиляцией RTC один раз.
+
+**Review/validation/governance:** Spike A/B1 — reviewer-flame + validator-judge + governance `allow_with_notes` (`W_ensemble_spike_2026-06-27`); B2a/B2b — reviewer-flame ACCEPT + validator-judge PASS + governance `allow_with_notes` (`W_ensemble_b2_2026-06-27`).
+
+**Файлы:** `code/sim_v2/messaging/{orchestrator_limiter_v8,rtc_limiter_v8,rtc_mp2_export,rtc_repairline_export}.py`, `code/utils/{spawn_cap_ensemble,ensemble_mp2_loader}.py` (новые harness + loader).
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
 ## 2026-06-26 — input/output version_id decouple (cap-curve без копирования входа)
 
 **Risk:** high | **Profile:** high-strict | **Workflow:** `W_input_version_decouple_2026-06-26` | **Branch:** `feature/dwh-bb8`

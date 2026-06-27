@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B1 CUDAEnsemble spike for LIMITER V8 per-run init/export isolation."""
+"""B2 CUDAEnsemble full MP2 export harness for LIMITER V8."""
 
 import argparse
 import hashlib
@@ -15,7 +15,14 @@ sys.path.insert(0, str(MESSAGING_DIR))
 
 import pyflamegpu as fg
 from orchestrator_limiter_v8 import LimiterV8Orchestrator
-from rtc_mp2_export import SPIKEA_BUF_SIZE, SPIKEA_EXPORT_DIR, SPIKEA_FIELDS
+from model_build import MAX_EXPORT_STEPS, MAX_FRAMES, MP2_BUF_SIZE, RL_BUF_SIZE
+from rtc_mp2_export import (
+    MP2_DYNAMIC_FIELDS,
+    MP2_EXPORT_DIR,
+    MP2_FIELDS,
+    MP2_STATIC_FIELDS,
+)
+from rtc_repairline_export import RL_EXPORT_FIELDS
 
 
 def _build_orchestrator(args: argparse.Namespace) -> LimiterV8Orchestrator:
@@ -26,6 +33,7 @@ def _build_orchestrator(args: argparse.Namespace) -> LimiterV8Orchestrator:
         clickhouse_client=None,
         version_id=args.version_ids[0],
         input_version_id=args.input_version_id,
+        ensemble_mode=True,
     )
     orchestrator.prepare_data()
     orchestrator.build_model()
@@ -66,7 +74,7 @@ def _run_ensemble(model: fg.ModelDescription, args: argparse.Namespace, concurre
     config = ensemble.Config()
     config.devices = _int_set(args.devices)
     config.concurrent_runs = int(concurrent_runs)
-    config.out_directory = str(PROJECT_ROOT / "output" / "ensemble_b1" / f"logs_cr{concurrent_runs}")
+    config.out_directory = str(PROJECT_ROOT / "output" / "ensemble_b2" / f"logs_cr{concurrent_runs}")
     config.out_format = "json"
     config.truncate_log_files = True
     config.telemetry = False
@@ -100,19 +108,40 @@ def _file_info(path: Path) -> dict:
     }
 
 
-def _validate_spike_files(version_ids: list[int]) -> list[dict]:
-    expected_size = SPIKEA_BUF_SIZE * 4
+def _expected_mp2_size(field: str) -> int:
+    if field in MP2_DYNAMIC_FIELDS:
+        return MP2_BUF_SIZE * 4
+    if field in MP2_STATIC_FIELDS:
+        return MAX_FRAMES * 4
+    if field == "mp2_day_for_step":
+        return MAX_EXPORT_STEPS * 4
+    if field == "mp2_num_steps":
+        return 2 * 4
+    raise RuntimeError(f"Unknown MP2 export field: {field}")
+
+
+def _expected_export_size(field: str) -> int:
+    if field in RL_EXPORT_FIELDS:
+        return RL_BUF_SIZE * 4
+    return _expected_mp2_size(field)
+
+
+def _validate_export_files(version_ids: list[int]) -> list[dict]:
     rows = []
-    by_field = {field: [] for field in SPIKEA_FIELDS}
+    by_field = {
+        field: []
+        for field in [*MP2_FIELDS, "mp2_day_for_step", "mp2_num_steps", *RL_EXPORT_FIELDS]
+    }
     for version_id in version_ids:
-        for field in SPIKEA_FIELDS:
-            path = Path(SPIKEA_EXPORT_DIR) / f"run_{version_id}_{field}.bin"
+        for field in by_field:
+            path = Path(MP2_EXPORT_DIR) / f"run_{version_id}_{field}.bin"
             if not path.is_file():
-                raise RuntimeError(f"Missing SpikeA export: {path}")
+                raise RuntimeError(f"Missing ensemble export: {path}")
             info = _file_info(path)
+            expected_size = _expected_export_size(field)
             if info["size"] != expected_size:
                 raise RuntimeError(
-                    f"Unexpected SpikeA size for {path}: {info['size']} != {expected_size}"
+                    f"Unexpected ensemble export size for {path}: {info['size']} != {expected_size}"
                 )
             rows.append(info)
             by_field[field].append(info)
@@ -120,7 +149,7 @@ def _validate_spike_files(version_ids: list[int]) -> list[dict]:
     for field, infos in by_field.items():
         hashes = {info["sha256"] for info in infos}
         if len(hashes) != 1:
-            raise RuntimeError(f"SpikeA field differs across identical runs: {field}, hashes={hashes}")
+            raise RuntimeError(f"Ensemble field differs across identical runs: {field}, hashes={hashes}")
     return rows
 
 
@@ -157,13 +186,14 @@ def _run_ensemble_with_smi(model: fg.ModelDescription, args: argparse.Namespace,
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="B1 CUDAEnsemble spike for LIMITER V8")
+    parser = argparse.ArgumentParser(description="B2 CUDAEnsemble full MP2 export for LIMITER V8")
     parser.add_argument("--version-date", required=True, help="Input dataset date YYYY-MM-DD")
     parser.add_argument("--input-version-id", type=int, default=3, help="Source input version_id")
-    parser.add_argument("--version-ids", type=int, nargs=2, default=[850, 851], help="Disposable output version_ids")
+    parser.add_argument("--version-ids", type=int, nargs="+", default=[860], help="Disposable output version_ids")
     parser.add_argument("--end-day", type=int, default=3650)
     parser.add_argument("--max-steps", type=int, default=10000)
     parser.add_argument("--devices", type=int, nargs="+", default=[0])
+    parser.add_argument("--concurrent-runs", type=int, nargs="+", default=[1])
     return parser.parse_args()
 
 
@@ -173,32 +203,35 @@ def main() -> None:
 
     orchestrator = _build_orchestrator(args)
     model = orchestrator.model
+    repair_quota = int(orchestrator.repair_quota)
 
-    print("\n=== CUDAEnsemble B1 sequential via concurrent_runs=1 ===")
-    seq = _run_ensemble(model, args, concurrent_runs=1)
-    seq_files = _validate_spike_files(args.version_ids)
-
-    print("\n=== CUDAEnsemble B1 concurrent via concurrent_runs=2 ===")
+    results = []
     before_smi = _nvidia_smi_snapshot()
-    conc, smi_live = _run_ensemble_with_smi(model, args, concurrent_runs=2)
-    after_smi = _nvidia_smi_snapshot()
-    conc_files = _validate_spike_files(args.version_ids)
+    for concurrent_runs in args.concurrent_runs:
+        print(f"\n=== CUDAEnsemble B2 concurrent_runs={concurrent_runs} ===")
+        result, smi_live = _run_ensemble_with_smi(model, args, concurrent_runs)
+        files = _validate_export_files(args.version_ids)
+        results.append((result, smi_live, files))
 
-    ratio = conc["wall_s"] / seq["wall_s"] if seq["wall_s"] > 0 else 0.0
-    print("\n=== B1 RESULT ===")
-    print(f"concurrent_runs=1 wall_s={seq['wall_s']:.3f} ensemble_elapsed_s={seq['ensemble_elapsed_s']:.3f}")
-    print(f"concurrent_runs=1 final_steps={seq['final_steps']} final_days={seq['final_days']}")
-    print(f"concurrent_runs=2 wall_s={conc['wall_s']:.3f} ensemble_elapsed_s={conc['ensemble_elapsed_s']:.3f}")
-    print(f"concurrent_runs=2 final_steps={conc['final_steps']} final_days={conc['final_days']}")
-    print(f"ratio concurrent/sequential={ratio:.3f}")
+    after_smi = _nvidia_smi_snapshot()
+    print("\n=== B2 RESULT ===")
+    for result, smi_live, files in results:
+        cr = result["concurrent_runs"]
+        print(f"concurrent_runs={cr} wall_s={result['wall_s']:.3f} ensemble_elapsed_s={result['ensemble_elapsed_s']:.3f}")
+        print(f"concurrent_runs={cr} final_steps={result['final_steps']} final_days={result['final_days']}")
+        print(f"nvidia_smi_live_cr{cr}_begin")
+        print(smi_live)
+        print(f"nvidia_smi_live_cr{cr}_end")
     print(f"nvidia_smi_before={before_smi}")
-    print("nvidia_smi_live_begin")
-    print(smi_live)
-    print("nvidia_smi_live_end")
     print(f"nvidia_smi_after={after_smi}")
-    for info in conc_files:
-        print(f"spike_file path={info['path']} size={info['size']} sha256={info['sha256']}")
-    print(f"validated_initial_files={len(seq_files)} validated_concurrent_files={len(conc_files)}")
+    print(f"repair_quota={repair_quota}")
+    print(
+        "loader_repair_quota_arg="
+        f"--repair-quota {repair_quota}"
+    )
+    for info in results[-1][2]:
+        print(f"ensemble_file path={info['path']} size={info['size']} sha256={info['sha256']}")
+    print(f"validated_ensemble_files={len(results[-1][2])}")
 
 
 if __name__ == "__main__":

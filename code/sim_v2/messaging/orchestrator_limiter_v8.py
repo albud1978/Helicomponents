@@ -487,13 +487,15 @@ class LimiterV8Orchestrator:
     def __init__(self, version_date: str, end_day: int = 3650,
                  enable_mp2: bool = False, clickhouse_client=None,
                  version_id: int | None = None,
-                 input_version_id: int | None = None):
+                 input_version_id: int | None = None,
+                 ensemble_mode: bool = False):
         self.version_date = version_date
         self.end_day = end_day
         self.enable_mp2 = enable_mp2
         self.clickhouse_client = clickhouse_client
         self.version_id = version_id
         self.input_version_id = input_version_id
+        self.ensemble_mode = bool(ensemble_mode)
         
         self.model = None
         self.simulation = None
@@ -710,7 +712,8 @@ class LimiterV8Orchestrator:
         self.population_snapshot = PopulationSnapshot()
         self.population_builder.populate_agents(self.population_snapshot, heli_agent)
         self._day0_repair_line_map = self._compute_day0_repair_line_map(self.population_snapshot)
-        self._add_repair_exits_from_snapshot(self.population_snapshot)
+        if self.ensemble_mode:
+            self._add_repair_exits_from_snapshot(self.population_snapshot)
 
         # Ensemble-only population init. Single-run still uses _populate_agents().
         self._hf_ensemble_populate = HF_EnsemblePopulate(
