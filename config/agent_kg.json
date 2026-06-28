@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-28T21:04:07Z",
+    "updated_at": "2026-06-28T21:05:23Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -3186,8 +3186,8 @@
       "workflow_id": "W_ensemble_l1_2026-06-29",
       "goal": "L1: проверить поддержку bulk/numpy-присваивания HostMacroProperty в сборке 2.0.0rc4; если есть — заменить поэлементную Python-запись в per-run init (особенно InitMP5Cumsum ~200k эл.) на bulk, замерить улучшение cr-масштабирования, сохранить bit-identity",
       "phase": "analysis",
-      "owner": "orchestrator",
-      "status": "active",
+      "owner": "human",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 250000,
@@ -3195,13 +3195,13 @@
         "profile": "high-strict"
       },
       "usage": {
-        "cumulative_steps": 6,
-        "cumulative_tokens": 185200,
+        "cumulative_steps": 7,
+        "cumulative_tokens": 197200,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-28T21:04:07Z"
+        "last_updated": "2026-06-28T21:05:14Z"
       },
       "created_at": "2026-06-28T20:21:21Z",
-      "updated_at": "2026-06-28T21:04:07Z",
+      "updated_at": "2026-06-28T21:05:23Z",
       "parent_workflow": "W_ensemble_perf_2026-06-28"
     }
   ],
@@ -23682,6 +23682,49 @@
         "est_tokens": 4200,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_ensemble_l1_2026-06-29_orchestrator_42ff0dd1",
+      "workflow_id": "W_ensemble_l1_2026-06-29",
+      "agent": "orchestrator",
+      "user_goal": "потом L1 (bulk-запись MacroProperty)",
+      "changes": "HF_InitMP5Cumsum: per-element Python loop -> env.importMacroProperty(.bin), atomic single write in main before simulate. File: orchestrator_limiter_v8.py. Committed b35e6fbb+9d1e387c.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "reviewer ACCEPT(84039385); validator PASS(7da6cd1e): vid1300==vid9 master 75192 + repairline 65700 EXCEPT=0/0 line_id=18 births=60; governance allow(40596324); measurement(4f900779): init 0.19->0.009s, GPU sweep 128.7->108.8s (-15.4%), E2E 308.5->298.95s (-3.1%), cr=4 optimum",
+      "drift_check": "UserGoal(L1 bulk-init mp5_cumsum) <-> Changes scope match: yes - single function, bit-identical, accepted, committed",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "ORCH-FINAL",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "touches code/sim_v2 runtime init path; MacroProperty load mechanism; requires bit-identity",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "L1: bulk-load mp5_cumsum via importMacroProperty(.bin) instead of per-element Python loop; verify cr-scaling + bit-identity",
+      "evidence_pack": "reviewer ACCEPT(84039385); validator PASS(7da6cd1e): vid1300==vid9 master 75192 + repairline 65700 EXCEPT=0/0 line_id=18 births=60; governance allow(40596324); measurement(4f900779): init 0.19->0.009s, GPU sweep 128.7->108.8s (-15.4%), E2E 308.5->298.95s (-3.1%), cr=4 optimum",
+      "success_criteria": "bulk-init корректен (значения идентичны) и cr-масштабирование измерено",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=4946022b;84039385;7da6cd1e;40596324;4f900779; approval_ref=current_chat_user_prompt",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "aa84d5d3fdb7666aae3efab5a764d6f834a0bb9d4f02ea208f3a6232a3bba941",
+      "created_at": "2026-06-28T21:05:14Z",
+      "modules": [
+        "step_logic",
+        "export",
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-opus-4.8",
+        "est_tokens": 12000,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -26573,6 +26616,15 @@
       "agent": "docs-curator",
       "created_at": "2026-06-28T20:22:45Z",
       "updated_at": "2026-06-28T21:03:01Z"
+    },
+    {
+      "context_id": "ctx_W_ensemble_l1_2026-06-29_closure_105922a9",
+      "workflow_id": "W_ensemble_l1_2026-06-29",
+      "context_type": "closure",
+      "content": "L1 bulk-init mp5_cumsum принят и закоммичен b35e6fbb+9d1e387c. GPU sweep -15%, E2E -3.1%, bit-identical. Конвейер ingestion-bound.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-28T21:05:23Z",
+      "updated_at": "2026-06-28T21:05:23Z"
     }
   ],
   "meta": {
