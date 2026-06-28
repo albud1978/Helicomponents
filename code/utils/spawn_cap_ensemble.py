@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""B2 CUDAEnsemble full MP2 export harness for LIMITER V8."""
+"""B3b CUDAEnsemble spawn cap sweep harness for LIMITER V8."""
+
+from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import subprocess
 import sys
 import time
+from datetime import date
+from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-MESSAGING_DIR = PROJECT_ROOT / "code" / "sim_v2" / "messaging"
-sys.path.insert(0, str(MESSAGING_DIR))
+CODE_ROOT = PROJECT_ROOT / "code"
+MESSAGING_DIR = CODE_ROOT / "sim_v2" / "messaging"
+for path in (CODE_ROOT, CODE_ROOT / "utils", MESSAGING_DIR):
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
 
 import pyflamegpu as fg
 from orchestrator_limiter_v8 import LimiterV8Orchestrator
@@ -23,29 +30,101 @@ from rtc_mp2_export import (
     MP2_STATIC_FIELDS,
 )
 from rtc_repairline_export import RL_EXPORT_FIELDS
+from sim_env_setup import get_client
+from spawn_cap_curve import get_reference_shape, synth_cumulative, synth_seed
 
 
-def _build_orchestrator(args: argparse.Namespace) -> LimiterV8Orchestrator:
+@dataclass(frozen=True)
+class RunSpec:
+    version_id: int
+    cap_n: int
+    spawn_limit_active: int
+    label: str
+
+
+def _run_specs(args: argparse.Namespace) -> list[RunSpec]:
+    caps = [int(cap) for cap in args.caps]
+    if not caps:
+        raise ValueError("caps list must not be empty")
+    if len(set(caps)) != len(caps):
+        raise ValueError(f"Duplicate caps are not allowed: {caps}")
+    invalid_caps = [cap for cap in caps if cap < 0 or cap > 60]
+    if invalid_caps:
+        raise ValueError(f"B3b caps must be strictly within 0..60, got {invalid_caps}")
+    if 61 in caps:
+        raise ValueError("cap=61 is reserved for uncapped vid1061 and must not be in caps")
+
+    specs = [
+        RunSpec(
+            version_id=int(args.out_base) + int(cap),
+            cap_n=int(cap),
+            spawn_limit_active=1,
+            label=f"cap{int(cap)}",
+        )
+        for cap in caps
+    ]
+    if not args.skip_uncapped:
+        specs.append(
+            RunSpec(
+                version_id=int(args.uncapped_version_id),
+                cap_n=0,
+                spawn_limit_active=0,
+                label="uncapped",
+            )
+        )
+    seen = set()
+    for spec in specs:
+        if spec.version_id in seen:
+            raise ValueError(f"Duplicate output version_id in B3b run specs: {spec.version_id}")
+        seen.add(spec.version_id)
+    return specs
+
+
+def _build_orchestrator(args: argparse.Namespace) -> tuple[LimiterV8Orchestrator, dict[str, int]]:
     orchestrator = LimiterV8Orchestrator(
         version_date=args.version_date,
         end_day=args.end_day,
         enable_mp2=True,
         clickhouse_client=None,
-        version_id=args.version_ids[0],
+        version_id=int(args.out_base),
         input_version_id=args.input_version_id,
         ensemble_mode=True,
     )
     orchestrator.prepare_data()
+
+    client = get_client()
+    threshold, days_total = get_reference_shape(
+        client,
+        args.version_date,
+        ref_vid=args.reference_version_id,
+    )
+    env_days = int(orchestrator.env_data["days_total_u16"])
+    if days_total != env_days:
+        raise RuntimeError(
+            "reference spawn_limit shape days_total mismatch: "
+            f"ref={days_total}, input={env_days}"
+        )
+
+    # B3a disables planned Mi-17 deliveries globally; dynamic spawn is tested alone.
+    orchestrator.env_data["mp4_new_counter_mi17_seed"] = [0] * days_total
+    orchestrator._deterministic_spawn_count = 0
+
+    # Ensemble per-run cap injection needs only the reference step threshold.
+    orchestrator.env_data["spawn_limit_cumulative"] = synth_cumulative(threshold, days_total, 1)
+    orchestrator.env_data["mp4_spawn_limit_seed"] = synth_seed(threshold, days_total, 1)
+    orchestrator.env_data["spawn_limit_active"] = 1
+    orchestrator._collect_deterministic_dates()
+
     orchestrator.build_model()
-    return orchestrator
+    return orchestrator, {"threshold": threshold, "days_total": days_total}
 
 
-def _make_runs(model: fg.ModelDescription, version_ids: list[int], max_steps: int) -> fg.RunPlanVector:
-    runs = fg.RunPlanVector(model, len(version_ids))
-    for i, version_id in enumerate(version_ids):
+def _make_runs(model: fg.ModelDescription, specs: list[RunSpec], max_steps: int) -> fg.RunPlanVector:
+    runs = fg.RunPlanVector(model, len(specs))
+    for i, spec in enumerate(specs):
         run = runs[i]
         run.setSteps(max_steps)
-        run.setPropertyUInt("version_id", int(version_id))
+        run.setPropertyUInt("version_id", spec.version_id)
         run.setPropertyUInt("ensemble_mode", 1)
         run.setPropertyUInt("ensemble_pop_inited", 0)
         run.setPropertyUInt("mp5_inited", 0)
@@ -53,7 +132,9 @@ def _make_runs(model: fg.ModelDescription, version_ids: list[int], max_steps: in
         run.setPropertyUInt("econ_inited", 0)
         run.setPropertyUInt("lines_inited", 0)
         run.setPropertyUInt("v8_inited", 0)
-        run.setOutputSubdirectory(f"run_{version_id}")
+        run.setPropertyUInt("spawn_cap_n", spec.cap_n)
+        run.setPropertyUInt8("spawn_limit_active", spec.spawn_limit_active)
+        run.setOutputSubdirectory(f"run_{spec.version_id}")
     return runs
 
 
@@ -64,8 +145,13 @@ def _int_set(values: list[int]) -> fg.IntSet:
     return result
 
 
-def _run_ensemble(model: fg.ModelDescription, args: argparse.Namespace, concurrent_runs: int) -> dict:
-    runs = _make_runs(model, args.version_ids, args.max_steps)
+def _run_ensemble(
+    model: fg.ModelDescription,
+    args: argparse.Namespace,
+    specs: list[RunSpec],
+    concurrent_runs: int,
+) -> dict:
+    runs = _make_runs(model, specs, args.max_steps)
     ensemble = fg.CUDAEnsemble(model)
     exit_log = fg.LoggingConfig(model)
     exit_log.logEnvironment("version_id")
@@ -74,7 +160,7 @@ def _run_ensemble(model: fg.ModelDescription, args: argparse.Namespace, concurre
     config = ensemble.Config()
     config.devices = _int_set(args.devices)
     config.concurrent_runs = int(concurrent_runs)
-    config.out_directory = str(PROJECT_ROOT / "output" / "ensemble_b2" / f"logs_cr{concurrent_runs}")
+    config.out_directory = str(PROJECT_ROOT / "output" / "ensemble_b2" / f"logs_b3b_cr{concurrent_runs}")
     config.out_format = "json"
     config.truncate_log_files = True
     config.telemetry = False
@@ -126,30 +212,24 @@ def _expected_export_size(field: str) -> int:
     return _expected_mp2_size(field)
 
 
-def _validate_export_files(version_ids: list[int]) -> list[dict]:
+def _validate_export_files(specs: list[RunSpec]) -> list[dict]:
     rows = []
-    by_field = {
-        field: []
-        for field in [*MP2_FIELDS, "mp2_day_for_step", "mp2_num_steps", *RL_EXPORT_FIELDS]
-    }
-    for version_id in version_ids:
-        for field in by_field:
-            path = Path(MP2_EXPORT_DIR) / f"run_{version_id}_{field}.bin"
+    fields = [*MP2_FIELDS, "mp2_day_for_step", "mp2_num_steps", *RL_EXPORT_FIELDS]
+    for spec in specs:
+        for field in fields:
+            path = Path(MP2_EXPORT_DIR) / f"run_{spec.version_id}_{field}.bin"
             if not path.is_file():
                 raise RuntimeError(f"Missing ensemble export: {path}")
             info = _file_info(path)
+            info["version_id"] = spec.version_id
+            info["label"] = spec.label
+            info["field"] = field
             expected_size = _expected_export_size(field)
             if info["size"] != expected_size:
                 raise RuntimeError(
                     f"Unexpected ensemble export size for {path}: {info['size']} != {expected_size}"
                 )
             rows.append(info)
-            by_field[field].append(info)
-
-    for field, infos in by_field.items():
-        hashes = {info["sha256"] for info in infos}
-        if len(hashes) != 1:
-            raise RuntimeError(f"Ensemble field differs across identical runs: {field}, hashes={hashes}")
     return rows
 
 
@@ -162,7 +242,7 @@ def _nvidia_smi_snapshot() -> str:
     return subprocess.check_output(cmd, text=True).strip()
 
 
-def _run_ensemble_with_smi(model: fg.ModelDescription, args: argparse.Namespace,
+def _run_ensemble_with_smi(model: fg.ModelDescription, args: argparse.Namespace, specs: list[RunSpec],
                            concurrent_runs: int) -> tuple[dict, str]:
     smi_cmd = [
         "nvidia-smi",
@@ -178,22 +258,83 @@ def _run_ensemble_with_smi(model: fg.ModelDescription, args: argparse.Namespace,
         text=True,
     )
     try:
-        result = _run_ensemble(model, args, concurrent_runs)
+        result = _run_ensemble(model, args, specs, concurrent_runs)
     finally:
         monitor.terminate()
     smi_output, _ = monitor.communicate(timeout=5)
     return result, smi_output.strip()
 
 
+def _version_date_int_arg(version_date: str) -> str:
+    return date.fromisoformat(version_date).strftime("%Y%m%d")
+
+
+def _load_exports(args: argparse.Namespace, specs: list[RunSpec], repair_quota: int) -> list[str]:
+    outputs = []
+    loader = PROJECT_ROOT / "code" / "utils" / "ensemble_mp2_loader.py"
+    materializer = PROJECT_ROOT / "code" / "sim_v2" / "messaging" / "sim_daily_materializer.py"
+    version_date_int = _version_date_int_arg(args.version_date)
+    for spec in specs:
+        cmd = [
+            sys.executable,
+            str(loader),
+            "--version-date",
+            args.version_date,
+            "--version-id",
+            str(spec.version_id),
+            "--baseline-version-id",
+            str(args.input_version_id),
+            "--repair-quota",
+            str(repair_quota),
+        ]
+        completed = subprocess.run(
+            cmd,
+            cwd=PROJECT_ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        output = completed.stdout.strip()
+        if completed.stderr.strip():
+            output = output + "\n" + completed.stderr.strip()
+        print(output)
+        materialize_cmd = [
+            sys.executable,
+            str(materializer),
+            "--version-date",
+            version_date_int,
+            "--version-id",
+            str(spec.version_id),
+        ]
+        materialized = subprocess.run(
+            materialize_cmd,
+            cwd=PROJECT_ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        materializer_output = materialized.stdout.strip()
+        if materialized.stderr.strip():
+            materializer_output = materializer_output + "\n" + materialized.stderr.strip()
+        print(materializer_output)
+        outputs.append(output + "\n" + materializer_output)
+    return outputs
+
+
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="B2 CUDAEnsemble full MP2 export for LIMITER V8")
+    parser = argparse.ArgumentParser(description="B3b CUDAEnsemble spawn cap sweep for LIMITER V8")
     parser.add_argument("--version-date", required=True, help="Input dataset date YYYY-MM-DD")
     parser.add_argument("--input-version-id", type=int, default=3, help="Source input version_id")
-    parser.add_argument("--version-ids", type=int, nargs="+", default=[860], help="Disposable output version_ids")
+    parser.add_argument("--caps", type=int, nargs="+", default=list(range(61)), help="Capped spawn_limit values")
+    parser.add_argument("--out-base", type=int, default=1000, help="Output vid base: cap N -> out_base+N")
+    parser.add_argument("--uncapped-version-id", type=int, default=1061)
+    parser.add_argument("--skip-uncapped", action="store_true", help="Do not append uncapped baseline run")
+    parser.add_argument("--reference-version-id", type=int, default=9, help="Reference vid for cap threshold")
+    parser.add_argument("--repair-quota", type=int, required=True, help="Explicit repair quota for loader")
     parser.add_argument("--end-day", type=int, default=3650)
     parser.add_argument("--max-steps", type=int, default=10000)
     parser.add_argument("--devices", type=int, nargs="+", default=[0])
-    parser.add_argument("--concurrent-runs", type=int, nargs="+", default=[1])
+    parser.add_argument("--concurrent-runs", type=int, nargs="+", default=[4])
     return parser.parse_args()
 
 
@@ -201,20 +342,38 @@ def main() -> None:
     args = _parse_args()
     fg.Telemetry.disable()
 
-    orchestrator = _build_orchestrator(args)
+    specs = _run_specs(args)
+    orchestrator, shape = _build_orchestrator(args)
     model = orchestrator.model
-    repair_quota = int(orchestrator.repair_quota)
+    repair_quota = int(args.repair_quota)
+    if repair_quota != int(orchestrator.repair_quota):
+        raise RuntimeError(
+            f"Explicit repair_quota={repair_quota} does not match orchestrator repair_quota={orchestrator.repair_quota}"
+        )
 
     results = []
     before_smi = _nvidia_smi_snapshot()
     for concurrent_runs in args.concurrent_runs:
-        print(f"\n=== CUDAEnsemble B2 concurrent_runs={concurrent_runs} ===")
-        result, smi_live = _run_ensemble_with_smi(model, args, concurrent_runs)
-        files = _validate_export_files(args.version_ids)
+        print(f"\n=== CUDAEnsemble B3b concurrent_runs={concurrent_runs} ===")
+        result, smi_live = _run_ensemble_with_smi(model, args, specs, concurrent_runs)
+        files = _validate_export_files(specs)
         results.append((result, smi_live, files))
 
+    loader_outputs = _load_exports(args, specs, repair_quota)
+
     after_smi = _nvidia_smi_snapshot()
-    print("\n=== B2 RESULT ===")
+    print("\n=== B3b RESULT ===")
+    print(
+        f"reference_shape threshold={shape['threshold']} days_total={shape['days_total']} "
+        f"reference_vid={args.reference_version_id}"
+    )
+    print("planned_spawn_disabled=1 deterministic_spawn_count=0")
+    for spec in specs:
+        print(
+            "run_spec "
+            f"label={spec.label} version_id={spec.version_id} cap_n={spec.cap_n} "
+            f"spawn_limit_active={spec.spawn_limit_active}"
+        )
     for result, smi_live, files in results:
         cr = result["concurrent_runs"]
         print(f"concurrent_runs={cr} wall_s={result['wall_s']:.3f} ensemble_elapsed_s={result['ensemble_elapsed_s']:.3f}")
@@ -229,8 +388,13 @@ def main() -> None:
         "loader_repair_quota_arg="
         f"--repair-quota {repair_quota}"
     )
+    print(f"loader_runs={len(loader_outputs)}")
     for info in results[-1][2]:
-        print(f"ensemble_file path={info['path']} size={info['size']} sha256={info['sha256']}")
+        print(
+            "ensemble_file "
+            f"label={info['label']} version_id={info['version_id']} field={info['field']} "
+            f"path={info['path']} size={info['size']} sha256={info['sha256']}"
+        )
     print(f"validated_ensemble_files={len(results[-1][2])}")
 
 

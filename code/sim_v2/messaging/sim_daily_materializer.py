@@ -298,38 +298,26 @@ ops_counts AS (
 program_targets AS (
     SELECT
         toUInt32(formatDateTime(version_date, '%%Y%%m%%d')) AS version_date_int,
-        arraySort(
-            x -> x.1,
-            groupArray((dates, toUInt32(ops_counter_mi8), toUInt32(ops_counter_mi17)))
-        ) AS day_targets
+        dates AS day_date,
+        max(toUInt32(ops_counter_mi8)) AS target_mi8,
+        max(toUInt32(ops_counter_mi17)) AS target_mi17
     FROM flight_program_ac
     WHERE version_date = toDate(parseDateTimeBestEffort(toString(%(version_date)s)))
-    GROUP BY version_date
+    GROUP BY version_date, dates
 ),
-target_indexes AS (
+targets AS (
     SELECT
         g.version_date AS version_date,
         g.version_id AS version_id,
         g.group_by AS group_by,
         g.day_date AS day_date,
-        p.day_targets AS day_targets,
-        arrayLastIndex(x -> x <= g.day_date, arrayMap(item -> item.1, p.day_targets)) AS target_idx
+        if(g.group_by = 1, p.target_mi8, p.target_mi17) AS target
     FROM daily_grid g
+    -- Exact-date join is equivalent to forward-fill only for dense daily flight_program_ac;
+    -- _check_deficit_target_coverage fails fast on sparse program data before this INSERT runs.
     INNER JOIN program_targets p
       ON p.version_date_int = g.version_date
-),
-targets AS (
-    SELECT
-        version_date AS version_date,
-        version_id AS version_id,
-        group_by AS group_by,
-        day_date AS day_date,
-        if(
-            group_by = 1,
-            arrayMap(item -> item.2, day_targets)[greatest(target_idx, 1)],
-            arrayMap(item -> item.3, day_targets)[greatest(target_idx, 1)]
-        ) AS target
-    FROM target_indexes
+     AND p.day_date = g.day_date
 )
 SELECT
     g.version_date AS version_date,
@@ -350,6 +338,68 @@ LEFT JOIN ops_counts o
  AND o.version_id = g.version_id
  AND o.group_by = g.group_by
  AND o.day_date = g.day_date
+"""
+
+
+DEFICIT_TARGET_COVERAGE_CHECK = f"""
+WITH events_daily AS (
+    SELECT
+        version_date AS version_date,
+        version_id AS version_id,
+        group_by AS group_by,
+        aircraft_number AS aircraft_number,
+        day_date AS day_date,
+        argMax(status_id, idx) AS status_id
+    FROM {SOURCE_TABLE}
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND group_by IN (1, 2)
+    GROUP BY version_date, version_id, group_by, aircraft_number, day_date
+),
+version_bounds AS (
+    SELECT
+        version_date AS version_date,
+        version_id AS version_id,
+        max(day_date) AS version_max_day
+    FROM events_daily
+    GROUP BY version_date, version_id
+),
+aircraft_span AS (
+    SELECT
+        e.version_date AS version_date,
+        e.version_id AS version_id,
+        e.group_by AS group_by,
+        e.aircraft_number AS aircraft_number,
+        min(e.day_date) AS aircraft_min_day,
+        vb.version_max_day AS aircraft_max_day
+    FROM events_daily e
+    INNER JOIN version_bounds vb
+      ON vb.version_date = e.version_date
+     AND vb.version_id = e.version_id
+    GROUP BY e.version_date, e.version_id, e.group_by, e.aircraft_number, vb.version_max_day
+),
+expanded_days AS (
+    SELECT DISTINCT
+        a.version_date AS version_date,
+        a.version_id AS version_id,
+        a.group_by AS group_by,
+        addDays(a.aircraft_min_day, n) AS day_date
+    FROM aircraft_span a
+    ARRAY JOIN range(dateDiff('day', a.aircraft_min_day, a.aircraft_max_day) + 1) AS n
+),
+program_target_dates AS (
+    SELECT
+        dates AS day_date
+    FROM flight_program_ac
+    WHERE version_date = toDate(parseDateTimeBestEffort(toString(%(version_date)s)))
+    GROUP BY dates
+)
+SELECT
+    count() AS missing_grid_days,
+    uniqExact(day_date) AS missing_dates,
+    arraySlice(arraySort(groupUniqArray((group_by, day_date))), 1, 10) AS sample_missing_grid_days
+FROM expanded_days
+WHERE day_date NOT IN (SELECT day_date FROM program_target_dates)
 """
 
 
@@ -374,6 +424,30 @@ def _count_partition(client, table_name: str, params: dict[str, int]) -> int:
     )
 
 
+def _format_missing_grid_days(sample_missing_grid_days) -> str:
+    return ", ".join(
+        f"group_by={int(group_by)} day_date={day_date}"
+        for group_by, day_date in sample_missing_grid_days
+    )
+
+
+def _check_deficit_target_coverage(client, params: dict[str, int]) -> None:
+    missing_grid_days, missing_dates, sample_missing = client.execute(
+        DEFICIT_TARGET_COVERAGE_CHECK,
+        params,
+    )[0]
+    if int(missing_grid_days) == 0:
+        return
+
+    sample_text = _format_missing_grid_days(sample_missing)
+    raise RuntimeError(
+        "flight_program_ac must be dense daily for sim_deficit_v9_daily exact-date targets: "
+        f"version_date={params['version_date']}, version_id={params['version_id']}, "
+        f"missing_grid_days={int(missing_grid_days)}, missing_dates={int(missing_dates)}, "
+        f"sample_missing=[{sample_text}]"
+    )
+
+
 def materialize_daily(client, version_date_int: int, version_id: int) -> int:
     """Rebuild one version partition of daily BI views."""
     version_date_int = _as_uint32(version_date_int, "version_date_int")
@@ -382,6 +456,7 @@ def materialize_daily(client, version_date_int: int, version_id: int) -> int:
 
     client.execute(DDL_DAILY)
     client.execute(DDL_DEFICIT)
+    _check_deficit_target_coverage(client, params)
     client.execute(f"ALTER TABLE {TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
     client.execute(f"ALTER TABLE {DEFICIT_TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
     client.execute(INSERT_DAILY, params)

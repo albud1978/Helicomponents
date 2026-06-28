@@ -28,7 +28,7 @@ for path in (CODE_ROOT, CODE_ROOT / "utils", CODE_ROOT / "sim_v2" / "messaging")
 from sim_env_setup import get_client, prepare_env_arrays  # noqa: E402
 
 DEFAULT_VERSION_DATE = "2026-06-22"
-DEFAULT_CSV_PATH = "output/spawn_cap_curve_20260622.csv"
+DEFAULT_CSV_PATH = "output/spawn_cap_curve_b3_20260622.csv"
 CSV_COLUMNS = (
     "cap",
     "version_id",
@@ -193,6 +193,12 @@ def _deficit_by_day(client, version_date: str | date, version_id: int) -> list[t
         """,
         {"version_date_int": _version_date_int(version_date), "version_id": version_id},
     )
+    if not rows:
+        raise RuntimeError(
+            "sim_deficit_v9_daily has no rows for "
+            f"version_date={_version_date_int(version_date)} version_id={version_id} group_by=2; "
+            "run code/sim_v2/messaging/sim_daily_materializer.py for this version before --collect"
+        )
     return [(row[0], int(row[1] or 0)) for row in rows]
 
 
@@ -253,7 +259,7 @@ def collect_curve(
     version_date: str | date,
     caps: Iterable[int],
     out_base: int = 100,
-    baseline_vid: int = 3,
+    baseline_vid: int = 1061,
     src_vid: int = 3,
 ) -> list[dict[str, int | float | None]]:
     """Collect read-only curve metrics for cap versions and baseline cap=61."""
@@ -265,7 +271,7 @@ def collect_curve(
         rows.append(row)
 
     baseline: dict[str, int | float | None] = {"cap": 61, "version_id": baseline_vid}
-    baseline.update(_metrics_for_version(client, version_date, baseline_vid, src_vid=baseline_vid))
+    baseline.update(_metrics_for_version(client, version_date, baseline_vid, src_vid=src_vid))
     rows.append(baseline)
     rows.sort(key=lambda item: int(item["cap"]))
 
@@ -314,7 +320,7 @@ def _print_plan(args: argparse.Namespace, caps: list[int]) -> None:
     print("actions=" + ", ".join(actions))
     for cap in caps:
         print(f"  cap={cap:02d}: input vid{args.src_vid} -> output vid{args.out_base + cap}")
-    print("  baseline cap=61: input vid3 -> output vid3")
+    print(f"  baseline cap=61: output vid{args.baseline_vid}")
     print("  validate: synth cap=60 == ref vid9")
 
 
@@ -323,7 +329,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version-date", default=DEFAULT_VERSION_DATE)
     parser.add_argument("--cap-min", type=int, default=0)
     parser.add_argument("--cap-max", type=int, default=60)
-    parser.add_argument("--out-base", type=int, default=100)
+    parser.add_argument("--out-base", type=int, default=1000)
+    parser.add_argument("--baseline-vid", type=int, default=1061)
     parser.add_argument("--src-vid", type=int, default=3)
     parser.add_argument("--end-day", type=int, default=3650)
     parser.add_argument("--csv-path", default=DEFAULT_CSV_PATH)
@@ -362,7 +369,14 @@ def main(argv: list[str] | None = None) -> int:
                 src_vid=args.src_vid,
             )
     if args.collect:
-        rows = collect_curve(client, args.version_date, caps, out_base=args.out_base, src_vid=args.src_vid)
+        rows = collect_curve(
+            client,
+            args.version_date,
+            caps,
+            out_base=args.out_base,
+            baseline_vid=args.baseline_vid,
+            src_vid=args.src_vid,
+        )
         path = write_curve(rows, args.csv_path)
         print(f"collect: wrote {len(rows)} rows -> {path}")
     return 0

@@ -693,6 +693,7 @@ class LimiterV8Orchestrator:
             spawn_limit_cumulative = [0] * max(1, self.days)
         self.base_model.env.newMacroPropertyUInt("spawn_limit_cumulative", model_build.MAX_DAYS)
         self.base_model.env.newPropertyUInt8("spawn_limit_active", int(self.env_data.get('spawn_limit_active', 0)))
+        self.base_model.env.newPropertyUInt("spawn_cap_n", 0)
         
         heli_agent = self.base_model.agent
         
@@ -1822,9 +1823,27 @@ class HF_InitSpawnLimitCumulative(fg.HostFunction):
                 f"{len(values)} > {len(mp)}"
             )
 
-        print(f"  [HF_InitSpawnLimitCumulative] Загрузка spawn_limit_cumulative: {len(values)}")
-        for i, value in enumerate(values):
-            mp[i] = int(value)
+        ensemble_mode = int(env.getPropertyUInt("ensemble_mode")) != 0
+        if ensemble_mode:
+            threshold = None
+            for i, value in enumerate(values):
+                if int(value) > 0:
+                    threshold = i
+                    break
+            if threshold is None:
+                raise RuntimeError("ensemble spawn cap requires positive reference spawn_limit_cumulative")
+
+            cap_n = int(env.getPropertyUInt("spawn_cap_n"))
+            print(
+                "  [HF_InitSpawnLimitCumulative] Ensemble cap synthesis: "
+                f"threshold={threshold}, cap={cap_n}, days={len(values)}"
+            )
+            for i in range(len(values)):
+                mp[i] = 0 if i < threshold else cap_n
+        else:
+            print(f"  [HF_InitSpawnLimitCumulative] Загрузка spawn_limit_cumulative: {len(values)}")
+            for i, value in enumerate(values):
+                mp[i] = int(value)
 
         env.setPropertyUInt("spawnlim_inited", 1)
         print("  [HF_InitSpawnLimitCumulative] ✅ Загружено")
