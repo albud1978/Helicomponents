@@ -28,6 +28,7 @@ import sys
 import time
 import argparse
 import hashlib
+import tempfile
 
 # Пути
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -54,6 +55,36 @@ import pyflamegpu as fg
 import model_build
 
 import rtc_spawn_dynamic_v7
+
+
+def _prepare_uint32_macro_property_import(values, label: str, expected_len: int | None = None):
+    """Prepare a raw UInt32 .bin file for HostEnvironment.importMacroProperty()."""
+    import numpy as np
+
+    source = np.ascontiguousarray(np.asarray(values, dtype=np.uint32).reshape(-1))
+    if expected_len is None:
+        array = source
+    else:
+        expected_len = int(expected_len)
+        if len(source) > expected_len:
+            raise RuntimeError(
+                f"{label} values exceed MacroProperty size: {len(source)} > {expected_len}"
+            )
+        array = np.zeros(expected_len, dtype=np.uint32)
+        array[:len(source)] = source
+    digest = hashlib.sha256(array.view(np.uint8)).hexdigest()[:16]
+    path = os.path.join(
+        tempfile.gettempdir(),
+        f"helicomponents_{label}_{len(array)}_{digest}.bin",
+    )
+    tmp_path = f"{path}.{os.getpid()}.tmp"
+    array.tofile(tmp_path)
+    if os.path.getsize(tmp_path) != array.nbytes:
+        raise RuntimeError(
+            f"{label} bulk file size mismatch: {os.path.getsize(tmp_path)} != {array.nbytes}"
+        )
+    os.replace(tmp_path, path)
+    return source, len(array), path
 
 
 def collect_agents_state(simulation, agent_desc, current_day, version_date_int, version_id,
@@ -1780,7 +1811,16 @@ class HF_InitMP5Cumsum(fg.HostFunction):
     
     def __init__(self, mp5_cumsum, frames: int, days: int):
         super().__init__()
-        self.mp5_cumsum = mp5_cumsum
+        cumsum_size = model_build.RTC_MAX_FRAMES * (model_build.MAX_DAYS + 1)
+        (
+            self.mp5_cumsum,
+            self._mp5_cumsum_bulk_len,
+            self._mp5_cumsum_bulk_path,
+        ) = _prepare_uint32_macro_property_import(
+            mp5_cumsum,
+            "mp5_cumsum",
+            expected_len=cumsum_size,
+        )
         self.frames = frames
         self.days = days
     
@@ -1792,15 +1832,35 @@ class HF_InitMP5Cumsum(fg.HostFunction):
         print(f"  [HF_InitMP5Cumsum] Загрузка mp5_cumsum: {self.mp5_cumsum.shape}")
         
         mp = env.getMacroPropertyUInt32("mp5_cumsum")
-        
-        for i in range(min(len(self.mp5_cumsum), len(mp))):
-            mp[i] = int(self.mp5_cumsum[i])
+        if self._mp5_cumsum_bulk_len != len(mp):
+            raise RuntimeError(
+                "mp5_cumsum bulk import requires exact MacroProperty length: "
+                f"{self._mp5_cumsum_bulk_len} != {len(mp)}"
+            )
+
+        t0 = time.perf_counter()
+        env.importMacroProperty("mp5_cumsum", self._mp5_cumsum_bulk_path)
+        elapsed_s = time.perf_counter() - t0
+
+        sample_expectations = {
+            0: int(self.mp5_cumsum[0]),
+            1: int(self.mp5_cumsum[1]),
+            len(self.mp5_cumsum) // 2: int(self.mp5_cumsum[len(self.mp5_cumsum) // 2]),
+            len(self.mp5_cumsum) - 1: int(self.mp5_cumsum[-1]),
+            len(mp) - 1: 0,
+        }
+        for idx, expected in sorted(sample_expectations.items()):
+            actual = int(mp[idx])
+            if actual != expected:
+                raise RuntimeError(
+                    f"mp5_cumsum bulk import mismatch at {idx}: {actual} != {expected}"
+                )
         
         mp_min = env.getMacroPropertyUInt32("mp_min_limiter")
         mp_min[0] = 0xFFFFFFFF
         
         env.setPropertyUInt("mp5_inited", 1)
-        print(f"  [HF_InitMP5Cumsum] ✅ Загружено")
+        print(f"  [HF_InitMP5Cumsum] ✅ Загружено bulk={elapsed_s:.6f}s")
 
 
 class HF_InitSpawnLimitCumulative(fg.HostFunction):

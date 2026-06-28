@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-06-29 — L1: bulk-init `HF_InitMP5Cumsum` (MacroProperty `.bin` import)
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_ensemble_l1_2026-06-29` | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** загрузка read-only lookup-таблицы `mp5_cumsum` (~200k `UInt32`) в MacroProperty в `HF_InitMP5Cumsum` переведена с поэлементного Python-цикла (`mp[i]=...`, GIL ~0.19с, блокировал `concurrent_runs>1` в ensemble) на bulk `env.importMacroProperty(.bin)` (копирование на стороне C++). `.bin` готовится **один раз** в main-процессе при `build_model` (атомарно `tmp+os.replace`); ensemble-прогоны делают только read-only import — гонок под `cr>1` нет.
+
+**Эффект:** init **0.189с → 0.009с** (×20); GPU-фаза полного 62-vid свипа **128.7с → 108.8с** (−15.4%) при `cr=4` (остаётся оптимумом); E2E свипа **308.5с → 298.95с** (−3.1%). Конвейер остаётся **ingestion-bound** (loader+materializer ~179с доминируют).
+
+**Корректность (bit-identical):** 374/374 `.bin` sha256; vid1300==vid9 в CH (master 75192 + repairline 65700, EXCEPT=0/0, line_id=18, births=60); на полном свипе births линейны, deficit_post180 cross-check совпал.
+
+**Диагностика (profiling):** одиночный прогон **не** host-bound (Python ≈8.5% wall); cr-масштабирование упиралось в per-run init — L1 устранил узкое место.
+
+**Review/validation/governance:** reviewer-flame ACCEPT (`84039385`) + validator-judge PASS (`7da6cd1e`) + governance `allow` (`40596324`).
+
+**Файлы:** `code/sim_v2/messaging/orchestrator_limiter_v8.py` (`HF_InitMP5Cumsum`, helper `_prepare_uint32_macro_property_import`).
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
 ## 2026-06-28 — ensemble sweep ingestion: batch loader + multi-vid materializer + parallel CH load
 
 **Risk:** high | **Profile:** high-strict | **Workflow:** `W_ensemble_perf_2026-06-28` | **Branch:** `feature/dwh-bb8`
