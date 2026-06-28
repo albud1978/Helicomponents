@@ -410,18 +410,38 @@ def _as_uint32(value: int, name: str) -> int:
     return value_int
 
 
-def _count_partition(client, table_name: str, params: dict[str, int]) -> int:
+def _version_ids_csv(version_ids: list[int]) -> str:
+    if not version_ids:
+        raise ValueError("version_ids must not be empty")
+    checked = [_as_uint32(version_id, "version_id") for version_id in version_ids]
+    if len(set(checked)) != len(checked):
+        raise ValueError(f"Duplicate version_id values are not allowed: {version_ids}")
+    return ", ".join(str(version_id) for version_id in checked)
+
+
+def _multi_version_query(query: str, version_ids: list[int]) -> str:
+    return query.replace(
+        "version_id = %(version_id)s",
+        f"version_id IN ({_version_ids_csv(version_ids)})",
+    )
+
+
+def _count_partitions(client, table_name: str, version_date_int: int, version_ids: list[int]) -> int:
     return int(
         client.execute(
             f"""
             SELECT count()
             FROM {table_name}
             WHERE version_date = %(version_date)s
-              AND version_id = %(version_id)s
+              AND version_id IN ({_version_ids_csv(version_ids)})
             """,
-            params,
+            {"version_date": version_date_int},
         )[0][0]
     )
+
+
+def _count_partition(client, table_name: str, params: dict[str, int]) -> int:
+    return _count_partitions(client, table_name, params["version_date"], [params["version_id"]])
 
 
 def _format_missing_grid_days(sample_missing_grid_days) -> str:
@@ -431,9 +451,9 @@ def _format_missing_grid_days(sample_missing_grid_days) -> str:
     )
 
 
-def _check_deficit_target_coverage(client, params: dict[str, int]) -> None:
+def _check_deficit_target_coverage(client, params: dict[str, int], version_ids: list[int]) -> None:
     missing_grid_days, missing_dates, sample_missing = client.execute(
-        DEFICIT_TARGET_COVERAGE_CHECK,
+        _multi_version_query(DEFICIT_TARGET_COVERAGE_CHECK, version_ids),
         params,
     )[0]
     if int(missing_grid_days) == 0:
@@ -442,26 +462,63 @@ def _check_deficit_target_coverage(client, params: dict[str, int]) -> None:
     sample_text = _format_missing_grid_days(sample_missing)
     raise RuntimeError(
         "flight_program_ac must be dense daily for sim_deficit_v9_daily exact-date targets: "
-        f"version_date={params['version_date']}, version_id={params['version_id']}, "
+        f"version_date={params['version_date']}, version_ids={version_ids}, "
         f"missing_grid_days={int(missing_grid_days)}, missing_dates={int(missing_dates)}, "
         f"sample_missing=[{sample_text}]"
     )
 
 
-def materialize_daily(client, version_date_int: int, version_id: int) -> int:
-    """Rebuild one version partition of daily BI views."""
+def _clear_daily_partitions(client, version_date_int: int, version_ids: list[int]) -> None:
+    if len(version_ids) == 1:
+        version_id = version_ids[0]
+        client.execute(f"ALTER TABLE {TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
+        client.execute(f"ALTER TABLE {DEFICIT_TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
+        return
+
+    version_ids_csv = _version_ids_csv(version_ids)
+    params = {"version_date": version_date_int}
+    client.execute(
+        f"""
+        ALTER TABLE {TABLE_NAME} DELETE
+        WHERE version_date = %(version_date)s
+          AND version_id IN ({version_ids_csv})
+        """,
+        params,
+        settings={"mutations_sync": 2},
+    )
+    client.execute(
+        f"""
+        ALTER TABLE {DEFICIT_TABLE_NAME} DELETE
+        WHERE version_date = %(version_date)s
+          AND version_id IN ({version_ids_csv})
+        """,
+        params,
+        settings={"mutations_sync": 2},
+    )
+
+
+def materialize_daily_versions(client, version_date_int: int, version_ids: list[int]) -> tuple[int, int]:
+    """Rebuild one or more version partitions of daily BI views."""
     version_date_int = _as_uint32(version_date_int, "version_date_int")
-    version_id = _as_uint32(version_id, "version_id")
-    params = {"version_date": version_date_int, "version_id": version_id}
+    version_ids = [_as_uint32(version_id, "version_id") for version_id in version_ids]
+    params = {"version_date": version_date_int}
 
     client.execute(DDL_DAILY)
     client.execute(DDL_DEFICIT)
-    _check_deficit_target_coverage(client, params)
-    client.execute(f"ALTER TABLE {TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
-    client.execute(f"ALTER TABLE {DEFICIT_TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
-    client.execute(INSERT_DAILY, params)
-    client.execute(INSERT_DEFICIT, params)
-    return _count_partition(client, TABLE_NAME, params)
+    _check_deficit_target_coverage(client, params, version_ids)
+    _clear_daily_partitions(client, version_date_int, version_ids)
+    client.execute(_multi_version_query(INSERT_DAILY, version_ids), params)
+    client.execute(_multi_version_query(INSERT_DEFICIT, version_ids), params)
+    return (
+        _count_partitions(client, TABLE_NAME, version_date_int, version_ids),
+        _count_partitions(client, DEFICIT_TABLE_NAME, version_date_int, version_ids),
+    )
+
+
+def materialize_daily(client, version_date_int: int, version_id: int) -> int:
+    """Rebuild one version partition of daily BI views."""
+    row_count, _deficit_row_count = materialize_daily_versions(client, version_date_int, [version_id])
+    return row_count
 
 
 def count_deficit_rows(client, version_date_int: int, version_id: int) -> int:
@@ -495,41 +552,67 @@ def _list_versions(client) -> list[tuple[int, int]]:
     ]
 
 
+def _target_version_ids(args: argparse.Namespace, parser: argparse.ArgumentParser) -> list[int]:
+    if args.version_id is not None and args.version_ids is not None:
+        parser.error("Pass only one of --version-id or --version-ids")
+    if args.version_ids is not None:
+        return [_as_uint32(version_id, "version_id") for version_id in args.version_ids]
+    if args.version_id is not None:
+        return [_as_uint32(args.version_id, "version_id")]
+    parser.error("--version-id or --version-ids is required without --all")
+
+
+def _chunks(values: list[int], chunk_size: int) -> list[list[int]]:
+    if chunk_size <= 0:
+        raise ValueError("--chunk-size must be > 0")
+    return [values[i:i + chunk_size] for i in range(0, len(values), chunk_size)]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Materialize sim_masterv2_v9_daily")
     parser.add_argument("--all", action="store_true", help="Materialize all present source versions")
     parser.add_argument("--version-date", type=int, help="Version date as YYYYMMDD")
     parser.add_argument("--version-id", type=int, help="Version id")
+    parser.add_argument("--version-ids", type=int, nargs="+", help="Version ids")
+    parser.add_argument("--chunk-size", type=int, default=15, help="Number of version ids per SQL pass")
     args = parser.parse_args()
 
     if args.all:
         client = get_client()
-        versions = _list_versions(client)
+        versions_by_date: dict[int, list[int]] = {}
+        for version_date_int, version_id in _list_versions(client):
+            versions_by_date.setdefault(version_date_int, []).append(version_id)
         recreate_daily_table(client)
     else:
-        if args.version_date is None or args.version_id is None:
-            parser.error("--version-date and --version-id are required without --all")
+        if args.version_date is None:
+            parser.error("--version-date is required without --all")
         client = get_client()
-        versions = [(args.version_date, args.version_id)]
+        versions_by_date = {args.version_date: _target_version_ids(args, parser)}
 
     total_rows = 0
     total_deficit_rows = 0
     started = time.perf_counter()
-    for version_date_int, version_id in versions:
-        version_started = time.perf_counter()
-        row_count = materialize_daily(client, version_date_int, version_id)
-        deficit_row_count = count_deficit_rows(client, version_date_int, version_id)
-        elapsed = time.perf_counter() - version_started
-        total_rows += row_count
-        total_deficit_rows += deficit_row_count
-        print(
-            "📊 sim_masterv2_v9_daily: "
-            f"{row_count} строк (version_date={version_date_int}, version_id={version_id}, {elapsed:.2f}с)"
-        )
-        print(
-            "📊 sim_deficit_v9_daily: "
-            f"{deficit_row_count} строк (version_date={version_date_int}, version_id={version_id}, {elapsed:.2f}с)"
-        )
+    for version_date_int, version_ids in versions_by_date.items():
+        for version_chunk in _chunks(version_ids, args.chunk_size):
+            version_started = time.perf_counter()
+            row_count, deficit_row_count = materialize_daily_versions(
+                client,
+                version_date_int,
+                version_chunk,
+            )
+            elapsed = time.perf_counter() - version_started
+            total_rows += row_count
+            total_deficit_rows += deficit_row_count
+            print(
+                "📊 sim_masterv2_v9_daily: "
+                f"{row_count} строк (version_date={version_date_int}, "
+                f"version_ids={version_chunk[0]}..{version_chunk[-1]}, count={len(version_chunk)}, {elapsed:.2f}с)"
+            )
+            print(
+                "📊 sim_deficit_v9_daily: "
+                f"{deficit_row_count} строк (version_date={version_date_int}, "
+                f"version_ids={version_chunk[0]}..{version_chunk[-1]}, count={len(version_chunk)}, {elapsed:.2f}с)"
+            )
 
     elapsed_total = time.perf_counter() - started
     print(f"✅ sim_masterv2_v9_daily: всего {total_rows} строк ({elapsed_total:.2f}с)")

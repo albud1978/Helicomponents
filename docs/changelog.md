@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-06-28 — ensemble sweep ingestion: batch loader + multi-vid materializer + parallel CH load
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_ensemble_perf_2026-06-28` | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** оптимизация конвейера выгрузки 62-vid ensemble sweep (spawn_limit 0–61) в ClickHouse поверх CUDAEnsemble (B3). Single-run и legacy API (`--version-id`, `materialize_daily()`) **сохранены** — изменения аддитивны.
+
+**4 шага:** (1) `concurrent_runs=4` — эмпирический оптимум (cr=6/8 медленнее из-за GIL-сериализации per-run Python-init); (2) batch loader — один процесс на все vid вместо 62 subprocess; (3) единый проход материализации deficit (`version_id IN (...)`, chunked) вместо 62 отдельных; (4) параллельные загрузчики N=4 (разные version_id → разные партиции CH; peak MemoryTracking ~2.7 ГБ).
+
+**E2E:** полный свип **744.9с → 308.5с** (×2.4). Фазы: GPU 125.7с; loader **92.8с** (было 369.6); materializer **80.5с** (было 209.4).
+
+**Корректность (bit-identical):** births линейны cap=N→N (0..61); vid1060==vid9 (master 75192 + repairline 65700, EXCEPT=0); deficit_post180 cross-check 1055..1060==vid4..9.
+
+**Диагностика (profiling, read-only):** одиночный прогон не host-bound (Python ≈8.5% wall, ~91% — GPU/runtime); per-step host дёшев; узкое место cr-масштабирования — поэлементная Python-запись MacroProperty в per-run init (кандидат на bulk-запись).
+
+**Review/validation/governance:** reviewer-flame ACCEPT + validator-judge PASS + governance `allow_with_notes` (`W_ensemble_perf_2026-06-28`).
+
+**Файлы:** `code/utils/ensemble_mp2_loader.py` (batch + parallel modes), `code/utils/spawn_cap_ensemble.py` (batch вызовы, phase timings), `code/sim_v2/messaging/sim_daily_materializer.py` (multi-vid/chunked materialize).
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
 ## 2026-06-27 — CUDAEnsemble export pipeline: Spike A → B1 → B2a/B2b (bit-identical)
 
 **Risk:** high | **Profile:** high-strict | **Workflow:** `W_ensemble_spike_2026-06-27`, `W_ensemble_b2_2026-06-27` | **Branch:** `feature/dwh-bb8`

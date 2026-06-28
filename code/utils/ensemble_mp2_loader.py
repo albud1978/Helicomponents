@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import hashlib
 import sys
 import time
@@ -45,6 +46,7 @@ REPAIRLINE_COLUMNS = [
     "aircraft_number", "group_by", "bank_count", "bank_head_start", "bank_head_end",
 ]
 REPAIRLINE_COMPARE_COLUMNS = [column for column in REPAIRLINE_COLUMNS if column != "version_id"]
+MAX_PARALLEL_WORKERS = 4
 
 
 def _parse_version_date(value: str) -> int:
@@ -370,17 +372,32 @@ def resolve_repair_quota(repair_quota: int | None) -> int:
     )
 
 
-def insert_master(client, columns_data: list[list[int]], version_date_int: int, version_id: int) -> int:
+def delete_master_versions(client, version_date_int: int, version_ids: list[int]) -> None:
+    if not version_ids:
+        raise RuntimeError("version_ids must not be empty for sim_masterv2_v9 cleanup")
+    ensure_master_table(client)
+    version_ids_csv = ", ".join(str(int(version_id)) for version_id in version_ids)
+    client.execute(
+        "ALTER TABLE sim_masterv2_v9 DELETE "
+        f"WHERE version_date = %(vd)s AND version_id IN ({version_ids_csv})",
+        {"vd": version_date_int},
+        settings={"mutations_sync": 2},
+    )
+
+
+def insert_master(
+    client,
+    columns_data: list[list[int]],
+    version_date_int: int,
+    version_id: int,
+    delete_existing: bool = True,
+) -> int:
     row_count = len(columns_data[0])
     if any(len(column) != row_count for column in columns_data):
         raise RuntimeError("Column length mismatch before INSERT")
     ensure_master_table(client)
-    client.execute(
-        "ALTER TABLE sim_masterv2_v9 DELETE "
-        "WHERE version_date = %(vd)s AND version_id = %(vid)s",
-        {"vd": version_date_int, "vid": version_id},
-        settings={"mutations_sync": 2},
-    )
+    if delete_existing:
+        delete_master_versions(client, version_date_int, [version_id])
     client.execute(
         f"INSERT INTO sim_masterv2_v9 ({', '.join(MASTER_COLUMNS)}) VALUES",
         columns_data,
@@ -509,7 +526,10 @@ def compare_repairline_versions(
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Load CUDAEnsemble MP2/RL .bin into V9 ClickHouse tables")
     parser.add_argument("--version-date", required=True, help="YYYY-MM-DD or YYYYMMDD")
-    parser.add_argument("--version-id", type=int, required=True, help="Target disposable version_id")
+    parser.add_argument("--version-id", type=int, help="Target disposable version_id")
+    parser.add_argument("--version-ids", type=int, nargs="+", help="Target disposable version_id list")
+    parser.add_argument("--version-id-start", type=int, help="Inclusive start of target version_id range")
+    parser.add_argument("--version-id-end", type=int, help="Inclusive end of target version_id range")
     parser.add_argument("--baseline-version-id", type=int, default=3)
     parser.add_argument("--export-dir", default=str(MP2_EXPORT_DIR))
     parser.add_argument("--total-agents", type=int, default=None)
@@ -517,43 +537,99 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-repairline", action="store_true")
     parser.add_argument("--compare", action="store_true")
     parser.add_argument("--require-bit-identical", action="store_true")
+    parser.add_argument(
+        "--parallel-workers",
+        type=int,
+        default=1,
+        help=f"Parallel loader workers for distinct version_id chunks (1..{MAX_PARALLEL_WORKERS})",
+    )
     return parser.parse_args()
 
 
-def main() -> None:
-    args = _parse_args()
-    version_date_int = _parse_version_date(args.version_date)
-    export_dir = Path(args.export_dir)
-    client = get_client()
+def _target_version_ids(args: argparse.Namespace) -> list[int]:
+    sources = []
+    if args.version_id is not None:
+        sources.append([int(args.version_id)])
+    if args.version_ids is not None:
+        sources.append([int(version_id) for version_id in args.version_ids])
+    if args.version_id_start is not None or args.version_id_end is not None:
+        if args.version_id_start is None or args.version_id_end is None:
+            raise RuntimeError("--version-id-start and --version-id-end must be passed together")
+        if args.version_id_start > args.version_id_end:
+            raise RuntimeError("--version-id-start must be <= --version-id-end")
+        sources.append(list(range(int(args.version_id_start), int(args.version_id_end) + 1)))
+    if len(sources) != 1:
+        raise RuntimeError("Pass exactly one of --version-id, --version-ids, or --version-id-start/--version-id-end")
 
+    version_ids = sources[0]
+    if not version_ids:
+        raise RuntimeError("version_id list must not be empty")
+    if len(set(version_ids)) != len(version_ids):
+        raise RuntimeError(f"Duplicate version_id values are not allowed: {version_ids}")
+    invalid = [version_id for version_id in version_ids if version_id < 0 or version_id > 0xFFFFFFFF]
+    if invalid:
+        raise RuntimeError(f"version_id values must fit UInt32: {invalid}")
+    return version_ids
+
+
+def _resolve_parallel_workers(requested: int, version_count: int) -> int:
+    workers = int(requested)
+    if workers < 1 or workers > MAX_PARALLEL_WORKERS:
+        raise RuntimeError(f"--parallel-workers must be in 1..{MAX_PARALLEL_WORKERS}, got {workers}")
+    return min(workers, int(version_count))
+
+
+def _split_version_ids(version_ids: list[int], worker_count: int) -> list[list[int]]:
+    if worker_count <= 0:
+        raise RuntimeError("worker_count must be > 0")
+    chunks = [[] for _ in range(worker_count)]
+    for idx, version_id in enumerate(version_ids):
+        chunks[idx % worker_count].append(version_id)
+    return [chunk for chunk in chunks if chunk]
+
+
+def load_version(
+    client,
+    args: argparse.Namespace,
+    export_dir: Path,
+    version_date_int: int,
+    version_id: int,
+    repair_quota: int,
+    delete_existing_master: bool,
+) -> dict[str, int | float | str | None]:
     t0 = time.perf_counter()
-    mp2_data = load_mp2_export(export_dir, args.version_id, args.total_agents)
-    repair_quota = resolve_repair_quota(args.repair_quota)
+    mp2_data = load_mp2_export(export_dir, version_id, args.total_agents)
     pp_count = postprocess_promotions(
         mp2_data["fields"], mp2_data["days"], mp2_data["num_steps"],
         mp2_data["total_agents"], repair_quota
     )
-    columns_data, master_sha256 = build_master_columns(mp2_data, version_date_int, args.version_id)
+    columns_data, master_sha256 = build_master_columns(mp2_data, version_date_int, version_id)
     t_load = time.perf_counter()
-    row_count = insert_master(client, columns_data, version_date_int, args.version_id)
+    row_count = insert_master(
+        client,
+        columns_data,
+        version_date_int,
+        version_id,
+        delete_existing=delete_existing_master,
+    )
     t_insert = time.perf_counter()
     repairline_rows = None
 
     if not args.skip_repairline:
         rl_data = load_repairline_export(
             export_dir,
-            args.version_id,
+            version_id,
             repair_quota,
             mp2_data["num_steps"],
             mp2_data["days"],
         )
         rl_rows = interpolate_repairline_daily(rl_data, repair_quota)
-        master_projection = load_master_projection(client, version_date_int, args.version_id)
+        master_projection = load_master_projection(client, version_date_int, version_id)
         export_repairline_to_ch(
             client,
             rl_rows,
             version_date_int,
-            args.version_id,
+            version_id,
             master_projection=master_projection,
         )
         repairline_rows = len(rl_rows)
@@ -561,7 +637,7 @@ def main() -> None:
 
     print(
         "ensemble_mp2_loader "
-        f"version_date={version_date_int} version_id={args.version_id} "
+        f"version_date={version_date_int} version_id={version_id} "
         f"num_steps={mp2_data['num_steps']} total_agents={mp2_data['total_agents']} "
         f"repair_quota={repair_quota} pp_modified={pp_count} rows={row_count} "
         f"repairline_rows={repairline_rows} "
@@ -569,15 +645,132 @@ def main() -> None:
         f"insert_s={t_insert - t_load:.3f} repairline_s={t_repairline - t_insert:.3f} "
         f"total_s={t_repairline - t0:.3f}"
     )
+    return {
+        "version_id": version_id,
+        "num_steps": mp2_data["num_steps"],
+        "total_agents": mp2_data["total_agents"],
+        "pp_modified": pp_count,
+        "rows": row_count,
+        "repairline_rows": repairline_rows,
+        "master_sha256": master_sha256,
+        "load_build_s": t_load - t0,
+        "insert_s": t_insert - t_load,
+        "repairline_s": t_repairline - t_insert,
+        "total_s": t_repairline - t0,
+    }
+
+
+def load_version_chunk(
+    worker_id: int,
+    args: argparse.Namespace,
+    export_dir: Path,
+    version_date_int: int,
+    version_ids: list[int],
+    repair_quota: int,
+    delete_existing_master: bool,
+) -> dict[str, int | float]:
+    client = get_client()
+    started = time.perf_counter()
+    results = []
+    for version_id in version_ids:
+        results.append(
+            load_version(
+                client,
+                args,
+                export_dir,
+                version_date_int,
+                version_id,
+                repair_quota,
+                delete_existing_master=delete_existing_master,
+            )
+        )
+    elapsed = time.perf_counter() - started
+    rows = sum(int(result["rows"]) for result in results)
+    repairline_rows = sum(int(result["repairline_rows"] or 0) for result in results)
+    print(
+        "ensemble_mp2_loader_worker "
+        f"worker_id={worker_id} version_ids={version_ids[0]}..{version_ids[-1]} "
+        f"count={len(version_ids)} rows={rows} repairline_rows={repairline_rows} "
+        f"total_s={elapsed:.3f}",
+        flush=True,
+    )
+    return {
+        "worker_id": worker_id,
+        "count": len(version_ids),
+        "rows": rows,
+        "repairline_rows": repairline_rows,
+        "total_s": elapsed,
+    }
+
+
+def main() -> None:
+    args = _parse_args()
+    version_date_int = _parse_version_date(args.version_date)
+    version_ids = _target_version_ids(args)
+    export_dir = Path(args.export_dir)
+    client = get_client()
+    repair_quota = resolve_repair_quota(args.repair_quota)
+    parallel_workers = _resolve_parallel_workers(args.parallel_workers, len(version_ids))
+
+    started = time.perf_counter()
+    if len(version_ids) > 1:
+        delete_master_versions(client, version_date_int, version_ids)
+    if parallel_workers == 1:
+        results = [
+            load_version(
+                client,
+                args,
+                export_dir,
+                version_date_int,
+                version_id,
+                repair_quota,
+                delete_existing_master=len(version_ids) == 1,
+            )
+            for version_id in version_ids
+        ]
+        worker_results = []
+    else:
+        worker_chunks = _split_version_ids(version_ids, parallel_workers)
+        worker_results = []
+        with ProcessPoolExecutor(max_workers=parallel_workers) as executor:
+            futures = [
+                executor.submit(
+                    load_version_chunk,
+                    worker_id,
+                    args,
+                    export_dir,
+                    version_date_int,
+                    chunk,
+                    repair_quota,
+                    False,
+                )
+                for worker_id, chunk in enumerate(worker_chunks)
+            ]
+            for future in as_completed(futures):
+                worker_results.append(future.result())
+        results = worker_results
+    total_elapsed = time.perf_counter() - started
+    total_rows = sum(int(result["rows"]) for result in results)
+    total_repairline_rows = sum(int(result["repairline_rows"] or 0) for result in results)
+    print(
+        "ensemble_mp2_loader_batch "
+        f"version_date={version_date_int} version_ids={version_ids[0]}..{version_ids[-1]} "
+        f"count={len(version_ids)} parallel_workers={parallel_workers} "
+        f"rows={total_rows} repairline_rows={total_repairline_rows} "
+        f"total_s={total_elapsed:.3f}"
+    )
 
     if args.compare or args.require_bit_identical:
-        compare = compare_versions(client, version_date_int, args.version_id, args.baseline_version_id)
+        if len(version_ids) != 1:
+            raise RuntimeError("--compare and --require-bit-identical require exactly one version_id")
+        version_id = version_ids[0]
+        compare = compare_versions(client, version_date_int, version_id, args.baseline_version_id)
         for key, value in compare.items():
             print(f"compare_master_{key}={value}")
         repairline_compare = {}
         if not args.skip_repairline:
             repairline_compare = compare_repairline_versions(
-                client, version_date_int, args.version_id, args.baseline_version_id
+                client, version_date_int, version_id, args.baseline_version_id
             )
             for key, value in repairline_compare.items():
                 print(f"compare_repairline_{key}={value}")

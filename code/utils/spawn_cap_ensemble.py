@@ -269,43 +269,53 @@ def _version_date_int_arg(version_date: str) -> str:
     return date.fromisoformat(version_date).strftime("%Y%m%d")
 
 
-def _load_exports(args: argparse.Namespace, specs: list[RunSpec], repair_quota: int) -> list[str]:
-    outputs = []
+def _load_exports(args: argparse.Namespace, specs: list[RunSpec], repair_quota: int) -> dict[str, str | float]:
     loader = PROJECT_ROOT / "code" / "utils" / "ensemble_mp2_loader.py"
     materializer = PROJECT_ROOT / "code" / "sim_v2" / "messaging" / "sim_daily_materializer.py"
     version_date_int = _version_date_int_arg(args.version_date)
-    for spec in specs:
-        cmd = [
-            sys.executable,
-            str(loader),
-            "--version-date",
-            args.version_date,
-            "--version-id",
-            str(spec.version_id),
-            "--baseline-version-id",
-            str(args.input_version_id),
-            "--repair-quota",
-            str(repair_quota),
-        ]
-        completed = subprocess.run(
-            cmd,
-            cwd=PROJECT_ROOT,
-            text=True,
-            capture_output=True,
-            check=True,
-        )
-        output = completed.stdout.strip()
-        if completed.stderr.strip():
-            output = output + "\n" + completed.stderr.strip()
-        print(output)
+    version_ids = [str(spec.version_id) for spec in specs]
+    cmd = [
+        sys.executable,
+        str(loader),
+        "--version-date",
+        args.version_date,
+        "--version-ids",
+        *version_ids,
+        "--baseline-version-id",
+        str(args.input_version_id),
+        "--repair-quota",
+        str(repair_quota),
+        "--parallel-workers",
+        str(args.loader_workers),
+    ]
+    loader_started = time.perf_counter()
+    completed = subprocess.run(
+        cmd,
+        cwd=PROJECT_ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    loader_wall = time.perf_counter() - loader_started
+    loader_output = completed.stdout.strip()
+    if completed.stderr.strip():
+        loader_output = loader_output + "\n" + completed.stderr.strip()
+    print(loader_output)
+
+    materializer_output = ""
+    materializer_wall = 0.0
+    if not args.skip_materialize:
         materialize_cmd = [
             sys.executable,
             str(materializer),
             "--version-date",
             version_date_int,
-            "--version-id",
-            str(spec.version_id),
+            "--version-ids",
+            *version_ids,
+            "--chunk-size",
+            str(args.materialize_chunk_size),
         ]
+        materializer_started = time.perf_counter()
         materialized = subprocess.run(
             materialize_cmd,
             cwd=PROJECT_ROOT,
@@ -313,12 +323,19 @@ def _load_exports(args: argparse.Namespace, specs: list[RunSpec], repair_quota: 
             capture_output=True,
             check=True,
         )
+        materializer_wall = time.perf_counter() - materializer_started
         materializer_output = materialized.stdout.strip()
         if materialized.stderr.strip():
             materializer_output = materializer_output + "\n" + materialized.stderr.strip()
         print(materializer_output)
-        outputs.append(output + "\n" + materializer_output)
-    return outputs
+
+    return {
+        "loader_output": loader_output,
+        "loader_wall_s": loader_wall,
+        "materializer_output": materializer_output,
+        "materializer_wall_s": materializer_wall,
+        "total_wall_s": loader_wall + materializer_wall,
+    }
 
 
 def _parse_args() -> argparse.Namespace:
@@ -335,6 +352,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-steps", type=int, default=10000)
     parser.add_argument("--devices", type=int, nargs="+", default=[0])
     parser.add_argument("--concurrent-runs", type=int, nargs="+", default=[4])
+    parser.add_argument("--skip-load", action="store_true", help="Run CUDAEnsemble only; do not load .bin exports")
+    parser.add_argument("--skip-materialize", action="store_true", help="Load .bin exports without daily materialization")
+    parser.add_argument("--materialize-chunk-size", type=int, default=15, help="Version ids per materializer SQL pass")
+    parser.add_argument("--loader-workers", type=int, default=4, help="Parallel loader workers for distinct version ids")
     return parser.parse_args()
 
 
@@ -359,7 +380,9 @@ def main() -> None:
         files = _validate_export_files(specs)
         results.append((result, smi_live, files))
 
-    loader_outputs = _load_exports(args, specs, repair_quota)
+    load_summary = None
+    if not args.skip_load:
+        load_summary = _load_exports(args, specs, repair_quota)
 
     after_smi = _nvidia_smi_snapshot()
     print("\n=== B3b RESULT ===")
@@ -388,7 +411,16 @@ def main() -> None:
         "loader_repair_quota_arg="
         f"--repair-quota {repair_quota}"
     )
-    print(f"loader_runs={len(loader_outputs)}")
+    if load_summary is None:
+        print("loader_skipped=1")
+    else:
+        print("loader_runs=1")
+        print(
+            "phase_wall_s "
+            f"loader={float(load_summary['loader_wall_s']):.3f} "
+            f"materializer={float(load_summary['materializer_wall_s']):.3f} "
+            f"load_total={float(load_summary['total_wall_s']):.3f}"
+        )
     for info in results[-1][2]:
         print(
             "ensemble_file "
