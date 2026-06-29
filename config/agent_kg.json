@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-29T02:42:09Z",
+    "updated_at": "2026-06-29T02:45:13Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -3208,8 +3208,8 @@
       "workflow_id": "W_ensemble_crprofile_2026-06-29",
       "goal": "Диагностика: почему concurrent_runs>4 медленнее cr=4 ДАЖЕ после L1. Различить гипотезу A (host/GIL-очередь per-step) vs B (переподписка одной GPU крошечными ядрами). Измерить при cr=4/6/8: суммарное host-время, FLAME GPU-time, nvidia-smi util. Инструментация откатывается, без коммита.",
       "phase": "analysis",
-      "owner": "human",
-      "status": "active",
+      "owner": "orchestrator",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 150000,
@@ -3217,13 +3217,13 @@
         "profile": "medium-fast"
       },
       "usage": {
-        "cumulative_steps": 2,
-        "cumulative_tokens": 61000,
+        "cumulative_steps": 3,
+        "cumulative_tokens": 91000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-29T02:42:09Z"
+        "last_updated": "2026-06-29T02:44:46Z"
       },
       "created_at": "2026-06-29T02:31:18Z",
-      "updated_at": "2026-06-29T02:42:09Z",
+      "updated_at": "2026-06-29T02:45:13Z",
       "parent_workflow": "W_ensemble_l1_2026-06-29"
     }
   ],
@@ -23832,6 +23832,47 @@
         "est_tokens": 9000,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_W_ensemble_crprofile_2026-06-29_governance-compliance_38c1b9e5",
+      "workflow_id": "W_ensemble_crprofile_2026-06-29",
+      "agent": "governance-compliance",
+      "user_goal": "GOVERNANCE single pass (worker), medium-risk диагностика cr-профиля: verdict (allow|allow_with_notes|reject) для закрытия workflow",
+      "changes": "VERDICT=allow_with_notes. Проверено: (1) Scope match — UserGoal(почему cr>4 медленнее) <-> Changes(измерили cr=4/6/8, вердикт B доминирует) совпадают, DriftCheck заполнен (yes). (2) Код не менялся/не коммитился — git diff --stat code/sim_v2/messaging пуст; последний коммит по messaging b35e6fbb относится к prior L1 workflow; коммит 899d6894 содержит только KG-записи. Полностью обратимо (monkey-patch in-memory, без git restore). (3) SSoT не затронут — git diff config/transitions + invariants.json пуст. (4) Read-only диагностика — GPU-only sweep, ClickHouse load skipped, реальные данные в CH не писались. (5) Process discipline — profile medium-fast корректен для reversible diagnostic; оба handoff (coder-flame a050ac78, orchestrator d27042fb) с TraceID/PlanStepID/RiskTier; single governance pass. NOTE: orchestrator SuccessCriteria использует manual-check для medium-risk (rule #13 предпочитает numeric/SQL) — но verifiable numeric присутствует в coder-flame handoff (cr=4/6/8 wall/host/FLAME/util измерены), substance выполнен. Non-blocking.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: Источники: git status --short (чисто), git diff --stat code/sim_v2/messaging (пусто), git diff config/transitions+invariants.json (пусто), git log messaging (последний b35e6fbb = L1, не эта задача), коммит 899d6894 (KG-only). KG read-state: phase=analysis, status=active, profile=medium-fast, parent=W_ensemble_l1. Handoffs(2): orchestrator d27042fb (DriftCheck заполнен), coder-flame a050ac78 (numeric Results, ApprovalGate approved, artifacts summary.json). Проверены RiskTier/RiskReasons/HumanGateRequired=no; PlanCard/EvidencePack/ComplianceChecklist в обоих handoff. Единственный governance pass.\nEvidence: git diff --stat -- code/sim_v2/messaging => empty (код не менялся). git diff config/transitions config/transitions/invariants.json => empty (SSoT untouched). git status --short => clean. git log code/sim_v2/messaging => последний b35e6fbb (L1 workflow). commit 899d6894 = KG-only (chore(kg) диагностика cr-профиля). coder-flame a050ac78 numeric: cr4 wall=89.245s host=6.792s FLAME_avg=5.244s util=66.48; cr6 wall=89.920s host=7.947s; cr8 wall=92.578s host=9.246s FLAME_avg=11.066s util=63.94. decomp host delta=2.455s. artifacts output/crprofile_20260629/summary.json.",
+      "drift_check": "N/A (governance verdict, не orchestrator handoff)",
+      "process_insights": "",
+      "trace_id": "wf:W_ensemble_crprofile_2026-06-29:20260629T024209Z",
+      "plan_step_id": "GOV-1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "diagnostic profiling only; instrumentation reverted; no code commit; no SSoT/prod impact",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Governance single pass: проверить scope match, traceability, no-coding, SSoT untouched, reversibility, read-only diagnostic, process discipline; вердикт для закрытия medium-workflow",
+      "evidence_pack": "Facts: Источники: git status --short (чисто), git diff --stat code/sim_v2/messaging (пусто), git diff config/transitions+invariants.json (пусто), git log messaging (последний b35e6fbb = L1, не эта задача), коммит 899d6894 (KG-only). KG read-state: phase=analysis, status=active, profile=medium-fast, parent=W_ensemble_l1. Handoffs(2): orchestrator d27042fb (DriftCheck заполнен), coder-flame a050ac78 (numeric Results, ApprovalGate approved, artifacts summary.json). Проверены RiskTier/RiskReasons/HumanGateRequired=no; PlanCard/EvidencePack/ComplianceChecklist в обоих handoff. Единственный governance pass.\nEvidence: git diff --stat -- code/sim_v2/messaging => empty (код не менялся). git diff config/transitions config/transitions/invariants.json => empty (SSoT untouched). git status --short => clean. git log code/sim_v2/messaging => последний b35e6fbb (L1 workflow). commit 899d6894 = KG-only (chore(kg) диагностика cr-профиля). coder-flame a050ac78 numeric: cr4 wall=89.245s host=6.792s FLAME_avg=5.244s util=66.48; cr6 wall=89.920s host=7.947s; cr8 wall=92.578s host=9.246s FLAME_avg=11.066s util=63.94. decomp host delta=2.455s. artifacts output/crprofile_20260629/summary.json.",
+      "success_criteria": "manual-check: governance verdict (allow|allow_with_notes|reject) выдан с проверкой SSoT/code/reversibility/process discipline",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=success_criteria_manual_check_at_orchestrator_noted_nonblocking; evidence_refs=git diff code/sim_v2/messaging empty;git diff SSoT empty;git status clean;output/crprofile_20260629/summary.json;handoff coder-flame a050ac78;handoff orchestrator d27042fb;commit 899d6894 kg-only; approval_ref=current_chat_user_prompt",
+      "risks": "orchestrator SuccessCriteria в форме manual-check для medium-risk — на будущее использовать numeric/SQL на уровне orchestrator (substance покрыт coder numeric, non-blocking).",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "f3c73d011e64cd555459a777a329f6c203ac112c024c29eae70da04f33d173c0",
+      "created_at": "2026-06-29T02:44:46Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-opus-4-7-thinking-high",
+        "est_tokens": 30000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -26741,6 +26782,15 @@
       "agent": "coder-flame",
       "created_at": "2026-06-29T02:33:27Z",
       "updated_at": "2026-06-29T02:33:27Z"
+    },
+    {
+      "context_id": "ctx_W_ensemble_crprofile_2026-06-29_closure_79bd05ab",
+      "workflow_id": "W_ensemble_crprofile_2026-06-29",
+      "context_type": "closure",
+      "content": "Диагностика закрыта (governance allow_with_notes 38c1b9e5): cr>4 медленнее из-за GPU-переподписки B (~80%: FLAME per-run 5.24->11.07с, util не растёт 66.5->63.9%), host/GIL A ~20% (+2.5с). Бонус: stdout/print ~20с overhead. Код не менялся/не коммитился.",
+      "agent": "orchestrator",
+      "created_at": "2026-06-29T02:45:13Z",
+      "updated_at": "2026-06-29T02:45:13Z"
     }
   ],
   "meta": {
