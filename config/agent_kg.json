@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-28T21:05:23Z",
+    "updated_at": "2026-06-29T02:42:09Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -3203,6 +3203,28 @@
       "created_at": "2026-06-28T20:21:21Z",
       "updated_at": "2026-06-28T21:05:23Z",
       "parent_workflow": "W_ensemble_perf_2026-06-28"
+    },
+    {
+      "workflow_id": "W_ensemble_crprofile_2026-06-29",
+      "goal": "Диагностика: почему concurrent_runs>4 медленнее cr=4 ДАЖЕ после L1. Различить гипотезу A (host/GIL-очередь per-step) vs B (переподписка одной GPU крошечными ядрами). Измерить при cr=4/6/8: суммарное host-время, FLAME GPU-time, nvidia-smi util. Инструментация откатывается, без коммита.",
+      "phase": "analysis",
+      "owner": "human",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 150000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 61000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-29T02:42:09Z"
+      },
+      "created_at": "2026-06-29T02:31:18Z",
+      "updated_at": "2026-06-29T02:42:09Z",
+      "parent_workflow": "W_ensemble_l1_2026-06-29"
     }
   ],
   "handoffs": [
@@ -23725,6 +23747,91 @@
         "est_tokens": 12000,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_W_ensemble_crprofile_2026-06-29_coder-flame_a050ac78",
+      "workflow_id": "W_ensemble_crprofile_2026-06-29",
+      "agent": "coder-flame",
+      "user_goal": "ДИАГНОСТИЧЕСКИЙ ЭКСПЕРИМЕНТ (worker, без коммита). Закрыть числами, почему concurrent_runs>4 медленнее cr=4 после L1; различить host/GIL queue vs GPU oversubscription; вернуть cr=4/6/8 table wall/host/FLAME/util, verdict and clean rollback.",
+      "changes": "Diagnostic measurement only. No persistent code instrumentation was written to code/**: profiling was done via in-memory monkey-patching of HostFunction/HostCondition run() methods in a standalone runner. No commit. No git restore was required because code/sim_v2/messaging remained diff-clean throughout; only config/agent_kg.json changed due KG context/handoff writes.",
+      "facts": "",
+      "assumptions": "Assumption: prior after-L1 wall reference cr4=108.845s and cr8=120.884s remains the operator comparison point for the ~12s gap. Risks if false: the 20/80 split against reference gap changes, but the instrumented run still shows host delta=2.455s and FLAME per-run timing/util trend.\nAssumption: ExitLogFrame.getTotalTime is the relevant FLAME programmatic per-run timing requested as FLAME GPU-time. Risks if false: a lower-level CUDA kernel-only timer would need nsys/CUPTI; current evidence still distinguishes host wrapper time from FLAME internal timing.\nAssumption: In-memory monkey-patch timing overhead is small enough for relative attribution. Risks if false: host total is slightly inflated; this would strengthen, not weaken, the conclusion that host cannot explain the full prior ~12s gap.",
+      "evidence": "Scope: GPU-only full sweep caps 0..60 + uncapped 1061, version_date=2026-06-22, input_version_id=3, out_base=1000, repair_quota=18, ClickHouse load skipped. Instrumented targets: HF_EnsemblePopulate, HF_InitMP5Cumsum, HF_InitSpawnLimitCumulative, HF_InitEconomicsDailyCosts, HF_InitRepairLines, HF_InitV8, HF_StepController, HF_ExitConditionV8. Thread-safe accumulation via threading.Lock. FLAME timing: CUDAEnsemble Config().timing=True + LoggingConfig.logTiming(True); used ExitLogFrame getTotalTime/getRTCTime/getInitTime/getExitTime. nvidia-smi sampler: utilization.gpu, utilization.memory, clocks.sm at -lms 200.\nResults: cr=4 wall=89.245s ensemble_elapsed=89.031s summed_host=6.792s host_calls=122192 FLAME_total_sum=325.118s FLAME_total_avg=5.244s FLAME_rtc_sum=24.739s util_avg=66.48 util_max=75. cr=6 wall=89.920s ensemble_elapsed=89.918s summed_host=7.947s host_calls=122192 FLAME_total_sum=500.649s FLAME_total_avg=8.075s FLAME_rtc_sum=28.326s util_avg=67.26 util_max=72. cr=8 wall=92.578s ensemble_elapsed=92.574s summed_host=9.246s host_calls=122192 FLAME_total_sum=686.109s FLAME_total_avg=11.066s FLAME_rtc_sum=26.191s util_avg=63.94 util_max=70. All run_count=62, final_days_min=max=3650, step_count_sum=15274.\nHost by name cr4: StepController=2.728s, EnsemblePopulate=1.474s, InitEconomics=0.998s, InitMP5=0.555s, InitRepairLines=0.432s, ExitCondition=0.328s, InitSpawnLimit=0.223s, InitV8=0.054s. Host by name cr8: StepController=3.404s, EnsemblePopulate=1.974s, InitEconomics=1.793s, InitMP5=0.593s, InitRepairLines=0.645s, ExitCondition=0.407s, InitSpawnLimit=0.369s, InitV8=0.061s.\nDecomposition: instrumented cr8-cr4 wall gap=3.333s; tracked host delta=2.455s (73.7%), residual=0.878s (26.3%). Against the prior standard after-L1 gap from user/harness (120.884-108.845=12.039s), the same measured host delta explains only 2.455s (20.4%), leaving 9.584s (79.6%) for FLAME/GPU scheduling/output/other overhead. FLAME total avg per run rises 5.244 -> 11.066s while GPU util avg drops 66.48% -> 63.94% and util max drops 75 -> 70.\nArtifacts: output/crprofile_20260629/summary.json; output/crprofile_20260629/build.log; output/crprofile_20260629/sim_cr4.log; sim_cr6.log; sim_cr8.log. Clean rollback/working-tree check: git diff --stat -- code/sim_v2/messaging produced no entries; git status --short shows only M config/agent_kg.json.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_ensemble_crprofile_2026-06-29:20260629T024037Z",
+      "plan_step_id": "CRPROFILE-1",
+      "approval_gate_id": "current_chat_user_prompt",
+      "approval_status": "approved",
+      "approval_source": "current_chat_user_prompt",
+      "risk_tier": "medium",
+      "risk_reasons": "Measurement of simulation runtime behavior; diagnostic instrumentation around HostFunction/HostCondition; full GPU-only sweep",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Instrument host functions in-memory; run GPU-only full sweep cr=4/6/8 with FLAME timing and nvidia-smi; decompose cr8-cr4 gap; verify no persistent code diff.",
+      "evidence_pack": "Scope: GPU-only full sweep caps 0..60 + uncapped 1061, version_date=2026-06-22, input_version_id=3, out_base=1000, repair_quota=18, ClickHouse load skipped. Instrumented targets: HF_EnsemblePopulate, HF_InitMP5Cumsum, HF_InitSpawnLimitCumulative, HF_InitEconomicsDailyCosts, HF_InitRepairLines, HF_InitV8, HF_StepController, HF_ExitConditionV8. Thread-safe accumulation via threading.Lock. FLAME timing: CUDAEnsemble Config().timing=True + LoggingConfig.logTiming(True); used ExitLogFrame getTotalTime/getRTCTime/getInitTime/getExitTime. nvidia-smi sampler: utilization.gpu, utilization.memory, clocks.sm at -lms 200.\nResults: cr=4 wall=89.245s ensemble_elapsed=89.031s summed_host=6.792s host_calls=122192 FLAME_total_sum=325.118s FLAME_total_avg=5.244s FLAME_rtc_sum=24.739s util_avg=66.48 util_max=75. cr=6 wall=89.920s ensemble_elapsed=89.918s summed_host=7.947s host_calls=122192 FLAME_total_sum=500.649s FLAME_total_avg=8.075s FLAME_rtc_sum=28.326s util_avg=67.26 util_max=72. cr=8 wall=92.578s ensemble_elapsed=92.574s summed_host=9.246s host_calls=122192 FLAME_total_sum=686.109s FLAME_total_avg=11.066s FLAME_rtc_sum=26.191s util_avg=63.94 util_max=70. All run_count=62, final_days_min=max=3650, step_count_sum=15274.\nHost by name cr4: StepController=2.728s, EnsemblePopulate=1.474s, InitEconomics=0.998s, InitMP5=0.555s, InitRepairLines=0.432s, ExitCondition=0.328s, InitSpawnLimit=0.223s, InitV8=0.054s. Host by name cr8: StepController=3.404s, EnsemblePopulate=1.974s, InitEconomics=1.793s, InitMP5=0.593s, InitRepairLines=0.645s, ExitCondition=0.407s, InitSpawnLimit=0.369s, InitV8=0.061s.\nDecomposition: instrumented cr8-cr4 wall gap=3.333s; tracked host delta=2.455s (73.7%), residual=0.878s (26.3%). Against the prior standard after-L1 gap from user/harness (120.884-108.845=12.039s), the same measured host delta explains only 2.455s (20.4%), leaving 9.584s (79.6%) for FLAME/GPU scheduling/output/other overhead. FLAME total avg per run rises 5.244 -> 11.066s while GPU util avg drops 66.48% -> 63.94% and util max drops 75 -> 70.\nArtifacts: output/crprofile_20260629/summary.json; output/crprofile_20260629/build.log; output/crprofile_20260629/sim_cr4.log; sim_cr6.log; sim_cr8.log. Clean rollback/working-tree check: git diff --stat -- code/sim_v2/messaging produced no entries; git status --short shows only M config/agent_kg.json.",
+      "success_criteria": "numeric: cr=4/6/8 wall, summed host time/calls, FLAME timing, nvidia-smi util measured; verdict A vs B with cr8-cr4 decomposition; code/sim_v2 diff clean",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=output/crprofile_20260629/summary.json; git diff --stat -- code/sim_v2/messaging empty; phase_start ctx_W_ensemble_crprofile_2026-06-29_phase_start_6726671a; approval_ref=current_chat_user_prompt",
+      "risks": "1. Instrumented wall differs from previous standard harness wall because Python stdout was redirected in the diagnostic runner; attribution therefore reports both instrumented gap and prior-reference gap.\n2. FLAME timing is per-run programmatic timing, not a CUPTI kernel-only trace.\n3. Untracked Python exit-function/export print overhead is included in simulate wall but not in the requested per-step host bucket.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Diagnostic measurement only; Domain Graph/SSoT unchanged.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-29T02:40:37Z",
+      "modules": [
+        "step_logic",
+        "infra",
+        "export"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 52000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_ensemble_crprofile_2026-06-29_orchestrator_d27042fb",
+      "workflow_id": "W_ensemble_crprofile_2026-06-29",
+      "agent": "orchestrator",
+      "user_goal": "мы не поняли что убивает concurrent runs больше 4 - гипотеза про хостфункции в очереди",
+      "changes": "Diagnostic instrumentation (not persisted to code/**; git diff sim_v2 empty). Measured cr=4/6/8 GPU-only sweep.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "coder a050ac78: host_sum 6.79->9.25s (+2.45, ~20% gap), FLAME per-run 5.24->11.07s, util 66.5->63.9% (drops). Verdict B (GPU oversubscription) ~80%, A (host/GIL) ~20%. Bonus: stdout/print ~20s overhead at cr=4.",
+      "drift_check": "UserGoal(почему cr>4 медленнее) <-> Changes scope match: yes - измерено, вердикт B доминирует",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "ORCH-FINAL",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "diagnostic profiling only, instrumentation reverted, no commit",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Diagnostic: distinguish host/GIL-queue (A) vs GPU-oversubscription (B) for cr>4 slowdown via instrumented cr=4/6/8 sweep",
+      "evidence_pack": "coder a050ac78: host_sum 6.79->9.25s (+2.45, ~20% gap), FLAME per-run 5.24->11.07s, util 66.5->63.9% (drops). Verdict B (GPU oversubscription) ~80%, A (host/GIL) ~20%. Bonus: stdout/print ~20s overhead at cr=4.",
+      "success_criteria": "manual-check: измерено что растёт с cr (host vs GPU), вердикт A/B с разложением разрыва",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=a050ac78; approval_ref=current_chat_user_prompt",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "e2019fd89eac7e116afa0e78cfcf1da1b77e997c8c413f96aeac0fa3f43a9d19",
+      "created_at": "2026-06-29T02:42:09Z",
+      "modules": [
+        "step_logic",
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-opus-4.8",
+        "est_tokens": 9000,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -26625,6 +26732,15 @@
       "agent": "orchestrator",
       "created_at": "2026-06-28T21:05:23Z",
       "updated_at": "2026-06-28T21:05:23Z"
+    },
+    {
+      "context_id": "ctx_W_ensemble_crprofile_2026-06-29_phase_start_6726671a",
+      "workflow_id": "W_ensemble_crprofile_2026-06-29",
+      "context_type": "phase_start",
+      "content": "Diagnostic cr profile phase_start: SuccessCriteria=numeric table cr=4/6/8 wall, summed host time/calls, FLAME timing, nvidia-smi util; verdict A vs B with split of cr8-cr4 gap; no commit; no persistent code instrumentation; sim_v2 diff clean after run.",
+      "agent": "coder-flame",
+      "created_at": "2026-06-29T02:33:27Z",
+      "updated_at": "2026-06-29T02:33:27Z"
     }
   ],
   "meta": {
