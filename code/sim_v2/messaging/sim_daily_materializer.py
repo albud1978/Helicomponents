@@ -400,32 +400,15 @@ def _check_deficit_target_coverage(client, params: dict[str, int], version_ids: 
 
 
 def _clear_daily_partitions(client, version_date_int: int, version_ids: list[int]) -> None:
-    if len(version_ids) == 1:
-        version_id = version_ids[0]
+    checked_version_ids = [_as_uint32(version_id, "version_id") for version_id in version_ids]
+    if not checked_version_ids:
+        raise ValueError("version_ids must not be empty")
+    if len(set(checked_version_ids)) != len(checked_version_ids):
+        raise ValueError(f"Duplicate version_id values are not allowed: {version_ids}")
+
+    for version_id in checked_version_ids:
         client.execute(f"ALTER TABLE {TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
         client.execute(f"ALTER TABLE {DEFICIT_TABLE_NAME} DROP PARTITION tuple({version_date_int}, {version_id})")
-        return
-
-    version_ids_csv = _version_ids_csv(version_ids)
-    params = {"version_date": version_date_int}
-    client.execute(
-        f"""
-        ALTER TABLE {TABLE_NAME} DELETE
-        WHERE version_date = %(version_date)s
-          AND version_id IN ({version_ids_csv})
-        """,
-        params,
-        settings={"mutations_sync": 2},
-    )
-    client.execute(
-        f"""
-        ALTER TABLE {DEFICIT_TABLE_NAME} DELETE
-        WHERE version_date = %(version_date)s
-          AND version_id IN ({version_ids_csv})
-        """,
-        params,
-        settings={"mutations_sync": 2},
-    )
 
 
 def materialize_daily_versions(client, version_date_int: int, version_ids: list[int]) -> tuple[int, int]:

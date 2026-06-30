@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-06-30 — Ingestion Шаг 4: materializer DROP PARTITION cleanup
+
+**Risk:** medium | **Profile:** medium-policy | **Workflow:** `W_mat_clear_partitions_2026-06-30`
+
+**Контекст:** batch-profile: `_clear_daily_partitions` ~68% materializer wall (~59с). Single-vid уже использовал `DROP PARTITION`, batch path — `ALTER DELETE mutations_sync=2` на daily+deficit.
+
+**Действие:** `sim_daily_materializer.py` — `_clear_daily_partitions` для batch: loop `DROP PARTITION tuple(version_date, version_id)` по обеим таблицам; batch `ALTER DELETE` удалён.
+
+**Корректность (bit-identical PASS):** daily+deficit EXCEPT both-ways = 0, пары 9501/9504/9506 vs 9001/9004/9006, `version_date=20260622`, `group_by` 1&2.
+
+**Perf:** batch materializer 62vid: clear **59→18с**, total **84.9→48.3с** (−36.6с, **−43%**). **E2E re-measure (Steps 1–4): total 173.6с** vs baseline 241.0с (−28.0%) vs Steps 1–3 205.3с (−15.5%). Breakdown NEW: GPU 20.8, loader 96.2, materializer 47.3.
+
+**Review/governance:** governance `allow_with_notes` (`handoff_governance-compliance_bc859a8e`), блокеров нет.
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
 ## 2026-06-30 — Ingestion Шаг 3 + E2E re-measure (numpy insert_master)
 
 **Risk:** medium | **Profile:** medium-policy | **Workflow:** `W_loader_step3_e2e_2026-06-30`

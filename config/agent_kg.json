@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-30T04:47:25Z",
+    "updated_at": "2026-06-30T06:09:33Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -3581,6 +3581,47 @@
       },
       "created_at": "2026-06-30T04:26:49Z",
       "updated_at": "2026-06-30T04:47:25Z"
+    },
+    {
+      "workflow_id": "W_mat_clear_partitions_2026-06-30",
+      "goal": "Шаг 4: оптимизация materializer _clear_daily_partitions (~68% mat wall)",
+      "phase": "implement",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-policy"
+      },
+      "usage": {
+        "cumulative_steps": 3,
+        "cumulative_tokens": 39500,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-30T05:53:39Z"
+      },
+      "created_at": "2026-06-30T05:44:08Z",
+      "updated_at": "2026-06-30T05:53:39Z"
+    },
+    {
+      "workflow_id": "W_e2e62_step4_2026-06-30",
+      "goal": "E2E re-measure 62 vid после Шага 4 (DROP PARTITION cleanup)",
+      "phase": "implement",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 26000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-06-30T06:09:33Z"
+      },
+      "created_at": "2026-06-30T05:59:15Z",
+      "updated_at": "2026-06-30T06:09:33Z"
     }
   ],
   "handoffs": [
@@ -26050,6 +26091,217 @@
         "est_tokens": 4000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_mat_clear_partitions_2026-06-30_coder-general_ff99e3f7",
+      "workflow_id": "W_mat_clear_partitions_2026-06-30",
+      "agent": "coder-general",
+      "user_goal": "Workflow W_mat_clear_partitions_2026-06-30 (medium-risk, СОГЛАСОВАНО после commit/push ingestion Steps 1-3). Реализация + bit-identical + batch re-time.",
+      "changes": "code/sim_v2/messaging/sim_daily_materializer.py: _clear_daily_partitions now validates non-empty/duplicate version_ids and loops DROP PARTITION tuple(version_date, version_id) for sim_masterv2_v9_daily and sim_deficit_v9_daily; removed batch ALTER TABLE DELETE with mutations_sync=2.",
+      "facts": "",
+      "assumptions": "OLD baseline 84.9s/clear ~59s is comparable to current 62-ID throwaway batch; Risks if false: speedup ratio may shift slightly, but NEW breakdown is directly measured on current data.",
+      "evidence": "Facts: Tables: default.sim_masterv2_v9_daily and default.sim_deficit_v9_daily are PARTITION BY (version_date, version_id); source default.sim_masterv2_v9 is PARTITION BY version_date. Throwaway source IDs 9500..9561 already existed; no source rows were created or deleted. OLD comparison used workflow baseline from user/W_batch_profile: clear about 59s, materializer total 84.9s.\nEvidence: CH 24.10.1.2812: DROP PARTITION IF EXISTS unsupported (Code 62), ordinary DROP missing partition OK. py_compile PASS. ReadLints PASS. Batch NEW on 9500..9561 chunk-size=15: clear=17.946s, INSERT_DAILY=24.281s, INSERT_DEFICIT=1.102s, total=48.273s, rows daily=2715600, deficit=452600. EXCEPT_FIXED all zero for 9001->9501, 9004->9504, 9006->9506 on daily and deficit both directions with group_by IN (1,2). Cleanup target partitions 9500..9561: daily=0, deficit=0.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_mat_clear_partitions_2026-06-30:2026-06-30T05:44:00Z",
+      "plan_step_id": "I1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Changes materializer behavior in code/sim_v2/messaging; mutates ClickHouse daily/deficit target partitions for real-data verification; performance validation uses batch throwaway IDs.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (post-implementation governance by orchestrator if needed)",
+      "human_gate_required": "conditional",
+      "plan_card": "Replace batch ALTER DELETE cleanup in sim_daily_materializer with DROP PARTITION loop; verify bit-identical daily/deficit outputs and measure batch materializer breakdown on real throwaway IDs.",
+      "evidence_pack": "Facts: Tables: default.sim_masterv2_v9_daily and default.sim_deficit_v9_daily are PARTITION BY (version_date, version_id); source default.sim_masterv2_v9 is PARTITION BY version_date. Throwaway source IDs 9500..9561 already existed; no source rows were created or deleted. OLD comparison used workflow baseline from user/W_batch_profile: clear about 59s, materializer total 84.9s.\nEvidence: CH 24.10.1.2812: DROP PARTITION IF EXISTS unsupported (Code 62), ordinary DROP missing partition OK. py_compile PASS. ReadLints PASS. Batch NEW on 9500..9561 chunk-size=15: clear=17.946s, INSERT_DAILY=24.281s, INSERT_DEFICIT=1.102s, total=48.273s, rows daily=2715600, deficit=452600. EXCEPT_FIXED all zero for 9001->9501, 9004->9504, 9006->9506 on daily and deficit both directions with group_by IN (1,2). Cleanup target partitions 9500..9561: daily=0, deficit=0.",
+      "success_criteria": "SQL: both-way EXCEPT daily+deficit = 0 for 9001/9004/9006 vs 9501/9504/9506, version_date=20260622, group_by IN (1,2); script: python3 -m py_compile code/sim_v2/messaging/sim_daily_materializer.py; numeric: cleanup rows for 9500..9561 in daily+deficit == 0; timing: batch 62 vid chunk-size=15 measured.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=governance_pending; evidence_refs=py_compile; ReadLints; CH EXCEPT output; batch timing output; approval_ref=N/A",
+      "risks": "Pre-existing throwaway source IDs 9500..9561 were retained; only materialized daily/deficit target partitions were cleaned. Runtime performance can vary with ClickHouse background load.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No SSoT/domain graph change; only materializer cleanup strategy changed.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-30T05:52:04Z",
+      "modules": [
+        "postprocess",
+        "bi",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 31000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_mat_clear_partitions_2026-06-30_governance-compliance_bc859a8e",
+      "workflow_id": "W_mat_clear_partitions_2026-06-30",
+      "agent": "governance-compliance",
+      "user_goal": "следующий шаг _clear_daily_partitions",
+      "changes": "",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "EXCEPT 0 daily+deficit 9501/9504/9506; mat 84.9->48.3с (-43%); clear 59->18с; handoff_coder-general_ff99e3f7",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "правка cleanup materializer BI-витрин",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "DROP PARTITION loop вместо batch ALTER DELETE",
+      "evidence_pack": "EXCEPT 0 daily+deficit 9501/9504/9506; mat 84.9->48.3с (-43%); clear 59->18с; handoff_coder-general_ff99e3f7",
+      "success_criteria": "SQL: EXCEPT=0 + numeric: materializer wall снижается",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=sim_daily_materializer.py;EXCEPT=0; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "40ebce7acd1c222a19509a8d75d75f10f9bd6f7c8962d0a8cb84da3001a0f3f8",
+      "created_at": "2026-06-30T05:52:50Z",
+      "modules": [
+        "bi",
+        "postprocess"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8",
+        "est_tokens": 3500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_mat_clear_partitions_2026-06-30_orchestrator_6b0bf1cf",
+      "workflow_id": "W_mat_clear_partitions_2026-06-30",
+      "agent": "orchestrator",
+      "user_goal": "следующий шаг _clear_daily_partitions",
+      "changes": "",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "EXCEPT 0; mat 84.9->48.3с (-43%); clear 59->18с; handoff_coder-general_ff99e3f7",
+      "drift_check": "UserGoal(clear partitions opt) <-> Changes(_clear_daily_partitions DROP loop) scope match: yes",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P4",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "правка cleanup materializer BI-витрин",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "DROP PARTITION loop вместо batch ALTER DELETE",
+      "evidence_pack": "EXCEPT 0; mat 84.9->48.3с (-43%); clear 59->18с; handoff_coder-general_ff99e3f7",
+      "success_criteria": "SQL: EXCEPT=0 + numeric: materializer -43%",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=sim_daily_materializer.py; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "82b52cd5a27b9377da768ec2b4196c680bff12fe7239525fda6a9d1f17072d98",
+      "created_at": "2026-06-30T05:53:39Z",
+      "modules": [
+        "bi",
+        "postprocess"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8",
+        "est_tokens": 5000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_e2e62_step4_2026-06-30_coder-general_72cf3ae0",
+      "workflow_id": "W_e2e62_step4_2026-06-30",
+      "agent": "coder-general",
+      "user_goal": "Workflow W_e2e62_step4_2026-06-30 (low-risk, замер only, код НЕ менять): полный E2E re-measure 62 vid с текущим кодом, вернуть NEW vs 241.0 vs 205.3, способ запуска и cleanup подтверждение.",
+      "changes": "Код не менялся. Выполнен E2E замер 62 vid на диапазоне 9700..9761; записаны evidence файлы output/e2e62_step4_off_20260630_command.txt и output/e2e62_step4_off_20260630_run.log; выполнен cleanup CH и .bin exports.",
+      "facts": "SuccessCriteria PASS: command=/home/albud/miniconda3/envs/cuda13_nosb/bin/python3 -u code/utils/spawn_cap_ensemble.py --version-date 2026-06-22 --input-version-id 3 --repair-quota 18 --caps 0..60 --out-base 9700 --uncapped-version-id 9761 --reference-version-id 9 --end-day 3650 --max-steps 10000 --devices 0 --concurrent-runs 4; results total_shell=173.56s gpu=20.824s loader=96.150s materializer=47.257s; validated_ensemble_files=2108; cleanup after rows master=0 repairline=0 daily=0 deficit=0 bin_exports=0.",
+      "assumptions": "No simulation semantic validation was requested; this was timing-only re-measure. Risks if false: performance result may not imply correctness of downstream business metrics.",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_e2e62_step4_2026-06-30:2026-06-30T06:07:46Z",
+      "plan_step_id": "P4",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "timing-only measurement, no code changes",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "manual-check: report NEW vs Original 241.0s and Steps1-3 205.3s with abs/% deltas, command/env/vid range, cleanup confirmation",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "measurement-only, no domain graph change",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-06-30T06:07:46Z",
+      "modules": [
+        "export",
+        "postprocess"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 22000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_e2e62_step4_2026-06-30_orchestrator_a7fce86d",
+      "workflow_id": "W_e2e62_step4_2026-06-30",
+      "agent": "orchestrator",
+      "user_goal": "E2E замер",
+      "changes": "",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal(E2E замер) <-> Changes(замер only) scope match: yes",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "20383ebcec2abb856700ff2b261f23384fd20cd83d3e33a0e9b7323cdb0a9ed3",
+      "created_at": "2026-06-30T06:09:33Z",
+      "modules": [
+        "bi",
+        "postprocess"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8",
+        "est_tokens": 4000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -29292,6 +29544,24 @@
       "agent": "coder-general",
       "created_at": "2026-06-30T04:27:54Z",
       "updated_at": "2026-06-30T04:27:54Z"
+    },
+    {
+      "context_id": "ctx_W_mat_clear_partitions_2026-06-30_phase_start_3ca282fb",
+      "workflow_id": "W_mat_clear_partitions_2026-06-30",
+      "context_type": "phase_start",
+      "content": "coder-general implementation phase started. SuccessCriteria: update _clear_daily_partitions to DROP PARTITION loop for batch; verify bit-identical vs 9001/9004/9006 for version_date=20260622 with both-way EXCEPT on daily+deficit group_by 1,2; re-time 62 throwaway vid batch chunk-size=15; cleanup throwaway.",
+      "agent": "coder-general",
+      "created_at": "2026-06-30T05:45:40Z",
+      "updated_at": "2026-06-30T05:45:40Z"
+    },
+    {
+      "context_id": "ctx_W_e2e62_step4_2026-06-30_phase_start_90ab927d",
+      "workflow_id": "W_e2e62_step4_2026-06-30",
+      "context_type": "phase_start",
+      "content": "Step4 E2E re-measure started. SuccessCriteria: manual-check: run current code E2E for 62 vids, report NEW vs 241.0/205.3 with abs/% deltas, command/env/vid range, and cleanup confirmation.",
+      "agent": "coder-general",
+      "created_at": "2026-06-30T06:01:12Z",
+      "updated_at": "2026-06-30T06:01:12Z"
     }
   ],
   "meta": {
