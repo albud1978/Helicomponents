@@ -271,32 +271,7 @@ SETTINGS index_granularity = 8192
 """
 
 
-def export_repairline_to_ch(
-    ch_client,
-    rows,
-    version_date_int,
-    version_id,
-    drop_table=False,
-    master_projection=None,
-):
-    """
-    Экспорт ежедневной матрицы RepairLine в ClickHouse.
-
-    Args:
-        ch_client: clickhouse_driver.Client
-        rows: list[tuple] — (day_u16, line_id, free_days, repair_time, aircraft_number, group_by,
-                            bank_count, bank_head_start, bank_head_end)
-        version_date_int: int — YYYYMMDD
-        version_id: int
-        drop_table: bool — дропнуть таблицу перед созданием
-        master_projection: optional list[tuple] — (aircraft_number, group_by, day_u16,
-            status_id, pre_status_id, commit_p2, commit_p3, repair_claim_line_id,
-            repair_claim_start_day, repair_claim_end_day, repair_claim_source)
-
-    Lookback-only: occupancy (aircraft_number/group_by) детерминированно строится из sim_masterv2_v9.
-    Runtime telemetry (acn/gb) не используется как источник occupancy, только для выбора line_id
-    для claimless эпизодов. bank telemetry сохраняется из GPU-снимка линии.
-    """
+def ensure_repairline_table(ch_client, drop_table=False):
     if drop_table:
         ch_client.execute("DROP TABLE IF EXISTS sim_repairline_v9")
         print("  🗑️ sim_repairline_v9 удалена")
@@ -327,6 +302,37 @@ def export_repairline_to_ch(
         "ALTER TABLE sim_repairline_v9 "
         "ADD COLUMN IF NOT EXISTS bank_head_end UInt32"
     )
+
+
+def export_repairline_to_ch(
+    ch_client,
+    rows,
+    version_date_int,
+    version_id,
+    drop_table=False,
+    master_projection=None,
+    delete_existing=True,
+):
+    """
+    Экспорт ежедневной матрицы RepairLine в ClickHouse.
+
+    Args:
+        ch_client: clickhouse_driver.Client
+        rows: list[tuple] — (day_u16, line_id, free_days, repair_time, aircraft_number, group_by,
+                            bank_count, bank_head_start, bank_head_end)
+        version_date_int: int — YYYYMMDD
+        version_id: int
+        drop_table: bool — дропнуть таблицу перед созданием
+        master_projection: optional list[tuple] — (aircraft_number, group_by, day_u16,
+            status_id, pre_status_id, commit_p2, commit_p3, repair_claim_line_id,
+            repair_claim_start_day, repair_claim_end_day, repair_claim_source)
+        delete_existing: bool — удалить существующий срез перед INSERT
+
+    Lookback-only: occupancy (aircraft_number/group_by) детерминированно строится из sim_masterv2_v9.
+    Runtime telemetry (acn/gb) не используется как источник occupancy, только для выбора line_id
+    для claimless эпизодов. bank telemetry сохраняется из GPU-снимка линии.
+    """
+    ensure_repairline_table(ch_client, drop_table=drop_table)
 
     if master_projection is None:
         master_rows = ch_client.execute(
@@ -480,7 +486,7 @@ def export_repairline_to_ch(
 
     row_count = len(columns_data[0])
     if row_count:
-        if not drop_table:
+        if not drop_table and delete_existing:
             ch_client.execute(
                 "ALTER TABLE sim_repairline_v9 DELETE "
                 "WHERE version_date = %(vd)s AND version_id = %(vi)s",

@@ -202,88 +202,16 @@ INSERT INTO {DEFICIT_TABLE_NAME}
     ops_count,
     deficit
 )
-WITH events_daily AS (
-    SELECT
-        version_date AS version_date,
-        version_id AS version_id,
-        group_by AS group_by,
-        aircraft_number AS aircraft_number,
-        day_date AS day_date,
-        argMax(status_id, idx) AS status_id
-    FROM {SOURCE_TABLE}
-    WHERE version_date = %(version_date)s
-      AND version_id = %(version_id)s
-      AND group_by IN (1, 2)
-    GROUP BY version_date, version_id, group_by, aircraft_number, day_date
-),
-version_bounds AS (
-    SELECT
-        version_date AS version_date,
-        version_id AS version_id,
-        max(day_date) AS version_max_day
-    FROM events_daily
-    GROUP BY version_date, version_id
-),
-aircraft_span AS (
-    SELECT
-        e.version_date AS version_date,
-        e.version_id AS version_id,
-        e.group_by AS group_by,
-        e.aircraft_number AS aircraft_number,
-        min(e.day_date) AS aircraft_min_day,
-        vb.version_max_day AS aircraft_max_day
-    FROM events_daily e
-    INNER JOIN version_bounds vb
-      ON vb.version_date = e.version_date
-     AND vb.version_id = e.version_id
-    GROUP BY e.version_date, e.version_id, e.group_by, e.aircraft_number, vb.version_max_day
-),
-events_packed AS (
-    SELECT
-        version_date AS version_date,
-        version_id AS version_id,
-        group_by AS group_by,
-        aircraft_number AS aircraft_number,
-        arraySort(x -> x.1, groupArray((day_date, status_id))) AS day_status_pairs
-    FROM events_daily
-    GROUP BY version_date, version_id, group_by, aircraft_number
-),
-expanded_days AS (
-    SELECT
-        a.version_date AS version_date,
-        a.version_id AS version_id,
-        a.group_by AS group_by,
-        a.aircraft_number AS aircraft_number,
-        addDays(a.aircraft_min_day, n) AS day_date
-    FROM aircraft_span a
-    ARRAY JOIN range(dateDiff('day', a.aircraft_min_day, a.aircraft_max_day) + 1) AS n
-),
-daily_aircraft_status AS (
-    SELECT
-        d.version_date AS version_date,
-        d.version_id AS version_id,
-        d.group_by AS group_by,
-        d.aircraft_number AS aircraft_number,
-        d.day_date AS day_date,
-        if(
-            arrayLastIndex(x -> x <= d.day_date, arrayMap(p -> p.1, p.day_status_pairs)) = 0,
-            0,
-            arrayMap(p -> p.2, p.day_status_pairs)[arrayLastIndex(x -> x <= d.day_date, arrayMap(p -> p.1, p.day_status_pairs))]
-        ) AS status_id
-    FROM expanded_days d
-    INNER JOIN events_packed p
-      ON p.version_date = d.version_date
-     AND p.version_id = d.version_id
-     AND p.group_by = d.group_by
-     AND p.aircraft_number = d.aircraft_number
-),
-daily_grid AS (
+WITH daily_grid AS (
     SELECT DISTINCT
         version_date AS version_date,
         version_id AS version_id,
         group_by AS group_by,
         day_date AS day_date
-    FROM daily_aircraft_status
+    FROM {TABLE_NAME}
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND group_by IN (1, 2)
 ),
 ops_counts AS (
     SELECT
@@ -291,9 +219,12 @@ ops_counts AS (
         version_id AS version_id,
         group_by AS group_by,
         day_date AS day_date,
-        countIf(status_id = 2) AS ops_count
-    FROM daily_aircraft_status
-    GROUP BY version_date, version_id, group_by, day_date
+        status_count_ffill AS ops_count
+    FROM {TABLE_NAME}
+    WHERE version_date = %(version_date)s
+      AND version_id = %(version_id)s
+      AND group_by IN (1, 2)
+      AND status_id = 2
 ),
 program_targets AS (
     SELECT

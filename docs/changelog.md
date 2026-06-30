@@ -1,5 +1,87 @@
 # Changelog
 
+## 2026-06-30 — Ingestion Шаг 3 + E2E re-measure (numpy insert_master)
+
+**Risk:** medium | **Profile:** medium-policy | **Workflow:** `W_loader_step3_e2e_2026-06-30`
+
+**Контекст:** batch-profile: `insert_master` ~42% loader wall. Hot path `build_master_columns` материализовал ~75k rows/vid через `.tolist()` перед columnar insert.
+
+**Действие:** `ensemble_mp2_loader.py` — `build_master_columns()` возвращает `list[np.ndarray]`, `insert_master()` с `use_numpy=True`; `_u16/_u8` → реальные uint dtypes; `master_sha256` алгоритм сохранён.
+
+**Корректность (bit-identical PASS):** master+repairline EXCEPT both-ways = 0, пары 9911/9914/9916 vs 9001/9004/9006, `version_date=20260622`, group_by counts match.
+
+**Perf (mixed):** изолированный batch loader 62vid pw4: **95.1с** vs Step2 **93.1с** (+2с, Step3 alone не ускорил). **Полный E2E 62vid** (Шаги 1+2+3, cr4, OFF-build): **205.3с** vs baseline **241.0с** (**−35.7с / −14.8%**). Breakdown: GPU 20.4, loader 87.5, materializer 84.9.
+
+**Review/governance:** governance `allow_with_notes`, блокеров нет. E2E-выигрыш — cumulative pipeline effect; isolated insert_master baseline требует отдельного контрольного retime.
+
+**Открыто:** materializer `_clear_daily_partitions` (~68% mat, ~59с) — следующий кандидат оптимизации.
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
+## 2026-06-30 — Ingestion Шаг 2: loader repairline batch DELETE
+
+**Risk:** medium | **Profile:** medium-policy | **Workflow:** `W_loader_step2_2026-06-30`
+
+**Контекст:** batch-profile показал `repairline_phase` ~56% loader wall (~67с critical). Per-vid `ALTER DELETE mutations_sync=2` на `sim_repairline_v9` ×62 vid — главный CH-overhead; master уже имел batch delete, repairline — нет. `interpolate_repairline_daily` на 62 `.bin` = 0.121с — не bottleneck, vectorization пропущена.
+
+**Действие:** 2 файла (`+55/−27`) — `ensemble_mp2_loader.py`: `delete_repairline_versions()` + один batch DELETE до workers; `rtc_repairline_export.py`: параметр `delete_existing`, skip per-vid DELETE при batch. Single-vid режим без изменений.
+
+**Корректность (bit-identical PASS):** master+repairline EXCEPT both-ways = 0, пары 9901/9904/9906 vs 9001/9004/9006, `group_by` counts match, `version_date=20260622`.
+
+**Perf:** batch loader 62 vid, `parallel_workers=4`: **103.1с→93.1с** (×1.11). Ожидаемый выигрыш E2E ~−10с (требует полного re-measure).
+
+**Review/governance:** governance `allow_with_notes` (`handoff_governance-compliance_048f4aa5`), блокеров нет.
+
+**Открыто:** Шаг 3 — `insert_master` (~42% loader); materializer `_clear_daily_partitions` (~68% mat) — отдельный кандидат.
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
+## 2026-06-30 — Ingestion Шаг 1: materializer single forward-fill (deficit из daily)
+
+**Risk:** medium | **Profile:** medium-policy | **Workflow:** `W_mat_single_ff_2026-06-30`
+
+**Контекст:** после SEATBELTS=OFF E2E стал ingestion-bound (~205с). Микрозамер materializer: `INSERT_DAILY` 41% / `INSERT_DEFICIT` 50% / coverage 9%; daily/deficit ratio 0.83 ⇒ forward-fill каскад (events→span→`ARRAY JOIN range(~3650)`→`arrayLastIndex`) считался **дважды**. Конкурс моделей (вариант B): deficit должен переиспользовать уже построенную daily-витрину.
+
+**Действие:** правка ТОЛЬКО `code/sim_v2/messaging/sim_daily_materializer.py` (`+10/−79`, 1 файл) — `INSERT_DEFICIT` переписан: `daily_grid = SELECT DISTINCT` из `sim_masterv2_v9_daily`, `ops_count = status_count_ffill WHERE status_id=2`. Forward-fill остался только в `INSERT_DAILY`. DDL, `_check_deficit_target_coverage`, порядок `materialize_daily_versions` не тронуты. Float64 не введён, `group_by IN (1,2)` сохранён.
+
+**Корректность (bit-identical PASS):** EXCEPT both-ways = 0 — deficit (3650 строк/группа) и daily (21900 строк/группа), пары 9001→9801 / 9004→9804 / 9006→9806, `group_by` 1&2, реальные данные CH 24.10.1.2812. Throwaway cleanup 9801/9804/9806 = 0/0/0.
+
+**Perf:** re-time `INSERT_DEFICIT` **×5.46 / ×5.10 / ×5.54** (≈0.95с→≈0.17с/vid). deficit был 50% materializer ⇒ ожидаемый выигрыш materializer ~40%.
+
+**Review/governance:** coder-general impl + self-verify; governance `allow_with_notes` (`handoff_governance-compliance_5428c4cd`), блокеров нет; human approval «идём в Шаг 1».
+
+**Открыто (follow-up, не блокеры):** Шаг 2 — loader repairline-phase (60% loader: vectorization + batch `ALTER DELETE`); Шаг 3 — loader `insert_master` numpy (без `.tolist()`). coverage_check single-source (9%) — опционально. Ре-материализация старых prod-vid не требуется (правка чисто downstream, bit-identical доказан).
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
+## 2026-06-29 — SEATBELTS=OFF: host-bound bottleneck + pyflamegpu rebuild (equivalence proof)
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_seatbelts_off_rebuild_2026-06-29` | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** расследование host-bound боттлнека CUDAEnsemble. Диагноз (ранее): не GPU-compute, а **12.7M `cudaMemsetAsync`** из `flamegpu::detail::CUDAMacroEnvironment::resetFlagsAsync` — seatbelts read/write флаги MacroProperty перед каждым слоем; `concurrent_runs`-scaling не работал (плато после cr4). Конкурс 2 моделей (opus-4-8 + gpt-5.5): консенсус **`FLAMEGPU_SEATBELTS=OFF`**, подтверждено заголовками pyflamegpu (`resetFlagsAsync` под `#if FLAMEGPU_SEATBELTS`).
+
+**Действие:** собран pyflamegpu из FLAMEGPU2 commit **d2ba2cc** с `FLAMEGPU_SEATBELTS=OFF`, `CMAKE_CUDA_ARCHITECTURES=120` (Blackwell sm_120), Release, в **изолированном** conda-env `cuda13_nosb`. Рабочий env `cuda13` (SEATBELTS=ON) **не тронут**. Код репозитория **не менялся**.
+
+**Корректность (G2 PASS, bit-identical):** sha256 **102/102** `.bin` device-экспортов OFF==ON; ClickHouse EXCEPT both-ways **12/12 = 0** строк (`sim_masterv2_v9` / `sim_repairline_v9` / daily / deficit, spawn_cap{1,4,6}, vid 9001/9004/9006 vs 9101/9104/9106, `group_by` учтён). RTC-кэш ON/OFF не пересекается: SEATBELTS = 3-е поле ключа JitifyCache; **803** `_1_` ON + **67** `_0_` OFF ядра раздельно.
+
+**Perf (G3 PASS):** `cudaMemsetAsync` **212781→1218** (×174.7), `resetFlagsAsync→0`; GPU-фаза 62-vid свипа cr4 **88.3с→19.05с** (×4.63); cr-scaling возобновился. Полный E2E теперь **ingestion-bound** (loader+materializer ~205с = 91.5%); полный wall **326.5с→239.9с** (×1.36) — дальнейший выигрыш в оптимизации загрузки CH, не GPU.
+
+**Review/validation/governance:** reviewer-flame `approve_with_notes` (`ctx_milestone_0bd64e19`) + validator-judge PASS G2/G3 + governance `allow_with_notes`, result **VALID** (`handoff_governance-compliance_39714a61`); human approval `ctx_W_seatbelts_off_rebuild_2026-06-29_approval_c91e80e6`.
+
+**Открыто:** INV-2 на spawn_cap-прогонах FAIL **идентично ON** (pre-existing, в triage, не регрессия SEATBELTS). **Production-adoption OFF** = отдельный high-risk workflow с human-gate + 6 guardrails (provenance-штамп, fail-fast `--require-seatbelts`, дисциплина validate-on-ON, durable-архив wheel+lockfile, полный invariant-suite на prod-конфиге, экстремумы cap=0/uncapped). **Не переключать свипы на OFF** без этого.
+
+**Файлы:** код репозитория не изменялся; артефакты под `output/seatbelts_gate_*`, `output/g3_*`, `output/nsys_g3_*`; изолированная сборка в `cuda13_nosb` / `flamegpu_builds/FLAMEGPU2_d2ba2cc_nosb*`.
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
 ## 2026-06-29 — L1: bulk-init `HF_InitMP5Cumsum` (MacroProperty `.bin` import)
 
 **Risk:** high | **Profile:** high-strict | **Workflow:** `W_ensemble_l1_2026-06-29` | **Branch:** `feature/dwh-bb8`

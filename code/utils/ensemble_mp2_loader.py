@@ -23,6 +23,7 @@ from model_build import MAX_EXPORT_STEPS, MAX_FRAMES, MP2_BUF_SIZE, REPAIR_LINES
 from rtc_mp2_export import MP2_DYNAMIC_FIELDS, MP2_EXPORT_DIR, MP2_FIELDS, MP2_STATIC_FIELDS
 from rtc_repairline_export import (
     RL_EXPORT_FIELDS,
+    ensure_repairline_table,
     export_repairline_to_ch,
     interpolate_repairline_daily,
 )
@@ -243,14 +244,14 @@ def postprocess_promotions(fields: dict, days: np.ndarray, num_steps: int,
 
 
 def _u16(arr: np.ndarray) -> np.ndarray:
-    return np.bitwise_and(arr, np.uint32(0xFFFF)).astype(np.uint32, copy=False)
+    return np.bitwise_and(arr, np.uint32(0xFFFF)).astype(np.uint16, copy=False)
 
 
 def _u8(arr: np.ndarray) -> np.ndarray:
-    return np.bitwise_and(arr, np.uint32(0xFF)).astype(np.uint32, copy=False)
+    return np.bitwise_and(arr, np.uint32(0xFF)).astype(np.uint8, copy=False)
 
 
-def build_master_columns(mp2_data: dict, version_date_int: int, version_id: int) -> tuple[list[list[int]], str]:
+def build_master_columns(mp2_data: dict, version_date_int: int, version_id: int) -> tuple[list[np.ndarray], str]:
     num_steps = mp2_data["num_steps"]
     days = mp2_data["days"]
     fields = mp2_data["fields"]
@@ -284,34 +285,34 @@ def build_master_columns(mp2_data: dict, version_date_int: int, version_id: int)
         return np.broadcast_to(fields[field][:total_agents].reshape(1, total_agents), (num_steps, total_agents))
 
     arrays = [
-        [version_date_int] * row_count,
-        [version_id] * row_count,
-        _u16(day_2d)[mask].tolist(),
-        _u16(static_2d("mp2_idx"))[mask].tolist(),
-        static_2d("mp2_aircraft_number")[mask].tolist(),
-        _u8(static_2d("mp2_group_by"))[mask].tolist(),
-        static_2d("mp2_oh")[mask].tolist(),
-        static_2d("mp2_br")[mask].tolist(),
-        static_2d("mp2_ll")[mask].tolist(),
-        _u8(status)[mask].tolist(),
-        _u8(pre_status)[mask].tolist(),
-        _u16(fields["mp2_status_change_day"][:num_steps, :total_agents])[mask].tolist(),
-        fields["mp2_sne"][:num_steps, :total_agents][mask].tolist(),
-        fields["mp2_ppr"][:num_steps, :total_agents][mask].tolist(),
-        _u16(fields["mp2_limiter"][:num_steps, :total_agents])[mask].tolist(),
-        _u16(fields["mp2_repair_days"][:num_steps, :total_agents])[mask].tolist(),
-        _u16(claim_start)[mask].tolist(),
-        _u16(claim_end)[mask].tolist(),
-        _u8(claim_source)[mask].tolist(),
-        _u16(claim_line_id)[mask].tolist(),
-        _u16(fields["mp2_repair_time"][:num_steps, :total_agents])[mask].tolist(),
-        _u16(fields["mp2_assembly_time"][:num_steps, :total_agents])[mask].tolist(),
-        _u8(fields["mp2_active_trigger"][:num_steps, :total_agents])[mask].tolist(),
-        _u8(fields["mp2_assembly_trigger"][:num_steps, :total_agents])[mask].tolist(),
-        fields["mp2_daily_today"][:num_steps, :total_agents][mask].tolist(),
-        fields["mp2_daily_next"][:num_steps, :total_agents][mask].tolist(),
-        commit_p2[mask].tolist(),
-        commit_p3[mask].tolist(),
+        np.full(row_count, version_date_int, dtype=np.uint32),
+        np.full(row_count, version_id, dtype=np.uint32),
+        _u16(day_2d)[mask],
+        _u16(static_2d("mp2_idx"))[mask],
+        static_2d("mp2_aircraft_number")[mask],
+        _u8(static_2d("mp2_group_by"))[mask],
+        static_2d("mp2_oh")[mask],
+        static_2d("mp2_br")[mask],
+        static_2d("mp2_ll")[mask],
+        _u8(status)[mask],
+        _u8(pre_status)[mask],
+        _u16(fields["mp2_status_change_day"][:num_steps, :total_agents])[mask],
+        fields["mp2_sne"][:num_steps, :total_agents][mask],
+        fields["mp2_ppr"][:num_steps, :total_agents][mask],
+        _u16(fields["mp2_limiter"][:num_steps, :total_agents])[mask],
+        _u16(fields["mp2_repair_days"][:num_steps, :total_agents])[mask],
+        _u16(claim_start)[mask],
+        _u16(claim_end)[mask],
+        _u8(claim_source)[mask],
+        _u16(claim_line_id)[mask],
+        _u16(fields["mp2_repair_time"][:num_steps, :total_agents])[mask],
+        _u16(fields["mp2_assembly_time"][:num_steps, :total_agents])[mask],
+        _u8(fields["mp2_active_trigger"][:num_steps, :total_agents])[mask],
+        _u8(fields["mp2_assembly_trigger"][:num_steps, :total_agents])[mask],
+        fields["mp2_daily_today"][:num_steps, :total_agents][mask],
+        fields["mp2_daily_next"][:num_steps, :total_agents][mask],
+        commit_p2[mask],
+        commit_p3[mask],
     ]
 
     master_hash = hashlib.sha256()
@@ -385,9 +386,22 @@ def delete_master_versions(client, version_date_int: int, version_ids: list[int]
     )
 
 
+def delete_repairline_versions(client, version_date_int: int, version_ids: list[int]) -> None:
+    if not version_ids:
+        raise RuntimeError("version_ids must not be empty for sim_repairline_v9 cleanup")
+    ensure_repairline_table(client)
+    version_ids_csv = ", ".join(str(int(version_id)) for version_id in version_ids)
+    client.execute(
+        "ALTER TABLE sim_repairline_v9 DELETE "
+        f"WHERE version_date = %(vd)s AND version_id IN ({version_ids_csv})",
+        {"vd": version_date_int},
+        settings={"mutations_sync": 2},
+    )
+
+
 def insert_master(
     client,
-    columns_data: list[list[int]],
+    columns_data: list[np.ndarray],
     version_date_int: int,
     version_id: int,
     delete_existing: bool = True,
@@ -402,7 +416,7 @@ def insert_master(
         f"INSERT INTO sim_masterv2_v9 ({', '.join(MASTER_COLUMNS)}) VALUES",
         columns_data,
         columnar=True,
-        settings={"max_partitions_per_insert_block": 300},
+        settings={"max_partitions_per_insert_block": 300, "use_numpy": True},
     )
     return row_count
 
@@ -596,6 +610,7 @@ def load_version(
     version_id: int,
     repair_quota: int,
     delete_existing_master: bool,
+    delete_existing_repairline: bool,
 ) -> dict[str, int | float | str | None]:
     t0 = time.perf_counter()
     mp2_data = load_mp2_export(export_dir, version_id, args.total_agents)
@@ -631,6 +646,7 @@ def load_version(
             version_date_int,
             version_id,
             master_projection=master_projection,
+            delete_existing=delete_existing_repairline,
         )
         repairline_rows = len(rl_rows)
     t_repairline = time.perf_counter()
@@ -668,6 +684,7 @@ def load_version_chunk(
     version_ids: list[int],
     repair_quota: int,
     delete_existing_master: bool,
+    delete_existing_repairline: bool,
 ) -> dict[str, int | float]:
     client = get_client()
     started = time.perf_counter()
@@ -682,6 +699,7 @@ def load_version_chunk(
                 version_id,
                 repair_quota,
                 delete_existing_master=delete_existing_master,
+                delete_existing_repairline=delete_existing_repairline,
             )
         )
     elapsed = time.perf_counter() - started
@@ -715,6 +733,8 @@ def main() -> None:
     started = time.perf_counter()
     if len(version_ids) > 1:
         delete_master_versions(client, version_date_int, version_ids)
+        if not args.skip_repairline:
+            delete_repairline_versions(client, version_date_int, version_ids)
     if parallel_workers == 1:
         results = [
             load_version(
@@ -725,6 +745,7 @@ def main() -> None:
                 version_id,
                 repair_quota,
                 delete_existing_master=len(version_ids) == 1,
+                delete_existing_repairline=len(version_ids) == 1,
             )
             for version_id in version_ids
         ]
@@ -742,6 +763,7 @@ def main() -> None:
                     version_date_int,
                     chunk,
                     repair_quota,
+                    False,
                     False,
                 )
                 for worker_id, chunk in enumerate(worker_chunks)
