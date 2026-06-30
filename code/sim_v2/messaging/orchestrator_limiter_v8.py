@@ -754,21 +754,17 @@ class LimiterV8Orchestrator:
             self._day0_repair_line_map,
             None,
         )
-        layer_ensemble_pop = self.model.newLayer("layer_ensemble_populate")
-        layer_ensemble_pop.addHostFunction(self._hf_ensemble_populate)
+        self.model.addInitFunction(self._hf_ensemble_populate)
 
         # HF для инициализации mp5_cumsum
-        hf_init_cumsum = HF_InitMP5Cumsum(self.mp5_cumsum, self.frames, self.days)
-        layer_init = self.model.newLayer("layer_init_mp5_cumsum")
-        layer_init.addHostFunction(hf_init_cumsum)
+        self._hf_init_cumsum = HF_InitMP5Cumsum(self.mp5_cumsum, self.frames, self.days)
+        self.model.addInitFunction(self._hf_init_cumsum)
 
-        hf_init_spawn_limit = HF_InitSpawnLimitCumulative(spawn_limit_cumulative)
-        layer_init_spawn_limit = self.model.newLayer("layer_init_spawn_limit_cumulative")
-        layer_init_spawn_limit.addHostFunction(hf_init_spawn_limit)
+        self._hf_init_spawn_limit = HF_InitSpawnLimitCumulative(spawn_limit_cumulative)
+        self.model.addInitFunction(self._hf_init_spawn_limit)
         
-        hf_init_economics = HF_InitEconomicsDailyCosts(self.economics_daily_costs)
-        layer_init_economics = self.model.newLayer("layer_init_economics_daily_costs")
-        layer_init_economics.addHostFunction(hf_init_economics)
+        self._hf_init_economics = HF_InitEconomicsDailyCosts(self.economics_daily_costs)
+        self.model.addInitFunction(self._hf_init_economics)
         
         # HF для инициализации repair_line_*_mp
         # day0_map заполняется позже в _init_repair_lines_at_build
@@ -781,14 +777,12 @@ class LimiterV8Orchestrator:
         self._hf_init_lines = HF_InitRepairLines(
             self.repair_quota, day0_map=self._day0_repair_line_map, mi8_rt=mi8_rt, mi17_rt=mi17_rt
         )
-        layer_lines = self.model.newLayer("layer_init_repair_lines")
-        layer_lines.addHostFunction(self._hf_init_lines)
+        self.model.addInitFunction(self._hf_init_lines)
 
-        # V8: HF_InitV8 как layer (addInitFunction не вызывается в step() режиме)
+        # V8: single-run uses simulate(); CUDAEnsemble invokes init functions per run.
         self._hf_init_v8 = rtc_limiter_v8.HF_InitV8(self.deterministic_dates, self.end_day)
-        layer_init_v8 = self.model.newLayer("layer_init_v8")
-        layer_init_v8.addHostFunction(self._hf_init_v8)
-        print("  ✅ V8 HF_InitV8 зарегистрирован (layer host function)")
+        self.model.addInitFunction(self._hf_init_v8)
+        print("  ✅ V8 HF_InitV8 зарегистрирован (InitFunction)")
 
         # V8: StepController как layer ПЕРЕД обработкой (QM видит новый current_day)
         # Читает mp_min_limiter из ПРЕДЫДУЩЕГО шага, продвигает current_day
