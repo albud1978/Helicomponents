@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-30T18:25:36Z",
+    "updated_at": "2026-06-30T18:26:47Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -3668,7 +3668,7 @@
       "workflow_id": "W_gpu_only_dayloop_2026-06-30",
       "goal": "GPU-only day-loop: убрать все per-step Python host-callback'ы из симуляционного цикла (P0->P1->P2), сохранив bit-identical результат",
       "phase": "analysis",
-      "owner": "reviewer-flame",
+      "owner": "orchestrator",
       "status": "active",
       "caps": {
         "max_steps": 50,
@@ -3677,13 +3677,13 @@
         "profile": "high-strict"
       },
       "usage": {
-        "cumulative_steps": 5,
-        "cumulative_tokens": 167000,
+        "cumulative_steps": 6,
+        "cumulative_tokens": 199000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-30T18:15:34Z"
+        "last_updated": "2026-06-30T18:26:47Z"
       },
       "created_at": "2026-06-30T17:01:43Z",
-      "updated_at": "2026-06-30T18:15:34Z"
+      "updated_at": "2026-06-30T18:26:47Z"
     }
   ],
   "handoffs": [
@@ -26666,6 +26666,49 @@
       "usage": {
         "model": "gpt-5.5",
         "est_tokens": 65000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_gpu_only_dayloop_2026-06-30_validator-judge_63a2c813",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "agent": "validator-judge",
+      "user_goal": "Независимая валидация P1a (high-risk, code/sim_v2). SuccessCriteria: результат симуляции BIT-IDENTICAL к baseline — sha256 всех mp2 + repairline .bin идентичны golden.",
+      "changes": "Независимая validator-judge проверка P1a: воспроизведён CUDAEnsemble B3b inline runner на post-P1a коде; пересчитаны sha256 68 .bin; сравнение с output/p0_dayloop_golden_hashes.json.",
+      "facts": "",
+      "assumptions": "CH SQL invariant suite (INV-1..INV-9) not run; Risks if false: raw .bin parity could pass while CH materialization differs.",
+      "evidence": "Facts: SuccessCriteria проверен: numeric sha256(golden mp2+repairline .bin for cap0/cap7) == sha256(independent validator replay) => PASS 68/68 mismatches=0. Артефакты: output/p1a_validator_replay_hashes.json, output/p1a_validator_hash_compare.json, output/p1a_validator_ensemble_run.log. Golden baseline: output/p0_dayloop_golden_hashes.json (68 rows). Охват: version_date=2026-06-22 input_version_id=1; CH heli_pandas group_by 1=163 group_by 2=123; caps cap0 vid13000 cap7 vid13007; 34 fields/run (27 mp2 + 7 repairline); concurrent_runs=2 skip CH load; reference_shape threshold=9 ref_cap=60 days_total=4000 from flight_program_ac v9; repair_quota=18. Replay ensemble: final_steps={0:251,1:255} final_days={0:3650,1:3650} wall_s=3.387 ensemble_elapsed_s=3.157. Cross-check: validator replay vs coder output/p1a_dayloop_post_hashes.json mismatches=0.\nEvidence: Compare output/p1a_validator_hash_compare.json: golden_rows=68 replay_rows=68 missing=[] extra=[] mismatches=[]. Command: conda cuda13 + python3 output/p1a_validator_replay.py (inline B3b using spawn_cap_ensemble RunSpec/_run_ensemble/_validate_export_files, reference shape from flight_program_ac v9 via preload_mp4_by_day).",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_gpu_only_dayloop_2026-06-30:2026-06-30T20:30:00Z",
+      "plan_step_id": "V2",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "Independent validation of high-risk sim_v2 RTC current_day_mp migration",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Independent sha256 replay of 68 mp2+RL .bin exports vs golden baseline for P1a current_day_mp migration.",
+      "evidence_pack": "Facts: SuccessCriteria проверен: numeric sha256(golden mp2+repairline .bin for cap0/cap7) == sha256(independent validator replay) => PASS 68/68 mismatches=0. Артефакты: output/p1a_validator_replay_hashes.json, output/p1a_validator_hash_compare.json, output/p1a_validator_ensemble_run.log. Golden baseline: output/p0_dayloop_golden_hashes.json (68 rows). Охват: version_date=2026-06-22 input_version_id=1; CH heli_pandas group_by 1=163 group_by 2=123; caps cap0 vid13000 cap7 vid13007; 34 fields/run (27 mp2 + 7 repairline); concurrent_runs=2 skip CH load; reference_shape threshold=9 ref_cap=60 days_total=4000 from flight_program_ac v9; repair_quota=18. Replay ensemble: final_steps={0:251,1:255} final_days={0:3650,1:3650} wall_s=3.387 ensemble_elapsed_s=3.157. Cross-check: validator replay vs coder output/p1a_dayloop_post_hashes.json mismatches=0.\nEvidence: Compare output/p1a_validator_hash_compare.json: golden_rows=68 replay_rows=68 missing=[] extra=[] mismatches=[]. Command: conda cuda13 + python3 output/p1a_validator_replay.py (inline B3b using spawn_cap_ensemble RunSpec/_run_ensemble/_validate_export_files, reference shape from flight_program_ac v9 via preload_mp4_by_day).",
+      "success_criteria": "numeric: sha256(golden mp2+repairline .bin exports for cap0/cap7) == sha256(independent replay), 68/68 rows, mismatches=0.",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=output/p1a_validator_hash_compare.json; output/p1a_validator_replay_hashes.json; output/p0_dayloop_golden_hashes.json; approval_ref=ctx_W_gpu_only_dayloop_2026-06-30_approval_request_beed7a38",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "ba584420888bf92926c3e4ddb1274c7d99e5dd0281906019b9818012941b9845",
+      "created_at": "2026-06-30T18:26:47Z",
+      "modules": [
+        "step_logic",
+        "export",
+        "validation"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 32000,
         "source": "manual"
       }
     }
