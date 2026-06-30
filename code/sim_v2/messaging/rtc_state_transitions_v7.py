@@ -125,7 +125,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_copy_exit_date_unsvc_v7, flamegpu::MessageNone, flam
 # Условие: exit_date достигнут (для repair)
 COND_REPAIR_EXIT = """
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_repair_exit) {
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     const unsigned int exit_date = FLAMEGPU->getVariable<unsigned int>("exit_date");
     return (current_day >= exit_date);
 }
@@ -137,7 +138,8 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_repair_exit) {
 RTC_REPAIR_TO_SVC = """
 FLAMEGPU_AGENT_FUNCTION(rtc_repair_to_svc_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     // Переход из ремонта: PPR = 0, limiter сбрасывается
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     
     // V8 simplified: фиксация линии ремонта для day0 repair
     const unsigned int candidate = FLAMEGPU->getVariable<unsigned int>("repair_candidate");
@@ -334,7 +336,8 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_demote_to_unsvc) {{
     if (ppr >= oh) return true;
 
     // current_day совпадает с day_offset, которым HF_InitEconomicsDailyCosts заполняет массивы.
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
 
     unsigned int repair_cost = 0u;
@@ -408,7 +411,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v7, flamegpu::MessageNone, flamegpu::
 # Функция: operations → unserviceable (экономический гейт демоута, 2→7)
 RTC_OPS_DEMOTE_TO_UNSVC = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_to_unsvc_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int repair_time = (group_by == 1u)
         ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
@@ -431,7 +435,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_to_unsvc_v7, flamegpu::MessageNone, flame
 # Функция: operations → storage (beyond-repair демоут, 2→6)
 RTC_OPS_DEMOTE_TO_STORAGE = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_to_storage_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_6", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
@@ -446,7 +451,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_to_storage_v7, flamegpu::MessageNone, fla
 # Функция: operations → serviceable (демоут, 2→3)
 RTC_OPS_DEMOTE = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_3", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_id", 3u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
@@ -478,7 +484,8 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_svc_promoted) {
 RTC_SVC_TO_OPS = DEVICE_FN_COMPUTE_LIMITER + """
 FLAMEGPU_AGENT_FUNCTION(rtc_svc_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
     // P1: PPR сохраняется
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     if (group_by == 1u) {
@@ -515,13 +522,14 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_unsvc_promoted) {
 # Функция: unserviceable → operations (P2, 7→2)
 RTC_UNSVC_TO_OPS = DEVICE_FN_COMPUTE_LIMITER + """
 FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
-    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    const unsigned int prev_day = current_day_mp[1];
     const unsigned int ppr_new = 0u;
     FLAMEGPU->setVariable<unsigned int>("ppr", ppr_new);  // P2: PPR обнуляется!
     FLAMEGPU->setVariable<unsigned int>("exit_date", 0u);  // Сброс exit_date
@@ -536,7 +544,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_to_ops_v7, flamegpu::MessageNone, flamegpu::Me
             ll,
             oh,
             idx,
-            FLAMEGPU->environment.getProperty<unsigned int>("current_day")
+            current_day
         )
     );
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага
@@ -567,14 +575,15 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_inactive_promoted) {
 RTC_INACTIVE_TO_OPS = DEVICE_FN_COMPUTE_LIMITER + f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_v7, flamegpu::MessageNone, flamegpu::MessageNone) {{
     // P3: PPR по правилам group_by
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
     const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
-    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    const unsigned int prev_day = current_day_mp[1];
     unsigned int ppr_after = ppr;
     
     // Mi-17: если PPR < br2_mi17, сохраняем; иначе обнуляем
@@ -599,7 +608,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_inactive_to_ops_v7, flamegpu::MessageNone, flamegpu:
             ll,
             oh,
             idx,
-            FLAMEGPU->environment.getProperty<unsigned int>("current_day")
+            current_day
         )
     );
     FLAMEGPU->setVariable<unsigned int>("promoted", 0u);  // Сброс флага

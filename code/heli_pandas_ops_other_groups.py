@@ -20,6 +20,10 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 sys.path.append(str(Path(__file__).resolve().parent / "utils"))
 from config_loader import get_clickhouse_client  # type: ignore
+from static_data_resolver import (  # type: ignore
+    latest_source_dataset_label,
+    resolve_latest_md_slice,
+)
 
 OPTIONAL_GROUPS = {32, 33, 34}
 ALLOW_EXTRA_GROUPS = {32, 33, 34, 35}
@@ -167,7 +171,7 @@ def fetch_group_counts(client, version: VersionInfo) -> Dict[int, Dict[int, int]
     return result
 
 
-def fetch_group_requirements(client, version: VersionInfo) -> Dict[int, Dict[str, int]]:
+def fetch_group_requirements(client, md_version: VersionInfo) -> Dict[int, Dict[str, int]]:
     rows = client.execute(
         """
         SELECT
@@ -180,7 +184,7 @@ def fetch_group_requirements(client, version: VersionInfo) -> Dict[int, Dict[str
           AND group_by > 2
         GROUP BY group_by
         """,
-        {"version_date": version.version_date, "version_id": version.version_id},
+        {"version_date": md_version.version_date, "version_id": md_version.version_id},
     )
     return {
         int(group_by): {
@@ -191,7 +195,7 @@ def fetch_group_requirements(client, version: VersionInfo) -> Dict[int, Dict[str
     }
 
 
-def fetch_requirement_details(client, version: VersionInfo) -> Dict[int, List[str]]:
+def fetch_requirement_details(client, md_version: VersionInfo) -> Dict[int, List[str]]:
     rows = client.execute(
         """
         SELECT
@@ -203,7 +207,7 @@ def fetch_requirement_details(client, version: VersionInfo) -> Dict[int, List[st
           AND version_id = %(version_id)s
           AND group_by > 2
         """,
-        {"version_date": version.version_date, "version_id": version.version_id},
+        {"version_date": md_version.version_date, "version_id": md_version.version_id},
     )
     details: Dict[int, List[str]] = {}
     for group_by, partno, comp_number in rows:
@@ -213,11 +217,15 @@ def fetch_requirement_details(client, version: VersionInfo) -> Dict[int, List[st
     return details
 
 
-def fetch_aggregations(client, version: VersionInfo) -> List[PlaneAggregation]:
+def fetch_aggregations(
+    client,
+    version: VersionInfo,
+    md_version: VersionInfo,
+) -> List[PlaneAggregation]:
     plane_meta = fetch_plane_meta(client, version)
     counts = fetch_group_counts(client, version)
-    requirements = fetch_group_requirements(client, version)
-    requirement_details = fetch_requirement_details(client, version)
+    requirements = fetch_group_requirements(client, md_version)
+    requirement_details = fetch_requirement_details(client, md_version)
 
     aggregations: List[PlaneAggregation] = []
     for aircraft_number, (ac_type_mask, mfg_date, partno) in plane_meta.items():
@@ -463,7 +471,11 @@ def split_by_type(rows: Sequence[PlaneAggregation]) -> Tuple[List[PlaneAggregati
     return mi8, mi17, mixed
 
 
-def build_markdown(version: VersionInfo, rows: Sequence[PlaneAggregation]) -> str:
+def build_markdown(
+    version: VersionInfo,
+    md_version: VersionInfo,
+    rows: Sequence[PlaneAggregation],
+) -> str:
     mi8, mi17, mixed = split_by_type(rows)
     sections = [
         "# Агрегаты других групп на планерах operations",
@@ -471,7 +483,9 @@ def build_markdown(version: VersionInfo, rows: Sequence[PlaneAggregation]) -> st
         "**Легенда:** `группа:установлено/норма(partno:qty)` — формат записи в колонке отклонений. "
         "Жирным выделены обязательные группы с дефицитом.",
         "",
-        f"- Версия данных: `{version.version_date} v{version.version_id}`",
+        f"- Версия heli_pandas: `{version.version_date} v{version.version_id}`",
+        f"- Нормы md_components: `{md_version.version_date} v{md_version.version_id}` "
+        f"(статика из `{latest_source_dataset_label()}`)",
         f"- Сгенерировано: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"- Планеров в эксплуатации: **{len(rows)}**",
         f"- Агрегатов (кроме планеров): **{sum(r.total_components for r in rows)}**",
@@ -568,10 +582,20 @@ def main() -> int:
     args = parse_args()
     client = get_clickhouse_client()
     version = resolve_version(client, args.version_date, args.version_id)
-    rows = fetch_aggregations(client, version)
+    md_slice = resolve_latest_md_slice(client)
+    md_version = VersionInfo(
+        version_date=md_slice.version_date,
+        version_id=md_slice.version_id,
+    )
+    rows = fetch_aggregations(client, version, md_version)
 
     print(
-        f"\n✅ Планеров в status_id=2: {len(rows)}; агрегатов других групп: "
+        f"\n✅ heli_pandas: {version.version_date} v{version.version_id}; "
+        f"md_components: {md_version.version_date} v{md_version.version_id} "
+        f"(статика: {latest_source_dataset_label()})"
+    )
+    print(
+        f"✅ Планеров в status_id=2: {len(rows)}; агрегатов других групп: "
         f"{sum(r.total_components for r in rows)}"
     )
     mi8, mi17, mixed = split_by_type(rows)
@@ -616,7 +640,7 @@ def main() -> int:
     if mixed:
         print_group("Смешанные/неизвестные", mixed)
 
-    markdown = build_markdown(version, rows)
+    markdown = build_markdown(version, md_version, rows)
 
     if not args.skip_md:
         md_path = (

@@ -58,7 +58,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     const unsigned char group_by = FLAMEGPU->getVariable<unsigned char>("group_by");
     if (group_by != 1u) return flamegpu::ALIVE;  // один QM для всех типов
     
-    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int day = current_day_mp[0];
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int target_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
     
@@ -347,7 +348,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_bucket_v8, flamegpu::MessageBucket, fl
         // N1: не помечаем кандидатом stale-агента (status_change_day > claim_start_day),
         // иначе он инфлирует commit_pos соседей. Используем ту же формулу claim_start_day,
         // что и commit (current_day - repair_time), для согласованности позиций.
-        const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+        auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+        const unsigned int current_day = current_day_mp[0];
         const unsigned int repair_time = (group_by == 1u)
             ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
             : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
@@ -372,7 +374,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_bucket_v8, flamegpu::MessageBucket,
     if (group_by != 1u && group_by != 2u) return flamegpu::ALIVE;
     if (repair_days != 0u) return flamegpu::ALIVE;
     
-    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int day = current_day_mp[0];
     const unsigned int rt = (group_by == 1u)
         ? FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const")
         : FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
@@ -457,7 +460,8 @@ RTC_COUNT_UNSVC_V8 = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_count_unsvc_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int day = current_day_mp[0];
     const unsigned int repair_days = FLAMEGPU->getVariable<unsigned int>("repair_days");
     const unsigned int repair_line_id = FLAMEGPU->getVariable<unsigned int>("repair_line_id");
     const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");
@@ -530,7 +534,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
     auto bank_count_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_ro_mp");
     auto bank_head_end_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_head_end_ro_mp");
     
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");
@@ -845,7 +850,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
     auto bank_count_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_count_ro_mp");
     auto bank_head_end_ro = FLAMEGPU->environment.getMacroProperty<unsigned int, {REPAIR_LINES_MAX}u>("repair_line_bank_head_end_ro_mp");
     
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     const unsigned int acn = FLAMEGPU->getVariable<unsigned int>("aircraft_number");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
     const unsigned int status_change_day = FLAMEGPU->getVariable<unsigned int>("status_change_day");

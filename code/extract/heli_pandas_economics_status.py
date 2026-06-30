@@ -15,16 +15,13 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 code_root = Path(__file__).resolve().parents[1]
-repo_root = code_root.parent
 sys.path.append(str(code_root / "utils"))
 sys.path.append(str(code_root))
 sys.path.append(str(code_root / "sim_v2" / "messaging"))
 
 from config_loader import get_clickhouse_client  # type: ignore
-from precompute_events import (  # type: ignore
-    ECONOMICS_SOURCE_PATH,
-    get_economics_costs_for_date,
-)
+from static_data_resolver import resolve_economics_workbook  # type: ignore
+from precompute_events import get_economics_costs_for_date  # type: ignore
 
 
 Candidate = Tuple[str, int, int, int, int, int]
@@ -183,7 +180,7 @@ def main() -> int:
     ensure_columns(client)
 
     version_date, version_id = resolve_version(client, args.version_date, args.version_id)
-    workbook_path = repo_root / ECONOMICS_SOURCE_PATH
+    workbook_path = resolve_economics_workbook()
     costs = get_economics_costs_for_date(version_date, workbook_path=workbook_path)
     candidates = fetch_candidates(client, version_date, version_id)
     demote, keep, oh_zero = classify_demotions(candidates, costs)

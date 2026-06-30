@@ -97,7 +97,8 @@ FLAMEGPU_DEVICE_FUNCTION unsigned short compute_limiter_inline(
     const unsigned int ll = FLAMEGPU->getVariable<unsigned int>("ll");
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     
     return compute_limiter_inline(FLAMEGPU, sne, ppr, ll, oh, idx, current_day);
 }

@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
 """
-Калькулятор repair_days/repair_time для ВС в ремонте
+Калькулятор repair_days/repair_time для агентов в ремонте (status_id=4).
 
-Логика:
-- Работает с ВС в статусе 4 (Ремонт) в таблице heli_pandas
-- Сначала заполняет repair_time стандартом из md_components по partseqno_i
-- Для day-0 активных ремонтов планеров group_by IN (1,2) берет активную строку
-  status_overhaul, совпадающую с target_date, и пишет фактическую длительность цикла
-- repair_days для таких планеров = прошедшие дни с act_start_date до version_date
+Day-0 per-board цикл (ориентир — target_date):
+- Планеры group_by IN (1,2): act_start из status_overhaul (sched_end_date = target_date).
+- Агрегаты group_by > 2: act_start = removal_date.
 
-Зависимости:
-- md_components (с заполненным repair_time)
-- heli_pandas (с установленным status_id=4)
-- status_overhaul (для дат ремонта)
-
-Автор: AI Assistant  
-Дата: 2025-07-26
+repair_time = target_date - act_start; repair_days = max(0, version_date - act_start).
 """
 
 import sys
@@ -411,8 +402,47 @@ class RepairDaysCalculator:
         return True
 
 
+EMPTY_DATE = date(1970, 1, 1)
+
+
 def _as_u32(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="raise").fillna(0).astype("int64")
+
+
+def _as_repair_date(value) -> date | None:
+    if pd.isna(value):
+        return None
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    normalized = parsed.date()
+    if normalized == EMPTY_DATE:
+        return None
+    return normalized
+
+
+def _repair_cycle_from_start(
+    start_date: date,
+    target_date: date,
+    version_date: date,
+    label: str,
+) -> tuple[int, int]:
+    if start_date > target_date:
+        raise ValueError(
+            f"{label}: start={start_date} позже target_date={target_date}"
+        )
+    if start_date > version_date:
+        raise ValueError(
+            f"{label}: start={start_date} позже version_date={version_date}"
+        )
+    repair_time = (target_date - start_date).days
+    repair_days = max(0, (version_date - start_date).days)
+    if repair_time < 0:
+        raise ValueError(
+            f"{label}: отрицательная длительность ремонта "
+            f"start={start_date}, target_date={target_date}"
+        )
+    return repair_time, repair_days
 
 
 def _load_standard_repair_time_map(client) -> dict[int, int]:
@@ -473,12 +503,32 @@ def _active_overhaul_cycle(client, serialno: str, target_date: date, version_dat
     return act_start_date, sched_end_date
 
 
+def _apply_row_repair_cycle(
+    updated: pd.DataFrame,
+    row: pd.Series,
+    repair_time: int,
+    repair_days: int,
+) -> None:
+    target_date = row["target_date"]
+    exact_mask = (
+        (updated["serialno"] == row["serialno"])
+        & (_as_u32(updated["partseqno_i"]) == int(row["partseqno_i"]))
+        & (_as_u32(updated["group_by"]) == int(row["group_by"]))
+        & (updated["target_date"] == target_date)
+        & (_as_u32(updated["status_id"]) == 4)
+    )
+    updated.loc[exact_mask, ["repair_days", "repair_time"]] = [repair_days, repair_time]
+
+
 def apply_repair_days(
     df: pd.DataFrame, client, version_date: date, version_id: int
 ) -> pd.DataFrame:
     """Заполняет repair_time и day-0 repair_days в DataFrame без ALTER UPDATE."""
     updated = df.copy()
-    required = {"partseqno_i", "status_id", "group_by", "serialno", "target_date", "repair_days", "repair_time"}
+    required = {
+        "partseqno_i", "status_id", "group_by", "serialno",
+        "target_date", "removal_date", "repair_days", "repair_time",
+    }
     missing = required - set(updated.columns)
     if missing:
         raise ValueError(f"heli_pandas DataFrame missing columns: {sorted(missing)}")
@@ -496,37 +546,72 @@ def apply_repair_days(
 
     status_id = _as_u32(updated["status_id"])
     group_by = _as_u32(updated["group_by"])
-    repair_aircraft = updated.loc[
-        (status_id == 4) & (group_by.isin([1, 2]))
-    ].sort_values("serialno")
-    print(f"✅ repair_days in-memory: repair planers={len(repair_aircraft)}")
+    in_repair = (status_id == 4)
 
-    for idx, row in repair_aircraft.iterrows():
+    repair_planers = updated.loc[in_repair & group_by.isin([1, 2])].sort_values("serialno")
+    repair_aggregates = updated.loc[in_repair & (group_by > 2)].sort_values("serialno")
+    print(
+        "✅ repair_days in-memory: "
+        f"planers={len(repair_planers)}, aggregates={len(repair_aggregates)}"
+    )
+
+    for _, row in repair_planers.iterrows():
         serialno = str(row["serialno"])
-        target_date = row["target_date"]
-        if pd.isna(target_date):
+        target_date = _as_repair_date(row["target_date"])
+        if target_date is None:
             raise ValueError(f"ВС {serialno}: отсутствует target_date для active repair")
         act_start_date, sched_end_date = _active_overhaul_cycle(
             client, serialno, target_date, version_date, version_id
         )
-        repair_time = (sched_end_date - act_start_date).days
-        repair_days = max(0, (version_date - act_start_date).days)
-        if repair_time < 0:
-            raise ValueError(
-                f"ВС {serialno}: отрицательная длительность ремонта "
-                f"act_start={act_start_date}, target_date={sched_end_date}"
-            )
-        exact_mask = (
-            (updated["serialno"] == row["serialno"])
-            & (_as_u32(updated["partseqno_i"]) == int(row["partseqno_i"]))
-            & (_as_u32(updated["group_by"]) == int(row["group_by"]))
-            & (updated["target_date"] == target_date)
-            & (_as_u32(updated["status_id"]) == 4)
+        repair_time, repair_days = _repair_cycle_from_start(
+            act_start_date, sched_end_date, version_date, f"ВС {serialno}"
         )
-        updated.loc[exact_mask, ["repair_days", "repair_time"]] = [repair_days, repair_time]
+        _apply_row_repair_cycle(updated, row, repair_time, repair_days)
         print(
-            f"   ✅ ВС {serialno}: repair_days={repair_days}, repair_time={repair_time}"
+            f"   ✅ планер {serialno}: repair_days={repair_days}, repair_time={repair_time}"
         )
+
+    for _, row in repair_aggregates.iterrows():
+        serialno = str(row["serialno"])
+        group = int(row["group_by"])
+        target_date = _as_repair_date(row["target_date"])
+        removal_date = _as_repair_date(row["removal_date"])
+        if target_date is None:
+            raise ValueError(
+                f"Агрегат {serialno} (group_by={group}): отсутствует target_date для active repair"
+            )
+        if removal_date is None:
+            raise ValueError(
+                f"Агрегат {serialno} (group_by={group}): отсутствует removal_date для active repair"
+            )
+        repair_time, repair_days = _repair_cycle_from_start(
+            removal_date, target_date, version_date,
+            f"Агрегат {serialno} group_by={group}",
+        )
+        _apply_row_repair_cycle(updated, row, repair_time, repair_days)
+
+    if len(repair_aggregates):
+        sample = repair_aggregates.head(3)
+        for _, row in sample.iterrows():
+            gb = int(row["group_by"])
+            rt = updated.loc[
+                (updated["serialno"] == row["serialno"])
+                & (_as_u32(updated["group_by"]) == gb)
+                & (_as_u32(updated["status_id"]) == 4),
+                "repair_time",
+            ].iloc[0]
+            rd = updated.loc[
+                (updated["serialno"] == row["serialno"])
+                & (_as_u32(updated["group_by"]) == gb)
+                & (_as_u32(updated["status_id"]) == 4),
+                "repair_days",
+            ].iloc[0]
+            print(
+                f"   ✅ агрегат {row['serialno']} gb={gb}: "
+                f"repair_days={int(rd)}, repair_time={int(rt)}"
+            )
+        if len(repair_aggregates) > 3:
+            print(f"   … и ещё {len(repair_aggregates) - 3} агрегатов")
 
     return updated
 

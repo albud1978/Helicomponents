@@ -41,8 +41,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_increment_v8, flamegpu::MessageNone, flamegpu::M
     // V8: Инкремент SNE/PPR + сохранение dt_next для проверки ресурсов
     
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
+    const unsigned int prev_day = current_day_mp[1];
     const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     
@@ -103,8 +104,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_increment_v8, flamegpu::MessageNone, flamegpu::M
 
 RTC_UNSVC_DECREMENT_V8 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_unsvc_decrement_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
+    const unsigned int prev_day = current_day_mp[1];
     const unsigned int adaptive_days = (current_day > prev_day) ? (current_day - prev_day) : 0u;
     if (adaptive_days == 0u) return flamegpu::ALIVE;
     
@@ -136,7 +138,8 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage_v8) {
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     
@@ -169,7 +172,8 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
     const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
     const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
     const unsigned int frames = FLAMEGPU->environment.getProperty<unsigned int>("frames_total");
     
@@ -205,7 +209,8 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_unsvc_v8) {
 RTC_OPS_TO_STORAGE_V8 = """
 FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_storage_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
     // V8: Переход в storage при строгом превышении ресурса следующим днём
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_6", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
@@ -223,7 +228,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_to_unsvc_v8, flamegpu::MessageNone, flamegpu::Me
     // V8: Переход в unserviceable при строгом превышении OH следующим днём
     // exit_date НЕ используется в V8 (квотирование через RepairLine)
     
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
     FLAMEGPU->setVariable<unsigned int>("transition_2_to_7", 1u);
     FLAMEGPU->setVariable<unsigned int>("status_id", 7u);
     FLAMEGPU->setVariable<unsigned short>("limiter", 0u);

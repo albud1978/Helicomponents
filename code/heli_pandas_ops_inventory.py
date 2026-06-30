@@ -20,6 +20,10 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parent / "utils"))
 from config_loader import get_clickhouse_client  # type: ignore
+from static_data_resolver import (  # type: ignore
+    latest_source_dataset_label,
+    resolve_latest_md_slice,
+)
 
 
 @dataclass(frozen=True)
@@ -73,7 +77,11 @@ def resolve_version(
     return VersionInfo(version_date=latest_date, version_id=int(latest_id))
 
 
-def fetch_inventory_rows(client, version: VersionInfo) -> List[InventoryRow]:
+def fetch_inventory_rows(
+    client,
+    version: VersionInfo,
+    md_version: VersionInfo,
+) -> List[InventoryRow]:
     query = """
         WITH requirements AS (
             SELECT
@@ -81,8 +89,8 @@ def fetch_inventory_rows(client, version: VersionInfo) -> List[InventoryRow]:
                 max(comp_number) AS required_count,
                 any(group_by) AS group_by
             FROM md_components
-            WHERE version_date = %(version_date)s
-              AND version_id = %(version_id)s
+            WHERE version_date = %(md_version_date)s
+              AND version_id = %(md_version_id)s
             GROUP BY partseqno_i
         )
         SELECT
@@ -109,7 +117,12 @@ def fetch_inventory_rows(client, version: VersionInfo) -> List[InventoryRow]:
     """
     rows = client.execute(
         query,
-        {"version_date": version.version_date, "version_id": version.version_id},
+        {
+            "version_date": version.version_date,
+            "version_id": version.version_id,
+            "md_version_date": md_version.version_date,
+            "md_version_id": md_version.version_id,
+        },
     )
     result: List[InventoryRow] = []
     for (
@@ -209,6 +222,7 @@ def format_details_table(
 
 def build_markdown(
     version: VersionInfo,
+    md_version: VersionInfo,
     summary: Sequence[Dict[str, object]],
     rows: Sequence[InventoryRow],
     detail_limit: Optional[int],
@@ -217,7 +231,9 @@ def build_markdown(
     lines = [
         "# Инвентаризация агрегатов (status_id=2)",
         "",
-        f"- Версия данных: `{version.version_date} v{version.version_id}`",
+        f"- Версия heli_pandas: `{version.version_date} v{version.version_id}`",
+        f"- Нормы md_components: `{md_version.version_date} v{md_version.version_id}` "
+        f"(статика из `{latest_source_dataset_label()}`)",
         f"- Сгенерировано: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"- Планеров в эксплуатации: **{len(summary)}**",
         f"- Всего агрегатов на бортах: **{total_components}**",
@@ -293,18 +309,27 @@ def main() -> int:
     args = parse_args()
     client = get_clickhouse_client()
     version = resolve_version(client, args.version_date, args.version_id)
-    rows = fetch_inventory_rows(client, version)
+    md_slice = resolve_latest_md_slice(client)
+    md_version = VersionInfo(
+        version_date=md_slice.version_date,
+        version_id=md_slice.version_id,
+    )
+    rows = fetch_inventory_rows(client, version, md_version)
     summary = build_summary(rows)
 
     print(
-        f"\n✅ Инвентаризация для версии {version.version_date} v{version.version_id}: "
-        f"{len(summary)} планеров, {len(rows)} строк детализации."
+        f"\n✅ heli_pandas: {version.version_date} v{version.version_id}; "
+        f"md_components: {md_version.version_date} v{md_version.version_id} "
+        f"(статика: {latest_source_dataset_label()})"
+    )
+    print(
+        f"✅ {len(summary)} планеров, {len(rows)} строк детализации."
     )
     print(format_summary_table(summary))
     print(format_details_table(rows, args.detail_limit))
 
     if not args.skip_md:
-        md_content = build_markdown(version, summary, rows, args.detail_limit)
+        md_content = build_markdown(version, md_version, summary, rows, args.detail_limit)
         default_path = Path(
             f"output/heli_pandas_ops_inventory_{version.version_date}.md"
         )

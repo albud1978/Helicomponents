@@ -44,8 +44,9 @@ def setup_rl_export_buffers(env):
 
 RTC_REPAIR_LINE_INCREMENT = f"""
 FLAMEGPU_AGENT_FUNCTION(rtc_repair_line_increment_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
-    const unsigned int current_day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
-    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int current_day = current_day_mp[0];
+    const unsigned int prev_day = current_day_mp[1];
     const unsigned int adaptive_days = (current_day > prev_day) ? (current_day - prev_day) : 0u;
     
     const unsigned int line_id = FLAMEGPU->getVariable<unsigned int>("line_id");

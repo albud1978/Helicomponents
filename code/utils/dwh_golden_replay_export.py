@@ -25,6 +25,13 @@ def _as_of_start(report_date: str) -> str:
     return f"toDateTime('{report_date} 00:00:00')"
 
 
+def _allowed_owners_sql_in() -> str:
+    """Whitelist owner для program_ac / status_overhaul — как в dual_loader.prepare_data()."""
+    from extract.dual_loader import ALLOWED_OWNERS
+
+    return ", ".join(f"'{owner}'" for owner in sorted(ALLOWED_OWNERS))
+
+
 def default_out_subdir(report_date: str, *, prefix: str = "dwh_replay") -> str:
     """Каталог под output/, например dwh_replay_v2026-04-08."""
     return f"{prefix}_v{report_date}"
@@ -210,6 +217,7 @@ LEFT JOIN snapshot_spec sp
   AND upperUTF8(replaceAll(trim(BOTH ' ' FROM coalesce(sp.special, '')), ' ', '')) = 'ДИРЕКЦ'
 WHERE a.ac_typ IN ('МИ8', 'МИ8АМТ', 'МИ8МТВ')
   AND a.manual_owner = 'ЮТ-ВУ'
+  AND coalesce(a.owner, '') IN ({_allowed_owners_sql_in()})
 {status_filter}{regs_filter}  AND a.non_managed = 'N'
 ORDER BY ac_registr
 """
@@ -258,6 +266,7 @@ WHERE (
 AND wp.start_date > 18993
 AND (wp.act_start_date > 18993 OR wp.act_start_date IS NULL)
 AND a.manual_owner = 'ЮТ-ВУ'
+AND coalesce(a.owner, '') IN ({_allowed_owners_sql_in()})
 AND wp.ac_typ IN ('МИ8', 'МИ8АМТ', 'МИ8МТВ')
 ORDER BY ac_registr, wpno
 """

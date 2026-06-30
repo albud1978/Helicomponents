@@ -140,10 +140,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v7, flamegpu::MessageNone, flamegp
 
 RTC_SPAWN_DYNAMIC_TICKET_V8 = Template(DEVICE_FN_COMPUTE_LIMITER + """
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int day = current_day_mp[0];
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    const unsigned int prev_day = current_day_mp[1];
     const unsigned int ticket = FLAMEGPU->getVariable<unsigned int>("ticket");
     
     // Читаем параметры
@@ -222,7 +223,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8, flamegpu::MessageNone, flam
             ll,
             oh,
             new_idx,
-            FLAMEGPU->environment.getProperty<unsigned int>("current_day")
+            day
         )
     );
     
@@ -232,7 +233,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8, flamegpu::MessageNone, flam
 
 RTC_SPAWN_DYNAMIC_MGR_V8 = Template("""
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int day = current_day_mp[0];
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int target_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
     const unsigned int write_day = target_day;
@@ -339,10 +341,11 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_mgr_v8, flamegpu::MessageNone, flamegp
 
 RTC_SPAWN_DYNAMIC_TICKET_V8_MI8 = Template(DEVICE_FN_COMPUTE_LIMITER + """
 FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8_mi8, flamegpu::MessageNone, flamegpu::MessageNone) {
-    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int day = current_day_mp[0];
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int safe_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
-    const unsigned int prev_day = FLAMEGPU->environment.getProperty<unsigned int>("prev_day");
+    const unsigned int prev_day = current_day_mp[1];
     const unsigned int ticket = FLAMEGPU->getVariable<unsigned int>("ticket");
     
     // Читаем параметры
@@ -416,7 +419,7 @@ FLAMEGPU_AGENT_FUNCTION(rtc_spawn_dynamic_ticket_v8_mi8, flamegpu::MessageNone, 
             ll,
             oh,
             new_idx,
-            FLAMEGPU->environment.getProperty<unsigned int>("current_day")
+            day
         )
     );
     

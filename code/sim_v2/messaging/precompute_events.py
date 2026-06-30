@@ -14,13 +14,25 @@ from typing import Dict, List, Tuple, Optional
 from openpyxl import load_workbook
 
 
-ECONOMICS_SOURCE_PATH = Path("data_input/master_data/Economics.xlsx")
 ECONOMICS_COST_COLUMNS = (
     "repair_cost_mi8",
     "repair_cost_mi17",
     "ferry_cost_mi8",
     "ferry_cost_mi17",
 )
+
+
+def _economics_workbook_path(workbook_path: Optional[Path] = None) -> Path:
+    if workbook_path is not None:
+        return workbook_path
+    import sys
+
+    utils_path = Path(__file__).resolve().parents[2] / "utils"
+    if str(utils_path) not in sys.path:
+        sys.path.insert(0, str(utils_path))
+    from static_data_resolver import resolve_economics_workbook
+
+    return resolve_economics_workbook()
 
 
 def find_program_change_days(mp4_mi8: List[int], mp4_mi17: List[int]) -> List[Tuple[int, int, int]]:
@@ -137,9 +149,9 @@ def _load_economics_rows(workbook_path: Path) -> List[Tuple[date, Dict[str, int]
 
 def get_economics_costs_for_date(
     report_date: date,
-    workbook_path: Path = ECONOMICS_SOURCE_PATH,
+    workbook_path: Optional[Path] = None,
 ) -> Dict[str, int]:
-    rows = _load_economics_rows(workbook_path)
+    rows = _load_economics_rows(_economics_workbook_path(workbook_path))
     current = None
     for effective_date, costs in rows:
         if effective_date > report_date:
@@ -156,13 +168,13 @@ def get_economics_costs_for_date(
 def compute_economics_daily_costs(
     report_date: date,
     max_days: int,
-    workbook_path: Path = ECONOMICS_SOURCE_PATH,
+    workbook_path: Optional[Path] = None,
 ) -> Dict[str, np.ndarray]:
     """Разворачивает годовые стоимости в UInt32 массивы day-indexed от report_date."""
     if max_days < 0:
         raise ValueError(f"max_days must be non-negative, got {max_days}")
 
-    rows = _load_economics_rows(workbook_path)
+    rows = _load_economics_rows(_economics_workbook_path(workbook_path))
     arrays = {
         column: np.zeros(max_days + 1, dtype=np.uint32)
         for column in ECONOMICS_COST_COLUMNS

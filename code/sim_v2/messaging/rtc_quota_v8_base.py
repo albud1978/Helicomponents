@@ -179,7 +179,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_demote_ops_v8, flamegpu::MessageNone, flamegpu::Mess
     // Демоут: если в operations избыток, отмечаем агентов для выхода
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int day = current_day_mp[0];
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
     unsigned int step_days = mp_result[0];
@@ -255,7 +256,8 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_svc_v8, flamegpu::MessageNone, flamegpu::Mes
     // P1: serviceable → operations (если дефицит)
     const unsigned int idx = FLAMEGPU->getVariable<unsigned int>("idx");
     const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-    const unsigned int day = FLAMEGPU->environment.getProperty<unsigned int>("current_day");
+    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    const unsigned int day = current_day_mp[0];
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
     unsigned int step_days = mp_result[0];
