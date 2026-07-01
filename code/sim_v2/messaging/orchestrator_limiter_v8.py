@@ -55,6 +55,7 @@ import pyflamegpu as fg
 import model_build
 
 import rtc_spawn_dynamic_v7
+import rtc_spawn_det_v8
 
 
 def _prepare_uint32_macro_property_import(values, label: str, expected_len: int | None = None):
@@ -717,7 +718,6 @@ class LimiterV8Orchestrator:
         self.base_model.env.newPropertyUInt("v8_inited", 0)
         self.base_model.env.newPropertyUInt("ensemble_mode", 0)
         self.base_model.env.newPropertyUInt("ensemble_pop_inited", 0)
-        self.base_model.env.newPropertyUInt("det_spawn_total_spawned", 0)
         self.base_model.env.newMacroPropertyUInt("det_spawn_done_days", model_build.MAX_DAYS)
         spawn_limit_cumulative = list(self.env_data.get('spawn_limit_cumulative', []))
         if not spawn_limit_cumulative:
@@ -793,33 +793,26 @@ class LimiterV8Orchestrator:
         # Pre-status snapshot (перед любыми переходами)
         rtc_state_transitions_v8.register_save_pre_status(self.model, heli_agent)
         
-        # Детерминированный spawn (HostFunction, mid-simulation)
+        # Детерминированный spawn (device-birth, mgr+ticket — шаг P2)
+        # Расписание берётся из seed по возрастанию дня (как host enumerate);
+        # схема idx/acn сохранена: [first_reserved_idx, +det_spawn) и [100000, +det_spawn).
         spawn_seed = self.env_data.get('mp4_new_counter_mi17_seed', [])
         spawn_schedule = [
             (day_idx, count)
             for day_idx, count in enumerate(spawn_seed)
             if count > 0
         ]
+        self._det_spawn_data = None
         if spawn_schedule:
             det_spawn = getattr(self, '_deterministic_spawn_count', 0)
-            env_consts = {
-                'll': int(self.env_data.get('mi17_ll_const', 270000)),
-                'oh': int(self.env_data.get('mi17_oh_const', 270000)),
-                'br': int(self.env_data.get('mi17_br_const', 210000)),
-                'repair_time': mi17_rt,
-                'assembly_time': int(self.env_data.get('mi17_assembly_time_const', 30)),
-                'partout_time': int(self.env_data.get('mi17_partout_time_const', 20)),
-                'second_ll_sentinel': int(self.env_data.get('second_ll_sentinel', 0xFFFFFFFF)),
-            }
             base_idx = int(self.env_data.get('first_reserved_idx', self.frames))
             if base_idx < 0:
                 base_idx = self.frames
-            self._hf_det_spawn = HF_DeterministicSpawn(
-                spawn_schedule, base_idx, 100000, env_consts
+            self._det_spawn_data = rtc_spawn_det_v8.register_det_spawn_v8(
+                self.model, heli_agent, self.base_model.env,
+                det_spawn_count=det_spawn, first_idx=base_idx, base_acn=100000
             )
-            layer_det_spawn = self.model.newLayer("layer_det_spawn")
-            layer_det_spawn.addHostFunction(self._hf_det_spawn)
-            print(f"  ✅ Детерм. spawn: {det_spawn} агентов, schedule={spawn_schedule}")
+            print(f"  ✅ Детерм. spawn (device): {det_spawn} агентов, schedule={spawn_schedule}")
         
         # ═══════════════════════════════════════════════════════════════
         # V8: RepairAgent ОТКЛЮЧЁН — используем V8 квотирование через RepairLine
@@ -1253,7 +1246,7 @@ class LimiterV8Orchestrator:
             inactive_pop[i].setVariableUInt("repair_days", 0)
         self.simulation.setPopulationData(inactive_pop, "inactive")
         
-        # Детерминированный spawn реализован через HF_DeterministicSpawn (mid-simulation)
+        # Детерминированный spawn реализован device-birth (DetSpawnMgr+DetSpawnTicket, P2)
         spawn_count = getattr(self, '_deterministic_spawn_count', 0)
         
         # V8: Добавляем repair_exits в deterministic_dates
@@ -1282,6 +1275,14 @@ class LimiterV8Orchestrator:
         # V8: RepairAgent ОТКЛЮЧЁН — не инициализируем популяцию
         # count_repair = self._count_agents_in_state("repair")
         
+        # Детерминированный спавн (device: менеджер + тикеты)
+        if getattr(self, '_det_spawn_data', None):
+            rtc_spawn_det_v8.init_det_spawn_population_v8(
+                self.simulation,
+                self.model,
+                self._det_spawn_data['det_spawn_count'],
+            )
+
         # Динамический спавн (менеджер + тикеты)
         if hasattr(self, 'spawn_data') and self.spawn_data:
             rtc_spawn_dynamic_v7.init_spawn_dynamic_population_v8(
@@ -1667,139 +1668,6 @@ class LimiterV8Orchestrator:
                 fields['mp2_assembly_trigger'][s, a] = 1 if remaining_repair < assembly_time else 0
         
         return modified
-
-
-class HF_DeterministicSpawn(fg.HostFunction):
-    """
-    HostFunction: детерминированный spawn агентов в serviceable.
-    Создаёт агентов mid-simulation когда current_day >= spawn_day.
-    pre_status_id = 0 (маркер spawn) сохраняется корректно.
-    """
-    
-    def __init__(self, spawn_schedule, base_idx, base_acn, env_consts):
-        """
-        Args:
-            spawn_schedule: list of (day, count) — расписание spawn
-            base_idx: стартовый idx для det spawn агентов
-            base_acn: стартовый aircraft_number (100000)
-            env_consts: dict с ll, oh, br, repair_time, assembly_time, partout_time, second_ll_sentinel
-        """
-        super().__init__()
-        self.spawn_schedule = list(spawn_schedule or [])
-        self.base_idx = int(base_idx)
-        self.base_acn = int(base_acn)
-        self.env_consts = env_consts or {}
-    
-    def run(self, FLAMEGPU):
-        if not self.spawn_schedule:
-            return
-        
-        env = FLAMEGPU.environment
-        current_day_mp = env.getMacroPropertyUInt("current_day_mp")
-        current_day = int(current_day_mp[0])
-        done_days = env.getMacroPropertyUInt("det_spawn_done_days")
-        total_spawned = int(env.getPropertyUInt("det_spawn_total_spawned"))
-        svc_api = None
-        
-        for spawn_day, count in self.spawn_schedule:
-            spawn_day_i = int(spawn_day)
-            if spawn_day_i < 0 or spawn_day_i >= len(done_days):
-                raise RuntimeError(f"deterministic spawn_day out of range: {spawn_day_i}")
-            if int(done_days[spawn_day_i]) != 0:
-                continue
-            if current_day < spawn_day_i:
-                continue
-            
-            done_days[spawn_day_i] = 1
-            count_i = int(count)
-            if count_i <= 0:
-                continue
-            
-            if svc_api is None:
-                svc_api = FLAMEGPU.agent("HELI", "serviceable")
-            
-            start_acn = self.base_acn + total_spawned
-            for _ in range(count_i):
-                idx = self.base_idx + total_spawned
-                acn = self.base_acn + total_spawned
-                
-                agent = svc_api.newAgent()
-                agent.setVariableUInt("idx", idx)
-                agent.setVariableUInt("aircraft_number", acn)
-                agent.setVariableUInt("partseqno_i", 0)
-                agent.setVariableUInt("group_by", 2)  # Mi-17
-                agent.setVariableUInt("status_id", 3)
-                agent.setVariableUInt("pre_status_id", 0)  # spawn marker
-                agent.setVariableUInt("intent_state", 3)
-                agent.setVariableUInt("prev_intent", 0)
-                agent.setVariableUInt("bi_counter", 1)
-                
-                agent.setVariableUInt("transition_0_to_2", 0)
-                agent.setVariableUInt("transition_2_to_3", 0)
-                agent.setVariableUInt("transition_2_to_6", 0)
-                agent.setVariableUInt("transition_2_to_7", 0)
-                agent.setVariableUInt("transition_3_to_2", 0)
-                agent.setVariableUInt("transition_7_to_2", 0)
-                agent.setVariableUInt("transition_1_to_2", 0)
-                agent.setVariableUInt("transition_4_to_3", 0)
-                
-                agent.setVariableUInt("exit_date", 0)
-                agent.setVariableUInt("sne", 0)
-                agent.setVariableUInt("ppr", 0)
-                agent.setVariableUInt("cso", 0)
-                agent.setVariableUInt("daily_today_u32", 0)
-                agent.setVariableUInt("daily_next_u32", 0)
-                
-                agent.setVariableUInt("ll", int(self.env_consts.get('ll', 0)))
-                agent.setVariableUInt(
-                    "second_ll", int(self.env_consts.get('second_ll_sentinel', 0xFFFFFFFF))
-                )
-                agent.setVariableUInt("oh", int(self.env_consts.get('oh', 0)))
-                agent.setVariableUInt("br", int(self.env_consts.get('br', 0)))
-                
-                agent.setVariableUInt("repair_time", int(self.env_consts.get('repair_time', 0)))
-                agent.setVariableUInt("assembly_time", int(self.env_consts.get('assembly_time', 0)))
-                agent.setVariableUInt("partout_time", int(self.env_consts.get('partout_time', 0)))
-                agent.setVariableUInt("repair_days", 0)
-                agent.setVariableUInt("assembly_trigger", 0)
-                agent.setVariableUInt("active_trigger", 0)
-                agent.setVariableUInt("partout_trigger", 0)
-                
-                agent.setVariableUInt("mfg_date", current_day)
-                agent.setVariableUInt("s4_days", 0)
-                
-                agent.setVariableUInt("limiter_date", 0xFFFFFFFF)
-                agent.setVariableUInt16("limiter", 0)
-                agent.setVariableUInt("computed_adaptive_days", 1)
-                
-                agent.setVariableUInt("status_change_day", current_day)
-                agent.setVariableUInt("repair_candidate", 0)
-                agent.setVariableUInt("repair_line_id", 0xFFFFFFFF)
-                agent.setVariableUInt("repair_line_day", 0xFFFFFFFF)
-                
-                agent.setVariableUInt("promoted", 0)
-                agent.setVariableUInt("needs_demote", 0)
-                agent.setVariableUInt("commit_p1", 0)
-                agent.setVariableUInt("commit_p2", 0)
-                agent.setVariableUInt("commit_p3", 0)
-                agent.setVariableUInt("decision_p2", 0)
-                agent.setVariableUInt("decision_p3", 0)
-                
-                agent.setVariableUInt("debug_promoted", 0)
-                agent.setVariableUInt("debug_needs_demote", 0)
-                agent.setVariableUInt("debug_repair_candidate", 0)
-                agent.setVariableUInt("debug_repair_line_id", 0xFFFFFFFF)
-                agent.setVariableUInt("debug_repair_line_day", 0xFFFFFFFF)
-                agent.setVariableUInt("debug_bucket_seen", 0)
-                
-                total_spawned += 1
-            
-            env.setPropertyUInt("det_spawn_total_spawned", total_spawned)
-            end_acn = self.base_acn + total_spawned - 1
-            print(
-                f"   📦 Det spawn: {count_i} агентов в serviceable "
-                f"(day={current_day}, acn={start_acn}..{end_acn})"
-            )
 
 
 class HF_InitMP5Cumsum(fg.HostFunction):
