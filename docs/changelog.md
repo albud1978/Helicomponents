@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-07-01 — GPU-only day-loop (P0/P1a/P1b/P2) + диагностика cr-scaling
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_gpu_only_dayloop_2026-06-30` | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** цель workflow — убрать все устранимые per-step Python host-callback'ы из симуляционного day-loop (P0→P1→P2), сохранив bit-identical результат на реальных CH-данных. После завершения миграций — nsys-диагностика предела `concurrent_runs`-scaling (OFF-сборка, `cuda13_nosb`).
+
+**Действие (фазы, bit-identical на каждом шаге):**
+- **P0** (`e6e92ac4`): 6 init-HostFunction перенесены из per-step цикла в `addInitFunction`.
+- **P1a** (`7e33ce4b`): 39 device-чтений `env` `current_day`/`prev_day` → MacroProperty `current_day_mp`.
+- **P1b** (`30b5faf3`): StepController перенесён на device RTC (prepare/commit на QuotaManager).
+- **P2** (`b16a50c8`): детерминированный spawn перенесён с host (`HF_DeterministicSpawn`) на device RTC — новый `rtc_spawn_det_v8.py`, паттерн manager+ticket, рождение в serviceable. Убран последний устранимый per-step host-callback; остался только тривиальный exit-condition `HostCondition` (RTC-эквивалента нет). Убран осиротевший env-скаляр `det_spawn_total_spawned`.
+- **Диагностика** (`38dd1873`): nsys OFF-сборка, cr=8 vs cr=62 — предел масштабирования `concurrent_runs` = контенция host-локов CUDA-драйвера (`cudaMalloc` ×16.5, `pthread_rwlock_wrlock` ×20 при том же числе вызовов), **не** сериализация kernel-launch и **не** per-step host-callback'и.
+
+**Корректность (bit-identical PASS):** P0/P1a/P1b — hash-compare PASS (validator-judge per phase). P2 на реальных CH-данных (`version_date=2026-06-22`, `input_version_id=1`, 28 det-spawn рождений Mi-17): host(7801)==device(7802) **74320** строк, SHA256 `05873ff0…` совпал, EXCEPT=0; det-spawn idx 286–313 / acn 100000–100027 идентичны; `sim_repairline_v9` EXCEPT=0.
+
+**Perf / scaling:** P1b и P2 **не улучшили** cr-scaling (ожидаемо). OFF-сборка: practical optimum **cr=8** (~17.3с GPU-only); рост до cr=62 не ускоряет — контенция аллокатора драйвера. SEATBELTS OFF даёт ~**3.6–4×** по абсолюту отдельно от day-loop рефактора (см. `W_seatbelts_off_rebuild_2026-06-29`).
+
+**Review/validation/governance:** reviewer-flame P2 `approve_with_notes` (7/7 инвариантов bit-identity); validator-judge PASS per phase (`handoff_W_gpu_only_dayloop_2026-06-30_validator-judge_*`); human approval `ctx_W_gpu_only_dayloop_2026-06-30_approval_request_beed7a38`.
+
+**Итог:** GPU-only рефактор **завершён** ради архитектурной чистоты; perf `concurrent_runs` **не улучшился** — стена в аллокаторе драйвера; practical optimum **cr=8**.
+
+**Файлы:** `code/sim_v2/messaging/orchestrator_limiter_v8.py`, `rtc_spawn_det_v8.py` (новый), RTC-модули P1a/P1b; артефакты `output/p*_dayloop_*`, `output/g3_cr_scaling_high_off_*`, `output/nsys_blackwell_verdict_20260630.md`.
+
+**Коммиты:** `e6e92ac4` (P0), `7e33ce4b` (P1a), `30b5faf3` (P1b), `b16a50c8` (P2), `38dd1873` (диагностика).
+
+---
+
 ## 2026-06-30 — Ingestion Шаг 4: materializer DROP PARTITION cleanup
 
 **Risk:** medium | **Profile:** medium-policy | **Workflow:** `W_mat_clear_partitions_2026-06-30`

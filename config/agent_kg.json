@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-01T01:56:08Z",
+    "updated_at": "2026-07-01T02:57:38Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -3668,8 +3668,8 @@
       "workflow_id": "W_gpu_only_dayloop_2026-06-30",
       "goal": "GPU-only day-loop: убрать все per-step Python host-callback'ы из симуляционного цикла (P0->P1->P2), сохранив bit-identical результат",
       "phase": "analysis",
-      "owner": "reviewer-flame",
-      "status": "active",
+      "owner": "human",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -3677,13 +3677,34 @@
         "profile": "high-strict"
       },
       "usage": {
-        "cumulative_steps": 8,
-        "cumulative_tokens": 306000,
+        "cumulative_steps": 12,
+        "cumulative_tokens": 455000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-30T18:50:14Z"
+        "last_updated": "2026-07-01T02:57:14Z"
       },
       "created_at": "2026-06-30T17:01:43Z",
-      "updated_at": "2026-06-30T18:50:14Z"
+      "updated_at": "2026-07-01T02:57:38Z"
+    },
+    {
+      "workflow_id": "W_session_20260701T022440Z",
+      "goal": "[NEEDS_TRIAGE] implicit session workflow (auto-bootstrap on edit of code/sim_v2/messaging/rtc_spawn_det_v8.py)",
+      "phase": "triage",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-01T02:24:40Z"
+      },
+      "created_at": "2026-07-01T02:24:40Z",
+      "updated_at": "2026-07-01T02:24:40Z"
     }
   ],
   "handoffs": [
@@ -26798,6 +26819,170 @@
         "est_tokens": 65000,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_W_gpu_only_dayloop_2026-06-30_validator-judge_038e8177",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "agent": "validator-judge",
+      "user_goal": "доказать bit-identical эквивалентность host-vs-device детерминированного spawn (шаг P2) на РЕАЛЬНЫХ данных ClickHouse",
+      "changes": "Validation only: ran host baseline (stash pop restore) and device P2 simulations; SQL comparison in ClickHouse",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: PASS. Input: version_date=2026-06-22 input_version_id=1 (det-spawn total=28, 4 spawn days). CH 24.10.1.2812 @ 10.95.19.132:9000. Host cmd: orchestrator HEAD stash+run --version-date 2026-06-22 --input-version-id 1 --version-id 7801 --end-day 3650. Device cmd: P2 orchestrator same params --version-id 7802. Rows: host=74320 device=74320. EXCEPT(all content cols)=0. Row-level cityHash64 mismatches=0. cityHash64(sorted)=13141361452916884614 both. SHA256(sorted CH dump)=05873ff046fa86f8e383492c94fdd48480f3b3e622788b791cf545bdb7ef39a5 both. Det-spawn births: 28 each, idx=286..313, acn=100000..100027, days=207/572/938/1303, status_id=3 pre_status=0 — identical host vs device. sim_repairline_v9 EXCEPT=0. Note: orchestrator inline master_rows_sha256 differed pre-insert (cd72fb3a vs 61d61375) due to columnar build iteration order; stored CH data bit-identical. Git: stash pop OK, orchestrator P2 (register_det_spawn_v8 present, HF_DeterministicSpawn absent), rtc_spawn_det_v8.py untracked.\nEvidence: SQL det-spawn active: SELECT sum(new_counter_mi17) FROM flight_program_ac WHERE version_date=2026-06-22 AND version_id=1 => 28; vid=3 => 0. Logs: /tmp/host_baseline_7801.log /tmp/device_p2_7802.log. Both runs: spawn=28, ops=target PASS.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_gpu_only_dayloop_2026-06-30:2026-07-01T07:30:00Z",
+      "plan_step_id": "P2.validate",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "code/sim_v2/** P2 device spawn migration; bit-identical gate on real CH data",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "no",
+      "plan_card": "SQL-first validation: det-spawn active version selected; host baseline vid=7801 vs device P2 vid=7802; EXCEPT+cityHash64+det-spawn agent compare",
+      "evidence_pack": "Facts: PASS. Input: version_date=2026-06-22 input_version_id=1 (det-spawn total=28, 4 spawn days). CH 24.10.1.2812 @ 10.95.19.132:9000. Host cmd: orchestrator HEAD stash+run --version-date 2026-06-22 --input-version-id 1 --version-id 7801 --end-day 3650. Device cmd: P2 orchestrator same params --version-id 7802. Rows: host=74320 device=74320. EXCEPT(all content cols)=0. Row-level cityHash64 mismatches=0. cityHash64(sorted)=13141361452916884614 both. SHA256(sorted CH dump)=05873ff046fa86f8e383492c94fdd48480f3b3e622788b791cf545bdb7ef39a5 both. Det-spawn births: 28 each, idx=286..313, acn=100000..100027, days=207/572/938/1303, status_id=3 pre_status=0 — identical host vs device. sim_repairline_v9 EXCEPT=0. Note: orchestrator inline master_rows_sha256 differed pre-insert (cd72fb3a vs 61d61375) due to columnar build iteration order; stored CH data bit-identical. Git: stash pop OK, orchestrator P2 (register_det_spawn_v8 present, HF_DeterministicSpawn absent), rtc_spawn_det_v8.py untracked.\nEvidence: SQL det-spawn active: SELECT sum(new_counter_mi17) FROM flight_program_ac WHERE version_date=2026-06-22 AND version_id=1 => 28; vid=3 => 0. Logs: /tmp/host_baseline_7801.log /tmp/device_p2_7802.log. Both runs: spawn=28, ops=target PASS.",
+      "success_criteria": "numeric: sim_masterv2_v9 host(7801) rows+content hash == device(7802); det-spawn agents count/idx/acn match",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=sim_masterv2_v9 vid 7801/7802; /tmp/host_baseline_7801.log; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "1b086b7faa0d249c05375012f4f96413a2b3831ae99deba1711baedf2e344412",
+      "created_at": "2026-07-01T02:38:16Z",
+      "modules": [
+        "step_logic",
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 45000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_gpu_only_dayloop_2026-06-30_docs-curator_3adfe8fb",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "agent": "docs-curator",
+      "user_goal": "Добавь запись в docs/changelog.md по завершённому high-risk workflow W_gpu_only_dayloop_2026-06-30. Только changelog, новых .md не создавай.",
+      "changes": "docs/changelog.md: добавлена запись 2026-07-01 GPU-only day-loop (P0/P1a/P1b/P2 + cr-scaling diagnostics) для workflow W_gpu_only_dayloop_2026-06-30, branch feature/dwh-bb8.",
+      "facts": "Источники: user brief (commits e6e92ac4/7e33ce4b/30b5faf3/b16a50c8/38dd1873); config/agent_kg.json workflow+handoffs+contexts (milestone P2, validator-judge 038e8177, review ctx_e6ac2de4); стиль сверен с docs/changelog.md записями 2026-06-29 SEATBELTS OFF и 2026-06-30 ingestion. phase_start ctx записан.",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "b3bce1340715569a36c473a87572fbfc3eb736f513e0f6838e318b414a733772",
+      "created_at": "2026-07-01T02:52:07Z",
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_gpu_only_dayloop_2026-06-30_governance-compliance_6275d5e8",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "agent": "governance-compliance",
+      "user_goal": "Ревью/validation P2 (deterministic spawn -> device RTC) для закрытия high-risk workflow GPU-only day-loop",
+      "changes": "Governance single-pass verdict по P2 + всему workflow",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "SSoT (transitions/invariants) не тронут (git show b16a50c8 --name-only); no Float64/fallback/hardcode; validator PASS bit-identical реальные данные (74320 строк, SHA256 05873ff0, EXCEPT=0, 28 det-spawn); reviewer approve_with_notes 7/7 инвариантов",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "правки code/sim_v2/** (spawn-механизм); контракт bit-identity; влияние на sim_masterv2_v9",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Верификация high-strict контура: init PRE-approval + implement + reviewer-flame + validator-judge + governance",
+      "evidence_pack": "SSoT (transitions/invariants) не тронут (git show b16a50c8 --name-only); no Float64/fallback/hardcode; validator PASS bit-identical реальные данные (74320 строк, SHA256 05873ff0, EXCEPT=0, 28 det-spawn); reviewer approve_with_notes 7/7 инвариантов",
+      "success_criteria": "numeric: sim_masterv2_v9 host(7801)==device(7802) rows+SHA256 — PASS",
+      "compliance_checklist": "decision=allow_with_notes required_gates=pass exceptions=none evidence_refs=validator-judge_038e8177;git_show_b16a50c8;review_e6ac2de4;approval_beed7a38 approval_ref=ctx_W_gpu_only_dayloop_2026-06-30_approval_request_beed7a38",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "7e544dda59460e3bcb56f9ddf2ca24b9434fa8cdfa8e96bcf816fc5f0d61270c",
+      "created_at": "2026-07-01T02:56:48Z",
+      "modules": [
+        "state_transitions",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "claude-opus-4.8",
+        "est_tokens": 62000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_gpu_only_dayloop_2026-06-30_orchestrator_8628f4a1",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "agent": "orchestrator",
+      "user_goal": "GPU-only day-loop: убрать устранимые per-step host-callback (P0/P1a/P1b/P2), bit-identical; диагностировать предел concurrent_runs",
+      "changes": "P0 (e6e92ac4) init->addInitFunction; P1a (7e33ce4b) env current_day->MacroProperty; P1b (30b5faf3) StepController->device; P2 (b16a50c8) det-spawn->device rtc_spawn_det_v8.py; диагностика (38dd1873); changelog + KG contexts",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "P0/P1a/P1b/P2 bit-identical PASS (P2: реальные данные 2026-06-22 vid=1, host7801==device7802, 74320 строк, SHA256 05873ff0, EXCEPT=0, 28 det-spawn). nsys OFF cr8 vs cr62: cr-scaling предел = host-lock contention драйвера (cudaMalloc x16.5, rwlock x20), НЕ kernel-launch/host-callback. optimum cr=8 (17.3с)",
+      "drift_check": "UserGoal (GPU-only day-loop + понять почему cr62 медленнее) ↔ Changes scope match: yes. Доп. итог: perf concurrent_runs не улучшился — причина доказана (аллокатор драйвера), не входила в исходную гипотезу, но отвечает на вопрос пользователя.",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "миграции в code/sim_v2/** (day-state, StepController, spawn); контракт bit-identity",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "10-step high-strict: approval->implement(coder-flame)->review(reviewer-flame)->validation(validator-judge)->governance->docs->close",
+      "evidence_pack": "P0/P1a/P1b/P2 bit-identical PASS (P2: реальные данные 2026-06-22 vid=1, host7801==device7802, 74320 строк, SHA256 05873ff0, EXCEPT=0, 28 det-spawn). nsys OFF cr8 vs cr62: cr-scaling предел = host-lock contention драйвера (cudaMalloc x16.5, rwlock x20), НЕ kernel-launch/host-callback. optimum cr=8 (17.3с)",
+      "success_criteria": "numeric: sim_masterv2_v9 host==device bit-identical PASS (P2); INV: цель убрать host-callback выполнена (остался только неустранимый exit-condition)",
+      "compliance_checklist": "decision=allow_with_notes required_gates=pass exceptions=none evidence_refs=governance_6275d5e8;validator_038e8177;review_e6ac2de4 approval_ref=ctx_W_gpu_only_dayloop_2026-06-30_approval_request_beed7a38",
+      "risks": "P2 без perf-выигрыша (принято, цель чистота); cr>8 контенция драйвера — архитектурный предел FLAME/CUDA",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "ab58cbe13f986f8c31a4bdaa84ca964c8e511f5d2ef5344e0dcbfa3ff17a56ef",
+      "created_at": "2026-07-01T02:57:14Z",
+      "modules": [
+        "state_transitions",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "claude-opus-4.8",
+        "est_tokens": 30000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -30072,19 +30257,19 @@
       "context_id": "ctx_W_gpu_only_dayloop_2026-06-30_phase_start_023f58d0",
       "workflow_id": "W_gpu_only_dayloop_2026-06-30",
       "context_type": "phase_start",
-      "content": "P1b implementation start after human relaxed criteria: move heavy HF_StepController to device RTC; keep HF_ExitConditionV8 host as accepted lightweight callback; verify 68/68 golden and scaling cr62/cr4.",
-      "agent": "coder-flame",
+      "content": "docs-curator: changelog entry for completed GPU-only day-loop workflow (P0/P1a/P1b/P2 + cr-scaling diagnostics)",
+      "agent": "docs-curator",
       "created_at": "2026-06-30T17:04:59Z",
-      "updated_at": "2026-06-30T18:36:43Z"
+      "updated_at": "2026-07-01T02:51:22Z"
     },
     {
       "context_id": "ctx_W_gpu_only_dayloop_2026-06-30_milestone_c3d849ff",
       "workflow_id": "W_gpu_only_dayloop_2026-06-30",
       "context_type": "milestone",
-      "content": "ДОКАЗАНО nsys (2025.3.1, OFF-сборка, single-cr 62 runs, cr=8 vs cr=62, output/nsys_off_scaling/). ГИПОТЕЗА 'kernel-launch serialization' ОПРОВЕРГНУТА: cudaLaunchKernel вырос ×1.5, cudaStreamSynchronize ×1.05 (9.09M вызовов, flat). РЕАЛЬНАЯ ПРИЧИНА cr62>cr8: host-lock contention в CUDA-драйвере. Доминанта cudaMalloc 3.4s->56.1s (×16.5) при том же числе вызовов (~72-75k) = глобальный mutex аллокатора сериализует 62 конкурентные per-run аллокации. OSRT: pthread_rwlock_wrlock 57s->1174s (×20.6, avg 60us->1.24ms), mutex_lock ×19, cond_timedwait ×18 — все при том же числе вызовов = чистая контенция. Per-step Python callbacks (exit-cond+det-spawn) добавляют GIL-давление, но НЕ доминанта (cudaMalloc от них не зависит). ВЫВОД: P1b/P2 стену не пробьют. Wall-кривая OFF warm: cr4=20.5 cr8=17.3(min) cr16=20.4 cr32=25.2 cr62=30.7. Оптимум cr=8.",
+      "content": "P2 ЗАВЕРШЁН: deterministic spawn -> device (mgr+ticket, рождение в serviceable). Файлы: новый rtc_spawn_det_v8.py, orchestrator_limiter_v8.py (-150/+40, удалён HF_DeterministicSpawn+layer_det_spawn). REVIEW (reviewer-flame): approve_with_notes, блокеров нет, 7/7 инвариантов bit-identity подтверждены. VALIDATION (validator-judge): bit-identical PASS на реальных данных 2026-06-22 vid=1 (det-spawn активен: 28 рождений Mi-17 на 4 даты). host(7801)==device(7802): 74320 строк, SHA256 05873ff0 совпал, EXCEPT=0, det-spawn idx 286-313/acn 100000-100027 идентичны. Perf: без выигрыша (ожидаемо, стена в аллокаторе). Notes (low/nit, не блокеры): осиротевший env-скаляр det_spawn_total_spawned (device использует agent-var курсор) — кандидат на cleanup; двойной путь деривации br (значения равны). Коммит НЕ сделан (ждёт человека).",
       "agent": "unknown",
       "created_at": "2026-06-30T19:53:39Z",
-      "updated_at": "2026-07-01T01:56:08Z"
+      "updated_at": "2026-07-01T02:42:41Z"
     },
     {
       "context_id": "ctx_W_gpu_only_dayloop_2026-06-30_correction_4a77cee2",
@@ -30094,6 +30279,24 @@
       "agent": "unknown",
       "created_at": "2026-07-01T01:20:28Z",
       "updated_at": "2026-07-01T01:20:28Z"
+    },
+    {
+      "context_id": "ctx_W_gpu_only_dayloop_2026-06-30_review_e6ac2de4",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "context_type": "review",
+      "content": "P2 review (reviewer-flame, agent 03ccc06b): verdict=approve_with_notes, блокеров нет. 7/7 инвариантов bit-identity подтверждены дословной сверкой rtc_spawn_det_v8.py против git HEAD HF_DeterministicSpawn.run: (1) полный набор+значения переменных агента, (2) mfg_date/status_change_day=current_day, (3) catch-up >= с агрегацией и contiguous idx, (4) done_days gating atomic, (5) рождение в serviceable, (6) позиция слоёв на месте layer_det_spawn, (7) курсор total_spawned как agent-var без гонок. Notes: low (осиротевший det_spawn_total_spawned — устранён в b16a50c8), nit (двойной путь br, значения равны; clamp опирается на MAX_DAYS>=days_total). Готов к acceptance.",
+      "agent": "unknown",
+      "created_at": "2026-07-01T02:50:50Z",
+      "updated_at": "2026-07-01T02:50:50Z"
+    },
+    {
+      "context_id": "ctx_W_gpu_only_dayloop_2026-06-30_implementation_aaca548d",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "context_type": "implementation",
+      "content": "P2 impl (coder-flame, agent 156d4ef6): новый code/sim_v2/messaging/rtc_spawn_det_v8.py (RTC_DET_SPAWN_MGR_V8 + RTC_DET_SPAWN_TICKET_V8 + register_det_spawn_v8 + init_det_spawn_population_v8, паттерн mgr+ticket зеркалит rtc_spawn_dynamic_v7, setAgentOutput в serviceable). orchestrator_limiter_v8.py: удалён HF_DeterministicSpawn+layer_det_spawn, добавлен register_det_spawn_v8 на прежней позиции + device-populate. Офлайн host-vs-device эквивалентность births PASS (sequential+catch-up), NVRTC чисто на sm_120. Commit b16a50c8.",
+      "agent": "unknown",
+      "created_at": "2026-07-01T02:50:50Z",
+      "updated_at": "2026-07-01T02:50:50Z"
     }
   ],
   "meta": {
