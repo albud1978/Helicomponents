@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-06-30T18:26:47Z",
+    "updated_at": "2026-07-01T01:56:08Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -3668,7 +3668,7 @@
       "workflow_id": "W_gpu_only_dayloop_2026-06-30",
       "goal": "GPU-only day-loop: убрать все per-step Python host-callback'ы из симуляционного цикла (P0->P1->P2), сохранив bit-identical результат",
       "phase": "analysis",
-      "owner": "orchestrator",
+      "owner": "reviewer-flame",
       "status": "active",
       "caps": {
         "max_steps": 50,
@@ -3677,13 +3677,13 @@
         "profile": "high-strict"
       },
       "usage": {
-        "cumulative_steps": 6,
-        "cumulative_tokens": 199000,
+        "cumulative_steps": 8,
+        "cumulative_tokens": 306000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-06-30T18:26:47Z"
+        "last_updated": "2026-06-30T18:50:14Z"
       },
       "created_at": "2026-06-30T17:01:43Z",
-      "updated_at": "2026-06-30T18:26:47Z"
+      "updated_at": "2026-06-30T18:50:14Z"
     }
   ],
   "handoffs": [
@@ -26711,6 +26711,93 @@
         "est_tokens": 32000,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_W_gpu_only_dayloop_2026-06-30_coder-flame_57d31842",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "agent": "coder-flame",
+      "user_goal": "КОНТЕКСТ (ты не видишь предыдущий разговор — вот всё необходимое). Workflow GPU-only day-loop. Цель: убрать per-step Python host-callback'и из CUDAEnsemble day-loop (сериализуются на GIL, ломают масштабирование по concurrent_runs). ЗАДАЧА P1b: перенести HF_StepController (rtc_limiter_optimized.py class ~333, run ~340) с Python-host на device RTC, чтобы УБРАТЬ per-step host-callback ПОЛНОСТЬЮ.",
+      "changes": "DESIGN:\n- Candidate carrier: existing QuotaManager singleton pair, execute RTC StepController only for group_by==1 via RTC function condition. This avoids new agent types and preserves exactly-one execution per step.\n- Device StepController logic would read current_day_mp[0], end_day env, mp_min_limiter[0], deterministic_dates_mp, num_deterministic_dates; reset mp_min_limiter[0] with exchange(0xFFFFFFFF); write current_day_mp[0/1], adaptive_result_mp[0/1], mp2_day_for_step[step], mp2_num_steps[0].\n- Layer order would keep layer_step_controller first, before save_pre_status/state/quota/spawn/repairline readers.\n- Env consumers: HF_DeterministicSpawn should read current_day_mp instead of env current_day; spawn_cap_ensemble exit report should stop depending on stale env current_day or be handled by one final/non-step host sync.\nBLOCKERS:\n- Strict SuccessCriteria says ZERO per-step Python host-callback. Current active model still registers rtc_limiter_v8.HF_ExitConditionV8 via model.addExitCondition in orchestrator_limiter_v8.py. pyflamegpu exposes addExitCondition as HostConditionCallback; this is host/Python control-plane code evaluated per step.\n- Removing only HF_StepController would still leave the per-step HostCondition callback, so it does not satisfy the user's zero-callback criterion.\n- Removing HostCondition without a device-side stop/request-exit mechanism would force runs to continue to max_steps after current_day>=end_day, preserving neither performance intent nor clean adaptive loop semantics.\nRECOMMENDATION:\n- Do not implement P1b as a partial StepController-only change under the stated SuccessCriteria.\n- First decide an exit strategy: confirm a supported device-side termination API in FLAME GPU 2 rc4, or redesign harness/run plans so termination is non-Python and does not execute empty post-end steps. After that, implement device StepController and env-consumer migration together.",
+      "facts": "",
+      "assumptions": "Assumption: FLAME GPU 2 rc4 has no project-used device-side request-exit API available for RTC layer termination. Risks if false: implementation can proceed after confirming the exact API and removing HostCondition.",
+      "evidence": "Facts:\n- Read config/capsules_manifest.json, docs/limiter_v8_capsule.md, docs/flame_gpu_capsule.md, docs/quota_capsule.md, config/transitions/invariants.json.\n- Verified HF_StepController in code/sim_v2/messaging/rtc_limiter_optimized.py: reads env current_day/end_day, resets mp_min_limiter, computes deterministic-date clamp, writes current_day_mp/adaptive_result_mp/env/mp2 mapping.\n- Verified layer_step_controller in code/sim_v2/messaging/orchestrator_limiter_v8.py currently addHostFunction(HF_StepController) before V8 readers.\n- Verified QuotaManager has exactly two agents group_by=1/2 in single-run and ensemble population paths.\n- Verified active host env consumer HF_DeterministicSpawn reads env current_day; spawn_cap_ensemble logs env current_day for final_days.\n- Verified active exit callback: orchestrator_limiter_v8.py registers rtc_limiter_v8.HF_ExitConditionV8 via model.addExitCondition; pyflamegpu include ModelDescription.h stores addExitCondition callbacks as HostConditionCallback.\n- No code edits were made; no golden/perf runs were executed because design gate failed strict zero-callback.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_gpu_only_dayloop_2026-06-30:2026-06-30T18:33:52Z",
+      "plan_step_id": "P1b-design",
+      "approval_gate_id": "ctx_W_gpu_only_dayloop_2026-06-30_approval_request_beed7a38",
+      "approval_status": "approved",
+      "approval_source": "current_chat",
+      "risk_tier": "high",
+      "risk_reasons": "code/sim_v2/messaging day-loop architecture; CUDAEnsemble host-callback scaling; step/exit semantics affect adaptive simulation outputs",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Design/feasibility only. Device StepController on QuotaManager(group_by=1) is technically feasible for day advance and MP writes, but strict zero per-step host-callback is blocked by existing Python HostCondition exit callback.",
+      "evidence_pack": "Facts:\n- Read config/capsules_manifest.json, docs/limiter_v8_capsule.md, docs/flame_gpu_capsule.md, docs/quota_capsule.md, config/transitions/invariants.json.\n- Verified HF_StepController in code/sim_v2/messaging/rtc_limiter_optimized.py: reads env current_day/end_day, resets mp_min_limiter, computes deterministic-date clamp, writes current_day_mp/adaptive_result_mp/env/mp2 mapping.\n- Verified layer_step_controller in code/sim_v2/messaging/orchestrator_limiter_v8.py currently addHostFunction(HF_StepController) before V8 readers.\n- Verified QuotaManager has exactly two agents group_by=1/2 in single-run and ensemble population paths.\n- Verified active host env consumer HF_DeterministicSpawn reads env current_day; spawn_cap_ensemble logs env current_day for final_days.\n- Verified active exit callback: orchestrator_limiter_v8.py registers rtc_limiter_v8.HF_ExitConditionV8 via model.addExitCondition; pyflamegpu include ModelDescription.h stores addExitCondition callbacks as HostConditionCallback.\n- No code edits were made; no golden/perf runs were executed because design gate failed strict zero-callback.",
+      "success_criteria": "numeric: golden sha256 post == baseline for 68/68 B3b artifacts AND invariant: zero per-step Python host-callback in CUDAEnsemble day-loop; design gate FAIL because HostCondition remains per-step",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=implementation_not_started_zero_callback_blocker; evidence_refs=code/sim_v2/messaging/rtc_limiter_optimized.py; code/sim_v2/messaging/orchestrator_limiter_v8.py; code/sim_v2/messaging/rtc_limiter_v8.py; code/utils/spawn_cap_ensemble.py; pyflamegpu/include/flamegpu/model/ModelDescription.h; approval_ref=ctx_W_gpu_only_dayloop_2026-06-30_approval_request_beed7a38",
+      "risks": "Partial StepController-only migration would leave GIL-serialized HostCondition; removing HostCondition without device stop would run empty steps to max_steps; exit-log current_day would become stale if env sync is removed without harness adjustment.",
+      "next_owner": "orchestrator",
+      "open_questions": "Is HostCondition counted in the workflow's zero per-step host-callback definition? Is there a supported pyflamegpu rc4 device-side simulation termination API that can replace HF_ExitConditionV8?",
+      "graph_update": "no",
+      "graph_update_reason": "Design-only handoff; no domain graph/runtime SSoT change applied",
+      "prev_handoff_hash": "d32529360c04ac8ce6cde0d1bdff7b5382fcb7c8e6feb15b8973b972fc1fd198",
+      "created_at": "2026-06-30T18:33:52Z",
+      "modules": [
+        "step_logic",
+        "export",
+        "agent_setup"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 42000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_gpu_only_dayloop_2026-06-30_coder-flame_f38c9b34",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "agent": "coder-flame",
+      "user_goal": "Человек ослабил критерий. РЕАЛИЗУЙ P1b (не только design). Цель: убрать ТЯЖЁЛЫЙ per-step host-callback HF_StepController, перенеся его на device RTC; HF_ExitConditionV8 оставить host; bit-identical 68/68; scaling cr62/cr4.",
+      "changes": "- code/sim_v2/messaging/rtc_limiter_optimized.py: added device StepController as two QuotaManager RTC layers: prepare reads current_day_mp/mp_min_limiter/deterministic_dates into QuotaManager scratch; commit writes current_day_mp/adaptive_result_mp/mp_min_limiter reset/mp2_day_for_step/mp2_num_steps. Both functions have RTC function condition group_by==1 plus internal guard, so exactly one QuotaManager agent executes the controller.\n- code/sim_v2/messaging/base_model_messaging.py: added QuotaManager scratch variables step_prev_day, step_new_day, step_adaptive_days, step_min_limiter.\n- code/sim_v2/messaging/orchestrator_limiter_v8.py: replaced layer_step_controller host function with register_device_step_controller; HF_DeterministicSpawn now reads current_day_mp[0] instead of env current_day; registered one-time exit function for legacy env current_day logging.\n- code/sim_v2/messaging/rtc_limiter_v8.py: added HF_SyncDayEnvOnExit, an ExitFunction that syncs env current_day/prev_day/adaptive_days/step_days once at simulation exit for LoggingConfig.\n- code/utils/spawn_cap_ensemble.py: added explicit --threshold option so the B3b harness can use the human-specified threshold=9 without requiring nonexistent heli_pandas reference version ids; reference-version path remains default when --threshold is absent.",
+      "facts": "",
+      "assumptions": "Assumption: end_day=3650 is the correct golden horizon despite user text mentioning days_total=4000, because P0/P1a KG evidence and golden replay final_days are 3650 while shape days_total is 4000. Risks if false: the 4000-day run is a different acceptance oracle and currently mismatches 52/68.",
+      "evidence": "Facts:\n- Single-exec mechanism: existing QuotaManager has two agents group_by=1/2; both StepController RTC functions use setRTCFunctionCondition(cond_step_controller_qm_mi8) and an internal group_by!=1 early return. The read and write phases are split to satisfy FLAME GPU MacroProperty read/write rules.\n- Env consumers: HF_DeterministicSpawn reads current_day_mp[0]; env current_day/prev_day/adaptive_days/step_days are no longer written per step by StepController. Existing spawn_cap_ensemble exit-log remains on env current_day, fed by one-time HF_SyncDayEnvOnExit ExitFunction. HF_ExitConditionV8 remains host by accepted criterion and already reads current_day_mp.\n- Active env-day grep: remaining env current_day reads in messaging are legacy/unregistered V7 or old limiter functions, except one-time exit sync writes; active V8 post-quota paths use current_day_mp. register_post_quota_v7 active functions already read current_day_mp.\n- Compile/lint: python3 -m py_compile modified files PASS; ReadLints no errors; git diff --check PASS.\n- B3b golden: command with version_date=2026-06-22 input_version_id=1 caps=0,7 out_base=13000 threshold=9 repair_quota=18 concurrent_runs=2 skip_load. Initial end_day=4000 produced 52 mismatches because golden baseline is final_days=3650; Agent KG P0/P1a evidence confirms baseline final_days=3650 with days_total shape=4000. Re-run with end_day=3650 matched golden.\n- Golden compare: output/p0_dayloop_golden_hashes.json vs regenerated output/ensemble_b2 run_13000/run_13007 => total=68 matched=68 missing=0 mismatches=0.\n- Scaling command: output/gpu_hypothesis_profile.py --mode wall --concurrent-runs 4 62 --version-date 2026-06-22 --input-version-id 1 --threshold 180 --out-base 9900 --uncapped-version-id 9961 --repair-quota 18. Result output/gpu_hypothesis_wall.json: cr4 wall=89.039250699s, cr62 wall=119.145807822s, ratio=1.338. Baseline ratio ~1.34, so the expected noticeable gap reduction was NOT observed.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_gpu_only_dayloop_2026-06-30:2026-06-30T18:50:13Z",
+      "plan_step_id": "P1b",
+      "approval_gate_id": "ctx_W_gpu_only_dayloop_2026-06-30_approval_request_beed7a38",
+      "approval_status": "approved",
+      "approval_source": "current_chat",
+      "risk_tier": "high",
+      "risk_reasons": "code/sim_v2/messaging adaptive day-loop; CUDAEnsemble per-step control flow; MP2/RL export hashes are acceptance oracle",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Implement device StepController and remove heavy per-step HF_StepController while keeping accepted host HF_ExitConditionV8. Validate B3b sha256 and run cr4/cr62 scaling profile.",
+      "evidence_pack": "Facts:\n- Single-exec mechanism: existing QuotaManager has two agents group_by=1/2; both StepController RTC functions use setRTCFunctionCondition(cond_step_controller_qm_mi8) and an internal group_by!=1 early return. The read and write phases are split to satisfy FLAME GPU MacroProperty read/write rules.\n- Env consumers: HF_DeterministicSpawn reads current_day_mp[0]; env current_day/prev_day/adaptive_days/step_days are no longer written per step by StepController. Existing spawn_cap_ensemble exit-log remains on env current_day, fed by one-time HF_SyncDayEnvOnExit ExitFunction. HF_ExitConditionV8 remains host by accepted criterion and already reads current_day_mp.\n- Active env-day grep: remaining env current_day reads in messaging are legacy/unregistered V7 or old limiter functions, except one-time exit sync writes; active V8 post-quota paths use current_day_mp. register_post_quota_v7 active functions already read current_day_mp.\n- Compile/lint: python3 -m py_compile modified files PASS; ReadLints no errors; git diff --check PASS.\n- B3b golden: command with version_date=2026-06-22 input_version_id=1 caps=0,7 out_base=13000 threshold=9 repair_quota=18 concurrent_runs=2 skip_load. Initial end_day=4000 produced 52 mismatches because golden baseline is final_days=3650; Agent KG P0/P1a evidence confirms baseline final_days=3650 with days_total shape=4000. Re-run with end_day=3650 matched golden.\n- Golden compare: output/p0_dayloop_golden_hashes.json vs regenerated output/ensemble_b2 run_13000/run_13007 => total=68 matched=68 missing=0 mismatches=0.\n- Scaling command: output/gpu_hypothesis_profile.py --mode wall --concurrent-runs 4 62 --version-date 2026-06-22 --input-version-id 1 --threshold 180 --out-base 9900 --uncapped-version-id 9961 --repair-quota 18. Result output/gpu_hypothesis_wall.json: cr4 wall=89.039250699s, cr62 wall=119.145807822s, ratio=1.338. Baseline ratio ~1.34, so the expected noticeable gap reduction was NOT observed.",
+      "success_criteria": "numeric: golden sha256 post == baseline for 68/68 B3b artifacts (PASS: matched=68, mismatches=0) AND numeric: scaling cr62/cr4 measured after P1b (MEASURED: 119.145807822/89.039250699=1.338, no material improvement vs post-P1a ~1.34)",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=scaling_ratio_not_improved; evidence_refs=output/p0_dayloop_golden_hashes.json; output/gpu_hypothesis_wall.json; terminal 252038 B3b PASS; terminal 972987 profile PASS; approval_ref=ctx_W_gpu_only_dayloop_2026-06-30_approval_request_beed7a38",
+      "risks": "Performance target not confirmed: cr62/cr4 stayed ~1.338; output/gpu_hypothesis_profile wall includes ensemble export/other overhead, which may hide day-loop callback removal; code/utils/spawn_cap_ensemble.py changed outside RTC zone to expose explicit threshold because reference heli_pandas vid9/60 is absent for 2026-06-22.",
+      "next_owner": "reviewer-flame",
+      "open_questions": "Why did removing HF_StepController not reduce cr62/cr4 in wall profile? Is wall profile dominated by export/exit functions rather than per-step day controller? Should a no-export day-loop-only profiler be used for the next diagnosis?",
+      "graph_update": "no",
+      "graph_update_reason": "Runtime implementation changed, but Domain Graph/transition SSoT was not modified",
+      "prev_handoff_hash": "ae39c75522272e4d067dbbccbb1b10d2cd056e8e6e59c41749ee5fd018462819",
+      "created_at": "2026-06-30T18:50:14Z",
+      "modules": [
+        "step_logic",
+        "export",
+        "agent_setup",
+        "infra"
+      ],
+      "usage": {
+        "model": "gpt-5.5-extra-high",
+        "est_tokens": 65000,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -29985,10 +30072,28 @@
       "context_id": "ctx_W_gpu_only_dayloop_2026-06-30_phase_start_023f58d0",
       "workflow_id": "W_gpu_only_dayloop_2026-06-30",
       "context_type": "phase_start",
-      "content": "P1a independent validation: replay B3b ensemble cap0/cap7, sha256 68 .bin vs golden",
-      "agent": "validator-judge",
+      "content": "P1b implementation start after human relaxed criteria: move heavy HF_StepController to device RTC; keep HF_ExitConditionV8 host as accepted lightweight callback; verify 68/68 golden and scaling cr62/cr4.",
+      "agent": "coder-flame",
       "created_at": "2026-06-30T17:04:59Z",
-      "updated_at": "2026-06-30T18:25:36Z"
+      "updated_at": "2026-06-30T18:36:43Z"
+    },
+    {
+      "context_id": "ctx_W_gpu_only_dayloop_2026-06-30_milestone_c3d849ff",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "context_type": "milestone",
+      "content": "ДОКАЗАНО nsys (2025.3.1, OFF-сборка, single-cr 62 runs, cr=8 vs cr=62, output/nsys_off_scaling/). ГИПОТЕЗА 'kernel-launch serialization' ОПРОВЕРГНУТА: cudaLaunchKernel вырос ×1.5, cudaStreamSynchronize ×1.05 (9.09M вызовов, flat). РЕАЛЬНАЯ ПРИЧИНА cr62>cr8: host-lock contention в CUDA-драйвере. Доминанта cudaMalloc 3.4s->56.1s (×16.5) при том же числе вызовов (~72-75k) = глобальный mutex аллокатора сериализует 62 конкурентные per-run аллокации. OSRT: pthread_rwlock_wrlock 57s->1174s (×20.6, avg 60us->1.24ms), mutex_lock ×19, cond_timedwait ×18 — все при том же числе вызовов = чистая контенция. Per-step Python callbacks (exit-cond+det-spawn) добавляют GIL-давление, но НЕ доминанта (cudaMalloc от них не зависит). ВЫВОД: P1b/P2 стену не пробьют. Wall-кривая OFF warm: cr4=20.5 cr8=17.3(min) cr16=20.4 cr32=25.2 cr62=30.7. Оптимум cr=8.",
+      "agent": "unknown",
+      "created_at": "2026-06-30T19:53:39Z",
+      "updated_at": "2026-07-01T01:56:08Z"
+    },
+    {
+      "context_id": "ctx_W_gpu_only_dayloop_2026-06-30_correction_4a77cee2",
+      "workflow_id": "W_gpu_only_dayloop_2026-06-30",
+      "context_type": "correction",
+      "content": "CORRECTION (диагностическая ошибка исправлена). Предыдущий вывод 'рост GPU 23->80s = загрузка станка/DWH' НЕВЕРЕН. Истинная причина: gpu_hypothesis_profile.py использовал sys.executable из env cuda13, где pyflamegpu.SEATBELTS=True (ON). E2E/прод OFF-build запускается интерпретатором env cuda13_nosb (SEATBELTS OFF). Отношение 79.4s(ON)/20.8s(OFF)=3.8x = SEATBELTS-оверхед (совпадает с ранее измеренным 4.63x на GPU-фазе). ВЫВОД: прод GPU cr=4 = ~20s корректно (e2e62_step4_off). Все абсолютные ~80-120s из профайлера НЕВАЛИДНЫ (не то окружение). Утверждение 'ниже 80 невозможно' отозвано. Относительный cr62/cr4=1.34 мерился на ON-сборке -> для валидности требуется пересъёмка на cuda13_nosb, если вопрос scaling ещё актуален.",
+      "agent": "unknown",
+      "created_at": "2026-07-01T01:20:28Z",
+      "updated_at": "2026-07-01T01:20:28Z"
     }
   ],
   "meta": {
