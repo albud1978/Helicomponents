@@ -20,6 +20,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from model_build import RTC_MAX_FRAMES, MAX_DAYS, MAX_EXPORT_STEPS
+from rtc_limiter_v8 import MAX_DETERMINISTIC_DATES
 
 try:
     import pyflamegpu as fg
@@ -251,6 +252,119 @@ FLAMEGPU_AGENT_FUNCTION(rtc_compute_min_limiter, flamegpu::MessageNone, flamegpu
 """
 
 
+# ══════════════════════════════════════════════════════════════════
+# RTC: V8 StepController on QuotaManager singleton
+# ══════════════════════════════════════════════════════════════════
+COND_STEP_CONTROLLER_QM_MI8 = """
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_step_controller_qm_mi8) {
+    return FLAMEGPU->getVariable<unsigned char>("group_by") == 1u;
+}
+"""
+
+
+RTC_STEP_CONTROLLER_PREPARE_V8 = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_step_controller_prepare_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Single-exec guard: only QuotaManager(group_by=1) computes global day advance.
+    if (FLAMEGPU->getVariable<unsigned char>("group_by") != 1u) {{
+        return flamegpu::ALIVE;
+    }}
+
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    auto mp_min = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp_min_limiter");
+
+    const unsigned int current_day = mp_day[0];
+    const unsigned int end_day = FLAMEGPU->environment.getProperty<unsigned int>("end_day");
+    const unsigned int min_limiter = mp_min[0];
+
+    if (current_day >= end_day) {{
+        FLAMEGPU->setVariable<unsigned int>("step_prev_day", current_day);
+        FLAMEGPU->setVariable<unsigned int>("step_new_day", current_day);
+        FLAMEGPU->setVariable<unsigned int>("step_adaptive_days", 0u);
+        FLAMEGPU->setVariable<unsigned int>("step_min_limiter", 0xFFFFFFFFu);
+        return flamegpu::ALIVE;
+    }}
+
+    auto mp_dates = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DETERMINISTIC_DATES}u>("deterministic_dates_mp");
+    unsigned int num_dates = FLAMEGPU->environment.getProperty<unsigned int>("num_deterministic_dates");
+    if (num_dates > {MAX_DETERMINISTIC_DATES}u) {{
+        num_dates = {MAX_DETERMINISTIC_DATES}u;
+    }}
+
+    unsigned int days_to_det = {MAX_DAYS}u;
+    for (unsigned int i = 0u; i < num_dates; ++i) {{
+        const unsigned int det_day = mp_dates[i];
+        if (det_day > current_day) {{
+            const unsigned int delta = det_day - current_day;
+            if (delta < days_to_det) {{
+                days_to_det = delta;
+            }}
+        }}
+    }}
+    if (days_to_det == {MAX_DAYS}u) {{
+        days_to_det = end_day - current_day;
+    }}
+
+    unsigned int adaptive_days = (min_limiter == 0xFFFFFFFFu)
+        ? days_to_det
+        : ((min_limiter < days_to_det) ? min_limiter : days_to_det);
+
+    if (current_day + adaptive_days > end_day) {{
+        adaptive_days = end_day - current_day;
+    }}
+    if (adaptive_days < 1u) {{
+        adaptive_days = 1u;
+    }}
+
+    const unsigned int prev_day = current_day;
+    const unsigned int new_day = current_day + adaptive_days;
+
+    FLAMEGPU->setVariable<unsigned int>("step_prev_day", prev_day);
+    FLAMEGPU->setVariable<unsigned int>("step_new_day", new_day);
+    FLAMEGPU->setVariable<unsigned int>("step_adaptive_days", adaptive_days);
+    FLAMEGPU->setVariable<unsigned int>("step_min_limiter", min_limiter);
+
+    return flamegpu::ALIVE;
+}}
+"""
+
+
+RTC_STEP_CONTROLLER_COMMIT_V8 = f"""
+FLAMEGPU_AGENT_FUNCTION(rtc_step_controller_commit_v8, flamegpu::MessageNone, flamegpu::MessageNone) {{
+    // Single-exec guard: only QuotaManager(group_by=1) writes global MacroProperties.
+    if (FLAMEGPU->getVariable<unsigned char>("group_by") != 1u) {{
+        return flamegpu::ALIVE;
+    }}
+
+    const unsigned int prev_day = FLAMEGPU->getVariable<unsigned int>("step_prev_day");
+    const unsigned int new_day = FLAMEGPU->getVariable<unsigned int>("step_new_day");
+    const unsigned int adaptive_days = FLAMEGPU->getVariable<unsigned int>("step_adaptive_days");
+    const unsigned int min_limiter = FLAMEGPU->getVariable<unsigned int>("step_min_limiter");
+
+    auto mp_day = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
+    auto mp_result = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("adaptive_result_mp");
+    auto mp_min = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("mp_min_limiter");
+
+    mp_min[0].exchange(0xFFFFFFFFu);
+    mp_day[1].exchange(prev_day);
+    mp_day[0].exchange(new_day);
+    mp_result[0].exchange(adaptive_days);
+    mp_result[1].exchange(
+        (min_limiter == 0xFFFFFFFFu) ? 0xFFFFFFFFu : (min_limiter << 1u)
+    );
+
+    const unsigned int step = FLAMEGPU->getStepCounter();
+    if (adaptive_days > 0u && step < {MAX_EXPORT_STEPS}u) {{
+        auto mp2_days = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_EXPORT_STEPS}u>("mp2_day_for_step");
+        auto mp2_num = FLAMEGPU->environment.getMacroProperty<unsigned int, 2u>("mp2_num_steps");
+        mp2_days[step].exchange(new_day);
+        mp2_num[0].exchange(step + 1u);
+    }}
+
+    return flamegpu::ALIVE;
+}}
+"""
+
+
 # ═══════════════════════════════════════════════════════════════════
 # HostFunction: Вычисление adaptive_days
 # ═══════════════════════════════════════════════════════════════════
@@ -442,6 +556,30 @@ def setup_limiter_macroproperties(env, program_changes: list):
         pass
     
     print("  ✅ Limiter MacroProperty: mp_min_limiter")
+
+
+def register_device_step_controller(model: fg.ModelDescription, quota_agent: fg.AgentDescription):
+    """Register V8 StepController as single-exec prepare/commit device layers."""
+    fn_prepare = quota_agent.newRTCFunction(
+        "rtc_step_controller_prepare_v8", RTC_STEP_CONTROLLER_PREPARE_V8
+    )
+    fn_prepare.setRTCFunctionCondition(COND_STEP_CONTROLLER_QM_MI8)
+    fn_prepare.setInitialState("default")
+    fn_prepare.setEndState("default")
+
+    layer_prepare = model.newLayer("layer_step_controller_prepare")
+    layer_prepare.addAgentFunction(fn_prepare)
+
+    fn_commit = quota_agent.newRTCFunction(
+        "rtc_step_controller_commit_v8", RTC_STEP_CONTROLLER_COMMIT_V8
+    )
+    fn_commit.setRTCFunctionCondition(COND_STEP_CONTROLLER_QM_MI8)
+    fn_commit.setInitialState("default")
+    fn_commit.setEndState("default")
+
+    layer_commit = model.newLayer("layer_step_controller")
+    layer_commit.addAgentFunction(fn_commit)
+    print("  ✅ V8 RTC StepController зарегистрирован (QuotaManager group_by=1, first layers)")
 
 
 def register_limiter_optimized(model: fg.ModelDescription, agent: fg.AgentDescription,

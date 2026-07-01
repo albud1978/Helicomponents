@@ -138,3 +138,21 @@ class HF_ExitConditionV8(fg.HostCondition):
         mp_day = FLAMEGPU.environment.getMacroPropertyUInt("current_day_mp")
         current_day = mp_day[0]
         return current_day >= self.end_day
+
+
+class HF_SyncDayEnvOnExit(fg.HostFunction):
+    """One-time exit sync for legacy environment logging."""
+
+    def run(self, FLAMEGPU):
+        env = FLAMEGPU.environment
+        mp_day = env.getMacroPropertyUInt("current_day_mp")
+        mp_result = env.getMacroPropertyUInt("adaptive_result_mp")
+
+        current_day = int(mp_day[0])
+        prev_day = int(mp_day[1])
+        adaptive_days = int(mp_result[0])
+
+        env.setPropertyUInt("current_day", current_day)
+        env.setPropertyUInt("prev_day", prev_day)
+        env.setPropertyUInt("adaptive_days", adaptive_days)
+        env.setPropertyUInt("step_days", adaptive_days)

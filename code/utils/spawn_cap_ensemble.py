@@ -92,18 +92,24 @@ def _build_orchestrator(args: argparse.Namespace) -> tuple[LimiterV8Orchestrator
     )
     orchestrator.prepare_data()
 
-    client = get_client()
-    threshold, days_total = get_reference_shape(
-        client,
-        args.version_date,
-        ref_vid=args.reference_version_id,
-    )
     env_days = int(orchestrator.env_data["days_total_u16"])
-    if days_total != env_days:
-        raise RuntimeError(
-            "reference spawn_limit shape days_total mismatch: "
-            f"ref={days_total}, input={env_days}"
+    if args.threshold is None:
+        client = get_client()
+        threshold, days_total = get_reference_shape(
+            client,
+            args.version_date,
+            ref_vid=args.reference_version_id,
         )
+        if days_total != env_days:
+            raise RuntimeError(
+                "reference spawn_limit shape days_total mismatch: "
+                f"ref={days_total}, input={env_days}"
+            )
+    else:
+        threshold = int(args.threshold)
+        days_total = env_days
+        if threshold < 0 or threshold >= days_total:
+            raise RuntimeError(f"invalid threshold={threshold} for days_total={days_total}")
 
     # B3a disables planned Mi-17 deliveries globally; dynamic spawn is tested alone.
     orchestrator.env_data["mp4_new_counter_mi17_seed"] = [0] * days_total
@@ -347,6 +353,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--uncapped-version-id", type=int, default=1061)
     parser.add_argument("--skip-uncapped", action="store_true", help="Do not append uncapped baseline run")
     parser.add_argument("--reference-version-id", type=int, default=9, help="Reference vid for cap threshold")
+    parser.add_argument("--threshold", type=int, default=None, help="Explicit synthetic cap threshold")
     parser.add_argument("--repair-quota", type=int, required=True, help="Explicit repair quota for loader")
     parser.add_argument("--end-day", type=int, default=3650)
     parser.add_argument("--max-steps", type=int, default=10000)

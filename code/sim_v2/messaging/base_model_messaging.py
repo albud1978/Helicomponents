@@ -194,6 +194,12 @@ class V2BaseModelMessaging:
         quota.newVariableUInt("debug_qm_unsvc_ready_mi17")
         quota.newVariableUInt("debug_qm_inactive_mi8")
         quota.newVariableUInt("debug_qm_inactive_mi17")
+
+        # Device StepController scratch. Prepare reads MacroProperties, commit writes them.
+        quota.newVariableUInt("step_prev_day")
+        quota.newVariableUInt("step_new_day")
+        quota.newVariableUInt("step_adaptive_days")
+        quota.newVariableUInt("step_min_limiter")
         
         # MacroProperty буферы для хранения idx агентов (для масштабирования >1000)
         # Каждый QuotaManager хранит idx своей группы

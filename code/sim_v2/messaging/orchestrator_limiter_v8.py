@@ -784,12 +784,11 @@ class LimiterV8Orchestrator:
         self.model.addInitFunction(self._hf_init_v8)
         print("  ✅ V8 HF_InitV8 зарегистрирован (InitFunction)")
 
-        # V8: StepController как layer ПЕРЕД обработкой (QM видит новый current_day)
-        # Читает mp_min_limiter из ПРЕДЫДУЩЕГО шага, продвигает current_day
-        self.hf_step_controller = rtc_limiter_optimized.HF_StepController()
-        layer_step = self.model.newLayer("layer_step_controller")
-        layer_step.addHostFunction(self.hf_step_controller)
-        print("  ✅ V8 HF_StepController зарегистрирован (layer, перед QM)")
+        # V8: device StepController ПЕРЕД обработкой (QM видит новый current_day)
+        # Читает mp_min_limiter из ПРЕДЫДУЩЕГО шага, продвигает current_day.
+        rtc_limiter_optimized.register_device_step_controller(
+            self.model, self.base_model.quota_agent
+        )
 
         # Pre-status snapshot (перед любыми переходами)
         rtc_state_transitions_v8.register_save_pre_status(self.model, heli_agent)
@@ -984,6 +983,8 @@ class LimiterV8Orchestrator:
         # V8 Exit condition
         self.hf_exit = rtc_limiter_v8.HF_ExitConditionV8(self.end_day)
         self.model.addExitCondition(self.hf_exit)
+        self._hf_sync_day_env_on_exit = rtc_limiter_v8.HF_SyncDayEnvOnExit()
+        self.model.addExitFunction(self._hf_sync_day_env_on_exit)
         
         print("\n✅ Модель LIMITER V8 построена")
         print(f"   deterministic_dates: {len(self.deterministic_dates)} дат")
@@ -1694,7 +1695,8 @@ class HF_DeterministicSpawn(fg.HostFunction):
             return
         
         env = FLAMEGPU.environment
-        current_day = int(env.getPropertyUInt("current_day"))
+        current_day_mp = env.getMacroPropertyUInt("current_day_mp")
+        current_day = int(current_day_mp[0])
         done_days = env.getMacroPropertyUInt("det_spawn_done_days")
         total_spawned = int(env.getPropertyUInt("det_spawn_total_spawned"))
         svc_api = None
