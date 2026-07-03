@@ -141,6 +141,63 @@ python3 code/utils/spawn_cap_curve.py --collect \
 - INV-12 классифицирует переналёт: «входной» (борт уже в `heli_pandas` с `ppr>oh`) → **WARNING, PASS**; «переналёт движка» (введён симуляцией) → FAIL. Классификация работает только при выходном id = входному (канонический `1`).
 - Известный кейс: `acn=22497` (2026-06-29) — входной переналёт из источника, признан валидным для симуляции (решение Алексея 2026-07-01), правка данных на стороне DWH.
 
+## 5. Профилирование ядер и замер скорости
+
+### Уровень 1 — wall-time (без инструментов)
+
+- Оркестратор сам печатает: `Время общее / Время GPU / дней-сек (GPU и общая)`.
+- Sweep-harness (`spawn_cap_ensemble.py`) печатает phase timings: GPU ensemble / loader / materializer.
+- Точнее: `/usr/bin/time -v <команда>` (peak RSS, user/sys).
+- **Первый прогон всегда включает одноразовый RTC JIT-компайл (~1.2 с и более при смене model hash)** — скорость мерить по «прогретому» прогону или вычитать cold-фазу.
+
+### Уровень 2 — nsys (Nsight Systems): таймлайн ядер, memcpy, CUDA API, host-локи
+
+> ⚠️ **Blackwell (sm_120): системный nsys 2024.5 из `/usr/local/cuda-12.6` СЛЕП** — CUDA-trace будет пустым. Использовать только **nsys 2025.3.1** из окружения `cuda13_nosb`.
+
+```bash
+NSYS=/home/albud/miniconda3/envs/cuda13_nosb/nsight-compute-2025.3.1/host/target-linux-x64/nsys
+
+# Профиль полного прогона (ядра + memcpy + CUDA API + OS runtime локи):
+$NSYS profile --trace=cuda,nvtx,osrt,cuda-hw --sample=none --stats=true --show-output=true \
+  -f true -o output/nsys_<label> \
+  /home/albud/miniconda3/envs/cuda13_nosb/bin/python3 -u <сим-команда из раздела 2>
+
+# Готовые отчёты из .nsys-rep:
+$NSYS stats --report cuda_gpu_kern_sum  --format column output/nsys_<label>.nsys-rep  # топ ядер
+$NSYS stats --report cuda_api_sum       --format column output/nsys_<label>.nsys-rep  # sync/launch/memcpy API
+$NSYS stats --report cuda_gpu_mem_time_sum --format column output/nsys_<label>.nsys-rep  # H2D/D2H
+$NSYS stats --report osrt_sum           --format column output/nsys_<label>.nsys-rep  # pthread/GIL contention
+```
+
+- `--stats=true` заодно кладёт рядом `.sqlite` — для кастомного анализа: `sqlite3 output/nsys_<label>.sqlite` (таблицы `CUPTI_ACTIVITY_KIND_KERNEL`, `CUPTI_ACTIVITY_KIND_RUNTIME`, `OSRT_API`; в multi-run сравнениях суммы считать per-thread).
+- Пример разбора и выводов: `output/nsys_blackwell_verdict_20260630.md` (kernels ~1 с из wall ~10 с; узкие места — sync/launch/H2D, не compute), артефакты замеров: `output/nsys_off_scaling/` (точные команды сохранены в `*_command.txt`).
+
+### Уровень 3 — ncu (Nsight Compute): глубокий разбор одного ядра
+
+Occupancy, memory throughput, стойлы конкретного RTC-ядра:
+
+```bash
+/home/albud/miniconda3/envs/cuda13_nosb/nsight-compute-2025.3.1/ncu \
+  --kernel-name <regex_имени_ядра> --launch-count 3 \
+  /home/albud/miniconda3/envs/cuda13_nosb/bin/python3 <сим-команда>
+```
+
+Нужен, только если nsys показал, что доминирует конкретное ядро (в текущей модели compute ~10% wall — обычно не нужен).
+
+### Уровень 4 — py-spy: host/Python-сторона (GIL, сериализация Init)
+
+```bash
+/home/albud/miniconda3/envs/cuda13/bin/py-spy dump --pid <PID>            # мгновенный стек всех потоков
+/home/albud/miniconda3/envs/cuda13/bin/py-spy record -o prof.svg --pid <PID> --duration 30  # flamegraph
+```
+
+### Методика честного замера (обязательно)
+
+1. Одинаковый датасет/version_date/caps у сравниваемых вариантов.
+2. Warm-up прогон перед замером (исключить JIT/NVRTC cold-компайл).
+3. Бит-идентичность результата до сравнения скоростей (EXCEPT both-ways = 0) — оптимизация, меняющая результат, не считается.
+4. Фиксировать команду замера рядом с артефактом (`*_command.txt` в `output/`).
+
 ## Связанные документы
 
 - `docs/dwh_sim_gate.md` — история приёмок DWH-срезов, тайминги, нюансы enrich
