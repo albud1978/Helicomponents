@@ -32,6 +32,10 @@ class V2BaseModelMessaging:
         self.repair_line_agent: Optional[fg.AgentDescription] = None  # RepairLine (ремонтные линии)
         self.env: Optional[fg.EnvironmentDescription] = None
         self.env_data: Optional[Dict[str, object]] = None
+        self.mp4_ops_counter_mi8 = []
+        self.mp4_ops_counter_mi17 = []
+        self.mp4_new_counter_mi17_seed = []
+        self.mp3_mfg_date_days = []
         
         # Messages
         self.msg_planer_report: Optional[fg.MessageDescription] = None
@@ -442,35 +446,41 @@ class V2BaseModelMessaging:
         print(f"  ✅ MacroProperty: MP5={model_build.MAX_SIZE}, Quota буферы для совместимости")
     
     def _setup_property_arrays(self, env_data: Dict[str, object]):
-        """Настройка PropertyArray (квоты MP4)"""
+        """Подготовка статичных MP4/MP3 массивов для MacroProperty init."""
         days = int(env_data['days_total_u16'])
         
         # MP4: Целевые количества в operations по дням
         mp4_mi8 = env_data.get('mp4_ops_counter_mi8', [0] * days)
         mp4_mi17 = env_data.get('mp4_ops_counter_mi17', [0] * days)
         
-        # Приводим к int и обрезаем до days
+        # MacroProperty требует compile-time фиксированный размер.
         mp4_mi8_int = [int(x) for x in mp4_mi8[:days]]
         mp4_mi17_int = [int(x) for x in mp4_mi17[:days]]
-        
-        self.env.newPropertyArrayUInt("mp4_ops_counter_mi8", mp4_mi8_int)
-        self.env.newPropertyArrayUInt("mp4_ops_counter_mi17", mp4_mi17_int)
+        self.mp4_ops_counter_mi8 = (mp4_mi8_int + [0] * model_build.MAX_DAYS)[:model_build.MAX_DAYS]
+        self.mp4_ops_counter_mi17 = (mp4_mi17_int + [0] * model_build.MAX_DAYS)[:model_build.MAX_DAYS]
         
         # MP4 new_counter для spawn (дата берём из version_date+day, НЕ из month_first)
         mp4_new = list(env_data.get('mp4_new_counter_mi17_seed', []))
         if not mp4_new:
             mp4_new = [0] * model_build.MAX_DAYS
-        mp4_new = (mp4_new + [0] * model_build.MAX_DAYS)[:model_build.MAX_DAYS]
-        self.env.newPropertyArrayUInt32("mp4_new_counter_mi17_seed", mp4_new)
+        self.mp4_new_counter_mi17_seed = (
+            [int(x) for x in mp4_new] + [0] * model_build.MAX_DAYS
+        )[:model_build.MAX_DAYS]
         
         # MP3 mfg_date_days для spawn
         mp3_mfg = list(env_data.get('mp3_mfg_date_days', []))
         if not mp3_mfg:
             mp3_mfg = [0] * model_build.RTC_MAX_FRAMES
-        mp3_mfg = (mp3_mfg + [0] * model_build.RTC_MAX_FRAMES)[:model_build.RTC_MAX_FRAMES]
-        self.env.newPropertyArrayUInt32("mp3_mfg_date_days", mp3_mfg)
-        
-        print(f"  ✅ PropertyArray: mp4_ops_counter[{days}], mp4_new_counter_mi17_seed[{model_build.MAX_DAYS}]")
+        self.mp3_mfg_date_days = (
+            [int(x) for x in mp3_mfg] + [0] * model_build.RTC_MAX_FRAMES
+        )[:model_build.RTC_MAX_FRAMES]
+
+        print(
+            "  ✅ MP4/MP3 static arrays prepared for MacroProperty: "
+            f"mp4_ops_counter[{model_build.MAX_DAYS}], "
+            f"mp4_new_counter_mi17_seed[{model_build.MAX_DAYS}], "
+            f"mp3_mfg_date_days[{model_build.RTC_MAX_FRAMES}]"
+        )
     
     def _setup_agent(self) -> fg.AgentDescription:
         """Настройка агента HELI (планеры) — идентично base_model.py"""

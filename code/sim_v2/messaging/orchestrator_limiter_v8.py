@@ -29,6 +29,7 @@ import time
 import argparse
 import hashlib
 import tempfile
+import uuid
 
 # Пути
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -58,6 +59,8 @@ import rtc_spawn_dynamic_v7
 import rtc_spawn_det_v8
 
 
+# TODO: Keep this helper duplicated until a shared messaging utility module is allowed.
+# Importing it from this orchestrator would execute heavy module-level side effects.
 def _prepare_uint32_macro_property_import(values, label: str, expected_len: int | None = None):
     """Prepare a raw UInt32 .bin file for HostEnvironment.importMacroProperty()."""
     import numpy as np
@@ -78,7 +81,9 @@ def _prepare_uint32_macro_property_import(values, label: str, expected_len: int 
         tempfile.gettempdir(),
         f"helicomponents_{label}_{len(array)}_{digest}.bin",
     )
-    tmp_path = f"{path}.{os.getpid()}.tmp"
+    if os.path.exists(path) and os.path.getsize(path) == array.nbytes:
+        return source, len(array), path
+    tmp_path = f"{path}.{uuid.uuid4().hex}.tmp"
     array.tofile(tmp_path)
     if os.path.getsize(tmp_path) != array.nbytes:
         raise RuntimeError(
@@ -86,6 +91,26 @@ def _prepare_uint32_macro_property_import(values, label: str, expected_len: int 
         )
     os.replace(tmp_path, path)
     return source, len(array), path
+
+
+def _verify_uint32_macro_property_samples(mp, expected_values, label: str):
+    """Check first/middle/last samples after bulk MacroProperty import."""
+    import numpy as np
+
+    expected = np.ascontiguousarray(np.asarray(expected_values, dtype=np.uint32).reshape(-1))
+    if len(expected) != len(mp):
+        raise RuntimeError(
+            f"{label} sample verification requires exact MacroProperty length: "
+            f"{len(expected)} != {len(mp)}"
+        )
+
+    for idx in sorted({0, len(expected) // 2, len(expected) - 1}):
+        actual = int(mp[idx])
+        expected_value = int(expected[idx])
+        if actual != expected_value:
+            raise RuntimeError(
+                f"{label} bulk import mismatch at {idx}: {actual} != {expected_value}"
+            )
 
 
 def collect_agents_state(simulation, agent_desc, current_day, version_date_int, version_id,
@@ -714,6 +739,7 @@ class LimiterV8Orchestrator:
         self.base_model.env.newPropertyUInt("mp5_inited", 0)
         self.base_model.env.newPropertyUInt("spawnlim_inited", 0)
         self.base_model.env.newPropertyUInt("econ_inited", 0)
+        self.base_model.env.newPropertyUInt("mp4_inited", 0)
         self.base_model.env.newPropertyUInt("lines_inited", 0)
         self.base_model.env.newPropertyUInt("v8_inited", 0)
         self.base_model.env.newPropertyUInt("ensemble_mode", 0)
@@ -733,7 +759,10 @@ class LimiterV8Orchestrator:
         # ═══════════════════════════════════════════════════════════════
         cumsum_size = model_build.RTC_MAX_FRAMES * (model_build.MAX_DAYS + 1)
         self.base_model.env.newMacroPropertyUInt32("mp5_cumsum", cumsum_size)
-        # mp4_ops_counter_mi8/mi17 уже созданы в base_model как PropertyArray
+        self.base_model.env.newMacroPropertyUInt32("mp4_ops_counter_mi8", model_build.MAX_DAYS)
+        self.base_model.env.newMacroPropertyUInt32("mp4_ops_counter_mi17", model_build.MAX_DAYS)
+        self.base_model.env.newMacroPropertyUInt32("mp4_new_counter_mi17_seed", model_build.MAX_DAYS)
+        self.base_model.env.newMacroPropertyUInt32("mp3_mfg_date_days", model_build.RTC_MAX_FRAMES)
         
         # MP2 Export: буферы для per-agent per-step экспорта
         rtc_mp2_export.setup_mp2_buffers(self.base_model.env)
@@ -762,6 +791,14 @@ class LimiterV8Orchestrator:
 
         self._hf_init_spawn_limit = HF_InitSpawnLimitCumulative(spawn_limit_cumulative)
         self.model.addInitFunction(self._hf_init_spawn_limit)
+
+        self._hf_init_mp4_quota = HF_InitMP4Quota(
+            self.base_model.mp4_ops_counter_mi8,
+            self.base_model.mp4_ops_counter_mi17,
+            self.base_model.mp4_new_counter_mi17_seed,
+            self.base_model.mp3_mfg_date_days,
+        )
+        self.model.addInitFunction(self._hf_init_mp4_quota)
         
         self._hf_init_economics = HF_InitEconomicsDailyCosts(self.economics_daily_costs)
         self.model.addInitFunction(self._hf_init_economics)
@@ -1773,34 +1810,77 @@ class HF_InitSpawnLimitCumulative(fg.HostFunction):
         print("  [HF_InitSpawnLimitCumulative] ✅ Загружено")
 
 
+class HF_InitMP4Quota(fg.HostFunction):
+    """HostFunction для инициализации статичных MP4/MP3 MacroProperty."""
+
+    def __init__(self, mp4_ops_mi8, mp4_ops_mi17, mp4_new_seed, mp3_mfg):
+        super().__init__()
+        self._mp_specs = []
+        for name, values, expected_len in [
+            ("mp4_ops_counter_mi8", mp4_ops_mi8, model_build.MAX_DAYS),
+            ("mp4_ops_counter_mi17", mp4_ops_mi17, model_build.MAX_DAYS),
+            ("mp4_new_counter_mi17_seed", mp4_new_seed, model_build.MAX_DAYS),
+            ("mp3_mfg_date_days", mp3_mfg, model_build.RTC_MAX_FRAMES),
+        ]:
+            if len(values) != expected_len:
+                raise RuntimeError(
+                    f"{name} values must match MacroProperty size: {len(values)} != {expected_len}"
+                )
+            self._mp_specs.append((name, values))
+
+    def run(self, FLAMEGPU):
+        env = FLAMEGPU.environment
+        if int(env.getPropertyUInt("mp4_inited")) != 0:
+            return
+
+        print("  [HF_InitMP4Quota] Загрузка MP4/MP3 MacroProperty")
+        for name, values in self._mp_specs:
+            mp = env.getMacroPropertyUInt32(name)
+            if len(values) != len(mp):
+                raise RuntimeError(
+                    f"{name} values must match MacroProperty size: {len(values)} != {len(mp)}"
+                )
+            for i, value in enumerate(values):
+                mp[i] = int(value)
+
+        env.setPropertyUInt("mp4_inited", 1)
+        print("  [HF_InitMP4Quota] ✅ Загружено")
+
+
 class HF_InitEconomicsDailyCosts(fg.HostFunction):
     """HostFunction для инициализации дневных UInt32 стоимостей."""
 
     def __init__(self, economics_daily_costs):
         super().__init__()
-        self.economics_daily_costs = economics_daily_costs
+        if not economics_daily_costs:
+            raise RuntimeError("economics_daily_costs is empty")
+
+        self._mp_specs = []
+        expected_len = model_build.MAX_DAYS + 1
+        for column in ECONOMICS_COST_COLUMNS:
+            values = economics_daily_costs.get(column)
+            if values is None:
+                raise RuntimeError(f"economics_daily_costs missing column: {column}")
+            if len(values) != expected_len:
+                raise RuntimeError(
+                    f"{column} values must match MacroProperty size: {len(values)} != {expected_len}"
+                )
+            self._mp_specs.append((column, values))
 
     def run(self, FLAMEGPU):
         env = FLAMEGPU.environment
         if int(env.getPropertyUInt("econ_inited")) != 0:
             return
 
-        if not self.economics_daily_costs:
-            raise RuntimeError("economics_daily_costs is empty")
-
         print("  [HF_InitEconomicsDailyCosts] Загрузка дневных стоимостей")
-        for column in ECONOMICS_COST_COLUMNS:
-            values = self.economics_daily_costs.get(column)
-            if values is None:
-                raise RuntimeError(f"economics_daily_costs missing column: {column}")
-
+        for column, values in self._mp_specs:
             mp = env.getMacroPropertyUInt32(column)
-            if len(values) > len(mp):
+            if len(values) != len(mp):
                 raise RuntimeError(
-                    f"{column} length exceeds MacroProperty size: {len(values)} > {len(mp)}"
+                    f"{column} values must match MacroProperty size: {len(values)} != {len(mp)}"
                 )
-            for i in range(len(values)):
-                mp[i] = int(values[i])
+            for i, value in enumerate(values):
+                mp[i] = int(value)
 
         env.setPropertyUInt("econ_inited", 1)
         print("  [HF_InitEconomicsDailyCosts] ✅ Загружено")

@@ -63,8 +63,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_quota_manager_v8_bucket, flamegpu::MessageNone, flam
     const unsigned int days_total = FLAMEGPU->environment.getProperty<unsigned int>("days_total");
     const unsigned int target_day = (day < days_total ? day : (days_total > 0u ? days_total - 1u : 0u));
     
-    const unsigned int target_mi8 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi8", target_day);
-    const unsigned int target_mi17 = FLAMEGPU->environment.getProperty<unsigned int>("mp4_ops_counter_mi17", target_day);
+    auto mp4_mi8 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("mp4_ops_counter_mi8");
+    auto mp4_mi17 = FLAMEGPU->environment.getMacroProperty<unsigned int, {MAX_DAYS}u>("mp4_ops_counter_mi17");
+    const unsigned int target_mi8 = mp4_mi8[target_day];
+    const unsigned int target_mi17 = mp4_mi17[target_day];
     const unsigned int mi8_rt = FLAMEGPU->environment.getProperty<unsigned int>("mi8_repair_time_const");
     const unsigned int mi17_rt = FLAMEGPU->environment.getProperty<unsigned int>("mi17_repair_time_const");
     

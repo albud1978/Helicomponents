@@ -98,15 +98,13 @@ class HF_InitV8(fg.HostFunction):
         mp_day[0] = 0  # current_day = 0
         mp_day[1] = 0  # prev_day = 0
         
-        # Инициализация deterministic_dates_mp
-        mp_dates = env.getMacroPropertyUInt("deterministic_dates_mp")
-        for i, day in enumerate(dates[:MAX_DETERMINISTIC_DATES]):
-            mp_dates[i] = int(day)
-        
-        # Заполняем остаток end_day (чтобы поиск не вышел за границы)
         effective_len = min(total_dates, MAX_DETERMINISTIC_DATES)
+        mp_dates = env.getMacroPropertyUInt("deterministic_dates_mp")
+
+        for i in range(effective_len):
+            mp_dates[i] = int(dates[i])
         for i in range(effective_len, MAX_DETERMINISTIC_DATES):
-            mp_dates[i] = self.end_day
+            mp_dates[i] = int(self.end_day)
         
         # Синхронизируем num_deterministic_dates (используется в RTC)
         env.setPropertyUInt("num_deterministic_dates", effective_len)

@@ -53,9 +53,10 @@ FLAMEGPU_AGENT_FUNCTION(rtc_det_spawn_mgr_v8, flamegpu::MessageNone, flamegpu::M
     // порядок влияет только на contiguous idx → bit-identical результат.
     unsigned int need = 0u;
     const unsigned int scan_days = (days_total <= ${MAX_DAYS}u ? days_total : ${MAX_DAYS}u);
+    auto mp4_new_seed = FLAMEGPU->environment.getMacroProperty<unsigned int, ${MAX_DAYS}u>("mp4_new_counter_mi17_seed");
     for (unsigned int d = 0u; d < scan_days; ++d) {
         if (d > day) break;  // spawn_day в будущем: ещё не due (day-loop мог перепрыгнуть)
-        const unsigned int cnt = FLAMEGPU->environment.getProperty<unsigned int>("mp4_new_counter_mi17_seed", d);
+        const unsigned int cnt = mp4_new_seed[d];
         if (cnt == 0u) continue;
         // exchange возвращает старое значение done: считаем только при первой активации.
         const unsigned int old = done_mp[d].exchange(1u);
