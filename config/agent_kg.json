@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-03T13:48:02Z",
+    "updated_at": "2026-07-03T18:40:10Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -3973,6 +3973,48 @@
       },
       "created_at": "2026-07-03T13:48:02Z",
       "updated_at": "2026-07-03T13:48:02Z"
+    },
+    {
+      "workflow_id": "W_multiproc_shard_spike_2026-07-03",
+      "goal": "Спайк п.1: мульти-процессный шардинг ensemble-свипа (8 процессов × ~8 ранов, cr=8) против одного процесса cr=8 (baseline ~30с) и cr=62 (66с); только GPU-фаза (--skip-load), инженерные vid 50000+, без записи в CH",
+      "phase": "implement",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 30000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-03T17:53:59Z"
+      },
+      "created_at": "2026-07-03T17:45:47Z",
+      "updated_at": "2026-07-03T17:53:59Z"
+    },
+    {
+      "workflow_id": "W_mps_shard_launcher_2026-07-03",
+      "goal": "Новый лончер code/utils/spawn_cap_ensemble_mps.py: мульти-процессный шардинг ensemble-свипа под MPS (старт демона в начале, quit в конце), только для множественных прогонов; GPU-фаза шардится, loader+materializer после всех шардов единым проходом",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 3,
+        "cumulative_tokens": 98000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-03T18:24:32Z"
+      },
+      "created_at": "2026-07-03T18:10:35Z",
+      "updated_at": "2026-07-03T18:25:06Z"
     }
   ],
   "handoffs": [
@@ -28432,6 +28474,169 @@
         "est_tokens": 5000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_multiproc_shard_spike_2026-07-03_orchestrator_e11565b9",
+      "workflow_id": "W_multiproc_shard_spike_2026-07-03",
+      "agent": "orchestrator",
+      "user_goal": "п.1 я бы попробовал",
+      "changes": "Спайк без изменений кода: 62-ран свип (2026-06-29, input vid=1, --skip-load, warm JIT) в 4 конфигурациях; скрипты и логи в output/multiproc_spike/; инженерные vid 50900-54061 только в .bin (в CH не писалось)",
+      "facts": "Baseline 1 процесс cr=8: 27.97s (ensemble 20.4s). 8 процессов без MPS: 43.0s — ХУЖЕ (context time-slicing). 8 процессов + MPS: 24.1s (ensemble max 6.1s). 4 процесса x16 + MPS: 19.1s (ensemble 8.6s) — лучший, x1.46. GPU-фаза масштабируется x2.4-3.4; новый bottleneck — per-process startup ~7-10.5s (CH fetch + model build + RTC load, CPU contention). Бит-идентичность: 2108 sha256 .bin полей diff=0 в обоих вариантах. MPS обязателен для мульти-процесса. SuccessCriteria (numeric) выполнен: 19.1s < 27.97s",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — спайк ровно по одобренному п.1, без изменений кода",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "numeric: wall(шардинг) vs wall(1 процесс cr=8): 19.1s vs 27.97s — выигрыш 8.9s (x1.46)",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-03T17:53:59Z",
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 30000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_mps_shard_launcher_2026-07-03_coder-general_461ef29e",
+      "workflow_id": "W_mps_shard_launcher_2026-07-03",
+      "agent": "coder-general",
+      "user_goal": "создать ОДИН новый файл code/utils/spawn_cap_ensemble_mps.py — лончер мульти-процессного шардинга ensemble-свипа spawn_limit под CUDA MPS. Существующие файлы НЕ менять.",
+      "changes": "Added code/utils/spawn_cap_ensemble_mps.py only: argparse CLI per requested option set; MPS ensure/stop lifecycle; cap sharding into contiguous groups; per-shard logs under output/mps_shard; centralized loader/materializer subprocess path after all shards.",
+      "facts": "",
+      "assumptions": "Full non-skip-load path was not executed because user-required smoke forbids CH writes; it reuses the same subprocess argument pattern as spawn_cap_ensemble.py _load_exports. Risks if false: loader/materializer integration issue would surface only in an explicitly approved CH-writing run.",
+      "evidence": "Read docs/runbook_sim_launch.md, docs/quota_capsule.md, spawn_cap_ensemble.py _load_exports, ensemble_mp2_loader.py CLI, sim_daily_materializer.py CLI. ReadLints: no linter errors. Smoke command exited 0 with shard 1 rc=0, shard 2 rc=0, phase_wall_s gpu=11.407 loader=0.000 materializer=0.000 load_total=0.000, total_wall_s=11.428, mps_pids_after_stop=none. pgrep -af '[n]vidia-cuda-mps-control' returned empty.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_mps_shard_launcher_2026-07-03:20260703T181441Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Operational launcher starts/stops CUDA MPS and can load simulation exports into ClickHouse when --skip-load is omitted; simulation semantics unchanged; smoke used --skip-load.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A; delegated implementation handoff, governance remains with orchestrator",
+      "human_gate_required": "no",
+      "plan_card": "Create one subprocess-only MPS shard launcher; preserve existing harness/loader/materializer; no pyflamegpu import in launcher.",
+      "evidence_pack": "Read docs/runbook_sim_launch.md, docs/quota_capsule.md, spawn_cap_ensemble.py _load_exports, ensemble_mp2_loader.py CLI, sim_daily_materializer.py CLI. ReadLints: no linter errors. Smoke command exited 0 with shard 1 rc=0, shard 2 rc=0, phase_wall_s gpu=11.407 loader=0.000 materializer=0.000 load_total=0.000, total_wall_s=11.428, mps_pids_after_stop=none. pgrep -af '[n]vidia-cuda-mps-control' returned empty.",
+      "success_criteria": "script: required smoke command exits 0; stdout has shard_done shard=1 rc=0 and shard=2 rc=0, phase_wall_s gpu/load_total, mps_pids_after_stop=none; pgrep -af '[n]vidia-cuda-mps-control' returns empty",
+      "compliance_checklist": "decision=allow_with_notes required_gates=partial exceptions=governance_not_run;full_load_not_run evidence_refs=code/utils/spawn_cap_ensemble_mps.py;smoke stdout;ReadLints approval_ref=N/A",
+      "risks": "Non-skip-load path writes ClickHouse via existing loader and still needs an explicitly approved load smoke; launcher always stops any pre-existing MPS daemon by design per Alexey decision.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "No Domain Graph/SSoT model update; tooling launcher only.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-03T18:14:41Z",
+      "modules": [
+        "infra",
+        "export",
+        "quotas_ops"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 30000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_mps_shard_launcher_2026-07-03_orchestrator_f3f68590",
+      "workflow_id": "W_mps_shard_launcher_2026-07-03",
+      "agent": "orchestrator",
+      "user_goal": "Да давай данчер встроим демона и будем гасить егов конце. Пользовать такой режим будем только для множественных прогонов",
+      "changes": "code/utils/spawn_cap_ensemble_mps.py (новый, coder-general); docs/runbook_sim_launch.md §3 (подсекция MPS-шардинг); docs/changelog.md (запись 2026-07-03)",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Smoke coder-general: 2 шарда rc=0, mps_pids_after_stop=none. Независимая верификация orchestrator: полный свип 62 ранов (--shards 4 --concurrent-runs 8 --out-base 56000 --skip-load) rc=0, GPU-фаза 19.421s против baseline single-proc cr=8 27.97s (SuccessCriteria numeric PASS); бит-идентичность cmp 2108 .bin (vid 56000..56061 против baseline 51000..51061) diff_files=0; mps_stop_rc=0, pgrep пуст. Логи: output/mps_shard/vd20260629_out56000_shard*.log",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — лончер с MPS-демоном (старт/quit) только для множественных прогонов, ничего сверх",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "новый launcher в code/utils (tooling, реверсивно, без SSoT/sim_v2 правок); управление системным MPS-демоном; явное одобрение Алексея в чате",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "Делегация coder-general: новый code/utils/spawn_cap_ensemble_mps.py (MPS lifecycle + шардинг GPU-фазы + единый loader/materializer после шардов); верификация оркестратором: полный свип 62 ранов + бит-идентичность + runbook/changelog",
+      "evidence_pack": "Smoke coder-general: 2 шарда rc=0, mps_pids_after_stop=none. Независимая верификация orchestrator: полный свип 62 ранов (--shards 4 --concurrent-runs 8 --out-base 56000 --skip-load) rc=0, GPU-фаза 19.421s против baseline single-proc cr=8 27.97s (SuccessCriteria numeric PASS); бит-идентичность cmp 2108 .bin (vid 56000..56061 против baseline 51000..51061) diff_files=0; mps_stop_rc=0, pgrep пуст. Логи: output/mps_shard/vd20260629_out56000_shard*.log",
+      "success_criteria": "",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=output/mps_shard/vd20260629_out56000_shard1.log;output/ensemble_b2 cmp diff=0;docs/changelog.md; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "6453b0aa9f12fbd40c6274c5ecec2a272dc918155d438d3fe11e85079038e75d",
+      "created_at": "2026-07-03T18:22:39Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 42000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_mps_shard_launcher_2026-07-03_governance-compliance_d91ae1cf",
+      "workflow_id": "W_mps_shard_launcher_2026-07-03",
+      "agent": "governance-compliance",
+      "user_goal": "Да давай данчер встроим демона и будем гасить егов конце. Пользовать такой режим будем только для множественных прогонов",
+      "changes": "Governance single-pass verdict = allow_with_notes. Проверено: (1) scope match UserGoal↔Changes — yes (лончер с MPS-демоном старт/quit только для множественных прогонов, ничего сверх); (2) denylist/SSoT — git status: только новый code/utils/spawn_cap_ensemble_mps.py (coder-general) + docs/runbook_sim_launch.md,docs/changelog.md (orchestrator, allowlist) + config/agent_kg.json (KG CLI); правок config/transitions/**,invariants.json,code/sim_v2/** нет; (3) no self-coding — код написан субагентом coder-general (handoff 461ef29e), не оркестратором; (4) DROP/TRUNCATE — grep по launcher без совпадений, smoke использовал --skip-load; (5) traceability — оба handoff привязаны к workflow_id, coder-general trace_id+C1 заполнены. Notes: orchestrator handoff f3f68590 имеет пустые trace_id и success_criteria (dispatch numeric-критерий подтверждён в evidence_pack, drift_check заполнен) — minor artifact hygiene.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: Источники: git status --porcelain (4 записи, scope совпадает); config/agent_kg.json handoffs coder-general_461ef29e + orchestrator_f3f68590; grep DROP/TRUNCATE/DELETE по code/utils/spawn_cap_ensemble_mps.py = no matches; docs/changelog.md запись 2026-07-03. Evidence dispatch (независимо оркестратором): полный свип 62 ранов --shards4 --concurrent-runs8 --skip-load rc=0, GPU-фаза 19.421s < baseline 27.97s (numeric PASS); cmp 2108 .bin vid56000..56061 vs 51000..51061 diff_files=0 (бит-идентичность PASS); mps_stop_rc=0, pgrep пуст (демон погашен PASS). Проверены PlanCard/EvidencePack/ComplianceChecklist в handoffs; RiskTier=medium/profile medium-fast/HumanGateRequired=no согласованы.\nEvidence: git status; KG handoffs 461ef29e+f3f68590; grep launcher (no DROP); changelog 2026-07-03; dispatch numeric PASS + bit-identity diff=0 + pgrep empty (verified by orchestrator).",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "reversible tooling launcher в code/utils; управление системным MPS-демоном; без SSoT/code/sim_v2/BI/public API",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Single governance pass (Tier-M M3): policy/scope/traceability check перед закрытием W_mps_shard_launcher; вердикт allow_with_notes.",
+      "evidence_pack": "Facts: Источники: git status --porcelain (4 записи, scope совпадает); config/agent_kg.json handoffs coder-general_461ef29e + orchestrator_f3f68590; grep DROP/TRUNCATE/DELETE по code/utils/spawn_cap_ensemble_mps.py = no matches; docs/changelog.md запись 2026-07-03. Evidence dispatch (независимо оркестратором): полный свип 62 ранов --shards4 --concurrent-runs8 --skip-load rc=0, GPU-фаза 19.421s < baseline 27.97s (numeric PASS); cmp 2108 .bin vid56000..56061 vs 51000..51061 diff_files=0 (бит-идентичность PASS); mps_stop_rc=0, pgrep пуст (демон погашен PASS). Проверены PlanCard/EvidencePack/ComplianceChecklist в handoffs; RiskTier=medium/profile medium-fast/HumanGateRequired=no согласованы.\nEvidence: git status; KG handoffs 461ef29e+f3f68590; grep launcher (no DROP); changelog 2026-07-03; dispatch numeric PASS + bit-identity diff=0 + pgrep empty (verified by orchestrator).",
+      "success_criteria": "manual-check: governance verdict вынесен (allow_with_notes), 5-field ComplianceChecklist записан, handoff в KG создан",
+      "compliance_checklist": "decision=allow_with_notes required_gates=partial exceptions=orchestrator_handoff_trace_id_empty;orchestrator_success_criteria_field_empty evidence_refs=handoff_W_mps_shard_launcher_2026-07-03_coder-general_461ef29e;handoff_W_mps_shard_launcher_2026-07-03_orchestrator_f3f68590;code/utils/spawn_cap_ensemble_mps.py;output/mps_shard approval_ref=N/A",
+      "risks": "Minor: пустые trace_id/success_criteria в orchestrator handoff снижают самодостаточность аудита, но линковка через workflow_id и numeric evidence в evidence_pack компенсируют.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "tooling launcher only; Domain Graph/SSoT не затронуты",
+      "prev_handoff_hash": "ec999c41c02b5cc926335bc98d79fa91fc3f4a46b13b3427fe5b6ab39a8ee4f4",
+      "created_at": "2026-07-03T18:24:32Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 26000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -30203,10 +30408,10 @@
       "context_id": "ctx_W_triage_queue_triage_db2c7605",
       "workflow_id": "W_triage_queue",
       "context_type": "triage",
-      "content": "[INV-2-spawncap][validation][medium] INV-2 (ops vs MP4 target, Mi-17 post-warmup) FAIL на spawn_cap-прогонах (192/173/169 для cap 1/4/6) ОДИНАКОВО на ON и OFF. Вероятно by-design: capped spawn -> дефицит к target, inv2 читает spawn_limit_active=false из flight_program_ac vid=3 и не учитывает synthetic cap-контекст ensemble. Проверить: должен ли INV-2 быть scoped/skipped для spawn_cap ensemble или это реальный незакрытый дефицит-вопрос. Не связано с SEATBELTS=OFF. Источник: validator handoff e638c78c",
+      "content": "[BACKLOG-scenario-framework][step_logic,infra][high] Универсальный фреймворк множественных прогонов (сценарный дескриптор + обобщённые scenario_sweep/MPS-лончер). ОТЛОЖЕНО до явной команды Алексея. Блокеры от Алексея: архитектура пользовательского интерфейса + конечный набор варьируемых переменных. Расширенный scope (важно): не только диапазон статических входных данных, но и подкрутка параметров В РАЗНЫЕ ДАТЫ — это рефактор исходных MacroProperty и определение лимитеров по образцу spawn (кумулятив + ручка в RunPlan + интерпретация в Init HF). Архитектурная позиция принята 2026-07-03: интерфейс дескриптора проектировать по двум реальным сценариям (spawn + следующий), не по одному; JSON-манифесты/плагин-реестры не делать. Текущее состояние: spawn-контур работает (spawn_cap_ensemble.py + spawn_cap_ensemble_mps.py, см. runbook §3).",
       "agent": "unknown",
       "created_at": "2026-06-10T09:35:34Z",
-      "updated_at": "2026-06-29T17:36:33Z"
+      "updated_at": "2026-07-03T18:40:10Z"
     },
     {
       "context_id": "ctx_W_loop_eng_2026_06_10_implementation_complete_72b661b0",
@@ -31881,6 +32086,33 @@
       "agent": "unknown",
       "created_at": "2026-07-03T07:23:36Z",
       "updated_at": "2026-07-03T07:23:36Z"
+    },
+    {
+      "context_id": "ctx_W_multiproc_shard_spike_2026-07-03_note_a1a0f633",
+      "workflow_id": "W_multiproc_shard_spike_2026-07-03",
+      "context_type": "note",
+      "content": "Спайк п.1 (мульти-процессный шардинг, GPU-фаза --skip-load, 62 рана, warm JIT): baseline 1 процесс cr=8 = 27.97s wall (ensemble 20.4s); 8 процессов БЕЗ MPS = 43.0s (context time-slicing, хуже); 8 процессов + MPS = 24.1s (ensemble max 6.1s/шард); 4 процесса x 16 + MPS = 19.1s (ensemble max 8.6s) — лучший, x1.46 к baseline, GPU-фаза масштабируется x2.4-3.4. Бит-идентичность: sha256 всех 2108 .bin полей diff=0 против baseline для обоих вариантов. Новый bottleneck — per-process startup (CH fetch + model build + RTC load ~7-10s, контендится по CPU). MPS daemon запущен (nvidia-cuda-mps-control -d).",
+      "agent": "unknown",
+      "created_at": "2026-07-03T17:53:36Z",
+      "updated_at": "2026-07-03T17:53:36Z"
+    },
+    {
+      "context_id": "ctx_W_mps_shard_launcher_2026-07-03_phase_start_f511f29a",
+      "workflow_id": "W_mps_shard_launcher_2026-07-03",
+      "context_type": "phase_start",
+      "content": "coder-general implementation start: create code/utils/spawn_cap_ensemble_mps.py; SuccessCriteria=smoke command with caps 0..7 shards=2 skip-load returns both shard rc=0 and MPS stopped",
+      "agent": "coder-general",
+      "created_at": "2026-07-03T18:12:10Z",
+      "updated_at": "2026-07-03T18:12:10Z"
+    },
+    {
+      "context_id": "ctx_W_mps_shard_launcher_2026-07-03_closure_587b8eac",
+      "workflow_id": "W_mps_shard_launcher_2026-07-03",
+      "context_type": "closure",
+      "content": "Лончер создан и верифицирован: свип 62 ранов GPU-фаза 19.4s против 28.0s baseline, бит-идентичность 2108 .bin diff=0, MPS погашен; governance allow_with_notes (d91ae1cf); runbook+changelog обновлены",
+      "agent": "orchestrator",
+      "created_at": "2026-07-03T18:25:06Z",
+      "updated_at": "2026-07-03T18:25:06Z"
     }
   ],
   "meta": {

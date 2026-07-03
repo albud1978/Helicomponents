@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-03 — MPS-лончер шардированного свипа `spawn_cap_ensemble_mps.py`
+
+**Risk:** medium (`medium-fast`) | **Workflow:** `W_mps_shard_launcher_2026-07-03` | **Branch:** `feature/dwh-bb8`
+
+По итогам спайка мульти-процессного шардинга (8/4 процесса, с/без MPS) создан лончер `code/utils/spawn_cap_ensemble_mps.py` для **множественных прогонов**: поднимает CUDA MPS-демон в начале, шардит caps по N процессам `spawn_cap_ensemble.py --skip-load` (GPU-фаза), после всех шардов выполняет `ensemble_mp2_loader.py` + `sim_daily_materializer.py` одним проходом, **всегда гасит демон в finally**. Без MPS шардинг вреден (time-slicing: 43s против 28s baseline) — лончер fail-fast при отсутствии демона. Замер полного свипа 62 ранов (4 шарда × cr=8): GPU-фаза **19.4s против 28.0s** одного процесса cr=8 (−31%); бит-идентичность: 2108 `.bin` против baseline, diff=0. MPS-демон после завершения погашен (pgrep пуст). Документировано в `docs/runbook_sim_launch.md` §3.
+
 ## 2026-07-03 — Инцидент `--drop-table` + тотальный запрет DROP + единый runbook запуска
 
 **Risk:** low (docs/rules/hooks) | **Workflow:** `W_clean_10y_validation_2026-07-03` | **Branch:** `feature/dwh-bb8`

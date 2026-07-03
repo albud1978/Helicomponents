@@ -131,6 +131,22 @@ python3 code/utils/spawn_cap_curve.py --collect \
 - Выходные vid сценариев (1000..1061) — **инженерные**: валидировать их полным набором инвариантов нельзя (см. семантику version_id выше); кривая собирается `--collect`, а не `run_all_stream`.
 - `spawn_cap_curve.py --run` / `spawn_cap_curve_launcher.py` — старый одиночный слой (субпроцессы по одному cap); для свипов использовать `spawn_cap_ensemble.py`.
 
+### Ускоренный свип: мульти-процессный шардинг под CUDA MPS
+
+Для **множественных прогонов** (полный свип 62 ранов) есть лончер `code/utils/spawn_cap_ensemble_mps.py`: сам поднимает MPS-демон в начале, шардит caps по N процессам `spawn_cap_ensemble.py` (GPU-фаза), после завершения всех шардов выполняет loader+materializer одним проходом и **всегда гасит демон в конце** (finally).
+
+```bash
+# Полный свип 0..60 + uncapped, 4 шарда × cr=8 (замер 2026-07-03: GPU-фаза 19.4s
+# против 28.0s в одном процессе cr=8; бит-идентичность 2108 .bin diff=0):
+/home/albud/miniconda3/envs/cuda13_nosb/bin/python3 code/utils/spawn_cap_ensemble_mps.py \
+  --version-date 2026-06-29 --input-version-id 1 --repair-quota 18 \
+  --shards 4 --concurrent-runs 8 --out-base 1000 --threshold 180
+```
+
+- Режим только для множественных прогонов: одиночные/малые запуски гонять обычным `spawn_cap_ensemble.py` без MPS.
+- Без MPS шардинг **вреден** (time-slicing контекстов: 43s против 28s baseline) — лончер fail-fast, если демон не поднялся.
+- Логи шардов: `output/mps_shard/<label>_shardN.log`; при rc!=0 любого шарда лончер печатает хвост лога, гасит остальные шарды и MPS, выходит с 1.
+
 ## 4. Валидация инвариантов
 
 ```bash
