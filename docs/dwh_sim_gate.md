@@ -1,5 +1,7 @@
 # DWH sim-gate: приёмка среза через симуляцию
 
+> **Актуальные команды загрузки/запуска/валидации — в едином runbook: [`docs/runbook_sim_launch.md`](runbook_sim_launch.md).** Этот документ — история приёмок конкретных срезов.
+
 **Branch:** `feature/dwh-bb8`  
 **Целевой срез:** `heli_pandas` `version_date=2026-06-12`, `version_id=1`  
 **Workflow:** `W_dwh_sim_gate_20260612` (Agent KG)

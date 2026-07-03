@@ -27,6 +27,10 @@
         "command": "python3 .cursor/hooks/superset_docker_guard.py"
       },
       {
+        "command": "python3 .cursor/hooks/clickhouse_drop_guard.py",
+        "matcher": "Shell"
+      },
+      {
         "command": "python3 .cursor/hooks/edit_workflow_guard.py",
         "matcher": "Write|StrReplace|EditNotebook"
       }

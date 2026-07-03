@@ -1,5 +1,74 @@
 # Changelog
 
+## 2026-07-03 — Инцидент `--drop-table` + тотальный запрет DROP + единый runbook запуска
+
+**Risk:** low (docs/rules/hooks) | **Workflow:** `W_clean_10y_validation_2026-07-03` | **Branch:** `feature/dwh-bb8`
+
+**Инцидент:** при запуске «чистого прогона 10 лет» оркестратор передал флаг `--drop-table` в `orchestrator_limiter_v8.py`, который пересоздаёт таблицы целиком: уничтожены ВСЕ version_id в `sim_masterv2_v9` и `sim_repairline_v9`, включая канонический `version_id=1` и инженерные прогоны сессии (19961/19964/19971/19974/20160/20260/20360, 9860/9861 и др.). Витрина `sim_masterv2_v9_daily` не пострадала. Бэкапов sim-таблиц нет (скрипт снапшотов покрывает только ETL). Решение Алексея: на утраченные инженерные прогоны «забить», канонический срез перегнать заново.
+
+**Меры (раз и навсегда):**
+1. **Тотальный запрет DROP/TRUNCATE/`--drop-table`** — новый hook `.cursor/hooks/clickhouse_drop_guard.py` (deny в preToolUse, зарегистрирован в `.cursor/hooks.json`); bypass только по явному согласию Алексея через токен `DROP_APPROVED_BY_ALEXEY=1` в команде. Правило закреплено в `.cursor/rules/00_global_always.mdc`.
+2. **Единый runbook `docs/runbook_sim_launch.md`**: 3 DWH-источника (`status_components`→`heli_pandas`/`heli_raw`, `program_ac`, `status_overhaul` через `dwh_loader.py`) + 4 статичных Excel из `v_2026-04-08`/master_data (`Program_heli.xlsx`→`flight_program_ac`, `Program.xlsx`→`flight_program_fl`, `MD_Сomponents.xlsx`, `Economics.xlsx`); команды запуска seatbelts ON (`cuda13`) / OFF (`cuda13_nosb`, бит-идентичность подтверждена EXCEPT=0/0) только через прямые пути интерпретаторов (`conda run` не работает); семантика version_id.
+3. **Разгадана «мистика INV-12/INV-2/11/13»**: валидаторы ищут `flight_program_ac` и входной `heli_pandas` по ВЫХОДНОМУ version_id → канонический прогон обязан идти с `--version-id 1`; инженерные id ≠ 1 дают ложные FAIL (артефакт связки, не дефект алгоритма).
+
+## 2026-07-02 — П.2 Фазы 1+2 (bulk-импорт Init HostFunctions): реализовано, провалидировано, ОТКАЧЕНО (нет perf-выигрыша)
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_p2_bulk_init_2026-07-02` (закрыт) | **Branch:** `feature/dwh-bb8`
+
+**Итог (важно):** гипотеза плана П.2 (bulk `.bin`-импорт вместо поэлементных SWIG-записей ускорит Init-фазу CUDAEnsemble) реализована, дважды доработана после найденных дефектов, корректность подтверждена bit-identical трижды — но **финальный чистый замер `nsys` показал отсутствие практического wall-time выигрыша**: `concurrent_runs=62` полный sweep −1.1% (в пределах шума измерения), `concurrent_runs=8` стабильно **хуже на +38.8%**. По решению Алексея реализация **откачена** (рабочее дерево, без коммита). Изменения П.1 (MacroProperty migration, см. запись ниже) и ранее существовавший `HF_InitMP5Cumsum` откатом не затронуты.
+
+**Что было сделано (и затем откачено):** перевод `HF_InitMP4Quota`, `HF_InitEconomicsDailyCosts`, `HF_InitSpawnLimitCumulative` (обе ветки, ensemble — через `np.where`), `HF_InitV8`(`deterministic_dates_mp`) на bulk `.bin`-импорт (`env.importMacroProperty`) по образцу `HF_InitMP5Cumsum`, с общим content-addressed digest-кэш helper'ом.
+
+**2 реальных дефекта найдены и исправлены в процессе (оба сохранены как урок, не как отдельная функциональность после отката):**
+1. **Race condition**: временный путь bulk-импорта использовал `os.getpid()` как маркер уникальности, но `CUDAEnsemble` исполняет `concurrent_runs` как конкурентные вызовы внутри ОДНОГО python-процесса (общий PID) — при идентичном содержимом (один digest на весь sweep, типично для `deterministic_dates_mp`) конкурентные вызовы гонялись за один tmp-путь → `FileNotFoundError` (13/62 runs при `cr=62`). Исправлено `uuid.uuid4().hex`.
+2. **Отсутствие cache-hit**: даже после race-fix каждый из 62 конкурентных вызовов с идентичным содержимым делал полную запись на диск заново (не было проверки "файл с этим digest уже есть — переиспользовать"), что создавало новый disk I/O contention (`pthread_rwlock_wrlock` вырос на +16.5% к baseline), нейтрализующий выигрыш от снижения Python-сериализации. Добавлена cache-hit проверка — снизила, но не устранила эффект (rwlock_wrlock остался +9.7% к baseline).
+
+**Корректность (bit-identical PASS, 3 независимых раунда):** (1) исходная bulk-init реализация — vids 19961↔19971 (non-ensemble) и 19964↔19974 (ensemble); (2) race-fix — vid 20160↔20260; (3) cache-hit fix — vid 20360↔20260. Во всех случаях `sim_masterv2_v9`+`sim_repairline_v9` EXCEPT both-ways=0/0, независимо перепроверено SQL напрямую оркестратором (не только со слов исполнителя).
+
+**Финальные perf-числа (nsys, cuda13_nosb, тот же сценарий/датасет для всех):**
+
+| метрика | baseline (П.1) | broken (race, partial 49/62) | +race-fix (clean) | +race-fix+cache-hit (финал) |
+|---|---:|---:|---:|---:|
+| cr=8 wall | 29.973s | 39.519s | 43.098s | 41.609s (**+38.8%**) |
+| cr=62 init-stagger p50 | 23.271s | 16.564s | 17.410s | 16.256s (−30.1%) |
+| cr=62 `pthread_cond_timedwait` | 1435.4s | 907.3s | 983.2s | 920.1s (−35.9%) |
+| cr=62 `pthread_rwlock_wrlock` | 1305.5s | 741.9s | 1520.7s | 1432.1s (**+9.7%**) |
+| cr=62 полный wall | 66.375s | 58.867s | 66.000s | 65.626s (**−1.1%, шум**) |
+
+Теоретическая цель (снижение Python-сериализации Init-вызовов) частично достигнута (`cond_timedwait`/стаггер вниз), но компенсирована новым disk I/O contention — итоговый wall-time не улучшился.
+
+**Review/governance (весь пайплайн пройден трижды, single-pass governance с context-обновлениями):** reviewer-flame `approve_with_notes` × 3 раунда (bulk-init, race-fix, cache-hit); validator-judge PASS; governance-compliance `allow_with_notes`; human PRE-approval «реализуем п.2» + финальное решение об откате в текущем чате.
+
+**Урок на будущее (зафиксирован в Agent KG):** любая bulk/file-cache-based host-I/O оптимизация для multi-threaded-in-one-process окружений (CUDAEnsemble) должна закладывать cache-hit с самого начала и избегать заходов на файловую систему на "горячем" пути инициализации при высокой конкурентности — иначе новый disk I/O contention может полностью нейтрализовать выигрыш от устранения Python-сериализации. Измерять эффект стоит ДО передачи в review/governance, а не после.
+
+**Фаза 3** (device population init через `agent_out`+tickets) остаётся отложенной до multibom-редизайна — не зависит от исхода Фаз 1+2; дизайн-заготовка в `/home/albud/.cursor/plans/п.2a_bulk-init_init_hostfunctions_09004d98.plan.md`.
+
+**Файлы:** `code/sim_v2/messaging/orchestrator_limiter_v8.py`, `rtc_limiter_v8.py` — возвращены к состоянию до Фаз 1+2 (П.1 и `HF_InitMP5Cumsum` не затронуты).
+
+**Коммит:** не выполнялся на всём протяжении workflow (реализация была откачена до коммита).
+
+---
+
+## 2026-07-02 — MacroProperty migration для статичных квотных массивов (устранение per-RTC-launch env-буфера)
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_mp4_macroprop_2026-07-02` | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** nsys callchain-атрибуция (OSRT_API→OSRT_CALLCHAINS) доказала точным совпадением чисел (978061 RTC-запусков == cuLibraryGetGlobal == cuMemcpyHtoDAsync == cuLaunchKernelEx), что на **каждый** RTC-запуск FLAME GPU перезаливает весь env-буфер (~51.6 КБ H2D/launch, 49 из 52 ГБ H2D-трафика на 62-run sweep). 4 статичных массива (не меняющихся между прогонами sweep) составляли ~48 КБ этого буфера: `mp4_ops_counter_mi8`/`mi17` (квоты по дням), `mp4_new_counter_mi17_seed` (план поставок Mi-17), `mp3_mfg_date_days` (даты выпуска).
+
+**Действие:** миграция этих 4 массивов из env PropertyArray в device-resident MacroProperty. Изменено 6 файлов `code/sim_v2/messaging/**` (+90/−24): `base_model_messaging.py` (padding до MAX_DAYS/RTC_MAX_FRAMES + capture значений), `orchestrator_limiter_v8.py` (4× `newMacroPropertyUInt32`, новый флаг `mp4_inited`, новый `HF_InitMP4Quota` по паттерну существующего `HF_InitEconomicsDailyCosts`), `rtc_quota_v8.py`/`rtc_quota_v8_base.py`/`rtc_spawn_det_v8.py`/`rtc_spawn_dynamic_v7.py` (device-read `getProperty<T>(name,idx)` → `getMacroProperty<T,SIZE>(name)[idx]`, SIZE через существующий `Template.substitute()`/f-string механизм без хардкода).
+
+**Корректность (bit-identical PASS, независимо подтверждено validator-judge):** сравнение sim vid=9860 (старый код) vs vid=9861 (новый код) на реальных данных ClickHouse (`2026-06-29`, input vid=1, MP4-квоты ненулевые, det-spawn seed sum=28). `sim_masterv2_v9` 77055/77055 строк, EXCEPT both-ways=0/0 (28 колонок, `group_by` 1&2). `sim_repairline_v9` 65700/65700, EXCEPT both-ways=0/0 (11 колонок). Det-spawn маркер (idx 286–313) = 28/28 идентично. Инварианты `run_all_stream.py`: 24/32 PASS идентично на обеих версиях (8 pre-existing FAIL не регрессия).
+
+**Review/governance:** reviewer-flame `approve_with_notes` (`ctx_W_mp4_macroprop_2026-07-02_review_d1c39590`: API-корректность, паддинг, init-ordering, scope discipline подтверждены; замечание: `mp3_mfg_date_days` dead-путь в активном пайплайне, triage); governance-compliance `allow_with_notes`, блокеров нет; human PRE-approval «реализуем п.1» (`ctx_W_mp4_macroprop_2026-07-02_approval_d9a2147f`).
+
+**Итог:** устраняет статичные массивы из per-launch env-буфера FLAME GPU; ожидаемое снижение H2D-трафика (nsys sanity-профиль до/после не прогонялся отдельно, снижение объёма буфера подтверждено по коду). Практический ROI остаётся ограниченным на текущих 62 прогонах (GPU занят ~88% wall при cr=8), эффект более выражен при масштабировании sweep.
+
+**Файлы:** `code/sim_v2/messaging/base_model_messaging.py`, `orchestrator_limiter_v8.py`, `rtc_quota_v8.py`, `rtc_quota_v8_base.py`, `rtc_spawn_det_v8.py`, `rtc_spawn_dynamic_v7.py`.
+
+**Коммит:** не выполнен (по политике — только по явной команде).
+
+---
+
 ## 2026-07-01 — GPU-only day-loop (P0/P1a/P1b/P2) + диагностика cr-scaling
 
 **Risk:** high | **Profile:** high-strict | **Workflow:** `W_gpu_only_dayloop_2026-06-30` | **Branch:** `feature/dwh-bb8`

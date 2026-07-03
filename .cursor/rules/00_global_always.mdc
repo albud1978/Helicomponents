@@ -108,6 +108,16 @@ alwaysApply: true
 - Перед запросом: загрузить `.env` и `config/database_config.yaml` (host/port/user из ENV, пароль из `CLICKHOUSE_PASSWORD`).
 - Выполнять только SELECT без мутаций.
 
+## ClickHouse: тотальный запрет DROP/TRUNCATE (решение Алексея 2026-07-03)
+- **DROP TABLE / DROP DATABASE / TRUNCATE любых таблиц — тотальный запрет. Только с явного согласия Алексея в текущем чате.**
+- **Флаг `--drop-table` у `orchestrator_limiter_v8.py` пересоздаёт ВСЮ таблицу (все version_id), а не срез — запрещён.** Загрузчики и симулятор идемпотентны: сами чистят только свой срез `version_date`/`version_id`, drop не нужен.
+- Enforcement: hook `.cursor/hooks/clickhouse_drop_guard.py` блокирует такие команды; после явного согласия Алексея — добавить в команду токен `DROP_APPROVED_BY_ALEXEY=1`.
+- Причина: инцидент 2026-07-03 — `--drop-table` уничтожил все версии `sim_masterv2_v9`/`sim_repairline_v9`, включая канонический `version_id=1`.
+
+## Запуск симуляции и загрузка данных (единый runbook)
+- **Единственный источник истины по командам запуска симуляции (seatbelts ON/OFF), загрузке данных (3 DWH + 4 Excel) и семантике version_id — `docs/runbook_sim_launch.md`.** Не искать команды по коду/чатам — читать runbook.
+- Канонический прогон — всегда `--version-id 1` (валидаторы ищут `flight_program_ac`/`heli_pandas` по выходному version_id).
+
 ## Экспертный уровень анализа и разработки (обновлено 19.10.2025)
 
 ### Требуемый уровень работы
