@@ -59,6 +59,12 @@
 - Любые артефакты должны быть идемпотентны и ревью-пригодны в Git.
 - Экстренные runtime-фиксы обязательно backport в source-артефакты.
 
+## Safe-dev цикл для BI
+- Подробный порядок: `deploy/bi-as-code/runbook_safe_dev.md`.
+- `scripts/bi_backup.py` снимает timestamped backup через Superset API export и ставит локальный `bi-backup-*` tag без push.
+- `scripts/bi_smoke.py` проверяет `/api/v1/chart/data`; для `График Ремонта` дополнительно проверяет overlap по `sim_repairline_v9` напрямую в ClickHouse.
+- Published chart/dashboard id не менять до promote; все правки сначала идут в `[WIP]`-копию с `published:false`.
+
 ## Политика секретов (обязательно)
 - Локальный рабочий файл: `.env.private` (или локальный `.env`, не в Git).
 - Шаблон для передачи между проектами: `.env.template` / `.env.example` без реальных значений.

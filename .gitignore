@@ -182,6 +182,10 @@ superset-frontend/plugins/plugin-chart-echarts6-gantt/node_modules/
 superset-frontend/plugins/plugin-chart-echarts6-gantt/lib/
 superset-frontend/plugins/plugin-chart-echarts6-gantt/dist/
 superset-frontend/plugins/plugin-chart-echarts6-gantt/package-lock.json
+# BI backup bundles are timestamped operator artifacts; keep the tracked
+# dashboard_1 template sanitized in Git, but do not add ad-hoc backups by accident.
+!deploy/bi-as-code/scripts/bi_backup.py
+deploy/bi-as-code/superset/bundles/*_backup_*/**
 .cursor/hooks/connection_fail.flag
 # Daily hygiene check local state (per-machine, не shared)
 .cursor/hooks/.hygiene_last_check.txt

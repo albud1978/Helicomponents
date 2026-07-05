@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-03T18:40:10Z",
+    "updated_at": "2026-07-05T10:25:48Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -4015,6 +4015,88 @@
       },
       "created_at": "2026-07-03T18:10:35Z",
       "updated_at": "2026-07-03T18:25:06Z"
+    },
+    {
+      "workflow_id": "W_mps_e2e_62_2026-07-03",
+      "goal": "Чистый E2E-прогон MPS-лончера: 62 сценария (caps 0..60 + uncapped), 4 шарда x cr=8, seatbelts OFF, полная загрузка CH, замер общего wall E2E",
+      "phase": "implement",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 24000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-03T19:04:25Z"
+      },
+      "created_at": "2026-07-03T18:58:55Z",
+      "updated_at": "2026-07-03T19:04:25Z"
+    },
+    {
+      "workflow_id": "W_canonical_20260704_2026-07-05",
+      "goal": "Полный канонический прогон на 2026-07-04 (version_id=1, seatbelts OFF) + полная валидация инвариантов; проверка правки DE по acn=22497 (INV-12 должен быть чистым)",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-policy"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 41000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-05T09:06:15Z"
+      },
+      "created_at": "2026-07-05T08:58:58Z",
+      "updated_at": "2026-07-05T09:06:53Z"
+    },
+    {
+      "workflow_id": "W_repair_gantt_diag_2026-07-05",
+      "goal": "Диагностика Superset-чарта График Ремонта: наложения на Ганте 29.06 (артефакт визуализации vs дефект расчёта) + почему видно только 2 датасета; данные sim_repairline_v9 проверены — реальных наложений нет",
+      "phase": "implement",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 22000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-05T10:00:33Z"
+      },
+      "created_at": "2026-07-05T09:51:22Z",
+      "updated_at": "2026-07-05T10:00:33Z"
+    },
+    {
+      "workflow_id": "W_bi_safe_dev_tooling_2026-07-05",
+      "goal": "Безопасный цикл разработки BI: bi_backup.py (снимок+git-тег), bi_smoke.py (chart/data + gantt-overlap assert), конвенция staging WIP-копия, санитизация секрета CH в bundle + gitignore",
+      "phase": "implement",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 3,
+        "cumulative_tokens": 120000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-05T10:25:48Z"
+      },
+      "created_at": "2026-07-05T10:13:27Z",
+      "updated_at": "2026-07-05T10:25:48Z"
     }
   ],
   "handoffs": [
@@ -28637,6 +28719,335 @@
         "est_tokens": 26000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_mps_e2e_62_2026-07-03_orchestrator_ded123f7",
+      "workflow_id": "W_mps_e2e_62_2026-07-03",
+      "agent": "orchestrator",
+      "user_goal": "Теперь делай читсый прогон ланчера на 62 сценария с замером общего вреени прогона e2e и ситбелтс офф",
+      "changes": "Прогонов кода не меняли: чистый E2E-запуск spawn_cap_ensemble_mps.py (62 сценария, 4 шарда x cr=8, cuda13_nosb seatbelts OFF, out_base=1000, полная загрузка CH); лог output/mps_shard/e2e_62_20260703.log",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "total_wall_s=172.492 (GPU 20.819s, loader 101.784s, materializer 48.809s); все 4 шарда rc=0; загружено vids 1000..1061: sim_masterv2_v9 4.71M строк, sim_repairline_v9 4.07M, daily 2.72M, deficit 0.45M; бит-идентичность 2108 .bin против baseline свипа diff=0; mps_stop_rc=0, pgrep пуст",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "total_wall_s=172.492 (GPU 20.819s, loader 101.784s, materializer 48.809s); все 4 шарда rc=0; загружено vids 1000..1061: sim_masterv2_v9 4.71M строк, sim_repairline_v9 4.07M, daily 2.72M, deficit 0.45M; бит-идентичность 2108 .bin против baseline свипа diff=0; mps_stop_rc=0, pgrep пуст",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-03T19:04:01Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_mps_e2e_62_2026-07-03_orchestrator_47a9855b",
+      "workflow_id": "W_mps_e2e_62_2026-07-03",
+      "agent": "orchestrator",
+      "user_goal": "Теперь делай читсый прогон ланчера на 62 сценария с замером общего вреени прогона e2e и ситбелтс офф",
+      "changes": "Код не менялся: чистый E2E-запуск spawn_cap_ensemble_mps.py (62 сценария, 4 шарда x cr=8, cuda13_nosb seatbelts OFF, out_base=1000, полная загрузка CH); лог output/mps_shard/e2e_62_20260703.log",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "total_wall_s=172.492 (GPU 20.819s, loader 101.784s, materializer 48.809s); все 4 шарда rc=0; загружено vids 1000..1061: sim_masterv2_v9 4.71M строк, sim_repairline_v9 4.07M, daily 2.72M, deficit 0.45M; бит-идентичность 2108 .bin против baseline свипа diff=0; mps_stop_rc=0, pgrep пуст",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — только запуск и замер, кода не меняли",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "total_wall_s=172.492 (GPU 20.819s, loader 101.784s, materializer 48.809s); все 4 шарда rc=0; загружено vids 1000..1061: sim_masterv2_v9 4.71M строк, sim_repairline_v9 4.07M, daily 2.72M, deficit 0.45M; бит-идентичность 2108 .bin против baseline свипа diff=0; mps_stop_rc=0, pgrep пуст",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "c7068df74e78eef829b4969f4807f965ae587e7aab1d25d0d679e72940a74008",
+      "created_at": "2026-07-03T19:04:25Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_canonical_20260704_2026-07-05_orchestrator_79af3e72",
+      "workflow_id": "W_canonical_20260704_2026-07-05",
+      "agent": "orchestrator",
+      "user_goal": "давай теперь седалем полный прогон на вчерашний день, инварианты должны быть норм, т.к. команда DE поправили данные на 22497, заодно и проверим",
+      "changes": "Код не менялся. DWH: загружен срез 2026-07-04 в heli_pandas(11615)/program_ac(169)/status_overhaul(57) + flight_program_ac/fl из Excel v_2026-04-08. Симуляция: sim_masterv2_v9/sim_repairline_v9/daily для version_date=20260704 version_id=1 (INSERT в свой срез, идемпотентно)",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Прогон: 239 шагов, 9.05с общее, 2.44с GPU, ops=target Mi-8=10/Mi-17=139. Валидация run_all_stream --dataset 20260704:1: TOTAL=16 PASSED=16 FAILED=0. INV-12 детально: total_ppr_gt_oh_rows=0, sim_introduced_violations rows=0 aircraft=0 (22497 чистый). Подтверждение правки DE: 22497 group_by=2 ppr 270034->307 на 04.07 (обнуление ppr после ремонта), oh=270000",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — прогон на 04.07 + валидация правки DE по 22497, ничего сверх",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "канонический прогон + INSERT в sim-таблицы (идемпотентный срез); кода/SSoT не меняли; DWH-загрузка нового среза 04.07",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "DWH-загрузка 04.07 (dwh_loader all + program_ac/fl Excel) -> канонический прогон orchestrator_limiter_v8 (seatbelts OFF, 10y, vid=1) -> run_all_stream валидация",
+      "evidence_pack": "Прогон: 239 шагов, 9.05с общее, 2.44с GPU, ops=target Mi-8=10/Mi-17=139. Валидация run_all_stream --dataset 20260704:1: TOTAL=16 PASSED=16 FAILED=0. INV-12 детально: total_ppr_gt_oh_rows=0, sim_introduced_violations rows=0 aircraft=0 (22497 чистый). Подтверждение правки DE: 22497 group_by=2 ppr 270034->307 на 04.07 (обнуление ppr после ремонта), oh=270000",
+      "success_criteria": "",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=run_all_stream SUMMARY 16/16;inv12_ppr_le_oh.py total_ppr_gt_oh_rows=0; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-05T09:03:30Z",
+      "modules": [
+        "state_transitions"
+      ],
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 28000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_canonical_20260704_2026-07-05_governance-compliance_5bf62ee1",
+      "workflow_id": "W_canonical_20260704_2026-07-05",
+      "agent": "governance-compliance",
+      "user_goal": "давай теперь седалем полный прогон на вчерашний день, инварианты должны быть норм, т.к. команда DE поправили данные на 22497, заодно и проверим",
+      "changes": "Governance single pass verdict=allow_with_notes. Проверено: (1) scope match UserGoal(прогон 04.07 + проверка INV после правки DE 22497) <-> Changes(DWH-загрузка 04.07 + канонический прогон + валидация + подтверждение фикса) — совпадает; (2) denylist-зоны НЕ тронуты (git: изменён только config/agent_kg.json — сама KG-шина); (3) DROP/TRUNCATE отсутствует (--replace-slice = DELETE своего среза, разрешён runbook/лоадером); (4) SuccessCriteria верифицируем (script run_all_stream --dataset 20260704:1 -> 16/16 PASS, INV-12 чистый). NOTES: TraceID пуст и поле success_criteria в KG-записи orchestrator handoff пусто (minor traceability gap; PlanStepID=P1 и handoff_id несут workflow-линковку, INV-12 evidence присутствует в EvidencePack).",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: Источники: agent_kg.py --read-state (handoff orchestrator_79af3e72, phase=implement, RiskTier=medium, HumanGateRequired=no, DriftCheck заполнен); git status --porcelain (только config/agent_kg.json); inspect handoffs (trace_id='', plan_step_id=P1, success_criteria='', usage present); EvidencePack orchestrator: run_all_stream 16/16 PASS, INV-12 total_ppr_gt_oh_rows=0 sim_introduced=0. Проверены PlanCard/EvidencePack/ComplianceChecklist (present), RiskTier/RiskReasons/HumanGateRequired (согласованы). BI boundary N/A. DROP guard: --replace-slice не DROP.\nEvidence: git status --porcelain: только config/agent_kg.json. read-state: orchestrator handoff 79af3e72 phase=implement medium HumanGate=no DriftCheck заполнен. inspect: trace_id='' plan_step_id=P1 success_criteria='' usage={claude-fable-5-thinking-high,28000}. Orchestrator EvidencePack: run_all_stream --dataset 20260704:1 16/16 PASS; INV-12 total_ppr_gt_oh_rows=0 sim_introduced=0 (22497 чистый). --replace-slice=DELETE среза, не DROP.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "операционный канонический прогон + INSERT в свой срез sim-таблиц; код/SSoT/BI/invariants не менялись",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "no",
+      "plan_card": "Single governance pass перед закрытием W_canonical_20260704: policy/scope/denylist/DROP/traceability check -> verdict allow_with_notes.",
+      "evidence_pack": "Facts: Источники: agent_kg.py --read-state (handoff orchestrator_79af3e72, phase=implement, RiskTier=medium, HumanGateRequired=no, DriftCheck заполнен); git status --porcelain (только config/agent_kg.json); inspect handoffs (trace_id='', plan_step_id=P1, success_criteria='', usage present); EvidencePack orchestrator: run_all_stream 16/16 PASS, INV-12 total_ppr_gt_oh_rows=0 sim_introduced=0. Проверены PlanCard/EvidencePack/ComplianceChecklist (present), RiskTier/RiskReasons/HumanGateRequired (согласованы). BI boundary N/A. DROP guard: --replace-slice не DROP.\nEvidence: git status --porcelain: только config/agent_kg.json. read-state: orchestrator handoff 79af3e72 phase=implement medium HumanGate=no DriftCheck заполнен. inspect: trace_id='' plan_step_id=P1 success_criteria='' usage={claude-fable-5-thinking-high,28000}. Orchestrator EvidencePack: run_all_stream --dataset 20260704:1 16/16 PASS; INV-12 total_ppr_gt_oh_rows=0 sim_introduced=0 (22497 чистый). --replace-slice=DELETE среза, не DROP.",
+      "success_criteria": "",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=traceability_minor(empty_trace_id;empty_success_criteria_field); evidence_refs=git status(only config/agent_kg.json);handoff_W_canonical_20260704_2026-07-05_orchestrator_79af3e72;run_all_stream 16/16 PASS;INV-12 clean; approval_ref=N/A",
+      "risks": "Пустой TraceID снижает сквозную трассируемость будущих аудитов — рекомендовано заполнять при --write-handoff",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "0bd61992463931bdd83cde27c1532344c0bd1ed2bd28c1159e9cb53a1e4c9f9a",
+      "created_at": "2026-07-05T09:06:15Z",
+      "modules": [
+        "extract_dwh",
+        "validation"
+      ],
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 13000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_repair_gantt_diag_2026-07-05_orchestrator_6e628316",
+      "workflow_id": "W_repair_gantt_diag_2026-07-05",
+      "agent": "orchestrator",
+      "user_goal": "полный прогон попал в CH? проверить таблицы ремонтов; в Суперсет видно 2 датасета, Гант 29.06 много наложений — битый расчёт ремонтов?",
+      "changes": "Диагностика read-only, изменений нет",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "1) Прогон 04.07 в CH: (20260704,1) во всех 4 sim-таблицах. 2) Расчёт ремонтов корректен: sim_repairline_v9 vid=1 (29.06 и 04.07) — чистые 180-дн непересекающиеся эпизоды, дублей (line,day)=0, борт в >1 линии=0, TEMP-5 overlap=0, INV 16/16. 3) ROOT CAUSE Ганта: за version_date=20260629 в таблице 65 version_id (канон 1 + свип 1000..1061); чарт echarts6_gantt (deploy/bi-as-code/superset/charts/gantt_repairline_custom_v20250704.yaml, datasource sim_repairline_v9_daily->физич. sim_repairline_v9) не пинит пару (version_date,version_id) на один прогон -> на линии 12 день 1290 сидят 44 vid x 4 борта, бары клипаются. Борт 25127 из тултипа есть только в vid=1003 [1094..1273] норм 180дн, в vid=1 отсутствует. 4) 04.07 должен рендериться чисто (только vid=1). 5) '2 датасета'=2 version_date с выходами; 6 Excel-снапшотов из data_input/source_data — входы, не выходы симуляции.",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — диагностика Ганта/таблиц, вывод без изменений",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "1) Прогон 04.07 в CH: (20260704,1) во всех 4 sim-таблицах. 2) Расчёт ремонтов корректен: sim_repairline_v9 vid=1 (29.06 и 04.07) — чистые 180-дн непересекающиеся эпизоды, дублей (line,day)=0, борт в >1 линии=0, TEMP-5 overlap=0, INV 16/16. 3) ROOT CAUSE Ганта: за version_date=20260629 в таблице 65 version_id (канон 1 + свип 1000..1061); чарт echarts6_gantt (deploy/bi-as-code/superset/charts/gantt_repairline_custom_v20250704.yaml, datasource sim_repairline_v9_daily->физич. sim_repairline_v9) не пинит пару (version_date,version_id) на один прогон -> на линии 12 день 1290 сидят 44 vid x 4 борта, бары клипаются. Борт 25127 из тултипа есть только в vid=1003 [1094..1273] норм 180дн, в vid=1 отсутствует. 4) 04.07 должен рендериться чисто (только vid=1). 5) '2 датасета'=2 version_date с выходами; 6 Excel-снапшотов из data_input/source_data — входы, не выходы симуляции.",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-05T10:00:33Z",
+      "modules": [
+        "bi"
+      ],
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 22000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_bi_safe_dev_tooling_2026-07-05_coder-general_c15d9632",
+      "workflow_id": "W_bi_safe_dev_tooling_2026-07-05",
+      "agent": "coder-general",
+      "user_goal": "Реализовать safe-dev tooling для BI: sanitize ClickHouse secret в Superset bundle; добавить bi_backup.py и bi_smoke.py; проверить backup smoke, Gantt smoke без version_id FAIL и pinned smoke PASS; обновить runbook/README/changelog; без Superset/ClickHouse мутаций и без push.",
+      "changes": "- Sanitized deploy/bi-as-code/superset/bundles/dashboard_1/dashboard_export_bundle/databases/clickhouse.yaml: sqlalchemy_uri password replaced with *** placeholder.\n- Updated .gitignore: ignored deploy/bi-as-code/superset/bundles/*_backup_*/** and added explicit exception for deploy/bi-as-code/scripts/bi_backup.py because global *_backup* would hide the requested script.\n- Added deploy/bi-as-code/scripts/bi_backup.py: API health check, reuse SupersetSession/_login/export_dashboard_bundle, timestamped backup dir, git add -A -f, local bi-backup-* tag, optional note/no-tag.\n- Added deploy/bi-as-code/scripts/bi_smoke.py: chart/data smoke for configured charts and ClickHouse read-only repairline overlap check for chart 3 with version_date and optional version_id pin.\n- Added deploy/bi-as-code/runbook_safe_dev.md and updated deploy/bi-as-code/README.md.\n- Updated docs/changelog.md with 2026-07-05 entry and Git history secret caveat.",
+      "facts": "",
+      "assumptions": "Backup tag points to current Git HEAD as requested by script contract; operator commit/push policy remains explicit-human-only. Risks if false: rollback tags need an explicit committed restore point before external use.",
+      "evidence": "SuccessCriteria evidence:\n1) py_compile PASS: python3 -m py_compile deploy/bi-as-code/scripts/bi_backup.py deploy/bi-as-code/scripts/bi_smoke.py (exit 0); ReadLints found no linter errors for new scripts.\n2) Backup smoke PASS (exit 0): health OK http://10.96.96.47:8088/health; export OK deploy/bi-as-code/superset/bundles/dashboard_1_backup_20260705101956; git add OK; git tag OK bi-backup-1-20260705101956. Cleanup performed: git reset path, removed backup dir, deleted tag; follow-up checks show no *_backup_* dirs and no tag.\n3) Gantt unpinned smoke expected FAIL (exit 1): chart 3 data OK rows=54327; CH source rows=1751920 for version_date=20260629 group_by IN (1,2); SMOKE FAIL max aircraft_records per (line_id, day_u16)=65 at line_id=0 day_u16=1 distinct_versions=65.\n4) Gantt pinned smoke PASS (exit 0): chart 3 data OK rows=24838; CH source rows=24838 for version_date=20260704 version_id=1 group_by IN (1,2); overlap OK max aircraft_records per (line_id, day_u16)<=1; SMOKE PASS.\n5) Sanitized URI confirmed by rg: sqlalchemy_uri clickhousedb://default:***@10.95.19.132:8123/default?secure=false.\nConstraints: no Superset mutations beyond read-only chart/data/export; no CH mutations, only SELECT/DESCRIBE; no DROP, no push, no subagents.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_bi_safe_dev_tooling_2026-07-05:2026-07-05T10:25:00Z",
+      "plan_step_id": "C1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "BI safe-dev tooling touches deploy/bi-as-code scripts/docs and read-only Superset/ClickHouse smoke; secret sanitization affects tracked bundle metadata.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A - coder implementation handoff; governance/compliance may review next",
+      "human_gate_required": "conditional",
+      "plan_card": "Implement API-only backup/smoke utilities, sanitize tracked CH bundle secret, document safe-dev WIP/promote/rollback process.",
+      "evidence_pack": "SuccessCriteria evidence:\n1) py_compile PASS: python3 -m py_compile deploy/bi-as-code/scripts/bi_backup.py deploy/bi-as-code/scripts/bi_smoke.py (exit 0); ReadLints found no linter errors for new scripts.\n2) Backup smoke PASS (exit 0): health OK http://10.96.96.47:8088/health; export OK deploy/bi-as-code/superset/bundles/dashboard_1_backup_20260705101956; git add OK; git tag OK bi-backup-1-20260705101956. Cleanup performed: git reset path, removed backup dir, deleted tag; follow-up checks show no *_backup_* dirs and no tag.\n3) Gantt unpinned smoke expected FAIL (exit 1): chart 3 data OK rows=54327; CH source rows=1751920 for version_date=20260629 group_by IN (1,2); SMOKE FAIL max aircraft_records per (line_id, day_u16)=65 at line_id=0 day_u16=1 distinct_versions=65.\n4) Gantt pinned smoke PASS (exit 0): chart 3 data OK rows=24838; CH source rows=24838 for version_date=20260704 version_id=1 group_by IN (1,2); overlap OK max aircraft_records per (line_id, day_u16)<=1; SMOKE PASS.\n5) Sanitized URI confirmed by rg: sqlalchemy_uri clickhousedb://default:***@10.95.19.132:8123/default?secure=false.\nConstraints: no Superset mutations beyond read-only chart/data/export; no CH mutations, only SELECT/DESCRIBE; no DROP, no push, no subagents.",
+      "success_criteria": "script: py_compile new BI scripts exits 0; smoke: bi_backup.py --dashboard-ids 1 exits 0 then cleanup; smoke: bi_smoke.py --chart-ids 3 --version-date 20260629 --strict exits 1 with overlap; smoke: bi_smoke.py --chart-ids 3 --version-date 20260704 --version-id 1 --strict exits 0.",
+      "compliance_checklist": "decision=allow_with_notes required_gates=partial exceptions=governance_not_run_by_coder evidence_refs=py_compile;bi_backup_smoke;bi_smoke_unpinned;bi_smoke_pinned;sanitized_rg approval_ref=N/A",
+      "risks": "Secret remains in Git history until password rotation/history-purge; backup tag without a committed restore point is only a local marker; default all-chart smoke was not run, only requested chart 3 smoke modes.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "BI tooling/docs only; Domain Graph not affected.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-05T10:21:22Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 31000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_bi_safe_dev_tooling_2026-07-05_governance-compliance_74fd07ed",
+      "workflow_id": "W_bi_safe_dev_tooling_2026-07-05",
+      "agent": "governance-compliance",
+      "user_goal": "изучи тему, посмотрим как нам разрабатывать безопасно с бэкапом настроек суперсет. Мы же можем себе сохранить настройки или сделать тестовый набор для доработок, и после успешных тестов перезаписывать паблишед",
+      "changes": "Governance verdict=allow_with_notes для закрытия W_bi_safe_dev_tooling. Проверено: (1) scope match UserGoal(safe-dev backup+тестовый набор+promote published) ↔ Changes(bi_backup+bi_smoke+runbook+sanitize+gitignore); (2) denylist чист (нет code/sim_v2, config/transitions, invariants.json, prod-BI); (3) DROP/мутации отсутствуют — bi_smoke только DESCRIBE+SELECT, bi_backup только API export + git add/tag без push; (4) traceability coder-handoff c15d9632; (5) security sqlalchemy_uri sanitized, оговорка про Git history зафиксирована. NOTE(residual): пароль в Git history — sanitize+gitignore защищают только будущее; рекомендована ротация CH-пароля + опциональный history-purge отдельным решением.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: git check-ignore подтверждает bi_backup.py НЕ скрыт (negation .gitignore:187), bi_smoke.py не скрыт, backup-каталоги игнорируются (.gitignore:135). git status: оба скрипта committable (??). Read bi_smoke.py/bi_backup.py: read-only CH + API export, без мутаций и push. KG read-state: coder handoff c15d9632 traceable (TraceID/PlanStepID/workflow). Проверено RiskTier=medium/HumanGateRequired=no (reversible, архитектура pre-approved Алексеем в чате). PlanCard/EvidencePack/ComplianceChecklist в coder handoff присутствуют.\nEvidence: 1) git check-ignore -v: bi_backup.py → .gitignore:187 !-negation (НЕ игнорируется), bi_smoke.py rc=1 (не игнорируется), dashboard_1_backup_*/foo.yaml → .gitignore:135 *_backup* (игнорируется). 2) git status --porcelain: только .gitignore/config(agent_kg)/deploy/bi-as-code(README,clickhouse.yaml)/docs(changelog) + ?? runbook/bi_backup.py/bi_smoke.py — denylist чист. 3) Grep DROP|TRUNCATE|ALTER|DELETE|INSERT|UPDATE|OPTIMIZE в scripts/: только англ. 'Create ... backup' в docstrings, мутаций нет. 4) bi_smoke._check_repairline_overlap: DESCRIBE TABLE + SELECT count()/GROUP BY, params dict, re.fullmatch identifier, group_by IN(1,2). 5) clickhouse.yaml:2 sqlalchemy_uri=default:***@ sanitized. 6) changelog.md:11 фиксирует security-оговорку про Git history + рекомендацию ротации/purge.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_bi_safe_dev_tooling_2026-07-05:2026-07-05T10:30:00Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "reversible BI tooling в deploy/bi-as-code/scripts+docs; read-only Superset export + read-only ClickHouse SELECT; sanitize секрета в tracked bundle",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Single governance pass перед закрытием: verify policy/scope/denylist/DROP/traceability/security для BI safe-dev tooling; verdict + KG handoff.",
+      "evidence_pack": "Facts: git check-ignore подтверждает bi_backup.py НЕ скрыт (negation .gitignore:187), bi_smoke.py не скрыт, backup-каталоги игнорируются (.gitignore:135). git status: оба скрипта committable (??). Read bi_smoke.py/bi_backup.py: read-only CH + API export, без мутаций и push. KG read-state: coder handoff c15d9632 traceable (TraceID/PlanStepID/workflow). Проверено RiskTier=medium/HumanGateRequired=no (reversible, архитектура pre-approved Алексеем в чате). PlanCard/EvidencePack/ComplianceChecklist в coder handoff присутствуют.\nEvidence: 1) git check-ignore -v: bi_backup.py → .gitignore:187 !-negation (НЕ игнорируется), bi_smoke.py rc=1 (не игнорируется), dashboard_1_backup_*/foo.yaml → .gitignore:135 *_backup* (игнорируется). 2) git status --porcelain: только .gitignore/config(agent_kg)/deploy/bi-as-code(README,clickhouse.yaml)/docs(changelog) + ?? runbook/bi_backup.py/bi_smoke.py — denylist чист. 3) Grep DROP|TRUNCATE|ALTER|DELETE|INSERT|UPDATE|OPTIMIZE в scripts/: только англ. 'Create ... backup' в docstrings, мутаций нет. 4) bi_smoke._check_repairline_overlap: DESCRIBE TABLE + SELECT count()/GROUP BY, params dict, re.fullmatch identifier, group_by IN(1,2). 5) clickhouse.yaml:2 sqlalchemy_uri=default:***@ sanitized. 6) changelog.md:11 фиксирует security-оговорку про Git history + рекомендацию ротации/purge.",
+      "success_criteria": "script: bi_backup.py export+tag; bi_smoke.py Гант pinned PASS; секрет sanitized; runbook — верифицировано оркестратором PASS",
+      "compliance_checklist": "decision=allow_with_notes required_gates=pass exceptions=git_history_secret_residual evidence_refs=git_check-ignore(187/135);git_status;clickhouse.yaml:2;bi_smoke.py;bi_backup.py;handoff_c15d9632;changelog.md:11 approval_ref=N/A",
+      "risks": "Пароль CH в Git-истории до ротации/purge (документировано, вне scope reversible tooling); backup-tag=локальный маркер без committed restore point; default all-chart smoke не гонялся (только chart 3)",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "26aa8737a02416bc0382d41f8ec694dc04f0e55379b77f78c9e1a720af500245",
+      "created_at": "2026-07-05T10:25:08Z",
+      "modules": [
+        "bi"
+      ],
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 34000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_bi_safe_dev_tooling_2026-07-05_orchestrator_d852e0bb",
+      "workflow_id": "W_bi_safe_dev_tooling_2026-07-05",
+      "agent": "orchestrator",
+      "user_goal": "безопасная разработка BI с бэкапом настроек суперсет + тестовый набор + перезапись published после тестов",
+      "changes": "Новые: deploy/bi-as-code/scripts/bi_backup.py, bi_smoke.py, runbook_safe_dev.md. Изменены: .gitignore (backup-каталоги игнор, bi_backup.py исключение), deploy/bi-as-code/README.md, bundles/.../databases/clickhouse.yaml (секрет sanitized), docs/changelog.md",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Секрет sanitized: sqlalchemy_uri default:***@... Верификация orchestrator: bi_smoke без пина 29.06 rc=1 (max=65 version_id на line=0 day=1 — ловит реальный баг чарта); bi_smoke pinned 04.07/vid=1 rc=0 PASS. bi_backup smoke: timestamped export+git-tag создан и удалён (разовый). py_compile OK. governance check-ignore: bi_backup.py НЕ скрыт (negation .gitignore:187), backup-каталоги игнорируются. Governance: allow_with_notes (74fd07ed) — residual: пароль в Git-истории (рекомендована ротация CH + опц. history-purge)",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — безопасный цикл BI-разработки с бэкапом+WIP+smoke+promote, ничего сверх",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "P1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "reversible tooling в deploy/bi-as-code/scripts (medium-fast); security: sanitize секрета CH; архитектура pre-approved Алексеем",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Делегация coder-general: bi_backup.py+bi_smoke.py+runbook_safe_dev+sanitize секрета; верификация оркестратором (smoke FAIL/PASS exit codes); governance single pass",
+      "evidence_pack": "Секрет sanitized: sqlalchemy_uri default:***@... Верификация orchestrator: bi_smoke без пина 29.06 rc=1 (max=65 version_id на line=0 day=1 — ловит реальный баг чарта); bi_smoke pinned 04.07/vid=1 rc=0 PASS. bi_backup smoke: timestamped export+git-tag создан и удалён (разовый). py_compile OK. governance check-ignore: bi_backup.py НЕ скрыт (negation .gitignore:187), backup-каталоги игнорируются. Governance: allow_with_notes (74fd07ed) — residual: пароль в Git-истории (рекомендована ротация CH + опц. history-purge)",
+      "success_criteria": "",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=git_history_secret_residual; evidence_refs=handoff_c15d9632;handoff_74fd07ed;bi_smoke.py;bi_backup.py;changelog.md:11; approval_ref=N/A",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "cdcf978e5f30bf0da51335330eac1872e1eb2e7dedc44d3d777fd3aec2c07f71",
+      "created_at": "2026-07-05T10:25:48Z",
+      "modules": [
+        "infra"
+      ],
+      "usage": {
+        "model": "claude-fable-5-thinking-high",
+        "est_tokens": 55000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -32113,6 +32524,60 @@
       "agent": "orchestrator",
       "created_at": "2026-07-03T18:25:06Z",
       "updated_at": "2026-07-03T18:25:06Z"
+    },
+    {
+      "context_id": "ctx_W_mps_e2e_62_2026-07-03_closure_22ab5296",
+      "workflow_id": "W_mps_e2e_62_2026-07-03",
+      "context_type": "closure",
+      "content": "E2E 62 сценария: total 172.5s (GPU 20.8 + load 150.6), rc=0, бит-идентичность diff=0, MPS погашен",
+      "agent": "orchestrator",
+      "created_at": "2026-07-03T19:04:25Z",
+      "updated_at": "2026-07-03T19:04:25Z"
+    },
+    {
+      "context_id": "ctx_W_canonical_20260704_2026-07-05_closure_a87e820f",
+      "workflow_id": "W_canonical_20260704_2026-07-05",
+      "context_type": "closure",
+      "content": "Канонический прогон 04.07: 16/16 PASS, INV-12 по 22497 чистый (правка DE подтверждена: ppr обнулён после ремонта); governance allow_with_notes (5bf62ee1)",
+      "agent": "orchestrator",
+      "created_at": "2026-07-05T09:06:53Z",
+      "updated_at": "2026-07-05T09:06:53Z"
+    },
+    {
+      "context_id": "ctx_W_repair_gantt_diag_2026-07-05_phase_start_ce6b5690",
+      "workflow_id": "W_repair_gantt_diag_2026-07-05",
+      "context_type": "phase_start",
+      "content": "READ-ONLY BI диагностика Superset: чарт График Ремонта, viz_type, dataset/SQL, механизм интервала бара Ганта, проверка гипотезы min/max overlap-артефакта, объяснение 2 датасетов по version_date/version_id",
+      "agent": "bi-semantic-analyst",
+      "created_at": "2026-07-05T09:52:36Z",
+      "updated_at": "2026-07-05T09:52:36Z"
+    },
+    {
+      "context_id": "ctx_W_repair_gantt_diag_2026-07-05_closure_b407af26",
+      "workflow_id": "W_repair_gantt_diag_2026-07-05",
+      "context_type": "closure",
+      "content": "Диагностика: расчёт ремонтов корректен (vid=1 чистые 180-дн эпизоды, INV 16/16); наложения Ганта = наложение 65 version_id (свип) за 29.06 из-за отсутствия пиннинга (version_date,version_id); 04.07 чист",
+      "agent": "orchestrator",
+      "created_at": "2026-07-05T10:00:33Z",
+      "updated_at": "2026-07-05T10:00:33Z"
+    },
+    {
+      "context_id": "ctx_W_bi_safe_dev_tooling_2026-07-05_phase_start_17075004",
+      "workflow_id": "W_bi_safe_dev_tooling_2026-07-05",
+      "context_type": "phase_start",
+      "content": "governance single-pass: policy/scope/traceability/security review перед закрытием BI safe-dev tooling",
+      "agent": "governance-compliance",
+      "created_at": "2026-07-05T10:14:30Z",
+      "updated_at": "2026-07-05T10:24:04Z"
+    },
+    {
+      "context_id": "ctx_W_bi_safe_dev_tooling_2026-07-05_closure_a9448b04",
+      "workflow_id": "W_bi_safe_dev_tooling_2026-07-05",
+      "context_type": "closure",
+      "content": "BI safe-dev tooling: bi_backup+bi_smoke+runbook+sanitize секрета; верифицировано (smoke FAIL/PASS), governance allow_with_notes (74fd07ed); residual — пароль в Git-истории (ротация CH опц.)",
+      "agent": "orchestrator",
+      "created_at": "2026-07-05T10:25:48Z",
+      "updated_at": "2026-07-05T10:25:48Z"
     }
   ],
   "meta": {

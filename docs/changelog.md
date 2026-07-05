@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-05 — Safe-dev tooling для BI backup/smoke
+
+**Risk:** medium | **Workflow:** `W_bi_safe_dev_tooling_2026-07-05` | **Branch:** `feature/dwh-bb8`
+
+Добавлены `deploy/bi-as-code/scripts/bi_backup.py` и `deploy/bi-as-code/scripts/bi_smoke.py`: backup делает API-only export dashboard bundle в timestamped-каталог и ставит локальный `bi-backup-*` tag без push; smoke проверяет `/api/v1/chart/data` и отдельно ловит Gantt overlap по `sim_repairline_v9` через read-only ClickHouse `SELECT`.
+
+Документирован safe-dev цикл `backup -> [WIP] -> smoke -> promote -> smoke published -> rollback` в `deploy/bi-as-code/runbook_safe_dev.md`, README дополнен указателем на runbook и новые утилиты.
+
+Секрет ClickHouse в tracked Superset bundle sanitized (`sqlalchemy_uri` теперь содержит `***`), а timestamped backup-каталоги игнорируются от случайного добавления. Важно: пароль уже был в истории Git; sanitize + gitignore защищают будущие изменения, но не очищают history. Рекомендация: ротация пароля ClickHouse и отдельное решение по history purge через `git filter-repo`.
+
 ## 2026-07-03 — MPS-лончер шардированного свипа `spawn_cap_ensemble_mps.py`
 
 **Risk:** medium (`medium-fast`) | **Workflow:** `W_mps_shard_launcher_2026-07-03` | **Branch:** `feature/dwh-bb8`
