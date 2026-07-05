@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-07-05 — History purge: пароль CH убран из всей Git-истории репо
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_git_history_purge_2026-07-05` | **Branch:** все (force-push на master и все ветки)
+
+**Что сделано:** `git filter-repo --replace-text` заменил 3 уникальных пароля ClickHouse (пользователь `default`, встречались в `…/databases/clickhouse.yaml` со 25.02) на `***` во ВСЕХ коммитах/ветках/тегах. Переписано 876 коммитов. Force-push `--all --tags` на origin: master `822c83a2→fd62b9a6`, 17 веток force-update + 2 new, 3 тега force-update + 1 new. Верифицировано оркестратором независимо: локально и на remote — 0 остатков пароля, sanitized `default:***@` подтверждён на `origin/master` и `origin/feature/dwh-bb8`.
+
+**Backup (точка отката):** `git bundle create --all` → `/media/DATA_BIG/Projects/Heli/_backups/pre-purge-2026-07-05.bundle` (738 MB, 31 ref, verify OK), вынесен за пределы репо. Откат: `git clone pre-purge-2026-07-05.bundle` + force-push обратно.
+
+**Явные решения Алексея:** (1) весь репо, не только `feature/dwh-bb8`; (2) force-push на `master` согласован; (3) БЕЗ GitHub GC (dangling objects) и БЕЗ ротации пароля CH.
+
+**Важные оговорки (зафиксированы как осознанный выбор):**
+- **Пароль НЕ ротирован** — действующий пароль CH совпадает с одним из исторических и остаётся валидным. До GitHub GC unreachable-object старые коммиты с паролем доступны по прямому SHA. Защита от компрометации — ротация пароля CH (отдельное решение, мутирующая операция, требует админов CH).
+- **GitHub dangling commits**: force-push убирает пароль из видимой истории веток, но старые SHA остаются доступны через GitHub UI до внутреннего GC. Полная очистка — запрос в GitHub support (не делаем).
+- **Все клоны разошлись**: разработчикам/агентам нужен fresh `git clone`; существующие клоны с старыми хешами сломаны.
+- filter-repo проявил и force-pushed дополнительные refs (`cursor/*`, `codex/*`, `claude/*`, `feature/extract-dwh`, `master-backup-jan2026-flame-rtc`, `rollback_spawn_1287`) — все в sanitized виде; удаление ненужных — отдельной операцией.
+
 ## 2026-07-05 — Safe-dev tooling для BI backup/smoke
 
 **Risk:** medium | **Workflow:** `W_bi_safe_dev_tooling_2026-07-05` | **Branch:** `feature/dwh-bb8`
