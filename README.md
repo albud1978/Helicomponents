@@ -181,7 +181,7 @@ python3 code/sim_v2/messaging/orchestrator_limiter_v8.py \
 | **`.cursor/rules/`** | Модульные правила разработки для Cursor AI |
 | **`.cursor/agents/`** | Субагенты проекта: orchestrator + 9 активных (coder-flame, coder-general, reviewer-flame, validator-judge, capsule-builder, research-graph-analyst, bi-semantic-analyst, governance-compliance, docs-curator) + 1 deprecated (analyst-sql-graph). Состав см. ниже («Multi-agent framework — переиспользование»). |
 | `docs/validation.md` | Операционный runbook: порядок прогона V8 + потоковые валидации без автозапуска |
-| `docs/backlog.md` | Короткие идеи на будущее (формат и правила внутри файла) |
+| [`docs/backlog.md`](docs/backlog.md) | **SSoT project backlog**: отложенные идеи/DQ/BI без активного workflow; индекс + карточки с алгоритмом/кодом и кликабельными путями (см. правила внутри файла). Связь: Agent KG `W_triage_queue`, Singularity по желанию |
 | `docs/migration.md` | Промт для новых разработчиков |
 | `docs/limiter_v8_capsule.md` | Контекстная капсула LIMITER V8 (handoff) |
 

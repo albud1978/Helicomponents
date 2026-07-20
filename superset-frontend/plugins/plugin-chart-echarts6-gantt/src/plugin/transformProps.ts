@@ -14,6 +14,9 @@ const END_TIME_KEYS = ["end", "end_ts", "end_date", "finish", "to"];
 const LABEL_KEYS = ["label", "name", "aircraft_number"];
 const GROUP_KEYS = ["group_by", "groupBy", "group"];
 const DAY_INDEX_KEYS = ["day_u16", "day_index", "day_u32"];
+const OVERDUE_KEYS = ["overdue", "is_overdue", "alert"];
+const DESCRIPTION_KEYS = ["description", "desc", "wp_description"];
+const STATUS_KEYS = ["status", "wp_status", "state"];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type RawRow = Record<string, unknown>;
@@ -42,6 +45,14 @@ function parseOptionalInt(raw: unknown): number | null {
   return Math.trunc(num);
 }
 
+function parseOptionalText(raw: unknown): string {
+  if (raw === undefined || raw === null) {
+    return "";
+  }
+  const text = String(raw).trim();
+  return text === "null" || text === "None" ? "" : text;
+}
+
 export default function transformProps(
   chartProps: ChartProps
 ): Echarts6GanttTransformedProps {
@@ -61,6 +72,9 @@ export default function transformProps(
   const labelKey = detectTimeKey(rawRows, LABEL_KEYS);
   const groupKey = detectTimeKey(rawRows, GROUP_KEYS);
   const dayIndexKey = detectTimeKey(rawRows, DAY_INDEX_KEYS);
+  const overdueKey = detectTimeKey(rawRows, OVERDUE_KEYS);
+  const descriptionKey = detectTimeKey(rawRows, DESCRIPTION_KEYS);
+  const statusKey = detectTimeKey(rawRows, STATUS_KEYS);
 
   // Prefer explicit start/end ranges; otherwise merge contiguous day points into intervals.
   let data: GanttPoint[] = [];
@@ -81,6 +95,9 @@ export default function transformProps(
         const dayIndexStart = parseOptionalInt(
           row.day_u16 ?? (dayIndexKey ? row[dayIndexKey] : null)
         );
+        const overdue = parseOptionalInt(
+          row.overdue ?? (overdueKey ? row[overdueKey] : null)
+        );
         return {
           startTs: left,
           endTs: right,
@@ -88,7 +105,12 @@ export default function transformProps(
           value: Number.isFinite(metricValue) ? metricValue : 0,
           label: String(fallbackLabel ?? metricValue ?? "N/A"),
           groupBy: groupByParsed,
-          dayIndexStart
+          dayIndexStart,
+          overdue,
+          description: parseOptionalText(
+            row.description ?? (descriptionKey ? row[descriptionKey] : "")
+          ),
+          status: parseOptionalText(row.status ?? (statusKey ? row[statusKey] : ""))
         };
       })
       .filter(point => Number.isFinite(point.startTs) && Number.isFinite(point.endTs));
@@ -104,13 +126,21 @@ export default function transformProps(
         const dayIndexStart = parseOptionalInt(
           row.day_u16 ?? (dayIndexKey ? row[dayIndexKey] : null)
         );
+        const overdue = parseOptionalInt(
+          row.overdue ?? (overdueKey ? row[overdueKey] : null)
+        );
         return {
           startTs,
           category: String(row[categoryKey] ?? "N/A"),
           value: Number.isFinite(metricValue) ? metricValue : 0,
           label: String(fallbackLabel ?? metricValue ?? "N/A"),
           groupBy: groupByParsed,
-          dayIndexStart
+          dayIndexStart,
+          overdue,
+          description: parseOptionalText(
+            row.description ?? (descriptionKey ? row[descriptionKey] : "")
+          ),
+          status: parseOptionalText(row.status ?? (statusKey ? row[statusKey] : ""))
         };
       })
       .filter(point => Number.isFinite(point.startTs))
@@ -134,9 +164,14 @@ export default function transformProps(
         last.category === point.category &&
         last.groupBy === point.groupBy &&
         last.label === point.label &&
+        last.status === point.status &&
+        last.description === point.description &&
         point.startTs <= last.endTs + DAY_MS
       ) {
         last.endTs = Math.max(last.endTs, point.startTs + DAY_MS);
+        if (point.overdue === 1) {
+          last.overdue = 1;
+        }
       } else {
         data.push({
           startTs: point.startTs,
@@ -145,7 +180,10 @@ export default function transformProps(
           value: point.value,
           label: point.label,
           groupBy: point.groupBy,
-          dayIndexStart: point.dayIndexStart
+          dayIndexStart: point.dayIndexStart,
+          overdue: point.overdue,
+          description: point.description,
+          status: point.status
         });
       }
     }

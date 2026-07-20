@@ -8,6 +8,10 @@ SSoT: data_input/master_data/MD_Сomponents.xlsx → таблица md_component
 1. Пустая md_components (после DROP) — полная загрузка всех строк из Excel
 2. Непустая md_components — INSERT новых partno + UPDATE существующих из Excel SSoT
 3. Проверяет качество и целостность данных
+
+Поле nomenclature (Excel: «Наименование») — человекочитаемое имя агрегата/группы
+для аналитики и BI. Optional: отсутствие колонки в старом Excel не ломает загрузку;
+в CH добавляется через ALTER ADD COLUMN IF NOT EXISTS (не DROP/TRUNCATE).
 """
 
 import pandas as pd
@@ -61,6 +65,17 @@ def load_md_components():
         if 'Счет' in df.columns:
             df = df.drop(columns=['Счет'])
             print(f"🗑️ Удалена служебная колонка: Счет")
+
+        # «Наименование» / Unnamed (если English-header пуст) → nomenclature
+        rename_nomen = {}
+        if 'nomenclature' not in df.columns:
+            if 'Наименование' in df.columns:
+                rename_nomen['Наименование'] = 'nomenclature'
+            elif 'Unnamed: 1' in df.columns:
+                rename_nomen['Unnamed: 1'] = 'nomenclature'
+        if rename_nomen:
+            df = df.rename(columns=rename_nomen)
+            print(f"🏷️ Колонка наименования: {list(rename_nomen.keys())[0]} → nomenclature")
         
         print(f"📊 Загружено: {len(df):,} записей с {len(df.columns)} колонками")
         print(f"📋 Колонки: {list(df.columns)}")
@@ -89,7 +104,7 @@ def prepare_md_data(df, version_date, version_id=1):
             sys.exit(1)
         
         # Обработка строковых полей для ClickHouse
-        string_columns = ['partno']
+        string_columns = ['partno', 'nomenclature']
         for col in string_columns:
             if col in df.columns:
                 df[col] = df[col].astype(str)
@@ -97,6 +112,8 @@ def prepare_md_data(df, version_date, version_id=1):
                 # Очищаем переносы строк в partno
                 if col == 'partno':
                     df[col] = df[col].str.replace('\n', '', regex=False)
+                if col == 'nomenclature':
+                    df[col] = df[col].str.replace('\n', ' ', regex=False).str.strip()
         
         # Обработка ac_type_mask (переименование и преобразование в UInt8)
         if 'ac_type_mask' in df.columns:
@@ -247,6 +264,7 @@ def prepare_md_data(df, version_date, version_id=1):
         # Приводим порядок колонок к порядку DDL ClickHouse
         column_order = [
             'partno',
+            'nomenclature',
             'comp_number', 'group_by', 'ac_type_mask',
             'type_restricted', 'common_restricted1', 'common_restricted2',
             'trigger_interval', 'partout_time', 'assembly_time', 'repair_number', 'repair_time',
@@ -298,6 +316,7 @@ def create_md_table(client):
         
         if table_exists:
             print("✅ Таблица md_components уже существует, пропускаем создание")
+            ensure_nomenclature_column(client)
             return
         
         print("📝 Создание таблицы md_components...")
@@ -305,6 +324,7 @@ def create_md_table(client):
         CREATE TABLE IF NOT EXISTS md_components (
             -- Основные идентификаторы
             `partno` Nullable(String),              -- Чертежный номер
+            `nomenclature` Nullable(String),        -- Человекочитаемое наименование (BI/аналитика)
             `comp_number` Nullable(UInt8),          -- Количество на ВС (было Float64 → uint8)
             `group_by` Nullable(UInt8),             -- Группировка
             `ac_type_mask` Nullable(UInt8),         -- Тип ВС (маска: 32, 64, 96)
@@ -363,6 +383,27 @@ def create_md_table(client):
     except Exception as e:
         print(f"❌ Ошибка создания таблицы md_components: {e}")
         sys.exit(1)
+
+
+def ensure_nomenclature_column(client):
+    """Additive schema: nomenclature для BI, без DROP/пересоздания таблицы."""
+    cols = {row[0] for row in client.execute("DESCRIBE TABLE md_components")}
+    if "nomenclature" in cols:
+        print("✅ Колонка md_components.nomenclature уже есть")
+        return
+    # Ставим сразу после partno, если ClickHouse позволяет AFTER; иначе в конец.
+    try:
+        client.execute(
+            "ALTER TABLE md_components ADD COLUMN IF NOT EXISTS "
+            "`nomenclature` Nullable(String) AFTER `partno`"
+        )
+    except Exception:
+        client.execute(
+            "ALTER TABLE md_components ADD COLUMN IF NOT EXISTS "
+            "`nomenclature` Nullable(String)"
+        )
+    print("✅ Добавлена колонка md_components.nomenclature (Nullable String)")
+
 
 def check_version_conflicts(client, version_date, version_id):
     """Проверяет состояние справочника md_components
@@ -450,10 +491,11 @@ def _sync_ssot_rows(client, df: pd.DataFrame) -> int:
         return 0
 
     partnos_sql = ", ".join(f"'{_escape_partno(partno)}'" for partno in df['partno'])
-    # version_date/version_id — ключи ORDER BY MergeTree, UPDATE запрещён ClickHouse
-    sync_columns = [
-        col for col in df.columns if col not in {'partno', 'version_date', 'version_id'}
-    ]
+    # version_date/version_id — ключи ORDER BY MergeTree, UPDATE запрещён ClickHouse.
+    # br_mi8/br_mi17 — производные (calculate_beyond_repair.py), Excel их не содержит:
+    # не затираем NULL при SSoT sync.
+    sync_skip = {'partno', 'version_date', 'version_id', 'br_mi8', 'br_mi17'}
+    sync_columns = [col for col in df.columns if col not in sync_skip]
 
     for col in sync_columns:
         cases = []

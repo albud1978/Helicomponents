@@ -203,6 +203,52 @@ def load_clickhouse_config():
         print(f"❌ Ошибка загрузки конфигурации: {e}")
         sys.exit(1)
 
+
+def _apply_clickhouse_bind_device(bind_device: str) -> None:
+    """Привязка native TCP к интерфейсу (например ppp0 для 10.95.x)."""
+    import socket
+
+    import clickhouse_driver.connection as ch_conn
+
+    if getattr(ch_conn.Connection, "_heli_bind_device_patched", False):
+        return
+
+    device = bind_device.encode("utf-8") + b"\x00"
+    so_bind_to_device = 25
+    orig_create_socket = ch_conn.Connection._create_socket
+
+    def _create_socket_bound(self, host, port):
+        err = None
+        for res in socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM):
+            af, socktype, proto, canonname, sa = res
+            sock = None
+            try:
+                sock = socket.socket(af, socktype, proto)
+                sock.setsockopt(socket.SOL_SOCKET, so_bind_to_device, device)
+                sock.settimeout(self.connect_timeout)
+
+                if self.secure_socket:
+                    ssl_context = self._create_ssl_context(self.ssl_options.copy())
+                    sock = ssl_context.wrap_socket(
+                        sock, server_hostname=self.server_hostname or host
+                    )
+
+                sock.connect(sa)
+                return sock
+            except OSError as exc:
+                err = exc
+                if sock is not None:
+                    sock.close()
+
+        if err is not None:
+            raise err
+        raise OSError("getaddrinfo returns an empty list")
+
+    ch_conn.Connection._create_socket = _create_socket_bound
+    ch_conn.Connection._heli_bind_device_patched = True
+    ch_conn.Connection._heli_bind_device_name = bind_device
+
+
 def get_clickhouse_client():
     """
     Создает клиент ClickHouse с безопасной конфигурацией
@@ -214,6 +260,11 @@ def get_clickhouse_client():
         from clickhouse_driver import Client
         
         config = load_clickhouse_config()
+
+        bind_device = os.getenv("CLICKHOUSE_BIND_DEVICE", "").strip()
+        if bind_device:
+            _apply_clickhouse_bind_device(bind_device)
+            print(f"🔗 ClickHouse bind device: {bind_device}")
         
         client = Client(
             host=config['host'],

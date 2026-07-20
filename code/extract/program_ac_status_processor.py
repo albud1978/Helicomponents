@@ -32,14 +32,36 @@ def load_dict_status_flat():
     }
 
 
-def get_program_ac_data(client):
+def _version_date_from_df(pandas_df):
+    """Извлекает единственный version_date из heli_pandas DataFrame."""
+    if 'version_date' not in pandas_df.columns or pandas_df.empty:
+        raise ValueError("heli_pandas DataFrame: отсутствует version_date")
+    unique = pandas_df['version_date'].dropna().unique()
+    if len(unique) == 0:
+        raise ValueError("heli_pandas DataFrame: version_date пуст")
+    if len(unique) > 1:
+        raise ValueError(
+            f"heli_pandas DataFrame: ожидается один version_date, найдено {len(unique)}"
+        )
+    raw = unique[0]
+    if isinstance(raw, date) and not isinstance(raw, datetime):
+        return raw
+    if isinstance(raw, datetime):
+        return raw.date()
+    if hasattr(raw, 'date') and callable(raw.date):
+        return raw.date()
+    return date.fromisoformat(str(raw)[:10])
+
+
+def get_program_ac_data(client, version_date):
     """
     Получает данные из таблицы program_ac - реестр вертолетов в эксплуатации
+    только для указанного version_date (без ретроспективного смешивания версий).
     
     Возвращает DataFrame с регистрационными номерами ВС в активной эксплуатации
     """
     try:
-        print("📋 Загружаем данные из program_ac...")
+        print(f"📋 Загружаем данные из program_ac (version_date={version_date})...")
         
         # Проверяем наличие таблицы
         check_table_query = "SELECT COUNT(*) FROM system.tables WHERE name = 'program_ac'"
@@ -50,7 +72,7 @@ def get_program_ac_data(client):
             print("💡 Сначала запустите: python3 code/extract/program_ac_loader.py")
             return None
         
-        # Получаем все данные о ВС в эксплуатации
+        # Только срез version_date датасета heli_pandas (не все исторические версии)
         query = """
         SELECT 
             ac_registr,
@@ -60,19 +82,20 @@ def get_program_ac_data(client):
             homebase,
             homebase_name
         FROM program_ac 
+        WHERE version_date = %(version_date)s
         ORDER BY ac_registr
         """
         
-        result = client.execute(query)
+        result = client.execute(query, {"version_date": version_date})
         
         if not result:
-            print("ℹ️ Нет данных о ВС в эксплуатации в program_ac")
+            print(f"ℹ️ Нет данных о ВС в эксплуатации в program_ac для {version_date}")
             return pd.DataFrame(columns=['ac_registr', 'ac_typ', 'owner', 'operator', 'homebase', 'homebase_name'])
         
         # Создаем DataFrame
         df = pd.DataFrame(result, columns=['ac_registr', 'ac_typ', 'owner', 'operator', 'homebase', 'homebase_name'])
         
-        print(f"✅ Загружено {len(df)} записей ВС в эксплуатации")
+        print(f"✅ Загружено {len(df)} записей ВС в эксплуатации (version_date={version_date})")
         print(f"📊 Типы ВС: {df['ac_typ'].value_counts().head(3).to_dict()}")
         
         # Показываем примеры ВС в эксплуатации
@@ -104,8 +127,9 @@ def process_aircraft_operation_status(pandas_df, client):
     try:
         print("🔧 Обработка статусов компонентов через program_ac...")
         
-        # Получаем данные по ВС в эксплуатации
-        program_ac_df = get_program_ac_data(client)
+        version_date = _version_date_from_df(pandas_df)
+        # Получаем данные по ВС в эксплуатации (только текущий version_date)
+        program_ac_df = get_program_ac_data(client, version_date)
         if program_ac_df is None:
             print("⚠️ Не удалось загрузить данные program_ac - пропускаем обработку статусов эксплуатации")
             return pandas_df

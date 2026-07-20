@@ -851,6 +851,11 @@ def main(version_date=None, version_id=None):
             print(f"🔧 Этап 3: Статусы неактивности планеров...")
             from extract.inactive_planery_processor import process_inactive_planery_status
             pandas_df = process_inactive_planery_status(pandas_df, client)
+
+            # ЭТАП 3b: inactive → serviceable (Mi-17 всегда; Mi-8 по истории программы) + агрегаты
+            print(f"🔧 Этап 3b: Inactive/serviceable classifier...")
+            from extract.inactive_serviceable_classifier import process_inactive_serviceable_status
+            pandas_df = process_inactive_serviceable_status(pandas_df, client)
             
         except ImportError as e:
             print(f"⚠️ Модуль статусов не найден: {e}")

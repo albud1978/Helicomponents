@@ -15,6 +15,7 @@ sys.path.append(str(CODE_ROOT / "utils"))
 from config_loader import get_clickhouse_client
 from extract.dual_loader import insert_data
 from extract.inactive_planery_processor import process_inactive_planery_status
+from extract.inactive_serviceable_classifier import process_inactive_serviceable_status
 from extract.overhaul_status_processor import process_status_field
 from extract.program_ac_precheck_runner import apply_program_ac_precheck
 from extract.program_ac_status_processor import process_program_ac_status_field
@@ -109,6 +110,23 @@ def _load_heli_pandas_version(client, version_date: date, version_id: int) -> pd
     return pd.DataFrame(rows, columns=PANDAS_COLS)
 
 
+def _reset_enrichment_outputs(df: pd.DataFrame) -> pd.DataFrame:
+    """Clear prior cascade outputs so re-enrich is idempotent on classified data.
+
+    Resets only enrichment-derived fields. Base identity/dims stay intact:
+    aircraft_number, group_by, ac_type_mask, and raw DWH columns.
+    """
+    out = df.copy()
+    n = len(out)
+    out["status_id"] = 0
+    out["repair_days"] = pd.Series([None] * n, index=out.index, dtype=object)
+    print(
+        f"Enrichment reset applied: status_id=0, repair_days=NA for {n} rows "
+        "(base fields / aircraft_number / group_by / ac_type_mask unchanged)"
+    )
+    return out
+
+
 def _replace_heli_pandas_version(
     client, df: pd.DataFrame, version_date: date, version_id: int
 ) -> int:
@@ -137,6 +155,7 @@ def _run_planner_cascade(client, df: pd.DataFrame) -> pd.DataFrame:
     df = process_status_field(df, client)
     df = process_program_ac_status_field(df, client)
     df = process_inactive_planery_status(df, client)
+    df = process_inactive_serviceable_status(df, client)
     return df
 
 
@@ -176,8 +195,9 @@ def run_post_enrichment(
         f"OPS={stats['ops_before']}, planner_status_0={stats['planner_zero_before']}"
     )
 
-    print("Planner cascade (overhaul -> program_ac -> inactive)...")
+    print("Planner cascade (overhaul -> program_ac -> inactive -> inactive_serviceable)...")
     df = _load_heli_pandas_version(ch, version_date, version_id)
+    df = _reset_enrichment_outputs(df)
     df = _run_planner_cascade(ch, df)
 
     if dry_run:

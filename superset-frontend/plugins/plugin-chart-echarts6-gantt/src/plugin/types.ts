@@ -6,6 +6,9 @@ export type GanttPoint = {
   label: string;
   groupBy: number | null;
   dayIndexStart: number | null;
+  overdue: number | null;
+  description: string;
+  status: string;
 };
 
 export type Echarts6GanttTransformedProps = {

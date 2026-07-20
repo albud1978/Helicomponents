@@ -57,6 +57,11 @@ import model_build
 
 import rtc_spawn_dynamic_v7
 import rtc_spawn_det_v8
+from sim_v2.components.planer_spawn_bom import PsnSpawnAllocator, load_reference_boms
+from sim_v2.messaging.planer_cospawn_aggregates import (
+    export_l2_births_to_ch,
+    register_planer_cospawn_hf,
+)
 
 
 # TODO: Keep this helper duplicated until a shared messaging utility module is allowed.
@@ -545,7 +550,8 @@ class LimiterV8Orchestrator:
                  enable_mp2: bool = False, clickhouse_client=None,
                  version_id: int | None = None,
                  input_version_id: int | None = None,
-                 ensemble_mode: bool = False):
+                 ensemble_mode: bool = False,
+                 enable_cospawn: bool = True):
         self.version_date = version_date
         self.end_day = end_day
         self.enable_mp2 = enable_mp2
@@ -553,11 +559,15 @@ class LimiterV8Orchestrator:
         self.version_id = version_id
         self.input_version_id = input_version_id
         self.ensemble_mode = bool(ensemble_mode)
+        self.enable_cospawn = bool(enable_cospawn)
         
         self.model = None
         self.simulation = None
         self.base_model = None
         self.env_data = None
+        self.bom_by_gb = None
+        self.psn_allocator = None
+        self.birth_records: list[dict] = []
         
         # DEBUG: дни для детального лога состояния (локальная отладка)
         self.debug_days = {830}
@@ -588,6 +598,20 @@ class LimiterV8Orchestrator:
         self.days = min(int(self.env_data['days_total_u16']), self.end_day + 1)
         
         print(f"\n✅ Данные: frames={self.frames}, days={self.days}")
+
+        if self.enable_cospawn:
+            src_vid = int(src_vid if src_vid is not None else 1)
+            print("\n📦 Co-spawn BOM (эталон max mfg_date, fullkit =2 двигателя)...")
+            self.bom_by_gb = load_reference_boms(client, vd, src_vid)
+            self.psn_allocator = PsnSpawnAllocator()
+            self.birth_records = []
+            for gb in (1, 2):
+                bom = self.bom_by_gb[gb]
+                mfg = bom.ref_mfg_date.isoformat() if bom.ref_mfg_date else "NULL"
+                print(
+                    f"   gb{gb}: ref_acn={bom.ref_aircraft_number}, mfg_date={mfg}, "
+                    f"lines={len(bom.lines)}, units/planer={bom.total_units}"
+                )
         
         # Подсчёт детерминированного spawn для смещения динамического
         spawn_seed = self.env_data.get('mp4_new_counter_mi17_seed', [])
@@ -951,6 +975,24 @@ class LimiterV8Orchestrator:
         )
         self._hf_ensemble_populate.spawn_data = self.spawn_data
 
+        if self.enable_cospawn and self.bom_by_gb and self.psn_allocator is not None:
+            vd = date.fromisoformat(self.version_date)
+            version_date_int = vd.year * 10000 + vd.month * 100 + vd.day
+            if self.version_id is not None:
+                version_id = int(self.version_id)
+            else:
+                run_id_env = os.environ.get("V8_RUN_ID")
+                version_id = int(run_id_env) if run_id_env else int(self.env_data.get("version_id_u32", 1))
+            self._hf_planer_cospawn = register_planer_cospawn_hf(
+                self.model,
+                bom_by_gb=self.bom_by_gb,
+                allocator=self.psn_allocator,
+                birth_records=self.birth_records,
+                version_date_int=version_date_int,
+                version_id=version_id,
+                days_total=self.days,
+            )
+
         # ═══════════════════════════════════════════════════════════════
         # ФАЗА 4: Limiter (бинарный поиск)
         # ═══════════════════════════════════════════════════════════════
@@ -1249,6 +1291,25 @@ class LimiterV8Orchestrator:
                 f"📊 Витрина sim_masterv2_v9_daily: {daily_rows} строк "
                 f"({version_date_int}, {version_id})"
             )
+            if self.enable_cospawn and self.birth_records and self.clickhouse_client:
+                t_birth = time.perf_counter()
+                inserted = export_l2_births_to_ch(
+                    self.clickhouse_client,
+                    self.birth_records,
+                    version_date_int,
+                    version_id,
+                )
+                birth_time = time.perf_counter() - t_birth
+                planer_births = len(
+                    {
+                        (r["birth_day"], r["aircraft_number"], r["spawn_kind"])
+                        for r in self.birth_records
+                    }
+                )
+                print(
+                    f"📤 L2 birth → sim_l2_birth_v1: {inserted:,} строк агрегатов "
+                    f"({planer_births} рождений планеров, {birth_time:.2f}с)"
+                )
         elif rl_data is None:
             print("⚠️ RepairLine Drain не прочитал данные")
         
@@ -1989,6 +2050,11 @@ def main():
     parser.add_argument("--version-id", type=int, default=None, help="Номер версии симуляции (1,2,3...); по умолчанию env V8_RUN_ID или 1")
     parser.add_argument("--input-version-id", type=int, default=None, help="version_id источника входных данных; по умолчанию = --version-id")
     parser.add_argument("--drop-table", action="store_true", help="Пересоздать таблицу")
+    parser.add_argument(
+        "--no-cospawn",
+        action="store_true",
+        help="Отключить co-spawn агрегатов при рождении планеров (bit-identical baseline)",
+    )
     
     args = parser.parse_args()
 
@@ -2122,7 +2188,8 @@ Run simulation requires Agent KG traceability. Options:
         enable_mp2=True,
         clickhouse_client=client,
         version_id=args.version_id,
-        input_version_id=args.input_version_id
+        input_version_id=args.input_version_id,
+        enable_cospawn=not args.no_cospawn,
     )
     orchestrator.prepare_data()
     orchestrator.build_model()

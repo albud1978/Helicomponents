@@ -1,5 +1,78 @@
 # Changelog
 
+## 2026-07-21 — Extract+sim+analysis DWH-среза 2026-07-19 v1 (vs 2026-07-12)
+
+**Workflow:** `W_extract_sim_20260719_vs12` | **Risk:** high | **Profile:** high-strict
+
+- **Extract:** полный DWH load + `flight_program_*` (Excel `v_2026-04-08`) + day0 OPS deficit demote → OPS Mi-8=55, Mi-17=102 (target совпал; demoted=12).
+- **Sim:** канонический `orchestrator_limiter_v8` seatbelts OFF; `sim_masterv2_v9` 84 561 rows; built-in ops=target PASS.
+- **Analysis (delta vs 2026-07-12):** day0 OPS deficit boards 3→5, units 33→68; новый heavy **22491** (29 units); demote 0 на 12 vs 12 на 19.
+- **Review/governance:** G1 **allow_with_notes**; validator-judge INV SQL — pending перед close. **Evidence:** `output/day0_ops_deficit_demote_2026-07-19_v1/`, `output/sim_canonical_2026-07-19_v1.log`.
+
+## 2026-07-20 — Day0 OPS deficit-demote в extract перед симуляцией
+
+**Workflow:** `W_day0_ops_deficit_demote_20260720` | **Risk:** high | **Module:** `extract_dwh`
+
+- Extract-контур (4 модуля): `deficit_rank_calculator.py` (ранжирование OPS по deficit_units), `ops_target_comparator.py` (OPS vs MP4 target из `flight_program_ac`, fail-fast без MP4), `deficit_demoter.py` (планеры 2→3; агрегаты на борту: `ИСПРАВНЫЙ`→3, иначе→7), CLI `day0_ops_deficit_demote_runner.py` (audit в `output/day0_ops_deficit_demote_<vd>_v<vid>/`).
+- Runbook (`docs/runbook_sim_launch.md`): шаг 3 после обоих `flight_program_*` loader-ов; после `--step enrich` runner перезапускать (enrichment сбрасывает статусы).
+- **Apply (2026-07-12 v1):** OPS Mi-8=55, Mi-17=102 (target совпал); demoted planers=11; aggregates→3=266. Governance **allow_with_notes**; downstream sim+INV revalidation — отдельный шаг.
+
+## 2026-07-20 — Demote: BR (sne>br) больше не уходит в storage(6) при профицитном демоуте — остаётся serviceable(3)
+
+**Workflow:** `W_demote_br_to_svc_20260720` | **Risk:** high | **Profile:** high-strict | **Branch:** `feature/dwh-bb8`
+
+**Контекст:** откат ветки demote-BR→6 из `W_demote_fork_br_storage_20260617` (запись changelog **2026-06-17** ниже сохранена как исторический след; **новая семантика её supersede'ит** для профицитного demote). Цель: beyond-repair планер (`sne>br`), выводимый по профициту из ops, **не** уходит рано в storage(6), а остаётся **serviceable(3)** — чтобы добить остаточный ресурс; ремонт(7) только по экономическому гейту для ремонтопригодных; resource-layer OH/LL+BR→6 на V8 без изменений.
+
+**Архитектура (RTC):** удалён V7-слой `v7_ops_demote_to_storage` (`COND_OPS_DEMOTE_TO_STORAGE`, `RTC_OPS_DEMOTE_TO_STORAGE`, регистрация в `register_phase2_demote`). Сохранён br-guard в `cond_ops_demote_to_unsvc` (`br>0 && sne>br → false`): BR пропускает economic→7 и падает в `v7_ops_demote`→3. Порядок Phase 2: `v7_ops_demote_to_unsvc` (2→7) → `v7_ops_demote` (2→3). Resource-layer V8 `ops_to_storage_v8` / `ops_to_unsvc_v8` (OH/LL + BR) **не тронуты**.
+
+**SSoT:** `config/transitions/transitions_rules.json` → `rtc_execution_order`: удалён `v7_ops_demote_to_storage`, перенумерация **0..44**. **Domain Graph sync не выполнялся** (по инструкции workflow).
+
+**Код:** `code/sim_v2/messaging/rtc_state_transitions_v7.py`, `config/transitions/transitions_rules.json`.
+
+**Review (reviewer-flame R1):** **ACCEPT** — удаление demote→storage подтверждено; V8 resource-слои без изменений; SSoT order 0..44.
+
+**Validation:** полный extract + sim, DWH-срез **2026-07-12 v1** — **INV 16/16 PASS** (INV-1…13 + TEMP-1/4/5). Day-1 регрессия demote-BR: борта **22607, 22654, 24689** — было **2→6**, стало **2→3**; demote-BR **3→0**; serviceable day1 **+3**; storage day1 **−3**.
+
+**Evidence:** `output/demote_br_to_svc_20260720/`; handoffs `handoff_W_demote_br_to_svc_20260720_coder-flame_661637e6` (I1), `handoff_W_demote_br_to_svc_20260720_reviewer-flame_c2d1d99c` (R1); approval `ctx_W_demote_br_to_svc_20260720_approval_7087ca8d`.
+
+**Verdict:** high-risk правка **принята** (reviewer-flame ACCEPT; sim+INV PASS на 2026-07-12 v1); demote-BR→6 **снято**; SSoT обновлён без sync Domain Graph.
+
+---
+
+## 2026-07-20 — dwh_post_enrichment: reset outputs before re-enrich cascade
+
+**Risk:** medium | **Workflow:** `W_day0_inactive_serviceable_20260717`
+
+- `code/utils/dwh_post_enrichment.py`: после `_load_heli_pandas_version` сбрасываются enrichment-выходы (`status_id=0`, `repair_days=NA`) до planner/post cascade — re-enrich на уже классифицированных данных идемпотентен; base fields / `aircraft_number` / `group_by` / `ac_type_mask` не трогаются.
+
+## 2026-07-17 — Day0 inactive/serviceable classifier + program_ac version_date filter
+
+**Risk:** high | **Workflow:** `W_day0_inactive_serviceable_20260717`
+
+- Новый шаг cascade после `inactive_planery`: `code/extract/inactive_serviceable_classifier.py` — Mi-17 OOR → serviceable(3); Mi-8 OOR → 3 только при истории в программе (SCD≥365d или `program_ac` с 2025-07-04); агрегаты на inactive → 7.
+- Фикс `program_ac_status_processor.get_program_ac_data`: фильтр `WHERE version_date = heli_pandas.version_date` (без ретроспективного смешивания версий).
+- Wiring: `dual_loader.py`, `dwh_post_enrichment.py`.
+
+## 2026-07-17 — Канонический sim-прогон DWH-среза 2026-07-16 v1
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_sim_20260716_20260717T071252Z`
+
+- **DWH load** (`dwh_loader.py --step all`, `version_date=2026-07-16`, `version_id=1`): `heli_pandas` 11 619, `program_ac` 171, `status_overhaul` 57.
+- **Flight program** (Excel `v_2026-04-08`): `flight_program_ac` 4 000 + `flight_program_fl` 2 064 000.
+- **Sim** (`orchestrator_limiter_v8`, `cuda13_nosb`, SEATBELTS OFF, `version_id=1`, `input-version-id=1`, `end-day=3650`): `sim_masterv2_v9` 76 940, `sim_repairline_v9` 65 700, `sim_masterv2_v9_daily` 43 800; GPU 2.33s, wall 9.63s.
+- **Validation** (`run_all_stream.py --dataset 20260716:1`): **16/16 PASS** (INV-1..13 + TEMP-1/4/5), 0 FAIL.
+- **Побочный контекст:** `md_components.nomenclature` 77/77 после загрузки (поле `nomenclature` не сломало цикл). **Логи:** `output/sim_gate_2026-07-16_*.log`.
+
+## 2026-07-13 — Канонический sim-прогон DWH-среза 2026-07-12 v1
+
+**Risk:** high | **Profile:** high-strict | **Workflow:** `W_sim_20260712_validate_20260713T181928Z`
+
+- **DWH load** (`dwh_loader.py --step all`, `version_date=2026-07-12`, `version_id=1`): `heli_pandas` 11 616, `program_ac` 169, `status_overhaul` 57.
+- **Flight program** (Excel `v_2026-04-08`): `flight_program_ac` 4 000 + `flight_program_fl` 1 952 000.
+- **Sim** (`orchestrator_limiter_v8`, `cuda13_nosb`, SEATBELTS OFF, `version_id=1`, `input-version-id=1`, `end-day=3650`): `sim_masterv2_v9` 76 254, `sim_repairline_v9` 65 700, `sim_masterv2_v9_daily` 43 800; GPU 2.42s, wall 49.4s.
+- **Validation** (`run_all_stream.py --dataset 20260712:1`): **16/16 PASS** (INV-1..13 + TEMP-1/4/5), 0 FAIL; built-in `ops=target`: Mi-8 10=10, Mi-17 139=139 PASS.
+- **Env-фикс (runtime):** `DWH_CLICKHOUSE_CA_CERT` → `config/certs/yandex_cloud_RootCA.pem` (устойчивый путь вместо `/tmp`). **master_sha256:** `138059a9240c390e207370f86e912c291eddf32b5db8c94e8e28cabd1549ecb3`.
+
 ## 2026-07-05 — History purge: пароль CH убран из всей Git-истории репо
 
 **Risk:** high | **Profile:** high-strict | **Workflow:** `W_git_history_purge_2026-07-05` | **Branch:** все (force-push на master и все ветки)

@@ -309,17 +309,6 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage) {
 }
 """
 
-# Условие: beyond-repair демоут в storage (needs_demote == 1)
-COND_OPS_DEMOTE_TO_STORAGE = """
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_demote_to_storage) {
-    if (FLAMEGPU->getVariable<unsigned int>("needs_demote") != 1u) return false;
-
-    const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
-    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
-    return (br > 0u && sne > br);
-}
-"""
-
 # Условие: экономический гейт демоута в unserviceable (needs_demote == 1)
 COND_OPS_DEMOTE_TO_UNSVC = f"""
 FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_demote_to_unsvc) {{
@@ -428,22 +417,6 @@ FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_to_unsvc_v7, flamegpu::MessageNone, flame
     FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     FLAMEGPU->setVariable<unsigned int>("repair_time", repair_time);
     FLAMEGPU->setVariable<unsigned int>("repair_days", repair_time);
-    return flamegpu::ALIVE;
-}
-"""
-
-# Функция: operations → storage (beyond-repair демоут, 2→6)
-RTC_OPS_DEMOTE_TO_STORAGE = """
-FLAMEGPU_AGENT_FUNCTION(rtc_ops_demote_to_storage_v7, flamegpu::MessageNone, flamegpu::MessageNone) {
-    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
-    const unsigned int current_day = current_day_mp[0];
-    FLAMEGPU->setVariable<unsigned int>("transition_2_to_6", 1u);
-    FLAMEGPU->setVariable<unsigned int>("status_id", 6u);
-    FLAMEGPU->setVariable<unsigned short>("limiter", 0u);
-    FLAMEGPU->setVariable<unsigned int>("needs_demote", 0u);
-    FLAMEGPU->setVariable<unsigned int>("status_change_day", current_day);
-    FLAMEGPU->setVariable<unsigned int>("daily_today_u32", 0u);
-    FLAMEGPU->setVariable<unsigned int>("daily_next_u32", 0u);
     return flamegpu::ALIVE;
 }
 """
@@ -731,14 +704,6 @@ def register_phase1_operations(model: fg.ModelDescription, agent: fg.AgentDescri
 def register_phase2_demote(model: fg.ModelDescription, agent: fg.AgentDescription):
     """Фаза 2: Демоут (после квотирования)"""
     print("  📦 V7 Фаза 2: Демоут...")
-    
-    # operations → storage (beyond-repair демоут, 2→6)
-    layer_demote_storage = model.newLayer("v7_ops_demote_to_storage")
-    fn = agent.newRTCFunction("rtc_ops_demote_to_storage_v7", RTC_OPS_DEMOTE_TO_STORAGE)
-    fn.setRTCFunctionCondition(COND_OPS_DEMOTE_TO_STORAGE)
-    fn.setInitialState("operations")
-    fn.setEndState("storage")
-    layer_demote_storage.addAgentFunction(fn)
 
     # operations → unserviceable (экономический гейт демоута, 2→7)
     layer_demote_unsvc = model.newLayer("v7_ops_demote_to_unsvc")
@@ -759,7 +724,7 @@ def register_phase2_demote(model: fg.ModelDescription, agent: fg.AgentDescriptio
     # V7: _stay функции удалены — FLAME GPU автоматически оставляет агентов
     # в своём состоянии если FunctionCondition = false
     
-    print("    ✅ Фаза 2 готова (storage, unsvc, demote)")
+    print("    ✅ Фаза 2 готова (unsvc, demote)")
 
 
 def register_phase3_promote(model: fg.ModelDescription, agent: fg.AgentDescription):

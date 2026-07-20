@@ -46,9 +46,12 @@ export DWH_CLICKHOUSE_CA_CERT=/media/DATA_BIG/Projects/Heli/Helicomponents/confi
 # Шаг 2: flight_program из Excel (порядок важен: сначала ac, потом fl)
 .venv/bin/python code/extract/program_ac_direct_loader.py --version-date 2026-06-29 --version-id 1 --dataset-path data_input/source_data/v_2026-04-08
 .venv/bin/python code/extract/program_fl_direct_loader.py --version-date 2026-06-29 --version-id 1 --dataset-path data_input/source_data/v_2026-04-08
+
+# Шаг 3: day0 OPS demote по дефициту комплектации (MP4 обязателен)
+.venv/bin/python code/extract/day0_ops_deficit_demote_runner.py --version-date 2026-06-29 --version-id 1
 ```
 
-> ⚠️ Повторный `--step enrich` на уже обогащённом `heli_pandas` падает — enrich только на свежем срезе (детали: `docs/dwh_sim_gate.md`).
+> ⚠️ `day0_ops_deficit_demote_runner.py` запускается после обоих `flight_program_*` loader-ов и fail-fast останавливается без MP4 (`flight_program_ac`). Повторный `--step enrich` сбрасывает enrichment-статусы в `heli_pandas`, поэтому после любого re-enrich этот runner нужно прогонять заново перед симуляцией.
 
 ---
 
