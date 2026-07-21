@@ -126,13 +126,16 @@
       "covers": [
         "extract_master.py",
         "code/extract/*.py",
+        "planer_calendar_remain.py",
+        "day0_ops_deficit_demote_runner.py",
         "heli_pandas",
         "flight_program_*",
-        "md_components"
+        "md_components",
+        "dwh_post_enrichment.py"
       ],
       "invariants": [],
-      "updated": "2026-05-14",
-      "last_verified_against_ssot": "2026-05-14",
+      "updated": "2026-07-22",
+      "last_verified_against_ssot": "2026-07-22",
       "staleness_status": "verified"
     }
   ]

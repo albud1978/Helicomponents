@@ -852,8 +852,8 @@ def main(version_date=None, version_id=None):
             from extract.inactive_planery_processor import process_inactive_planery_status
             pandas_df = process_inactive_planery_status(pandas_df, client)
 
-            # ЭТАП 3b: inactive → serviceable (Mi-17 всегда; Mi-8 по истории программы) + агрегаты
-            print(f"🔧 Этап 3b: Inactive/serviceable classifier...")
+            # ЭТАП 3b: OOR inactive/serviceable — те же calendar+program гейты, что demote
+            print(f"🔧 Этап 3b: Inactive/serviceable classifier (synced demote gates)...")
             from extract.inactive_serviceable_classifier import process_inactive_serviceable_status
             pandas_df = process_inactive_serviceable_status(pandas_df, client)
             

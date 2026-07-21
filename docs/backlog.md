@@ -52,8 +52,108 @@
 
 | Дата | Название | Фаза | Контекст | Следующий шаг | Владелец |
 | --- | --- | --- | --- | --- | --- |
+| 2026-07-21 | [Воронка классификации планеров day0](#2026-07-21--воронка-классификации-планеров-day0-dwh--heli_pandas) | Done (extract) | Полная воронка + calendar/program гейты; demote-only fallback 10y; прогоны 19/20.07 | age40 — отдельно | Алексей |
 | 2026-07-20 | [AMOS DQ: WP + задержка установки](#2026-07-20--amos-dq-wp-не-закрыт--задержка-установки-агрегатов) | После выбора UX ежедневных дашбордов | Два дефекта дисциплины AMOS; day0 2026-07-12 v1; Singularity `T-f5440b35…` | Спека виджетов A/B/C по карточке ниже | Алексей |
 | 2026-02-01 | Дообогащение СУБД между adaptive днями | После стабилизации adaptive days | Заполнение интервалов между adaptive днями | Оценить объём / MP2 | — |
+
+---
+
+## 2026-07-21 — Воронка классификации планеров day0 (DWH → heli_pandas)
+
+**Статус:** implemented + documented (согласовано 2026-07-22).  
+**Канон воронки:** этот раздел. Код: [`planer_calendar_remain.py`](../code/extract/planer_calendar_remain.py), cascade в [`dwh_post_enrichment.py`](../code/utils/dwh_post_enrichment.py) / [`dual_loader.py`](../code/extract/dual_loader.py), demote [`day0_ops_deficit_demote_runner.py`](../code/extract/day0_ops_deficit_demote_runner.py).  
+**UI-якорь AMOS (календарь OH):** Actual Status → `Last Overhaul Date`; Requirements → `OH (OVERHAUL)` dim=`D`.
+
+### Полная воронка планеров (`group_by ∈ {1,2}`)
+
+Порядок **жёсткий**. Статусы: `0` сырой → `4` ремонт → `2` OPS → `1` inactive → `3` serviceable / `6` storage / `7` unserviceable.
+
+```
+DWH load (heli_pandas status_id=0)
+  │
+  ├─[1] overhaul_status_processor        status_overhaul активен → 4 (+ repair_days/time)
+  ├─[2] program_ac_status_processor      в program_ac as-of day0 и ещё 0 → 2 (OPS)
+  │                                       (4 не перезаписывается)
+  ├─[3] inactive_planery_processor       остаток планеров (partno planer) ещё 0 → 1 (OOR)
+  ├─[3b] inactive_serviceable_classifier ТОЛЬКО status=1 (OOR): destination gates
+  │                                       календарь = только treq OH(D); fallback 10y ВЫКЛ
+  │
+  ├─ post: program_ac_precheck_d1        ТОЛЬКО status=2: хватает ли oh/ll на 1-й день MP5
+  │                                       rem_oh|rem_ll < dt → 6 или 7 (часы, не календарь)
+  ├─ post: component / serviceable / repair / storage / terminal_br …
+  │
+  └─[после flight_program_*] day0 demote ТОЛЬКО excess OPS (status=2) vs MP4:
+        rank by aggregate deficit → top excess
+        destination gates (+ fallback 10y если нет treq и hist с 2025-07-04)
+```
+
+| Шаг | Вход | Выход планера | Часы OH? | Календарь OH(D)? |
+| --- | --- | --- | --- | --- |
+| 1 overhaul | сырой 0 | 4 | нет (статус из ремонта) | нет |
+| 2 program_ac | 0, в реестре day0 | 2 | нет | нет |
+| 3 inactive | хвост планеров 0 | 1 | нет | нет |
+| 3b OOR classify | **только 1** | 1 или 3 (+agg 3\|7) | нет (раньше по воронке) | **treq only** |
+| precheck D1 | **только 2** | 2 / 6 / 7 | **да** (`oh−ppr`, `ll−sne` vs dt) | нет |
+| demote | **только 2** excess | 3 или 1 (+agg) | нет (уже в OPS) | treq **или** fallback 10y |
+
+**Часы не дублируются** в 3b/demote: OPS уже прошёл precheck; OOR/demote решают destination по **программе + календарю**.
+
+### Два входа destination (demote vs 3b)
+
+`program_ac` — SCD **as-of** «числится в эксплуатации» на дату (не накопитель).  
+`flight_program_ac.ops_counter_*` — **план** OPS на день (MP4).
+
+| Контур | Вход | Смысл |
+| --- | --- | --- |
+| **demote** | `status=2`, top excess vs MP4 | roster AMOS шире plan → excess уводим из OPS |
+| **3b** | `status=1` после шагов 1–3 | OOR-хвост: кто ещё serviceable-запас |
+
+Пересечение входов в одном цикле: `∅`. Общая функция: `destination_for_remain` (порядок **программа → календарь**).
+
+### Destination gates (симметрия Mi-8 / Mi-17)
+
+`destination_for_remain(remain_d, in_program_history)`:
+
+1. **нет** в `program_ac` с **2025-07-04** → planer **1**, agg **7** (`not_in_program`; календарь не смотрим)
+2. в программе + `remain_d > 0` → planer **3**, agg **3** (`in_program_calendar_positive`)
+3. в программе + нет положительного календаря → planer **1**, agg **3** (`in_program_no_calendar`)
+
+### Календарный OH(D)
+
+```
+vitriina oh_at/mfg → forecast OH% → treq (threshold=N, dim=I, counter_defno_i=3)
+int_days = raw*365 if raw<100 else raw
+base = mfg if oh_at≤1972-01-01 else oh_at
+due = base + int_days;  remain_d = due − day0
+```
+
+**Fallback (только demote):** нет treq OH(D) **и** serial ∈ history с 2025-07-04  
+→ `due = base + 10 calendar years − 1 day` (inclusive 10y; как директор для 27130).  
+**3b:** `fallback_10y_psns=None` — без treq → `remain_d=None` → не 3 по календарю.
+
+Открытый gap: age40 (`mfg+40y`) не в гейтах.
+
+### Приёмка (одинаковые правила)
+
+| срез | demote excess | serviceable | 3b→3 | evidence |
+| --- | --- | --- | --- | --- |
+| 2026-07-19 v1 | 12 (10+2) | **12** (все demote; 5 treq + 7 fb) | 0 | `output/day0_ops_deficit_demote_2026-07-19_v1_demote_fallback/` |
+| 2026-07-20 v1 | 11 (10+1) | **11** (все demote; 4 treq + 7 fb) | 0 | `output/day0_ops_deficit_demote_2026-07-20_v1_demote_fallback/` |
+
+Diff 19→20 — **только исходные данные**, не дрейф алгоритма: **22491** вышел из `program_ac` (−1 Mi-17 OPS → не demotят 22417); у **24500** сняли 2×АГБ → вытеснил **24246** из Mi-8 demote top-10.
+
+### Ссылки
+
+| Что | Путь |
+| --- | --- |
+| Shared gates + calendar | [code/extract/planer_calendar_remain.py](../code/extract/planer_calendar_remain.py) |
+| 3b OOR | [code/extract/inactive_serviceable_classifier.py](../code/extract/inactive_serviceable_classifier.py) |
+| Demote apply | [code/extract/deficit_demoter.py](../code/extract/deficit_demoter.py) |
+| Demote CLI | [code/extract/day0_ops_deficit_demote_runner.py](../code/extract/day0_ops_deficit_demote_runner.py) |
+| Cascade entry | [code/utils/dwh_post_enrichment.py](../code/utils/dwh_post_enrichment.py) |
+| Precheck часы OPS | [code/extract/program_ac_precheck_next_day.py](../code/extract/program_ac_precheck_next_day.py) |
+| Runbook | [docs/runbook_sim_launch.md](runbook_sim_launch.md) §1 + § day0 demote gates |
+| Capsule ETL | [docs/etl_extract_capsule.md](etl_extract_capsule.md) |
 
 ---
 

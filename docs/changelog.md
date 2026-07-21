@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-07-22 — Day0 воронка планеров: program→calendar; fallback 10y только demote
+
+**Workflow:** `W_day0_demote_calendar_gate_20260721` | **Risk:** medium | **Module:** `extract_dwh`
+
+**Код:**
+- новый `code/extract/planer_calendar_remain.py` — OH(D) из DWH treq + `destination_for_remain` + demote-only fallback `base+10y−1д` (при hist с 2025-07-04);
+- `inactive_serviceable_classifier.py` — 3b OOR (`status=1`), те же гейты, **без** fallback;
+- `deficit_demoter.py` / `day0_ops_deficit_demote_runner.py` — enrich destinations + apply;
+- cascade комментарии: `dual_loader.py`, `dwh_post_enrichment.py`.
+
+**Правила (канон в backlog §2026-07-21 + runbook + etl_extract_capsule):**
+1. Воронка: overhaul→program_ac→inactive→3b → precheck(часы OPS) → … → demote(excess).
+2. Destination: **сначала** program history, **потом** календарь; симметрия Mi-8/Mi-17.
+3. Часы OH — на precheck OPS; в 3b/demote не дублируются.
+4. Fallback 10y — **только demote**.
+
+**Приёмка:** 2026-07-19 → serviceable **12**; 2026-07-20 → **11**; 3b→3=0. Diff срезов = данные (22491 out of program_ac; 24500 lost АГБ), не дрейф алгоритма.  
+Evidence: `output/day0_ops_deficit_demote_2026-07-19_v1_demote_fallback/`, `..._2026-07-20_v1_demote_fallback/`.
+
 ## 2026-07-21 — Extract+sim+analysis DWH-среза 2026-07-19 v1 (vs 2026-07-12)
 
 **Workflow:** `W_extract_sim_20260719_vs12` | **Risk:** high | **Profile:** high-strict

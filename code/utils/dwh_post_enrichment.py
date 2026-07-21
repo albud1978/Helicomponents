@@ -195,7 +195,7 @@ def run_post_enrichment(
         f"OPS={stats['ops_before']}, planner_status_0={stats['planner_zero_before']}"
     )
 
-    print("Planner cascade (overhaul -> program_ac -> inactive -> inactive_serviceable)...")
+    print("Planner cascade (overhaul -> program_ac -> inactive -> inactive_serviceable calendar+program)...")
     df = _load_heli_pandas_version(ch, version_date, version_id)
     df = _reset_enrichment_outputs(df)
     df = _run_planner_cascade(ch, df)

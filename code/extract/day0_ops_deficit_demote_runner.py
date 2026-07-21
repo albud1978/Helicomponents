@@ -16,7 +16,11 @@ sys.path.append(str(code_root))
 sys.path.append(str(code_root / "utils"))
 
 from config_loader import get_clickhouse_client  # type: ignore
-from extract.deficit_demoter import apply_demotions, select_demotions  # type: ignore
+from extract.deficit_demoter import (  # type: ignore
+    apply_demotions,
+    enrich_demotion_destinations,
+    select_demotions,
+)
 from extract.deficit_rank_calculator import calculate_deficit_ranking  # type: ignore
 from extract.ops_target_comparator import compare_ops_to_target  # type: ignore
 
@@ -81,6 +85,9 @@ def main() -> int:
     before.to_excel(output_dir / "ops_target_before.xlsx", index=False)
 
     demoted = select_demotions(ranking, before)
+    demoted = enrich_demotion_destinations(
+        client, version_date, version_id, demoted
+    )
     _write_outputs(output_dir, "demoted", demoted)
     mutation_stats = apply_demotions(
         client,

@@ -22,12 +22,12 @@ ETL-специфичные инварианты (не в invariants.json, обе
 ## Decisions (≤7)
 
 1. **18-стадийный sequential pipeline** — жёсткий порядок: MD → Status → Program → Dual → Enrich → Dictionaries → Tensors → Final. Причина: каждая стадия зависит от предыдущей.
-2. **Dual Loader** (стадия 4) — одновременная загрузка heli_raw (все данные) и heli_pandas (фильтрованные); per-dataset counts см. в Key ClickHouse Tables. Причина: разделение архивных и рабочих данных.
-3. **Блок 4 статус‑маппинг** — неисправные агрегаты без target_date получают status_id=1 (inactive), а не status_id=4 (repair); без target_date нет плана ремонта — `code/extract/heli_pandas_storage_status.py`.
-4. **Native ClickHouse driver** (порт 9000) — clickhouse_driver вместо clickhouse_connect (HTTP). Причина: производительность + совместимость с типами.
-5. **Additive vs Rewrite** — словари (dict_*) additive (append-only); status_flat — rewrite. Причина: словари растут монотонно, статусы перезаписываются.
-6. **Excel как входные данные** — Status_Components.xlsx, Status_Overhaul.xlsx, Program_AC.xlsx, Program.xlsx из `data_input/source_data/v_YYYY-MM-DD/`. Причина: бизнес-формат заказчика.
-7. **Мультиверсионность** — каждый прогон ETL хранит данные с уникальным `version_date`; sim читает по фильтру `version_date`; `day_0` симуляции = `version_date` датасета. Источник: `.cursor/rules/10_extract_and_env.mdc`, `code/utils/dataset_manager.py`.
+2. **Dual Loader / DWH enrich** — `heli_pandas` после load проходит planner cascade: overhaul→program_ac→inactive→**3b** → post (precheck часов OPS, component/storage…). Канон воронки планеров: [docs/backlog.md](backlog.md) §2026-07-21.
+3. **Destination gates (program→calendar)** — общий `destination_for_remain`: сначала история `program_ac`≥2025-07-04, потом календарный OH(D). Demote и 3b — **разные входы** (`status=2` excess vs `status=1` OOR), одна функция гейтов. Fallback `+10y−1д` **только demote** (+ hist); 3b — только treq. Код: `planer_calendar_remain.py`.
+4. **Day0 OPS demote после MP4** — excess OPS vs `flight_program_ac` ранжируется по deficit комплектации; destination через те же гейты. Runner: `day0_ops_deficit_demote_runner.py` (после `flight_program_*`; re-enrich сбрасывает статусы → demote заново).
+5. **Блок storage** — неисправные агрегаты без target_date → status_id=7 (unserviceable), не 4; `heli_pandas_storage_status.py`.
+6. **Native ClickHouse driver** (порт 9000) — clickhouse_driver; Float64 запрещён без согласования.
+7. **Мультиверсионность** — `version_date`/`version_id`; day0 sim = `version_date` среза. DWH-path: `dwh_loader.py` + Excel `v_2026-04-08` для MP4/MP5 (см. runbook).
 
 ## Impact Paths
 - `data_input/source_data/v_*/*.xlsx` → extract_master.py → ClickHouse tables → симуляция читает из ClickHouse
@@ -39,6 +39,19 @@ ETL-специфичные инварианты (не в invariants.json, обе
 ## Data Flow
 
 ```
+DWH path (канон runbook):
+  program_ac + status_overhaul + Status_Components
+       → heli_pandas (status_id=0)
+       → planner cascade: overhaul→program_ac→inactive→3b(OOR gates)
+       → post: precheck(D1 hours OPS) → component/serviceable/repair/storage/BR
+       → flight_program_ac/fl (Excel v_2026-04-08)
+       → day0 OPS deficit demote (destination gates + demote-only 10y fallback)
+       → sim
+
+Excel legacy path (extract_master): см. стадии 1–18 ниже.
+```
+
+```
 Excel files (data_input/)
   │
   ├── MD_Components.xlsx ──────── [1] md_components_loader ──→ md_components
@@ -48,8 +61,8 @@ Excel files (data_input/)
   │
   │   [5-8] Enrichment: ac_type_mask, BR, MD enrichment, dictionaries
   │
-  ├── Program.xlsx ────────────── [9]  flight_program_fl ───→ flight_program_fl (1.16M rows)
-  │                                [10] flight_program_ac ──→ flight_program_ac (4K rows)
+  ├── Program.xlsx ────────────── [9]  flight_program_fl ───→ flight_program_fl
+  │                                [10] flight_program_ac ──→ flight_program_ac
   │
   │   [11-18] Final: group_by, precheck, statuses, repair_days
   │
@@ -82,16 +95,16 @@ Excel files (data_input/)
 - Автоматизация запуска ETL по расписанию (cron)?
 
 ## Pointers (≤15)
-- `code/extract/extract_master.py`
+- `docs/backlog.md` §2026-07-21 (канон воронки планеров)
+- `docs/runbook_sim_launch.md`
+- `code/extract/planer_calendar_remain.py`
+- `code/extract/inactive_serviceable_classifier.py`
+- `code/extract/deficit_demoter.py` / `day0_ops_deficit_demote_runner.py`
+- `code/extract/program_ac_precheck_next_day.py`
+- `code/utils/dwh_loader.py` / `dwh_post_enrichment.py`
 - `code/extract/dual_loader.py`
+- `code/extract/overhaul_status_processor.py` / `program_ac_status_processor.py` / `inactive_planery_processor.py`
 - `code/extract/heli_pandas_storage_status.py`
-- `code/extract/md_components_loader.py`
-- `code/extract/status_overhaul_loader.py`
-- `code/extract/program_fl_direct_loader.py`
-- `code/extract/program_ac_loader.py`
+- `code/extract/program_fl_direct_loader.py` / `program_ac_direct_loader.py`
 - `config/database_config.yaml`
 - `code/utils/config_loader.py`
-- `code/utils/etl_version_manager.py`
-- `code/utils/dataset_manager.py`
-- `code/analysis/validate_heli_pandas.py`
-- `docs/architecture/extract.md`

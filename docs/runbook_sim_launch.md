@@ -53,6 +53,19 @@ export DWH_CLICKHOUSE_CA_CERT=/media/DATA_BIG/Projects/Heli/Helicomponents/confi
 
 > ⚠️ `day0_ops_deficit_demote_runner.py` запускается после обоих `flight_program_*` loader-ов и fail-fast останавливается без MP4 (`flight_program_ac`). Повторный `--step enrich` сбрасывает enrichment-статусы в `heli_pandas`, поэтому после любого re-enrich этот runner нужно прогонять заново перед симуляцией.
 
+### Day0: воронка статусов планеров + demote destination
+
+Канон (подробно): [docs/backlog.md](backlog.md) §2026-07-21.
+
+Кратко после `--step enrich` (планеры `group_by∈{1,2}`):
+
+1. overhaul → `4`; program_ac as-of → `2`; хвост → `1` (inactive/OOR)
+2. **3b** на `status=1`: гейты program→calendar; календарь **только treq OH(D)** (fallback 10y выкл)
+3. precheck D1 на `status=2`: часовой ресурс на первый день MP5 (`oh−ppr` / `ll−sne`)
+4. **demote** (шаг 3 выше): excess OPS vs MP4; те же гейты + **fallback** `due=oh_at+10y−1д` только если нет treq и serial был в `program_ac` с 2025-07-04
+
+Destination: нет hist → planer 1 / agg 7; hist+remain>0 → 3/3; hist без календаря → 1/3. Симметрия Mi-8/Mi-17.
+
 ---
 
 ## 2. Запуск симуляции: seatbelts ON / OFF
