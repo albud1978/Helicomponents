@@ -27,7 +27,7 @@ SSoT доменных инвариантов: `config/transitions/invariants.jso
 ## Decisions (≤7)
 
 1. **18-стадийный sequential pipeline (Excel path)** — MD → Status → Program → Dual → Enrich → Dictionaries → Tensors → Final; каждая стадия зависит от предыдущей (`extract_master.py`).
-2. **DWH cascade планеров** — после load `heli_pandas status_id=0`: overhaul→program_ac→inactive→**3b** → post (precheck часов OPS, component/serviceable/repair/storage/BR). Entry: `dwh_post_enrichment.py` / `dual_loader.py`. Канон: `docs/backlog.md` §2026-07-21.
+2. **DWH cascade планеров** — после load `heli_pandas status_id=0`: overhaul→program_ac→inactive→**3b** → post (precheck часов OPS, component/serviceable/repair/storage/BR). Entry: `dwh_post_enrichment.py` / `dual_loader.py`. Канон: `docs/architecture/extract.md` §Day0; приёмка: `docs/backlog.md` §2026-07-21.
 3. **Destination gates (program→calendar)** — общий `destination_for_remain`: сначала hist `program_ac` ≥2025-07-04, затем календарный OH(D). Demote (`status=2` excess) и 3b (`status=1` OOR) — **разные входы**, одна функция гейтов. Код: `planer_calendar_remain.py`.
 4. **Demote-only fallback +10y−1d** — если нет treq OH(D) **и** serial ∈ history с 2025-07-04 → `due = base + 10 calendar years − 1 day` (inclusive). **3b без fallback** — без treq → не 3 по календарю. Решение согласовано 2026-07-22 (`docs/backlog.md` §2026-07-21).
 5. **Day0 OPS demote после MP4** — excess OPS vs `flight_program_ac` ранжируется по deficit комплектации; destination через те же гейты (+ demote-only fallback). Runner: `day0_ops_deficit_demote_runner.py` после `flight_program_*`; re-enrich сбрасывает статусы → demote заново (`docs/runbook_sim_launch.md` §1).
@@ -83,7 +83,8 @@ Excel legacy path: data_input/v_*/*.xlsx → extract_master.py [1–18] → те
 *Settled (не open): demote-only fallback +10y−1d — согласовано 2026-07-22, см. Decisions §4.*
 
 ## Pointers (≤15)
-- `docs/backlog.md` §2026-07-21 (канон воронки; acceptance counts)
+- `docs/architecture/extract.md` §Day0 воронка (канон)
+- `docs/backlog.md` §2026-07-21 (приёмка + evidence)
 - `docs/runbook_sim_launch.md` §1 + § day0 demote gates
 - `code/extract/planer_calendar_remain.py`
 - `code/extract/inactive_serviceable_classifier.py`
