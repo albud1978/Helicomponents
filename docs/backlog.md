@@ -60,8 +60,10 @@
 
 ## 2026-07-21 — Воронка классификации планеров day0 (DWH → heli_pandas)
 
+**Канон архитектуры:** [docs/architecture/extract.md](architecture/extract.md) §Day0 воронка классификации планеров; капсула [docs/etl_extract_capsule.md](etl_extract_capsule.md); [docs/runbook_sim_launch.md](runbook_sim_launch.md) § day0 gates. **Эта карточка = приёмка + evidence.**
+
 **Статус:** implemented + documented (согласовано 2026-07-22).  
-**Канон воронки:** этот раздел. Код: [`planer_calendar_remain.py`](../code/extract/planer_calendar_remain.py), cascade в [`dwh_post_enrichment.py`](../code/utils/dwh_post_enrichment.py) / [`dual_loader.py`](../code/extract/dual_loader.py), demote [`day0_ops_deficit_demote_runner.py`](../code/extract/day0_ops_deficit_demote_runner.py).  
+**Код:** [`planer_calendar_remain.py`](../code/extract/planer_calendar_remain.py), cascade в [`dwh_post_enrichment.py`](../code/utils/dwh_post_enrichment.py) / [`dual_loader.py`](../code/extract/dual_loader.py), demote [`day0_ops_deficit_demote_runner.py`](../code/extract/day0_ops_deficit_demote_runner.py).  
 **UI-якорь AMOS (календарь OH):** Actual Status → `Last Overhaul Date`; Requirements → `OH (OVERHAUL)` dim=`D`.
 
 ### Полная воронка планеров (`group_by ∈ {1,2}`)

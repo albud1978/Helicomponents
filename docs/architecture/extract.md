@@ -270,6 +270,46 @@ python3 code/utils/database_cleanup.py
 - **`program_ac_status_processor.py`** - обработка статусов эксплуатации → `heli_pandas.status_id`
 - **`inactive_planery_processor.py`** - обработка неактивных планеров → `heli_pandas.status_id`
 
+### Day0 воронка классификации планеров (DWH enrich + demote)
+
+**Скоуп:** планеры `group_by ∈ {1,2}`. Статусы: `0` сырой → `4` ремонт → `2` OPS → `1` inactive → `3` serviceable / `6` storage / `7` unserviceable.
+
+**Порядок cascade (жёсткий):**
+
+```
+DWH load (heli_pandas status_id=0)
+  ├─[1] overhaul_status_processor        status_overhaul активен → 4
+  ├─[2] program_ac_status_processor      в program_ac as-of day0 и ещё 0 → 2 (OPS); 4 не перезаписывается
+  ├─[3] inactive_planery_processor       хвост планеров ещё 0 → 1 (OOR)
+  ├─[3b] inactive_serviceable_classifier ТОЛЬКО status=1: destination gates; календарь = treq OH(D); fallback 10y ВЫКЛ
+  ├─ post: program_ac_precheck_d1        ТОЛЬКО status=2: oh/ll на 1-й день MP5 → 6 или 7 (часы, не календарь)
+  ├─ post: component / serviceable / repair / storage / terminal_br …
+  └─[после flight_program_*] day0 demote  ТОЛЬКО excess OPS (status=2) vs MP4: rank by deficit → top excess
+```
+
+**Destination gates (`destination_for_remain`, порядок program → calendar):**
+
+1. **нет** в `program_ac` с **2025-07-04** → planer **1**, agg **7** (календарь не смотрим)
+2. в программе + `remain_d > 0` (treq OH(D)) → planer **3**, agg **3**
+3. в программе + нет положительного календаря → planer **1**, agg **3**
+
+Календарь: vitriina `oh_at`/`mfg` → forecast OH% → treq (dim=I, counter_defno_i=3); `remain_d = due − day0`.
+
+**Demote vs 3b** — разные входы, общая функция gates; пересечение `∅`:
+
+| Контур | Вход | Смысл |
+| --- | --- | --- |
+| **3b** | `status=1` после шагов 1–3 | OOR-хвост: кто ещё serviceable-запас |
+| **demote** | `status=2`, top excess vs MP4 | roster AMOS шире plan → excess уводим из OPS |
+
+`program_ac` — SCD as-of «числится в эксплуатации»; `flight_program_ac.ops_counter_*` — план OPS (MP4). Часы OH проверяются **только** на precheck OPS; в 3b/demote не дублируются.
+
+**Fallback 10y (только demote):** нет treq OH(D) **и** serial ∈ history с 2025-07-04 → `due = base + 10 calendar years − 1 day`. В **3b** `fallback_10y_psns=None` — без treq → не 3 по календарю.
+
+**Код:** [`planer_calendar_remain.py`](../../code/extract/planer_calendar_remain.py), [`inactive_serviceable_classifier.py`](../../code/extract/inactive_serviceable_classifier.py), [`deficit_demoter.py`](../../code/extract/deficit_demoter.py) / [`day0_ops_deficit_demote_runner.py`](../../code/extract/day0_ops_deficit_demote_runner.py); cascade — [`dwh_post_enrichment.py`](../../code/utils/dwh_post_enrichment.py), [`dual_loader.py`](../../code/extract/dual_loader.py).
+
+**Подробнее:** приёмка + evidence → [docs/backlog.md](../backlog.md) §2026-07-21; операторский контур → [docs/etl_extract_capsule.md](../etl_extract_capsule.md), [docs/runbook_sim_launch.md](../runbook_sim_launch.md) § day0 gates.
+
 ### Утилиты Extract
 
 16. **`utils/create_all_dictionaries.py`** - утилита-обертка для создания всех словарей

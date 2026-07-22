@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Индекс контекстных капсул проекта. Оркестратор читает этот файл, чтобы узнать какие капсулы существуют и что покрывают.",
-  "updated": "2026-05-14",
+  "updated": "2026-07-22",
   "capsules": [
     {
       "id": "limiter_v8",
@@ -122,18 +122,21 @@
     {
       "id": "etl_extract",
       "path": "docs/etl_extract_capsule.md",
-      "domain": "ETL пайплайн, Extract, загрузка датасетов, heli_pandas",
+      "domain": "ETL пайплайн, DWH cascade, day0 воронка планеров, heli_pandas",
       "covers": [
         "extract_master.py",
         "code/extract/*.py",
         "planer_calendar_remain.py",
         "day0_ops_deficit_demote_runner.py",
+        "dwh_post_enrichment.py",
         "heli_pandas",
         "flight_program_*",
-        "md_components",
-        "dwh_post_enrichment.py"
+        "md_components"
       ],
-      "invariants": [],
+      "invariants": [
+        "INV-2",
+        "INV-12"
+      ],
       "updated": "2026-07-22",
       "last_verified_against_ssot": "2026-07-22",
       "staleness_status": "verified"

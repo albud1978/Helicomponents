@@ -10,7 +10,7 @@
 - `deficit_demoter.py` / `day0_ops_deficit_demote_runner.py` — enrich destinations + apply;
 - cascade комментарии: `dual_loader.py`, `dwh_post_enrichment.py`.
 
-**Правила (канон в backlog §2026-07-21 + runbook + etl_extract_capsule):**
+**Правила (канон: [docs/architecture/extract.md](architecture/extract.md) §Day0; приёмка — backlog §2026-07-21):**
 1. Воронка: overhaul→program_ac→inactive→3b → precheck(часы OPS) → … → demote(excess).
 2. Destination: **сначала** program history, **потом** календарь; симметрия Mi-8/Mi-17.
 3. Часы OH — на precheck OPS; в 3b/demote не дублируются.
@@ -18,6 +18,8 @@
 
 **Приёмка:** 2026-07-19 → serviceable **12**; 2026-07-20 → **11**; 3b→3=0. Diff срезов = данные (22491 out of program_ac; 24500 lost АГБ), не дрейф алгоритма.  
 Evidence: `output/day0_ops_deficit_demote_2026-07-19_v1_demote_fallback/`, `..._2026-07-20_v1_demote_fallback/`.
+
+**Audit (40_docs):** Review N/A (medium extract logic; code on `feature/dwh-bb8`; FLAME reviewer not required). Validation: extract apply 2026-07-19/20 — OPS==MP4 after demote; serviceable 12/11; 3b→3=0; evidence paths above. Governance: N/A / allow_with_notes deferred (medium; human accepted rules in chat 2026-07-22). Docs: docs-curator sync architecture+backlog+changelog; capsule-builder `etl_extract_capsule.md`.
 
 ## 2026-07-21 — Extract+sim+analysis DWH-среза 2026-07-19 v1 (vs 2026-07-12)
 

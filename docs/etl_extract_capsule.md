@@ -3,100 +3,88 @@
 ## Scope
 Трогаем:
 - `code/extract/extract_master.py` (оркестратор 18 стадий ETL)
-- `code/extract/*.py` (все загрузчики и обогатители)
-- `config/database_config.yaml` (подключение к ClickHouse)
-- `code/utils/config_loader.py`, `code/utils/etl_version_manager.py`, `code/utils/version_utils.py`
+- `code/extract/*.py` (загрузчики, обогатители, воронка планеров day0)
+- `code/utils/dwh_loader.py`, `code/utils/dwh_post_enrichment.py` (DWH path + cascade)
+- `config/database_config.yaml`, `code/utils/config_loader.py`, `code/utils/etl_version_manager.py`, `code/utils/version_utils.py`
 
 Не трогаем:
-- Симуляцию (code/sim_v2/) → другие капсулы
-- Валидацию результатов симуляции → `docs/validation_capsule.md`
+- Симуляцию (`code/sim_v2/`) → `docs/limiter_v8_capsule.md`, `docs/transitions_capsule.md`, `docs/quota_capsule.md`
+- Финальную post-sim валидацию → `docs/validation_capsule.md`
 
 ## Invariants (≤12)
 
-ETL-специфичные инварианты (не в invariants.json, обеспечиваются пайплайном):
-- Версионирование: каждый прогон ETL создаёт уникальный version_date; данные иммутабельны после записи
-- Полнота: 18 стадий выполняются строго последовательно; пропуск стадии = ошибка
-- Типы данных: все ресурсные поля (sne, ppr, ll, oh) → UInt32; repair_days → UInt16
-- Источники: только реальные Excel + ClickHouse; синтетика запрещена без разрешения
+SSoT доменных инвариантов: `config/transitions/invariants.json`
+
+- **INV-2** (`invariants.json`): ETL day0 demote выравнивает `status_id=2` (OPS) планеров `group_by∈{1,2}` под `flight_program_ac.ops_counter_*` на day0; вход sim должен удовлетворять `abs(ops_count − mp4_target[day0]) ≤ tolerance` (validator: `code/validation/inv2_ops_vs_target.py`). Источник воронки: `docs/backlog.md` §2026-07-21.
+- **INV-12** (`invariants.json`): для планеров `group_by∈{1,2}` всегда `ppr ≤ oh`; precheck D1 на OPS использует `oh−ppr` vs `dt` (validator: `code/validation/inv12_ppr_le_oh.py`).
+- **ETL-версионирование**: каждый прогон создаёт уникальный `version_date`/`version_id`; срез иммутабелен после записи (`code/utils/etl_version_manager.py`).
+- **ETL-последовательность**: 18 стадий Excel-path / DWH enrich выполняются строго по порядку; пропуск стадии = fail-fast.
+- **ETL-типы**: ресурсные поля (`sne`, `ppr`, `ll`, `oh`) → `UInt32`; `repair_days` → `UInt16`; `Float64` запрещён без согласования (`.cursor/rules/00_global_always.mdc`).
+- **ETL-источники**: только реальные Excel + ClickHouse/DWH; синтетика запрещена без явного разрешения.
+- **Раздельные входы demote vs 3b**: demote — только `status=2` excess OPS; 3b — только `status=1` OOR; пересечение входов в одном цикле `∅` (`docs/backlog.md` §2026-07-21).
+- **Fallback +10y−1d**: только demote (+ hist с 2025-07-04); 3b — treq OH(D) only, `fallback_10y_psns=None` (`planer_calendar_remain.py`).
 
 ## Decisions (≤7)
 
-1. **18-стадийный sequential pipeline** — жёсткий порядок: MD → Status → Program → Dual → Enrich → Dictionaries → Tensors → Final. Причина: каждая стадия зависит от предыдущей.
-2. **Dual Loader / DWH enrich** — `heli_pandas` после load проходит planner cascade: overhaul→program_ac→inactive→**3b** → post (precheck часов OPS, component/storage…). Канон воронки планеров: [docs/backlog.md](backlog.md) §2026-07-21.
-3. **Destination gates (program→calendar)** — общий `destination_for_remain`: сначала история `program_ac`≥2025-07-04, потом календарный OH(D). Demote и 3b — **разные входы** (`status=2` excess vs `status=1` OOR), одна функция гейтов. Fallback `+10y−1д` **только demote** (+ hist); 3b — только treq. Код: `planer_calendar_remain.py`.
-4. **Day0 OPS demote после MP4** — excess OPS vs `flight_program_ac` ранжируется по deficit комплектации; destination через те же гейты. Runner: `day0_ops_deficit_demote_runner.py` (после `flight_program_*`; re-enrich сбрасывает статусы → demote заново).
-5. **Блок storage** — неисправные агрегаты без target_date → status_id=7 (unserviceable), не 4; `heli_pandas_storage_status.py`.
-6. **Native ClickHouse driver** (порт 9000) — clickhouse_driver; Float64 запрещён без согласования.
-7. **Мультиверсионность** — `version_date`/`version_id`; day0 sim = `version_date` среза. DWH-path: `dwh_loader.py` + Excel `v_2026-04-08` для MP4/MP5 (см. runbook).
+1. **18-стадийный sequential pipeline (Excel path)** — MD → Status → Program → Dual → Enrich → Dictionaries → Tensors → Final; каждая стадия зависит от предыдущей (`extract_master.py`).
+2. **DWH cascade планеров** — после load `heli_pandas status_id=0`: overhaul→program_ac→inactive→**3b** → post (precheck часов OPS, component/serviceable/repair/storage/BR). Entry: `dwh_post_enrichment.py` / `dual_loader.py`. Канон: `docs/backlog.md` §2026-07-21.
+3. **Destination gates (program→calendar)** — общий `destination_for_remain`: сначала hist `program_ac` ≥2025-07-04, затем календарный OH(D). Demote (`status=2` excess) и 3b (`status=1` OOR) — **разные входы**, одна функция гейтов. Код: `planer_calendar_remain.py`.
+4. **Demote-only fallback +10y−1d** — если нет treq OH(D) **и** serial ∈ history с 2025-07-04 → `due = base + 10 calendar years − 1 day` (inclusive). **3b без fallback** — без treq → не 3 по календарю. Решение согласовано 2026-07-22 (`docs/backlog.md` §2026-07-21).
+5. **Day0 OPS demote после MP4** — excess OPS vs `flight_program_ac` ранжируется по deficit комплектации; destination через те же гейты (+ demote-only fallback). Runner: `day0_ops_deficit_demote_runner.py` после `flight_program_*`; re-enrich сбрасывает статусы → demote заново (`docs/runbook_sim_launch.md` §1).
+6. **Блок storage** — неисправные агрегаты без `target_date` → `status_id=7` (unserviceable), не 4; `heli_pandas_storage_status.py`.
+7. **Native ClickHouse driver** (порт 9000) + **мультиверсионность** — `version_date`/`version_id`; day0 sim = `version_date` среза; DWH-path MP4/MP5 из Excel `v_2026-04-08` (runbook).
 
 ## Impact Paths
-- `data_input/source_data/v_*/*.xlsx` → extract_master.py → ClickHouse tables → симуляция читает из ClickHouse
-- `config/database_config.yaml` + `.env` → параметры подключения → все скрипты ETL и анализа
-- `heli_pandas` (ClickHouse) → начальное состояние агентов → корректность всей симуляции
-- `flight_program_fl` → mp5_lin (программа полётов) → определяет налёт агентов
-- `version_date` фильтр → `preload_mp5_maps` + `preload_mp4_by_day` → корректное стартовое состояние симуляции
-
-## Data Flow
 
 ```
 DWH path (канон runbook):
   program_ac + status_overhaul + Status_Components
-       → heli_pandas (status_id=0)
-       → planner cascade: overhaul→program_ac→inactive→3b(OOR gates)
-       → post: precheck(D1 hours OPS) → component/serviceable/repair/storage/BR
-       → flight_program_ac/fl (Excel v_2026-04-08)
-       → day0 OPS deficit demote (destination gates + demote-only 10y fallback)
-       → sim
+    → heli_pandas (status_id=0)
+    → cascade: overhaul→program_ac→inactive→3b(OOR gates)
+    → post: precheck(D1 hours OPS) → component/serviceable/repair/storage/BR
+    → flight_program_ac/fl (Excel v_2026-04-08)
+    → day0 OPS deficit demote (destination gates + demote-only 10y fallback)
+    → sim (читает ClickHouse по version_date/version_id)
 
-Excel legacy path (extract_master): см. стадии 1–18 ниже.
+Excel legacy path: data_input/v_*/*.xlsx → extract_master.py [1–18] → те же таблицы
 ```
 
-```
-Excel files (data_input/)
-  │
-  ├── MD_Components.xlsx ──────── [1] md_components_loader ──→ md_components
-  ├── Status_Overhaul.xlsx ────── [2] status_overhaul_loader → status_overhaul
-  ├── Program_AC.xlsx ─────────── [3] program_ac_loader ────→ program_ac
-  ├── Status_Components.xlsx ──── [4] dual_loader ──────────→ heli_raw + heli_pandas
-  │
-  │   [5-8] Enrichment: ac_type_mask, BR, MD enrichment, dictionaries
-  │
-  ├── Program.xlsx ────────────── [9]  flight_program_fl ───→ flight_program_fl
-  │                                [10] flight_program_ac ──→ flight_program_ac
-  │
-  │   [11-18] Final: group_by, precheck, statuses, repair_days
-  │
-  └──→ ClickHouse (all tables versioned by version_date)
-```
+- `data_input/source_data/v_*/*.xlsx` → loaders → ClickHouse (`heli_pandas`, `heli_raw`, `flight_program_*`, `program_ac`, `status_overhaul`, `md_components`, `dict_*`)
+- `config/database_config.yaml` + `.env` → все ETL-скрипты
+- `heli_pandas` + `flight_program_fl`/`flight_program_ac` → начальное состояние агентов sim; `version_date` → `preload_mp5_maps` / `preload_mp4_by_day`
+- Ключевые таблицы (per-dataset): `heli_pandas` ~10.9–11.4k; `flight_program_fl` ~1.16M; `flight_program_ac` ~4k (`docs/backlog.md`, `.cursor/rules/10_extract_and_env.mdc`)
 
-## Key ClickHouse Tables
+## Validation Proof
 
-| Таблица | Записей | Назначение |
-|---------|---------|------------|
-| heli_pandas (v_2025-07-04) | 10,913 | Центральная таблица компонентов (per-dataset) |
-| heli_pandas (v_2025-12-30) | 11,389 | Центральная таблица компонентов (per-dataset) |
-| heli_raw (v_2025-07-04) | 10,913 | Архив всех данных без фильтрации (per-dataset) |
-| heli_raw (v_2025-12-30) | 11,389 | Архив всех данных без фильтрации (per-dataset) |
-| md_components | 64 | Мастер-данные компонентов |
-| flight_program_fl | 1,164,000 | Тензор программы полётов (FRAMES × DAYS) |
-| flight_program_ac | 4,000 | Тензор операций (борт × день) |
-| status_overhaul | 46 | Статус капремонтов |
-| program_ac | 189 | Реестр бортов |
-| dict_* | variable | Справочники (partno, serialno, owner, ac_type, status, aircraft_number) |
+**Day0 воронка + demote (extract-phase):**
+- **Runbook**: `docs/runbook_sim_launch.md` §1 — `dwh_loader.py --step all` → `program_*_direct_loader` → `day0_ops_deficit_demote_runner.py` (fail-fast без MP4).
+- **Manual-check status_id**: после enrich+demote — counts планеров `group_by∈{1,2}` по `status_id` (0/1/2/3/4/6/7) на срезе; шаги 1–3b до demote, demote только на excess `status=2`.
+- **Manual-check OPS==MP4**: после demote — `count(status_id=2)` по Mi-8/Mi-17 == `ops_counter_*` day0 в `flight_program_ac` (acceptance в `docs/backlog.md` §2026-07-21).
+- **Evidence dirs** (прогоны 19–20.07.2026):
+  - `output/day0_ops_deficit_demote_2026-07-19_v1_demote_fallback/` — 12 demote (10+2), serviceable 12, 3b→3: 0
+  - `output/day0_ops_deficit_demote_2026-07-20_v1_demote_fallback/` — 11 demote (10+1), serviceable 11, 3b→3: 0
+- **Комплектность (rank input demote)**: `code/analysis/ops_aggregate_completeness_day0.py` / `code/heli_pandas_ops_other_groups.py` — deficit ranking для top excess OPS.
+- **Post-sim (optional)**: INV suite после sim — `docs/validation_capsule.md`; **INV-2** `code/validation/inv2_ops_vs_target.py`, **INV-12** `code/validation/inv12_ppr_le_oh.py` (SSoT: `config/transitions/invariants.json`).
 
 ## Risks (≤7) + Mitigations
-- Некорректные Excel → ошибка начальных данных → precheck стадия (D1) + validate_heli_pandas.py
-- Пропуск стадии → неконсистентные данные → sequential pipeline (ошибка останавливает всё)
-- Дубли version_date → смешение прогонов → etl_version_manager: уникальный version_date per run
-- Ретроспективные сверки статусов: блок 4 изменён (status_id=4 → status_id=1 для неисправных без target_date) → учитывать смену классификации — `code/extract/heli_pandas_storage_status.py`
+- Некорректные Excel/DWH → ошибка начальных данных → precheck D1 + `validate_heli_pandas.py`
+- Пропуск стадии / demote до MP4 → неконсистентные OPS → sequential pipeline + fail-fast в `day0_ops_deficit_demote_runner.py`
+- Re-enrich без повторного demote → сброс статусов → runbook: demote заново после `--step enrich`
+- Дубли `version_date` → смешение прогонов → `etl_version_manager`: уникальный срез per run
+- Demote vs 3b пересечение входов → двойная классификация → disjoint inputs enforced в cascade (`docs/backlog.md`)
+- Fallback 10y только demote → 3b без treq остаётся OOR → явный `fallback_10y_psns=None` в 3b path
+- Storage reclass (status 4→7 для неисправных без target_date) → ретроспективные сверки учитывать `heli_pandas_storage_status.py`
 
 ## Open Questions (≤7)
+- **age40** — отдельный контур (не входит в day0 воронку 2026-07-21); scope TBD (`docs/backlog.md` §2026-07-21).
 - Миграция с Excel на API-источник данных?
 - Автоматизация запуска ETL по расписанию (cron)?
 
+*Settled (не open): demote-only fallback +10y−1d — согласовано 2026-07-22, см. Decisions §4.*
+
 ## Pointers (≤15)
-- `docs/backlog.md` §2026-07-21 (канон воронки планеров)
-- `docs/runbook_sim_launch.md`
+- `docs/backlog.md` §2026-07-21 (канон воронки; acceptance counts)
+- `docs/runbook_sim_launch.md` §1 + § day0 demote gates
 - `code/extract/planer_calendar_remain.py`
 - `code/extract/inactive_serviceable_classifier.py`
 - `code/extract/deficit_demoter.py` / `day0_ops_deficit_demote_runner.py`
@@ -105,6 +93,7 @@ Excel files (data_input/)
 - `code/extract/dual_loader.py`
 - `code/extract/overhaul_status_processor.py` / `program_ac_status_processor.py` / `inactive_planery_processor.py`
 - `code/extract/heli_pandas_storage_status.py`
-- `code/extract/program_fl_direct_loader.py` / `program_ac_direct_loader.py`
+- `code/extract/extract_master.py`
+- `config/transitions/invariants.json` (INV-2, INV-12)
 - `config/database_config.yaml`
-- `code/utils/config_loader.py`
+- `docs/validation_capsule.md`

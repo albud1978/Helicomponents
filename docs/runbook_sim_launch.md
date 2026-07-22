@@ -55,7 +55,7 @@ export DWH_CLICKHOUSE_CA_CERT=/media/DATA_BIG/Projects/Heli/Helicomponents/confi
 
 ### Day0: воронка статусов планеров + demote destination
 
-Канон (подробно): [docs/backlog.md](backlog.md) §2026-07-21.
+Канон: [docs/architecture/extract.md](architecture/extract.md) §Day0 воронка; приёмка/evidence — [docs/backlog.md](backlog.md) §2026-07-21.
 
 Кратко после `--step enrich` (планеры `group_by∈{1,2}`):
 
