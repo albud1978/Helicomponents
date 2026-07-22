@@ -265,10 +265,11 @@ class ExtractMaster:
         },
         {
             'script': 'heli_pandas_economics_status.py',
-            'description': 'Day-0 economics screen: планеры status_id=3 → 7 по ferry/repair cost',
+            # DISABLED 2026-07-22: ferry/resource→7 gate cancelled (no-op script kept for pipeline slot)
+            'description': 'DISABLED: former day-0 economics 3→7 ferry/resource gate (no-op)',
             'dependencies': ['heli_pandas'],
             'result_table': 'heli_pandas',
-            'critical': True
+            'critical': False
         },
         # === МЕТА-СЛОВАРЬ (финальный этап после всех таблиц) ===
         {

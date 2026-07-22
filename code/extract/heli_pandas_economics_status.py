@@ -2,8 +2,9 @@
 """
 Day-0 economics screen for serviceable planers.
 
-Only planers already classified as status_id=3 are checked. Economically
-unreasonable planers move to status_id=7; all other statuses stay untouched.
+DISABLED (2026-07-22): гейт «остаток ресурса < цена перегона» → status_id=7
+признан ошибочным. Скрипт оставлен как no-op для совместимости extract_master;
+статусы 3 не меняются.
 """
 
 from __future__ import annotations
@@ -177,38 +178,12 @@ def _count_by_group(rows: List[Candidate]) -> Dict[int, int]:
 def main() -> int:
     args = parse_args()
     client = get_clickhouse_client()
-    ensure_columns(client)
-
     version_date, version_id = resolve_version(client, args.version_date, args.version_id)
-    workbook_path = resolve_economics_workbook()
-    costs = get_economics_costs_for_date(version_date, workbook_path=workbook_path)
-    candidates = fetch_candidates(client, version_date, version_id)
-    demote, keep, oh_zero = classify_demotions(candidates, costs)
-
     print(
-        f"📅 Версия {version_date} (version_id={version_id}), "
-        f"dry-run={'ON' if args.dry_run else 'OFF'}"
+        f"📅 Версия {version_date} (version_id={version_id}): "
+        "heli_pandas_economics_status DISABLED "
+        "(ferry/resource gate cancelled; no 3→7 mutations)"
     )
-    print(f"📘 Economics.xlsx: {workbook_path}")
-    print(f"💰 Стоимости: {costs}")
-    print(f"📊 status_id=3 планеров-кандидатов: {len(candidates)}")
-    print(f"📊 Останутся status=3: {len(keep)} by group_by={_count_by_group(keep)}")
-    print(f"📊 Перейдут 3→7: {len(demote)} by group_by={_count_by_group(demote)}")
-    if oh_zero:
-        print(f"⚠️ Кандидатов с oh=0 оставлено без изменения: {len(oh_zero)}")
-    for row in demote[:10]:
-        serialno, _, group_by, oh, ppr, aircraft_number = row
-        print(
-            f"   3→7 serialno={serialno}, aircraft_number={aircraft_number}, "
-            f"group_by={group_by}, oh={oh}, ppr={ppr}"
-        )
-
-    if args.dry_run:
-        print("📝 DRY-RUN завершён без изменений")
-        return 0
-
-    apply_demotions(client, version_date, version_id, demote)
-    print(f"✅ Обновлено status_id=7: {len(demote)}")
     return 0
 
 

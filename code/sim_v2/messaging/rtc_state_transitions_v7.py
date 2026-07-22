@@ -310,47 +310,12 @@ FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_to_storage) {
 """
 
 # Условие: экономический гейт демоута в unserviceable (needs_demote == 1)
-COND_OPS_DEMOTE_TO_UNSVC = f"""
-FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_demote_to_unsvc) {{
-    if (FLAMEGPU->getVariable<unsigned int>("needs_demote") != 1u) return false;
-
-    const unsigned int br = FLAMEGPU->getVariable<unsigned int>("br");
-    const unsigned int sne = FLAMEGPU->getVariable<unsigned int>("sne");
-    if (br > 0u && sne > br) return false;
-
-    const unsigned int oh = FLAMEGPU->getVariable<unsigned int>("oh");
-    if (oh == 0u) return false;
-
-    const unsigned int ppr = FLAMEGPU->getVariable<unsigned int>("ppr");
-    if (ppr >= oh) return true;
-
-    // current_day совпадает с day_offset, которым HF_InitEconomicsDailyCosts заполняет массивы.
-    auto current_day_mp = FLAMEGPU->environment.getMacroProperty<unsigned int, 4u>("current_day_mp");
-    const unsigned int current_day = current_day_mp[0];
-    const unsigned int group_by = FLAMEGPU->getVariable<unsigned int>("group_by");
-
-    unsigned int repair_cost = 0u;
-    unsigned int ferry_cost = 0u;
-    if (group_by == 1u) {{
-        auto repair_costs = FLAMEGPU->environment.getMacroProperty<unsigned int, {DAILY_COST_SIZE}u>("repair_cost_mi8");
-        auto ferry_costs = FLAMEGPU->environment.getMacroProperty<unsigned int, {DAILY_COST_SIZE}u>("ferry_cost_mi8");
-        repair_cost = repair_costs[current_day];
-        ferry_cost = ferry_costs[current_day];
-    }} else if (group_by == 2u) {{
-        auto repair_costs = FLAMEGPU->environment.getMacroProperty<unsigned int, {DAILY_COST_SIZE}u>("repair_cost_mi17");
-        auto ferry_costs = FLAMEGPU->environment.getMacroProperty<unsigned int, {DAILY_COST_SIZE}u>("ferry_cost_mi17");
-        repair_cost = repair_costs[current_day];
-        ferry_cost = ferry_costs[current_day];
-    }} else {{
-        return false;
-    }}
-
-    if (repair_cost == 0u) return false;
-
-    const float frac_resource = (float)(oh - ppr) / (float)oh;
-    const float frac_cost = (float)ferry_cost / (float)repair_cost;
-    return frac_resource < frac_cost;
-}}
+# ОТКЛЮЧЕНО (2026-07-22): гейт «остаток ресурса < цена перегона» признан ошибочным.
+# Demote всегда идёт 2→3 через rtc_ops_demote_v7; слой v7_ops_demote_to_unsvc не срабатывает.
+COND_OPS_DEMOTE_TO_UNSVC = """
+FLAMEGPU_AGENT_FUNCTION_CONDITION(cond_ops_demote_to_unsvc) {
+    return false;
+}
 """
 
 # Условие: демоут (needs_demote == 1)

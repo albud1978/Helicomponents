@@ -21,7 +21,10 @@ from extract.deficit_demoter import (  # type: ignore
     enrich_demotion_destinations,
     select_demotions,
 )
-from extract.deficit_rank_calculator import calculate_deficit_ranking  # type: ignore
+from extract.deficit_rank_calculator import (  # type: ignore
+    RANK_MODES,
+    calculate_deficit_ranking,
+)
 from extract.ops_target_comparator import compare_ops_to_target  # type: ignore
 
 
@@ -32,6 +35,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--version-date", required=True, help="Slice date YYYY-MM-DD")
     parser.add_argument("--version-id", type=int, default=1, help="Slice version_id")
     parser.add_argument("--dry-run", action="store_true", help="Do not mutate heli_pandas")
+    parser.add_argument(
+        "--rank-mode",
+        choices=sorted(RANK_MODES),
+        default="tiered",
+        help="Extract ranking: tiered (2engines+VR→powertrain→other, АГБ ignored) or flat",
+    )
     parser.add_argument(
         "--output-dir",
         type=str,
@@ -69,7 +78,8 @@ def main() -> int:
     client = get_clickhouse_client()
     print(
         f"Day0 OPS deficit demote: version_date={version_date}, "
-        f"version_id={version_id}, dry_run={'ON' if args.dry_run else 'OFF'}"
+        f"version_id={version_id}, rank_mode={args.rank_mode}, "
+        f"dry_run={'ON' if args.dry_run else 'OFF'}"
     )
     print(f"Output: {output_dir}")
 
@@ -79,6 +89,7 @@ def main() -> int:
         version_date,
         version_id,
         output_path=ranking_path,
+        rank_mode=args.rank_mode,
     )
     before = compare_ops_to_target(client, version_date, version_id)
     before.to_csv(output_dir / "ops_target_before.csv", index=False)
@@ -106,6 +117,7 @@ def main() -> int:
         "version_date": version_date,
         "version_id": version_id,
         "dry_run": bool(args.dry_run),
+        "rank_mode": str(args.rank_mode),
         "ranking_path": str(ranking_path),
         "demoted_count": len(demoted_acn),
         "demoted_acn": demoted_acn,

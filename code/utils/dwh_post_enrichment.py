@@ -38,6 +38,9 @@ POST_SCRIPTS = (
     ("heli_pandas_component_status.py", apply_component_status),
     ("heli_pandas_serviceable_status.py", apply_serviceable_status),
     ("heli_pandas_repair_status.py", apply_repair_status),
+    # After repair force-exits planers (past target_date → OPS), re-sync
+    # ИСПРАВНЫЙ aggregates that were painted 3 while the planer was still 4.
+    ("heli_pandas_component_status.py", apply_component_status),
     ("heli_pandas_storage_status.py", apply_storage_status),
     ("repair_days_calculator.py", apply_repair_days),
     ("heli_pandas_terminal_br_gate.py", apply_terminal_br_gate),
