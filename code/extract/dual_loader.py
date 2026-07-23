@@ -847,19 +847,14 @@ def main(version_date=None, version_id=None):
             from extract.program_ac_status_processor import process_program_ac_status_field
             pandas_df = process_program_ac_status_field(pandas_df, client)
             
-            # ЭТАП 3: Обработка статусов неактивности планеров (МИ-8Т, МИ-8П и т.д.)
-            print(f"🔧 Этап 3: Статусы неактивности планеров...")
-            from extract.inactive_planery_processor import process_inactive_planery_status
-            pandas_df = process_inactive_planery_status(pandas_df, client)
-
-            # ЭТАП 3b: OOR inactive/serviceable — те же calendar+program гейты, что demote
-            print(f"🔧 Этап 3b: Inactive/serviceable classifier (synced demote gates)...")
+            # ЭТАП 3b: хвост status=0 — destination gates (вместо inactive_planery + 3b)
+            print(f"🔧 Этап 3b: Inactive/serviceable classifier (status=0 remainder, synced demote gates)...")
             from extract.inactive_serviceable_classifier import process_inactive_serviceable_status
             pandas_df = process_inactive_serviceable_status(pandas_df, client)
             
         except ImportError as e:
             print(f"⚠️ Модуль статусов не найден: {e}")
-            print(f"💡 Убедитесь что созданы: extract/overhaul_status_processor.py, program_ac_status_processor.py, inactive_planery_processor.py")
+            print(f"💡 Убедитесь что созданы: extract/overhaul_status_processor.py, program_ac_status_processor.py, inactive_serviceable_classifier.py")
         except Exception as e:
             print(f"❌ Ошибка обработки статусов: {e}")
         

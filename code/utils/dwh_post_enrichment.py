@@ -14,7 +14,6 @@ sys.path.append(str(CODE_ROOT / "utils"))
 
 from config_loader import get_clickhouse_client
 from extract.dual_loader import insert_data
-from extract.inactive_planery_processor import process_inactive_planery_status
 from extract.inactive_serviceable_classifier import process_inactive_serviceable_status
 from extract.overhaul_status_processor import process_status_field
 from extract.program_ac_precheck_runner import apply_program_ac_precheck
@@ -157,7 +156,6 @@ def _replace_heli_pandas_version(
 def _run_planner_cascade(client, df: pd.DataFrame) -> pd.DataFrame:
     df = process_status_field(df, client)
     df = process_program_ac_status_field(df, client)
-    df = process_inactive_planery_status(df, client)
     df = process_inactive_serviceable_status(df, client)
     return df
 
@@ -198,7 +196,7 @@ def run_post_enrichment(
         f"OPS={stats['ops_before']}, planner_status_0={stats['planner_zero_before']}"
     )
 
-    print("Planner cascade (overhaul -> program_ac -> inactive -> inactive_serviceable calendar+program)...")
+    print("Planner cascade (overhaul -> program_ac -> inactive_serviceable [3b, status=0])...")
     df = _load_heli_pandas_version(ch, version_date, version_id)
     df = _reset_enrichment_outputs(df)
     df = _run_planner_cascade(ch, df)

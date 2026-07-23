@@ -34,14 +34,14 @@ SSoT доменных инвариантов: `config/transitions/invariants.jso
 - **ETL-последовательность**: `extract_master.py` — единый orchestrator для Excel-path и DWH-path; стадии выполняются строго по порядку; пропуск стадии = fail-fast.
 - **ETL-типы**: ресурсные поля (`sne`, `ppr`, `ll`, `oh`) → `UInt32`; `repair_days` → `UInt16`; `Float64` запрещён без согласования (`.cursor/rules/00_global_always.mdc`).
 - **ETL-источники**: только реальные Excel + ClickHouse/DWH; синтетика запрещена без явного разрешения.
-- **Раздельные входы demote vs 3b**: demote — только `status=2` excess OPS; 3b — только `status=1` OOR; пересечение входов в одном цикле `∅` (`docs/backlog.md` §2026-07-21).
+- **Раздельные входы demote vs 3b**: demote — только `status=2` excess OPS; 3b — `status=0` хвост после overhaul/program_ac → `1` или `3`; пересечение входов `∅` (`docs/backlog.md` §2026-07-21).
 - **Fallback +10y−1d**: только demote (+ hist с 2025-07-04); 3b — treq OH(D) only, `fallback_10y_psns=None` (`planer_calendar_remain.py`).
 
 ## Decisions (≤7)
 
 1. **Sequential pipeline через `extract_master.py`** — единый entrypoint для Excel и DWH: MD → source-head → Enrich/Dictionaries → Tensors → status/repair/BR → demote; каждая стадия зависит от предыдущей.
-2. **DWH cascade планеров** — в DWH-режиме `extract_master.py` заменяет Excel head одним `dwh_loader.py --step all`; после load `heli_pandas status_id=0`: overhaul→program_ac→inactive→**3b** → post (precheck часов OPS, component/serviceable/repair/storage/BR). Канон: `docs/architecture/extract.md` §Day0; приёмка: `docs/backlog.md` §2026-07-21.
-3. **Destination gates (program→calendar)** — общий `destination_for_remain`: сначала hist `program_ac` ≥2025-07-04, затем календарный OH(D). Demote (`status=2` excess) и 3b (`status=1` OOR) — **разные входы**, одна функция гейтов. Код: `planer_calendar_remain.py`.
+2. **DWH cascade планеров** — в DWH-режиме `extract_master.py` заменяет Excel head одним `dwh_loader.py --step all`; после load `heli_pandas status_id=0`: overhaul→program_ac→**3b** (merge inactive) → post (precheck часов OPS, component/serviceable/repair/storage/BR). Канон: `docs/architecture/extract.md` §Day0; приёмка: `docs/backlog.md` §2026-07-21.
+3. **Destination gates (program→calendar)** — общий `destination_for_remain`: сначала hist `program_ac` ≥2025-07-04, затем календарный OH(D). Demote (`status=2` excess) и 3b (`status=0` хвост) — **разные входы**, одна функция гейтов. Код: `planer_calendar_remain.py`.
 4. **Demote-only fallback +10y−1d** — если нет treq OH(D) **и** serial ∈ history с 2025-07-04 → `due = base + 10 calendar years − 1 day` (inclusive). **3b без fallback** — без treq → не 3 по календарю. Решение согласовано 2026-07-22 (`docs/backlog.md` §2026-07-21).
 5. **Day0 OPS demote после terminal BR** — excess OPS vs `flight_program_ac` ранжируется по deficit комплектации; destination через те же гейты (+ demote-only fallback). Runner: `day0_ops_deficit_demote_runner.py` — последний критичный шаг `extract_master.py`; финальная acceptance проверяет OPS==MP4 через `compare_ops_to_target`.
 6. **Блок storage** — неисправные агрегаты без `target_date` → `status_id=7` (unserviceable), не 4; `heli_pandas_storage_status.py`.

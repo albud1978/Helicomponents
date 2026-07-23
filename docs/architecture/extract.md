@@ -270,7 +270,7 @@ python3 code/utils/database_cleanup.py
 - **`aircraft_number_processor.py`** - определение номеров ВС → `heli_pandas.aircraft_number`
 - **`overhaul_status_processor.py`** - обработка статусов капремонта → `heli_pandas.status_id`
 - **`program_ac_status_processor.py`** - обработка статусов эксплуатации → `heli_pandas.status_id`
-- **`inactive_planery_processor.py`** - обработка неактивных планеров → `heli_pandas.status_id`
+- **`inactive_planery_processor.py`** — legacy (не в cascade с 2026-07-24); ранее 0→1, заменён merge в 3b
 
 ### Day0 воронка классификации планеров (DWH enrich + demote)
 
@@ -282,8 +282,7 @@ python3 code/utils/database_cleanup.py
 DWH load (heli_pandas status_id=0)
   ├─[1] overhaul_status_processor        status_overhaul активен → 4
   ├─[2] program_ac_status_processor      в program_ac as-of day0 и ещё 0 → 2 (OPS); 4 не перезаписывается
-  ├─[3] inactive_planery_processor       хвост планеров ещё 0 → 1 (OOR)
-  ├─[3b] inactive_serviceable_classifier ТОЛЬКО status=1: destination gates; календарь = treq OH(D); fallback 10y ВЫКЛ
+  ├─[3b] inactive_serviceable_classifier хвост status=0 → 1 или 3 (merge inactive); календарь = treq OH(D); fallback 10y ВЫКЛ
   ├─ post: program_ac_precheck_d1        ТОЛЬКО status=2: oh/ll на 1-й день MP5 → 6 или 7 (часы, не календарь)
   ├─ post: component / serviceable / repair / storage / terminal_br …
   └─[после flight_program_*] day0 demote  ТОЛЬКО excess OPS (status=2) vs MP4: rank by deficit → top excess
@@ -304,7 +303,7 @@ DWH load (heli_pandas status_id=0)
 
 | Контур | Вход | Смысл |
 | --- | --- | --- |
-| **3b** | `status=1` после шагов 1–3 | OOR-хвост: кто ещё serviceable-запас |
+| **3b** | `status=0` после шагов 1–2 | хвост: сразу 1 или 3 (+ agg 3/7) |
 | **demote** | `status=2`, top excess vs MP4 | roster AMOS шире plan → excess уводим из OPS |
 
 `program_ac` — SCD as-of «числится в эксплуатации»; `flight_program_ac.ops_counter_*` — план OPS (MP4). Часы OH проверяются **только** на precheck OPS; в 3b/demote не дублируются.

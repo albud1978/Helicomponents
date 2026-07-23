@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Day-0 классификатор OOR: inactive планеры + агрегаты.
+Day-0 классификатор OOR: хвост планеров после overhaul/program_ac + агрегаты.
 
-Выполняется ПОСЛЕ process_inactive_planery_status, ДО component_status / serviceable_status.
+Выполняется ПОСЛЕ program_ac, ВМЕСТО inactive_planery; ДО component_status / serviceable_status.
+Вход: group_by∈{1,2} и status_id=0 (остаток после шагов 1–2). OPS(2)/repair(4) не трогаем.
 
 Синхрон с OPS demote destination gates (`planer_calendar_remain.destination_for_remain`):
 - сначала program_ac с 2025-07-04; без истории → планер 1, agg 7
@@ -10,7 +11,7 @@ Day-0 классификатор OOR: inactive планеры + агрегаты
 - в программе + нет положительного календаря → планер 1, agg 3
 Календарь в 3b — только treq OH(D); fallback +10y−1д здесь НЕ применяется (только demote).
 
-Полная симметрия Mi-8 / Mi-17. OPS (status_id=2) не трогаем.
+Полная симметрия Mi-8 / Mi-17.
 """
 
 from __future__ import annotations
@@ -55,9 +56,9 @@ def _version_date_from_df(pandas_df: pd.DataFrame) -> date:
 
 def process_inactive_serviceable_status(pandas_df: pd.DataFrame, client):
     """
-    Классифицирует inactive-планеры и агрегаты теми же гейтами, что demote destination.
+    Классифицирует хвост планеров (status=0) и агрегаты теми же гейтами, что demote destination.
     """
-    print("\n🚀 === INACTIVE/SERVICEABLE CLASSIFIER (calendar+program, synced with demote) ===")
+    print("\n🚀 === INACTIVE/SERVICEABLE CLASSIFIER (status=0 remainder, calendar+program) ===")
     required = {
         "group_by",
         "status_id",
@@ -79,17 +80,17 @@ def process_inactive_serviceable_status(pandas_df: pd.DataFrame, client):
     psn = _as_u32(pandas_df["psn"])
     serial_norm = pandas_df["serialno"].map(normalize_registr)
 
-    inactive_planer = group_by.isin([1, 2]) & (status_id == 1)
-    inactive_idx = pandas_df.index[inactive_planer]
-    if len(inactive_idx) == 0:
-        print("ℹ️ Inactive OOR планеров нет — классификатор пропущен")
+    remainder_planer = group_by.isin([1, 2]) & (status_id == 0)
+    remainder_idx = pandas_df.index[remainder_planer]
+    if len(remainder_idx) == 0:
+        print("ℹ️ Планеров с status=0 (хвост после overhaul/program_ac) нет — классификатор пропущен")
         print("✅ inactive_serviceable_classifier завершён")
         return pandas_df
 
     # Один планер = одна строка group_by∈{1,2}; ключ — aircraft_number (fallback serial).
     planer_rows = []
     seen = set()
-    for idx in inactive_idx:
+    for idx in remainder_idx:
         acn = int(aircraft_number.loc[idx])
         serial = str(serial_norm.loc[idx])
         key = acn if acn > 0 else f"s:{serial}"
@@ -117,7 +118,7 @@ def process_inactive_serviceable_status(pandas_df: pd.DataFrame, client):
     )
     print(
         f"📋 program_ac history since 2025-07-04: {len(history)} serials; "
-        f"inactive OOR planers: {len(planer_rows)}; fallback_10y=OFF (demote-only)"
+        f"remainder planers (status=0): {len(planer_rows)}; fallback_10y=OFF (demote-only)"
     )
 
     reason_counts: Counter = Counter()
@@ -157,8 +158,8 @@ def process_inactive_serviceable_status(pandas_df: pd.DataFrame, client):
             f"hist={int(in_hist)} → planer={planer_st} agg={agg_st} ({reason})"
         )
 
-    print(f"✅ OOR planers → serviceable(3): {planer_to_3}")
-    print(f"ℹ️ OOR planers остаются inactive(1): {planer_stay_1}")
+    print(f"✅ Remainder planers → serviceable(3): {planer_to_3}")
+    print(f"ℹ️ Remainder planers → inactive(1): {planer_stay_1}")
     print(f"✅ Aggregates → serviceable(3): {agg_to_3}")
     print(f"✅ Aggregates → unserviceable(7): {agg_to_7}")
     print(f"📊 by_reason: {dict(reason_counts)}")
