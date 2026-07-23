@@ -5,7 +5,7 @@ description: "Governance/Compliance агент. Контрольная плос�
 
 agent_card:
   version: "1.0"
-  model_fallback: gpt-5.5-extra-high
+  model_fallback: cursor-grok-4.5-high-fast
   temperature_policy: low
   capabilities:
     - policy_check

@@ -1,11 +1,11 @@
 ---
 name: coder-general
-model: gpt-5.5-extra-high
+model: gpt-5.6-sol-medium
 description: Разработчик общего кода (не FLAME GPU). Используй для ETL/Extract/analysis/utils/config/docs.
 
 agent_card:
   version: "1.0"
-  model_fallback: claude-opus-4-8-thinking-high
+  model_fallback: cursor-grok-4.5-high-fast
   temperature_policy: low
   capabilities:
     - general_code_dev

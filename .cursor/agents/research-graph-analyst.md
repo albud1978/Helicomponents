@@ -1,11 +1,11 @@
 ---
 name: research-graph-analyst
-model: gpt-5.5-extra-high
+model: gpt-5.6-sol-medium
 description: Исследователь структуры и графовых связей + routine SELECT/fact-check. Используй для разведки по репо, dependency/context mapping, Agent KG, Domain Graph, Neo4j/Cypher, graph impact и регулярных SQL-проверок по заданной логике.
 
 agent_card:
   version: "1.0"
-  model_fallback: claude-opus-4-8-thinking-high
+  model_fallback: cursor-grok-4.5-high-fast
   temperature_policy: low
   capabilities:
     - repo_exploration

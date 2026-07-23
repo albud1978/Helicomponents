@@ -1,11 +1,11 @@
 ---
 name: capsule-builder
-model: composer-2.5-fast
+model: cursor-grok-4.5-high-fast
 description: Сборщик/редактор Context Capsule (docs/*_capsule.md). Используй после приёмки оркестратором.
 
 agent_card:
   version: "1.0"
-  model_fallback: gpt-5.4-medium
+  model_fallback: gpt-5.6-terra-medium
   temperature_policy: low
   capabilities:
     - context_capsule_maintenance

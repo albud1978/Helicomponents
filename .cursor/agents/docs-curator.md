@@ -1,11 +1,11 @@
 ---
 name: docs-curator
-model: composer-2.5-fast
+model: cursor-grok-4.5-high-fast
 description: Документационный агент. Поддерживает согласованность docs/changelog/README с принятыми решениями.
 
 agent_card:
   version: "1.0"
-  model_fallback: gpt-5.4-medium
+  model_fallback: gpt-5.6-terra-medium
   temperature_policy: low
   capabilities:
     - docs_synchronization

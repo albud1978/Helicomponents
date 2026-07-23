@@ -5,7 +5,7 @@ description: Ревьюер FLAME GPU/CUDA кода. Вызывай для code 
 
 agent_card:
   version: "1.0"
-  model_fallback: gpt-5.5-extra-high
+  model_fallback: cursor-grok-4.5-high-fast
   temperature_policy: low
   capabilities:
     - cuda_code_review
