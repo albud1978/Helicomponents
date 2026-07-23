@@ -817,6 +817,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_unsvc_commit_v8, flamegpu::MessageNone, flam
             auto p2 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve");
             p2[idx].exchange(1u);
         }}
+        // Runtime claim is backwards-fill: aircraft is already ops again; only day0 repairs freeze free_days.
+        line_acn[chosen_line].exchange(0u);
+        line_gb[chosen_line].exchange(0u);
     }} else {{
         FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     }}
@@ -1127,6 +1130,9 @@ FLAMEGPU_AGENT_FUNCTION(rtc_promote_inactive_commit_v8, flamegpu::MessageNone, f
             auto p3 = FLAMEGPU->environment.getMacroProperty<unsigned int, {RTC_MAX_FRAMES}u>("mi17_approve_s1");
             p3[idx].exchange(1u);
         }}
+        // Runtime claim is backwards-fill: aircraft is already ops again; only day0 repairs freeze free_days.
+        line_acn[chosen_line].exchange(0u);
+        line_gb[chosen_line].exchange(0u);
     }} else {{
         FLAMEGPU->setVariable<unsigned int>("repair_line_id", 0xFFFFFFFFu);
     }}

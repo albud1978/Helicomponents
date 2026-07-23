@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-23 — RepairLine free_days: заморозка 180 дней после runtime-клейма (halved repair capacity)
+
+**Workflow:** `W_repairline_freedays_fix_20260723` | **Risk:** high | **Profile:** high-strict | **Module:** `sim_v2`
+
+**Диагноз (подтверждён на raw-телеметрии, 107/107 клеймов source=1):** P2/P3 commit оставлял на линии метку `line_acn`; `rtc_repair_line_increment_v8` держал `free_days=0` ещё `repair_time` дней (ветка `busy_days`) — линия становилась доступна для следующего backwards-fill клейма через 360 дней вместо 180. Эффективная мощность ремзавода 18/год вместо 36 при 18 линиях; следствие — избыточные динамические покупки Mi-17 (spawn вместо ремонта при живом статусе 7).
+
+**Фикс (`code/sim_v2/messaging/rtc_quota_v8.py`, +6 строк, 2 симметричных блока):** в конце финализации `if(claimed)` в `rtc_promote_unsvc_commit_v8` и `rtc_promote_inactive_commit_v8` снимается метка линии (`line_acn`/`line_gb` `exchange(0u)`). CAS-мьютекс клейма сохранён; заморозка `free_days` остаётся только для day0-ремонтов (борт физически на линии). Дизайн подтверждён Алексеем: «free_days должен быть 0 когда на линии борт, и расти после освобождения; нахождением борта в ремонте управляет его агентная переменная repair_days».
+
+**A/B (`20260719`: v99 фикс vs v1 baseline, validator-judge PASS 4/4, handoff `a7467223`):** интервалы клеймов одной линии [180,360) появились (53 шт, в v1 — 0, min 362); динамические покупки Mi-17 39 → 17; `sum(deficit)=0`; кладбище в статусе 7 на конец прогона 30 → 9 бортов; медиана смерть→возврат 287 → 246 дней; инварианты: 12 PASS, 4 ожидаемых ложных FAIL инженерного vid (INV-2/11/13, INV-12 per runbook §4).
+
+**Review/validation/governance:** reviewer-flame APPROVE (`handoff_028c8d6e`); governance `allow_with_notes` (`handoff_eeac173e`); human PRE-approval `ctx_..._47baea4b`.
+
+**Статус:** правка **НЕ закоммичена** (по правилам — только по явной команде Алексея); canonical `version_id=1` не перегонялся.
+
 ## 2026-07-22 — Day0 воронка планеров: program→calendar; fallback 10y только demote
 
 **Workflow:** `W_day0_demote_calendar_gate_20260721` | **Risk:** medium | **Module:** `extract_dwh`
