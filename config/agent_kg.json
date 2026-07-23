@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-23T20:06:49Z",
+    "updated_at": "2026-07-23T20:23:27Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -4705,6 +4705,27 @@
       },
       "created_at": "2026-07-23T20:02:01Z",
       "updated_at": "2026-07-23T20:06:49Z"
+    },
+    {
+      "workflow_id": "W_overhaul_past_end_to_2_20260724",
+      "goal": "overhaul: past sched_end → status 2; remove planer past force; bit-exact vs baseline",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 32000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-23T20:23:27Z"
+      },
+      "created_at": "2026-07-23T20:18:52Z",
+      "updated_at": "2026-07-23T20:23:27Z"
     }
   ],
   "handoffs": [
@@ -32496,6 +32517,88 @@
         "est_tokens": 5000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_overhaul_past_end_to_2_20260724_coder-general_4475046b",
+      "workflow_id": "W_overhaul_past_end_to_2_20260724",
+      "agent": "coder-general",
+      "user_goal": "делаем изменения, но с побитовым сравнением",
+      "changes": "overhaul_status_processor: past end→2; heli_pandas_repair_status: убран planner past force; docs extract.md + etl_extract_capsule.md",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "py_compile OK; extract 20/20 PASS (output/extract_master_2026-07-22_v1_overhaul_past2.log); fp before=A890C61B77B627BE90FE06E7DA1A3B30 after=A890C61B77B627BE90FE06E7DA1A3B30 n=11625 BITEXACT_MATCH=True; OPS 49/88; status_id=0=0",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_overhaul_past_end_to_2_20260724:2026-07-24T01:22Z",
+      "plan_step_id": "I1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "изменение логики status_id в extract cascade (overhaul + repair_status)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "no",
+      "plan_card": "overhaul past sched_end→status 2; убран planner past force в repair_status; bit-exact verify 2026-07-22 v1",
+      "evidence_pack": "py_compile OK; extract 20/20 PASS (output/extract_master_2026-07-22_v1_overhaul_past2.log); fp before=A890C61B77B627BE90FE06E7DA1A3B30 after=A890C61B77B627BE90FE06E7DA1A3B30 n=11625 BITEXACT_MATCH=True; OPS 49/88; status_id=0=0",
+      "success_criteria": "fp == A890C61B77B627BE90FE06E7DA1A3B30 AND n==11625 AND OPS gb1=49 gb2=88 AND status_id=0=0 — PASS",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=output/extract_master_2026-07-22_v1_overhaul_past2.log;output/after_bitexact_heli_pandas_2026-07-22_overhaul_past2.json; approval_ref=ctx_W_overhaul_past_end_to_2_20260724_approval_request_14e2ee67",
+      "risks": "на срезах с active+past end пересечением поведение изменится; на 2026-07-22 bit-exact подтверждён",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "domain JSON/invariants не менялись",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-23T20:23:08Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 28000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_overhaul_past_end_to_2_20260724_orchestrator_7f97fa6e",
+      "workflow_id": "W_overhaul_past_end_to_2_20260724",
+      "agent": "orchestrator",
+      "user_goal": "делаем изменения, но с побитовым сравнением",
+      "changes": "overhaul_status_processor past end→2; repair_status drop planer past force; docs",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "fp match A890C61B77B627BE90FE06E7DA1A3B30; handoff coder 4475046b; log overhaul_past2",
+      "drift_check": "UserGoal ↔ Changes scope match: yes",
+      "process_insights": "",
+      "trace_id": "wf:W_overhaul_past_end_to_2_20260724:2026-07-24T01:25:00Z",
+      "plan_step_id": "I1",
+      "approval_gate_id": "ctx_W_overhaul_past_end_to_2_20260724_approval_request_14e2ee67",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "overhaul past end→2; remove planer past force",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "overhaul past sched_end→2; repair_status planer past force removed; bit-exact PASS",
+      "evidence_pack": "fp match A890C61B77B627BE90FE06E7DA1A3B30; handoff coder 4475046b; log overhaul_past2",
+      "success_criteria": "script: sipHash128 heli_pandas 2026-07-22 v1 fp==A890C61B77B627BE90FE06E7DA1A3B30 n==11625; OPS 49/88",
+      "compliance_checklist": "decision=allow;required_gates=pass;exceptions=none;evidence_refs=output/after_bitexact_heli_pandas_2026-07-22_overhaul_past2.json;approval_ref=ctx_W_overhaul_past_end_to_2_20260724_approval_request_14e2ee67",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "b1d61345d4c0a81c3bd30b291880f16017cefd467f97e1049b7bff49ffa93b52",
+      "created_at": "2026-07-23T20:23:27Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 4000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -36377,6 +36480,24 @@
       "agent": "coder-general",
       "created_at": "2026-07-23T20:02:46Z",
       "updated_at": "2026-07-23T20:02:46Z"
+    },
+    {
+      "context_id": "ctx_W_overhaul_past_end_to_2_20260724_approval_request_14e2ee67",
+      "workflow_id": "W_overhaul_past_end_to_2_20260724",
+      "context_type": "approval_request",
+      "content": "PRE-approval: user «делаем изменения, но с побитовым сравнением» — overhaul past sched_end→2; drop planer past force in repair_status; SuccessCriteria bit-exact heli_pandas 2026-07-22",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T20:18:52Z",
+      "updated_at": "2026-07-23T20:18:52Z"
+    },
+    {
+      "context_id": "ctx_W_overhaul_past_end_to_2_20260724_phase_start_3558cc7a",
+      "workflow_id": "W_overhaul_past_end_to_2_20260724",
+      "context_type": "phase_start",
+      "content": "I1: overhaul past end → status 2; remove planner past force in repair_status",
+      "agent": "coder-general",
+      "created_at": "2026-07-23T20:19:15Z",
+      "updated_at": "2026-07-23T20:19:15Z"
     }
   ],
   "meta": {
