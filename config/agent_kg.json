@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-23T14:43:12Z",
+    "updated_at": "2026-07-23T18:29:20Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -4579,6 +4579,90 @@
       },
       "created_at": "2026-07-23T14:43:12Z",
       "updated_at": "2026-07-23T14:43:12Z"
+    },
+    {
+      "workflow_id": "wf_readonly_planer_inactive_20260723",
+      "goal": "Read-only research: inactive planers and aggregate statuses for aggregate_status_block matrix",
+      "phase": "research",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 6,
+        "max_tokens": 150000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 1,
+        "cumulative_tokens": 52000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-23T15:41:27Z"
+      },
+      "created_at": "2026-07-23T15:38:15Z",
+      "updated_at": "2026-07-23T15:41:27Z"
+    },
+    {
+      "workflow_id": "W_extract_master_day0_unify_20260723",
+      "goal": "extract_master: demote final step + source dwh|excel + non-interactive CLI; batch-gate wires to master",
+      "phase": "implementation",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 4,
+        "cumulative_tokens": 82500,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-23T18:15:09Z"
+      },
+      "created_at": "2026-07-23T18:06:23Z",
+      "updated_at": "2026-07-23T18:15:22Z"
+    },
+    {
+      "workflow_id": "W_extract_master_smoke_20260723",
+      "goal": "Real smoke extract_master --source dwh on 2026-07-22 and compare OPS/status vs baseline",
+      "phase": "governance",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 3,
+        "cumulative_tokens": 47000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-23T18:24:03Z"
+      },
+      "created_at": "2026-07-23T18:16:09Z",
+      "updated_at": "2026-07-23T18:24:23Z"
+    },
+    {
+      "workflow_id": "W_housekeeping_20260723T182920Z",
+      "goal": "low-risk housekeeping edit of docs/runbook_sim_launch.md",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-23T18:29:20Z"
+      },
+      "created_at": "2026-07-23T18:29:20Z",
+      "updated_at": "2026-07-23T18:29:20Z"
     }
   ],
   "handoffs": [
@@ -31839,6 +31923,335 @@
         "est_tokens": 9000,
         "source": "manual"
       }
+    },
+    {
+      "handoff_id": "handoff_wf_readonly_planer_inactive_20260723_research-graph-analyst_dbc96b53",
+      "workflow_id": "wf_readonly_planer_inactive_20260723",
+      "agent": "research-graph-analyst",
+      "user_goal": "Read-only research: explain inactive planers status_id=1 and aggregates for aggregate_status_block matrix",
+      "changes": "No code edits. Reviewed requested files plus planer_calendar_remain.py, day0_ops_deficit_demote_runner.py, post status gates, runbook/backlog evidence.",
+      "facts": "",
+      "assumptions": "Final SQL statuses include post-terminal effects; no stored destination_reason for 3b rows, so reason split for inactive OOR inferred from code not reconstructed per aircraft. Risks if false: matrix may mix final statuses with intermediate destination outputs.",
+      "evidence": "Facts: Cascade: reset->overhaul(4)->program_ac(2)->inactive(1)->3b destination; post precheck/component/serviceable/repair/component/storage/repair_days/terminal_br; flight_program then day0 demote. 3b/demote destination_for_remain: no program history=>planer1 agg7; history+remain>0=>3/3; history+no positive calendar=>1/3. 3b ignores aggregate condition and has fallback10y off; demote uses fallback10y for history. SQL 2026-07-22 v1: inactive planers gb1=72, gb2=18; aggregates on inactive planers final include serviceable condition status3/6/7. Demote summary: 29 demoted, all planer3/agg3, reason in_program_calendar_positive, agg7=0.\nEvidence: Files: code/utils/dwh_post_enrichment.py; code/extract/inactive_planery_processor.py; inactive_serviceable_classifier.py; deficit_demoter.py; heli_pandas_*_status.py; terminal_br_gate.py; docs/architecture/extract.md; docs/etl_extract_capsule.md. SQL: DESCRIBE heli_pandas and grouped SELECTs on 2026-07-22 v1 with group_by IN (1,2) and group_by>2. Output: output/day0_ops_deficit_demote_2026-07-22_v1/summary.json. Git: c6b08bba, 3da58e9e, e3736377, 2f272bd7 in log -10.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:wf_readonly_planer_inactive_20260723:2026-07-23T15:55:00Z",
+      "plan_step_id": "R1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Read-only research informs aggregate_status_block refactor matrix; extract day0 status semantics reviewed; no code edits",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A - research only",
+      "human_gate_required": "conditional",
+      "plan_card": "Investigated Day0 inactive planer cascade, aggregate destinations, demote outputs, BR interaction, and current 2026-07-22 v1 matrix cells.",
+      "evidence_pack": "Facts: Cascade: reset->overhaul(4)->program_ac(2)->inactive(1)->3b destination; post precheck/component/serviceable/repair/component/storage/repair_days/terminal_br; flight_program then day0 demote. 3b/demote destination_for_remain: no program history=>planer1 agg7; history+remain>0=>3/3; history+no positive calendar=>1/3. 3b ignores aggregate condition and has fallback10y off; demote uses fallback10y for history. SQL 2026-07-22 v1: inactive planers gb1=72, gb2=18; aggregates on inactive planers final include serviceable condition status3/6/7. Demote summary: 29 demoted, all planer3/agg3, reason in_program_calendar_positive, agg7=0.\nEvidence: Files: code/utils/dwh_post_enrichment.py; code/extract/inactive_planery_processor.py; inactive_serviceable_classifier.py; deficit_demoter.py; heli_pandas_*_status.py; terminal_br_gate.py; docs/architecture/extract.md; docs/etl_extract_capsule.md. SQL: DESCRIBE heli_pandas and grouped SELECTs on 2026-07-22 v1 with group_by IN (1,2) and group_by>2. Output: output/day0_ops_deficit_demote_2026-07-22_v1/summary.json. Git: c6b08bba, 3da58e9e, e3736377, 2f272bd7 in log -10.",
+      "success_criteria": "SQL: SELECT-only heli_pandas version_date=2026-07-22 version_id=1 with group_by filters; file review of requested extract/docs files and git log -10",
+      "compliance_checklist": "decision=allow_with_notes required_gates=partial exceptions=governance-not-run evidence_refs=listed files; SQL SELECT 2026-07-22 v1; output/day0_ops_deficit_demote_2026-07-22_v1/summary.json approval_ref=N/A",
+      "risks": "Condition is ignored in 3b/demote destination; terminal BR affects 3b 7 before demote but not demote-created 7 unless rerun; not_in_program for demoted OPS should be unreachable by current program history invariant but code still has branch.",
+      "next_owner": "orchestrator",
+      "open_questions": "Should matrix encode intermediate destination or final post-terminal status? Should demote not_in_program be an impossible invariant or explicit 1/7 fallback? Should НЕИСПРАВНЫЙ aggregates ever become 3 via in_program_no_calendar?",
+      "graph_update": "no",
+      "graph_update_reason": "Read-only research; no Domain Graph update",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-23T15:41:27Z",
+      "modules": [
+        "extract_dwh",
+        "state_transitions"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 52000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_extract_master_day0_unify_20260723_coder-general_eba554f6",
+      "workflow_id": "W_extract_master_day0_unify_20260723",
+      "agent": "coder-general",
+      "user_goal": "Реализовать согласованный план: extract_master остаётся единственным оркестратором и готовит срез до готово к sim (включая demote). Отдельный day0_pipeline.py НЕ создавать.",
+      "changes": "code/extract/extract_master.py: added CLI, source excel|dwh, dynamic DWH pipeline step, script_path support, final demote step, OPS==MP4 final validation; code/utils/dwh_batch_sim_gate.py: replaced ensure_load/load_flight_program with extract_master subprocess, removed enriched>1000 day0 skip, default sim interpreter prefers cuda13_nosb; docs/runbook_sim_launch.md, docs/etl_extract_capsule.md, docs/architecture/extract.md, docs/changelog.md: minimal operator/process updates.",
+      "facts": "",
+      "assumptions": "Full DWH/ClickHouse pipeline not executed because it is mutating/long-running; Risks if false: runtime loader compatibility issues may only appear on an actual DWH slice. dwh_loader --skip-existing is used for idempotent existing program_ac/status_overhaul slices; Risks if false: if forced DWH reload of those tables is required, dwh_loader needs a separate replace policy.",
+      "evidence": "Facts: Read config/capsules_manifest.json and docs/etl_extract_capsule.md. Smoke: python3 code/extract/extract_master.py --help PASS; python3 code/utils/dwh_batch_sim_gate.py --help PASS; python3 -m py_compile code/extract/extract_master.py code/utils/dwh_batch_sim_gate.py PASS; ReadLints for changed Python files PASS; git diff --check PASS. Full DWH load/sim not run.\nEvidence: extract_master --help showed flags: --source {excel,dwh}, --mode {test,prod}, --dataset-path, --version-date, --version-id, --replace-slice. dwh_batch_sim_gate --help showed existing --dates/--skip-sim/--out-dir. git status scoped modified files: extract_master.py, dwh_batch_sim_gate.py, docs runbook/capsule/architecture/changelog, config/agent_kg.json.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_extract_master_day0_unify_20260723:20260723T181239Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "ctx_W_extract_master_day0_unify_20260723_approval_d8f1b1e7",
+      "approval_status": "approved",
+      "approval_source": "Алексей сказал 'делай' в чате 2026-07-23",
+      "risk_tier": "medium",
+      "risk_reasons": "medium-fast: reversible ETL orchestration/docs changes; no sim_v2/SSoT transitions/invariants; DWH prepare-to-sim behavior touched",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (medium-fast; governance optional)",
+      "human_gate_required": "conditional",
+      "plan_card": "P1 implemented: unify DWH day0 preparation under extract_master; keep shared tail and final demote; batch gate delegates preparation to extract_master.",
+      "evidence_pack": "Facts: Read config/capsules_manifest.json and docs/etl_extract_capsule.md. Smoke: python3 code/extract/extract_master.py --help PASS; python3 code/utils/dwh_batch_sim_gate.py --help PASS; python3 -m py_compile code/extract/extract_master.py code/utils/dwh_batch_sim_gate.py PASS; ReadLints for changed Python files PASS; git diff --check PASS. Full DWH load/sim not run.\nEvidence: extract_master --help showed flags: --source {excel,dwh}, --mode {test,prod}, --dataset-path, --version-date, --version-id, --replace-slice. dwh_batch_sim_gate --help showed existing --dates/--skip-sim/--out-dir. git status scoped modified files: extract_master.py, dwh_batch_sim_gate.py, docs runbook/capsule/architecture/changelog, config/agent_kg.json.",
+      "success_criteria": "script: code/extract/extract_master.py --source dwh --mode prod --version-date <vd> --version-id 1 --dataset-path <v_*> works non-interactive; invariant: demote is final pipeline step after terminal_br; script/invariant: compare_ops_to_target OPS==MP4 gate fails pipeline on mismatch; script: dwh_batch_sim_gate.py delegates to extract_master and has no enriched>1000 day0 skip; manual-check: docs runbook/capsule/architecture/changelog updated",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=full DWH load/sim not run by scope; evidence_refs=python3 code/extract/extract_master.py --help; python3 code/utils/dwh_batch_sim_gate.py --help; python3 -m py_compile; ReadLints; git diff --check; approval_ref=ctx_W_extract_master_day0_unify_20260723_approval_d8f1b1e7",
+      "risks": "1. Actual DWH slice execution remains unverified. 2. Existing DWH program_ac/status_overhaul slices are skipped, not replaced. 3. Final OPS gate depends on pandas availability in runtime env via ops_target_comparator.",
+      "next_owner": "orchestrator",
+      "open_questions": "Нужен ли отдельный replace policy для DWH program_ac/status_overhaul при --replace-slice, сейчас заменяется только heli_pandas как поддерживает dwh_loader.",
+      "graph_update": "no",
+      "graph_update_reason": "No Domain Graph/SSoT update; docs/capsule projection only.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-23T18:12:39Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 42000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_extract_master_day0_unify_20260723_orchestrator_8d215649",
+      "workflow_id": "W_extract_master_day0_unify_20260723",
+      "agent": "orchestrator",
+      "user_goal": "extract_master: demote final + source dwh|excel + CLI; batch-gate → master",
+      "changes": "extract_master demote+CLI+dwh; dwh_batch_sim_gate delegates; docs. coder handoff eba554f6",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: help/py_compile PASS; full DWH load not run — SuccessCriteria pending real smoke\nEvidence: handoff_W_extract_master_day0_unify_20260723_coder-general_eba554f6; --help PASS",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "O1",
+      "approval_gate_id": "ctx_W_extract_master_day0_unify_20260723_approval_d8f1b1e7",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "extract orchestration; reversible tooling",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "P1 done by coder-general; extract_master is single day0 entrypoint",
+      "evidence_pack": "Facts: help/py_compile PASS; full DWH load not run — SuccessCriteria pending real smoke\nEvidence: handoff_W_extract_master_day0_unify_20260723_coder-general_eba554f6; --help PASS",
+      "success_criteria": "script: extract_master --source dwh ... ; numeric: OPS==MP4 after demote",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=full DWH smoke not run; evidence_refs=coder handoff eba554f6; approval_ref=ctx_W_extract_master_day0_unify_20260723_approval_d8f1b1e7",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "259746b29e328ab9e351dde9f1de65f71a2dd78653869b0693c604ea7bd2e1a4",
+      "created_at": "2026-07-23T18:13:31Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 8000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_extract_master_day0_unify_20260723_orchestrator_49ebd0ce",
+      "workflow_id": "W_extract_master_day0_unify_20260723",
+      "agent": "orchestrator",
+      "user_goal": "extract_master: demote final + source dwh|excel + CLI; batch-gate → master",
+      "changes": "extract_master+batch-gate+docs; coder eba554f6",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: help/py_compile PASS; full DWH smoke pending\nEvidence: coder handoff eba554f6",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — unify day0 under extract_master, no day0_pipeline",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "O1",
+      "approval_gate_id": "ctx_W_extract_master_day0_unify_20260723_approval_d8f1b1e7",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "extract orchestration; reversible tooling",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "P1 done; extract_master single day0 entrypoint",
+      "evidence_pack": "Facts: help/py_compile PASS; full DWH smoke pending\nEvidence: coder handoff eba554f6",
+      "success_criteria": "script: extract_master --source dwh; numeric: OPS==MP4",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=full DWH smoke not run; evidence_refs=eba554f6; approval_ref=ctx_W_extract_master_day0_unify_20260723_approval_d8f1b1e7",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "828029937e14776683ab7544e9d4a5ab2b2bcf8363b323796b3aefcc7b053cb9",
+      "created_at": "2026-07-23T18:13:37Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 8500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_extract_master_day0_unify_20260723_governance-compliance_ab14fafb",
+      "workflow_id": "W_extract_master_day0_unify_20260723",
+      "agent": "governance-compliance",
+      "user_goal": "extract_master: demote final + source dwh|excel + non-interactive CLI; batch-gate delegates to master",
+      "changes": "Governance verdict=allow_with_notes. Scope-match verified: git status shows only extract_master.py, dwh_batch_sim_gate.py, config/agent_kg.json (KG CLI), docs (runbook/capsule/architecture/changelog) — no code/sim_v2, no config/transitions, no invariants.json, no deletions. Verified in-code: extract_master.py has --source {excel,dwh} (l.1020), OPS==MP4 acceptance gate (l.853-888), demote runner as final critical PIPELINE step after terminal_br_gate (l.300). dwh_batch_sim_gate.py delegates via run_extract_master subprocess (l.71-90,168-169). changelog.md updated with workflow ref.",
+      "facts": "",
+      "assumptions": "Full DWH/ClickHouse load+sim not executed (mutating/long-running); Risks if false: runtime loader/OPS gate compatibility may only surface on a real DWH slice. Acceptable deferral for medium-fast per dispatch.",
+      "evidence": "Facts: Sources: config/agent_kg.json read-state W_extract_master_day0_unify_20260723 (handoffs eba554f6/8d215649/49ebd0ce); git status --short; code/extract/extract_master.py l.290-322,853-888,1020; code/utils/dwh_batch_sim_gate.py l.2,71-90,168-169; docs/changelog.md l.3-9. Checked: RiskTier=medium/profile=medium-fast consistent; RiskReasons present. HumanGateRequired=conditional satisfied by PRE-approval ctx_...d8f1b1e7 (Алексей 'делай'). PlanCard/EvidencePack/ComplianceChecklist(5-field) present in coder+orchestrator handoffs. SuccessCriteria verifiable (script:/invariant:/numeric: forms). DriftCheck filled in orchestrator 49ebd0ce (scope match yes). This is the single governance pass for the workflow.\nEvidence: Scope: git status --short = 7 modified files, all in-scope, 0 deletions. Code checks: rg --source/OPS/demote in extract_master.py PASS; rg extract_master in dwh_batch_sim_gate.py PASS (run_extract_master subprocess). Docs: changelog.md l.3-9 documents demote-final + OPS==MP4 gate + batch-gate delegation + removed enriched>1000 skip. Coder smoke (from handoff eba554f6): --help PASS x2, py_compile PASS, ReadLints PASS, git diff --check PASS. Full DWH smoke NOT run — deferred note.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_extract_master_day0_unify_20260723:20260723T181239Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "ctx_W_extract_master_day0_unify_20260723_approval_d8f1b1e7",
+      "approval_status": "approved",
+      "approval_source": "Алексей 'делай' в чате 2026-07-23 (PRE-approval)",
+      "risk_tier": "medium",
+      "risk_reasons": "reversible ETL orchestration/docs (medium-fast); DWH prepare-to-sim behavior touched; no sim_v2/SSoT/invariants",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Governance single-pass: policy + traceability + scope for coder eba554f6 / orchestrator 49ebd0ce.",
+      "evidence_pack": "Facts: Sources: config/agent_kg.json read-state W_extract_master_day0_unify_20260723 (handoffs eba554f6/8d215649/49ebd0ce); git status --short; code/extract/extract_master.py l.290-322,853-888,1020; code/utils/dwh_batch_sim_gate.py l.2,71-90,168-169; docs/changelog.md l.3-9. Checked: RiskTier=medium/profile=medium-fast consistent; RiskReasons present. HumanGateRequired=conditional satisfied by PRE-approval ctx_...d8f1b1e7 (Алексей 'делай'). PlanCard/EvidencePack/ComplianceChecklist(5-field) present in coder+orchestrator handoffs. SuccessCriteria verifiable (script:/invariant:/numeric: forms). DriftCheck filled in orchestrator 49ebd0ce (scope match yes). This is the single governance pass for the workflow.\nEvidence: Scope: git status --short = 7 modified files, all in-scope, 0 deletions. Code checks: rg --source/OPS/demote in extract_master.py PASS; rg extract_master in dwh_batch_sim_gate.py PASS (run_extract_master subprocess). Docs: changelog.md l.3-9 documents demote-final + OPS==MP4 gate + batch-gate delegation + removed enriched>1000 skip. Coder smoke (from handoff eba554f6): --help PASS x2, py_compile PASS, ReadLints PASS, git diff --check PASS. Full DWH smoke NOT run — deferred note.",
+      "success_criteria": "script: code/extract/extract_master.py --source dwh --mode prod --version-date <vd> --version-id 1 --dataset-path <v_*> runs non-interactive; invariant: demote is final critical pipeline step after terminal_br_gate; numeric: OPS Mi-8/Mi-17 == MP4 day0 (compare_ops_to_target) else pipeline fail",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=full_dwh_smoke_deferred; evidence_refs=git status --short; code/extract/extract_master.py l.853-888,1020; code/utils/dwh_batch_sim_gate.py l.71-90; docs/changelog.md l.3-9; handoff_...coder-general_eba554f6; approval_ref=ctx_W_extract_master_day0_unify_20260723_approval_d8f1b1e7",
+      "risks": "1. Реальный DWH-срез не прогонялся — SuccessCriteria script:/numeric: подтвердится только на первом фактическом прогоне. 2. Существующие DWH program_ac/status_overhaul срезы skip, не replace (open question). 3. Финальный OPS-gate зависит от pandas в runtime env.",
+      "next_owner": "orchestrator",
+      "open_questions": "Нужен ли отдельный replace policy для DWH program_ac/status_overhaul при --replace-slice (сейчас заменяется только heli_pandas).",
+      "graph_update": "no",
+      "graph_update_reason": "No Domain Graph/SSoT change; docs/capsule projection only.",
+      "prev_handoff_hash": "319df8f428f49682693da0f1b86c5b51c1759ac7f4707e3401af4564f962d8e6",
+      "created_at": "2026-07-23T18:15:09Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 24000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_extract_master_smoke_20260723_coder-general_d75a15f6",
+      "workflow_id": "W_extract_master_smoke_20260723",
+      "agent": "coder-general",
+      "user_goal": "Реальный smoke `extract_master --source dwh` на срезе 2026-07-22 v1 с `--replace-slice`, сравнить с baseline. Mutating CH — явно разрешено Алексеем («тестируй на реальном прогоне и сравнивай»).",
+      "changes": "- Executed real ETL smoke: `.venv/bin/python code/extract/extract_master.py --source dwh --mode prod --version-date 2026-07-22 --version-id 1 --dataset-path data_input/source_data/v_2026-07-22 --replace-slice`.\n- Mutated ClickHouse slice for `version_date=2026-07-22`, `version_id=1` as explicitly approved; no code changes made; no commit.\n- Captured log at `output/extract_master_smoke_2026-07-22.log` and demote audit under `output/day0_ops_deficit_demote_2026-07-22_v1/`.",
+      "facts": "",
+      "assumptions": "flight_program_fl delta likely comes from direct loader expanding 712 distinct `aircraft_number` values over 4000 days (`2,848,000 = 712*4000`) from the current `Program_heli.xlsx`; Risks if false: baseline expectation 1,144,000 may indicate an input-scope mismatch that should be investigated before using FL tensor for downstream simulation.\nNo code fix was applied because success gate passed and no clear orchestration bug was observed; Risks if false: a hidden regression in FL row scope could remain outside this smoke's acceptance criteria.",
+      "evidence": "SuccessCriteria PASS: pipeline exit=0; SQL `compare_ops_to_target` returned Mi-8 49==49 excess=0 and Mi-17 88==88 excess=0; SQL status_id=0 counts planers=0, aggregates=0, total=0.\nLog evidence: `output/extract_master_smoke_2026-07-22.log` ends with `EXTRACT_MASTER_EXIT_CODE=0`; final validation logged `20/20 этапов`, `heli_pandas status_id=0 пройдена`, `OPS Mi-8/Mi-17 после demote совпадает с MP4 day0`.\nBaseline vs After matrix: OPS Mi-8/Mi-17 49/88 -> 49/88 delta 0/0; excess 0/0 -> 0/0 delta 0/0; heli_pandas rows 11625 -> 11625 delta 0; program_ac 170 -> 170 delta 0; status_overhaul 59 -> 59 delta 0; flight_program_ac 4000 -> 4000 delta 0; flight_program_fl 1144000 -> 2848000 delta +1704000; pipeline exit n/a -> 0.\nPlaner status counts after equal baseline: gb1 {1:72,2:49,3:16,6:26}; gb2 {1:18,2:88,3:13,4:4}; material planer redistribution vs baseline: none.\nDemote audit dir exists: `output/day0_ops_deficit_demote_2026-07-22_v1/` with `demoted.csv`, `demoted.xlsx`, `ops_target_before.csv`, `ops_target_after.csv`, `ranking.xlsx`, `summary.json`; before demote OPS was Mi-8 65 target 49 excess 16, Mi-17 101 target 88 excess 13; after demote OPS was Mi-8 49 target 49 excess 0, Mi-17 88 target 88 excess 0; `summary.json` reports `demoted_count=29`, `planers_to_3=29`, `aggregates_to_3=893`, reason `in_program_calendar_positive`.\nClickHouse scope and schema gates: server version 24.10.1.2812; all row-count SQL scoped by `version_date=2026-07-22` and `version_id=1`; planer status SQL additionally scoped by `group_by IN (1,2)` and `aircraft_number > 0`; required columns present for `heli_pandas` and `flight_program_ac` used by comparator.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_extract_master_smoke_20260723:2026-07-23T18:21:26Z",
+      "plan_step_id": "V1",
+      "approval_gate_id": "ctx_W_extract_master_smoke_20260723_approval_5d0f6727",
+      "approval_status": "approved",
+      "approval_source": "Alexey current chat",
+      "risk_tier": "medium",
+      "risk_reasons": "Mutating ClickHouse real ETL slice with --replace-slice; DWH extract smoke affects shared input tables for version 2026-07-22 v1; approval required and provided",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "yes",
+      "plan_card": "Run full DWH extract_master smoke for 2026-07-22 v1 with --replace-slice, then compare baseline vs after via ClickHouse SQL and demote audit outputs.",
+      "evidence_pack": "SuccessCriteria PASS: pipeline exit=0; SQL `compare_ops_to_target` returned Mi-8 49==49 excess=0 and Mi-17 88==88 excess=0; SQL status_id=0 counts planers=0, aggregates=0, total=0.\nLog evidence: `output/extract_master_smoke_2026-07-22.log` ends with `EXTRACT_MASTER_EXIT_CODE=0`; final validation logged `20/20 этапов`, `heli_pandas status_id=0 пройдена`, `OPS Mi-8/Mi-17 после demote совпадает с MP4 day0`.\nBaseline vs After matrix: OPS Mi-8/Mi-17 49/88 -> 49/88 delta 0/0; excess 0/0 -> 0/0 delta 0/0; heli_pandas rows 11625 -> 11625 delta 0; program_ac 170 -> 170 delta 0; status_overhaul 59 -> 59 delta 0; flight_program_ac 4000 -> 4000 delta 0; flight_program_fl 1144000 -> 2848000 delta +1704000; pipeline exit n/a -> 0.\nPlaner status counts after equal baseline: gb1 {1:72,2:49,3:16,6:26}; gb2 {1:18,2:88,3:13,4:4}; material planer redistribution vs baseline: none.\nDemote audit dir exists: `output/day0_ops_deficit_demote_2026-07-22_v1/` with `demoted.csv`, `demoted.xlsx`, `ops_target_before.csv`, `ops_target_after.csv`, `ranking.xlsx`, `summary.json`; before demote OPS was Mi-8 65 target 49 excess 16, Mi-17 101 target 88 excess 13; after demote OPS was Mi-8 49 target 49 excess 0, Mi-17 88 target 88 excess 0; `summary.json` reports `demoted_count=29`, `planers_to_3=29`, `aggregates_to_3=893`, reason `in_program_calendar_positive`.\nClickHouse scope and schema gates: server version 24.10.1.2812; all row-count SQL scoped by `version_date=2026-07-22` and `version_id=1`; planer status SQL additionally scoped by `group_by IN (1,2)` and `aircraft_number > 0`; required columns present for `heli_pandas` and `flight_program_ac` used by comparator.",
+      "success_criteria": "script: extract_master exit code 0; SQL: OPS==MP4 for Mi-8/Mi-17 and status_id=0 total count == 0 for version_date=2026-07-22 version_id=1",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=output/extract_master_smoke_2026-07-22.log; output/day0_ops_deficit_demote_2026-07-22_v1/summary.json; ClickHouse SQL scoped version_date=2026-07-22 version_id=1 group_by IN (1,2); approval_ref=ctx_W_extract_master_smoke_20260723_approval_5d0f6727",
+      "risks": "- `flight_program_fl` row count differs from baseline by +1,704,000; acceptance OPS/status gates still passed, but downstream FL consumers may need a separate input-scope check.\n- `dwh_loader` kept hardcoded `--skip-existing` behavior for `program_ac`/`status_overhaul` as requested; if source rows changed there, this smoke intentionally did not force-refresh those tables.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Runtime smoke only; no domain graph/model change",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-23T18:21:26Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 32000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_extract_master_smoke_20260723_orchestrator_7ea1fbde",
+      "workflow_id": "W_extract_master_smoke_20260723",
+      "agent": "orchestrator",
+      "user_goal": "тестируй на реальном прогоне и сравнивай",
+      "changes": "no code; smoke run only",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: PASS exit0; OPS 49/88; demote 65/101→49/88 (29); statuses bit-match baseline; fl rows 1.144M→2.848M (712 ACN×4000)\nEvidence: output/extract_master_smoke_2026-07-22.log; output/day0_ops_deficit_demote_2026-07-22_v1/; handoff coder d75a15f6",
+      "drift_check": "UserGoal ↔ Changes: yes — real smoke+compare, no scope creep",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "V1",
+      "approval_gate_id": "ctx_W_extract_master_smoke_20260723_approval_5d0f6727",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "mutating extract smoke on live slice",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "Real DWH extract_master smoke 2026-07-22; compare baseline",
+      "evidence_pack": "Facts: PASS exit0; OPS 49/88; demote 65/101→49/88 (29); statuses bit-match baseline; fl rows 1.144M→2.848M (712 ACN×4000)\nEvidence: output/extract_master_smoke_2026-07-22.log; output/day0_ops_deficit_demote_2026-07-22_v1/; handoff coder d75a15f6",
+      "success_criteria": "script: extract_master exit 0; numeric: OPS==MP4; status_id=0==0",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=smoke log+demote audit; approval_ref=ctx_W_extract_master_smoke_20260723_approval_5d0f6727",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "dd1413226f05797fd5a537914a2aa7e8c64abb3cacce586b5ed15c8889b27875",
+      "created_at": "2026-07-23T18:22:04Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 6000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_extract_master_smoke_20260723_governance-compliance_152c712a",
+      "workflow_id": "W_extract_master_smoke_20260723",
+      "agent": "governance-compliance",
+      "user_goal": "тестируй на реальном прогоне и сравнивай",
+      "changes": "Governance verdict = allow_with_notes. Checked: (1) scope match UserGoal 'тестируй на реальном прогоне и сравнивай' <-> real smoke+compare, no creep (orchestrator DriftCheck=yes); (2) human-gate: PRE-approval ctx_...approval_5d0f6727 present, coder handoff carries approval_status=approved + source; (3) policy: mutating CH explicitly approved, used --replace-slice (idempotent slice), NOT --drop-table/TRUNCATE — DROP-guard compliant; no code change, no commit; (4) no self-coding by orchestrator (delegated to coder-general); (5) SuccessCriteria verifiable and PASS (exit0, OPS 49/88==MP4, status_id=0 count 0); (6) demote of 29 boards 65/101->49/88 is expected deficit-demote behavior; heli_pandas 11625 unchanged, planer statuses match baseline. Wrote phase_start + this handoff to Agent KG.",
+      "facts": "",
+      "assumptions": "flight_program_fl 1.144M->2.848M is loader expansion (712 ACN x 4000 days), not a defect; Risks if false: FL tensor input-scope mismatch could affect downstream simulation and should be checked before FL consumers use this slice.",
+      "evidence": "Facts: Sources verified: config/agent_kg.json handoffs coder-general d75a15f6 (evidence_pack, SuccessCriteria PASS) and orchestrator 7ea1fbde (DriftCheck=yes); approval context ctx_W_extract_master_smoke_20260723_approval_5d0f6727 (type=approval, Alexey 2026-07-23). Evidence files exist on disk: output/extract_master_smoke_2026-07-22.log (29769B, EXTRACT_MASTER_EXIT_CODE=0) and output/day0_ops_deficit_demote_2026-07-22_v1/summary.json (demoted_count=29, planers_to_3=29, aggregates_to_3=893). Checked RiskTier=medium/profile=medium-fast, RiskReasons, HumanGateRequired=yes. Verified PlanCard/EvidencePack/ComplianceChecklist present in both handoffs.\nEvidence: output/extract_master_smoke_2026-07-22.log; output/day0_ops_deficit_demote_2026-07-22_v1/summary.json; handoff_W_extract_master_smoke_20260723_coder-general_d75a15f6; ctx_W_extract_master_smoke_20260723_approval_5d0f6727",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_extract_master_smoke_20260723:2026-07-23T18:24:00Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "ctx_W_extract_master_smoke_20260723_approval_5d0f6727",
+      "approval_status": "approved",
+      "approval_source": "Alexey current chat",
+      "risk_tier": "medium",
+      "risk_reasons": "Mutating ClickHouse real ETL slice via --replace-slice on shared input tables 2026-07-22 v1; PRE-approved by Alexey",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "yes",
+      "plan_card": "Single governance pass: verify scope/traceability/human-gate/policy/SuccessCriteria for real DWH extract_master smoke 2026-07-22 v1.",
+      "evidence_pack": "Facts: Sources verified: config/agent_kg.json handoffs coder-general d75a15f6 (evidence_pack, SuccessCriteria PASS) and orchestrator 7ea1fbde (DriftCheck=yes); approval context ctx_W_extract_master_smoke_20260723_approval_5d0f6727 (type=approval, Alexey 2026-07-23). Evidence files exist on disk: output/extract_master_smoke_2026-07-22.log (29769B, EXTRACT_MASTER_EXIT_CODE=0) and output/day0_ops_deficit_demote_2026-07-22_v1/summary.json (demoted_count=29, planers_to_3=29, aggregates_to_3=893). Checked RiskTier=medium/profile=medium-fast, RiskReasons, HumanGateRequired=yes. Verified PlanCard/EvidencePack/ComplianceChecklist present in both handoffs.\nEvidence: output/extract_master_smoke_2026-07-22.log; output/day0_ops_deficit_demote_2026-07-22_v1/summary.json; handoff_W_extract_master_smoke_20260723_coder-general_d75a15f6; ctx_W_extract_master_smoke_20260723_approval_5d0f6727",
+      "success_criteria": "script: extract_master exit code 0; SQL: OPS==MP4 for Mi-8/Mi-17 and status_id=0 total count == 0 for version_date=2026-07-22 version_id=1 (dispatch criterion; validated PASS in coder handoff d75a15f6)",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=output/extract_master_smoke_2026-07-22.log;output/day0_ops_deficit_demote_2026-07-22_v1/summary.json;handoff_W_extract_master_smoke_20260723_coder-general_d75a15f6; approval_ref=ctx_W_extract_master_smoke_20260723_approval_5d0f6727",
+      "risks": "NOTE (non-blocking): flight_program_fl doubled 1.144M->2.848M (=712x4000); OPS/status acceptance gates unaffected, but downstream FL tensor consumers should verify input-scope before simulation use. Minor traceability: orchestrator handoff 7ea1fbde has empty trace_id and empty approval_status/source (approval_ref present + coder handoff carries full approval fields) — not blocking.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Runtime smoke only; no domain graph/model change",
+      "prev_handoff_hash": "e8db1bfe062b96459d459196bb9f2e3cdbaa97e43c307c77c7bc4c405d553b51",
+      "created_at": "2026-07-23T18:24:03Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 9000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -35612,6 +36025,69 @@
       "agent": "orchestrator",
       "created_at": "2026-07-23T14:36:26Z",
       "updated_at": "2026-07-23T14:36:26Z"
+    },
+    {
+      "context_id": "ctx_wf_readonly_planer_inactive_20260723_phase_start_dc3fdf1a",
+      "workflow_id": "wf_readonly_planer_inactive_20260723",
+      "context_type": "phase_start",
+      "content": "Started read-only research on Day0 inactive planer cascade and aggregate status outcomes for aggregate_status_block matrix; scope: listed extract/docs files plus git log and optional SELECT-only ClickHouse checks.",
+      "agent": "research-graph-analyst",
+      "created_at": "2026-07-23T15:38:16Z",
+      "updated_at": "2026-07-23T15:38:16Z"
+    },
+    {
+      "context_id": "ctx_W_extract_master_day0_unify_20260723_approval_d8f1b1e7",
+      "workflow_id": "W_extract_master_day0_unify_20260723",
+      "context_type": "approval",
+      "content": "PRE-approval: Алексей 2026-07-23 «делай» — реализовать план extract_master day0 unify (demote final + source dwh|excel + CLI + batch-gate). Risk medium-fast. Scope: code/extract/extract_master.py, code/utils/dwh_batch_sim_gate.py, docs runbook/capsule/architecture/changelog. No sim_v2/SSoT.",
+      "agent": "unknown",
+      "created_at": "2026-07-23T18:06:27Z",
+      "updated_at": "2026-07-23T18:06:27Z"
+    },
+    {
+      "context_id": "ctx_W_extract_master_day0_unify_20260723_phase_start_536aa0ea",
+      "workflow_id": "W_extract_master_day0_unify_20260723",
+      "context_type": "phase_start",
+      "content": "governance-compliance single-pass start: policy/traceability check for extract_master day0 unify (medium/medium-fast). Reviewing coder handoff eba554f6 + orchestrator handoff 49ebd0ce against scope and approval ctx_...d8f1b1e7.",
+      "agent": "governance-compliance",
+      "created_at": "2026-07-23T18:06:27Z",
+      "updated_at": "2026-07-23T18:14:42Z"
+    },
+    {
+      "context_id": "ctx_W_extract_master_day0_unify_20260723_closure_754f5519",
+      "workflow_id": "W_extract_master_day0_unify_20260723",
+      "context_type": "closure",
+      "content": "P1 + governance allow_with_notes; awaiting human smoke/commit",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T18:15:22Z",
+      "updated_at": "2026-07-23T18:15:22Z"
+    },
+    {
+      "context_id": "ctx_W_extract_master_smoke_20260723_approval_5d0f6727",
+      "workflow_id": "W_extract_master_smoke_20260723",
+      "context_type": "approval",
+      "content": "PRE-approval: Алексей 2026-07-23 «тестируй на реальном прогоне и сравнивай» — mutating extract smoke на 2026-07-22 v1 с --replace-slice, compare baseline vs after.",
+      "agent": "unknown",
+      "created_at": "2026-07-23T18:16:19Z",
+      "updated_at": "2026-07-23T18:16:19Z"
+    },
+    {
+      "context_id": "ctx_W_extract_master_smoke_20260723_phase_start_3f1bcc9b",
+      "workflow_id": "W_extract_master_smoke_20260723",
+      "context_type": "phase_start",
+      "content": "governance-compliance start: single governance pass for W_extract_master_smoke_20260723 (medium-fast). Verify scope/traceability/human-gate/policy on real extract_master dwh smoke 2026-07-22 v1 --replace-slice vs baseline.",
+      "agent": "governance-compliance",
+      "created_at": "2026-07-23T18:17:04Z",
+      "updated_at": "2026-07-23T18:23:06Z"
+    },
+    {
+      "context_id": "ctx_W_extract_master_smoke_20260723_closure_8185d64e",
+      "workflow_id": "W_extract_master_smoke_20260723",
+      "context_type": "closure",
+      "content": "Smoke PASS allow_with_notes; FL row growth noted",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T18:24:23Z",
+      "updated_at": "2026-07-23T18:24:23Z"
     }
   ],
   "meta": {
