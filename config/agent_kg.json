@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-23T06:54:00Z",
+    "updated_at": "2026-07-23T06:58:24Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -4460,7 +4460,7 @@
       "goal": "Preserve HELISUR/OM foreign AMOS location in heli_pandas for warehouse pool filter",
       "phase": "close",
       "owner": "human",
-      "status": "active",
+      "status": "closed",
       "caps": {
         "max_steps": 8,
         "max_tokens": 500000,
@@ -4468,13 +4468,13 @@
         "profile": "medium-fast"
       },
       "usage": {
-        "cumulative_steps": 1,
-        "cumulative_tokens": 14000,
+        "cumulative_steps": 3,
+        "cumulative_tokens": 21000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-07-23T06:54:00Z"
+        "last_updated": "2026-07-23T06:58:24Z"
       },
       "created_at": "2026-07-23T06:53:47Z",
-      "updated_at": "2026-07-23T06:54:00Z"
+      "updated_at": "2026-07-23T06:58:24Z"
     }
   ],
   "handoffs": [
@@ -31095,6 +31095,88 @@
         "est_tokens": 14000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_foreign_location_preserve_20260723_governance-compliance_48321141",
+      "workflow_id": "W_foreign_location_preserve_20260723",
+      "agent": "governance-compliance",
+      "user_goal": "лечи дефекты и зарывай окончательно",
+      "changes": "policy verdict only; no code edits",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "c6b08bba; kept_foreign=32; pool 23=3+20; OPS 55/102; agent_kg json.load OK",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_foreign_location_preserve_20260723:2026-07-23T06:57:30Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "ctx_W_foreign_location_preserve_20260723_approval_request_44f3adb4",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "location semantics; KG integrity restore",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Governance single pass: allow close foreign-location preserve",
+      "evidence_pack": "c6b08bba; kept_foreign=32; pool 23=3+20; OPS 55/102; agent_kg json.load OK",
+      "success_criteria": "manual-check: agent_kg UTF-8 valid; foreign location kept on 2026-07-22; close-workflow succeeds after this handoff",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=c6b08bba;output/dwh_reload_foreign_loc_2026-07-22.log; approval_ref=ctx_W_foreign_location_preserve_20260723_approval_request_44f3adb4",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "7d52b196c639d9ac98300fbd6356d2d14b8af95b8bd6891b7fcb8e4181f256c8",
+      "created_at": "2026-07-23T06:57:30Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 4000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_foreign_location_preserve_20260723_orchestrator_a5ba5e57",
+      "workflow_id": "W_foreign_location_preserve_20260723",
+      "agent": "orchestrator",
+      "user_goal": "лечи дефекты и зарывай окончательно",
+      "changes": "no code; governance handoff absorbed; workflow close",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "governance handoff_W_foreign_location_preserve_20260723_governance-compliance_48321141 decision=allow; KG json.load OK; c6b08bba already on origin",
+      "drift_check": "UserGoal heal+close ↔ Changes: yes",
+      "process_insights": "",
+      "trace_id": "wf:W_foreign_location_preserve_20260723:2026-07-23T06:58:24Z",
+      "plan_step_id": "C2",
+      "approval_gate_id": "ctx_W_foreign_location_preserve_20260723_approval_request_44f3adb4",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "close after governance allow; KG integrity confirmed",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Close WF after governance allow; defects cleared",
+      "evidence_pack": "governance handoff_W_foreign_location_preserve_20260723_governance-compliance_48321141 decision=allow; KG json.load OK; c6b08bba already on origin",
+      "success_criteria": "manual-check: close-workflow succeeds; agent_kg UTF-8 valid; no open blockers",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=handoff_W_foreign_location_preserve_20260723_governance-compliance_48321141;c6b08bba; approval_ref=ctx_W_foreign_location_preserve_20260723_approval_request_44f3adb4",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "fb9d4c017c7fe6e140a591f5dc70b165133b3dfbe987b710abbe6d6e7a10bc1b",
+      "created_at": "2026-07-23T06:58:24Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 3000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -34796,6 +34878,15 @@
       "agent": "orchestrator",
       "created_at": "2026-07-23T06:53:47Z",
       "updated_at": "2026-07-23T06:53:47Z"
+    },
+    {
+      "context_id": "ctx_W_foreign_location_preserve_20260723_closure_0253dbbf",
+      "workflow_id": "W_foreign_location_preserve_20260723",
+      "context_type": "closure",
+      "content": "governance allow; defects healed; final close",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T06:58:24Z",
+      "updated_at": "2026-07-23T06:58:24Z"
     }
   ],
   "meta": {
