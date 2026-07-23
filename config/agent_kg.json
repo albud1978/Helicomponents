@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-23T09:40:30Z",
+    "updated_at": "2026-07-23T14:43:12Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -4517,6 +4517,68 @@
       },
       "created_at": "2026-07-23T09:27:45Z",
       "updated_at": "2026-07-23T09:40:30Z"
+    },
+    {
+      "workflow_id": "W_sim_20260722_det_spawn_ab",
+      "goal": "Канонические прогоны 2026-07-22: A det_spawn=0 (vid98), B base new_counter из Program_heli (vid1)",
+      "phase": "analysis",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-23T11:50:57Z"
+      },
+      "created_at": "2026-07-23T11:50:57Z",
+      "updated_at": "2026-07-23T11:50:57Z"
+    },
+    {
+      "workflow_id": "W_golden_window_sim_20260723",
+      "goal": "Golden-window сезонная политика demote/promote в LIMITER V8 за флагом --golden-window: фазовое ранжирование E + swap (Apr-Aug) + harvest (Aug-Dec), предохранитель при дефиците; канон (флаг OFF) бит-идентичен",
+      "phase": "analysis",
+      "owner": "orchestrator",
+      "status": "closed",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null
+      },
+      "usage": {
+        "cumulative_steps": 5,
+        "cumulative_tokens": 137000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-23T13:28:29Z"
+      },
+      "created_at": "2026-07-23T12:20:46Z",
+      "updated_at": "2026-07-23T14:36:26Z"
+    },
+    {
+      "workflow_id": "W_housekeeping_20260723T144312Z",
+      "goal": "low-risk housekeeping edit of .cursor/rules/15_flame_environment.mdc",
+      "phase": "implement",
+      "owner": "orchestrator",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "low"
+      },
+      "usage": {
+        "cumulative_steps": 0,
+        "cumulative_tokens": 0,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-23T14:43:12Z"
+      },
+      "created_at": "2026-07-23T14:43:12Z",
+      "updated_at": "2026-07-23T14:43:12Z"
     }
   ],
   "handoffs": [
@@ -31559,6 +31621,224 @@
         "est_tokens": 42000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_golden_window_sim_20260723_coder-flame_32c81e75",
+      "workflow_id": "W_golden_window_sim_20260723",
+      "agent": "coder-flame",
+      "user_goal": "вот теперь вернемся к нашем плану с golden window, попробуй реализовать, посмотрим что получится",
+      "changes": "- code/sim_v2/messaging/orchestrator_limiter_v8.py: added --golden-window flag, calendar precompute/init HostFunction, conditional golden quota registration, swap/harvest insertion before post-quota recount.\n- code/sim_v2/messaging/rtc_golden_window_v8.py: added opt-in RTC layers for golden demote/P1 keys, device death_fly over mp5_cumsum, swap and harvest rotations, and golden MacroProperties.\n- config/agent_kg.json: recorded phase_start and coder handoff context for W_golden_window_sim_20260723.",
+      "facts": "",
+      "assumptions": "- User requested Modules [sim], but Agent KG controlled vocabulary has no sim module; KG handoff maps scope to quotas_ops,state_transitions,step_logic. Risks if false: governance may request module vocabulary update.\n- UInt32 MacroProperty used for calendar arrays because project MacroProperty patterns and HostFunction import APIs use UInt32; values remain unsigned integer month/day indices. Risks if false: reviewer may require narrower MacroProperty API replacement.\n- September exits are not zero because requested E classes/swap months protect Apr-Aug and classify Sep-Mar as lower demote priority; May-Sep total still improves. Risks if false: policy spec may need explicit September inclusion in class 0/swap months.",
+      "evidence": "Commands:\n1) py_compile: /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_golden_window_v8.py code/sim_v2/messaging/orchestrator_limiter_v8.py => PASS.\n2) OFF run: cuda13_nosb orchestrator_limiter_v8.py --version-date 2026-07-22 --version-id 96 --input-version-id 1 => PASS, final ops target Mi-8 Δ=0, Mi-17 Δ=0, master_rows_sha256=920624b12220cb096e4c8463547fa581be8e797cf033d56defbf72cb63a6bafd.\n3) SQL EXCEPT vid96 vs vid1 excluding version_id: vid96_minus_vid1=0; vid1_minus_vid96=0.\n4) ON run: cuda13_nosb orchestrator_limiter_v8.py --version-date 2026-07-22 --version-id 97 --input-version-id 1 --golden-window => PASS, final ops target Mi-8 Δ=0, Mi-17 Δ=0, master_rows_sha256=7a0de430a5f132ba50eae41e5e801b072b4ad96c08b67900e4349e2be333496a.\n5) Daily ops-vs-target SQL on sim_masterv2_v9_daily for vid97: group_by=1 max_abs_delta=0 min_delta=0 max_delta=0; group_by=2 max_abs_delta=0 min_delta=0 max_delta=0.\n6) May-Sep raw transition counts pre_status_id=2 -> status_id in (6,7): gb1 baseline vid1=27, vid97=13; gb2 baseline vid1=53, vid97=36.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_golden_window_sim_20260723:20260723T123242Z",
+      "plan_step_id": "P1",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "code/sim_v2 GPU/RTC behavior changed; quota ranking and post-quota rotation semantics changed; ClickHouse simulation outputs written for vid96/vid97",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (pending reviewer/governance)",
+      "human_gate_required": "yes",
+      "plan_card": "Implement --golden-window as opt-in seasonal policy. Keep OFF path byte-identical; validate vid96 baseline equivalence and vid97 target/no-summer-exit improvement.",
+      "evidence_pack": "Commands:\n1) py_compile: /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_golden_window_v8.py code/sim_v2/messaging/orchestrator_limiter_v8.py => PASS.\n2) OFF run: cuda13_nosb orchestrator_limiter_v8.py --version-date 2026-07-22 --version-id 96 --input-version-id 1 => PASS, final ops target Mi-8 Δ=0, Mi-17 Δ=0, master_rows_sha256=920624b12220cb096e4c8463547fa581be8e797cf033d56defbf72cb63a6bafd.\n3) SQL EXCEPT vid96 vs vid1 excluding version_id: vid96_minus_vid1=0; vid1_minus_vid96=0.\n4) ON run: cuda13_nosb orchestrator_limiter_v8.py --version-date 2026-07-22 --version-id 97 --input-version-id 1 --golden-window => PASS, final ops target Mi-8 Δ=0, Mi-17 Δ=0, master_rows_sha256=7a0de430a5f132ba50eae41e5e801b072b4ad96c08b67900e4349e2be333496a.\n5) Daily ops-vs-target SQL on sim_masterv2_v9_daily for vid97: group_by=1 max_abs_delta=0 min_delta=0 max_delta=0; group_by=2 max_abs_delta=0 min_delta=0 max_delta=0.\n6) May-Sep raw transition counts pre_status_id=2 -> status_id in (6,7): gb1 baseline vid1=27, vid97=13; gb2 baseline vid1=53, vid97=36.",
+      "success_criteria": "SQL: EXCEPT(vid96 vs vid1 без version_id)=0 both ways И vid97 ops=target PASS И May-Sep 2->6/7 vid97 < vid1",
+      "compliance_checklist": "decision=allow_with_notes required_gates=partial exceptions=reviewer-flame_pending;governance_pending evidence_refs=py_compile;vid96_run;vid96_except;vid97_run;daily_ops_sql;monthly_exit_sql approval_ref=N/A",
+      "risks": "NVRTC/GPU review still required; policy did not fully zero May-Sep exits; additional RTC layers may affect performance/cache compilation time under --golden-window",
+      "next_owner": "reviewer-flame",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Domain graph/SSoT config unchanged; runtime code-only opt-in policy.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-23T12:33:34Z",
+      "modules": [
+        "quotas_ops",
+        "state_transitions",
+        "step_logic"
+      ],
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 65000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_golden_window_sim_20260723_coder-flame_95387752",
+      "workflow_id": "W_golden_window_sim_20260723",
+      "agent": "coder-flame",
+      "user_goal": "Ревью reviewer-flame: accept_with_notes, OFF-путь принят, ON-путь заблокирован одним критическим багом. Исправь и перепрогони.",
+      "changes": "- code/sim_v2/messaging/rtc_golden_window_v8.py: gw_death_fly now uses search_end=min(end_day, days_total) instead of days_total, preventing binary search over the unfilled mp5_cumsum tail.\n- code/sim_v2/messaging/rtc_golden_window_v8.py: removed rotation-only debug_needs_demote/debug_promoted writes; kept debug_needs_demote on golden demote and debug_bucket_seen on golden P1 because baseline writes those on equivalent paths.\n- OFF path code was not changed in P2; no vid96 rerun performed per reviewer instruction.",
+      "facts": "",
+      "assumptions": "- N1 cannot be fully answered from current ClickHouse outputs because transition counters are not persisted. Risks if false: reviewer may point to a non-CH binary/export artifact; I did not add new export scope.\n- OFF bit-identity remains covered by prior reviewer acceptance and P2 touched only ON module. Risks if false: if reviewer considers existing orchestrator changes still in scope, vid96 can be rerun again.",
+      "evidence": "Commands/evidence:\n1) py_compile: /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_golden_window_v8.py => PASS.\n2) ON rerun: cuda13_nosb orchestrator_limiter_v8.py --version-date 2026-07-22 --version-id 97 --input-version-id 1 --golden-window => PASS. Final validation: Mi-8 ops=38 target=38 Δ=0; Mi-17 ops=99 target=99 Δ=0. master_rows_sha256=bf2c638413e17122496d2a24d19114f564bf8b9aa9a10bf9623694a01e0ffc98.\n3) Daily ops-vs-target SQL on sim_masterv2_v9_daily for vid97: gb1 max_abs_delta=0 min_delta=0 max_delta=0; gb2 max_abs_delta=0 min_delta=0 max_delta=0.\n4) May-Sep 2->6/7 sums: gb1 vid1=27 vid97=11; gb2 vid1=53 vid97=28.\n5) Monthly 2->6/7 and KR-start SQL collected for vid97 vs vid1; see final response for compact table.\n6) N1 output-data check: sim_masterv2_v9 has no transition_* columns; SHOW TABLES found no sim*transition* or sim*mp2* transition output tables; rtc_mp2_export.py MP2_DYNAMIC_FIELDS excludes mp2_transition_* buffers. Master has 4 day/group rows with bidirectional actual 2->3 and 3->2 changes, but output data cannot compare aggregate transition counters because counters are not exported.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_golden_window_sim_20260723:20260723T124728Z",
+      "plan_step_id": "P2",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "Reviewer C1 critical fix in GPU RTC death_fly; ON simulation rerun and ClickHouse validation required; runtime code in code/sim_v2/messaging changed",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (pending reviewer-flame recheck)",
+      "human_gate_required": "yes",
+      "plan_card": "Fix C1 by clamping gw_death_fly binary search to end_day; keep OFF path untouched; rerun vid97 and collect SQL evidence including N1 output-data check.",
+      "evidence_pack": "Commands/evidence:\n1) py_compile: /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_golden_window_v8.py => PASS.\n2) ON rerun: cuda13_nosb orchestrator_limiter_v8.py --version-date 2026-07-22 --version-id 97 --input-version-id 1 --golden-window => PASS. Final validation: Mi-8 ops=38 target=38 Δ=0; Mi-17 ops=99 target=99 Δ=0. master_rows_sha256=bf2c638413e17122496d2a24d19114f564bf8b9aa9a10bf9623694a01e0ffc98.\n3) Daily ops-vs-target SQL on sim_masterv2_v9_daily for vid97: gb1 max_abs_delta=0 min_delta=0 max_delta=0; gb2 max_abs_delta=0 min_delta=0 max_delta=0.\n4) May-Sep 2->6/7 sums: gb1 vid1=27 vid97=11; gb2 vid1=53 vid97=28.\n5) Monthly 2->6/7 and KR-start SQL collected for vid97 vs vid1; see final response for compact table.\n6) N1 output-data check: sim_masterv2_v9 has no transition_* columns; SHOW TABLES found no sim*transition* or sim*mp2* transition output tables; rtc_mp2_export.py MP2_DYNAMIC_FIELDS excludes mp2_transition_* buffers. Master has 4 day/group rows with bidirectional actual 2->3 and 3->2 changes, but output data cannot compare aggregate transition counters because counters are not exported.",
+      "success_criteria": "script: vid97 --golden-window rerun PASS with final ops=target; SQL: daily ops target max_abs_delta=0 for gb1/gb2; SQL: monthly 2->6/7 and KR starts reported; manual-check: OFF path unchanged in P2",
+      "compliance_checklist": "decision=allow_with_notes required_gates=partial exceptions=reviewer-flame_recheck_pending;governance_pending evidence_refs=py_compile;vid97_rerun;daily_ops_sql;monthly_exit_sql;kr_start_sql;n1_export_check approval_ref=N/A",
+      "risks": "N1 transition-counter duplication cannot be proven from current persisted outputs; policy still reduces but does not zero May-Sep exits; reviewer-flame recheck required for high-risk RTC code",
+      "next_owner": "reviewer-flame",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Runtime code fix only; SSoT/domain graph unchanged.",
+      "prev_handoff_hash": "f2a65ba359d0e196e78d38f08d6748c25388776938028b2fa5f95e20f2367e26",
+      "created_at": "2026-07-23T12:47:52Z",
+      "modules": [
+        "quotas_ops",
+        "state_transitions",
+        "step_logic"
+      ],
+      "supersedes": "handoff_W_golden_window_sim_20260723_coder-flame_32c81e75",
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 25000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_golden_window_sim_20260723_coder-flame_7c8c0947",
+      "workflow_id": "W_golden_window_sim_20260723",
+      "agent": "coder-flame",
+      "user_goal": "Алексей одобрил доводку (PlanStepID P3): расширить защиту golden-window на сентябрь–октябрь. N1 (двойной переход 3→2/2→3 в один день) НЕ трогать — оставить как есть.",
+      "changes": "- code/sim_v2/messaging/rtc_golden_window_v8.py: demote class0 condition changed from m in 4..8 to m in 4..10.\n- code/sim_v2/messaging/rtc_golden_window_v8.py: swap active months changed from 4..8 to 4..10 for both ops dying-key and svc safe-key writers.\n- P1 promote key was checked: no hard-coded 4..8 set; class2 remains implicit non-valley/non-safe, so no P1 code change.\n- Harvest and N1 behavior unchanged by request. OFF path untouched; vid96 not rerun.",
+      "facts": "",
+      "assumptions": "- OFF path is unchanged in P3 because only rtc_golden_window_v8.py was edited and it is registered only under --golden-window. Risks if false: rerun vid96 EXCEPT again.\n- group_by SQL uses raw sim_masterv2_v9 for transition month counts and sim_masterv2_v9_daily for daily ops/deficit-days because raw master is adaptive-step output. Risks if false: validator may request a different canonical query.",
+      "evidence": "Commands/evidence:\n1) py_compile: /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_golden_window_v8.py => PASS.\n2) rg check: demote now m>=4 && m<=10; swap filters now m<4 || m>10; no remaining m>8/m<=8 season guard.\n3) ON rerun: cuda13_nosb orchestrator_limiter_v8.py --version-date 2026-07-22 --version-id 97 --input-version-id 1 --golden-window => PASS. Final validation: Mi-8 ops=38 target=38 Δ=0; Mi-17 ops=99 target=99 Δ=0. master_rows_sha256=b3d64df846f50f41727a01a1595c915214f14f4c2d188eeefff591a43531a707.\n4) Deficit-days SQL on sim_masterv2_v9_daily aligned by dateDiff+1: vid1 gb1=0, vid97 gb1=0, vid1 gb2=0, vid97 gb2=0; min_delta=0 and max_abs_delta=0 for all.\n5) May-Sep 2->6/7 sums: gb1 vid1=27 vid97=9; gb2 vid1=53 vid97=35. Sep-Oct sums: gb1 vid1=7 vid97=7; gb2 vid1=20 vid97=13.\n6) Monthly exits and KR starts collected; see final response.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_golden_window_sim_20260723:20260723T131034Z",
+      "plan_step_id": "P3",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "GPU RTC seasonal semantics changed in ON path; vid97 simulation rerun and ClickHouse validation required; high-risk code/sim_v2 runtime scope",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (pending reviewer-flame recheck)",
+      "human_gate_required": "yes",
+      "plan_card": "Extend golden-window protection to Sep-Oct in demote class0 and swap months only. Keep P1/harvest and N1 unchanged; OFF path untouched.",
+      "evidence_pack": "Commands/evidence:\n1) py_compile: /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_golden_window_v8.py => PASS.\n2) rg check: demote now m>=4 && m<=10; swap filters now m<4 || m>10; no remaining m>8/m<=8 season guard.\n3) ON rerun: cuda13_nosb orchestrator_limiter_v8.py --version-date 2026-07-22 --version-id 97 --input-version-id 1 --golden-window => PASS. Final validation: Mi-8 ops=38 target=38 Δ=0; Mi-17 ops=99 target=99 Δ=0. master_rows_sha256=b3d64df846f50f41727a01a1595c915214f14f4c2d188eeefff591a43531a707.\n4) Deficit-days SQL on sim_masterv2_v9_daily aligned by dateDiff+1: vid1 gb1=0, vid97 gb1=0, vid1 gb2=0, vid97 gb2=0; min_delta=0 and max_abs_delta=0 for all.\n5) May-Sep 2->6/7 sums: gb1 vid1=27 vid97=9; gb2 vid1=53 vid97=35. Sep-Oct sums: gb1 vid1=7 vid97=7; gb2 vid1=20 vid97=13.\n6) Monthly exits and KR starts collected; see final response.",
+      "success_criteria": "script: vid97 --golden-window rerun PASS with final ops=target; SQL: monthly 2->6/7, May-Sep, Sep-Oct, KR starts, and deficit-days reported; manual-check: OFF path untouched",
+      "compliance_checklist": "decision=allow_with_notes required_gates=partial exceptions=reviewer-flame_recheck_pending;governance_pending evidence_refs=py_compile;vid97_rerun;monthly_exit_sql;kr_start_sql;deficit_days_sql approval_ref=N/A",
+      "risks": "P3 changes alter seasonal behavior and require reviewer-flame recheck; May-Sep exits reduced but not zero for Mi-17; OFF path not rerun in P3 by instruction",
+      "next_owner": "reviewer-flame",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Runtime ON-path code only; SSoT/domain graph unchanged.",
+      "prev_handoff_hash": "1b56a22ade63fb540698854cdc7cfdb578823856f16411d9c0fb6e07e37b44f4",
+      "created_at": "2026-07-23T13:10:53Z",
+      "modules": [
+        "quotas_ops",
+        "state_transitions",
+        "step_logic"
+      ],
+      "supersedes": "handoff_W_golden_window_sim_20260723_coder-flame_95387752",
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 20000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_golden_window_sim_20260723_coder-flame_145c5be2",
+      "workflow_id": "W_golden_window_sim_20260723",
+      "agent": "coder-flame",
+      "user_goal": "Алексей одобрил следующую доводку (PlanStepID P4, пробный вариант, при неуспехе откатим): дожать июльско-августовскую утечку.",
+      "changes": "- code/sim_v2/messaging/rtc_golden_window_v8.py: harvest active-month guard changed from 8..12 to 5..12 in both ops rich-key and svc burn-key writers.\n- Demote class remains 4..10; swap remains 4..10; P1 and N1 unchanged.\n- OFF path untouched; vid96 not rerun by instruction.",
+      "facts": "",
+      "assumptions": "- P4 produced the same vid97 hash and SQL metrics as P3; likely no additional May-Jul harvest candidates satisfy burn/rich constraints before August on this dataset. Risks if false: need lower-level per-layer instrumentation to count candidate keys.\n- OFF path unchanged because only rtc_golden_window_v8.py harvest guards changed and module is registered only under --golden-window. Risks if false: rerun vid96 EXCEPT.",
+      "evidence": "Commands/evidence:\n1) py_compile: /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_golden_window_v8.py => PASS.\n2) rg check: demote m>=4 && m<=10; swap m<4 || m>10; harvest m<5 || m>12; no remaining harvest m<8.\n3) ON rerun: cuda13_nosb orchestrator_limiter_v8.py --version-date 2026-07-22 --version-id 97 --input-version-id 1 --golden-window => PASS. Final validation: Mi-8 ops=38 target=38 Δ=0; Mi-17 ops=99 target=99 Δ=0. master_rows_sha256=b3d64df846f50f41727a01a1595c915214f14f4c2d188eeefff591a43531a707 (same as P3).\n4) Exit sums: May-Sep gb1 27->9, gb2 53->35; Jul-Aug gb1 12->8, gb2 29->24; Sep-Oct gb1 7->7, gb2 20->13; Nov-Dec gb1 16->22, gb2 19->48.\n5) Births: vid1 gb2 total=16 planned=16 dynamic=0; vid97 gb2 total=17 planned=16 dynamic=1 (203212). No gb1 births.\n6) KR starts total: gb1 33->32; gb2 99->85.\n7) Deficit-days vid97 daily ffill aligned dateDiff+1: gb1=0 min_delta=0 max_abs_delta=0; gb2=0 min_delta=0 max_abs_delta=0.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_golden_window_sim_20260723:20260723T132423Z",
+      "plan_step_id": "P4",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "GPU RTC harvest semantics changed in ON path; vid97 simulation rerun and ClickHouse validation required; high-risk code/sim_v2 runtime scope",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (pending reviewer-flame recheck)",
+      "human_gate_required": "yes",
+      "plan_card": "Trial: extend harvest active months from 8..12 to 5..12 only. Keep demote/swap/P1/N1 and OFF path unchanged; collect exits/births/KR/deficit SQL.",
+      "evidence_pack": "Commands/evidence:\n1) py_compile: /home/albud/miniconda3/envs/cuda13/bin/python3 -m py_compile code/sim_v2/messaging/rtc_golden_window_v8.py => PASS.\n2) rg check: demote m>=4 && m<=10; swap m<4 || m>10; harvest m<5 || m>12; no remaining harvest m<8.\n3) ON rerun: cuda13_nosb orchestrator_limiter_v8.py --version-date 2026-07-22 --version-id 97 --input-version-id 1 --golden-window => PASS. Final validation: Mi-8 ops=38 target=38 Δ=0; Mi-17 ops=99 target=99 Δ=0. master_rows_sha256=b3d64df846f50f41727a01a1595c915214f14f4c2d188eeefff591a43531a707 (same as P3).\n4) Exit sums: May-Sep gb1 27->9, gb2 53->35; Jul-Aug gb1 12->8, gb2 29->24; Sep-Oct gb1 7->7, gb2 20->13; Nov-Dec gb1 16->22, gb2 19->48.\n5) Births: vid1 gb2 total=16 planned=16 dynamic=0; vid97 gb2 total=17 planned=16 dynamic=1 (203212). No gb1 births.\n6) KR starts total: gb1 33->32; gb2 99->85.\n7) Deficit-days vid97 daily ffill aligned dateDiff+1: gb1=0 min_delta=0 max_abs_delta=0; gb2=0 min_delta=0 max_abs_delta=0.",
+      "success_criteria": "script: vid97 --golden-window rerun PASS with final ops=target; SQL: exits by month and sums, births total/month/planned-vs-dynamic, KR starts total, deficit-days reported; manual-check: OFF path untouched",
+      "compliance_checklist": "decision=allow_with_notes required_gates=partial exceptions=reviewer-flame_recheck_pending;governance_pending evidence_refs=py_compile;vid97_rerun;exit_sql;birth_sql;kr_sql;deficit_days_sql approval_ref=N/A",
+      "risks": "Trial did not improve Jul-Aug leakage on measured output; high-risk RTC behavior needs reviewer recheck; OFF path not rerun by instruction",
+      "next_owner": "reviewer-flame",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Runtime ON-path code only; SSoT/domain graph unchanged.",
+      "prev_handoff_hash": "bd49573bbc6529f9f972e53ba8b3c76dd6b340b2ccf17b4f2f232573c3044321",
+      "created_at": "2026-07-23T13:24:41Z",
+      "modules": [
+        "quotas_ops",
+        "state_transitions",
+        "step_logic"
+      ],
+      "supersedes": "handoff_W_golden_window_sim_20260723_coder-flame_7c8c0947",
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 18000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_golden_window_sim_20260723_coder-flame_42745515",
+      "workflow_id": "W_golden_window_sim_20260723",
+      "agent": "coder-flame",
+      "user_goal": "P5 (пробный, одобрен Алексеем в рамках «дожимаем, не зайдёт — откатимся»). Диагноз: Jul-Aug смерти при svc_pool=0 ... Решение из контрфакта — proactive KR.",
+      "changes": "- No P5 code changes made.\n- P4 rollback was not performed because P5 instruction required STOP/no changes if 3->7 is not allowed by SSoT.\n- No simulation rerun and no SQL metrics collected for P5 because implementation was blocked before code.",
+      "facts": "",
+      "assumptions": "- Adding 3->7 would require SSoT change in config/transitions/transitions_rules.json and probably a new apply layer/condition, which is outside P5 permission. Risks if false: orchestrator may provide explicit SSoT approval and redispatch.",
+      "evidence": "SSoT check: config/transitions/transitions_rules.json rules list includes ops_to_unsvc_v8 from=2 to=7, ops_to_svc_demote_v7 from=2 to=3, svc_to_ops_p1_v7 from=3 to=2, p2_unsvc_to_ops_v8 from=7 to=2, p3_inactive_to_ops_v8 from=1 to=2. There is no serviceable->unserviceable from=3 to=7 rule. Execution order likewise has no 3->7 apply layer.\nGit status after stop: existing P1-P4 worktree remains; P5 added only Agent KG context/handoff.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_golden_window_sim_20260723:20260723T132805Z",
+      "plan_step_id": "P5",
+      "approval_gate_id": "N/A",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "high",
+      "risk_reasons": "Requested proactive KR requires serviceable->unserviceable 3->7 transition; config/transitions/transitions_rules.json is SSoT and does not allow 3->7; high-risk SSoT gate blocks implementation",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A (blocked before implementation)",
+      "human_gate_required": "yes",
+      "plan_card": "SSoT gate before coding: verify whether 3->7 is allowed. It is absent, so stop without code, simulation, or P4 rollback.",
+      "evidence_pack": "SSoT check: config/transitions/transitions_rules.json rules list includes ops_to_unsvc_v8 from=2 to=7, ops_to_svc_demote_v7 from=2 to=3, svc_to_ops_p1_v7 from=3 to=2, p2_unsvc_to_ops_v8 from=7 to=2, p3_inactive_to_ops_v8 from=1 to=2. There is no serviceable->unserviceable from=3 to=7 rule. Execution order likewise has no 3->7 apply layer.\nGit status after stop: existing P1-P4 worktree remains; P5 added only Agent KG context/handoff.",
+      "success_criteria": "manual-check: transitions_rules.json contains no from=3,to=7 rule; implementation stopped with no code changes in P5",
+      "compliance_checklist": "decision=reject required_gates=fail exceptions=ssot_transition_missing evidence_refs=config/transitions/transitions_rules.json approval_ref=N/A",
+      "risks": "Proactive KR cannot be implemented without approved 3->7 transition; changing SSoT would be high-risk and requires explicit approval; current P4 trial remains in worktree",
+      "next_owner": "orchestrator",
+      "open_questions": "Should orchestrator request explicit SSoT approval for adding serviceable->unserviceable 3->7, or should proactive KR be redesigned using existing allowed transitions?",
+      "graph_update": "no",
+      "graph_update_reason": "No domain graph update; stopped before SSoT/code changes.",
+      "prev_handoff_hash": "7764e2cba20a363e51c262f626b184973e9a526d12f96ea3de5d9129b7c58e6d",
+      "created_at": "2026-07-23T13:28:29Z",
+      "modules": [
+        "state_transitions",
+        "quotas_ops"
+      ],
+      "supersedes": "handoff_W_golden_window_sim_20260723_coder-flame_145c5be2",
+      "usage": {
+        "model": "gpt-5.5",
+        "est_tokens": 9000,
+        "source": "manual"
+      }
     }
   ],
   "contexts": [
@@ -35314,6 +35594,24 @@
       "agent": "orchestrator",
       "created_at": "2026-07-23T09:40:30Z",
       "updated_at": "2026-07-23T09:40:30Z"
+    },
+    {
+      "context_id": "ctx_W_golden_window_sim_20260723_phase_start_806bdd07",
+      "workflow_id": "W_golden_window_sim_20260723",
+      "context_type": "phase_start",
+      "content": "P5 SSoT gate started. SuccessCriteria: check transitions_rules.json for serviceable->unserviceable 3->7 before any code; if absent, stop and return handoff without changing code.",
+      "agent": "coder-flame",
+      "created_at": "2026-07-23T12:22:23Z",
+      "updated_at": "2026-07-23T13:27:52Z"
+    },
+    {
+      "context_id": "ctx_W_golden_window_sim_20260723_closure_4e9ca25d",
+      "workflow_id": "W_golden_window_sim_20260723",
+      "context_type": "closure",
+      "content": "Архив golden-window; откат из рабочего дерева; дальнейшая оптимизация лета не нужна после free_days fix",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T14:36:26Z",
+      "updated_at": "2026-07-23T14:36:26Z"
     }
   ],
   "meta": {
