@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-23T20:23:27Z",
+    "updated_at": "2026-07-23T20:26:52Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -4668,8 +4668,8 @@
       "workflow_id": "W_repair_past_motors_to_3_20260724",
       "goal": "past target_date для двигателей (gb 3/4) → status_id=3, никогда 2",
       "phase": "implementation",
-      "owner": "human",
-      "status": "active",
+      "owner": "orchestrator",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -4677,20 +4677,20 @@
         "profile": "medium-fast"
       },
       "usage": {
-        "cumulative_steps": 2,
-        "cumulative_tokens": 22000,
+        "cumulative_steps": 3,
+        "cumulative_tokens": 34000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-07-23T19:45:57Z"
+        "last_updated": "2026-07-23T20:26:33Z"
       },
       "created_at": "2026-07-23T19:41:40Z",
-      "updated_at": "2026-07-23T19:45:57Z"
+      "updated_at": "2026-07-23T20:26:52Z"
     },
     {
       "workflow_id": "W_merge_inactive_into_3b_20260724",
       "goal": "Merge inactive_planery into 3b: remainder status=0 → destination 1/3; parity vs baseline",
       "phase": "implementation",
-      "owner": "human",
-      "status": "active",
+      "owner": "orchestrator",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -4698,20 +4698,20 @@
         "profile": "medium-fast"
       },
       "usage": {
-        "cumulative_steps": 2,
-        "cumulative_tokens": 50000,
+        "cumulative_steps": 3,
+        "cumulative_tokens": 62000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-07-23T20:06:49Z"
+        "last_updated": "2026-07-23T20:26:34Z"
       },
       "created_at": "2026-07-23T20:02:01Z",
-      "updated_at": "2026-07-23T20:06:49Z"
+      "updated_at": "2026-07-23T20:26:52Z"
     },
     {
       "workflow_id": "W_overhaul_past_end_to_2_20260724",
       "goal": "overhaul: past sched_end → status 2; remove planer past force; bit-exact vs baseline",
       "phase": "implementation",
-      "owner": "human",
-      "status": "active",
+      "owner": "orchestrator",
+      "status": "closed",
       "caps": {
         "max_steps": 50,
         "max_tokens": 500000,
@@ -4719,13 +4719,13 @@
         "profile": "medium-fast"
       },
       "usage": {
-        "cumulative_steps": 2,
-        "cumulative_tokens": 32000,
+        "cumulative_steps": 3,
+        "cumulative_tokens": 41000,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-07-23T20:23:27Z"
+        "last_updated": "2026-07-23T20:26:41Z"
       },
       "created_at": "2026-07-23T20:18:52Z",
-      "updated_at": "2026-07-23T20:23:27Z"
+      "updated_at": "2026-07-23T20:26:52Z"
     }
   ],
   "handoffs": [
@@ -32599,6 +32599,129 @@
         "est_tokens": 4000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_repair_past_motors_to_3_20260724_governance-compliance_a470736e",
+      "workflow_id": "W_repair_past_motors_to_3_20260724",
+      "agent": "governance-compliance",
+      "user_goal": "past target для агрегатов → status_id=3 never 2 (уточнение: все group_by>2)",
+      "changes": "Governance verdict allow: scope/traceability/policy PASS для закрытия W_repair_past_motors_to_3_20260724. Проверено: UserGoal↔Changes match (all group_by>2 past→3); delegation coder-general→orchestrator; PRE-approval ctx_9870feb5; commit 322331c9 on feature/dwh-bb8; SuccessCriteria SQL PASS; GraphUpdate=no; single governance pass.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: Sources: config/agent_kg.json workflow+handoffs d7ead35f/822b83e6; ctx approval_request_9870feb5+scope_update_162f5cf6; git show 322331c9 (heli_pandas_repair_status.py group_by>2→3); log output/extract_master_2026-07-22_v1_repair_past_to_3.log OPS gb1=49/49 gb2=88/88; orchestrator DriftCheck=yes; no prior governance handoff; no Domain Graph sync; medium-fast profile.\nEvidence: handoff_822b83e6 SC1 past gb>2 status=2 count=0; SC2 three gb4 serials status=3; SC3 OPS 49/88; log extract_master_2026-07-22_v1_repair_past_to_3.log; commit 322331c9; approval ctx_9870feb5",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_repair_past_motors_to_3_20260724:2026-07-24T01:25:00Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "ctx_W_repair_past_motors_to_3_20260724_approval_request_9870feb5",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Extract repair-status semantics for all aggregates group_by>2; day0 heli_pandas slice impact",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Single governance pass pre-close: verify scope/traceability/evidence for past aggregate target→status_id=3 (never 2).",
+      "evidence_pack": "Facts: Sources: config/agent_kg.json workflow+handoffs d7ead35f/822b83e6; ctx approval_request_9870feb5+scope_update_162f5cf6; git show 322331c9 (heli_pandas_repair_status.py group_by>2→3); log output/extract_master_2026-07-22_v1_repair_past_to_3.log OPS gb1=49/49 gb2=88/88; orchestrator DriftCheck=yes; no prior governance handoff; no Domain Graph sync; medium-fast profile.\nEvidence: handoff_822b83e6 SC1 past gb>2 status=2 count=0; SC2 three gb4 serials status=3; SC3 OPS 49/88; log extract_master_2026-07-22_v1_repair_past_to_3.log; commit 322331c9; approval ctx_9870feb5",
+      "success_criteria": "PASS: orchestrator SQL SC verified via coder evidence — group_by>2 past status_id=2=0; gb4 serials status=3; OPS==MP4 49/88",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=handoff_W_repair_past_motors_to_3_20260724_orchestrator_d7ead35f;handoff_W_repair_past_motors_to_3_20260724_coder-general_822b83e6;commit_322331c9;output/extract_master_2026-07-22_v1_repair_past_to_3.log;ctx_W_repair_past_motors_to_3_20260724_approval_request_9870feb5; approval_ref=ctx_W_repair_past_motors_to_3_20260724_approval_request_9870feb5",
+      "risks": "workflow.goal text still mentions gb 3/4 but scope_update+implementation correctly use group_by>2 — no functional drift",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Extract logic only; transitions/invariants unchanged",
+      "prev_handoff_hash": "57b4bfe9c50f98b41e7fbef695af86900e7816bfb88a311ce3086846fb016c0e",
+      "created_at": "2026-07-23T20:26:33Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_merge_inactive_into_3b_20260724_governance-compliance_50be5e9b",
+      "workflow_id": "W_merge_inactive_into_3b_20260724",
+      "agent": "governance-compliance",
+      "user_goal": "давай аккуратно отрефакторим новую модель и потестируем в конце сверим с текущим распределением",
+      "changes": "Policy verdict allow: single governance pass pre-close. Verified scope match UserGoal↔Changes (inactive→3b merge, cascade drop, legacy kept, docs); delegation coder-general f924e6cc + orchestrator fc703f8a; commit 30170fa1 pushed; GraphUpdate=no; no high-risk zones.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: KG: workflow medium/medium-fast; PRE-approval ctx_W_merge_inactive_into_3b_20260724_approval_request_ea2c74c4; orchestrator DriftCheck=yes; SuccessCriteria PASS: planers_by_status exact; all_by_status cols0-3 exact; OPS 49/88; zero 0/0; serials 90/29 (baseline_planer_serials); extract_master 20/20 exit0 log; py_compile per coder; no governance handoff duplicate; no nested subagents.\nEvidence: handoff_W_merge_inactive_into_3b_20260724_coder-general_f924e6cc; handoff_W_merge_inactive_into_3b_20260724_orchestrator_fc703f8a; commit 30170fa1; output/baseline_status_dist_2026-07-22_pre_inactive_merge.json; output/after_status_dist_2026-07-22_inactive_merge.json; output/extract_master_2026-07-22_v1_inactive_merge.log; parity script cols0-3=True",
+      "drift_check": "UserGoal ↔ Changes scope match: yes (merge inactive→3b + parity test; no transitions/invariants/Domain Graph)",
+      "process_insights": "",
+      "trace_id": "wf:W_merge_inactive_into_3b_20260724:2026-07-23T20:25:00Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "ctx_W_merge_inactive_into_3b_20260724_approval_request_ea2c74c4",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "extract cascade status classification; medium-fast reversible ETL refactor with numeric parity gate",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "Verify PRE-approval, coder/orchestrator handoffs, numeric parity evidence, delegation discipline; verdict allow for orchestrator close",
+      "evidence_pack": "Facts: KG: workflow medium/medium-fast; PRE-approval ctx_W_merge_inactive_into_3b_20260724_approval_request_ea2c74c4; orchestrator DriftCheck=yes; SuccessCriteria PASS: planers_by_status exact; all_by_status cols0-3 exact; OPS 49/88; zero 0/0; serials 90/29 (baseline_planer_serials); extract_master 20/20 exit0 log; py_compile per coder; no governance handoff duplicate; no nested subagents.\nEvidence: handoff_W_merge_inactive_into_3b_20260724_coder-general_f924e6cc; handoff_W_merge_inactive_into_3b_20260724_orchestrator_fc703f8a; commit 30170fa1; output/baseline_status_dist_2026-07-22_pre_inactive_merge.json; output/after_status_dist_2026-07-22_inactive_merge.json; output/extract_master_2026-07-22_v1_inactive_merge.log; parity script cols0-3=True",
+      "success_criteria": "numeric: planers_by_status/all_by_status cols0-3 + OPS 49/88 + zero 0/0 + serial sets status 1/3 vs baseline — PASS per output JSON + extract log",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=handoff_W_merge_inactive_into_3b_20260724_orchestrator_fc703f8a;handoff_W_merge_inactive_into_3b_20260724_coder-general_f924e6cc;commit=30170fa1;output/after_status_dist_2026-07-22_inactive_merge.json;output/extract_master_2026-07-22_v1_inactive_merge.log; approval_ref=ctx_W_merge_inactive_into_3b_20260724_approval_request_ea2c74c4",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "extract refactor only; no transitions/invariants change",
+      "prev_handoff_hash": "5a7aec9bb8462db3d947abae3f29e9a116eeb7222336faec9bfb176d58484a48",
+      "created_at": "2026-07-23T20:26:34Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "claude-sonnet-5-thinking-high",
+        "est_tokens": 12000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_overhaul_past_end_to_2_20260724_governance-compliance_d484a37b",
+      "workflow_id": "W_overhaul_past_end_to_2_20260724",
+      "agent": "governance-compliance",
+      "user_goal": "делаем изменения, но с побитовым сравнением",
+      "changes": "Governance verdict=allow. Проверено: (1) Scope match UserGoal↔Changes — overhaul past sched_end→status 2, drop planer past force, bit-exact compare; commit 31f22b9a (4 files: overhaul_status_processor, heli_pandas_repair_status, extract.md, etl_extract_capsule.md); (2) Traceability — workflow active medium-fast; TraceID+PlanStepID I1/G1; PRE-approval ctx_W_overhaul_past_end_to_2_20260724_approval_request_14e2ee67; orchestrator DriftCheck=yes; (3) Delegation — coder-general 4475046b implement, orchestrator 7f97fa6e synthesize, no orchestrator self-coding; (4) SuccessCriteria PASS — sipHash128 fp A890C61B77B627BE90FE06E7DA1A3B30 n=11625 before==after; OPS gb1=49 gb2=88; status_id=0=0; extract 20/20; (5) GraphUpdate=no — no SSoT/invariants touched; (6) medium-fast — docs-curator skip OK; no nested subagents.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Facts: Sources: config/agent_kg.json W_overhaul_past_end_to_2_20260724 active; handoff_W_overhaul_past_end_to_2_20260724_coder-general_4475046b; handoff_W_overhaul_past_end_to_2_20260724_orchestrator_7f97fa6e; ctx_W_overhaul_past_end_to_2_20260724_approval_request_14e2ee67; output JSON/log files; git 31f22b9a on feature/dwh-bb8\nEvidence: Read output/after_bitexact_heli_pandas_2026-07-22_overhaul_past2.json (fp/n/ops/status_id_0); output/baseline_bitexact_heli_pandas_2026-07-22_pre_overhaul_past2.json (baseline fp match); output/extract_master_2026-07-22_v1_overhaul_past2.log exists; git show 31f22b9a --stat; KG handoffs coder 4475046b + orchestrator 7f97fa6e; approval ctx 14e2ee67; workflow caps profile=medium-fast",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_overhaul_past_end_to_2_20260724:2026-07-24T01:30Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "ctx_W_overhaul_past_end_to_2_20260724_approval_request_14e2ee67",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "extract cascade logic change (overhaul past end→2 + repair_status planer past force removed); medium-fast profile",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "no",
+      "plan_card": "G1 governance: verify overhaul past→2 + bit-exact PASS on 2026-07-22 v1; single pass; allow close",
+      "evidence_pack": "Facts: Sources: config/agent_kg.json W_overhaul_past_end_to_2_20260724 active; handoff_W_overhaul_past_end_to_2_20260724_coder-general_4475046b; handoff_W_overhaul_past_end_to_2_20260724_orchestrator_7f97fa6e; ctx_W_overhaul_past_end_to_2_20260724_approval_request_14e2ee67; output JSON/log files; git 31f22b9a on feature/dwh-bb8\nEvidence: Read output/after_bitexact_heli_pandas_2026-07-22_overhaul_past2.json (fp/n/ops/status_id_0); output/baseline_bitexact_heli_pandas_2026-07-22_pre_overhaul_past2.json (baseline fp match); output/extract_master_2026-07-22_v1_overhaul_past2.log exists; git show 31f22b9a --stat; KG handoffs coder 4475046b + orchestrator 7f97fa6e; approval ctx 14e2ee67; workflow caps profile=medium-fast",
+      "success_criteria": "script: sipHash128 heli_pandas 2026-07-22 v1 fp==A890C61B77B627BE90FE06E7DA1A3B30 n==11625; OPS 49/88; status_id=0=0 — governance verified PASS from output/after_bitexact_heli_pandas_2026-07-22_overhaul_past2.json",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=handoff_W_overhaul_past_end_to_2_20260724_coder-general_4475046b;handoff_W_overhaul_past_end_to_2_20260724_orchestrator_7f97fa6e;output/after_bitexact_heli_pandas_2026-07-22_overhaul_past2.json;git:31f22b9a; approval_ref=ctx_W_overhaul_past_end_to_2_20260724_approval_request_14e2ee67",
+      "risks": "На срезах с active+past end пересечением поведение изменится; на 2026-07-22 bit-exact подтверждён — зафиксировано в coder handoff",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "domain JSON/invariants не менялись",
+      "prev_handoff_hash": "a388dba538e17d2395ae65780177314cd1f4755bae701b4763f044e1cccea60d",
+      "created_at": "2026-07-23T20:26:41Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 9000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -36458,10 +36581,10 @@
       "context_id": "ctx_W_repair_past_motors_to_3_20260724_phase_start_aad741c6",
       "workflow_id": "W_repair_past_motors_to_3_20260724",
       "context_type": "phase_start",
-      "content": "I1: past target_date aggregates group_by>2 -> status_id=3 not 2",
-      "agent": "coder-general",
+      "content": "G1: single governance pass pre-close — policy/traceability/scope for past aggregates group_by>2 → status_id=3",
+      "agent": "governance-compliance",
       "created_at": "2026-07-23T19:42:12Z",
-      "updated_at": "2026-07-23T19:42:12Z"
+      "updated_at": "2026-07-23T20:26:26Z"
     },
     {
       "context_id": "ctx_W_merge_inactive_into_3b_20260724_approval_request_ea2c74c4",
@@ -36476,10 +36599,10 @@
       "context_id": "ctx_W_merge_inactive_into_3b_20260724_phase_start_8d6c3bdc",
       "workflow_id": "W_merge_inactive_into_3b_20260724",
       "context_type": "phase_start",
-      "content": "I1: merge inactive→3b; input status=0; remove inactive from cascade",
-      "agent": "coder-general",
+      "content": "G1: single governance pass pre-close; verify scope/traceability/evidence/approval/SuccessCriteria",
+      "agent": "governance-compliance",
       "created_at": "2026-07-23T20:02:46Z",
-      "updated_at": "2026-07-23T20:02:46Z"
+      "updated_at": "2026-07-23T20:26:28Z"
     },
     {
       "context_id": "ctx_W_overhaul_past_end_to_2_20260724_approval_request_14e2ee67",
@@ -36494,10 +36617,37 @@
       "context_id": "ctx_W_overhaul_past_end_to_2_20260724_phase_start_3558cc7a",
       "workflow_id": "W_overhaul_past_end_to_2_20260724",
       "context_type": "phase_start",
-      "content": "I1: overhaul past end → status 2; remove planner past force in repair_status",
-      "agent": "coder-general",
+      "content": "G1: single governance pass for close; verify scope/traceability/SuccessCriteria/approval/delegation",
+      "agent": "governance-compliance",
       "created_at": "2026-07-23T20:19:15Z",
-      "updated_at": "2026-07-23T20:19:15Z"
+      "updated_at": "2026-07-23T20:26:36Z"
+    },
+    {
+      "context_id": "ctx_W_repair_past_motors_to_3_20260724_closure_45d3381f",
+      "workflow_id": "W_repair_past_motors_to_3_20260724",
+      "context_type": "closure",
+      "content": "SuccessCriteria PASS; governance allow; committed 322331c9",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T20:26:52Z",
+      "updated_at": "2026-07-23T20:26:52Z"
+    },
+    {
+      "context_id": "ctx_W_merge_inactive_into_3b_20260724_closure_e28e9b20",
+      "workflow_id": "W_merge_inactive_into_3b_20260724",
+      "context_type": "closure",
+      "content": "SuccessCriteria PASS parity; governance allow; committed 30170fa1",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T20:26:52Z",
+      "updated_at": "2026-07-23T20:26:52Z"
+    },
+    {
+      "context_id": "ctx_W_overhaul_past_end_to_2_20260724_closure_225d0cf5",
+      "workflow_id": "W_overhaul_past_end_to_2_20260724",
+      "context_type": "closure",
+      "content": "SuccessCriteria bit-exact PASS; governance allow; committed 31f22b9a",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T20:26:52Z",
+      "updated_at": "2026-07-23T20:26:52Z"
     }
   ],
   "meta": {
