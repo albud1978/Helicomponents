@@ -5,7 +5,7 @@
 Функционал:
 - Извлекает номера вертолетов из значений RA-XXXXX (5 цифр)
 - Создает поле aircraft_number (UInt32)
-- Очищает location от не-вертолетных значений
+- Очищает location от складских не-RA значений; HELISUR / иноборт XX- (не RA-) сохраняет
 - Поддерживает работу с DataFrame (in-memory) и ClickHouse (SQL)
 - Валидация и статистика обработки
 
@@ -22,6 +22,8 @@ import logging
 from typing import Dict, List, Tuple, Optional
 import sys
 from pathlib import Path
+
+from extract.location_flags import is_foreign_location
 
 def setup_logging() -> logging.Logger:
     """Настройка логирования"""
@@ -89,19 +91,28 @@ def process_aircraft_numbers_in_memory(df: pd.DataFrame) -> Tuple[pd.DataFrame, 
         mask = df['location'] == location
         df.loc[mask, 'aircraft_number'] = aircraft_number
     
-    # Очищаем location для не-RA значений И для невалидных RA- форматов
-    # 1. Очищаем все не-RA значения
-    non_ra_mask = ~df['location'].str.startswith('RA-', na=False)
-    df.loc[non_ra_mask, 'location'] = ''
-    
-    # 2. Очищаем невалидные RA- форматы (которые не попали в aircraft_mapping)
+    # Wipe non-RA warehouse text; keep HELISUR / OM-/OB-… (acn stays 0).
+    loc_series = df["location"].fillna("").astype(str)
+    non_ra_mask = ~loc_series.str.startswith("RA-", na=False)
+    foreign_mask = loc_series.map(is_foreign_location)
+    wiped = int((non_ra_mask & ~foreign_mask).sum())
+    kept_foreign = int((non_ra_mask & foreign_mask).sum())
+    df.loc[non_ra_mask & ~foreign_mask, "location"] = ""
+
+    # Invalid RA- formats (not in aircraft_mapping)
     valid_ra_locations = set(aircraft_mapping.keys())
-    invalid_ra_mask = (df['location'].str.startswith('RA-', na=False)) & (~df['location'].isin(valid_ra_locations))
-    df.loc[invalid_ra_mask, 'location'] = ''
-    
-    aircraft_count = (df['aircraft_number'] > 0).sum()
+    invalid_ra_mask = (df["location"].str.startswith("RA-", na=False)) & (
+        ~df["location"].isin(valid_ra_locations)
+    )
+    df.loc[invalid_ra_mask, "location"] = ""
+
+    aircraft_count = (df["aircraft_number"] > 0).sum()
     print(f"✅ Обогащено {aircraft_count} записей номерами вертолетов")
-    
+    print(
+        f"🧹 location wipe: cleared={wiped}, kept_foreign={kept_foreign} "
+        "(HELISUR / non-RA XX-)"
+    )
+
     return df, len(aircraft_mapping), invalid_count
 
 def validate_aircraft_numbers(df: pd.DataFrame) -> bool:
@@ -236,16 +247,20 @@ def process_aircraft_numbers_in_clickhouse(client, table_name: str = 'heli_panda
         # Получаем статистику до очистки
         before_count = client.execute(f"SELECT COUNT(*) FROM {table_name} WHERE location IS NOT NULL AND location != ''")[0][0]
         
-        # Очищаем location для записей которые НЕ являются валидными вертолетами
-        # 1. Очищаем все не-RA значения
+        # Wipe non-RA warehouse text; keep HELISUR / foreign XX- (not RA-)
         clear_non_ra_query = f"""
         ALTER TABLE {table_name}
         UPDATE location = ''
-        WHERE location IS NOT NULL 
-          AND location != '' 
+        WHERE location IS NOT NULL
+          AND location != ''
           AND NOT (location LIKE 'RA-%')
+          AND NOT (upperUTF8(location) LIKE '%HELISUR%')
+          AND NOT (
+              match(location, '^[A-Za-z]{{2}}-')
+              AND NOT startsWith(location, 'RA-')
+          )
         """
-        
+
         client.execute(clear_non_ra_query)
         
         # 2. Очищаем невалидные RA- форматы (которые не имеют aircraft_number)
