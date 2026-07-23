@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Batch: DWH load + flight_program (Excel из датасета) + sim + INV validation for multiple dates."""
+"""Batch: extract_master DWH day0 + sim + INV validation for multiple dates."""
 from __future__ import annotations
 
 import argparse
@@ -12,8 +12,6 @@ from pathlib import Path
 CODE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CODE_ROOT / "utils"))
 
-from config_loader import get_clickhouse_client
-
 DATES_DEFAULT = [
     "2026-04-15",
     "2026-05-01",
@@ -21,42 +19,13 @@ DATES_DEFAULT = [
     "2026-06-05",
     "2026-06-11",
 ]
-# Интерпретатор для симуляции: на этой машине FLAME GPU работает на системном python3
-# (CUDA/окружение задаются через config/load_env.sh, наследуются текущим процессом).
-CUDA_PYTHON = sys.executable
+CUDA_PYTHON = (
+    "/home/albud/miniconda3/envs/cuda13_nosb/bin/python3"
+    if Path("/home/albud/miniconda3/envs/cuda13_nosb/bin/python3").exists()
+    else sys.executable
+)
 SOURCE_DATA_DIR = "data_input/source_data"
 _DATASET_RE = re.compile(r"^v_(\d{4}-\d{2}-\d{2})$")
-
-
-def _count(client, table: str, vd: str, vi: int = 1) -> int:
-    if table.startswith("sim_"):
-        vd_int = int(vd.replace("-", ""))
-        return int(
-            client.execute(
-                f"SELECT count() FROM {table} WHERE version_date=%(vd)s AND version_id=%(vi)s",
-                {"vd": vd_int, "vi": vi},
-            )[0][0]
-        )
-    return int(
-        client.execute(
-            f"SELECT count() FROM {table} WHERE version_date=toDate(%(vd)s) AND version_id=%(vi)s",
-            {"vd": vd, "vi": vi},
-        )[0][0]
-    )
-
-
-def _ops_enriched(client, vd: str, vi: int = 1) -> int:
-    return int(
-        client.execute(
-            """
-            SELECT count()
-            FROM heli_pandas
-            WHERE version_date = toDate(%(vd)s) AND version_id = %(vi)s
-              AND toUInt8(ifNull(status_id, 0)) > 0
-            """,
-            {"vd": vd, "vi": vi},
-        )[0][0]
-    )
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -68,29 +37,6 @@ def _run(cmd: list[str], *, log: Path) -> int:
         f.flush()
         p = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, cwd=REPO)
     return p.returncode
-
-
-def ensure_load(vd: str, vi: int, log: Path) -> None:
-    client = get_clickhouse_client()
-    if _ops_enriched(client, vd, vi) > 1000:
-        print(f"  load skip: heli_pandas enriched for {vd}")
-        return
-
-    hp = _count(client, "heli_pandas", vd, vi)
-    pac = _count(client, "program_ac", vd, vi)
-
-    loader = [sys.executable, "code/utils/dwh_loader.py", "--report-date", vd, "--version-id", str(vi)]
-
-    if pac == 0:
-        steps = ["--step", "all"]
-    elif hp == 0:
-        steps = ["--step", "status_components", "--step", "enrich"]
-    else:
-        steps = ["--step", "enrich"]
-
-    rc = _run(loader + steps + ["--skip-existing"], log=log)
-    if rc != 0:
-        raise SystemExit(f"load failed {vd} rc={rc}")
 
 
 def find_nearest_dataset(vd: str) -> Path:
@@ -122,30 +68,26 @@ def find_nearest_dataset(vd: str) -> Path:
     return chosen[2]
 
 
-def load_flight_program(vd: str, vi: int, log: Path) -> None:
-    """Генерирует flight_program_ac (Program_heli.xlsx) и flight_program_fl (Program.xlsx)
-    из ближайшего датасета напрямую, с день_0 = vd. Загрузчики идемпотентны (rewrite по version_date).
-    Порядок важен: сначала AC (fl читает new_counter_mi17 из последней версии AC)."""
+def run_extract_master(vd: str, vi: int, log: Path) -> None:
+    """Готовит day0-срез через единый extract_master."""
     dataset = find_nearest_dataset(vd)
-    for script in ("code/extract/program_ac_direct_loader.py", "code/extract/program_fl_direct_loader.py"):
-        cmd = [
-            sys.executable,
-            script,
-            "--version-date",
-            vd,
-            "--version-id",
-            str(vi),
-            "--dataset-path",
-            str(dataset),
-        ]
-        rc = _run(cmd, log=log)
-        if rc != 0:
-            raise SystemExit(f"flight_program load failed ({script}) {vd} rc={rc}")
-    client = get_clickhouse_client()
-    print(
-        f"  flight_program {vd}: ac={_count(client, 'flight_program_ac', vd, vi)} "
-        f"fl={_count(client, 'flight_program_fl', vd, vi)} rows (из {dataset.name})"
-    )
+    cmd = [
+        sys.executable,
+        "code/extract/extract_master.py",
+        "--source",
+        "dwh",
+        "--mode",
+        "prod",
+        "--version-date",
+        vd,
+        "--version-id",
+        str(vi),
+        "--dataset-path",
+        str(dataset),
+    ]
+    rc = _run(cmd, log=log)
+    if rc != 0:
+        raise SystemExit(f"extract_master failed {vd} rc={rc}")
 
 
 def run_sim(vd: str, log: Path) -> int:
@@ -223,21 +165,19 @@ def main() -> int:
         log = out_dir / f"sim_gate_{vd}.log"
         log.write_text(f"batch sim-gate {vd}\n", encoding="utf-8")
 
-        print("  [1] load (DWH heli_pandas/program_ac/status)")
-        ensure_load(vd, 1, log)
-        print("  [2] flight_program (Excel из ближайшего датасета)")
-        load_flight_program(vd, 1, log)
+        print("  [1] extract_master (DWH + flight_program + demote)")
+        run_extract_master(vd, 1, log)
         if args.skip_sim:
             results.append((vd, "load-only", "OK"))
             continue
 
-        print("  [3] sim")
+        print("  [2] sim")
         sim_rc = run_sim(vd, log)
         if sim_rc != 0:
             results.append((vd, "sim", f"FAIL rc={sim_rc}"))
             continue
 
-        print("  [4] validation")
+        print("  [3] validation")
         val_rc, verdict = run_validation(vd, log)
         results.append((vd, "inv", verdict))
 

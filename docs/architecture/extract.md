@@ -23,7 +23,9 @@ python3 code/utils/prep_source_dataset.py --dataset data_input/source_data/v_202
 python3 code/utils/prep_source_dataset.py --dataset data_input/source_data/v_2026-04-08 --sync-lease
 ```
 
-После нормализации запускайте пайплайн как обычно: **`python3 code/extract/extract_master.py`**.
+**Канон day0 (DWH, с 2026-07-23):** копируй команду из [`docs/runbook_sim_launch.md`](../runbook_sim_launch.md) **§0** —  
+`extract_master.py --source dwh --mode prod --version-date … --version-id 1 --dataset-path …`.  
+Не собирать day0 из leaf-скриптов. Excel/interactive ниже — **legacy**.
 
 ## Снимок таблиц перед экстрактом (бэкап для сравнения)
 
@@ -286,6 +288,9 @@ DWH load (heli_pandas status_id=0)
   ├─ post: component / serviceable / repair / storage / terminal_br …
   └─[после flight_program_*] day0 demote  ТОЛЬКО excess OPS (status=2) vs MP4: rank by deficit → top excess
 ```
+
+**Операторский entrypoint (SSoT):** [`docs/runbook_sim_launch.md`](../runbook_sim_launch.md) §0 + `.cursor/rules/10_extract_and_env.mdc`.  
+`extract_master.py --source dwh` вызывает DWH head → хвост Extract → `flight_program_*` → status/repair/BR → **`day0_ops_deficit_demote_runner`** → acceptance OPS==MP4. Demote не внутри enrich (нужен MP4); агентам запрещено вызывать demote/loaders отдельно.
 
 **Destination gates (`destination_for_remain`, порядок program → calendar):**
 

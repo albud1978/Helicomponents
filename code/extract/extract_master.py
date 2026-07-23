@@ -19,6 +19,7 @@ Extract Master - Оркестратор Extract этапа
 - md_components универсальна для всех датасетов
 """
 
+import argparse
 import subprocess
 import sys
 import time
@@ -29,6 +30,7 @@ from typing import List, Dict, Optional
 
 # Добавляем пути для utils и общего кода (code/)
 code_root = Path(__file__).resolve().parents[1]
+repo_root = code_root.parent
 sys.path.append(str(code_root / 'utils'))
 sys.path.append(str(code_root))
 from config_loader import get_clickhouse_client
@@ -294,9 +296,21 @@ class ExtractMaster:
             'result_table': 'heli_pandas',
             'critical': True
         },
+        {
+            'script': 'day0_ops_deficit_demote_runner.py',
+            'description': 'Day0 OPS demote: excess status=2 vs MP4 until OPS==target',
+            'dependencies': ['heli_pandas', 'flight_program_ac'],
+            'result_table': 'heli_pandas',
+            'critical': True,
+        },
         # === PRE-SIMULATION РАЗМЕТКА (инициализация status_change на D0) ===
         # Удалено: pre_simulation_status_change (status_change более не используется)
     ]
+    DWH_EXCEL_REPLACED_STEPS = {
+        'status_overhaul_loader.py',
+        'program_ac_loader.py',
+        'dual_loader.py',
+    }
     
     def __init__(self):
         """Инициализация Extract Master"""
@@ -305,6 +319,8 @@ class ExtractMaster:
         self.version_date = None
         self.version_id = None
         self.mode = None  # 'test' или 'prod'
+        self.source = 'excel'  # 'excel' или 'dwh'
+        self.replace_slice = False
         self.dataset: DatasetInfo = None  # Выбранный датасет
         self.dataset_path: str = None  # Путь к папке датасета
         
@@ -519,6 +535,88 @@ class ExtractMaster:
         except Exception as e:
             logger.error(f"❌ Ошибка подготовки продового режима: {e}")
             return False
+
+    def configure_non_interactive(
+        self,
+        *,
+        source: str,
+        mode: str,
+        dataset_path: str,
+        version_date: Optional[str],
+        version_id: int,
+        replace_slice: bool,
+    ) -> bool:
+        """Настройка CLI-режима без интерактивных вопросов."""
+        self.source = source
+        self.mode = mode
+        self.dataset_path = str(Path(dataset_path))
+        self.version_id = int(version_id)
+        self.replace_slice = bool(replace_slice)
+
+        from utils.version_utils import set_dataset_path
+        set_dataset_path(self.dataset_path)
+
+        if version_date:
+            self.version_date = datetime.strptime(version_date, '%Y-%m-%d').date()
+        elif source == 'excel':
+            self.version_date = extract_unified_version_date(self.dataset_path)
+        else:
+            logger.error("❌ Для --source dwh обязателен --version-date")
+            return False
+
+        logger.info(
+            "✅ CLI режим: source=%s, mode=%s, version=%s v%s, dataset=%s",
+            self.source,
+            self.mode,
+            self.version_date,
+            self.version_id,
+            self.dataset_path,
+        )
+        return True
+
+    def build_pipeline(self) -> List[Dict]:
+        """Собирает фактический pipeline под источник данных."""
+        if self.source == 'excel':
+            return [dict(step) for step in self.EXTRACT_PIPELINE]
+
+        pipeline: List[Dict] = []
+        dwh_step_added = False
+        for step in self.EXTRACT_PIPELINE:
+            script = step['script']
+            if script in self.DWH_EXCEL_REPLACED_STEPS:
+                if not dwh_step_added:
+                    args = [
+                        '--report-date', str(self.version_date),
+                        '--version-id', str(self.version_id),
+                        '--step', 'all',
+                        '--skip-existing',
+                    ]
+                    if self.replace_slice:
+                        args.append('--replace-slice')
+                    pipeline.append({
+                        'script': 'dwh_loader.py',
+                        'script_path': 'code/utils/dwh_loader.py',
+                        'description': 'DWH load: program_ac/status_overhaul/status_components + enrich',
+                        'dependencies': ['md_components'],
+                        'result_table': 'heli_pandas',
+                        'critical': True,
+                        'args': args,
+                        'pass_version_args': False,
+                    })
+                    dwh_step_added = True
+                continue
+            pipeline.append(dict(step))
+        return pipeline
+
+    def resolve_script_path(self, step: Dict) -> Path:
+        """Возвращает путь скрипта: extract-local или относительно repo root."""
+        raw_script = step.get('script_path') or step['script']
+        raw_path = Path(raw_script)
+        if raw_path.is_absolute():
+            return raw_path
+        if step.get('script_path') or raw_script.startswith('code/'):
+            return repo_root / raw_path
+        return Path(__file__).parent / raw_path
     
     def run_microservice(self, step: Dict) -> bool:
         """Запуск отдельного Extract микросервиса"""
@@ -528,7 +626,7 @@ class ExtractMaster:
         logger.info(f"🚀 Запуск микросервиса: {script_name}")
         logger.info(f"📋 Описание: {description}")
         
-        script_path = Path(__file__).parent / script_name
+        script_path = self.resolve_script_path(step)
         
         if not script_path.exists():
             logger.error(f"❌ Скрипт не найден: {script_path}")
@@ -541,11 +639,12 @@ class ExtractMaster:
             extra_args = step.get('args', [])
             
             # Базовые параметры
-            cmd_with_params = [
-                sys.executable, str(script_path),
-                '--version-date', str(self.version_date),
-                '--version-id', str(self.version_id),
-            ]
+            cmd_with_params = [sys.executable, str(script_path)]
+            if step.get('pass_version_args', True):
+                cmd_with_params.extend([
+                    '--version-date', str(self.version_date),
+                    '--version-id', str(self.version_id),
+                ])
             
             # Добавляем путь к датасету для скриптов которые его поддерживают
             # md_components_loader НЕ использует датасет (мастер-данные универсальны)
@@ -557,7 +656,8 @@ class ExtractMaster:
                                                          'heli_pandas_component_status.py', 'heli_pandas_serviceable_status.py',
                                                          'heli_pandas_repair_status.py', 'heli_pandas_storage_status.py',
                                                          'heli_pandas_economics_status.py',
-                                                         'repair_days_calculator.py', 'heli_pandas_terminal_br_gate.py']:
+                                                         'repair_days_calculator.py', 'heli_pandas_terminal_br_gate.py',
+                                                         'day0_ops_deficit_demote_runner.py', 'dwh_loader.py']:
                 cmd_with_params.extend(['--dataset-path', self.dataset_path])
             
             # Добавляем дополнительные аргументы шага
@@ -748,16 +848,56 @@ class ExtractMaster:
             f"(planers_zero={planers_zero}, aggregates_zero={aggregates_zero}, total_zero={total_zero})"
         )
         return True
+
+    def validate_ops_matches_mp4(self) -> bool:
+        """Проверка acceptance: OPS Mi-8/Mi-17 после demote совпадают с MP4 day0."""
+        if self.version_date is None or self.version_id is None:
+            logger.error("❌ Невозможно проверить OPS==MP4: version_date/version_id не определены")
+            return False
+
+        try:
+            from extract.ops_target_comparator import compare_ops_to_target
+            comparison = compare_ops_to_target(
+                self.client,
+                self.version_date,
+                int(self.version_id),
+            )
+        except Exception as e:
+            logger.error(f"❌ Ошибка проверки OPS==MP4: {e}")
+            return False
+
+        mismatches = comparison[
+            (comparison['excess'] != 0)
+            | (comparison['ops_count'] != comparison['target'])
+        ]
+        for row in comparison.itertuples(index=False):
+            logger.info(
+                "OPS==MP4 %s (group_by=%s): ops=%s target=%s excess=%s target_date=%s",
+                row.type,
+                row.group_by,
+                row.ops_count,
+                row.target,
+                row.excess,
+                row.target_date,
+            )
+
+        if not mismatches.empty:
+            logger.error("❌ OPS после demote не совпадает с MP4 day0")
+            return False
+
+        logger.info("✅ OPS Mi-8/Mi-17 после demote совпадает с MP4 day0")
+        return True
     
     def run_pipeline(self) -> bool:
         """Запуск полного Extract пайплайна"""
         logger.info("🚀 === ЗАПУСК EXTRACT ПАЙПЛАЙНА ===")
         
-        total_steps = len(self.EXTRACT_PIPELINE)
+        pipeline = self.build_pipeline()
+        total_steps = len(pipeline)
         success_count = 0
         failed_steps = []
         
-        for i, step in enumerate(self.EXTRACT_PIPELINE, 1):
+        for i, step in enumerate(pipeline, 1):
             logger.info(f"\n📋 ЭТАП {i}/{total_steps}: {step['script']}")
             
             if step.get('skip'):
@@ -864,6 +1004,8 @@ class ExtractMaster:
         # Проверка нулевых статусов в heli_pandas (текущая версия)
         if not self.validate_zero_statuses():
             all_ready = False
+        if not self.validate_ops_matches_mp4():
+            all_ready = False
         
         if all_ready:
             logger.info(f"\n🎉 СИСТЕМА ГОТОВА ДЛЯ FLAME GPU!")
@@ -873,30 +1015,69 @@ class ExtractMaster:
             logger.warning(f"\n⚠️ Система требует дополнительной настройки")
         return all_ready
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description='Extract Master - оркестратор Extract этапа')
+    parser.add_argument('--source', choices=('excel', 'dwh'), default='excel', help='Источник данных')
+    parser.add_argument('--mode', choices=('test', 'prod'), help='Режим запуска')
+    parser.add_argument('--dataset-path', type=str, help='Путь к папке датасета (v_YYYY-MM-DD)')
+    parser.add_argument('--version-date', type=str, help='Дата версии (YYYY-MM-DD)')
+    parser.add_argument('--version-id', type=int, default=1, help='ID версии')
+    parser.add_argument('--replace-slice', action='store_true', help='Передать --replace-slice в dwh_loader')
+    return parser.parse_args()
+
 def main():
     """Главная функция Extract Master"""
+    args = parse_args()
+    non_interactive = any([
+        args.mode,
+        args.dataset_path,
+        args.version_date,
+        args.source != 'excel',
+        args.replace_slice,
+    ])
     master = ExtractMaster()
     
     try:
-        # Выбор датасета
-        if not master.select_dataset():
-            sys.exit(0)
-        
-        # Инициализация
-        if not master.initialize():
-            sys.exit(1)
-        
-        # Выбор режима
-        if not master.select_mode():
-            sys.exit(0)
-        
-        # Подготовка в зависимости от режима
-        if master.mode == 'test':
-            if not master.prepare_test_mode():
+        if non_interactive:
+            if not args.mode:
+                logger.error("❌ В CLI-режиме обязателен --mode")
+                sys.exit(2)
+            if not args.dataset_path:
+                logger.error("❌ В CLI-режиме обязателен --dataset-path")
+                sys.exit(2)
+
+            if not master.configure_non_interactive(
+                source=args.source,
+                mode=args.mode,
+                dataset_path=args.dataset_path,
+                version_date=args.version_date,
+                version_id=args.version_id,
+                replace_slice=args.replace_slice,
+            ):
                 sys.exit(1)
-        elif master.mode == 'prod':
-            if not master.prepare_prod_mode():
+
+            if not master.initialize():
                 sys.exit(1)
+        else:
+            # Выбор датасета
+            if not master.select_dataset():
+                sys.exit(0)
+
+            # Инициализация
+            if not master.initialize():
+                sys.exit(1)
+
+            # Выбор режима
+            if not master.select_mode():
+                sys.exit(0)
+
+            # Подготовка в зависимости от режима
+            if master.mode == 'test':
+                if not master.prepare_test_mode():
+                    sys.exit(1)
+            elif master.mode == 'prod':
+                if not master.prepare_prod_mode():
+                    sys.exit(1)
         
         # Запуск пайплайна
         start_time = time.time()

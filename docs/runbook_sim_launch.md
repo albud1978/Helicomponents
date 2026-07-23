@@ -1,70 +1,99 @@
 # Runbook: загрузка данных и запуск симуляции LIMITER V8
 
-**Единственный источник истины** по загрузке данных и командам запуска симуляции.
-Создан по решению Алексея 2026-07-03, чтобы ни один агент больше не искал команды по коду и чатам.
+**Единственный источник истины** по загрузке day0 и командам запуска симуляции.
+Агентам **запрещено** собирать команды из кода/чатов/старых handoff — только этот файл (+ `.cursor/rules/10_extract_and_env.mdc` для Extract).
 
 ---
 
-## 1. Источники данных: 3 из DWH + 4 статичных Excel. Пробелов в данных нет
+## 0. Day0 prepare-to-sim — КОПИРУЙ ЭТО (канон с 2026-07-23)
 
-### 3 источника из DWH (по дате среза `--report-date`)
-
-| # | Источник DWH | Таблица Project CH | Загрузчик |
-|---|---|---|---|
-| 1 | `reports.amos_heli_rotables_components_status` | `heli_raw` + `heli_pandas` | `dwh_loader.py --step status_components` |
-| 2 | реестр планеров | `program_ac` | `dwh_loader.py --step program_ac` |
-| 3 | статусы капремонта | `status_overhaul` | `dwh_loader.py --step status_overhaul` |
-
-После загрузки обязателен `--step enrich` (post-enrichment `heli_pandas`: статусы, group_by, repair_days и т.д.).
-
-### 4 статичных источника из Excel (последний датасет `v_2026-04-08` + master_data)
-
-| # | Excel | Таблица / потребитель | Загрузчик / резолвер |
-|---|---|---|---|
-| 1 | `Program_heli.xlsx` (из `data_input/source_data/v_2026-04-08/`) | `flight_program_ac` (MP4-таргеты, spawn_limit) | `code/extract/program_ac_direct_loader.py --version-date <vd> --version-id 1 --dataset-path <v_*>` |
-| 2 | `Program.xlsx` (оттуда же) | `flight_program_fl` (MP5, суточные налёты) | `code/extract/program_fl_direct_loader.py` (те же аргументы; запускать ПОСЛЕ ac-загрузчика) |
-| 3 | `MD_Сomponents.xlsx` (`data_input/master_data/`) | `md_components` (справочник, без привязки к дате heli) | `code/extract/md_components_loader.py`; резолвер `static_data_resolver.resolve_md_components_workbook()` |
-| 4 | `Economics.xlsx` (`data_input/master_data/`) | Экономика (daily costs) — читается симулятором напрямую при старте (`compute_economics_daily_costs`), таблица не нужна | `static_data_resolver.resolve_economics_workbook()` |
-
-**Ключевое:** Excel-источники 1–2 генерируются на дату среза (`version_date` = дата DWH-среза, `version_id=1`), содержимое — из последнего датасета `v_2026-04-08`. Программа полётов вне DWH-scope. Никакого «пробела» в данных нет: для каждой version_date DWH-среза flight_program_* создаётся загрузчиками (идемпотентно, rewrite по своему срезу).
-
-### Полный пайплайн одной командой (batch)
+Одна команда готовит срез до «можно запускать sim»: DWH×3 + enrich + `flight_program_*` + статусы/BR + **demote** + gate OPS==MP4.
 
 ```bash
-# DWH load + flight_program (Excel) + sim + валидация на несколько дат:
-.venv/bin/python code/utils/dwh_batch_sim_gate.py   # даты в DATES_DEFAULT или аргументами
+cd /media/DATA_BIG/Projects/Heli/Helicomponents
+source ~/miniconda3/etc/profile.d/conda.sh && conda activate cuda13
+source config/load_env.sh
+export CUBE_CONFIG_PATH="$PWD/config"
+export DWH_CLICKHOUSE_CA_CERT="$PWD/config/certs/yandex_cloud_RootCA.pem"
+export AGENT_KG_WORKFLOW_ID=<активный workflow>   # обязателен, если включён KG-guard
+
+# Подставь дату среза и папку с Program_heli.xlsx + Program.xlsx:
+.venv/bin/python code/extract/extract_master.py \
+  --source dwh --mode prod \
+  --version-date 2026-07-22 --version-id 1 \
+  --dataset-path data_input/source_data/v_2026-07-22
 ```
 
-### Пошагово (одна дата, пример 2026-06-29)
+| Флаг | Смысл |
+|---|---|
+| `--source dwh` | канон (AMOS DWH). Не Excel-меню. |
+| `--mode prod` | версионированный срез `version_id` |
+| `--version-date` | = day0 = дата DWH-среза |
+| `--version-id` | канон для sim/валидаторов = **1** |
+| `--dataset-path` | папка `v_YYYY-MM-DD` с `Program_heli.xlsx` и `Program.xlsx` (желательно та же дата, что `--version-date`) |
+| `--replace-slice` | только если нужно **перезалить** `heli_pandas` с DWH (иначе idempotent skip существующих таблиц) |
+
+**Acceptance (master сам проверяет в конце):** exit 0; `status_id=0` = 0; OPS Mi-8/Mi-17 == `ops_counter_*` day0 в `flight_program_ac`.
+
+Smoke-доказательство: `output/extract_master_smoke_2026-07-22.log` (2026-07-23, exit 0, OPS 49/88).
+
+### Запрещено агентам (частые ошибки)
+
+1. Собирать day0 руками: `dwh_loader` → `program_*_loader` → `day0_ops_deficit_demote_runner` **по отдельности**.
+2. Запускать только `dwh_loader --step all` / `--step enrich` и считать срез готовым к sim (**без demote OPS ≠ MP4**).
+3. Запускать demote до `flight_program_ac` или после «голого» enrich без повторного demote через master.
+4. Искать «как раньше» в чатах / `extract_master` interactive / `printf "1\n2\n"` для DWH-канона.
+5. Путать интерпретаторы: Extract/ETL = `.venv` + conda `cuda13` (env vars); **sim** = `cuda13_nosb` (см. §2).
+
+Leaf-скрипты (`dwh_loader.py`, `program_*_direct_loader.py`, `day0_ops_deficit_demote_runner.py`) — только внутренняя реализация master / отладка по явной задаче человека.
+
+### Batch (несколько дат + sim)
 
 ```bash
-export DWH_CLICKHOUSE_CA_CERT=/media/DATA_BIG/Projects/Heli/Helicomponents/config/certs/yandex_cloud_RootCA.pem
-
-# Шаг 1: 3 источника из DWH + enrich
-.venv/bin/python code/utils/dwh_loader.py --report-date 2026-06-29 --version-id 1 --step all --skip-existing
-
-# Шаг 2: flight_program из Excel (порядок важен: сначала ac, потом fl)
-.venv/bin/python code/extract/program_ac_direct_loader.py --version-date 2026-06-29 --version-id 1 --dataset-path data_input/source_data/v_2026-04-08
-.venv/bin/python code/extract/program_fl_direct_loader.py --version-date 2026-06-29 --version-id 1 --dataset-path data_input/source_data/v_2026-04-08
-
-# Шаг 3: day0 OPS demote по дефициту комплектации (MP4 обязателен)
-.venv/bin/python code/extract/day0_ops_deficit_demote_runner.py --version-date 2026-06-29 --version-id 1
+.venv/bin/python code/utils/dwh_batch_sim_gate.py --dates 2026-07-22
+# внутри: extract_master --source dwh, затем sim на cuda13_nosb
 ```
 
-> ⚠️ `day0_ops_deficit_demote_runner.py` запускается после обоих `flight_program_*` loader-ов и fail-fast останавливается без MP4 (`flight_program_ac`). Повторный `--step enrich` сбрасывает enrichment-статусы в `heli_pandas`, поэтому после любого re-enrich этот runner нужно прогонять заново перед симуляцией.
+### Excel legacy (не канон day0)
 
-### Day0: воронка статусов планеров + demote destination
+Только если Алексей явно просит Excel-path: interactive `extract_master` без `--source dwh`, либо `--source excel`. Demote всё равно последний шаг master.
 
-Канон: [docs/architecture/extract.md](architecture/extract.md) §Day0 воронка; приёмка/evidence — [docs/backlog.md](backlog.md) §2026-07-21.
+---
 
-Кратко после `--step enrich` (планеры `group_by∈{1,2}`):
+## 1. Что внутри канона (справочно, не для ручной сборки)
 
-1. overhaul → `4`; program_ac as-of → `2`; хвост → `1` (inactive/OOR)
-2. **3b** на `status=1`: гейты program→calendar; календарь **только treq OH(D)** (fallback 10y выкл)
-3. precheck D1 на `status=2`: часовой ресурс на первый день MP5 (`oh−ppr` / `ll−sne`)
-4. **demote** (шаг 3 выше): excess OPS vs MP4; те же гейты + **fallback** `due=oh_at+10y−1д` только если нет treq и serial был в `program_ac` с 2025-07-04
+### 3 источника из DWH (`--version-date` = report-date)
 
-Destination: нет hist → planer 1 / agg 7; hist+remain>0 → 3/3; hist без календаря → 1/3. Симметрия Mi-8/Mi-17.
+| # | Источник DWH | Таблица Project CH | Шаг внутри master |
+|---|---|---|---|
+| 1 | `reports.amos_heli_rotables_components_status` | `heli_pandas` | `dwh_loader --step all` |
+| 2 | реестр планеров | `program_ac` | то же |
+| 3 | статусы капремонта | `status_overhaul` | то же (+ enrich cascade) |
+
+### 4 статичных Excel
+
+| # | Excel | Таблица / потребитель |
+|---|---|---|
+| 1 | `Program_heli.xlsx` (`--dataset-path`) | `flight_program_ac` (MP4, spawn) |
+| 2 | `Program.xlsx` (тот же path) | `flight_program_fl` (MP5) |
+| 3 | `MD_Сomponents.xlsx` (`data_input/master_data/`) | `md_components` |
+| 4 | `Economics.xlsx` (`master_data/`) | читает sim при старте, таблица не нужна |
+
+Порядок фаз master (`--source dwh`):  
+`md_components` → `dwh_loader --step all` → … → `program_ac_direct` → `program_fl_direct` → precheck/statuses/repair/BR → **`day0_ops_deficit_demote_runner`** → acceptance OPS==MP4.
+
+Demote **не** внутри enrich: нужен MP4 из `flight_program_ac`. Master всегда вызывает demote последним — отдельно demote после re-enrich агенту вызывать не нужно.
+
+### Day0: воронка статусов планеров
+
+Канон логики: [docs/architecture/extract.md](architecture/extract.md) §Day0; приёмка — [docs/backlog.md](backlog.md) §2026-07-21.
+
+1. overhaul → `4`; program_ac as-of → `2`; хвост → `1`
+2. **3b** на `status=1`: program→calendar; calendar = treq OH(D); fallback 10y **выкл**
+3. precheck D1 на `status=2`: часы на 1-й день MP5
+4. **demote** (финал master): excess OPS vs MP4; + fallback `oh_at+10y−1д` только demote при hist с 2025-07-04
+
+Destination: нет hist → planer 1 / agg 7; hist+remain>0 → 3/3; hist без календаря → 1/3.
 
 ---
 

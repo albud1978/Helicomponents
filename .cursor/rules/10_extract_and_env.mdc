@@ -1,10 +1,12 @@
 ---
-description: Environment setup + Extract pipeline rules
+description: Environment setup + Extract pipeline rules (SSoT entrypoint)
 globs:
   - "config/**"
   - "code/extract/**"
   - "code/**/extract/**"
   - "code/extract/extract_master.py"
+  - "code/utils/dwh_loader.py"
+  - "code/utils/dwh_batch_sim_gate.py"
   - "code/**/loader*.py"
   - "code/**/dual_loader*.py"
   - "code/heli_pandas_ops_*.py"
@@ -13,73 +15,60 @@ alwaysApply: false
 
 # Env + Extract rules
 
-## Перед любыми командами
+**SSoT команд:** [`docs/runbook_sim_launch.md`](../../docs/runbook_sim_launch.md) §0–§1. Не искать запуск по коду/чатам.
+
+## Перед любыми ETL-командами
+
 ```bash
-cd /path/to/Helicomponents
+cd /media/DATA_BIG/Projects/Heli/Helicomponents
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate cuda13
-if [ "$CONDA_DEFAULT_ENV" != "cuda13" ]; then
-  echo "❌ Требуется conda env cuda13"
-  return 1 2>/dev/null || exit 1
-fi
 source config/load_env.sh
 export CUBE_CONFIG_PATH="$PWD/config"
+export DWH_CLICKHOUSE_CA_CERT="$PWD/config/certs/yandex_cloud_RootCA.pem"
+export AGENT_KG_WORKFLOW_ID=<активный workflow>
 ```
 
-## Extract
-- Extract запускается только целиком через `python3 code/extract/extract_master.py`.
-- Запрещено запускать отдельные loader-ы вручную без `extract_master.py`.
+Extract/ETL — через `.venv/bin/python` (не `cuda13_nosb`; тот только для sim, см. `15_flame_environment.mdc`).
 
-### Режимы запуска
-**Интерактивный режим (в терминале):**
+## Канон day0 (DWH) — единственный правильный запуск
+
 ```bash
-python3 code/extract/extract_master.py
+.venv/bin/python code/extract/extract_master.py \
+  --source dwh --mode prod \
+  --version-date YYYY-MM-DD --version-id 1 \
+  --dataset-path data_input/source_data/v_YYYY-MM-DD
 ```
 
-**Автоматический режим (для скриптов/AI):**
+- Готовит срез до sim: DWH + enrich + flight_program + статусы + **demote** + OPS==MP4.
+- `--replace-slice` — только при явной перезаливке `heli_pandas` с DWH.
+- Канонический выходной `version_id` для последующей sim = **1**.
+
+### Запрещено
+
+1. Собирать day0 вручную из `dwh_loader` / `program_*_direct_loader` / `day0_ops_deficit_demote_runner`.
+2. Считать срез готовым после одного `dwh_loader --step enrich` (без demote через master).
+3. Interactive / `printf "1\n2\n"` для DWH-канона (агентам — только CLI-флаги выше).
+4. Excel-path (`--source excel` / меню) без явной команды Алексея.
+
+Leaf-скрипты — внутренняя реализация `extract_master`; отладка leaf — только по явной задаче человека.
+
+## Excel legacy (не канон)
+
+Интерактив: `.venv/bin/python code/extract/extract_master.py` (меню датасет/режим).  
+CLI: `--source excel --mode prod --dataset-path ...`. Demote — всё равно финальный шаг master.
+
+## Проверка комплектности (после day0, read-only)
+
 ```bash
-# Датасет 1 (2025-07-04), режим TEST (полная очистка)
-printf "1\n1\n" | python3 code/extract/extract_master.py --mode TEST
-
-# Датасет 2 (2025-12-30), режим PROD (версионирование, сохраняет данные других версий)
-printf "2\n2\n" | python3 code/extract/extract_master.py --mode PROD
+.venv/bin/python code/heli_pandas_ops_other_groups.py --version-date YYYY-MM-DD --version-id 1 --skip-pdf
+.venv/bin/python code/heli_pandas_ops_inventory.py --version-date YYYY-MM-DD --version-id 1
 ```
 
-**Важно:** первый датасет грузить в режиме TEST, последующие — в режиме PROD.
+Документация логики: `docs/architecture/extract.md`.
 
-### Правила выбора
-- Интерактивный выбор: 1=датасет 1, 2=датасет 2; 1=TEST, 2=PROD
-- Запрещено запускать отдельные loader-ы вручную без extract_master.py
+## Датасеты flight_program
 
-### Структура датасетов
-- Каждый датасет в отдельной папке: `v_2025-07-04/`, `v_2025-12-30/` и т.д.
-- Обязательные файлы: `Status_Components.xlsx`, `Status_Overhaul.xlsx`, `Program_AC.xlsx`
-- Статические файлы (Program_heli.xlsx, Program.xlsx) копируются из первого датасета
-
-## Проверка комплектности вертолётов
-Документация: `docs/architecture/extract.md` (секция "Проверка комплектности вертолётов")
-
-**Основная проверка (какие вертолёты с некомплектом):**
-```bash
-python3 code/heli_pandas_ops_other_groups.py --version-date 2025-07-04 --version-id 1 --skip-pdf
-```
-
-**Детальная инвентаризация (каждый агрегат на каждом планере):**
-```bash
-python3 code/heli_pandas_ops_inventory.py --version-date 2025-07-04 --version-id 1
-```
-
-**Результаты:**
-- `output/heli_pandas_ops_other_groups_YYYY-MM-DD.md`
-- `output/heli_pandas_ops_inventory_YYYY-MM-DD.md`
-
-## Доступные датасеты (январь 2026)
-| Датасет | Планеров | В ops | heli_pandas | flight_program_fl |
-|---------|----------|-------|-------------|-------------------|
-| `v_2025-07-04` | 279 | 154 | 10,913 | 1,164,000 (dates: 2025-07-04 — 2036-06-15) |
-| `v_2025-12-30` | 285 (+6) | 158 | 11,389 | 1,164,000 (dates: 2025-12-30 — 2036-12-11) |
-
-**Мультиверсионность:**
-- Каждый датасет имеет свой `version_date` в таблицах `flight_program_fl`, `flight_program_ac`
-- При симуляции `preload_mp5_maps` и `preload_mp4_by_day` фильтруют по `version_date`
-- `day_0` симуляции = `version_date` датасета (автоматический маппинг)
+- Папка: `data_input/source_data/v_YYYY-MM-DD/` с `Program_heli.xlsx` + `Program.xlsx`.
+- Для канона day0 предпочитать датасет **той же даты**, что `--version-date` (пример: `v_2026-07-22`).
+- `md_components` / Economics — из `data_input/master_data/`.

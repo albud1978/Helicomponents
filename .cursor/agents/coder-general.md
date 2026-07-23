@@ -111,6 +111,12 @@ agent_card:
 - В `Assumptions` — непроверенное с пометкой `Risks if false`
 - В `Risks` — 1–3 пункта (или `нет`)
 
+## Extract / day0
+
+- SSoT: `docs/runbook_sim_launch.md` **§0** + `.cursor/rules/10_extract_and_env.mdc`
+- Канон: `.venv/bin/python code/extract/extract_master.py --source dwh --mode prod --version-date <vd> --version-id 1 --dataset-path data_input/source_data/v_<vd>`
+- Запрещено собирать day0 из leaf (`dwh_loader` / `program_*_direct_loader` / `day0_ops_deficit_demote_runner`) или останавливаться на enrich без demote
+
 ## Запреты
 
 - Симуляцию запускать только по задаче оркестратора

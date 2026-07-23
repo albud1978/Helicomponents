@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-23 — extract_master стал единым DWH day0 prepare-to-sim entrypoint
+
+**Workflow:** `W_extract_master_day0_unify_20260723` | **Risk:** medium | **Profile:** medium-fast | **Module:** `extract_dwh`
+
+`extract_master.py` получил non-interactive CLI `--source dwh --mode prod --version-date ... --version-id ... --dataset-path ...`, заменяет Excel head одним `dwh_loader.py --step all` и сохраняет общий хвост до `terminal_br`; `day0_ops_deficit_demote_runner.py` стал последним критичным шагом. Финальная acceptance использует `compare_ops_to_target`: OPS Mi-8/Mi-17 после demote должны совпасть с MP4 day0, иначе pipeline fail.
+
+`dwh_batch_sim_gate.py` теперь вызывает `extract_master` вместо собственного DWH load + `flight_program_*`; ранний skip `heli_pandas enriched>1000` удалён, чтобы day0 не пропускался целиком.
+
+## 2026-07-23 — Docs: day0 канон copy-paste + запреты leaf (anti-drift агентов)
+
+**Risk:** low | **Module:** `extract_dwh`
+
+`docs/runbook_sim_launch.md` §0 — единственная copy-paste команда + явные запреты (не собирать day0 из leaf, не останавливаться на enrich). Синхрон: `.cursor/rules/{00_global_always,10_extract_and_env}.mdc`, `docs/etl_extract_capsule.md`, `docs/architecture/extract.md`. Smoke: `output/extract_master_smoke_2026-07-22.log`.
+
 ## 2026-07-23 — Sim env default: `cuda13_nosb` для любых прогонов
 
 **Risk:** low | **Module:** `infra`
