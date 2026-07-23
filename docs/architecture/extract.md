@@ -280,7 +280,7 @@ python3 code/utils/database_cleanup.py
 
 ```
 DWH load (heli_pandas status_id=0)
-  ├─[1] overhaul_status_processor        status_overhaul активен → 4
+  ├─[1] overhaul_status_processor        status_overhaul активен → 4 (ongoing) или 2 (sched_end < day0)
   ├─[2] program_ac_status_processor      в program_ac as-of day0 и ещё 0 → 2 (OPS); 4 не перезаписывается
   ├─[3b] inactive_serviceable_classifier хвост status=0 → 1 или 3 (merge inactive); календарь = treq OH(D); fallback 10y ВЫКЛ
   ├─ post: program_ac_precheck_d1        ТОЛЬКО status=2: oh/ll на 1-й день MP5 → 6 или 7 (часы, не календарь)

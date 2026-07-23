@@ -15,7 +15,8 @@
 - Прямое сопоставление: ac_registr == serialno
 - Фильтрация: partno IN PLANER_PARTNOS
 - Проверка дат: start < version_date (ремонт уже начался)
-- Если ВС в активном капремонте → status_id = 4 (Ремонт)
+- Если sched_end_date валиден и < version_date → status_id = 2 (Эксплуатация, ремонт завершён)
+- Иначе (end >= version_date или end пустой) → status_id = 4 (Ремонт), first-wins на 0
 - Переносит даты: act_start_date → removal_date, sched_end_date → target_date
 """
 
@@ -103,8 +104,8 @@ def process_aircraft_status(pandas_df, client):
     - Фильтр по version_date + status != 'Закрыто' (только активные ремонты)
     - Прямое сопоставление: ac_registr (status_overhaul) = serialno (heli_pandas)
     - Фильтрация: partno IN PLANER_PARTNOS
-    - Если ВС в активном капремонте → status_id=4 (Ремонт)
-    - Переносим act_start_date → removal_date, sched_end_date → target_date
+    - sched_end_date < version_date → status_id=2 (Эксплуатация); иначе → status_id=4 (Ремонт)
+    - Переносим act_start_date → removal_date, sched_end_date → target_date (обе ветки)
     
     Закрытые ремонты НЕ обрабатываем: эти ВС уже в других статусах,
     их определят program_ac_status_processor и inactive_planery_processor.
@@ -185,14 +186,21 @@ def process_aircraft_status(pandas_df, client):
                     continue
                 
                 if not start_in_past:
-                    print(f"   ⚠️ Ремонт ещё не начался (start >= version_date) - НЕ устанавливаем status=4")
+                    print(f"   ⚠️ Ремонт ещё не начался (start >= version_date) - НЕ устанавливаем status")
                     continue
                 
-                # Устанавливаем статус 4 (Ремонт)
+                sched_end_date = overhaul_data.get('sched_end_date')
+                end_in_past = (
+                    sched_end_date is not None
+                    and sched_end_date < version_date
+                )
+                target_status = 2 if end_in_past else 4
+                status_label = "Эксплуатация" if end_in_past else "Ремонт"
+
                 if pandas_df.at[idx, 'status_id'] == 0:
-                    pandas_df.at[idx, 'status_id'] = 4
+                    pandas_df.at[idx, 'status_id'] = target_status
                     status_updated_count += 1
-                    print(f"   ✅ status_id = 4 (Ремонт)")
+                    print(f"   ✅ status_id = {target_status} ({status_label})")
                 else:
                     print(f"   ⚠️ status_id уже установлен ({pandas_df.at[idx, 'status_id']}), не перезаписываем")
                 

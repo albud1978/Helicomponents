@@ -4,8 +4,8 @@
 
 Логика:
 1. Если target_date < version_date (ремонт завершился):
-   - планеры (group_by IN 1,2) → status_id=2 (Эксплуатация)
-   - агрегаты (group_by > 2) → status_id=3 (Списан/выбыл)
+   - агрегаты (group_by > 2, status_id=0) → status_id=3 (Списан/выбыл)
+   - планеры past end → status_id=2 в overhaul_status_processor (здесь не force)
 2. Если target_date >= version_date (ремонт идёт) → status_id=4 (Ремонт) + repair_days
    Приоритет: condition='ИСПРАВНЫЙ' — агрегаты не переводим в status_id=4 в этом модуле.
 
@@ -136,12 +136,10 @@ def count_condition_ok_aggregates(client, version_date: date, version_id: int) -
 
 
 def update_past_to_operations(client, version_date: date, version_id: int) -> int:
-    """target_date в прошлом: агрегаты → status_id=3, планеры → status_id=2.
+    """target_date в прошлом: агрегаты (status_id=0) → status_id=3.
 
-    ВАЖНО: Для планеров (group_by IN 1,2) принудительно ставим status_id=2
-    даже если текущий status_id=4 (были ошибочно помечены как "в ремонте")
+    Планеры с past end обрабатываются в overhaul_status_processor (→2).
     """
-    # Сначала обрабатываем агрегаты (status_id=0) → status_id=3 (выбыл)
     query_aggregates = """
     ALTER TABLE heli_pandas
     UPDATE status_id = 3
@@ -155,22 +153,7 @@ def update_past_to_operations(client, version_date: date, version_id: int) -> in
     """
     client.execute("SET mutations_sync = 1")
     client.execute(query_aggregates, {"version_date": version_date, "version_id": version_id})
-    
-    # Затем ПРИНУДИТЕЛЬНО обрабатываем планеры (status_id любой, т.к. ремонт завершён)
-    query_planers = """
-    ALTER TABLE heli_pandas
-    UPDATE status_id = 2
-    WHERE version_date = %(version_date)s
-      AND version_id = %(version_id)s
-      AND toUInt32(ifNull(group_by, 0)) IN (1, 2)
-      AND target_date IS NOT NULL
-      AND target_date != toDate('1970-01-01')
-      AND target_date < %(version_date)s
-    """
-    client.execute("SET mutations_sync = 1")
-    client.execute(query_planers, {"version_date": version_date, "version_id": version_id})
-    
-    # Проверяем сколько осталось
+
     remaining = count_past_target_date(client, version_date, version_id)
     return remaining
 
@@ -369,9 +352,6 @@ def apply_repair_status(
     past_aggregates = (group_by > 2) & (status_id == 0) & target_past
     updated.loc[past_aggregates, "status_id"] = 3
 
-    past_planers = group_by.isin([1, 2]) & target_past
-    updated.loc[past_planers, "status_id"] = 2
-
     group_by = _as_u32(updated["group_by"])
     status_id = _as_u32(updated["status_id"])
     future_condition = (group_by <= 2) | (updated["condition"].fillna("") != "ИСПРАВНЫЙ")
@@ -399,7 +379,6 @@ def apply_repair_status(
     print(
         "✅ repair_status in-memory: "
         f"past_aggregates_to_3={int(past_aggregates.sum())}, "
-        f"past_planers_to_2={int(past_planers.sum())}, "
         f"future_to_repair={int(future_to_repair.sum())}, "
         f"repair_days={int(repair_candidates.sum())}"
     )
@@ -425,7 +404,7 @@ def main() -> int:
 
     print(
         f"📊 Записей с target_date в ПРОШЛОМ "
-        f"(агрегаты → status_id=3, планеры → status_id=2): {past_count}"
+        f"(агрегаты status_id=0 → status_id=3): {past_count}"
     )
     print(f"📊 Агрегатов с target_date в БУДУЩЕМ (→ status_id=4): {future_count}")
     print(
@@ -451,7 +430,7 @@ def main() -> int:
     updated_df = apply_repair_status(df, client, version_date, version_id)
     _replace_heli_pandas_version(client, updated_df, version_date, version_id)
     print(
-        f"✅ Обновлено: past={past_count} (агрегаты→3, планеры→2), "
+        f"✅ Обновлено: past={past_count} (агрегаты→3), "
         f"future={future_count} → status_id=4 + repair_days"
     )
 
