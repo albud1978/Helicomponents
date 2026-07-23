@@ -3,7 +3,9 @@
 Микросервис установки status_id для агрегатов в ремонте (с target_date).
 
 Логика:
-1. Если target_date < version_date (ремонт завершился) → status_id=2 (Эксплуатация)
+1. Если target_date < version_date (ремонт завершился):
+   - планеры (group_by IN 1,2) → status_id=2 (Эксплуатация)
+   - агрегаты (group_by > 2) → status_id=3 (Списан/выбыл)
 2. Если target_date >= version_date (ремонт идёт) → status_id=4 (Ремонт) + repair_days
    Приоритет: condition='ИСПРАВНЫЙ' — агрегаты не переводим в status_id=4 в этом модуле.
 
@@ -134,15 +136,15 @@ def count_condition_ok_aggregates(client, version_date: date, version_id: int) -
 
 
 def update_past_to_operations(client, version_date: date, version_id: int) -> int:
-    """target_date в прошлом → status_id=2 (ремонт завершился)
-    
+    """target_date в прошлом: агрегаты → status_id=3, планеры → status_id=2.
+
     ВАЖНО: Для планеров (group_by IN 1,2) принудительно ставим status_id=2
     даже если текущий status_id=4 (были ошибочно помечены как "в ремонте")
     """
-    # Сначала обрабатываем агрегаты (status_id=0)
+    # Сначала обрабатываем агрегаты (status_id=0) → status_id=3 (выбыл)
     query_aggregates = """
     ALTER TABLE heli_pandas
-    UPDATE status_id = 2
+    UPDATE status_id = 3
     WHERE version_date = %(version_date)s
       AND version_id = %(version_id)s
       AND toUInt32(ifNull(group_by, 0)) > 2
@@ -365,7 +367,7 @@ def apply_repair_status(
     target_future = target_valid & (updated["target_date"] >= version_date)
 
     past_aggregates = (group_by > 2) & (status_id == 0) & target_past
-    updated.loc[past_aggregates, "status_id"] = 2
+    updated.loc[past_aggregates, "status_id"] = 3
 
     past_planers = group_by.isin([1, 2]) & target_past
     updated.loc[past_planers, "status_id"] = 2
@@ -396,7 +398,8 @@ def apply_repair_status(
     updated.loc[repair_candidates, "repair_days"] = repair_days
     print(
         "✅ repair_status in-memory: "
-        f"past_to_ops={int(past_aggregates.sum() + past_planers.sum())}, "
+        f"past_aggregates_to_3={int(past_aggregates.sum())}, "
+        f"past_planers_to_2={int(past_planers.sum())}, "
         f"future_to_repair={int(future_to_repair.sum())}, "
         f"repair_days={int(repair_candidates.sum())}"
     )
@@ -420,7 +423,10 @@ def main() -> int:
     future_count = count_future_target_date(client, version_date, version_id)
     condition_ok_count = count_condition_ok_aggregates(client, version_date, version_id)
 
-    print(f"📊 Агрегатов с target_date в ПРОШЛОМ (→ status_id=2): {past_count}")
+    print(
+        f"📊 Записей с target_date в ПРОШЛОМ "
+        f"(агрегаты → status_id=3, планеры → status_id=2): {past_count}"
+    )
     print(f"📊 Агрегатов с target_date в БУДУЩЕМ (→ status_id=4): {future_count}")
     print(
         "⚠️ Найдено агрегатов с condition='ИСПРАВНЫЙ' и валидным target_date: "
@@ -445,7 +451,7 @@ def main() -> int:
     updated_df = apply_repair_status(df, client, version_date, version_id)
     _replace_heli_pandas_version(client, updated_df, version_date, version_id)
     print(
-        f"✅ Обновлено: past={past_count} → status_id=2, "
+        f"✅ Обновлено: past={past_count} (агрегаты→3, планеры→2), "
         f"future={future_count} → status_id=4 + repair_days"
     )
 
