@@ -3,27 +3,34 @@ description: FLAME GPU runtime environment (SSoT) — what python to use, what N
 globs:
   - "code/sim_v2/**"
   - "code/utils/rtc_smoketest.py"
+  - "code/utils/spawn_cap_ensemble*.py"
   - "code/sim_v2/tests/**"
 alwaysApply: false
 ---
 
-# FLAME GPU runtime environment (SSoT — закреплено после регрессии 2026-05-26)
+# FLAME GPU runtime environment (SSoT — закреплено после регрессии 2026-05-26; дефолт env 2026-07-23)
 
 ## TL;DR — правильный запуск FLAME-задач на этой машине
+
+**Дефолт для любых прогонов симуляции (single-run и CUDAEnsemble): `cuda13_nosb` (SEATBELTS OFF).**
+`cuda13` (SEATBELTS ON) — только явная отладка device-assert'ов. Команды — `docs/runbook_sim_launch.md`.
 
 ```bash
 export CUDA_PATH="$HOME/miniconda3/targets/x86_64-linux"
 export LD_LIBRARY_PATH="$HOME/miniconda3/lib:$LD_LIBRARY_PATH"
-/home/albud/miniconda3/envs/cuda13/bin/python3 <script>.py
+# канон / ensemble / замеры:
+/home/albud/miniconda3/envs/cuda13_nosb/bin/python3 <script>.py
+# отладка device-ошибок (только по явной задаче):
+# /home/albud/miniconda3/envs/cuda13/bin/python3 <script>.py
 ```
 
-**Conda python + ОБЯЗАТЕЛЬНО `LD_LIBRARY_PATH`/`CUDA_PATH`.** Не `python3`, не `source activate.sh && python3`.
+**Conda python + ОБЯЗАТЕЛЬНО `LD_LIBRARY_PATH`/`CUDA_PATH`.** Не `python3`, не `source activate.sh && python3`, не `conda run`.
 
-> ⚠️ Прямой вызов бинарника `envs/cuda13/bin/python3` БЕЗ `LD_LIBRARY_PATH` падает с
+> ⚠️ Прямой вызов бинарника `envs/cuda13*/bin/python3` БЕЗ `LD_LIBRARY_PATH` падает с
 > `ImportError: libnvrtc.so.13: cannot open shared object file`. CUDA13-рантайм
 > (`libnvrtc.so.13` → `targets/x86_64-linux/lib/libnvrtc.so.13.0.88`) лежит в `$HOME/miniconda3/lib`,
 > а прямой вызов минует conda-активацию, которая в норме (`config/load_env.sh`) и выставляет эти переменные.
-> Альтернатива: `source $HOME/miniconda3/etc/profile.d/conda.sh && conda activate cuda13` (выставит окружение),
+> Альтернатива: `source $HOME/miniconda3/etc/profile.d/conda.sh && conda activate cuda13_nosb` (выставит окружение),
 > но при этом НЕ активировать venv (он перекроет conda-wheel — см. грабли ниже).
 
 ## Что есть на машине (закреплено)
@@ -32,14 +39,15 @@ export LD_LIBRARY_PATH="$HOME/miniconda3/lib:$LD_LIBRARY_PATH"
 |---|---|---|
 | **GPU** | NVIDIA RTX PRO 6000 Blackwell, compute_cap = 12.0 (sm_120) | hardware |
 | **Driver** | NVIDIA 580.142, CUDA Version 13.0 | nvidia-smi |
-| **Conda env (рабочая для FLAME)** | `cuda13` | `~/miniconda3/envs/cuda13/` |
-| **CUDA toolkit (рабочий)** | 13.0.88 | внутри conda env `cuda13` |
-| **pyflamegpu (рабочий wheel)** | `2.0.0rc4+cuda130` | `~/miniconda3/envs/cuda13/lib/python3.12/site-packages/pyflamegpu/` |
-| **Python (рабочий для FLAME)** | conda Python 3.12 | `/home/albud/miniconda3/envs/cuda13/bin/python3` |
-| **Конфигурация — источник истины** | `requirements.txt` (строка `pyflamegpu==2.0.0rc4+cuda130`) | репо |
-| **RTC cache prefix (свидетельство рабочей связки)** | `13000_120_1_2.0.0-rc.4+d2ba2cc_*` | `.rtc_cache/` |
+| **Conda env (дефолт sim / ensemble)** | `cuda13_nosb` (`SEATBELTS=False`) | `~/miniconda3/envs/cuda13_nosb/` |
+| **Conda env (отладка device)** | `cuda13` (`SEATBELTS=True`) | `~/miniconda3/envs/cuda13/` |
+| **CUDA toolkit (рабочий)** | 13.0.88 | внутри conda env `cuda13` / `cuda13_nosb` |
+| **pyflamegpu** | `2.0.0rc4+cuda130` (оба env; OFF — локальная сборка d2ba2cc) | `~/miniconda3/envs/cuda13(_nosb)/lib/.../pyflamegpu/` |
+| **Python (дефолт для sim)** | conda Python 3.12 | `/home/albud/miniconda3/envs/cuda13_nosb/bin/python3` |
+| **Конфигурация — источник истины** | `requirements.txt` + `docs/runbook_sim_launch.md` | репо |
+| **RTC cache prefix** | `13000_120_{0\|1}_2.0.0-rc.4+d2ba2cc_*` (3-е поле = SEATBELTS) | `.rtc_cache/` |
 
-`13000_120` в имени cache-файла = CUDA 13.0.0 + compute_cap 12.0 (sm_120) → подтверждает, что **cuda130 wheel + conda cuda13 + sm_120** есть и работает.
+`13000_120` в имени cache-файла = CUDA 13.0.0 + compute_cap 12.0 (sm_120). ON/OFF кэши **не пересекаются** (`_1_` vs `_0_`). Результаты bit-identical (EXCEPT=0/0, 2026-07-03).
 
 ## Что НЕЛЬЗЯ делать (накопленные грабли)
 
@@ -64,16 +72,17 @@ export LD_LIBRARY_PATH="$HOME/miniconda3/lib:$LD_LIBRARY_PATH"
 Перед "починкой среды" обязательно проверить, какой python подхватился:
 
 ```bash
-/home/albud/miniconda3/envs/cuda13/bin/python3 -c "import pyflamegpu as fg; print(fg.__version__, fg.__file__)"
+/home/albud/miniconda3/envs/cuda13_nosb/bin/python3 -c "import pyflamegpu as fg; print(fg.__version__, fg.__file__, fg.SEATBELTS)"
 # Ожидаемо:
 #   2.0.0rc4+cuda130
-#   /home/albud/miniconda3/envs/cuda13/lib/python3.12/site-packages/pyflamegpu/__init__.py
+#   .../envs/cuda13_nosb/.../pyflamegpu/__init__.py
+#   False
 ```
 
-Если так — RTC должен работать. Sanity-check:
+Если так — RTC должен работать. Sanity-check (для ловли device-assert допустим `cuda13`):
 
 ```bash
-/home/albud/miniconda3/envs/cuda13/bin/python3 code/utils/rtc_smoketest.py
+/home/albud/miniconda3/envs/cuda13_nosb/bin/python3 code/utils/rtc_smoketest.py
 # Ожидаемо: "RTC smoketest: OK"
 ```
 
@@ -94,7 +103,8 @@ python3 <script>.py
 
 Это активирует и conda cuda13, и venv; для ETL/Superset venv-овские зависимости как раз нужны.
 
-**Только FLAME-задачи (`code/sim_v2/**`, `code/utils/rtc_smoketest.py`) — через явный conda-путь `/home/albud/miniconda3/envs/cuda13/bin/python3`.**
+**Только FLAME-задачи (`code/sim_v2/**`, `code/utils/spawn_cap_ensemble*.py`, `code/utils/rtc_smoketest.py`) — через явный conda-путь.**
+Дефолт: `/home/albud/miniconda3/envs/cuda13_nosb/bin/python3`. Отладка: `.../cuda13/bin/python3`.
 
 ## Правка инфраструктуры (если нужно)
 
@@ -104,4 +114,4 @@ python3 <script>.py
 
 - Smoke-тест `code/sim_v2/tests/smoke_mp_persistence.py` сначала запускался под `source activate.sh && python3` → venv python с `pyflamegpu cuda120` → NVRTC fail на sm_120 → F/G/H/I-3/J помечены как "N/A: env blocker".
 - Реальная причина: pyflamegpu cuda120 был установлен в venv (вероятно когда-то по ошибке через `pip install` в активной venv-сессии), перекрывая conda cuda130. Условия среды (conda cuda13 + Blackwell + sm_120) корректны и рабочи — что подтверждает `.rtc_cache` с префиксом `13000_120_1_*` от последнего успешного прогона V8 20 мая 2026.
-- Фикс: запускать FLAME через `/home/albud/miniconda3/envs/cuda13/bin/python3` напрямую. RTC smoketest при этом моментально проходит.
+- Фикс: запускать FLAME через явный conda python напрямую (не venv). С 2026-07-23 дефолт прогонов — `cuda13_nosb`.

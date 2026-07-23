@@ -111,6 +111,7 @@ agent_card:
 
 ## Запреты
 
-- Симуляцию (`orchestrator_limiter_v8.py`) запускать только по задаче оркестратора
+- Симуляцию (`orchestrator_limiter_v8.py` / `spawn_cap_ensemble*.py`) запускать только по задаче оркестратора
+- **Env дефолт:** `/home/albud/miniconda3/envs/cuda13_nosb/bin/python3` (SEATBELTS OFF) для любых прогонов; `cuda13` — только явная отладка device. SSoT: `docs/runbook_sim_launch.md`, `.cursor/rules/15_flame_environment.mdc`
 - НЕ менять файлы вне своей зоны
 - НЕ использовать Float64 без согласования

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-23 — Sim env default: `cuda13_nosb` для любых прогонов
+
+**Risk:** low | **Module:** `infra`
+
+Политика: дефолт conda-env для single-run и CUDAEnsemble — `cuda13_nosb` (SEATBELTS OFF); `cuda13` только для явной отладки device. Закреплено в `docs/runbook_sim_launch.md` §2, `.cursor/rules/{00_global_always,15_flame_environment}.mdc`, `.cursor/agents/coder-flame.md`, `.cursor/skills/flame-rtc-guard/SKILL.md`.
+
 ## 2026-07-23 — RepairLine free_days: заморозка 180 дней после runtime-клейма (halved repair capacity)
 
 **Workflow:** `W_repairline_freedays_fix_20260723` | **Risk:** high | **Profile:** high-strict | **Module:** `sim_v2`

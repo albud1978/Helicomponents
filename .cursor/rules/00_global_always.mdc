@@ -116,6 +116,7 @@ alwaysApply: true
 
 ## Запуск симуляции и загрузка данных (единый runbook)
 - **Единственный источник истины по командам запуска симуляции (seatbelts ON/OFF), загрузке данных (3 DWH + 4 Excel) и семантике version_id — `docs/runbook_sim_launch.md`.** Не искать команды по коду/чатам — читать runbook.
+- **Дефолт env для любых sim-прогонов (single и CUDAEnsemble): `cuda13_nosb`** (`/home/albud/miniconda3/envs/cuda13_nosb/bin/python3`). `cuda13` (SEATBELTS ON) — только явная отладка device-ошибок. См. `.cursor/rules/15_flame_environment.mdc`.
 - Канонический прогон — всегда `--version-id 1` (валидаторы ищут `flight_program_ac`/`heli_pandas` по выходному version_id).
 
 ## Экспертный уровень анализа и разработки (обновлено 19.10.2025)
