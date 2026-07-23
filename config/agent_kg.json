@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-23T18:29:20Z",
+    "updated_at": "2026-07-23T20:06:49Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -4593,13 +4593,13 @@
         "profile": "medium-fast"
       },
       "usage": {
-        "cumulative_steps": 1,
-        "cumulative_tokens": 52000,
+        "cumulative_steps": 2,
+        "cumulative_tokens": 60500,
         "cumulative_cost": 0.0,
-        "last_updated": "2026-07-23T15:41:27Z"
+        "last_updated": "2026-07-23T18:46:11Z"
       },
       "created_at": "2026-07-23T15:38:15Z",
-      "updated_at": "2026-07-23T15:41:27Z"
+      "updated_at": "2026-07-23T18:46:11Z"
     },
     {
       "workflow_id": "W_extract_master_day0_unify_20260723",
@@ -4663,6 +4663,48 @@
       },
       "created_at": "2026-07-23T18:29:20Z",
       "updated_at": "2026-07-23T18:29:20Z"
+    },
+    {
+      "workflow_id": "W_repair_past_motors_to_3_20260724",
+      "goal": "past target_date для двигателей (gb 3/4) → status_id=3, никогда 2",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 22000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-23T19:45:57Z"
+      },
+      "created_at": "2026-07-23T19:41:40Z",
+      "updated_at": "2026-07-23T19:45:57Z"
+    },
+    {
+      "workflow_id": "W_merge_inactive_into_3b_20260724",
+      "goal": "Merge inactive_planery into 3b: remainder status=0 → destination 1/3; parity vs baseline",
+      "phase": "implementation",
+      "owner": "human",
+      "status": "active",
+      "caps": {
+        "max_steps": 50,
+        "max_tokens": 500000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 2,
+        "cumulative_tokens": 50000,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-23T20:06:49Z"
+      },
+      "created_at": "2026-07-23T20:02:01Z",
+      "updated_at": "2026-07-23T20:06:49Z"
     }
   ],
   "handoffs": [
@@ -32252,6 +32294,208 @@
         "est_tokens": 9000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_wf_readonly_planer_inactive_20260723_research-graph-analyst_df2b4c87",
+      "workflow_id": "wf_readonly_planer_inactive_20260723",
+      "agent": "research-graph-analyst",
+      "user_goal": "пошагово разобрать классификацию group_by=4 status_id в day0 extract и проверить аномалии на 2026-07-22 v1",
+      "changes": "",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "не запускалось",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "",
+      "plan_step_id": "R1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "low",
+      "risk_reasons": "N/A (low-risk)",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "N/A (low-risk)",
+      "evidence_pack": "N/A (low-risk)",
+      "success_criteria": "",
+      "compliance_checklist": "N/A (low-risk)",
+      "risks": "нет",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "3608781d1e80a58245b862911be71ee92c95567a3c000372e806e04aa4a5f0b8",
+      "created_at": "2026-07-23T18:46:11Z",
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 8500,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_repair_past_motors_to_3_20260724_coder-general_822b83e6",
+      "workflow_id": "W_repair_past_motors_to_3_20260724",
+      "agent": "coder-general",
+      "user_goal": "Исходный: «ремонт по моторам не должен заканчиваться 2 никогда, только 3 переделай». Уточнение: у всех остальных агрегатов также — past target_date → status_id=3 (никогда 2) для всех агрегатов group_by > 2, не только двигатели.",
+      "changes": "code/extract/heli_pandas_repair_status.py: update_past_to_operations SQL aggregates UPDATE status_id=3 (was 2); apply_repair_status in-memory past_aggregates→3; docstring/print messages updated; planers past→2 and future→4 unchanged.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "py_compile PASS. extract_master 2026-07-22 v1 exit 0 (119.7s), log output/extract_master_2026-07-22_v1_repair_past_to_3.log. SQL SC1: past aggregates group_by>2 with status_id=2 count=0 PASS. SQL SC2: serials 3877883902671/К7887217118/Н78913034 all gb=4 status_id=3 aircraft_number=0 PASS. SC3 OPS==MP4: gb1 ops=49 target=49, gb2 ops=88 target=88 (extract log) PASS. Final slice: 36 past-target aggregates all status_id=3.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_repair_past_motors_to_3_20260724:2026-07-23T19:45:00Z",
+      "plan_step_id": "I1",
+      "approval_gate_id": "ctx_W_repair_past_motors_to_3_20260724_approval_request_9870feb5",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Extract repair-status semantics change for all aggregates group_by>2; affects day0 heli_pandas status assignment",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "conditional",
+      "plan_card": "Past target_date: aggregates group_by>2 → status_id=3 (not 2); planers stay →2; future →4 unchanged. Verify via day0 extract + SQL on 2026-07-22 v1.",
+      "evidence_pack": "py_compile PASS. extract_master 2026-07-22 v1 exit 0 (119.7s), log output/extract_master_2026-07-22_v1_repair_past_to_3.log. SQL SC1: past aggregates group_by>2 with status_id=2 count=0 PASS. SQL SC2: serials 3877883902671/К7887217118/Н78913034 all gb=4 status_id=3 aircraft_number=0 PASS. SC3 OPS==MP4: gb1 ops=49 target=49, gb2 ops=88 target=88 (extract log) PASS. Final slice: 36 past-target aggregates all status_id=3.",
+      "success_criteria": "PASS: SQL group_by>2 past target_date status_id=2=0; known gb4 serials status_id=3 acn=0; OPS==MP4 49/88",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=code/extract/heli_pandas_repair_status.py;output/extract_master_2026-07-22_v1_repair_past_to_3.log; approval_ref=ctx_W_repair_past_motors_to_3_20260724_approval_request_9870feb5",
+      "risks": "repair_status step reported 0 status_id=0 candidates at entry (already status_id=3); code path validated by end-state SQL and in-memory function change",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Extract logic only; no transitions/invariants change",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-23T19:45:40Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 18000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_repair_past_motors_to_3_20260724_orchestrator_d7ead35f",
+      "workflow_id": "W_repair_past_motors_to_3_20260724",
+      "agent": "orchestrator",
+      "user_goal": "ремонт по моторам не должен заканчиваться 2 никогда, только 3 переделай (+ все агрегаты)",
+      "changes": "heli_pandas_repair_status.py: past aggregates 0→3 (was 2); verified via extract_master 2026-07-22",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "coder handoff_W_repair_past_motors_to_3_20260724_coder-general_822b83e6; SC past→2=0; serials→3; OPS 49/88; log output/extract_master_2026-07-22_v1_repair_past_to_3.log",
+      "drift_check": "UserGoal ↔ Changes scope match: yes (all aggregates past→3)",
+      "process_insights": "",
+      "trace_id": "wf:W_repair_past_motors_to_3_20260724:2026-07-23T19:50:00Z",
+      "plan_step_id": "I1",
+      "approval_gate_id": "ctx_W_repair_past_motors_to_3_20260724_approval_request_9870feb5",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "day0 aggregate past-target semantics",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "past target aggregates →3 never 2; planers past→2 unchanged",
+      "evidence_pack": "coder handoff_W_repair_past_motors_to_3_20260724_coder-general_822b83e6; SC past→2=0; serials→3; OPS 49/88; log output/extract_master_2026-07-22_v1_repair_past_to_3.log",
+      "success_criteria": "SQL: group_by>2 AND past target AND status_id=2 == 0; three gb4 serials status=3 acn=0; OPS==MP4 49/88",
+      "compliance_checklist": "decision=allow;required_gates=pass;exceptions=none;evidence_refs=handoff_W_repair_past_motors_to_3_20260724_coder-general_822b83e6;approval_ref=ctx_W_repair_past_motors_to_3_20260724_approval_request_9870feb5",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "7d65cfd3008ce5dfc0e76ef81bd151df944dec7fe706c291e8ac660e3f2a2605",
+      "created_at": "2026-07-23T19:45:57Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 4000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_merge_inactive_into_3b_20260724_coder-general_f924e6cc",
+      "workflow_id": "W_merge_inactive_into_3b_20260724",
+      "agent": "coder-general",
+      "user_goal": "давай аккуратно отрефакторим новую модель и потестируем в конце сверим с текущи распределением",
+      "changes": "inactive_serviceable_classifier.py: input status_id 1→0, docstring/logs; dwh_post_enrichment.py: drop inactive_planery from cascade; dual_loader.py: same; inactive_planery_processor.py: legacy deprecation note; docs/etl_extract_capsule.md + docs/architecture/extract.md: cascade wording",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "py_compile OK; extract_master 20/20 exit 0 log output/extract_master_2026-07-22_v1_inactive_merge.log; parity PASS planers_by_status, all_by_status cols0-3, ops 49/88, zero 0/0, serials status 1 (90) and 3 (29) vs output/baseline_planer_serials_1_3_2026-07-22.json; baseline output/baseline_status_dist_2026-07-22_pre_inactive_merge.json",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_merge_inactive_into_3b_20260724:2026-07-23T20:05Z",
+      "plan_step_id": "I1",
+      "approval_gate_id": "ctx_W_merge_inactive_into_3b_20260724_approval_request_ea2c74c4",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "extract cascade logic change (day0 status classification); blast radius limited to planner cascade pre-post",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "Merge inactive_planery into 3b: input status=0; remove step [3] from cascade; parity vs baseline 2026-07-22",
+      "evidence_pack": "py_compile OK; extract_master 20/20 exit 0 log output/extract_master_2026-07-22_v1_inactive_merge.log; parity PASS planers_by_status, all_by_status cols0-3, ops 49/88, zero 0/0, serials status 1 (90) and 3 (29) vs output/baseline_planer_serials_1_3_2026-07-22.json; baseline output/baseline_status_dist_2026-07-22_pre_inactive_merge.json",
+      "success_criteria": "numeric: planers_by_status/all_by_status counts + OPS 49/88 + zero planers/aggs=0 + serial sets status 1/3 identical to baseline",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=output/extract_master_2026-07-22_v1_inactive_merge.log;output/after_status_dist_2026-07-22_inactive_merge.json;output/baseline_status_dist_2026-07-22_pre_inactive_merge.json; approval_ref=ctx_W_merge_inactive_into_3b_20260724_approval_request_ea2c74c4",
+      "risks": "none — parity confirmed on full extract",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "extract refactor only; no transitions/invariants change",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-23T20:06:39Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "composer-2.5-fast",
+        "est_tokens": 45000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_merge_inactive_into_3b_20260724_orchestrator_fc703f8a",
+      "workflow_id": "W_merge_inactive_into_3b_20260724",
+      "agent": "orchestrator",
+      "user_goal": "давай аккуратно отрефакторим новую модель и потестируем в конце сверим с текущи распределением",
+      "changes": "inactive_serviceable entry 0; dwh_post_enrichment+dual_loader drop inactive_planery; docs cascade; inactive_planery kept legacy",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "coder handoff_W_merge_inactive_into_3b_20260724_coder-general_f924e6cc; baseline+after JSON; extract log inactive_merge; parity PASS",
+      "drift_check": "UserGoal ↔ Changes scope match: yes",
+      "process_insights": "",
+      "trace_id": "wf:W_merge_inactive_into_3b_20260724:2026-07-23T20:10:00Z",
+      "plan_step_id": "I1",
+      "approval_gate_id": "ctx_W_merge_inactive_into_3b_20260724_approval_request_ea2c74c4",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "extract planner cascade merge inactive into 3b",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "N/A",
+      "human_gate_required": "no",
+      "plan_card": "inactive removed; 3b entry status=0; parity PASS vs baseline 2026-07-22",
+      "evidence_pack": "coder handoff_W_merge_inactive_into_3b_20260724_coder-general_f924e6cc; baseline+after JSON; extract log inactive_merge; parity PASS",
+      "success_criteria": "numeric: planers_by_status and all_by_status match baseline; OPS 49/88; zero=0; serial sets status 1/3 match",
+      "compliance_checklist": "decision=allow;required_gates=pass;exceptions=none;evidence_refs=output/after_status_dist_2026-07-22_inactive_merge.json;approval_ref=ctx_W_merge_inactive_into_3b_20260724_approval_request_ea2c74c4",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "a646c66daa63dec709f8ced8f9e79caa84127e9293a91caae9e1dba802e25987",
+      "created_at": "2026-07-23T20:06:49Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 5000,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -36030,10 +36274,10 @@
       "context_id": "ctx_wf_readonly_planer_inactive_20260723_phase_start_dc3fdf1a",
       "workflow_id": "wf_readonly_planer_inactive_20260723",
       "context_type": "phase_start",
-      "content": "Started read-only research on Day0 inactive planer cascade and aggregate status outcomes for aggregate_status_block matrix; scope: listed extract/docs files plus git log and optional SELECT-only ClickHouse checks.",
+      "content": "Research gb4 aggregate status classification day0 extract; CH slice 2026-07-22 v1",
       "agent": "research-graph-analyst",
       "created_at": "2026-07-23T15:38:16Z",
-      "updated_at": "2026-07-23T15:38:16Z"
+      "updated_at": "2026-07-23T18:46:00Z"
     },
     {
       "context_id": "ctx_W_extract_master_day0_unify_20260723_approval_d8f1b1e7",
@@ -36088,6 +36332,51 @@
       "agent": "orchestrator",
       "created_at": "2026-07-23T18:24:23Z",
       "updated_at": "2026-07-23T18:24:23Z"
+    },
+    {
+      "context_id": "ctx_W_repair_past_motors_to_3_20260724_approval_request_9870feb5",
+      "workflow_id": "W_repair_past_motors_to_3_20260724",
+      "context_type": "approval_request",
+      "content": "PRE-approval: user explicit «переделай» — motors past repair end → status_id=3 never 2; planer past path unchanged; other aggregates past path unchanged unless already covered by motors-only filter gb IN (3,4)",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T19:41:40Z",
+      "updated_at": "2026-07-23T19:41:40Z"
+    },
+    {
+      "context_id": "ctx_W_repair_past_motors_to_3_20260724_scope_update_162f5cf6",
+      "workflow_id": "W_repair_past_motors_to_3_20260724",
+      "context_type": "scope_update",
+      "content": "User clarification: past target_date → status_id=3 (never 2) for ALL aggregates group_by>2, not motors-only. Planers past force-exit →2 unchanged.",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T19:42:03Z",
+      "updated_at": "2026-07-23T19:42:03Z"
+    },
+    {
+      "context_id": "ctx_W_repair_past_motors_to_3_20260724_phase_start_aad741c6",
+      "workflow_id": "W_repair_past_motors_to_3_20260724",
+      "context_type": "phase_start",
+      "content": "I1: past target_date aggregates group_by>2 -> status_id=3 not 2",
+      "agent": "coder-general",
+      "created_at": "2026-07-23T19:42:12Z",
+      "updated_at": "2026-07-23T19:42:12Z"
+    },
+    {
+      "context_id": "ctx_W_merge_inactive_into_3b_20260724_approval_request_ea2c74c4",
+      "workflow_id": "W_merge_inactive_into_3b_20260724",
+      "context_type": "approval_request",
+      "content": "PRE-approval: user «давай аккуратно отрефакторим» — merge inactive into 3b (entry status=0 remainder), remove inactive from cascade, parity vs baseline 2026-07-22",
+      "agent": "orchestrator",
+      "created_at": "2026-07-23T20:02:01Z",
+      "updated_at": "2026-07-23T20:02:01Z"
+    },
+    {
+      "context_id": "ctx_W_merge_inactive_into_3b_20260724_phase_start_8d6c3bdc",
+      "workflow_id": "W_merge_inactive_into_3b_20260724",
+      "context_type": "phase_start",
+      "content": "I1: merge inactive→3b; input status=0; remove inactive from cascade",
+      "agent": "coder-general",
+      "created_at": "2026-07-23T20:02:46Z",
+      "updated_at": "2026-07-23T20:02:46Z"
     }
   ],
   "meta": {
