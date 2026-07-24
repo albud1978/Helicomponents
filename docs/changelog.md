@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-24 — Full E2E 2026-07-22 v1 after W2.6/W2.7
+
+**Workflow:** `W_full_e2e_test_20260724` | **Risk:** high | **Profile:** high-strict | **Modules:** `validation`, `extract_dwh`
+
+Полный extract+sim+validation на `version_date=2026-07-22`, `version_id=1` после W2.6/W2.7. Код в этом WF **не менялся** (run-only).
+
+**Bitexact:** extract `heli_pandas` fp=`A890C61B77B627BE90FE06E7DA1A3B30`, OPS Mi-8/Mi-17 = 49/88; sim master fp=`F96A1D1787263EC6B5F2EB63A3A36173` n=77268; repairline fp=`1E07ED4801D487840C3C7BB7FAD241F7` n=65700.
+
+**Acceptance:** INV `run_all` 16/16 PASS. Governance `allow_with_notes` (`handoff_W_full_e2e_test_20260724_governance-compliance_b92d4de7`); ApprovalGate `ctx_W_full_e2e_test_20260724_approval_request_89d5ed26`. Capsule skip.
+
 ## 2026-07-24 — W2.6/W2.7 staged calendar and exact-slice replace
 **Workflow:** `W_w26_w27_extract_infra_20260724` | **Risk:** medium | **Profile:** medium-fast | **Module:** `extract_dwh`
 Календарные DWH-входы планеров материализуются один раз на version tuple для 3b/demote; общий replace helper и scoped enrich устраняют date-wide удаление соседних `version_id`. Семантика статусов не менялась; bitexact и neighbor-sentinel evidence фиксируются в workflow handoff.
