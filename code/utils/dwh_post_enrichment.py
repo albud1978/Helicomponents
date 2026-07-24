@@ -161,11 +161,24 @@ def _run_planner_cascade(client, df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _run_post_cascade(
-    client, df: pd.DataFrame, version_date: date, version_id: int
+    client,
+    df: pd.DataFrame,
+    version_date: date,
+    version_id: int,
+    dataset_path: str | None,
 ) -> pd.DataFrame:
     for script_name, apply_func in POST_SCRIPTS:
         print(f"  -> {script_name}")
-        df = apply_func(df, client, version_date, version_id)
+        if apply_func is apply_program_ac_precheck:
+            df = apply_func(
+                df,
+                client,
+                version_date,
+                version_id,
+                dataset_path=dataset_path,
+            )
+        else:
+            df = apply_func(df, client, version_date, version_id)
     return df
 
 
@@ -173,10 +186,15 @@ def run_post_enrichment(
     version_date: date,
     version_id: int = 1,
     *,
+    phase: str = "all",
     dry_run: bool = False,
+    dataset_path: str | None = None,
     client=None,
 ) -> dict:
-    """Planner cascade + scoped post-steps for one heli_pandas version."""
+    """Run the selected status-cascade phase for one heli_pandas version."""
+    if phase not in {"planner", "post", "all"}:
+        _fail(f"неизвестная phase={phase!r}; ожидается planner, post или all")
+
     ch = client or get_clickhouse_client()
 
     if _count_rows(ch, "program_ac", version_date, version_id) == 0:
@@ -196,40 +214,50 @@ def run_post_enrichment(
         f"OPS={stats['ops_before']}, planner_status_0={stats['planner_zero_before']}"
     )
 
-    print("Planner cascade (overhaul -> program_ac -> inactive_serviceable [3b, status=0])...")
     df = _load_heli_pandas_version(ch, version_date, version_id)
-    df = _reset_enrichment_outputs(df)
-    df = _run_planner_cascade(ch, df)
+    if phase in {"planner", "all"}:
+        print("Planner cascade (reset -> overhaul -> program_ac -> 3b)...")
+        df = _reset_enrichment_outputs(df)
+        df = _run_planner_cascade(ch, df)
 
+    if phase in {"post", "all"}:
+        print("Post cascade (precheck -> component/serviceable/repair/storage/terminal)...")
+        df = _run_post_cascade(ch, df, version_date, version_id, dataset_path)
+
+    ops_after = int(
+        df.loc[
+            (df["group_by"].isin([1, 2]))
+            & (df["status_id"] == 2)
+            & (df["aircraft_number"].fillna(0).astype(int) > 0),
+            "aircraft_number",
+        ].nunique()
+    )
+    stats["ops_after"] = ops_after
+    stats["planner_zero_after"] = int(
+        ((df["group_by"].isin([1, 2])) & (df["status_id"] == 0)).sum()
+    )
     if dry_run:
-        ops_after = int(
-            df.loc[
-                (df["group_by"].isin([1, 2]))
-                & (df["status_id"] == 2)
-                & (df["aircraft_number"].fillna(0).astype(int) > 0),
-                "aircraft_number",
-            ].nunique()
+        print(
+            f"[dry-run] phase={phase}: OPS={stats['ops_after']}, "
+            f"planner_status_0={stats['planner_zero_after']}"
         )
-        stats["ops_after"] = ops_after
-        stats["planner_zero_after"] = int(
-            ((df["group_by"].isin([1, 2])) & (df["status_id"] == 0)).sum()
-        )
-        print(f"[dry-run] OPS after planner cascade: {ops_after}")
         return stats
-
-    print("Post-steps in-memory (component/serviceable/storage/terminal)...")
-    df = _run_post_cascade(ch, df, version_date, version_id)
 
     inserted = _replace_heli_pandas_version(ch, df, version_date, version_id)
     if inserted != len(df):
         _fail(f"heli_pandas: inserted {inserted}, expected {len(df)}")
 
-    stats["ops_after"] = _ops_planers(ch, version_date, version_id)
-    stats["planner_zero_after"] = _planner_zero(ch, version_date, version_id)
     print(
-        f"Enrichment done: OPS={stats['ops_after']}, "
+        f"Enrichment phase={phase} done: OPS={stats['ops_after']}, "
         f"planner_status_0={stats['planner_zero_after']}"
     )
+    if phase in {"post", "all"}:
+        source = (
+            f"Excel {Path(dataset_path) / 'Program.xlsx'}"
+            if dataset_path
+            else "SQL flight_program_fl"
+        )
+        print(f"Precheck day0 dt source confirmed: {source}")
     return stats
 
 
@@ -239,10 +267,18 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Post-enrichment heli_pandas after DWH load")
     p.add_argument("--version-date", required=True, help="YYYY-MM-DD")
     p.add_argument("--version-id", type=int, default=1)
+    p.add_argument("--phase", choices=("planner", "post", "all"), default="all")
+    p.add_argument("--dataset-path")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
     vd = date.fromisoformat(args.version_date)
-    run_post_enrichment(vd, args.version_id, dry_run=args.dry_run)
+    run_post_enrichment(
+        vd,
+        args.version_id,
+        phase=args.phase,
+        dry_run=args.dry_run,
+        dataset_path=args.dataset_path,
+    )
 
 
 if __name__ == "__main__":

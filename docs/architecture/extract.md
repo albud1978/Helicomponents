@@ -27,6 +27,9 @@ python3 code/utils/prep_source_dataset.py --dataset data_input/source_data/v_202
 `extract_master.py --source dwh --mode prod --version-date … --version-id 1 --dataset-path …`.  
 Не собирать day0 из leaf-скриптов. Excel/interactive ниже — **legacy**.
 
+**W1.1 (2026-07-24):** `calculate_beyond_repair` выполняется сразу после `md_components_loader`; тензоры идут AC → FL; отключённый `heli_pandas_economics_status` не исполняется; `digital_values_dictionary_creator` запускается последним, после day0 demote.
+**W2.4 (2026-07-24):** первая trigger-коррекция `flight_program_ac` выполняется после day0 demote по финальному OPS и до `digital_values_dictionary_creator`.
+
 ## Снимок таблиц перед экстрактом (бэкап для сравнения)
 
 Чтобы зафиксировать текущее состояние конвейера экстракта в ClickHouse и сравнивать его с результатом после новой загрузки (или откатить логику вручную по SQL), используйте:
@@ -164,10 +167,10 @@ python3 code/heli_pandas_ops_inventory.py --version-date YYYY-MM-DD --version-id
 
 | **№** | **Скрипт** | **Назначение** | **Версионность** |
 |-------|-----------|----------------|------------------|
-| **9** | `program_fl_direct_loader.py` | Прямой тензор программ полетов на 4000 дней | ✅ CLI параметры Extract |
-| **10** | `program_ac_direct_loader.py` | Прямой тензор операций ВС с постпроцессингом | ✅ CLI параметры Extract |
+| **9** | `program_ac_direct_loader.py` | Прямой тензор операций ВС с постпроцессингом | ✅ CLI параметры Extract |
+| **10** | `program_fl_direct_loader.py` | Прямой тензор программ полетов на 4000 дней | ✅ CLI параметры Extract |
 | **11** | `heli_pandas_group_by_enricher.py` | Обогащение `heli_pandas.group_by` по `md_components.partno_comp` (идемпотентно, запускается с `--apply`) | ✅ Наследует от heli_pandas/md_components |
-| **12** | `digital_values_dictionary_creator.py` | Аддитивный словарь всех полей для Flame GPU - **ИСПРАВЛЕН** | ✅ Получает из heli_pandas |
+| **финал** | `digital_values_dictionary_creator.py` | Аддитивный словарь всех полей для Flame GPU, после day0 demote | ✅ Получает из heli_pandas |
 
 ### Финальные расчеты (критичные зависимости)
 
@@ -289,7 +292,11 @@ DWH load (heli_pandas status_id=0)
 ```
 
 **Операторский entrypoint (SSoT):** [`docs/runbook_sim_launch.md`](../runbook_sim_launch.md) §0 + `.cursor/rules/10_extract_and_env.mdc`.  
-`extract_master.py --source dwh` вызывает DWH head → хвост Extract → `flight_program_*` → status/repair/BR → **`day0_ops_deficit_demote_runner`** → acceptance OPS==MP4. Demote не внутри enrich (нужен MP4); агентам запрещено вызывать demote/loaders отдельно.
+`extract_master.py --source dwh` выполняет load-only DWH, один planner-cascade до `flight_program_ac`, затем один post-cascade после `flight_program_fl`/`group_by` → **`day0_ops_deficit_demote_runner`** → `digital_values_dictionary_creator` → acceptance OPS==MP4. Demote не внутри cascade (нужен MP4); агентам запрещено вызывать demote/loaders отдельно.
+С W2.2 precheck берёт day0 `daily_hours` напрямую из `Program.xlsx` (`--dataset-path`, без `dict_aircraft_number_flat`), оставляя scoped `flight_program_fl` только fallback-источником без Excel-path.
+С W2.3 `dict_aircraft_number_flat` строится до planner cascade из identity-полей `aircraft_number`/`ac_type_mask` текущего `version_date`+`version_id`; `status_id` намеренно не участвует.
+С FIX1 словарь планеров полностью заменяет только текущий срез `version_date`+`version_id`, сохраняя историю других версий.
+`program_fl_direct_loader` читает словарь и fallback `heli_pandas` только для переданной версии, поэтому исторические planers/spawn не попадают в новый FL.
 
 **Destination gates (`destination_for_remain`, порядок program → calendar):**
 
@@ -369,12 +376,12 @@ DWH load (heli_pandas status_id=0)
 
 | **Этап** | **Скрипт** | **Таблица СУБД** | **Источник версии** |
 |----------|-----------|------------------|-------------------|
-| **9** | `program_fl_direct_loader.py` | `flight_program_fl` | ✅ CLI параметры Extract |
-| **10** | `program_ac_direct_loader.py` | `flight_program_ac` | ✅ CLI параметры Extract |
+| **9** | `program_ac_direct_loader.py` | `flight_program_ac` | ✅ CLI параметры Extract |
+| **10** | `program_fl_direct_loader.py` | `flight_program_fl` | ✅ CLI параметры Extract |
 | **11** | `heli_pandas_group_by_enricher.py` | `heli_pandas` | ✅ Наследует от heli_pandas/md_components |
 | **12** | `program_ac_precheck_runner.py` | `heli_pandas` | ✅ Наследует от heli_pandas/md_components/flight_program_fl |
-| **13** | `digital_values_dictionary_creator.py` | `dict_digital_values_flat` | ✅ Получает из heli_pandas |
-| **14** | `repair_days_calculator.py` | `heli_pandas.repair_days` | ✅ Наследует от heli_pandas |
+| **13** | `repair_days_calculator.py` | `heli_pandas.repair_days` | ✅ Наследует от heli_pandas |
+| **финал** | `digital_values_dictionary_creator.py` | `dict_digital_values_flat` | ✅ Получает из heli_pandas после day0 demote |
 ## 📚 Матрица чтение/запись по этапам Extract (актуально на 04-09-2025)
 
 Ниже указано для каждого этапа: какие таблицы/поля читаются, какие пишутся/обновляются, и инварианты порядка (почему этап на своём месте).
@@ -1316,13 +1323,13 @@ repair_days = repair_time - (sched_end_date - version_date)
 | 6 | `calculate_beyond_repair.py` | `md_components` | `md_components.br_mi8/br_mi17` | BR в минутах |
 | 7 | `md_components_enricher.py` | `dict_partno_flat`; `md_components` | `md_components.partno_comp` | Связь MP1↔MP3 |
 | 8 | `dictionary_creator.py` | `heli_pandas`; `md_components` | `dict_*` таблицы | Словари для join/dictGet |
-| 9 | `program_fl_direct_loader.py` | `dict_aircraft_number_flat`; Excel Program.xlsx | `flight_program_fl` | Нужен для precheck |
-| 10 | `program_ac_direct_loader.py` | `heli_pandas`; `md_components`; Excel Program_heli.xlsx | `flight_program_ac` | Независим от precheck |
+| 9 | `program_ac_direct_loader.py` | `heli_pandas`; `md_components`; Excel Program_heli.xlsx | `flight_program_ac` | Независим от precheck |
+| 10 | `program_fl_direct_loader.py` | `dict_aircraft_number_flat`; Excel Program.xlsx | `flight_program_fl` | Нужен для precheck |
 | 11 | `heli_pandas_group_by_enricher.py` | `md_components`; `heli_pandas` | `heli_pandas.group_by` | Для фильтрации планеров/агрегатов |
 | 12 | `heli_pandas_component_status.py` | `heli_pandas` (group_by, aircraft_number, condition) | `heli_pandas.status_id=2` (агрегаты на ВС) | После group_by |
 | 13 | `heli_pandas_serviceable_status.py` | `heli_pandas` (group_by, condition, status_id) | `heli_pandas.status_id=3` (исправные агрегаты) | После component_status |
-| 14 | `digital_values_dictionary_creator.py` | DESCRIBE всех таблиц Extract | `dict_digital_values_flat` (+Dictionary) | После всех таблиц |
 | 15 | `repair_days_calculator.py` | `md_components.repair_time`; `heli_pandas`; `status_overhaul` | `heli_pandas.repair_days` | Финальный расчёт |
+| финал | `digital_values_dictionary_creator.py` | DESCRIBE всех таблиц Extract | `dict_digital_values_flat` (+Dictionary) | После day0 demote |
 
 ## СВОДКА ВЕРСИОННОСТИ ТАБЛИЦ СУБД
 

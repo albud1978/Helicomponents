@@ -751,6 +751,13 @@ def prepare_env_arrays(
     
     # Расширяем frames_total с учётом резерва для spawn
     frames_total = frames_total_base + total_spawn_reserve
+    frames_total_before_clamp = frames_total
+    frames_total = max(frames_total, len(ac_union))
+    if frames_total != frames_total_before_clamp:
+        print(
+            f"  ⚠️ frames_total clamp: {frames_total_before_clamp} → {frames_total} "
+            f"для покрытия MP3∪MP5 ({len(ac_union)} AC)"
+        )
     
     # 8. Индексы для spawn
     # first_reserved_idx — для детерминированного spawn (начинается сразу после существующих)

@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-07-24 — E2E sim 2026-07-22 v1 after FIX1 dict versioning
+
+**Workflow:** `W_e2e_sim_compare_20260724` | **Risk:** high | **Profile:** high-strict | **Modules:** `extract_dwh`, `validation`
+
+E2E extract+sim+compare на `version_date=2026-07-22`, `version_id=1` после FIX1 версионности dict. Код **не закоммичен**.
+
+**FIX1:**
+- `dict_aircraft` / aircraft dictionary — version-scoped replace (DELETE+INSERT среза);
+- `flight_program_fl` — version-scoped read/delete/spawn;
+- `sim_env_setup` — `frames_total` clamp по `len(MP3∪MP5)`.
+
+**Acceptance:** sim exit0; INV `run_all` 16/16 PASS; Day1 OPS Mi-8/Mi-17 = 49/88; master DELTA +302 (= +1 export day × 302 AC, explained). Evidence: `output/fix1_dict_version_verify_2026-07-22.json`, `output/after_sim_20260722_v1_e2e2_after_fix1.json`, `output/compare_sim_20260722_v1_e2e2_after_fix1.json`, `output/sim_limiter_v8_2026-07-22_v1_e2e2_after_fix1.log`.
+
+**Notes:** GPU ClickHouse Dictionary `aircraft_number_dict_flat` остаётся unscoped (TODO автора, non-blocking для sim-пути).
+
+**Review/validation/governance:** validator-judge V1 PASS (`handoff_..._8b625094`); reviewer-flame R1 `approve_with_notes` (`handoff_..._9fea0449`); governance-compliance `allow_with_notes` (`handoff_W_e2e_sim_compare_20260724_governance-compliance_0dda1619`); ApprovalGate `ctx_W_e2e_sim_compare_20260724_approval_request_d968022d`. Docs: changelog snippet (docs-curator D1); capsule skip — architecture уже синхронизирована coder'ом.
+
+## 2026-07-24 — Extract layer refactor checkpoint (W1.1 + W2.1–W2.4)
+
+**Workflow:** `W_extract_layer_refactor_20260724` | **Risk:** high | **Profile:** high-strict | **Module:** `extract_dwh`
+
+Checkpoint закрытия layered refactor Extract (bitexact `heli_pandas` на `version_date=2026-07-22`, `version_id=1`). Код **не закоммичен**; W2.5–W2.7 отложены на продолжение позже. Отчёт — отдельным шагом.
+
+**Сделано:**
+- **W1.1:** pipeline reorder — BR early, digital после demote, economics out.
+- **W2.1:** DWH load-only; planner before AC; post after FL.
+- **W2.2:** Excel `day0_dt` для precheck.
+- **W2.3:** aircraft dict — identity+version scoped.
+- **W2.4:** коррекция AC triggers после demote; day0 first_row `[16,13,29]→[0,0,0]` — intentional (human-ack).
+
+**Bitexact acceptance:** `heli_pandas` fp=`A890C61B77B627BE90FE06E7DA1A3B30`, n=11625, OPS Mi-8/Mi-17 = 49/88 (`status_id=0` total=0). Evidence: `output/after_bitexact_heli_pandas_2026-07-22_layer_w2_4.json` vs baseline pre-refactor.
+
+**Review/validation/governance:** governance-compliance `allow_with_notes` (`handoff_W_extract_layer_refactor_20260724_governance-compliance_ce935318`); ApprovalGate `ctx_W_extract_layer_refactor_20260724_approval_request_16fc35f4`. Docs: changelog snippet (docs-curator D1); capsule skip — architecture docs уже синхронизированы coder'ом.
+
 ## 2026-07-23 — extract_master стал единым DWH day0 prepare-to-sim entrypoint
 
 **Workflow:** `W_extract_master_day0_unify_20260723` | **Risk:** medium | **Profile:** medium-fast | **Module:** `extract_dwh`

@@ -39,11 +39,11 @@ SSoT доменных инвариантов: `config/transitions/invariants.jso
 
 ## Decisions (≤7)
 
-1. **Sequential pipeline через `extract_master.py`** — единый entrypoint для Excel и DWH: MD → source-head → Enrich/Dictionaries → Tensors → status/repair/BR → demote; каждая стадия зависит от предыдущей.
+1. **Sequential pipeline через `extract_master.py`** — единый entrypoint для Excel и DWH: MD → BR → source-head → Enrich/Dictionaries → tensor AC → tensor FL → status/repair tail → demote → digital values dictionary; каждая стадия зависит от предыдущей. Порядок зафиксирован W1.1 (2026-07-24).
 2. **DWH cascade планеров** — в DWH-режиме `extract_master.py` заменяет Excel head одним `dwh_loader.py --step all`; после load `heli_pandas status_id=0`: overhaul→program_ac→**3b** (merge inactive) → post (precheck часов OPS, component/serviceable/repair/storage/BR). Past end планеров (`sched_end_date < version_date`) → `status_id=2` в `overhaul_status_processor`, не в `heli_pandas_repair_status`. Канон: `docs/architecture/extract.md` §Day0; приёмка: `docs/backlog.md` §2026-07-21.
 3. **Destination gates (program→calendar)** — общий `destination_for_remain`: сначала hist `program_ac` ≥2025-07-04, затем календарный OH(D). Demote (`status=2` excess) и 3b (`status=0` хвост) — **разные входы**, одна функция гейтов. Код: `planer_calendar_remain.py`.
 4. **Demote-only fallback +10y−1d** — если нет treq OH(D) **и** serial ∈ history с 2025-07-04 → `due = base + 10 calendar years − 1 day` (inclusive). **3b без fallback** — без treq → не 3 по календарю. Решение согласовано 2026-07-22 (`docs/backlog.md` §2026-07-21).
-5. **Day0 OPS demote после terminal BR** — excess OPS vs `flight_program_ac` ранжируется по deficit комплектации; destination через те же гейты (+ demote-only fallback). Runner: `day0_ops_deficit_demote_runner.py` — последний критичный шаг `extract_master.py`; финальная acceptance проверяет OPS==MP4 через `compare_ops_to_target`.
+5. **Day0 OPS demote после terminal BR** — excess OPS vs `flight_program_ac` ранжируется по deficit комплектации; destination через те же гейты (+ demote-only fallback). Runner: `day0_ops_deficit_demote_runner.py` — последний критичный status-шаг `extract_master.py`; после него исполняется только `digital_values_dictionary_creator.py`, затем финальная acceptance проверяет OPS==MP4 через `compare_ops_to_target`.
 6. **Блок storage** — неисправные агрегаты без `target_date` → `status_id=7` (unserviceable), не 4; `heli_pandas_storage_status.py`.
 7. **Native ClickHouse driver** (порт 9000) + **мультиверсионность** — `version_date`/`version_id`; day0 sim = `version_date` среза; MP4/MP5 из Excel `--dataset-path` (предпочтительно `v_<та же дата>`).
 
@@ -51,10 +51,10 @@ SSoT доменных инвариантов: `config/transitions/invariants.jso
 
 ```
 DWH path (канон = extract_master --source dwh):
-  md_components → dwh_loader --step all
+  md_components → calculate_beyond_repair → dwh_loader --step all
     → heli_pandas (status_id=0) + cascade 1→3b + post enrich
-    → flight_program_ac/fl (Excel --dataset-path)
-    → status/repair/BR tail → day0 OPS demote → OPS==MP4 gate
+    → flight_program_ac → flight_program_fl (Excel --dataset-path)
+    → status/repair tail → day0 OPS demote → digital values dictionary → OPS==MP4 gate
     → sim (ClickHouse version_date/version_id=1)
 
 Excel legacy: extract_master --source excel | interactive menu → тот же хвост с demote

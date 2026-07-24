@@ -124,6 +124,16 @@ class DictionaryCreator:
         except Exception as e:
             self.logger.error(f"❌ Ошибка получения версионных параметров: {e}")
             return None, None
+
+    def _heli_version_filter(self, alias: str = "") -> str:
+        """Возвращает точный фильтр текущего среза heli_pandas."""
+        if self.version_date is None or self.version_id is None:
+            raise RuntimeError("version_date/version_id не определены для анализа heli_pandas")
+        prefix = f"{alias}." if alias else ""
+        return (
+            f"{prefix}version_date = toDate('{self.version_date}') "
+            f"AND {prefix}version_id = {int(self.version_id)}"
+        )
     
     def validate_embedded_id_fields(self) -> bool:
         """Валидация встроенных ID полей из Excel"""
@@ -139,7 +149,7 @@ class DictionaryCreator:
                 return False
             
             # Получаем статистику по встроенным ID полям
-            embedded_stats_result = self.client.query("""
+            embedded_stats_result = self.client.query(f"""
                 SELECT 
                     COUNT(*) as total_records,
                     COUNT(partseqno_i) as partseqno_filled,
@@ -147,8 +157,9 @@ class DictionaryCreator:
                     COUNT(address_i) as address_filled,
                     COUNT(ac_type_i) as ac_type_filled,
                     MAX(version_date) as latest_date
-            FROM heli_pandas
-        """)
+                FROM heli_pandas
+                WHERE {self._heli_version_filter()}
+            """)
         
             if not embedded_stats_result.result_rows:
                 self.logger.error("❌ Нет данных в heli_pandas")
@@ -195,10 +206,11 @@ class DictionaryCreator:
         
         try:
             # Анализ партномеров - берем DISTINCT пары partno, partseqno_i
-            partno_result = self.client.query("""
+            partno_result = self.client.query(f"""
                 SELECT DISTINCT partno, partseqno_i
                 FROM heli_pandas 
-                WHERE partno IS NOT NULL AND partno != '' AND partseqno_i IS NOT NULL
+                WHERE {self._heli_version_filter()}
+                  AND partno IS NOT NULL AND partno != '' AND partseqno_i IS NOT NULL
                 ORDER BY partseqno_i
             """)
             partno_data = [(row[0], row[1]) for row in partno_result.result_rows]
@@ -232,10 +244,11 @@ class DictionaryCreator:
                 )
             
             # Анализ серийных номеров - берем DISTINCT пары (partno, serialno), psn
-            serialno_result = self.client.query("""
+            serialno_result = self.client.query(f"""
                 SELECT DISTINCT partno, serialno, psn
                 FROM heli_pandas 
-                WHERE partno IS NOT NULL AND partno != '' 
+                WHERE {self._heli_version_filter()}
+                  AND partno IS NOT NULL AND partno != ''
                   AND serialno IS NOT NULL AND serialno != '' 
                   AND psn IS NOT NULL
                 ORDER BY psn
@@ -244,23 +257,25 @@ class DictionaryCreator:
             self.logger.info(f"📋 Найдено {len(serialno_data)} уникальных троек (partno, serialno) → psn")
             
             # Анализ владельцев - берем DISTINCT пары owner, address_i
-            owner_result = self.client.query("""
+            owner_result = self.client.query(f"""
                 SELECT DISTINCT owner, address_i
                 FROM heli_pandas 
-                WHERE owner IS NOT NULL AND owner != '' AND address_i IS NOT NULL
+                WHERE {self._heli_version_filter()}
+                  AND owner IS NOT NULL AND owner != '' AND address_i IS NOT NULL
                 ORDER BY address_i
             """)
             owner_data = [(row[0], row[1]) for row in owner_result.result_rows]
             self.logger.info(f"📋 Найдено {len(owner_data)} уникальных пар owner → address_i")
             
             # Анализ типов ВС (существующая логика)
-            ac_type_result = self.client.query("""
+            ac_type_result = self.client.query(f"""
                 SELECT ac_typ, count(*) as cnt
-                    FROM heli_pandas 
-                WHERE ac_typ IS NOT NULL AND ac_typ != ''
+                FROM heli_pandas
+                WHERE {self._heli_version_filter()}
+                  AND ac_typ IS NOT NULL AND ac_typ != ''
                 GROUP BY ac_typ
-                    ORDER BY cnt DESC
-                """)
+                ORDER BY cnt DESC
+            """)
             ac_type_data = [(row[0], row[1]) for row in ac_type_result.result_rows]
             self.logger.info(f"📋 Найдено {len(ac_type_data)} уникальных типов ВС")
             
@@ -419,15 +434,9 @@ class DictionaryCreator:
         try:
             self.logger.info("📊 Аддитивное заполнение Dictionary таблиц...")
             
-            # Получаем актуальные версионные параметры из heli_pandas
-            version_date, version_id = self.get_version_from_heli_pandas()
-            if version_date is None or version_id is None:
-                self.logger.error("❌ Не удалось получить версионные параметры из heli_pandas")
+            if self.version_date is None or self.version_id is None:
+                self.logger.error("❌ Версионные параметры словарей не определены")
                 return False
-            
-            # Устанавливаем версионные параметры для использования в остальной логике
-            self.version_date = version_date
-            self.version_id = version_id
             
             current_timestamp = datetime.now()
             
@@ -587,6 +596,16 @@ class DictionaryCreator:
             # 1. Подключение
             if not self.connect_to_database():
                 return False
+
+            # CLI scope имеет приоритет; без него сохраняется fallback на MAX(version_date/version_id).
+            if self.version_date is None or self.version_id is None:
+                self.version_date, self.version_id = self.get_version_from_heli_pandas()
+                if self.version_date is None or self.version_id is None:
+                    return False
+            self.logger.info(
+                f"🎯 DISTINCT-анализ heli_pandas ограничен срезом "
+                f"{self.version_date} v{self.version_id}"
+            )
             
             # 2. Валидация встроенных ID полей из Excel
             if not self.validate_embedded_id_fields():
@@ -699,8 +718,8 @@ class DictionaryCreator:
             return False
     
     def create_aircraft_number_dictionary(self) -> bool:
-        """Создание аддитивного словаря номеров ВС dict_aircraft_number_flat с ac_type_mask"""
-        self.logger.info("🚁 Создание аддитивного словаря номеров ВС с ac_type_mask...")
+        """Полная замена текущего версионного среза dict_aircraft_number_flat."""
+        self.logger.info("🚁 Создание версионного среза словаря номеров ВС с ac_type_mask...")
         
         try:
             # Проверяем существование таблицы heli_pandas
@@ -710,17 +729,23 @@ class DictionaryCreator:
                 self.logger.error("💡 Словарь номеров ВС создается ПОСЛЕ загрузки данных в heli_pandas")
                 return False
             
-            # Получаем уникальные номера ВС с их ac_type_mask из heli_pandas
-            # ЛОГИКА: 
+            # Получаем уникальные номера ВС с их ac_type_mask из heli_pandas.
+            # identity-only: status_id намеренно игнорируется.
+            # ЛОГИКА:
             # 1. Берем ТОЛЬКО планеры используя md_components.group_by IN (1, 2)
             # 2. ac_type_mask берем от этих записей
-            aircraft_query = """
+            self.logger.info(
+                "🔒 Источник aircraft dictionary: identity-only, status_id ignored; "
+                f"scope={self.version_date} v{self.version_id}"
+            )
+            aircraft_query = f"""
             SELECT 
                 h.aircraft_number,
                 any(h.ac_type_mask) as ac_type_mask
             FROM heli_pandas h
             JOIN md_components m ON h.partseqno_i = m.partseqno_i
-            WHERE h.aircraft_number IS NOT NULL AND h.aircraft_number > 0
+            WHERE {self._heli_version_filter('h')}
+                AND h.aircraft_number IS NOT NULL AND h.aircraft_number > 0
                 AND h.ac_type_mask IS NOT NULL AND h.ac_type_mask > 0
                 AND m.group_by IN (1, 2)
             GROUP BY h.aircraft_number
@@ -729,46 +754,11 @@ class DictionaryCreator:
             
             result = self.client.query(aircraft_query)
             if not result.result_rows:
-                self.logger.warning("⚠️ Нет данных о номерах ВС в heli_pandas — создаём пустую таблицу и Dictionary")
-                # Создаём таблицу, если её нет
-                aircraft_table_sql = """
-                CREATE TABLE IF NOT EXISTS dict_aircraft_number_flat (
-                    aircraft_number UInt32,
-                    formatted_number String,
-                    registration_code String,
-                    is_leading_zero UInt8 DEFAULT 0,
-                    ac_type_mask UInt8 DEFAULT 0,
-                    version_date Date DEFAULT today(),
-                    version_id UInt8 DEFAULT 1,
-                    load_timestamp DateTime DEFAULT now()
-                ) ENGINE = MergeTree()
-                ORDER BY (aircraft_number, version_date, version_id, load_timestamp)
-                PARTITION BY toYYYYMM(version_date)
-                SETTINGS index_granularity = 8192
-                """
-                self.client.query(aircraft_table_sql)
-                # Создаём/обновляем Dictionary объект
-                aircraft_dict_ddl = f"""
-                CREATE OR REPLACE DICTIONARY aircraft_number_dict_flat (
-                    aircraft_number UInt32,
-                    formatted_number String,
-                    registration_code String,
-                    is_leading_zero UInt8,
-                    ac_type_mask UInt8
+                self.logger.error(
+                    "❌ Нет планеров для текущего среза heli_pandas; "
+                    "dict_aircraft_number_flat не изменён"
                 )
-                PRIMARY KEY aircraft_number
-                SOURCE(CLICKHOUSE(
-                    HOST '{self.config['host']}'
-                    PORT {self.config['port']}
-                    TABLE 'dict_aircraft_number_flat'
-                    DB '{self.config['database']}'
-                ))
-                LAYOUT(FLAT())
-                LIFETIME(MIN 0 MAX 3600)
-                """
-                self.client.query(aircraft_dict_ddl)
-                self.logger.info("✅ Пустая dict_aircraft_number_flat создана и Dictionary определён")
-                return True
+                return False
             
             # Создаем словарь aircraft_number -> ac_type_mask
             aircraft_data_map = {}
@@ -811,76 +801,51 @@ class DictionaryCreator:
                 else:
                     self.logger.info("💡 Поле ac_type_mask уже существует в таблице")
                 
-                # Заполняем ac_type_mask для существующих записей если они пустые
-                empty_count_result = self.client.query("SELECT COUNT(*) FROM dict_aircraft_number_flat WHERE ac_type_mask = 0")
-                empty_count = empty_count_result.result_rows[0][0]
-                
-                if empty_count > 0:
-                    self.logger.info(f"🔧 Заполняем ac_type_mask для {empty_count} существующих записей...")
-                    
-                    # Заполняем ac_type_mask на основе данных из heli_pandas
-                    for aircraft_number, ac_type_mask in aircraft_data_map.items():
-                        update_sql = f"""
-                        ALTER TABLE dict_aircraft_number_flat 
-                        UPDATE ac_type_mask = {ac_type_mask}
-                        WHERE aircraft_number = {aircraft_number} AND ac_type_mask = 0
-                        """
-                        self.client.query(update_sql)
-                    
-                    self.logger.info(f"✅ ac_type_mask заполнен для существующих записей")
-                else:
-                    self.logger.info("💡 ac_type_mask уже заполнен для всех записей")
-                    
             except Exception as alter_error:
                 self.logger.warning(f"⚠️ Не удалось проверить/добавить поле ac_type_mask: {alter_error}")
                 # Продолжаем выполнение
             
-            # Получаем существующие номера для аддитивности
-            existing_query = "SELECT DISTINCT aircraft_number FROM dict_aircraft_number_flat"
-            try:
-                existing_result = self.client.query(existing_query)
-                existing_numbers = {row[0] for row in existing_result.result_rows}
-                self.logger.info(f"📋 Найдено {len(existing_numbers)} существующих номеров ВС")
-            except:
-                existing_numbers = set()
-                self.logger.info("📋 Словарь номеров ВС пуст")
+            # Идемпотентно заменяем только текущую пару version_date/version_id.
+            self.client.command(
+                f"""
+                ALTER TABLE dict_aircraft_number_flat DELETE
+                WHERE version_date = toDate('{self.version_date}')
+                  AND version_id = {int(self.version_id)}
+                SETTINGS mutations_sync = 2
+                """
+            )
+
+            aircraft_data = []
+            current_timestamp = datetime.now()
+            for aircraft_number in sorted(aircraft_data_map):
+                formatted_number = f"{aircraft_number:05d}"
+                aircraft_data.append([
+                    aircraft_number,
+                    formatted_number,
+                    f"RA-{formatted_number}",
+                    1 if aircraft_number < 10000 else 0,
+                    aircraft_data_map[aircraft_number],
+                    self.version_date,
+                    self.version_id,
+                    current_timestamp,
+                ])
+
+            self.client.insert(
+                'dict_aircraft_number_flat',
+                aircraft_data,
+                column_names=[
+                    'aircraft_number', 'formatted_number', 'registration_code',
+                    'is_leading_zero', 'ac_type_mask', 'version_date',
+                    'version_id', 'load_timestamp',
+                ],
+            )
+            self.logger.info(
+                f"✅ version-scoped replace: {len(aircraft_data)} rows for "
+                f"{self.version_date} v{self.version_id}"
+            )
             
-            # Определяем новые номера для добавления
-            new_numbers = set(aircraft_data_map.keys()) - existing_numbers
-            
-            if not new_numbers:
-                self.logger.info("✅ Все номера ВС уже существуют в словаре")
-            else:
-                # Подготавливаем данные только для новых номеров
-                aircraft_data = []
-                current_timestamp = datetime.now()
-                
-                for aircraft_number in sorted(new_numbers):
-                    formatted_number = f"{aircraft_number:05d}"
-                    registration_code = f"RA-{formatted_number}"
-                    is_leading_zero = 1 if aircraft_number < 10000 else 0
-                    ac_type_mask = aircraft_data_map[aircraft_number]
-                    
-                    aircraft_data.append([
-                        aircraft_number, formatted_number, registration_code, 
-                        is_leading_zero, ac_type_mask, self.version_date, self.version_id, current_timestamp
-                    ])
-                
-                # Аддитивная загрузка с новым полем ac_type_mask + версионность
-                self.client.insert('dict_aircraft_number_flat', aircraft_data,
-                                 column_names=['aircraft_number', 'formatted_number', 
-                                             'registration_code', 'is_leading_zero', 'ac_type_mask', 
-                                             'version_date', 'version_id', 'load_timestamp'])
-                
-                self.logger.info(f"✅ Добавлено {len(aircraft_data)} новых номеров ВС с ac_type_mask (аддитивно)")
-                
-                # Показываем примеры обогащенных данных
-                self.logger.info("📋 Примеры обогащенных записей:")
-                for i, aircraft_record in enumerate(aircraft_data[:3]):
-                    aircraft_number, formatted_number, registration_code, is_leading_zero, ac_type_mask = aircraft_record[:5]
-                    self.logger.info(f"  {aircraft_number} → {registration_code} (ac_type_mask: {ac_type_mask})")
-            
-            # Создаем/обновляем ClickHouse Dictionary объект с полем ac_type_mask
+            # Dictionary SOURCE остаётся глобальным и неоднозначным при повторе ключей.
+            # TODO: отдельно согласовать version-aware Dictionary; ETL/FL читают таблицу со scope.
             aircraft_dict_ddl = f"""
             CREATE OR REPLACE DICTIONARY aircraft_number_dict_flat (
                 aircraft_number UInt32,
@@ -902,8 +867,9 @@ class DictionaryCreator:
             
             self.client.query(aircraft_dict_ddl)
             
-            total_count = len(existing_numbers) + len(new_numbers if new_numbers else [])
-            self.logger.info(f"✅ Словарь номеров ВС с ac_type_mask готов: {total_count} записей")
+            self.logger.info(
+                f"✅ Срез словаря номеров ВС готов: {len(aircraft_data)} записей"
+            )
             
             return True
             
@@ -949,6 +915,7 @@ class DictionaryCreator:
             self.logger.info("   - dict_status_flat → status_dict_flat")
             self.logger.info("🔥 Поддержка dictGet: ПОЛНАЯ для всех словарей")
             self.logger.info("🚁 aircraft_number_dict_flat теперь содержит ac_type_mask для Flame GPU")
+            self.logger.info("🔒 aircraft dictionary contract: identity-only, status_id ignored")
             
             return True
             

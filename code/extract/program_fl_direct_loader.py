@@ -270,26 +270,39 @@ class FlightProgramDirectLoader:
             # Fallback на текущую дату
             return datetime.now().date()
     
-    def load_aircraft_dictionary(self) -> List[Tuple[int, int]]:
-        """Загружает 279 планеров из dict_aircraft_number_flat"""
+    def load_aircraft_dictionary(
+        self, version_date: date, version_id: int
+    ) -> List[Tuple[int, int]]:
+        """Загружает планеры только из указанного версионного среза."""
         try:
-            query = """
+            query = f"""
             SELECT aircraft_number, ac_type_mask
             FROM dict_aircraft_number_flat
+            WHERE version_date = '{version_date}'
+              AND version_id = {int(version_id)}
+              AND aircraft_number > 0
             ORDER BY aircraft_number
             """
             result = self.client.execute(query)
             aircraft_list = [(row[0], row[1]) for row in result]
-            self.logger.info(f"🚁 Найдено {len(aircraft_list)} планеров в словаре")
+            self.logger.info(
+                f"🚁 Найдено {len(aircraft_list)} планеров в словаре "
+                f"для {version_date} v{version_id}"
+            )
             if aircraft_list:
                 return aircraft_list
-            # Fallback: если словарь пуст, берём из heli_pandas
-            self.logger.warning("⚠️ Словарь dict_aircraft_number_flat пуст, используем fallback из heli_pandas")
+            self.logger.warning(
+                "⚠️ Версионный срез dict_aircraft_number_flat пуст, "
+                "используем scoped fallback из heli_pandas"
+            )
             hp_rows = self.client.execute(
-                """
+                f"""
                 SELECT DISTINCT aircraft_number, ac_type_mask
                 FROM heli_pandas
-                WHERE aircraft_number > 0
+                WHERE version_date = '{version_date}'
+                  AND version_id = {int(version_id)}
+                  AND group_by IN (1, 2)
+                  AND aircraft_number > 0
                 ORDER BY aircraft_number
                 """
             )
@@ -300,8 +313,8 @@ class FlightProgramDirectLoader:
             self.logger.error(f"❌ Ошибка получения списка планеров: {e}")
             return []
     
-    def create_flight_program_fl_table(self, version_date: date) -> bool:
-        """Создание таблицы flight_program_fl (если не существует) и очистка данных для version_date"""
+    def create_flight_program_fl_table(self, version_date: date, version_id: int) -> bool:
+        """Создаёт таблицу и очищает только заданный версионный срез."""
         try:
             # Создаем таблицу если не существует (не удаляем!)
             create_table_sql = """
@@ -319,12 +332,18 @@ class FlightProgramDirectLoader:
             
             self.client.execute(create_table_sql)
             
-            # Удаляем только записи с текущим version_date (rewrite policy)
-            delete_sql = f"ALTER TABLE flight_program_fl DELETE WHERE version_date = '{version_date}'"
+            delete_sql = (
+                "ALTER TABLE flight_program_fl DELETE "
+                f"WHERE version_date = '{version_date}' "
+                f"AND version_id = {int(version_id)}"
+            )
             self.client.execute(delete_sql)
             # Ждём завершения мутации
             self.client.execute("OPTIMIZE TABLE flight_program_fl FINAL")
-            self.logger.info(f"✅ Таблица flight_program_fl: удалены записи для version_date={version_date}")
+            self.logger.info(
+                f"✅ Таблица flight_program_fl: удалён срез "
+                f"{version_date} v{version_id}"
+            )
             return True
             
         except Exception as e:
@@ -411,39 +430,44 @@ class FlightProgramDirectLoader:
             self.logger.error(f"❌ Ошибка применения логики приоритетов: {e}")
             raise
 
-    def generate_new_mi17_aircraft_numbers(self) -> List[int]:
+    def generate_new_mi17_aircraft_numbers(
+        self, version_date: date, version_id: int
+    ) -> List[int]:
         """Генерирует последовательность новых aircraft_number для Ми‑17 начиная с 100000.
 
-        Источник количества: суммарный new_counter_mi17 из flight_program_ac по последней версии.
+        Источник количества: new_counter_mi17 из переданного среза flight_program_ac.
         Тип: UInt32. Маска типа для этих бортов: 64.
         """
         try:
-            # Получаем последнюю версию flight_program_ac
-            # Проверим, существует ли flight_program_ac
             exists = self.client.execute("EXISTS TABLE flight_program_ac")[0][0]
             if not exists:
                 self.logger.info("ℹ️ flight_program_ac отсутствует — пропускаем генерацию новых Ми-17")
                 return []
-            ver = self.client.execute(
-                """
-                SELECT version_date, version_id
-                FROM flight_program_ac
-                ORDER BY version_date DESC, version_id DESC
-                LIMIT 1
-                """
-            )
-            if not ver:
-                return []
-            vdate, vid = ver[0]
             rows = self.client.execute(
                 f"""
                 SELECT toInt64(SUM(new_counter_mi17))
                 FROM flight_program_ac
-                WHERE version_date = '{vdate}' AND version_id = {int(vid)}
+                WHERE version_date = '{version_date}'
+                  AND version_id = {int(version_id)}
                 """
             )
             total_new = int(rows[0][0] or 0)
             if total_new <= 0:
+                return []
+            current_spawn = int(
+                self.client.execute(
+                    f"""
+                    SELECT count()
+                    FROM dict_aircraft_number_flat
+                    WHERE version_date = '{version_date}'
+                      AND version_id = {int(version_id)}
+                      AND aircraft_number >= 100000
+                    """
+                )[0][0]
+                or 0
+            )
+            remaining = max(0, total_new - current_spawn)
+            if remaining == 0:
                 return []
             # Проверим занятые номера ≥100000, чтобы избежать коллизий при повторных загрузках
             res = self.client.execute(
@@ -454,42 +478,82 @@ class FlightProgramDirectLoader:
             )
             max_existing = int(res[0][0] or 99999)
             start = max(100000, max_existing + 1)
-            return [start + i for i in range(total_new)]
+            return [start + i for i in range(remaining)]
             
         except Exception as e:
             self.logger.error(f"❌ Ошибка генерации новых Ми‑17 номеров: {e}")
             return []
 
-    def extend_aircraft_dictionary_with_new_mi17(self, aircraft_list: List[Tuple[int,int]]) -> List[Tuple[int,int]]:
+    def extend_aircraft_dictionary_with_new_mi17(
+        self,
+        aircraft_list: List[Tuple[int, int]],
+        version_date: date,
+        version_id: int,
+    ) -> List[Tuple[int, int]]:
         """Дополняет словарь бортов новыми Ми‑17 (mask=64) по сгенерированным номерам.
         Возвращает объединённый список пар (aircraft_number, ac_type_mask).
         """
         try:
-            new_numbers = self.generate_new_mi17_aircraft_numbers()
+            new_numbers = self.generate_new_mi17_aircraft_numbers(
+                version_date, version_id
+            )
             if not new_numbers:
                 return aircraft_list
             extended = list(aircraft_list)
             for ac in new_numbers:
                 extended.append((int(ac), 64))
             # Зафиксируем их в dict_aircraft_number_flat, чтобы последующие шаги видели их
-            values = [(int(ac), 64,)]
-            try:
-                self.client.execute("""
-                    CREATE TABLE IF NOT EXISTS dict_aircraft_number_flat (
-                        aircraft_number UInt32,
-                        ac_type_mask UInt8,
-                        version_date Date DEFAULT today(),
-                        version_id UInt8 DEFAULT 1
-                    ) ENGINE = MergeTree()
-                    ORDER BY aircraft_number
-                """)
-            except Exception:
-                pass
-            # Вставляем пачками, игнорируя дубликаты через ON CLUSTER отсутствует — делаем фильтр
-            existing = {int(r[0]) for r in self.client.execute("SELECT aircraft_number FROM dict_aircraft_number_flat WHERE aircraft_number >= 100000")}
-            insert_vals = [(ac, 64) for ac in new_numbers if ac not in existing]
+            self.client.execute("""
+                CREATE TABLE IF NOT EXISTS dict_aircraft_number_flat (
+                    aircraft_number UInt32,
+                    formatted_number String,
+                    registration_code String,
+                    is_leading_zero UInt8 DEFAULT 0,
+                    ac_type_mask UInt8,
+                    version_date Date DEFAULT today(),
+                    version_id UInt8 DEFAULT 1,
+                    load_timestamp DateTime DEFAULT now()
+                ) ENGINE = MergeTree()
+                ORDER BY (aircraft_number, version_date, version_id, load_timestamp)
+            """)
+            existing = {
+                int(r[0])
+                for r in self.client.execute(
+                    f"""
+                    SELECT aircraft_number
+                    FROM dict_aircraft_number_flat
+                    WHERE version_date = '{version_date}'
+                      AND version_id = {int(version_id)}
+                      AND aircraft_number >= 100000
+                    """
+                )
+            }
+            now = datetime.now()
+            insert_vals = [
+                (
+                    ac,
+                    str(ac),
+                    f"NEW-MI17-{ac}",
+                    0,
+                    64,
+                    version_date,
+                    int(version_id),
+                    now,
+                )
+                for ac in new_numbers
+                if ac not in existing
+            ]
             if insert_vals:
-                self.client.execute("INSERT INTO dict_aircraft_number_flat (aircraft_number, ac_type_mask) VALUES", insert_vals)
+                self.client.execute(
+                    """
+                    INSERT INTO dict_aircraft_number_flat (
+                        aircraft_number, formatted_number, registration_code,
+                        is_leading_zero, ac_type_mask, version_date, version_id,
+                        load_timestamp
+                    ) VALUES
+                    """,
+                    insert_vals,
+                )
                 self.logger.info(f"📘 Добавлено в словарь новых Ми‑17: {len(insert_vals)} записей, диапазон [{insert_vals[0][0]}..{insert_vals[-1][0]}]")
             else:
                 self.logger.info("ℹ️ Новых Ми‑17 для словаря не требуется — всё уже есть")
@@ -675,14 +739,16 @@ class FlightProgramDirectLoader:
             calendar = expansion_engine.generate_4000_day_calendar(version_date)
             
             # 4. Загрузка словаря планеров и расширение новыми Ми‑17
-            all_aircraft = self.load_aircraft_dictionary()
-            all_aircraft = self.extend_aircraft_dictionary_with_new_mi17(all_aircraft)
+            all_aircraft = self.load_aircraft_dictionary(version_date, version_id)
+            all_aircraft = self.extend_aircraft_dictionary_with_new_mi17(
+                all_aircraft, version_date, version_id
+            )
             if not all_aircraft:
                 self.logger.error("❌ Нет данных о планерах")
                 return False
             
             # 5. Создание таблицы (и очистка данных для текущей version_date)
-            if not self.create_flight_program_fl_table(version_date):
+            if not self.create_flight_program_fl_table(version_date, version_id):
                 return False
             
             # 6. Применение логики приоритетов и создание данных

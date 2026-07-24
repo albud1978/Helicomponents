@@ -149,6 +149,13 @@ class ExtractMaster:
             'critical': True  # Критичен для фильтрации
         },
         {
+            'script': 'calculate_beyond_repair.py',
+            'description': 'Расчет Beyond Repair (br_mi8/br_mi17)',
+            'dependencies': ['md_components'],
+            'result_table': 'md_components',
+            'critical': False
+        },
+        {
             'script': 'status_overhaul_loader.py', 
             'description': 'Status & Overhaul - статусы и капремонт',
             'dependencies': [],
@@ -194,13 +201,6 @@ class ExtractMaster:
             'critical': True
         },
         {
-            'script': 'calculate_beyond_repair.py',
-            'description': 'Расчет Beyond Repair (br_mi8/br_mi17)',
-            'dependencies': ['md_components'],
-            'result_table': 'md_components',
-            'critical': False
-        },
-        {
             'script': 'md_components_psn_reserve.py',
             'description': 'Валидация резервирования psn для симуляционных рождений агрегатов',
             'dependencies': ['md_components', 'heli_pandas'],
@@ -210,10 +210,11 @@ class ExtractMaster:
         # === ТЕНЗОРЫ (в самом конце, когда все данные готовы) ===
         {
             'script': 'program_ac_direct_loader.py',
-            'description': 'Flight Program AC Direct - прямой тензор операций ВС на 4000 дней с постпроцессингом',
+            'description': 'Flight Program AC Direct - тензор без первой trigger-коррекции (--skip-trigger-correction)',
             'dependencies': ['heli_pandas', 'md_components'],
             'result_table': 'flight_program_ac',
-            'critical': False
+            'critical': False,
+            'args': ['--skip-trigger-correction'],
         },
         {
             'script': 'program_fl_direct_loader.py',
@@ -265,27 +266,13 @@ class ExtractMaster:
             'result_table': 'heli_pandas',
             'critical': True
         },
-        {
-            'script': 'heli_pandas_economics_status.py',
-            # DISABLED 2026-07-22: ferry/resource→7 gate cancelled (no-op script kept for pipeline slot)
-            'description': 'DISABLED: former day-0 economics 3→7 ferry/resource gate (no-op)',
-            'dependencies': ['heli_pandas'],
-            'result_table': 'heli_pandas',
-            'critical': False
-        },
-        # === МЕТА-СЛОВАРЬ (финальный этап после всех таблиц) ===
-        {
-            'script': 'digital_values_dictionary_creator.py',
-            'description': 'Digital Values Dictionary - аддитивный словарь всех полей для Flame GPU macroproperty',
-            'dependencies': ['heli_pandas', 'md_components', 'flight_program_ac', 'flight_program_fl'],
-            'result_table': 'dict_digital_values_flat',
-            'critical': False
-        },
-        # === ФИНАЛЬНЫЕ РАСЧЕТЫ (после всех словарей и тензоров) ===
+        # DISABLED 2026-07-22: heli_pandas_economics_status.py сохранён на диске,
+        # но исключён из исполняемого pipeline (former ferry/resource→7 gate).
+        # === STATUS/REPAIR TAIL (после основных словарей и тензоров) ===
         {
             'script': 'repair_days_calculator.py',
             'description': 'Расчет repair_days для ВС в ремонте',
-            'dependencies': ['md_components', 'heli_pandas', 'status_overhaul', 'dict_digital_values_flat'],
+            'dependencies': ['md_components', 'heli_pandas', 'status_overhaul'],
             'result_table': 'heli_pandas',
             'critical': True
         },
@@ -303,6 +290,23 @@ class ExtractMaster:
             'result_table': 'heli_pandas',
             'critical': True,
         },
+        {
+            'script': 'program_ac_trigger_correction',
+            'script_path': 'code/extract/program_ac_direct_loader.py',
+            'description': 'Корректировка первых trigger полей AC по финальному OPS после demote',
+            'dependencies': ['heli_pandas', 'flight_program_ac'],
+            'result_table': 'flight_program_ac',
+            'critical': True,
+            'args': ['--trigger-correction-only'],
+        },
+        # === МЕТА-СЛОВАРЬ (последний executable после status tail и demote) ===
+        {
+            'script': 'digital_values_dictionary_creator.py',
+            'description': 'Digital Values Dictionary - аддитивный словарь всех полей для Flame GPU macroproperty',
+            'dependencies': ['heli_pandas', 'md_components', 'flight_program_ac', 'flight_program_fl'],
+            'result_table': 'dict_digital_values_flat',
+            'critical': False
+        },
         # === PRE-SIMULATION РАЗМЕТКА (инициализация status_change на D0) ===
         # Удалено: pre_simulation_status_change (status_change более не используется)
     ]
@@ -310,6 +314,15 @@ class ExtractMaster:
         'status_overhaul_loader.py',
         'program_ac_loader.py',
         'dual_loader.py',
+    }
+    DWH_POST_CASCADE_STEPS = {
+        'program_ac_precheck_runner.py',
+        'heli_pandas_component_status.py',
+        'heli_pandas_serviceable_status.py',
+        'heli_pandas_repair_status.py',
+        'heli_pandas_storage_status.py',
+        'repair_days_calculator.py',
+        'heli_pandas_terminal_br_gate.py',
     }
     
     def __init__(self):
@@ -590,13 +603,14 @@ class ExtractMaster:
                         '--version-id', str(self.version_id),
                         '--step', 'all',
                         '--skip-existing',
+                        '--no-enrich',
                     ]
                     if self.replace_slice:
                         args.append('--replace-slice')
                     pipeline.append({
                         'script': 'dwh_loader.py',
                         'script_path': 'code/utils/dwh_loader.py',
-                        'description': 'DWH load: program_ac/status_overhaul/status_components + enrich',
+                        'description': 'DWH load-only: program_ac/status_overhaul/status_components без status cascade',
                         'dependencies': ['md_components'],
                         'result_table': 'heli_pandas',
                         'critical': True,
@@ -605,7 +619,29 @@ class ExtractMaster:
                     })
                     dwh_step_added = True
                 continue
+            if script in self.DWH_POST_CASCADE_STEPS:
+                continue
+            if script == 'program_ac_direct_loader.py':
+                pipeline.append({
+                    'script': 'dwh_post_enrichment.py',
+                    'script_path': 'code/utils/dwh_post_enrichment.py',
+                    'description': 'DWH planner cascade: reset → overhaul → program_ac → 3b (до AC tensor)',
+                    'dependencies': ['heli_pandas', 'program_ac', 'status_overhaul'],
+                    'result_table': 'heli_pandas',
+                    'critical': True,
+                    'args': ['--phase', 'planner'],
+                })
             pipeline.append(dict(step))
+            if script == 'heli_pandas_group_by_enricher.py':
+                pipeline.append({
+                    'script': 'dwh_post_enrichment.py',
+                    'script_path': 'code/utils/dwh_post_enrichment.py',
+                    'description': 'DWH post cascade: precheck → component/serviceable/repair/storage/terminal (после FL/group_by)',
+                    'dependencies': ['heli_pandas', 'flight_program_ac', 'flight_program_fl'],
+                    'result_table': 'heli_pandas',
+                    'critical': True,
+                    'args': ['--phase', 'post'],
+                })
         return pipeline
 
     def resolve_script_path(self, step: Dict) -> Path:
@@ -652,12 +688,12 @@ class ExtractMaster:
                                                          'md_components_enricher.py', 'md_components_psn_reserve.py', 'enrich_heli_pandas.py',
                                                          'dictionary_creator.py', 'digital_values_dictionary_creator.py',
                                                          'heli_pandas_group_by_enricher.py',
-                                                         'program_ac_precheck_runner.py',
                                                          'heli_pandas_component_status.py', 'heli_pandas_serviceable_status.py',
                                                          'heli_pandas_repair_status.py', 'heli_pandas_storage_status.py',
                                                          'heli_pandas_economics_status.py',
                                                          'repair_days_calculator.py', 'heli_pandas_terminal_br_gate.py',
-                                                         'day0_ops_deficit_demote_runner.py', 'dwh_loader.py']:
+                                                         'day0_ops_deficit_demote_runner.py', 'dwh_loader.py',
+                                                         ]:
                 cmd_with_params.extend(['--dataset-path', self.dataset_path])
             
             # Добавляем дополнительные аргументы шага

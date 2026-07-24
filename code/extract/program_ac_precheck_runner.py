@@ -28,19 +28,32 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--version-date", required=True, type=_parse_version_date)
     parser.add_argument("--version-id", required=True, type=int)
+    parser.add_argument("--dataset-path")
     return parser.parse_args()
 
 
 def apply_program_ac_precheck(
-    df: pd.DataFrame, client, version_date: date, version_id: int
+    df: pd.DataFrame,
+    client,
+    version_date: date,
+    version_id: int,
+    *,
+    dataset_path: str | None = None,
+    daily_map: dict[int, int] | None = None,
 ) -> pd.DataFrame:
     """Применяет D1 precheck к переданному heli_pandas DataFrame без записи в БД."""
-    del version_id
     from extract.program_ac_precheck_next_day import process_program_ac_precheck_d1
 
     updated = df.copy()
     old = updated["status_id"].to_numpy(copy=True)
-    updated = process_program_ac_precheck_d1(updated, client, version_date)
+    updated = process_program_ac_precheck_d1(
+        updated,
+        client,
+        version_date,
+        version_id,
+        dataset_path=dataset_path,
+        daily_map=daily_map,
+    )
     changed = int((old != updated["status_id"].to_numpy()).sum())
     print(f"🔄 Precheck in-memory status changes: {changed}")
     return updated
@@ -62,8 +75,9 @@ def main() -> int:
     checks = {
         'heli_pandas': "EXISTS TABLE heli_pandas",
         'md_components': "EXISTS TABLE md_components",
-        'flight_program_fl': "EXISTS TABLE flight_program_fl",
     }
+    if not args.dataset_path:
+        checks['flight_program_fl'] = "EXISTS TABLE flight_program_fl"
     for name, sql in checks.items():
         if client.execute(sql)[0][0] == 0:
             print(f"❌ Таблица {name} отсутствует — precheck невозможен")
@@ -71,7 +85,13 @@ def main() -> int:
 
     df = _load_heli_pandas_version(client, args.version_date, args.version_id)
     print(f"📦 heli_pandas в памяти: {len(df):,} записей")
-    updated_df = apply_program_ac_precheck(df, client, args.version_date, args.version_id)
+    updated_df = apply_program_ac_precheck(
+        df,
+        client,
+        args.version_date,
+        args.version_id,
+        dataset_path=args.dataset_path,
+    )
     _replace_heli_pandas_version(client, updated_df, args.version_date, args.version_id)
     print("✅ Precheck применён")
     return 0

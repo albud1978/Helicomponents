@@ -1033,7 +1033,8 @@ class ProgramACDirectLoader:
             return False
     
     def create_final_tensor(self, excel_path: str = None,
-                          version_date: Optional[date] = None, version_id: int = 1) -> bool:
+                          version_date: Optional[date] = None, version_id: int = 1,
+                          skip_trigger_correction: bool = False) -> bool:
         """Главная функция создания финального тензора"""
         try:
             # Определяем путь к Excel
@@ -1080,8 +1081,13 @@ class ProgramACDirectLoader:
             if not self.add_calculated_fields(version_date, version_id):
                 self.logger.warning("⚠️ Ошибка постпроцессинга, но основные данные загружены")
             
-            # 8. Корректировка первых значений trigger полей (ПОСЛЕ загрузки heli_pandas)
-            if not self.correct_first_trigger_values(version_date, version_id):
+            # 8. Корректировка первых значений trigger полей
+            if skip_trigger_correction:
+                self.logger.info(
+                    "⏭️ Корректировка первых trigger полей пропущена "
+                    "(--skip-trigger-correction)"
+                )
+            elif not self.correct_first_trigger_values(version_date, version_id):
                 self.logger.warning("⚠️ Ошибка корректировки trigger полей, но основные данные загружены")
             
             # 9. Валидация
@@ -1102,7 +1108,9 @@ class ProgramACDirectLoader:
             return False
 
 
-def main(version_date: Optional[str] = None, version_id: Optional[int] = None):
+def main(version_date: Optional[str] = None, version_id: Optional[int] = None,
+         skip_trigger_correction: bool = False,
+         trigger_correction_only: bool = False):
     """Главная функция с поддержкой версионирования"""
     print("🚀 === PROGRAM AC DIRECT LOADER ===")
     print("Прямое создание тензора flight_program_ac из Program_heli.xlsx")
@@ -1128,10 +1136,17 @@ def main(version_date: Optional[str] = None, version_id: Optional[int] = None):
             print(f"❌ Ошибка парсинга параметров версии: {e}")
             return False
     
+    if trigger_correction_only:
+        if parsed_version_date is None:
+            print("❌ Для --trigger-correction-only обязательны --version-date и --version-id")
+            return False
+        return loader.correct_first_trigger_values(parsed_version_date, parsed_version_id)
+
     # Создание тензора
     success = loader.create_final_tensor(
         version_date=parsed_version_date,
-        version_id=parsed_version_id
+        version_id=parsed_version_id,
+        skip_trigger_correction=skip_trigger_correction,
     )
     
     if success:
@@ -1149,6 +1164,16 @@ if __name__ == "__main__":
     parser.add_argument('--version-date', type=str, help='Дата версии (YYYY-MM-DD)')
     parser.add_argument('--version-id', type=int, help='ID версии')
     parser.add_argument('--dataset-path', type=str, help='Путь к папке датасета (v_YYYY-MM-DD)')
+    parser.add_argument(
+        '--skip-trigger-correction',
+        action='store_true',
+        help='Не корректировать первые trigger поля во время загрузки тензора',
+    )
+    parser.add_argument(
+        '--trigger-correction-only',
+        action='store_true',
+        help='Выполнить только корректировку первых trigger полей существующего тензора',
+    )
     
     args = parser.parse_args()
     
@@ -1157,5 +1182,10 @@ if __name__ == "__main__":
         from utils.version_utils import set_dataset_path
         set_dataset_path(args.dataset_path)
     
-    success = main(version_date=args.version_date, version_id=args.version_id)
+    success = main(
+        version_date=args.version_date,
+        version_id=args.version_id,
+        skip_trigger_correction=args.skip_trigger_correction,
+        trigger_correction_only=args.trigger_correction_only,
+    )
     sys.exit(0 if success else 1) 
