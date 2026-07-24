@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-24T06:18:29Z",
+    "updated_at": "2026-07-24T07:56:02Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -4788,6 +4788,27 @@
       },
       "created_at": "2026-07-24T05:42:46Z",
       "updated_at": "2026-07-24T06:18:29Z"
+    },
+    {
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "goal": "W2.5 mechanical: unify aggregate status cascade into aggregate_status_block without semantic change; bitexact 2026-07-22",
+      "phase": "validation",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 30,
+        "max_tokens": 300000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 6,
+        "cumulative_tokens": 100500,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-24T07:56:01Z"
+      },
+      "created_at": "2026-07-24T07:12:59Z",
+      "updated_at": "2026-07-24T07:56:02Z"
     }
   ],
   "handoffs": [
@@ -33576,6 +33597,252 @@
         "est_tokens": 3000,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_w25_aggregate_status_block_mech_20260724_coder-general_d5dd9b4a",
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "agent": "coder-general",
+      "user_goal": "сначала вариант 1 делай",
+      "changes": "code/extract/aggregate_status_block.py: added fixed-order in-memory block and scoped CLI; code/utils/dwh_post_enrichment.py: replaced five leaf entries with one block entry; code/extract/extract_master.py: Excel pipeline uses one critical block, DWH skip-list updated, block log lines relayed; docs/architecture/extract.md: W2.5 mechanical note.",
+      "facts": "",
+      "assumptions": "None beyond the approved W2.5 scope. Risks if false: if downstream consumers call removed leaf pipeline entries by position rather than script name, their private integration may need updating; repository canonical paths were verified.",
+      "evidence": "PASS. py_compile for aggregate_status_block.py, dwh_post_enrichment.py, extract_master.py; ReadLints no errors; git diff --check PASS. Canonical real-data DWH Extract exit=0, 15/15, final validation PASS. output/extract_master_2026-07-22_v1_w25_mech.log contains each aggregate_status_block/component, serviceable, repair, component_resync, storage exactly once in post phase. output/after_bitexact_heli_pandas_2026-07-22_w25_mech.json: fp=A890C61B77B627BE90FE06E7DA1A3B30, n=11625, OPS group_by 1/2=49/88, status_id=0 planers/aggregates/total=0/0/0. Baseline: output/baseline_bitexact_heli_pandas_2026-07-22_pre_layer_refactor.json. No simulation run: scope is mechanical Extract refactor and bit-exact Extract acceptance passed.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_w25_aggregate_status_block_mech_20260724:2026-07-24T07:20:07Z",
+      "plan_step_id": "W2.5",
+      "approval_gate_id": "ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "approval_status": "approved",
+      "approval_source": "human",
+      "risk_tier": "medium",
+      "risk_reasons": "Mechanical ETL orchestration refactor touches the canonical Excel and DWH Extract paths; behavior must remain bit-identical.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Unify component→serviceable→repair→component resync→storage into one aggregate_status_block while preserving leaf logic and neighboring precheck/repair_days/terminal steps.",
+      "evidence_pack": "PASS. py_compile for aggregate_status_block.py, dwh_post_enrichment.py, extract_master.py; ReadLints no errors; git diff --check PASS. Canonical real-data DWH Extract exit=0, 15/15, final validation PASS. output/extract_master_2026-07-22_v1_w25_mech.log contains each aggregate_status_block/component, serviceable, repair, component_resync, storage exactly once in post phase. output/after_bitexact_heli_pandas_2026-07-22_w25_mech.json: fp=A890C61B77B627BE90FE06E7DA1A3B30, n=11625, OPS group_by 1/2=49/88, status_id=0 planers/aggregates/total=0/0/0. Baseline: output/baseline_bitexact_heli_pandas_2026-07-22_pre_layer_refactor.json. No simulation run: scope is mechanical Extract refactor and bit-exact Extract acceptance passed.",
+      "success_criteria": "script: canonical DWH extract exit=0 AND sipHash128 fp==A890C61B77B627BE90FE06E7DA1A3B30 AND n==11625 AND OPS(group_by=1)==49 AND OPS(group_by=2)==88 AND status_id=0==0 AND each aggregate_status_block/* marker exactly once in post phase — PASS",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=output/extract_master_2026-07-22_v1_w25_mech.log;output/after_bitexact_heli_pandas_2026-07-22_w25_mech.json;output/baseline_bitexact_heli_pandas_2026-07-22_pre_layer_refactor.json;approval_ref=ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "risks": "No semantic delta detected; remaining risk is limited to untested external direct imports of POST_SCRIPTS internals.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Mechanical Extract orchestration only; domain model and SSoT unchanged.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-24T07:20:07Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.6-sol-medium",
+        "est_tokens": 20000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_w25_aggregate_status_block_mech_20260724_research-graph-analyst_c33ed98e",
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "agent": "research-graph-analyst",
+      "user_goal": "Построить **фактическую матрицу** day0-классификации агрегатов (`group_by > 2`) строго из текущего кода — без предложений «как должно быть».",
+      "changes": "No code changed. Read-only inventory of planner cascade, aggregate block, terminal BR gate, and day0 deficit demote.",
+      "facts": "",
+      "assumptions": "Current canonical path is extract_master DWH full flow through post cascade then day0 demote. Risks if false: post-only/manual leaf execution can enter processors with nonzero statuses and change which first-wins rules fire.",
+      "evidence": "Матрица текущего исполняемого порядка:\n\n| планер_носителя (status/acn=0) | condition (ИСПРАВНЫЙ / НЕ) | target_date (нет/past/future) | вход status_id агрегата (обычно 0) | → status_id | какой скрипт/шаг | порядок |\n|---|---|---|---:|---:|---|---:|\n| planner=0 до 3b, acn>0; не в program_ac history → planner=1 | любой | любой | любой (обычно 0) | 7 | inactive_serviceable_classifier: `not in history` | P3 |\n| planner=0 до 3b, acn>0; history=yes, remain_d>0 → planner=3 | любой | любой | любой (обычно 0) | 3 | inactive_serviceable_classifier | P3 |\n| planner=0 до 3b, acn>0; history=yes, remain_d is None/<=0 → planner=1 | любой | любой | любой (обычно 0) | 3 | inactive_serviceable_classifier | P3 |\n| planner=2, acn>0 | normalized == ИСПРАВНЫЙ | любой | !=2 | 2 | aggregate/component | A1 |\n| любой planner либо acn=0 | normalized == ИСПРАВНЫЙ | любой | 0 | 3 | aggregate/serviceable | A2 |\n| любой planner либо acn=0 | любой | past (valid, !=1970-01-01) | 0 | 3 | aggregate/repair past | A3a |\n| любой planner либо acn=0 | raw ifNull(condition,'') != ИСПРАВНЫЙ | future (valid, >=version_date) | 0 | 4 | aggregate/repair future | A3b |\n| planner=2, acn>0 | normalized == ИСПРАВНЫЙ | любой | !=2 | 2 | aggregate/component_resync | A4 |\n| любой planner либо acn=0 | normalized != ИСПРАВНЫЙ; sne>=BR_effective | любой | 0 | 6 | aggregate/storage BR | A5a |\n| любой planner либо acn=0 | ДОНОР | любой | 0 | 6 | aggregate/storage donor | A5b |\n| любой planner либо acn=0 | ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР | любой | 0 | 6 | aggregate/storage extension | A5c |\n| любой planner либо acn=0 | НЕИСПРАВНЫЙ | любой | 0 | 7 | aggregate/storage unserviceable | A5d |\n| любой planner либо acn=0 | любой остаточный | любой | 0 | 7 | aggregate/storage fallback | A5e |\n| любой planner либо acn=0 | любой | любой | 1 или 7; BR>0 и sne>=BR | 6 | terminal_br_gate | T1 |\n| selected demoted carrier planner=2 | любой | любой | только 2 | 7 | deficit_demoter: not_in_program | D1 |\n| selected demoted carrier planner=2 | любой | любой | только 2 | 3 | deficit_demoter: in_program (remain_d>0 либо нет положительного календаря) | D1 |\n\nПсевдокод правил: 3b `for planner gb in {1,2} & st=0: destination_for_remain; all agg gb>2 with same acn := agg_st` (condition/target/input status не фильтруются). Component `gb>2 & acn>0 & carrier_st=2 & norm(condition)=='ИСПРАВНЫЙ' & st!=2 ->2`. Serviceable `gb>2 & norm(condition)=='ИСПРАВНЫЙ' & st=0 ->3`. Repair past `gb>2 & st=0 & valid(target) & target<vd ->3`. Repair future `gb>=1 & st=0 & valid(target) & target>=vd & (gb<=2 OR raw condition!='ИСПРАВНЫЙ')->4`. Storage последовательно `BR-match->6; donor->6; extension->6; НЕИСПРАВНЫЙ->7; любой остаток st=0->7`. Terminal `st in (1,7) & BR>0 & sne>=BR ->6`. Demote меняет только st=2 по выбранным acn: planner->1/3, agg->7/3.\n\nИгнорируют condition: 3b целиком; repair-past; storage fallback; terminal BR; deficit demote. Игнорируют target_date: 3b, component, serviceable, весь storage, terminal, demote.\n\nТолько планеры/ось носителя: overhaul (`PLANER_PARTNOS`, active row, start<vd, st=0: sched_end<vd ->2 else ->4); program_ac (`PLANER_PARTNOS`, serial in current program_ac, st=0 ->2); D1 precheck (только gb in {1,2}, st=2: rem_ll0<dt ->6; иначе rem_oh0<dt ->6 при BR=0 или sne+dt>=BR, иначе ->7). Repair имеет planner-ветку только для остающихся st=0 с future target ->4. 3b, terminal и demote не planner-only.\n\nПовторный component: строки aggregate_status_block.py:23-29 задают component, serviceable, repair, component_resync, storage; вызов A4 повторяет ровно apply_component_status. В текущей in-memory каскаде repair не создаёт status=2 у планеров и не меняет уже status=2 агрегаты, поэтому новых кандидатов для A4 относительно A1 не создаёт; это механически сохранённый resync-шаг.\n\nStatus=0: после A5e для gb>2 не остаётся ни одной строки status=0; обязательный добивающий шаг — apply_storage_status fallback. SQL на фактическом срезе подтверждает gb4=0 и all gb>2=0.\n\nClickHouse fact (heli_pandas, server 24.10.1.2812; DESCRIBE проверил version_date/version_id/group_by/status_id/aircraft_number; filters version_date=2026-07-22, version_id=1): gb4 counts status 2=176,3=49,4=32,6=136,7=17 (total 410); all gb>2: 2=4839,3=2010,4=74,6=1964,7=2452 (total 11339). `gb4 AND status=3 AND acn>0`=23, НЕ ожидаемый 0; carrier breakdown: planner status1=1, status3=22. All gb>2 equivalent=1010 (carrier st0=9, st1=103, st3=893, st4=5). Warehouse `acn=0 AND status=3`: gb4=26; all gb>2=1000. Для 23 gb4 status3/acn>0: condition=ИСПРАВНЫЙ, target_date=1970-01-01 (нет).",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_w25_aggregate_status_block_mech_20260724:20260724T074608Z",
+      "plan_step_id": "R-matrix",
+      "approval_gate_id": "ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Read-only cross-module inventory plus production-like ClickHouse fact-check; no code or DB mutations.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Inventory factual day0 aggregate status writers, fixed execution order, and scoped 2026-07-22 v1 SQL distribution.",
+      "evidence_pack": "Матрица текущего исполняемого порядка:\n\n| планер_носителя (status/acn=0) | condition (ИСПРАВНЫЙ / НЕ) | target_date (нет/past/future) | вход status_id агрегата (обычно 0) | → status_id | какой скрипт/шаг | порядок |\n|---|---|---|---:|---:|---|---:|\n| planner=0 до 3b, acn>0; не в program_ac history → planner=1 | любой | любой | любой (обычно 0) | 7 | inactive_serviceable_classifier: `not in history` | P3 |\n| planner=0 до 3b, acn>0; history=yes, remain_d>0 → planner=3 | любой | любой | любой (обычно 0) | 3 | inactive_serviceable_classifier | P3 |\n| planner=0 до 3b, acn>0; history=yes, remain_d is None/<=0 → planner=1 | любой | любой | любой (обычно 0) | 3 | inactive_serviceable_classifier | P3 |\n| planner=2, acn>0 | normalized == ИСПРАВНЫЙ | любой | !=2 | 2 | aggregate/component | A1 |\n| любой planner либо acn=0 | normalized == ИСПРАВНЫЙ | любой | 0 | 3 | aggregate/serviceable | A2 |\n| любой planner либо acn=0 | любой | past (valid, !=1970-01-01) | 0 | 3 | aggregate/repair past | A3a |\n| любой planner либо acn=0 | raw ifNull(condition,'') != ИСПРАВНЫЙ | future (valid, >=version_date) | 0 | 4 | aggregate/repair future | A3b |\n| planner=2, acn>0 | normalized == ИСПРАВНЫЙ | любой | !=2 | 2 | aggregate/component_resync | A4 |\n| любой planner либо acn=0 | normalized != ИСПРАВНЫЙ; sne>=BR_effective | любой | 0 | 6 | aggregate/storage BR | A5a |\n| любой planner либо acn=0 | ДОНОР | любой | 0 | 6 | aggregate/storage donor | A5b |\n| любой planner либо acn=0 | ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР | любой | 0 | 6 | aggregate/storage extension | A5c |\n| любой planner либо acn=0 | НЕИСПРАВНЫЙ | любой | 0 | 7 | aggregate/storage unserviceable | A5d |\n| любой planner либо acn=0 | любой остаточный | любой | 0 | 7 | aggregate/storage fallback | A5e |\n| любой planner либо acn=0 | любой | любой | 1 или 7; BR>0 и sne>=BR | 6 | terminal_br_gate | T1 |\n| selected demoted carrier planner=2 | любой | любой | только 2 | 7 | deficit_demoter: not_in_program | D1 |\n| selected demoted carrier planner=2 | любой | любой | только 2 | 3 | deficit_demoter: in_program (remain_d>0 либо нет положительного календаря) | D1 |\n\nПсевдокод правил: 3b `for planner gb in {1,2} & st=0: destination_for_remain; all agg gb>2 with same acn := agg_st` (condition/target/input status не фильтруются). Component `gb>2 & acn>0 & carrier_st=2 & norm(condition)=='ИСПРАВНЫЙ' & st!=2 ->2`. Serviceable `gb>2 & norm(condition)=='ИСПРАВНЫЙ' & st=0 ->3`. Repair past `gb>2 & st=0 & valid(target) & target<vd ->3`. Repair future `gb>=1 & st=0 & valid(target) & target>=vd & (gb<=2 OR raw condition!='ИСПРАВНЫЙ')->4`. Storage последовательно `BR-match->6; donor->6; extension->6; НЕИСПРАВНЫЙ->7; любой остаток st=0->7`. Terminal `st in (1,7) & BR>0 & sne>=BR ->6`. Demote меняет только st=2 по выбранным acn: planner->1/3, agg->7/3.\n\nИгнорируют condition: 3b целиком; repair-past; storage fallback; terminal BR; deficit demote. Игнорируют target_date: 3b, component, serviceable, весь storage, terminal, demote.\n\nТолько планеры/ось носителя: overhaul (`PLANER_PARTNOS`, active row, start<vd, st=0: sched_end<vd ->2 else ->4); program_ac (`PLANER_PARTNOS`, serial in current program_ac, st=0 ->2); D1 precheck (только gb in {1,2}, st=2: rem_ll0<dt ->6; иначе rem_oh0<dt ->6 при BR=0 или sne+dt>=BR, иначе ->7). Repair имеет planner-ветку только для остающихся st=0 с future target ->4. 3b, terminal и demote не planner-only.\n\nПовторный component: строки aggregate_status_block.py:23-29 задают component, serviceable, repair, component_resync, storage; вызов A4 повторяет ровно apply_component_status. В текущей in-memory каскаде repair не создаёт status=2 у планеров и не меняет уже status=2 агрегаты, поэтому новых кандидатов для A4 относительно A1 не создаёт; это механически сохранённый resync-шаг.\n\nStatus=0: после A5e для gb>2 не остаётся ни одной строки status=0; обязательный добивающий шаг — apply_storage_status fallback. SQL на фактическом срезе подтверждает gb4=0 и all gb>2=0.\n\nClickHouse fact (heli_pandas, server 24.10.1.2812; DESCRIBE проверил version_date/version_id/group_by/status_id/aircraft_number; filters version_date=2026-07-22, version_id=1): gb4 counts status 2=176,3=49,4=32,6=136,7=17 (total 410); all gb>2: 2=4839,3=2010,4=74,6=1964,7=2452 (total 11339). `gb4 AND status=3 AND acn>0`=23, НЕ ожидаемый 0; carrier breakdown: planner status1=1, status3=22. All gb>2 equivalent=1010 (carrier st0=9, st1=103, st3=893, st4=5). Warehouse `acn=0 AND status=3`: gb4=26; all gb>2=1000. Для 23 gb4 status3/acn>0: condition=ИСПРАВНЫЙ, target_date=1970-01-01 (нет).",
+      "success_criteria": "script: inspect listed status modules and report complete ordered rule matrix; SQL: scoped counts for group_by=4 and all group_by>2 including status3/acn split.",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=code/extract/*.py; scoped SELECT heli_pandas 2026-07-22 v1; approval_ref=ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "risks": "Observed SQL contradicts expected zero for status_id=3 AND aircraft_number>0: gb4=23, all gb>2=1010; this is a fact finding, not a proposed semantic change.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "0ea8e0a0f289754f2eebe0863f9b43bc133e8b513a5b9aac84ceb80ea36fd3e7",
+      "created_at": "2026-07-24T07:46:08Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.6-sol-medium",
+        "est_tokens": 18000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_w25_aggregate_status_block_mech_20260724_coder-general_7d51c6df",
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "agent": "coder-general",
+      "user_goal": "внимательно анализируй и собирай из этих разных скриптов матрицу... Доделай это сам до конца с тестированием полного прогона и с гавернанс",
+      "changes": "code/extract/aggregate_status_block.py: expanded module contract, added 16-row FACTUAL_DAY0_MATRIX and one factual-order print; apply_* call order unchanged. docs/architecture/extract.md: added full W2.5 matrix including planner cascade, precheck, A1-A5, repair_days, terminal BR, demote and expected agg3 semantics. docs/changelog.md: added 4-line W2.5 audit entry. output evidence JSON and full extract log produced.",
+      "facts": "",
+      "assumptions": "The approved R-matrix and current canonical extract path are the factual contract. Risks if false: private non-canonical leaf execution may observe a different partial-cascade state; canonical full-run behavior is verified.",
+      "evidence": "PASS. Full canonical DWH Extract with --replace-slice exited 0 and completed 15/15. output/extract_master_2026-07-22_v1_w25b_matrix.log: heli_pandas=11625, status0 planers/aggregates/total=0/0/0, OPS group_by1/2=49/88 and OPS==MP4 PASS; aggregate block leaf order component, serviceable, repair, component_resync, storage observed. output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json: fp=A890C61B77B627BE90FE06E7DA1A3B30, n=11625, agg status3 on OPS planers=0, gb4 counts {2:176,3:49,4:32,6:136,7:17}, DESCRIBE schema gate PASS. py_compile PASS; matrix contract PASS rows=16; ReadLints no errors; git diff --check PASS.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_w25_aggregate_status_block_mech_20260724:20260724T075254Z",
+      "plan_step_id": "W2.5b",
+      "approval_gate_id": "ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "approval_status": "approved",
+      "approval_source": "human",
+      "risk_tier": "medium",
+      "risk_reasons": "Canonical Extract contract documentation spans planner cascade, aggregate block, and demote tail; full real-data replace-slice run required to prove no semantic delta.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Record the factual working day0 matrix in code and architecture docs without changing leaf apply_* semantics; prove bitexact through the canonical full DWH run.",
+      "evidence_pack": "PASS. Full canonical DWH Extract with --replace-slice exited 0 and completed 15/15. output/extract_master_2026-07-22_v1_w25b_matrix.log: heli_pandas=11625, status0 planers/aggregates/total=0/0/0, OPS group_by1/2=49/88 and OPS==MP4 PASS; aggregate block leaf order component, serviceable, repair, component_resync, storage observed. output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json: fp=A890C61B77B627BE90FE06E7DA1A3B30, n=11625, agg status3 on OPS planers=0, gb4 counts {2:176,3:49,4:32,6:136,7:17}, DESCRIBE schema gate PASS. py_compile PASS; matrix contract PASS rows=16; ReadLints no errors; git diff --check PASS.",
+      "success_criteria": "script: full extract_master DWH run exit=0 and 15/15; numeric: fp==A890C61B77B627BE90FE06E7DA1A3B30 AND n==11625 AND OPS(group_by1/2)==49/88 AND status0==0; SQL: aggregate status_id=3 with aircraft_number>0 on OPS planers group_by IN (1,2),status_id=2 == 0; SQL: group_by=4 status counts recorded in output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json",
+      "compliance_checklist": "decision=allow; required_gates=pass; exceptions=none; evidence_refs=output/extract_master_2026-07-22_v1_w25b_matrix.log;output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json;code/extract/aggregate_status_block.py;docs/architecture/extract.md; approval_ref=ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "risks": "No semantic delta detected. Remaining risk is limited to documentation drift if leaf rules change later without updating FACTUAL_DAY0_MATRIX.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "Documentation/contract only; no domain graph semantics changed.",
+      "prev_handoff_hash": "cc2f466e23f21d22b9c4e10d51889d4030d9ef44120aea0e85a29f694e756533",
+      "created_at": "2026-07-24T07:52:54Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.6-sol-medium",
+        "est_tokens": 20000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_w25_aggregate_status_block_mech_20260724_orchestrator_5cbcbb2f",
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "agent": "orchestrator",
+      "user_goal": "внимательно анализируй и собирай из этих разных скриптов матрицу... Доделай это сам до конца с тестированием полного прогона и с гавернанс",
+      "changes": "W2.5: aggregate_status_block.py; dwh_post_enrichment+extract_master wire; W2.5b FACTUAL_DAY0_MATRIX+docs/architecture/extract.md+changelog. Leaf apply_* semantics unchanged.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Research R-matrix c33ed98e; W2.5 d5dd9b4a; W2.5b 7d51c6df; after_w25b_matrix.json fp match; SQL agg3-on-OPS=0; gb4 counts 2:176,3:49,4:32,6:136,7:17; human: architectural order only, matrix from working scripts.",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — matrix from scripts, full extract test, governance close requested.",
+      "process_insights": "medium-fast; user required governance; commit/push after allow.",
+      "trace_id": "wf:W_w25_aggregate_status_block_mech_20260724:2026-07-24T08:00:00Z",
+      "plan_step_id": "CLOSE",
+      "approval_gate_id": "ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Extract aggregate status architecture docs+block; factual matrix freeze; no semantic change claimed.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Close W2.5 mechanical+factual matrix: block unify, matrix from scripts, bitexact+SQL OPS-agg3=0, gov then commit/push.",
+      "evidence_pack": "Research R-matrix c33ed98e; W2.5 d5dd9b4a; W2.5b 7d51c6df; after_w25b_matrix.json fp match; SQL agg3-on-OPS=0; gb4 counts 2:176,3:49,4:32,6:136,7:17; human: architectural order only, matrix from working scripts.",
+      "success_criteria": "numeric: heli_pandas fp==A890C61B77B627BE90FE06E7DA1A3B30 AND n==11625 AND OPS==49/88 AND status0==0; SQL: agg status3 on OPS planers==0; script: output/extract_master_2026-07-22_v1_w25b_matrix.log PASS",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=governance_pending; evidence_refs=output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json;handoff_..._7d51c6df; approval_ref=ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "risks": "нет",
+      "next_owner": "governance-compliance",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "dcd8dd947e0e591aabd8f81dde54c25ecb05e497b4b19fee634630f8484c51b8",
+      "created_at": "2026-07-24T07:53:27Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 6000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_w25_aggregate_status_block_mech_20260724_governance-compliance_56c6d031",
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "agent": "governance-compliance",
+      "user_goal": "внимательно анализируй и собирай из этих разных скриптов матрицу... Доделай это сам до конца с тестированием полного прогона и с гавернанс",
+      "changes": "Governance verdict=allow_with_notes for pre-close. Verified: (1) Scope match — Changes (aggregate_status_block.py new; dwh_post_enrichment.py + extract_master.py wire; docs/architecture/extract.md + docs/changelog.md factual matrix) equal git working set; no code/sim_v2/config/transitions/invariants touched; W2.5 mechanical + W2.5b docs, no semantic-change claim. (2) Traceability — full chain R-matrix c33ed98e, W2.5 d5dd9b4a, W2.5b 7d51c6df, orchestrator CLOSE 5cbcbb2f; all carry TraceID+PlanStepID. (3) No self-coding — all code by coder-general, research read-only, orchestrator only routed/closed. (4) Human gate — approval ctx_...73be4e6f present, status=approved source=human in coder handoffs. NOTE: uncommitted (5 mod +1 new) is intentional, orchestrator commits after allow per human command.",
+      "facts": "",
+      "assumptions": "R-matrix pre-run SQL noted gb4 status3/acn>0=23 vs expected 0; this is a differently-scoped fact-finding (warehouse acn>0 vs OPS planers) pre-W2.5b, not a semantic delta. Risks if false: if leaf apply_* rules change later without updating FACTUAL_DAY0_MATRIX, docs drift.",
+      "evidence": "Facts: Evidence files exist and verified: output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json fp=A890C61B77B627BE90FE06E7DA1A3B30, n=11625, ops=[[1,49],[2,88]], status_id_0 planers/aggregates/total=0/0/0, agg_status3_on_ops_planers=0, gb4 counts {2:176,3:49,4:32,6:136,7:17}, schema_gate PASS. output/extract_master_2026-07-22_v1_w25b_matrix.log: 15/15 stages, status_id=0 gate PASS, OPS==MP4 Mi-8=49 Mi-17=88 PASS. git status --porcelain matches claimed Changes. KG read-state + read-context confirm workflow phase=validation, approval_request ctx_...73be4e6f, coder ApprovalGate status=approved source=human. Checked PlanCard/EvidencePack/ComplianceChecklist present in orchestrator+coder handoffs; RiskTier=medium/RiskReasons/HumanGateRequired=conditional consistent; SuccessCriteria numeric+SQL verifiable form.\nEvidence: SuccessCriteria PASS: fp==A890C61B77B627BE90FE06E7DA1A3B30 AND n==11625 AND OPS==49/88 AND status0==0 AND SQL agg3-on-OPS==0 — all confirmed in output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json + extract log 15/15. Scope: git working set == Changes; no high-risk zone. Delegation: R c33ed98e / W2.5 d5dd9b4a / W2.5b 7d51c6df / CLOSE 5cbcbb2f.",
+      "drift_check": "UserGoal (matrix from working scripts, full run, governance) ↔ Changes scope match: yes.",
+      "process_insights": "",
+      "trace_id": "wf:W_w25_aggregate_status_block_mech_20260724:2026-07-24T07:53:30Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "approval_status": "approved",
+      "approval_source": "human",
+      "risk_tier": "medium",
+      "risk_reasons": "Extract aggregate-status architecture refactor + factual matrix docs on canonical DWH path; bit-exact acceptance required.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "G1 governance pre-close: verify scope/traceability/SuccessCriteria/self-coding for W2.5+W2.5b; verdict allow_with_notes; commit deferred to orchestrator on human command.",
+      "evidence_pack": "Facts: Evidence files exist and verified: output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json fp=A890C61B77B627BE90FE06E7DA1A3B30, n=11625, ops=[[1,49],[2,88]], status_id_0 planers/aggregates/total=0/0/0, agg_status3_on_ops_planers=0, gb4 counts {2:176,3:49,4:32,6:136,7:17}, schema_gate PASS. output/extract_master_2026-07-22_v1_w25b_matrix.log: 15/15 stages, status_id=0 gate PASS, OPS==MP4 Mi-8=49 Mi-17=88 PASS. git status --porcelain matches claimed Changes. KG read-state + read-context confirm workflow phase=validation, approval_request ctx_...73be4e6f, coder ApprovalGate status=approved source=human. Checked PlanCard/EvidencePack/ComplianceChecklist present in orchestrator+coder handoffs; RiskTier=medium/RiskReasons/HumanGateRequired=conditional consistent; SuccessCriteria numeric+SQL verifiable form.\nEvidence: SuccessCriteria PASS: fp==A890C61B77B627BE90FE06E7DA1A3B30 AND n==11625 AND OPS==49/88 AND status0==0 AND SQL agg3-on-OPS==0 — all confirmed in output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json + extract log 15/15. Scope: git working set == Changes; no high-risk zone. Delegation: R c33ed98e / W2.5 d5dd9b4a / W2.5b 7d51c6df / CLOSE 5cbcbb2f.",
+      "success_criteria": "manual-check: governance verdict recorded as handoff G1 with decision + 5-field ComplianceChecklist; NextOwner=orchestrator.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json;output/extract_master_2026-07-22_v1_w25b_matrix.log;handoff_orchestrator_5cbcbb2f;handoff_coder-general_7d51c6df;git-status-porcelain; approval_ref=ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "risks": "Doc drift if leaf apply_* semantics change later without updating FACTUAL_DAY0_MATRIX; uncommitted state until orchestrator commit.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "67d2deffb5e145352a2efed547c0122162901f2ce0e6b1232a0c3c450a3a5592",
+      "created_at": "2026-07-24T07:55:27Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 34000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_w25_aggregate_status_block_mech_20260724_orchestrator_71c62768",
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "agent": "orchestrator",
+      "user_goal": "Доделай это сам до конца с тестированием полного прогона и с гавернанс",
+      "changes": "No new code after W2.5b. Closing.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Gov 56c6d031 allow_with_notes; bitexact after_w25b_matrix.json.",
+      "drift_check": "UserGoal ↔ Changes scope match: yes.",
+      "process_insights": "",
+      "trace_id": "wf:W_w25_aggregate_status_block_mech_20260724:2026-07-24T08:10:00Z",
+      "plan_step_id": "CLOSE",
+      "approval_gate_id": "ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "W2.5 factual matrix freeze close.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Final close after gov allow_with_notes; then commit/push.",
+      "evidence_pack": "Gov 56c6d031 allow_with_notes; bitexact after_w25b_matrix.json.",
+      "success_criteria": "governance decision=allow_with_notes handoff_W_w25_aggregate_status_block_mech_20260724_governance-compliance_56c6d031; numeric fp==A890C61B77B627BE90FE06E7DA1A3B30",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=handoff_W_w25_aggregate_status_block_mech_20260724_governance-compliance_56c6d031; approval_ref=ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "2cb94e4ad5a6e864d46d60dfe0044d4cd3628fd9d6d705e4411d5f8b59da05cd",
+      "created_at": "2026-07-24T07:56:01Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 2500,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -37583,6 +37850,42 @@
       "agent": "orchestrator",
       "created_at": "2026-07-24T06:18:29Z",
       "updated_at": "2026-07-24T06:18:29Z"
+    },
+    {
+      "context_id": "ctx_W_w25_aggregate_status_block_mech_20260724_approval_request_73be4e6f",
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "context_type": "approval_request",
+      "content": "PRE-approval: user chose W2.5 variant 1 mechanical. No matrix semantics change. SuccessCriteria: bitexact heli_pandas fp A890C61B77B627BE90FE06E7DA1A3B30 n=11625 OPS 49/88 status0=0 after full extract.",
+      "agent": "orchestrator",
+      "created_at": "2026-07-24T07:12:59Z",
+      "updated_at": "2026-07-24T07:12:59Z"
+    },
+    {
+      "context_id": "ctx_W_w25_aggregate_status_block_mech_20260724_phase_start_71f29246",
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "context_type": "phase_start",
+      "content": "Governance pre-close for W2.5 mechanical + W2.5b factual matrix: policy/scope/traceability/SuccessCriteria/self-coding checks against orchestrator CLOSE handoff_5cbcbb2f.",
+      "agent": "governance-compliance",
+      "created_at": "2026-07-24T07:13:40Z",
+      "updated_at": "2026-07-24T07:54:39Z"
+    },
+    {
+      "context_id": "ctx_W_w25_aggregate_status_block_mech_20260724_phase_result_3c3422e9",
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "context_type": "phase_result",
+      "content": "W2.5 mechanical PASS bitexact fp A890C61B77B627BE90FE06E7DA1A3B30 OPS 49/88. Uncommitted. Awaiting human: commit/push/close or continue W2.6.",
+      "agent": "orchestrator",
+      "created_at": "2026-07-24T07:20:44Z",
+      "updated_at": "2026-07-24T07:20:44Z"
+    },
+    {
+      "context_id": "ctx_W_w25_aggregate_status_block_mech_20260724_closure_f826fcda",
+      "workflow_id": "W_w25_aggregate_status_block_mech_20260724",
+      "context_type": "closure",
+      "content": "W2.5 mechanical+factual matrix done; bitexact+SQL; gov allow_with_notes; commit/push next.",
+      "agent": "orchestrator",
+      "created_at": "2026-07-24T07:56:02Z",
+      "updated_at": "2026-07-24T07:56:02Z"
     }
   ],
   "meta": {

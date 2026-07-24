@@ -239,29 +239,8 @@ class ExtractMaster:
             'critical': False
         },
         {
-            'script': 'heli_pandas_component_status.py',
-            'description': 'Проставление status_id=2 для компонентов на планерах',
-            'dependencies': ['heli_pandas'],
-            'result_table': 'heli_pandas',
-            'critical': True
-        },
-        {
-            'script': 'heli_pandas_serviceable_status.py',
-            'description': 'Проставление status_id=3 для исправных агрегатов (не на ВС в эксплуатации)',
-            'dependencies': ['heli_pandas'],
-            'result_table': 'heli_pandas',
-            'critical': True
-        },
-        {
-            'script': 'heli_pandas_repair_status.py',
-            'description': 'Проставление status_id для агрегатов с target_date (4=ремонт или 2=вернулся)',
-            'dependencies': ['heli_pandas', 'md_components'],
-            'result_table': 'heli_pandas',
-            'critical': True
-        },
-        {
-            'script': 'heli_pandas_storage_status.py',
-            'description': 'Проставление status_id=6 для неисправных агрегатов beyond repair (sne > br)',
+            'script': 'aggregate_status_block.py',
+            'description': 'Классификация агрегатов: component → serviceable → repair → component resync → storage',
             'dependencies': ['heli_pandas', 'md_components'],
             'result_table': 'heli_pandas',
             'critical': True
@@ -317,10 +296,7 @@ class ExtractMaster:
     }
     DWH_POST_CASCADE_STEPS = {
         'program_ac_precheck_runner.py',
-        'heli_pandas_component_status.py',
-        'heli_pandas_serviceable_status.py',
-        'heli_pandas_repair_status.py',
-        'heli_pandas_storage_status.py',
+        'aggregate_status_block.py',
         'repair_days_calculator.py',
         'heli_pandas_terminal_br_gate.py',
     }
@@ -636,7 +612,7 @@ class ExtractMaster:
                 pipeline.append({
                     'script': 'dwh_post_enrichment.py',
                     'script_path': 'code/utils/dwh_post_enrichment.py',
-                    'description': 'DWH post cascade: precheck → component/serviceable/repair/storage/terminal (после FL/group_by)',
+                    'description': 'DWH post cascade: precheck → aggregate status block → repair_days → terminal BR',
                     'dependencies': ['heli_pandas', 'flight_program_ac', 'flight_program_fl'],
                     'result_table': 'heli_pandas',
                     'critical': True,
@@ -688,8 +664,7 @@ class ExtractMaster:
                                                          'md_components_enricher.py', 'md_components_psn_reserve.py', 'enrich_heli_pandas.py',
                                                          'dictionary_creator.py', 'digital_values_dictionary_creator.py',
                                                          'heli_pandas_group_by_enricher.py',
-                                                         'heli_pandas_component_status.py', 'heli_pandas_serviceable_status.py',
-                                                         'heli_pandas_repair_status.py', 'heli_pandas_storage_status.py',
+                                                         'aggregate_status_block.py',
                                                          'heli_pandas_economics_status.py',
                                                          'repair_days_calculator.py', 'heli_pandas_terminal_br_gate.py',
                                                          'day0_ops_deficit_demote_runner.py', 'dwh_loader.py',
@@ -736,6 +711,9 @@ class ExtractMaster:
                 # Показываем последние строки вывода
                 if result.stdout:
                     stdout_lines = result.stdout.strip().split('\n')
+                    for line in stdout_lines:
+                        if line.startswith("aggregate_status_block/"):
+                            logger.info(f"   {line}")
                     logger.info("📊 Последние строки вывода:")
                     for line in stdout_lines[-3:]:
                         logger.info(f"   {line}")

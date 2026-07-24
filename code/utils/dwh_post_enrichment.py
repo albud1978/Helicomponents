@@ -18,10 +18,7 @@ from extract.inactive_serviceable_classifier import process_inactive_serviceable
 from extract.overhaul_status_processor import process_status_field
 from extract.program_ac_precheck_runner import apply_program_ac_precheck
 from extract.program_ac_status_processor import process_program_ac_status_field
-from extract.heli_pandas_component_status import apply_component_status
-from extract.heli_pandas_serviceable_status import apply_serviceable_status
-from extract.heli_pandas_repair_status import apply_repair_status
-from extract.heli_pandas_storage_status import apply_storage_status
+from extract.aggregate_status_block import apply_aggregate_status_block
 from extract.repair_days_calculator import apply_repair_days
 from extract.heli_pandas_terminal_br_gate import apply_terminal_br_gate
 
@@ -34,13 +31,7 @@ PANDAS_COLS = [
 
 POST_SCRIPTS = (
     ("program_ac_precheck_runner.py", apply_program_ac_precheck),
-    ("heli_pandas_component_status.py", apply_component_status),
-    ("heli_pandas_serviceable_status.py", apply_serviceable_status),
-    ("heli_pandas_repair_status.py", apply_repair_status),
-    # After repair force-exits planers (past target_date → OPS), re-sync
-    # ИСПРАВНЫЙ aggregates that were painted 3 while the planer was still 4.
-    ("heli_pandas_component_status.py", apply_component_status),
-    ("heli_pandas_storage_status.py", apply_storage_status),
+    ("aggregate_status_block.py", apply_aggregate_status_block),
     ("repair_days_calculator.py", apply_repair_days),
     ("heli_pandas_terminal_br_gate.py", apply_terminal_br_gate),
 )
@@ -221,7 +212,7 @@ def run_post_enrichment(
         df = _run_planner_cascade(ch, df)
 
     if phase in {"post", "all"}:
-        print("Post cascade (precheck -> component/serviceable/repair/storage/terminal)...")
+        print("Post cascade (precheck -> aggregate_status_block -> repair_days -> terminal_br)...")
         df = _run_post_cascade(ch, df, version_date, version_id, dataset_path)
 
     ops_after = int(

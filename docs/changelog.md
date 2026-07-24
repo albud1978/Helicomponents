@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-07-24 — W2.5 factual day0 aggregate status matrix
+**Workflow:** `W_w25_aggregate_status_block_mech_20260724` | **Risk:** medium | **Profile:** medium-fast | **Module:** `extract_dwh`
+В `aggregate_status_block.py` и архитектурной документации зафиксирован фактический порядок planner cascade → precheck → A1–A5 → repair_days → terminal BR → demote; семантика leaf `apply_*` не менялась.
+Полный DWH day0 2026-07-22 v1: fp=`A890C61B77B627BE90FE06E7DA1A3B30`, n=11625, OPS=49/88, status0=0; agg3 на OPS-планерах=0. Evidence: `output/after_bitexact_heli_pandas_2026-07-22_w25b_matrix.json`. Код не коммитился.
+
 ## 2026-07-24 — E2E sim 2026-07-22 v1 after FIX1 dict versioning
 
 **Workflow:** `W_e2e_sim_compare_20260724` | **Risk:** high | **Profile:** high-strict | **Modules:** `extract_dwh`, `validation`

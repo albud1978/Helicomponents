@@ -29,6 +29,7 @@ python3 code/utils/prep_source_dataset.py --dataset data_input/source_data/v_202
 
 **W1.1 (2026-07-24):** `calculate_beyond_repair` выполняется сразу после `md_components_loader`; тензоры идут AC → FL; отключённый `heli_pandas_economics_status` не исполняется; `digital_values_dictionary_creator` запускается последним, после day0 demote.
 **W2.4 (2026-07-24):** первая trigger-коррекция `flight_program_ac` выполняется после day0 demote по финальному OPS и до `digital_values_dictionary_creator`.
+**W2.5 mechanical (2026-07-24):** шаги `component → serviceable → repair → component resync → storage` собраны в `aggregate_status_block`; порядок и семантика классификации не менялись.
 
 ## Снимок таблиц перед экстрактом (бэкап для сравнения)
 
@@ -320,6 +321,32 @@ DWH load (heli_pandas status_id=0)
 **Код:** [`planer_calendar_remain.py`](../../code/extract/planer_calendar_remain.py), [`inactive_serviceable_classifier.py`](../../code/extract/inactive_serviceable_classifier.py), [`deficit_demoter.py`](../../code/extract/deficit_demoter.py) / [`day0_ops_deficit_demote_runner.py`](../../code/extract/day0_ops_deficit_demote_runner.py); cascade — [`dwh_post_enrichment.py`](../../code/utils/dwh_post_enrichment.py), [`dual_loader.py`](../../code/extract/dual_loader.py).
 
 **Подробнее:** приёмка + evidence → [docs/backlog.md](../backlog.md) §2026-07-21; операторский контур → [docs/etl_extract_capsule.md](../etl_extract_capsule.md), [docs/runbook_sim_launch.md](../runbook_sim_launch.md) § day0 gates.
+
+### Day0 aggregate status matrix (factual, W2.5)
+
+Это фиксация порядка и условий уже работающего кода, а не новый движок правил. Leaf-функции `apply_*` сохраняют свою семантику. Полный порядок: planner cascade → planner-only post precheck → `aggregate_status_block` A1–A5 → `repair_days` → T1 terminal BR → D1 demote.
+
+| Step | Axis / carrier planer | Condition | Target date / gate | Input status | Output status | Script |
+|---|---|---|---|---|---|---|
+| P1 | planer | игнорируется | даты `status_overhaul` | 0 | 4 для ongoing; 2 для past end | `overhaul_status_processor.py` |
+| P2 | planer | игнорируется | состоит в `program_ac` as-of day0 | 0 | 2 | `program_ac_status_processor.py` |
+| P3b.1 | planer + его агрегаты | игнорируется, включая агрегаты | planer не в program history | planer 0 | planer 1; агрегаты 7 | `inactive_serviceable_classifier.py` |
+| P3b.2 | planer + его агрегаты | игнорируется, включая агрегаты | history и `remain_d > 0` | planer 0 | planer 3; агрегаты 3 | `inactive_serviceable_classifier.py` |
+| P3b.3 | planer + его агрегаты | игнорируется, включая агрегаты | history без положительного календарного remain | planer 0 | planer 1; агрегаты 3 | `inactive_serviceable_classifier.py` |
+| P4 post precheck | только planer | недостаточно LL/OH на первый день MP5 | не применяется | 2 | 6 или 7 | `program_ac_precheck_runner.py` |
+| A1 component | aggregate, `group_by > 2`, `aircraft_number > 0`; связанный planer=2 | normalized `ИСПРАВНЫЙ` | любая | !=2 | 2 | `heli_pandas_component_status.py` |
+| A2 serviceable | aggregate, `group_by > 2` | normalized `ИСПРАВНЫЙ` | любая | 0 | 3 | `heli_pandas_serviceable_status.py` |
+| A3a repair/past | aggregate, `group_by > 2` | любая | валидная, `< day0` | 0 | 3 | `heli_pandas_repair_status.py` |
+| A3b repair/future | planer или aggregate | planer **или** condition != `ИСПРАВНЫЙ` | валидная, `>= day0` | 0 | 4 | `heli_pandas_repair_status.py` |
+| A4 component resync | aggregate, `group_by > 2`, `aircraft_number > 0`; связанный planer=2 | normalized `ИСПРАВНЫЙ` | любая | !=2 | 2 | `heli_pandas_component_status.py` |
+| A5a storage | aggregate, `group_by > 2` | condition != `ИСПРАВНЫЙ` и достигнут BR; либо `ДОНОР`; либо `ВОЗМОЖНОЕ ПРОДЛЕНИЕ НР` | любая | 0 | 6 | `heli_pandas_storage_status.py` |
+| A5b unserviceable | aggregate, `group_by > 2` | normalized `НЕИСПРАВНЫЙ` | repair-ветка не выбрана | 0 | 7 | `heli_pandas_storage_status.py` |
+| A5c fallback | aggregate, `group_by > 2` | любой необработанный остаток | любая | 0 | 7 | `heli_pandas_storage_status.py` |
+| repair_days | строки ремонта | условия leaf-калькулятора | после A5 | 4 | status без изменения; считается `repair_days` | `repair_days_calculator.py` |
+| T1 terminal BR | planer или aggregate | `BR > 0` и `sne >= BR` | любая | 1 или 7 | 6 | `heli_pandas_terminal_br_gate.py` |
+| D1 demote | выбранный excess OPS planer и его агрегаты | destination: program history → calendar; fallback только здесь | выбранные `aircraft_number` | planer 2; агрегаты 2 | planer 1\|3; агрегаты 7\|3 | `day0_ops_deficit_demote_runner.py` |
+
+Критический закрытый баг-класс: после полного day0 число агрегатов `status_id=3 AND aircraft_number>0` на OPS-планерах (`group_by IN (1,2) AND status_id=2`) должно быть **0**. При этом ненулевые агрегаты status 3 на борту, чей planer имеет status 1 или 3, ожидаемы: их создают P3b и D1, это не anomaly.
 
 ### Утилиты Extract
 
