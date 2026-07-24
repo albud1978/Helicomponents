@@ -17,9 +17,8 @@ import pandas as pd
 
 from extract.planer_calendar_remain import (
     destination_for_remain,
-    fetch_calendar_remain_by_psn,
+    load_calendar_remain_from_snapshot,
     normalize_registr,
-    open_dwh_client,
     program_history_serials,
 )
 
@@ -114,8 +113,6 @@ def enrich_demotion_destinations(
     version_date: date,
     version_id: int,
     demoted: pd.DataFrame,
-    *,
-    dwh=None,
 ) -> pd.DataFrame:
     """Добавляет remain_d / oh_due / program_history / destination_* к demoted."""
     audit_cols = [
@@ -143,17 +140,16 @@ def enrich_demotion_destinations(
             f"для demoted acn={aircraft_numbers}"
         )
 
-    if dwh is None:
-        dwh = open_dwh_client()
     history = program_history_serials(client)
     fallback_psns = {
         int(row.psn)
         for row in planers.itertuples(index=False)
         if normalize_registr(row.serialno) in history
     }
-    cal = fetch_calendar_remain_by_psn(
-        dwh,
+    cal = load_calendar_remain_from_snapshot(
+        client,
         version_date,
+        version_id,
         [int(p) for p in planers["psn"].tolist()],
         fallback_10y_psns=fallback_psns,
     )

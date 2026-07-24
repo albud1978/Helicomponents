@@ -13,8 +13,10 @@
 Назначение: Заполнение ТОЛЬКО ac_type_mask через встроенные маски
 """
 
+import argparse
 import sys
 import logging
+from datetime import date
 from pathlib import Path
 from typing import Dict, List, Tuple, Any
 
@@ -26,10 +28,12 @@ sys.path.append(str(code_root))
 class HeliPandasEnricher:
     """Обогащение heli_pandas ТОЛЬКО полем ac_type_mask для GPU"""
     
-    def __init__(self):
+    def __init__(self, version_date: date, version_id: int):
         """Инициализация обогатителя"""
         self.logger = self._setup_logging()
         self.client = None
+        self.version_date = version_date
+        self.version_id = int(version_id)
         
         # Битовые маски для типов ВС (расширенный список)
         self.ac_type_masks = {
@@ -120,7 +124,8 @@ class HeliPandasEnricher:
                     COUNT(address_i) as address_filled,
                     COUNT(ac_type_i) as ac_type_filled
                 FROM heli_pandas
-            """)
+                WHERE version_date = %(vd)s AND version_id = %(vi)s
+            """, {"vd": self.version_date, "vi": self.version_id})
             
             if not coverage_result:
                 self.logger.warning("⚠️ Нет данных в heli_pandas")
@@ -187,7 +192,14 @@ class HeliPandasEnricher:
                 return False
             
             # Сначала очищаем поле
-            self.client.execute("ALTER TABLE heli_pandas UPDATE ac_type_mask = 0 WHERE 1=1")
+            params = {"vd": self.version_date, "vi": self.version_id}
+            self.client.execute(
+                """
+                ALTER TABLE heli_pandas UPDATE ac_type_mask = 0
+                WHERE version_date = %(vd)s AND version_id = %(vi)s
+                """,
+                params,
+            )
             self.logger.info("🧹 Поле ac_type_mask очищено")
             
             # Обновляем значения ac_type_mask для каждого типа ВС
@@ -201,12 +213,22 @@ class HeliPandasEnricher:
                 ALTER TABLE heli_pandas 
                 UPDATE ac_type_mask = {mask}
                 WHERE ac_typ = '{escaped_ac_type}'
+                  AND version_date = %(vd)s
+                  AND version_id = %(vi)s
                 """
                 
-                self.client.execute(update_query)
+                self.client.execute(update_query, params)
             
                 # Проверяем сколько записей обновилось
-                count_result = self.client.execute(f"SELECT COUNT(*) FROM heli_pandas WHERE ac_typ = '{escaped_ac_type}'")
+                count_result = self.client.execute(
+                    f"""
+                    SELECT COUNT(*) FROM heli_pandas
+                    WHERE ac_typ = '{escaped_ac_type}'
+                      AND version_date = %(vd)s
+                      AND version_id = %(vi)s
+                    """,
+                    params,
+                )
                 type_count = count_result[0][0]
                 
                 if type_count > 0:
@@ -227,12 +249,26 @@ class HeliPandasEnricher:
         self.logger.info("🔍 Проверка качества обогащения...")
         
         try:
+            params = {"vd": self.version_date, "vi": self.version_id}
             # Общая статистика
-            total_result = self.client.execute("SELECT COUNT(*) FROM heli_pandas")
+            total_result = self.client.execute(
+                """
+                SELECT COUNT(*) FROM heli_pandas
+                WHERE version_date = %(vd)s AND version_id = %(vi)s
+                """,
+                params,
+            )
             total_count = total_result[0][0]
             
             # Проверяем ac_type_mask
-            mask_result = self.client.execute("SELECT COUNT(*) FROM heli_pandas WHERE ac_type_mask > 0")
+            mask_result = self.client.execute(
+                """
+                SELECT COUNT(*) FROM heli_pandas
+                WHERE version_date = %(vd)s AND version_id = %(vi)s
+                  AND ac_type_mask > 0
+                """,
+                params,
+            )
             mask_count = mask_result[0][0]
             mask_coverage = (mask_count / total_count) * 100 if total_count > 0 else 0
             
@@ -248,7 +284,8 @@ class HeliPandasEnricher:
                     COUNT(address_i) as address_filled,
                     COUNT(ac_type_i) as ac_type_filled
                 FROM heli_pandas
-            """)
+                WHERE version_date = %(vd)s AND version_id = %(vi)s
+            """, params)
             
             if embedded_stats:
                 partseqno_filled, psn_filled, address_filled, ac_type_filled = embedded_stats[0]
@@ -261,11 +298,12 @@ class HeliPandasEnricher:
             types_result = self.client.execute("""
                 SELECT ac_typ, ac_type_mask, COUNT(*) as count
                 FROM heli_pandas 
-                WHERE ac_type_mask > 0
+                WHERE version_date = %(vd)s AND version_id = %(vi)s
+                  AND ac_type_mask > 0
                 GROUP BY ac_typ, ac_type_mask
                 ORDER BY count DESC
                 LIMIT 10
-            """)
+            """, params)
             
             if types_result:
                 self.logger.info("📋 Статистика по типам ВС (топ-10):")
@@ -277,9 +315,10 @@ class HeliPandasEnricher:
             examples_result = self.client.execute("""
                 SELECT ac_typ, ac_type_mask, partseqno_i, psn, address_i
                 FROM heli_pandas 
-                WHERE ac_type_mask > 0 
+                WHERE version_date = %(vd)s AND version_id = %(vi)s
+                  AND ac_type_mask > 0
                 LIMIT 3
-            """)
+            """, params)
             
             if examples_result:
                 self.logger.info("📋 Примеры обогащенных записей:")
@@ -350,7 +389,14 @@ def main():
     print("✨ Обрабатываем ТОЛЬКО ac_type_mask для multihot битовых операций")
     
     try:
-        enricher = HeliPandasEnricher()
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--version-date", required=True)
+        parser.add_argument("--version-id", type=int, required=True)
+        args = parser.parse_args()
+        enricher = HeliPandasEnricher(
+            date.fromisoformat(args.version_date),
+            args.version_id,
+        )
         success = enricher.run_enrichment()
         
         if success:

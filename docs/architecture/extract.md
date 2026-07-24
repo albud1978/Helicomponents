@@ -30,6 +30,9 @@ python3 code/utils/prep_source_dataset.py --dataset data_input/source_data/v_202
 **W1.1 (2026-07-24):** `calculate_beyond_repair` выполняется сразу после `md_components_loader`; тензоры идут AC → FL; отключённый `heli_pandas_economics_status` не исполняется; `digital_values_dictionary_creator` запускается последним, после day0 demote.
 **W2.4 (2026-07-24):** первая trigger-коррекция `flight_program_ac` выполняется после day0 demote по финальному OPS и до `digital_values_dictionary_creator`.
 **W2.5 mechanical (2026-07-24):** шаги `component → serviceable → repair → component resync → storage` собраны в `aggregate_status_block`; порядок и семантика классификации не менялись.
+**W2.6 (2026-07-24):** сырой календарь OH планеров материализуется один раз перед planner cascade в project ClickHouse `extract_planer_calendar_snapshot` на точный `version_date`+`version_id`.
+Этапы 3b и demote читают snapshot без повторного открытия DWH; `remain_d` вычисляется при чтении, поэтому demote-only fallback +10y−1d и поведение 3b остаются различными.
+**W2.7 (2026-07-24):** замена versioned DataFrame выполняется общим exact-slice helper по `(version_date, version_id)` с проверкой числа вставленных строк; enrich/reset `heli_pandas` также ограничены CLI tuple.
 
 ## Снимок таблиц перед экстрактом (бэкап для сравнения)
 

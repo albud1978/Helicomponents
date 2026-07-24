@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": 1,
-    "updated_at": "2026-07-24T07:56:02Z",
+    "updated_at": "2026-07-24T13:30:13Z",
     "description": "Agent KG — JSON-шина координации мультиагентного workflow",
     "hash_chain_baseline": {
       "started_at": "2026-05-16T06:58:44Z",
@@ -4809,6 +4809,27 @@
       },
       "created_at": "2026-07-24T07:12:59Z",
       "updated_at": "2026-07-24T07:56:02Z"
+    },
+    {
+      "workflow_id": "W_w26_w27_extract_infra_20260724",
+      "goal": "W2.6 staged DWH calendar for 3b/demote; W2.7 unified replace (version_date,version_id); bitexact; governance",
+      "phase": "validation",
+      "owner": "human",
+      "status": "closed",
+      "caps": {
+        "max_steps": 40,
+        "max_tokens": 400000,
+        "max_cost": null,
+        "profile": "medium-fast"
+      },
+      "usage": {
+        "cumulative_steps": 6,
+        "cumulative_tokens": 101500,
+        "cumulative_cost": 0.0,
+        "last_updated": "2026-07-24T13:30:13Z"
+      },
+      "created_at": "2026-07-24T13:10:39Z",
+      "updated_at": "2026-07-24T13:30:13Z"
     }
   ],
   "handoffs": [
@@ -33843,6 +33864,252 @@
         "est_tokens": 2500,
         "source": "char_estimate"
       }
+    },
+    {
+      "handoff_id": "handoff_W_w26_w27_extract_infra_20260724_research-graph-analyst_89ddd0ae",
+      "workflow_id": "W_w26_w27_extract_infra_20260724",
+      "agent": "research-graph-analyst",
+      "user_goal": "Подготовить точный plan для W2.6 и W2.7 (extract infra), без смены day0-семантики статусов.",
+      "changes": "Read-only research; код и данные не изменялись. Подготовлена карта W2.6 external calendar/history reads и W2.7 replace/delete/insert/mutation paths с минимальным design.",
+      "facts": "",
+      "assumptions": "Не выполнялся live DESCRIBE/SELECT DWH/Project CH: анализ по исполняемому коду. Risks if false: фактическая схема CH могла дрейфовать; coder должен schema-first проверить planned stage table и типы. Snapshot table name is design recommendation, not an existing contract.",
+      "evidence": "Facts: W2.6: единственный внешний DWH client — clickhouse_connect через dwh_golden_replay_export.dwh_client (code/utils/dwh_golden_replay_export.py:64-82), открывается open_dwh_client (code/extract/planer_calendar_remain.py:221-227). Calendar SQL: report max from reports.amos_heli_rotables_components_status (76-95), OH/mfg by report_date+psn (118-130), treq OH interval joins source.amos_heli_forecast/treq_* by psn (132-155). 3b calls project program_ac history then external calendar at inactive_serviceable_classifier.py:110-118 inside planner cascade dwh_post_enrichment.py:147-151,208-213; dual_loader legacy call 850-853. Demote calls same external calendar with 10y fallback only for history psn at deficit_demoter.py:138-159; runner invokes after rank/compare at day0_ops_deficit_demote_runner.py:86-109. ops_target_comparator uses only project CH, exact tuple scope (54-110). W2.7: dual_loader.insert_data deletes by version_date only (dual_loader.py:585-604), so dwh_post_enrichment exact DELETE at 123-144 is immediately followed by date-wide delete through insert_data — critical multi-version bug. dwh_loader heli replace is exact tuple (148-175). program_ac/status_overhaul direct deletes exact tuple (program_ac_loader.py:207-228; status_overhaul_loader.py:203-224). flight_program_ac exact tuple (program_ac_direct_loader.py:530-540,836-854); flight_program_fl exact tuple, not date-only (program_fl_direct_loader.py:316-346). dict_aircraft_number_flat exact tuple (dictionary_creator.py:808-845); other flat dictionaries are additive, digital dictionary checks exact tuple. etl_version_manager rewrite is intentionally date-wide across ETL tables (etl_version_manager.py:210-265). Mid-flight unscoped mutations: enrich_heli_pandas ac_type_mask global (186-210) and heli_pandas_group_by_enricher group_by update lacks version tuple (31-57); status demote UPDATE is tuple-scoped (deficit_demoter.py:237-260,366-398).\nEvidence: Static evidence: code/extract/planer_calendar_remain.py:39-49,76-155,221-246; inactive_serviceable_classifier.py:83-150; deficit_demoter.py:83-206,237-260; day0_ops_deficit_demote_runner.py:78-111; ops_target_comparator.py:54-110; code/utils/dwh_loader.py:101-175,287-354; dwh_post_enrichment.py:91-151,176-252; dual_loader.py:521-624,774-853,929-932; extract_master.py:566-621; program_fl_direct_loader.py:316-346; dictionary_creator.py:720-845; etl_version_manager.py:210-265. No mutation/test run performed.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_w26_w27_extract_infra_20260724:20260724T132500Z",
+      "plan_step_id": "R-infra",
+      "approval_gate_id": "ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "approval_status": "approved",
+      "approval_source": "human",
+      "risk_tier": "medium",
+      "risk_reasons": "Изменяются ETL replace semantics и момент внешнего DWH чтения; ошибка scope может удалить соседний version_id или изменить day0 statuses.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "W2.6: один persisted calendar input snapshot на tuple version_date/version_id, читаемый 3b и demote без внешнего DWH. W2.7: единый exact-tuple replace primitive; сначала heli_pandas/DWH load unit, затем соседние loaders.",
+      "evidence_pack": "Facts: W2.6: единственный внешний DWH client — clickhouse_connect через dwh_golden_replay_export.dwh_client (code/utils/dwh_golden_replay_export.py:64-82), открывается open_dwh_client (code/extract/planer_calendar_remain.py:221-227). Calendar SQL: report max from reports.amos_heli_rotables_components_status (76-95), OH/mfg by report_date+psn (118-130), treq OH interval joins source.amos_heli_forecast/treq_* by psn (132-155). 3b calls project program_ac history then external calendar at inactive_serviceable_classifier.py:110-118 inside planner cascade dwh_post_enrichment.py:147-151,208-213; dual_loader legacy call 850-853. Demote calls same external calendar with 10y fallback only for history psn at deficit_demoter.py:138-159; runner invokes after rank/compare at day0_ops_deficit_demote_runner.py:86-109. ops_target_comparator uses only project CH, exact tuple scope (54-110). W2.7: dual_loader.insert_data deletes by version_date only (dual_loader.py:585-604), so dwh_post_enrichment exact DELETE at 123-144 is immediately followed by date-wide delete through insert_data — critical multi-version bug. dwh_loader heli replace is exact tuple (148-175). program_ac/status_overhaul direct deletes exact tuple (program_ac_loader.py:207-228; status_overhaul_loader.py:203-224). flight_program_ac exact tuple (program_ac_direct_loader.py:530-540,836-854); flight_program_fl exact tuple, not date-only (program_fl_direct_loader.py:316-346). dict_aircraft_number_flat exact tuple (dictionary_creator.py:808-845); other flat dictionaries are additive, digital dictionary checks exact tuple. etl_version_manager rewrite is intentionally date-wide across ETL tables (etl_version_manager.py:210-265). Mid-flight unscoped mutations: enrich_heli_pandas ac_type_mask global (186-210) and heli_pandas_group_by_enricher group_by update lacks version tuple (31-57); status demote UPDATE is tuple-scoped (deficit_demoter.py:237-260,366-398).\nEvidence: Static evidence: code/extract/planer_calendar_remain.py:39-49,76-155,221-246; inactive_serviceable_classifier.py:83-150; deficit_demoter.py:83-206,237-260; day0_ops_deficit_demote_runner.py:78-111; ops_target_comparator.py:54-110; code/utils/dwh_loader.py:101-175,287-354; dwh_post_enrichment.py:91-151,176-252; dual_loader.py:521-624,774-853,929-932; extract_master.py:566-621; program_fl_direct_loader.py:316-346; dictionary_creator.py:720-845; etl_version_manager.py:210-265. No mutation/test run performed.",
+      "success_criteria": "numeric: full extract 2026-07-22 v1 heli_pandas fingerprint == A890C61B77B627BE90FE06E7DA1A3B30 and n == 11625 and OPS Mi-8/Mi-17 == 49/88 and planner status0 == 0; invariant: rerun for one version_id preserves all rows of sibling version_id for same version_date; script/code inspection: no external DWH calls from 3b/demote after staging.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=implementation_and_bitexact_validation_pending; evidence_refs=ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185;code/extract/planer_calendar_remain.py;code/extract/dual_loader.py;code/utils/dwh_post_enrichment.py; approval_ref=ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "risks": "1) Existing insert_data can erase sibling version_id. 2) In-memory-only W2.6 snapshot cannot cross planner and demote subprocesses. 3) Snapshotting derived remain_d without preserving fallback input would collapse intentional 3b/demote difference.",
+      "next_owner": "orchestrator",
+      "open_questions": "Decide whether W2.7 also changes legacy date-wide ETLVersionManager rewrite now or records it as a separate deprecation; recommended later because its user-visible rewrite policy is broader than exact-slice helper.",
+      "graph_update": "no",
+      "graph_update_reason": "Runtime extract infra only; Domain Graph/SSoT transitions unchanged.",
+      "prev_handoff_hash": "GENESIS",
+      "created_at": "2026-07-24T13:13:42Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.6-sol-medium",
+        "est_tokens": 22000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_w26_w27_extract_infra_20260724_coder-general_46d4a2f0",
+      "workflow_id": "W_w26_w27_extract_infra_20260724",
+      "agent": "coder-general",
+      "user_goal": "согласен по обоим, делай оба с гавернанс",
+      "changes": "W2.6: code/extract/planer_calendar_remain.py добавляет persisted raw calendar snapshot exact tuple и snapshot loader; inactive_serviceable_classifier.py и deficit_demoter.py читают snapshot без DWH; dwh_post_enrichment.py и dual_loader.py строят snapshot один раз перед 3b; docs/architecture/extract.md описывает staged contract.",
+      "facts": "",
+      "assumptions": "Legacy Excel path не выполнялся в full verification. Risks if false: его DataFrame может иметь типы, несовместимые с strict snapshot conversion; code path fail-fast.",
+      "evidence": "Facts: Full extract --replace-slice 2026-07-22 v1 PASS; fp=A890C61B77B627BE90FE06E7DA1A3B30 n=11625 OPS=49/88 status0=0; snapshot rows=286 uniq psn=286 report_date=2026-07-22; static rg: no open_dwh_client/fetch_calendar_remain_by_psn in inactive_serviceable_classifier.py or deficit_demoter.py; py_compile PASS.\nEvidence: output/extract_master_2026-07-22_v1_w26.log; output/after_bitexact_heli_pandas_2026-07-22_w26.json; DESCRIBE/SELECT extract_planer_calendar_snapshot; py_compile; rg open_dwh_client consumers.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_w26_w27_extract_infra_20260724:20260724T132200Z",
+      "plan_step_id": "W2.6",
+      "approval_gate_id": "ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "approval_status": "approved",
+      "approval_source": "human",
+      "risk_tier": "medium",
+      "risk_reasons": "Persisted ETL staging and external DWH read timing changed; bitexact and snapshot checks passed.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Materialize one exact-tuple raw DWH calendar snapshot before planner cascade; 3b and demote derive remain with their existing distinct fallback semantics.",
+      "evidence_pack": "Facts: Full extract --replace-slice 2026-07-22 v1 PASS; fp=A890C61B77B627BE90FE06E7DA1A3B30 n=11625 OPS=49/88 status0=0; snapshot rows=286 uniq psn=286 report_date=2026-07-22; static rg: no open_dwh_client/fetch_calendar_remain_by_psn in inactive_serviceable_classifier.py or deficit_demoter.py; py_compile PASS.\nEvidence: output/extract_master_2026-07-22_v1_w26.log; output/after_bitexact_heli_pandas_2026-07-22_w26.json; DESCRIBE/SELECT extract_planer_calendar_snapshot; py_compile; rg open_dwh_client consumers.",
+      "success_criteria": "numeric: fp==A890C61B77B627BE90FE06E7DA1A3B30 and n==11625 and OPS==49/88 and status0==0; SQL: snapshot rows=286 > 0; script/code inspection: no DWH open in 3b/demote.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=W2.7_and_final_governance_pending; evidence_refs=output/extract_master_2026-07-22_v1_w26.log;output/after_bitexact_heli_pandas_2026-07-22_w26.json;code/extract/planer_calendar_remain.py; approval_ref=ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "risks": "Legacy Excel path not runtime-tested; snapshot table retention is append-by-version with exact tuple replacement.",
+      "next_owner": "coder-general",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "f0e659f4a66c4f0b2d100a3bb6d3bb14d5196c94314cea5b69079f2b1f50ed88",
+      "created_at": "2026-07-24T13:21:35Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.6-sol-medium",
+        "est_tokens": 26000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_w26_w27_extract_infra_20260724_coder-general_f82ee3e4",
+      "workflow_id": "W_w26_w27_extract_infra_20260724",
+      "agent": "coder-general",
+      "user_goal": "согласен по обоим, делай оба с гавернанс",
+      "changes": "W2.7: добавлен code/utils/version_slice_replace.py exact tuple DELETE+INSERT+count; dual_loader.insert_data fail-fast валидирует единственный version tuple; dwh_post_enrichment и replace-path dwh_loader используют helper; enrich_heli_pandas и heli_pandas_group_by_enricher ограничивают UPDATE CLI version_date/version_id; docs architecture/changelog обновлены. ETLVersionManager не менялся.",
+      "facts": "",
+      "assumptions": "Neighbor smoke covers heli_pandas exact tuple and scoped enrich paths; no sentinel was inserted into heli_raw. Risks if false: legacy dual_loader heli_raw callers now intentionally require version_id and exact tuple.",
+      "evidence": "Facts: Full extract --replace-slice 2026-07-22 v1 PASS; fp=A890C61B77B627BE90FE06E7DA1A3B30 n=11625 OPS=49/88 status0=0. Sentinel heli_pandas 2026-07-22 v99 psn=4294967294: before=1 after extract=1, cleanup remaining=0. py_compile, IDE lints, git diff --check and fake-client fail-fast/exact tuple checks PASS.\nEvidence: output/extract_master_2026-07-22_v1_w27.log; output/after_bitexact_heli_pandas_2026-07-22_w27.json; py_compile; ReadLints; git diff --check; fake-client helper smoke.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_w26_w27_extract_infra_20260724:20260724T132800Z",
+      "plan_step_id": "W2.7",
+      "approval_gate_id": "ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "approval_status": "approved",
+      "approval_source": "human",
+      "risk_tier": "medium",
+      "risk_reasons": "Critical date-wide delete replaced by exact tuple; neighboring v99 survived end-to-end extract.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending",
+      "human_gate_required": "conditional",
+      "plan_card": "Unify versioned DataFrame replacement on exact (version_date, version_id), scope mid-flight enrich mutations, and prove sibling-version survival.",
+      "evidence_pack": "Facts: Full extract --replace-slice 2026-07-22 v1 PASS; fp=A890C61B77B627BE90FE06E7DA1A3B30 n=11625 OPS=49/88 status0=0. Sentinel heli_pandas 2026-07-22 v99 psn=4294967294: before=1 after extract=1, cleanup remaining=0. py_compile, IDE lints, git diff --check and fake-client fail-fast/exact tuple checks PASS.\nEvidence: output/extract_master_2026-07-22_v1_w27.log; output/after_bitexact_heli_pandas_2026-07-22_w27.json; py_compile; ReadLints; git diff --check; fake-client helper smoke.",
+      "success_criteria": "numeric: fp==A890C61B77B627BE90FE06E7DA1A3B30 and n==11625 and OPS==49/88 and status0==0; invariant: sentinel v99 count before==after==1 and cleanup==0; script: replace helper mixed-version fail-fast.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=final_governance_pending; evidence_refs=output/extract_master_2026-07-22_v1_w27.log;output/after_bitexact_heli_pandas_2026-07-22_w27.json;code/utils/version_slice_replace.py;handoff_W_w26_w27_extract_infra_20260724_coder-general_46d4a2f0; approval_ref=ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "risks": "Legacy dual_loader callers without version_id now fail-fast by design; snapshot retention policy remains per exact tuple.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "d029795a9850b270566ac7b2036183184c3eee56664a3f548d4464cb46e625a2",
+      "created_at": "2026-07-24T13:27:19Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "gpt-5.6-sol-medium",
+        "est_tokens": 36000,
+        "source": "manual"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_w26_w27_extract_infra_20260724_orchestrator_bdc5de35",
+      "workflow_id": "W_w26_w27_extract_infra_20260724",
+      "agent": "orchestrator",
+      "user_goal": "согласен по обоим, делай оба с гавернанс",
+      "changes": "W2.6: extract_planer_calendar_snapshot + build/load API; 3b/demote no mid-classify DWH. W2.7: insert_data/replace_version_slice exact tuple; scoped enrich_heli+group_by enricher. Docs+changelog.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "R-infra 89ddd0ae; coder W2.6/W2.7 handoffs; after_w26/w27 json fp match; logs w26/w27; sentinel survived.",
+      "drift_check": "UserGoal ↔ Changes scope match: yes — both W2.6 and W2.7 with governance.",
+      "process_insights": "",
+      "trace_id": "wf:W_w26_w27_extract_infra_20260724:2026-07-24T13:30:00Z",
+      "plan_step_id": "CLOSE",
+      "approval_gate_id": "ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Extract infra: staged DWH calendar snapshot; fix date-wide heli_pandas delete; scoped enrich UPDATEs.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "pending governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Close after W2.6+W2.7 bitexact+sentinel; gov then commit/push.",
+      "evidence_pack": "R-infra 89ddd0ae; coder W2.6/W2.7 handoffs; after_w26/w27 json fp match; logs w26/w27; sentinel survived.",
+      "success_criteria": "numeric: fp==A890C61B77B627BE90FE06E7DA1A3B30 AND n==11625 AND OPS==49/88 AND status0==0; numeric: calendar_snapshot_planers==286; numeric: sentinel_v99_survived==1 before cleanup",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=partial; exceptions=governance_pending; evidence_refs=output/after_bitexact_heli_pandas_2026-07-22_w27.json; approval_ref=ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "risks": "нет",
+      "next_owner": "governance-compliance",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "cd2012bd19e84deb28f313b77cbb88870e442de29ef9561aba60a4f5e34c1fb7",
+      "created_at": "2026-07-24T13:28:05Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 5000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_w26_w27_extract_infra_20260724_governance-compliance_7e93e5eb",
+      "workflow_id": "W_w26_w27_extract_infra_20260724",
+      "agent": "governance-compliance",
+      "user_goal": "согласен по обоим, делай оба с гавернанс",
+      "changes": "Governance pre-close verdict=allow_with_notes. Verified: (1) scope match UserGoal 'оба с гавернанс' ↔ Changes W2.6 staged calendar + W2.7 unified exact-tuple replace — yes; (2) traceability TraceID/PlanStepID/workflow linkage present across R-infra/W2.6/W2.7/CLOSE; (3) SuccessCriteria numeric verifiable + PASS on artifacts; (4) no orchestrator self-coding — code by coder-general, research by research-graph-analyst; (5) approval PRE-registered ctx=...a4819185 source=human status=approved. Notes: orchestrator CLOSE handoff ApprovalGate carries only id (status/source confirmed via KG approval context, not inline); legacy Excel path and legacy dual_loader heli_raw callers not runtime-tested (fail-fast by design).",
+      "facts": "",
+      "assumptions": "KG approval context is authoritative for approved/human even though orchestrator inline ApprovalGate omits status/source. Risks if false: human gate provenance would be incomplete; mitigated by explicit approval_request context and coder-level ApprovalGate=approved/human.",
+      "evidence": "Facts: Bitexact evidence read: output/after_bitexact_heli_pandas_2026-07-22_w27.json fp=A890C61B77B627BE90FE06E7DA1A3B30 n=11625 ops[gb1=49,gb2=88] status0=0 sentinel_before=1 sentinel_after=1 bitexact=true; w26.json same + snapshot_rows=286. Logs output/extract_master_2026-07-22_v1_w26.log/_w27.log present. KG approval_request ctx=...a4819185 source=human. Coder W2.6/W2.7 handoffs ApprovalGate status=approved source=human. Verified artifacts PlanCard/EvidencePack/ComplianceChecklist present in all handoffs; DriftCheck non-empty (scope match yes); RiskTier=medium profile medium-fast, HumanGateRequired=conditional consistent. No SSoT (config/transitions/invariants) touch; GraphUpdate=no; no DROP/TRUNCATE (exact-tuple DELETE+INSERT scoped).\nEvidence: output/after_bitexact_heli_pandas_2026-07-22_w27.json; output/after_bitexact_heli_pandas_2026-07-22_w26.json; output/extract_master_2026-07-22_v1_w27.log; handoff_...orchestrator_bdc5de35; ctx_...approval_request_a4819185; read-state/read-context on W_w26_w27_extract_infra_20260724.",
+      "drift_check": "",
+      "process_insights": "",
+      "trace_id": "wf:W_w26_w27_extract_infra_20260724:2026-07-24T13:31:00Z",
+      "plan_step_id": "G1",
+      "approval_gate_id": "",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "Extract infra medium-fast: staged DWH calendar snapshot; date-wide heli_pandas delete replaced by exact-tuple; scoped enrich UPDATEs.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Pre-close governance single pass for W2.6+W2.7; verify 5 gates; return G1 to orchestrator; orchestrator commits after allow.",
+      "evidence_pack": "Facts: Bitexact evidence read: output/after_bitexact_heli_pandas_2026-07-22_w27.json fp=A890C61B77B627BE90FE06E7DA1A3B30 n=11625 ops[gb1=49,gb2=88] status0=0 sentinel_before=1 sentinel_after=1 bitexact=true; w26.json same + snapshot_rows=286. Logs output/extract_master_2026-07-22_v1_w26.log/_w27.log present. KG approval_request ctx=...a4819185 source=human. Coder W2.6/W2.7 handoffs ApprovalGate status=approved source=human. Verified artifacts PlanCard/EvidencePack/ComplianceChecklist present in all handoffs; DriftCheck non-empty (scope match yes); RiskTier=medium profile medium-fast, HumanGateRequired=conditional consistent. No SSoT (config/transitions/invariants) touch; GraphUpdate=no; no DROP/TRUNCATE (exact-tuple DELETE+INSERT scoped).\nEvidence: output/after_bitexact_heli_pandas_2026-07-22_w27.json; output/after_bitexact_heli_pandas_2026-07-22_w26.json; output/extract_master_2026-07-22_v1_w27.log; handoff_...orchestrator_bdc5de35; ctx_...approval_request_a4819185; read-state/read-context on W_w26_w27_extract_infra_20260724.",
+      "success_criteria": "numeric: fp==A890C61B77B627BE90FE06E7DA1A3B30 AND n==11625 AND OPS==49/88 AND status0==0 AND sentinel_v99==survived AND snapshot_rows==286 — PASS on artifacts.",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=orchestrator_approvalgate_status_source_inline_omitted;legacy_excel_and_dual_loader_callers_runtime_untested; evidence_refs=output/after_bitexact_heli_pandas_2026-07-22_w27.json;output/after_bitexact_heli_pandas_2026-07-22_w26.json;handoff_W_w26_w27_extract_infra_20260724_orchestrator_bdc5de35;ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185; approval_ref=ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "risks": "Legacy dual_loader heli_raw callers now require version_id (fail-fast by design); snapshot retention append-by-exact-tuple.",
+      "next_owner": "orchestrator",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "5b4ad41af2c734da7eae976b9cd563fd18bb637dc552047b3f6b7859695bf4bc",
+      "created_at": "2026-07-24T13:29:41Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "claude-opus-4-8-thinking-high",
+        "est_tokens": 10000,
+        "source": "char_estimate"
+      }
+    },
+    {
+      "handoff_id": "handoff_W_w26_w27_extract_infra_20260724_orchestrator_ff7cff7e",
+      "workflow_id": "W_w26_w27_extract_infra_20260724",
+      "agent": "orchestrator",
+      "user_goal": "согласен по обоим, делай оба с гавернанс",
+      "changes": "No new code after W2.7. Closing + commit.",
+      "facts": "",
+      "assumptions": "",
+      "evidence": "Gov 7e93e5eb; after_w27.json.",
+      "drift_check": "UserGoal ↔ Changes scope match: yes.",
+      "process_insights": "",
+      "trace_id": "wf:W_w26_w27_extract_infra_20260724:2026-07-24T13:40:00Z",
+      "plan_step_id": "CLOSE",
+      "approval_gate_id": "ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "approval_status": "",
+      "approval_source": "",
+      "risk_tier": "medium",
+      "risk_reasons": "W2.6+W2.7 extract infra close.",
+      "risk_owner": "orchestrator",
+      "risk_validated_by": "governance-compliance",
+      "human_gate_required": "conditional",
+      "plan_card": "Final close after gov allow_with_notes; commit/push.",
+      "evidence_pack": "Gov 7e93e5eb; after_w27.json.",
+      "success_criteria": "governance decision=allow_with_notes handoff_W_w26_w27_extract_infra_20260724_governance-compliance_7e93e5eb; numeric fp==A890C61B77B627BE90FE06E7DA1A3B30",
+      "compliance_checklist": "decision=allow_with_notes; required_gates=pass; exceptions=none; evidence_refs=handoff_W_w26_w27_extract_infra_20260724_governance-compliance_7e93e5eb; approval_ref=ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "risks": "нет",
+      "next_owner": "human",
+      "open_questions": "",
+      "graph_update": "no",
+      "graph_update_reason": "",
+      "prev_handoff_hash": "184a56c311b125cbc6a55fc62358aa19e150d63ec433523f21c35b05273ec354",
+      "created_at": "2026-07-24T13:30:13Z",
+      "modules": [
+        "extract_dwh"
+      ],
+      "usage": {
+        "model": "cursor-grok-4.5-high-fast",
+        "est_tokens": 2500,
+        "source": "char_estimate"
+      }
     }
   ],
   "contexts": [
@@ -37886,6 +38153,33 @@
       "agent": "orchestrator",
       "created_at": "2026-07-24T07:56:02Z",
       "updated_at": "2026-07-24T07:56:02Z"
+    },
+    {
+      "context_id": "ctx_W_w26_w27_extract_infra_20260724_approval_request_a4819185",
+      "workflow_id": "W_w26_w27_extract_infra_20260724",
+      "context_type": "approval_request",
+      "content": "PRE-approval: user agreed W2.6 staged calendar + W2.7 unified replace; both with governance. SuccessCriteria per step: heli_pandas bitexact fp A890C61B77B627BE90FE06E7DA1A3B30 n=11625 OPS 49/88 status0=0 on 2026-07-22 v1 full extract.",
+      "agent": "orchestrator",
+      "created_at": "2026-07-24T13:10:39Z",
+      "updated_at": "2026-07-24T13:10:39Z"
+    },
+    {
+      "context_id": "ctx_W_w26_w27_extract_infra_20260724_phase_start_5dc355d0",
+      "workflow_id": "W_w26_w27_extract_infra_20260724",
+      "context_type": "phase_start",
+      "content": "Governance pre-close verify started: scope/traceability/SuccessCriteria/no-self-coding/approval for W2.6+W2.7. Evidence bitexact fp=A890C61B77B627BE90FE06E7DA1A3B30 n=11625 OPS 49/88 status0=0 sentinel v99 survived; snapshot_rows=286.",
+      "agent": "governance-compliance",
+      "created_at": "2026-07-24T13:10:49Z",
+      "updated_at": "2026-07-24T13:29:19Z"
+    },
+    {
+      "context_id": "ctx_W_w26_w27_extract_infra_20260724_closure_7bbc4fab",
+      "workflow_id": "W_w26_w27_extract_infra_20260724",
+      "context_type": "closure",
+      "content": "W2.6 staged calendar + W2.7 exact-tuple replace; bitexact+sentinel; gov allow_with_notes.",
+      "agent": "orchestrator",
+      "created_at": "2026-07-24T13:30:13Z",
+      "updated_at": "2026-07-24T13:30:13Z"
     }
   ],
   "meta": {

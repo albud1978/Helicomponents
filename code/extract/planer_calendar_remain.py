@@ -13,6 +13,7 @@ from datetime import date, timedelta
 from typing import Dict, Iterable, Optional, Sequence, Set
 
 PROGRAM_AC_HISTORY_START = date(2025, 7, 4)
+SNAPSHOT_TABLE = "extract_planer_calendar_snapshot"
 _SENTINEL_OH = date(1972, 1, 1)
 # Нет treq OH(D): due = base+10y−1д (inclusive 10y).
 # Включать только через fallback_10y_psns; в 3b не передавать (demote-only).
@@ -95,26 +96,15 @@ def _resolve_report_date(dwh, day0: date) -> date:
     return rows[0][0]
 
 
-def fetch_calendar_remain_by_psn(
+def _fetch_calendar_inputs(
     dwh,
-    day0: date,
+    report_date: date,
     psns: Sequence[int],
-    *,
-    fallback_10y_psns: Optional[Set[int]] = None,
-) -> Dict[int, CalendarRemain]:
-    """remain_d по psn.
-
-    Нет treq OH(D): fallback due=base+10y−1д только если psn ∈ fallback_10y_psns
-    (борта с историей program_ac с 2025-07-04). Иначе remain_d=None.
-    """
+) -> Dict[int, tuple[Optional[date], Optional[date], Optional[int]]]:
     unique = sorted({int(p) for p in psns if int(p) > 0})
     if not unique:
         return {}
-    allowed_fallback = {int(p) for p in (fallback_10y_psns or set())}
-
-    report_date = _resolve_report_date(dwh, day0)
     psn_in = ", ".join(str(p) for p in unique)
-
     vit_rows = dwh.query(
         f"""
         SELECT
@@ -153,11 +143,20 @@ def fetch_calendar_remain_by_psn(
         """,
     ).result_rows
     raw_by_psn = {int(r[0]): int(r[1]) for r in int_rows if r[1] is not None}
+    return {
+        psn: (*vit.get(psn, (None, None)), raw_by_psn.get(psn))
+        for psn in unique
+    }
 
+
+def _calendar_remain_from_inputs(
+    day0: date,
+    inputs: Dict[int, tuple[Optional[date], Optional[date], Optional[int]]],
+    fallback_10y_psns: Optional[Set[int]],
+) -> Dict[int, CalendarRemain]:
+    allowed_fallback = {int(p) for p in (fallback_10y_psns or set())}
     out: Dict[int, CalendarRemain] = {}
-    for psn in unique:
-        oh_at, mfg_d = vit.get(psn, (None, None))
-        raw = raw_by_psn.get(psn)
+    for psn, (oh_at, mfg_d, raw) in inputs.items():
         base = _base_date(oh_at, mfg_d)
 
         if raw is None:
@@ -216,6 +215,230 @@ def fetch_calendar_remain_by_psn(
             used_fallback_10y=False,
         )
     return out
+
+
+def fetch_calendar_remain_by_psn(
+    dwh,
+    day0: date,
+    psns: Sequence[int],
+    *,
+    fallback_10y_psns: Optional[Set[int]] = None,
+) -> Dict[int, CalendarRemain]:
+    """remain_d по psn.
+
+    Нет treq OH(D): fallback due=base+10y−1д только если psn ∈ fallback_10y_psns
+    (борта с историей program_ac с 2025-07-04). Иначе remain_d=None.
+    """
+    unique = sorted({int(p) for p in psns if int(p) > 0})
+    if not unique:
+        return {}
+    report_date = _resolve_report_date(dwh, day0)
+    inputs = _fetch_calendar_inputs(dwh, report_date, unique)
+    return _calendar_remain_from_inputs(day0, inputs, fallback_10y_psns)
+
+
+def _ensure_snapshot_table(project_client) -> None:
+    project_client.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS {SNAPSHOT_TABLE}
+        (
+            version_date Date,
+            version_id UInt8,
+            psn UInt32,
+            report_date Date,
+            oh_at_date Nullable(Date),
+            mfg_date Nullable(Date),
+            raw_interval Nullable(Int32),
+            program_history UInt8,
+            aircraft_number UInt32,
+            group_by UInt8,
+            load_timestamp DateTime DEFAULT now()
+        )
+        ENGINE = MergeTree
+        ORDER BY (version_date, version_id, psn)
+        """
+    )
+
+
+def _snapshot_planner_rows(project_client, version_date: date, version_id: int):
+    rows = project_client.execute(
+        """
+        SELECT
+            toUInt32(psn),
+            serialno,
+            toUInt32(ifNull(aircraft_number, 0)),
+            toUInt8(group_by)
+        FROM heli_pandas
+        WHERE version_date = %(vd)s
+          AND version_id = %(vi)s
+          AND toUInt8(group_by) IN (1, 2)
+          AND toUInt32(psn) > 0
+        ORDER BY psn
+        """,
+        {"vd": version_date, "vi": version_id},
+    )
+    if not rows:
+        raise RuntimeError(
+            f"heli_pandas: нет планеров psn>0 для snapshot {version_date} v{version_id}"
+        )
+    return rows
+
+
+def build_planer_calendar_snapshot(
+    project_client,
+    version_date: date,
+    version_id: int,
+) -> int:
+    """Материализует сырой DWH-календарь один раз на exact version tuple."""
+    planner_rows = _snapshot_planner_rows(project_client, version_date, version_id)
+    return _build_snapshot_from_rows(
+        project_client, version_date, version_id, planner_rows
+    )
+
+
+def build_planer_calendar_snapshot_from_dataframe(
+    project_client,
+    version_date: date,
+    version_id: int,
+    frame,
+) -> int:
+    """Legacy Excel path: stage calendar before its in-memory 3b classifier."""
+    required = {"psn", "serialno", "aircraft_number", "group_by"}
+    missing = required - set(frame.columns)
+    if missing:
+        raise ValueError(f"calendar snapshot DataFrame missing columns: {sorted(missing)}")
+    group_by = frame["group_by"].astype(int)
+    psn = frame["psn"].astype(int)
+    planers = frame.loc[
+        group_by.isin([1, 2]) & (psn > 0),
+        ["psn", "serialno", "aircraft_number", "group_by"],
+    ]
+    if planers.empty:
+        raise RuntimeError(
+            f"DataFrame: нет планеров psn>0 для snapshot {version_date} v{version_id}"
+        )
+    planner_rows = list(planers.itertuples(index=False, name=None))
+    return _build_snapshot_from_rows(
+        project_client, version_date, version_id, planner_rows
+    )
+
+
+def _build_snapshot_from_rows(
+    project_client,
+    version_date: date,
+    version_id: int,
+    planner_rows,
+) -> int:
+    history = program_history_serials(project_client)
+    dwh = open_dwh_client()
+    report_date = _resolve_report_date(dwh, version_date)
+    psns = [int(row[0]) for row in planner_rows]
+    inputs = _fetch_calendar_inputs(dwh, report_date, psns)
+    if not inputs:
+        raise RuntimeError(
+            f"DWH calendar inputs пусты для {version_date} v{version_id}, psn={len(psns)}"
+        )
+
+    _ensure_snapshot_table(project_client)
+    project_client.execute(
+        f"DELETE FROM {SNAPSHOT_TABLE} "
+        "WHERE version_date = %(vd)s AND version_id = %(vi)s",
+        {"vd": version_date, "vi": version_id},
+    )
+    values = []
+    for psn, serialno, aircraft_number, group_by in planner_rows:
+        oh_at, mfg_d, raw = inputs[int(psn)]
+        values.append(
+            (
+                version_date,
+                int(version_id),
+                int(psn),
+                report_date,
+                oh_at,
+                mfg_d,
+                raw,
+                int(normalize_registr(serialno) in history),
+                int(aircraft_number),
+                int(group_by),
+            )
+        )
+    project_client.execute(
+        f"""
+        INSERT INTO {SNAPSHOT_TABLE}
+        (
+            version_date, version_id, psn, report_date, oh_at_date, mfg_date,
+            raw_interval, program_history, aircraft_number, group_by
+        ) VALUES
+        """,
+        values,
+    )
+    count = int(
+        project_client.execute(
+            f"SELECT count() FROM {SNAPSHOT_TABLE} "
+            "WHERE version_date = %(vd)s AND version_id = %(vi)s",
+            {"vd": version_date, "vi": version_id},
+        )[0][0]
+    )
+    if count != len(values):
+        raise RuntimeError(
+            f"{SNAPSHOT_TABLE}: записано {count}, ожидалось {len(values)}"
+        )
+    print(
+        f"Calendar snapshot built: {SNAPSHOT_TABLE} {version_date} "
+        f"v{version_id}, rows={count}, report_date={report_date}"
+    )
+    return count
+
+
+def load_calendar_remain_from_snapshot(
+    project_client,
+    version_date: date,
+    version_id: int,
+    psns: Sequence[int],
+    *,
+    fallback_10y_psns: Optional[Set[int]] = None,
+) -> Dict[int, CalendarRemain]:
+    """Считает remain_d из persisted raw snapshot, не открывая DWH."""
+    unique = sorted({int(p) for p in psns if int(p) > 0})
+    if not unique:
+        return {}
+    _ensure_snapshot_table(project_client)
+    snapshot_count = int(
+        project_client.execute(
+            f"SELECT count() FROM {SNAPSHOT_TABLE} "
+            "WHERE version_date = %(vd)s AND version_id = %(vi)s",
+            {"vd": version_date, "vi": version_id},
+        )[0][0]
+    )
+    if snapshot_count == 0:
+        raise RuntimeError(
+            f"{SNAPSHOT_TABLE}: пуст snapshot для {version_date} v{version_id}"
+        )
+    psn_in = ", ".join(str(psn) for psn in unique)
+    rows = project_client.execute(
+        f"""
+        SELECT psn, oh_at_date, mfg_date, raw_interval
+        FROM {SNAPSHOT_TABLE}
+        WHERE version_date = %(vd)s
+          AND version_id = %(vi)s
+          AND psn IN ({psn_in})
+        """,
+        {"vd": version_date, "vi": version_id},
+    )
+    inputs = {
+        int(psn): (
+            oh_at,
+            mfg_d,
+            int(raw) if raw is not None else None,
+        )
+        for psn, oh_at, mfg_d, raw in rows
+    }
+    missing = sorted(set(unique) - set(inputs))
+    if missing:
+        raise RuntimeError(
+            f"{SNAPSHOT_TABLE}: нет {len(missing)} запрошенных psn, первые={missing[:10]}"
+        )
+    return _calendar_remain_from_inputs(version_date, inputs, fallback_10y_psns)
 
 
 def open_dwh_client():

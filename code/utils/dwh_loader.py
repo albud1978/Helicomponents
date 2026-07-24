@@ -30,6 +30,7 @@ from extract.status_overhaul_loader import (
     prepare_status_overhaul_data,
 )
 from dwh_post_enrichment import run_post_enrichment
+from version_slice_replace import replace_version_slice
 
 PANDAS_COLS = ["partno","serialno","ac_typ","location","mfg_date","removal_date","target_date","condition","owner","lease_restricted","oh","oh_threshold","ll","sne","ppr","version_date","version_id","partseqno_i","psn","address_i","ac_type_i","status_id","repair_days","repair_time","aircraft_number","ac_type_mask","group_by"]
 
@@ -145,13 +146,6 @@ def _batch_insert(ch, df, table, desc, batch=50000):
     print(f"  {table}: {total:,} inserted ({desc})")
     return total
 
-def _delete_heli_pandas_slice(ch, vd, vi):
-    ch.execute(
-        "DELETE FROM heli_pandas WHERE version_date = %(vd)s AND version_id = %(vi)s",
-        {"vd": vd, "vi": vi},
-    )
-
-
 def load(ch, pandas, vd, vi, dry=False, skip_existing=False, replace_slice=False):
     """Insert filtered heli_pandas staging slice (DWH path does not write heli_raw)."""
     s = {"pandas": len(pandas), "pandas_inserted": 0}
@@ -159,10 +153,12 @@ def load(ch, pandas, vd, vi, dry=False, skip_existing=False, replace_slice=False
         return s
     create_tables(ch)
     pandas_existing = _count_rows(ch, "heli_pandas", vd, vi)
-    if replace_slice and pandas_existing > 0:
-        print(f"  heli_pandas: replace slice ({pandas_existing:,} rows deleted)")
-        _delete_heli_pandas_slice(ch, vd, vi)
-        pandas_existing = 0
+    if replace_slice:
+        print(f"  heli_pandas: replace exact slice ({pandas_existing:,} old rows)")
+        s["pandas_inserted"] = replace_version_slice(
+            ch, "heli_pandas", pandas, vd, vi
+        )
+        return s
     if pandas_existing:
         if skip_existing:
             print(f"  heli_pandas: skip existing {pandas_existing:,}")

@@ -23,9 +23,8 @@ import pandas as pd
 
 from extract.planer_calendar_remain import (
     destination_for_remain,
-    fetch_calendar_remain_by_psn,
+    load_calendar_remain_from_snapshot,
     normalize_registr,
-    open_dwh_client,
     program_history_serials,
 )
 
@@ -65,6 +64,7 @@ def process_inactive_serviceable_status(pandas_df: pd.DataFrame, client):
         "serialno",
         "aircraft_number",
         "version_date",
+        "version_id",
         "psn",
     }
     missing = required - set(pandas_df.columns)
@@ -74,6 +74,15 @@ def process_inactive_serviceable_status(pandas_df: pd.DataFrame, client):
         )
 
     version_date = _version_date_from_df(pandas_df)
+    version_ids = pd.to_numeric(
+        pandas_df["version_id"], errors="raise"
+    ).dropna().unique()
+    if len(version_ids) != 1:
+        raise ValueError(
+            "inactive_serviceable_classifier: ожидается один version_id, "
+            f"найдено {len(version_ids)}"
+        )
+    version_id = int(version_ids[0])
     group_by = _as_u32(pandas_df["group_by"])
     status_id = _as_u32(pandas_df["status_id"])
     aircraft_number = _as_u32(pandas_df["aircraft_number"])
@@ -108,11 +117,11 @@ def process_inactive_serviceable_status(pandas_df: pd.DataFrame, client):
         )
 
     history = program_history_serials(client)
-    dwh = open_dwh_client()
     # Fallback +10y−1д только в demote; 3b считает календарь строго по treq OH(D).
-    cal = fetch_calendar_remain_by_psn(
-        dwh,
+    cal = load_calendar_remain_from_snapshot(
+        client,
         version_date,
+        version_id,
         [r["psn"] for r in planer_rows],
         fallback_10y_psns=None,
     )

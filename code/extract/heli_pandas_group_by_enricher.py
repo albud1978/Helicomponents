@@ -16,6 +16,7 @@ md_components.group_by через ключевое соответствие:
 
 import argparse
 import sys
+from datetime import date
 from typing import List, Dict, Tuple
 
 # Доступ к ClickHouse
@@ -28,14 +29,25 @@ ADD_COLUMN_SQL = (
     "ADD COLUMN IF NOT EXISTS group_by UInt8 DEFAULT 0"
 )
 
-def make_row_update_sql(partseqno_i: int, group_by: int) -> str:
+def make_row_update_sql(
+    partseqno_i: int,
+    group_by: int,
+    version_date: date,
+    version_id: int,
+) -> str:
     return (
         "ALTER TABLE heli_pandas "
         f"UPDATE group_by = toUInt8({group_by}) "
-        f"WHERE group_by = 0 AND partseqno_i = toUInt32({partseqno_i})"
+        f"WHERE version_date = toDate('{version_date.isoformat()}') "
+        f"AND version_id = toUInt8({version_id}) "
+        f"AND group_by = 0 AND partseqno_i = toUInt32({partseqno_i})"
     )
 
-def build_update_sqls(client) -> List[str]:
+def build_update_sqls(
+    client,
+    version_date: date,
+    version_id: int,
+) -> List[str]:
     sqls: List[str] = [ADD_COLUMN_SQL]
     # Собираем соответствия partseqno_i -> group_by через JOIN, группируем
     rows: List[Tuple[int, int]] = client.execute(
@@ -46,15 +58,22 @@ def build_update_sqls(client) -> List[str]:
         INNER JOIN md_components m
             ON m.partseqno_i = hp.partseqno_i
         WHERE hp.group_by = 0
+          AND hp.version_date = %(vd)s
+          AND hp.version_id = %(vi)s
           AND hp.partseqno_i IS NOT NULL
           AND m.group_by IS NOT NULL
         GROUP BY partseqno_i
         ORDER BY partseqno_i
-        """
+        """,
+        {"vd": version_date, "vi": version_id},
     )
     for partseq, gb in rows:
         if gb and partseq:
-            sqls.append(make_row_update_sql(int(partseq), int(gb)))
+            sqls.append(
+                make_row_update_sql(
+                    int(partseq), int(gb), version_date, version_id
+                )
+            )
     return sqls
 
 
@@ -68,17 +87,16 @@ def print_plan(sqls: List[str]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description='Обогащение heli_pandas.group_by из md_components.partseqno_i')
     parser.add_argument('--apply', action='store_true', help='Выполнить SQL (по умолчанию DRY-RUN)')
-    # Параметры версионирования для совместимости с Extract Master (не используются напрямую)
-    parser.add_argument('--version-date', type=str, default=None, help='Дата версии данных (совместимость)')
-    parser.add_argument('--version-id', type=int, default=None, help='ID версии данных (совместимость)')
+    parser.add_argument('--version-date', required=True, help='Дата версии YYYY-MM-DD')
+    parser.add_argument('--version-id', type=int, required=True, help='ID версии данных')
     args = parser.parse_args()
+    version_date = date.fromisoformat(args.version_date)
 
     client = get_clickhouse_client()
-    if args.version_date is not None and args.version_id is not None:
-        print(f"🗓️ Версия данных (совместимость): {args.version_date} (version_id={args.version_id})")
+    print(f"🗓️ Версия данных: {version_date} (version_id={args.version_id})")
 
     # Формируем план обновлений по группам partseqno_i
-    sqls: List[str] = build_update_sqls(client)
+    sqls: List[str] = build_update_sqls(client, version_date, args.version_id)
 
     if not args.apply:
         print_plan(sqls)

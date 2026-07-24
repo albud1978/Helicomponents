@@ -13,7 +13,6 @@ sys.path.append(str(CODE_ROOT))
 sys.path.append(str(CODE_ROOT / "utils"))
 
 from config_loader import get_clickhouse_client
-from extract.dual_loader import insert_data
 from extract.inactive_serviceable_classifier import process_inactive_serviceable_status
 from extract.overhaul_status_processor import process_status_field
 from extract.program_ac_precheck_runner import apply_program_ac_precheck
@@ -21,6 +20,8 @@ from extract.program_ac_status_processor import process_program_ac_status_field
 from extract.aggregate_status_block import apply_aggregate_status_block
 from extract.repair_days_calculator import apply_repair_days
 from extract.heli_pandas_terminal_br_gate import apply_terminal_br_gate
+from extract.planer_calendar_remain import build_planer_calendar_snapshot
+from version_slice_replace import replace_version_slice
 
 PANDAS_COLS = [
     "partno", "serialno", "ac_typ", "location", "mfg_date", "removal_date", "target_date",
@@ -137,11 +138,13 @@ def _replace_heli_pandas_version(
             index=df.index,
             dtype=object,
         )
-    client.execute(
-        "DELETE FROM heli_pandas WHERE version_date = %(vd)s AND version_id = %(vi)s",
-        {"vd": version_date, "vi": version_id},
+    return replace_version_slice(
+        client,
+        "heli_pandas",
+        df,
+        version_date,
+        version_id,
     )
-    return insert_data(client, df, "heli_pandas", "DWH post-enrichment")
 
 
 def _run_planner_cascade(client, df: pd.DataFrame) -> pd.DataFrame:
@@ -208,6 +211,7 @@ def run_post_enrichment(
     df = _load_heli_pandas_version(ch, version_date, version_id)
     if phase in {"planner", "all"}:
         print("Planner cascade (reset -> overhaul -> program_ac -> 3b)...")
+        build_planer_calendar_snapshot(ch, version_date, version_id)
         df = _reset_enrichment_outputs(df)
         df = _run_planner_cascade(ch, df)
 

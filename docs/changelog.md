@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-24 — W2.6/W2.7 staged calendar and exact-slice replace
+**Workflow:** `W_w26_w27_extract_infra_20260724` | **Risk:** medium | **Profile:** medium-fast | **Module:** `extract_dwh`
+Календарные DWH-входы планеров материализуются один раз на version tuple для 3b/demote; общий replace helper и scoped enrich устраняют date-wide удаление соседних `version_id`. Семантика статусов не менялась; bitexact и neighbor-sentinel evidence фиксируются в workflow handoff.
+
 ## 2026-07-24 — W2.5 factual day0 aggregate status matrix
 **Workflow:** `W_w25_aggregate_status_block_mech_20260724` | **Risk:** medium | **Profile:** medium-fast | **Module:** `extract_dwh`
 В `aggregate_status_block.py` и архитектурной документации зафиксирован фактический порядок planner cascade → precheck → A1–A5 → repair_days → terminal BR → demote; семантика leaf `apply_*` не менялась.

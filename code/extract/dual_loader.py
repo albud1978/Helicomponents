@@ -25,6 +25,11 @@ import openpyxl
 import os
 import time
 
+CODE_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(CODE_ROOT))
+
+from utils.version_slice_replace import replace_version_slice
+
 # Безопасная конфигурация через utils.config_loader
 
 # Функция extract_version_date_from_excel удалена - используется общая utils.version_utils.extract_unified_version_date()
@@ -583,49 +588,33 @@ def check_version_conflicts(client, version_date, version_id, auto_replace=False
         return False
 
 def insert_data(client, df, table_name, description):
-    """Загружает данные в указанную таблицу с защитой от дублей"""
-    try:
-        print(f"🚀 Загружаем {len(df):,} записей в {table_name} ({description})...")
-        
-        # === ЗАЩИТА ОТ ДУБЛЕЙ ===
-        # Извлекаем version_date из данных
-        if 'version_date' in df.columns:
-            version_date = df['version_date'].iloc[0]
-            
-            # Проверяем есть ли уже данные с такой version_date
-            existing_count = client.execute(
-                f"SELECT COUNT(*) FROM {table_name} WHERE version_date = '{version_date}'"
-            )[0][0]
-            
-            if existing_count > 0:
-                print(f"🧹 Удаляем {existing_count:,} существующих записей с version_date={version_date}...")
-                client.execute(f"ALTER TABLE {table_name} DELETE WHERE version_date = '{version_date}'")
-                # Ждём завершения мутации
-                time.sleep(1)
-                print(f"✅ Старые данные удалены")
-        
-        # Простая диагностика ресурсных полей (как в рабочих загрузчиках)
-        resource_cols = ['oh', 'oh_threshold', 'll', 'sne', 'ppr']
-        for col in resource_cols:
-            if col in df.columns:
-                sample_vals = df[col].dropna().head(2).tolist()
-                sample_types = [type(v).__name__ for v in sample_vals]
-                none_count = df[col].isnull().sum()
-                print(f"🔍 {col}: примеры={sample_vals} типы={sample_types} null={none_count}")
-        
-        # Простой рабочий подход - как в успешных загрузчиках
-        data_tuples = [tuple(row) for row in df.values]
-        cols = ", ".join(f"`{c}`" for c in df.columns)
-        
-        # Загружаем (явный список колонок — таблица может быть шире DataFrame)
-        client.execute(f'INSERT INTO {table_name} ({cols}) VALUES', data_tuples)
-        
-        print(f"✅ Загружено {len(data_tuples):,} записей в {table_name}")
-        return len(data_tuples)
-        
-    except Exception as e:
-        print(f"❌ Ошибка загрузки в {table_name}: {e}")
-        return 0
+    """Заменяет только exact version_date/version_id slice и проверяет count."""
+    print(f"🚀 Загружаем {len(df):,} записей в {table_name} ({description})...")
+    if "version_date" not in df.columns or "version_id" not in df.columns:
+        raise ValueError(
+            f"{table_name}: insert_data требует version_date и version_id"
+        )
+    version_dates = pd.to_datetime(df["version_date"], errors="raise").dt.date.unique()
+    version_ids = pd.to_numeric(
+        df["version_id"], errors="raise"
+    ).astype("int64").unique()
+    if len(version_dates) != 1 or len(version_ids) != 1:
+        raise ValueError(
+            f"{table_name}: ожидается один version tuple, "
+            f"dates={version_dates.tolist()}, ids={version_ids.tolist()}"
+        )
+    inserted = replace_version_slice(
+        client,
+        table_name,
+        df,
+        version_dates[0],
+        int(version_ids[0]),
+    )
+    print(
+        f"✅ Заменён срез {version_dates[0]} v{int(version_ids[0])}: "
+        f"{inserted:,} записей в {table_name}"
+    )
+    return inserted
 
 def validate_data_counts(client, version_date, version_id, original_count, raw_count, pandas_count, filtered_partnos_count):
     """Минимальная проверка количества записей"""
@@ -836,6 +825,16 @@ def main(version_date=None, version_id=None):
         # Добавляем поле status_id через обработку статусов (НОВАЯ ЛОГИКА)
         print(f"📊 Обработка статусов и repair_days через систему процессоров...")
         try:
+            from extract.planer_calendar_remain import (
+                build_planer_calendar_snapshot_from_dataframe,
+            )
+            build_planer_calendar_snapshot_from_dataframe(
+                client,
+                pd.Timestamp(version_date).date(),
+                int(version_id),
+                pandas_df,
+            )
+
             # ЭТАП 1: Обработка статусов капремонта (status_overhaul) + repair_days
             # Фильтрация по PLANER_PARTNOS (как в других процессорах, не по group_by)
             print(f"🔧 Этап 1: Статусы капремонта + repair_days...")
